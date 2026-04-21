@@ -58,6 +58,86 @@ describe("calendar detail timeline", () => {
     expect(screen.queryByText("Work Calendar")).toBeNull();
   });
 
+  it("shows a Join Zoom action for vanity subdomain links in the location", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        items: [
+          {
+            id: "zoom-location",
+            title: "Advisor sync",
+            startMs: new Date("2026-04-19T16:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T16:30:00.000Z").getTime(),
+            color: "#4285f4",
+            location: "https://example.zoom.us/j/11122233344",
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/abc123",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: /join zoom meeting/i }).getAttribute("href")).toBe(
+      "https://example.zoom.us/j/11122233344",
+    );
+    expect(screen.getByRole("link", { name: /open in google calendar/i })).toBeTruthy();
+    expect(screen.getByText("Zoom meeting")).toBeTruthy();
+    expect(screen.queryByText("https://example.zoom.us/j/11122233344")).toBeNull();
+  });
+
+  it("shows a Join Zoom action when the link only appears in event notes", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        items: [
+          {
+            id: "zoom-description",
+            title: "Team sync",
+            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
+            color: "#4285f4",
+            location: "Conference Room B",
+            description: "Notes: join at https://zoom.us/j/12345678901?pwd=abc.",
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/def456",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: /join zoom meeting/i }).getAttribute("href")).toBe(
+      "https://zoom.us/j/12345678901?pwd=abc",
+    );
+  });
+
+  it("does not show a Join Zoom action for non-Zoom links", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        items: [
+          {
+            id: "non-zoom",
+            title: "In-person review",
+            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
+            color: "#4285f4",
+            location: "Join docs https://example.com/meeting",
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/ghi789",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.queryByRole("link", { name: /join zoom meeting/i })).toBeNull();
+  });
+
   it("renders deadlines chronologically, uses End of day, and selects rows in-place", () => {
     const onSelect = vi.fn();
     const briefing = {

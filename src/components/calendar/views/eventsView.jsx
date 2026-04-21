@@ -1,6 +1,7 @@
-import { ExternalLink, Calendar as CalendarIcon } from "lucide-react";
+import { ExternalLink, Video, Calendar as CalendarIcon } from "lucide-react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
 import { formatEventDuration } from "../../../lib/redesign-helpers";
+import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 
 const EVENT_ROW_HEIGHT = 12;
@@ -168,7 +169,8 @@ function eventSubtitle(ev) {
   if (ev.attendees?.length) {
     return `with ${ev.attendees.slice(0, 3).join(", ")}${ev.attendees.length > 3 ? ` +${ev.attendees.length - 3}` : ""}`;
   }
-  return ev.location || ev.subtitle || "";
+  if (ev.location) return getLocationDisplayLabel(ev.location);
+  return ev.subtitle || "";
 }
 
 function eventMeta(ev) {
@@ -180,8 +182,46 @@ function isEditableEvent(ev) {
   return !!(ev?.writable && !ev?.isRecurring);
 }
 
+function renderActionLink({ href, label, icon: Icon }) {
+  if (!href) return null;
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={label}
+      title={label}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        color: "rgba(205,214,244,0.4)",
+        padding: 4,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 6,
+        transform: "translateY(0)",
+        transition: "transform 140ms, color 140ms, background 140ms",
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.color = "#cba6da";
+        event.currentTarget.style.background = "rgba(203,166,218,0.12)";
+        event.currentTarget.style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.color = "rgba(205,214,244,0.4)";
+        event.currentTarget.style.background = "transparent";
+        event.currentTarget.style.transform = "translateY(0)";
+      }}
+    >
+      <Icon size={12} />
+    </a>
+  );
+}
+
 function toRailItem(ev, index, onSelectEvent) {
   const editable = isEditableEvent(ev);
+  const zoomUrl = extractZoomMeetingUrl(ev);
   const meta = [
     eventMeta(ev),
     ev.isRecurring ? "Recurring" : null,
@@ -196,37 +236,20 @@ function toRailItem(ev, index, onSelectEvent) {
     meta,
     dotColor: ev.color || ev.sourceColor || "#4285f4",
     onClick: editable ? () => onSelectEvent?.(ev) : undefined,
-    trailing: (ev.openUrl || ev.htmlLink) ? (
-      <a
-        href={ev.openUrl || ev.htmlLink}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Open in Google Calendar"
-        onClick={(event) => event.stopPropagation()}
-        style={{
-          color: "rgba(205,214,244,0.4)",
-          padding: 4,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 6,
-          transform: "translateY(0)",
-          transition: "transform 140ms, color 140ms, background 140ms",
-        }}
-        onMouseEnter={(event) => {
-          event.currentTarget.style.color = "#cba6da";
-          event.currentTarget.style.background = "rgba(203,166,218,0.12)";
-          event.currentTarget.style.transform = "translateY(-1px)";
-        }}
-        onMouseLeave={(event) => {
-          event.currentTarget.style.color = "rgba(205,214,244,0.4)";
-          event.currentTarget.style.background = "transparent";
-          event.currentTarget.style.transform = "translateY(0)";
-        }}
-      >
-        <ExternalLink size={12} />
-      </a>
-    ) : null,
+    trailing: (
+      <>
+        {renderActionLink({
+          href: zoomUrl,
+          label: "Join Zoom meeting",
+          icon: Video,
+        })}
+        {renderActionLink({
+          href: ev.openUrl || ev.htmlLink,
+          label: "Open in Google Calendar",
+          icon: ExternalLink,
+        })}
+      </>
+    ),
   };
 }
 
