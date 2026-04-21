@@ -7,16 +7,15 @@ import CalendarLocationSuggestionsPanel from "./CalendarLocationSuggestionsPanel
 import CalendarBatchReviewSection from "./CalendarBatchReviewSection";
 import CalendarRecurrenceSection, { formatRecurrenceSummary } from "./CalendarRecurrenceSection";
 import CalendarRecurringScopePrompt, { recurringScopeLabel } from "./CalendarRecurringScopePrompt";
-
-const DATE_PICKER_WIDTH = 300;
-const DATE_PICKER_HEIGHT = 386;
-const TIME_PICKER_WIDTH = 280;
-const TIME_PICKER_HEIGHT = 238;
-const SOURCE_PICKER_WIDTH = 320;
-const SOURCE_PICKER_HEIGHT = 280;
-const LOCATION_PICKER_WIDTH = 360;
-const LOCATION_PICKER_HEIGHT = 240;
-const ACCENT = "var(--ea-accent)";
+import {
+  ACCENT,
+  toPacificYmd,
+  formatDateLabel,
+  formatTimeLabel,
+  addMinutesToDraftDateTime,
+  sourceDotStyle,
+  textFieldStyle,
+} from "./calendarEditorUtils";
 
 function FieldLabel({ children }) {
   return (
@@ -35,73 +34,14 @@ function FieldLabel({ children }) {
   );
 }
 
-function toPacificYmd(epoch) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(epoch));
-}
-
-function formatDateLabel(value) {
-  if (!value) return "Choose date";
-  return new Date(`${value}T12:00:00Z`).toLocaleDateString("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatTimeLabel(value) {
-  if (!value) return "Choose time";
-  return new Date(`2000-01-01T${value}:00`).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-function addMinutesToDraftDateTime(dateValue, timeValue, minutesToAdd) {
-  const baseDate = dateValue || "2026-01-01";
-  const baseTime = timeValue || "09:00";
-  const [hour, minute] = baseTime.split(":").map(Number);
-  const base = new Date(`${baseDate}T00:00:00`);
-  base.setHours(Number.isFinite(hour) ? hour : 9, Number.isFinite(minute) ? minute : 0, 0, 0);
-  base.setMinutes(base.getMinutes() + minutesToAdd);
-  const nextDate = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
-  const nextTime = `${String(base.getHours()).padStart(2, "0")}:${String(base.getMinutes()).padStart(2, "0")}`;
-  return { date: nextDate, time: nextTime };
-}
-
-function sourceDotStyle(color) {
-  return {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    background: color || "#4285f4",
-    boxShadow: `0 0 0 1px ${color || "#4285f4"}22, 0 0 8px ${color || "#4285f4"}44`,
-    flexShrink: 0,
-  };
-}
-
-function textFieldStyle({ invalid = false } = {}) {
-  return {
-    width: "100%",
-    background: "rgba(255,255,255,0.03)",
-    border: invalid
-      ? "1px solid rgba(249, 115, 22, 0.42)"
-      : "1px solid rgba(255,255,255,0.06)",
-    borderRadius: 8,
-    padding: "10px 12px",
-    color: "#cdd6f4",
-    fontSize: 12.5,
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-  };
-}
+const DATE_PICKER_WIDTH = 300;
+const DATE_PICKER_HEIGHT = 386;
+const TIME_PICKER_WIDTH = 280;
+const TIME_PICKER_HEIGHT = 238;
+const SOURCE_PICKER_WIDTH = 320;
+const SOURCE_PICKER_HEIGHT = 280;
+const LOCATION_PICKER_WIDTH = 360;
+const LOCATION_PICKER_HEIGHT = 240;
 
 function ActionButton({
   children,
