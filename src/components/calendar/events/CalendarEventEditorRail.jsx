@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { CalendarDays, Calendar as CalendarIcon, Clock3, MapPin } from "lucide-react";
 import CalendarBatchReviewSection from "./CalendarBatchReviewSection";
-import CalendarRecurrenceSection, { formatRecurrenceSummary } from "./CalendarRecurrenceSection";
-import CalendarRecurringScopePrompt, { recurringScopeLabel } from "./CalendarRecurringScopePrompt";
+import CalendarRecurrenceSection from "./CalendarRecurrenceSection";
+import CalendarRecurringScopePrompt from "./CalendarRecurringScopePrompt";
 import { FieldLabel, ActionButton, PickerFieldButton } from "./CalendarEditorControls";
 import CalendarEventEditorActionBar from "./CalendarEventEditorActionBar";
 import DetailSummaryRow from "./CalendarEventDetailSummary";
@@ -11,6 +11,8 @@ import useCalendarEditorPickers from "./useCalendarEditorPickers";
 import {
   formatDateLabel,
   formatTimeLabel,
+  formatRecurrenceSummary,
+  recurringScopeLabel,
   sourceDotStyle,
   textFieldStyle,
 } from "./calendarEditorUtils";

@@ -1,24 +1,4 @@
-const OPTIONS = [
-  {
-    value: "all",
-    label: "All events",
-    description: "Update the whole series.",
-  },
-  {
-    value: "following",
-    label: "Upcoming only",
-    description: "Update this event and future ones.",
-  },
-  {
-    value: "one",
-    label: "Just this one",
-    description: "Create an exception for only this event.",
-  },
-];
-
-export function recurringScopeLabel(scope) {
-  return OPTIONS.find((option) => option.value === scope)?.label || "";
-}
+import { RECURRING_SCOPE_OPTIONS } from "./calendarEditorUtils";
 
 export default function CalendarRecurringScopePrompt({
   selectedScope,
@@ -49,7 +29,7 @@ export default function CalendarRecurringScopePrompt({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-        {OPTIONS.map((option) => {
+        {RECURRING_SCOPE_OPTIONS.map((option) => {
           const selected = selectedScope === option.value;
           return (
             <button

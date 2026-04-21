@@ -1,16 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
-
-const WEEKDAY_OPTIONS = [
-  { code: "SU", label: "Sun" },
-  { code: "MO", label: "Mon" },
-  { code: "TU", label: "Tue" },
-  { code: "WE", label: "Wed" },
-  { code: "TH", label: "Thu" },
-  { code: "FR", label: "Fri" },
-  { code: "SA", label: "Sat" },
-];
+import { WEEKDAY_OPTIONS, formatMonthDay, formatRecurrenceSummary } from "./calendarEditorUtils";
 
 const FREQUENCY_OPTIONS = [
   { value: "daily", label: "Daily" },
@@ -49,58 +40,6 @@ function sectionCardStyle() {
     flexDirection: "column",
     gap: 12,
   };
-}
-
-function formatMonthDay(dateStr) {
-  if (!dateStr) return "the selected day";
-  const date = new Date(`${dateStr}T12:00:00Z`);
-  return date.toLocaleDateString("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-const WEEKDAY_LABEL_MAP = Object.fromEntries(WEEKDAY_OPTIONS.map((o) => [o.code, o.label]));
-
-export function formatRecurrenceSummary(recurrenceDraft, startDate) {
-  if (!recurrenceDraft) return "";
-  const { frequency, interval, weekdays } = recurrenceDraft;
-  const intervalLabel = interval > 1 ? `${interval} ` : "";
-
-  if (frequency === "daily") {
-    return interval > 1 ? `Every ${interval} days` : "Every day";
-  }
-  if (frequency === "weekly") {
-    const dayLabels = (weekdays || []).map((code) => WEEKDAY_LABEL_MAP[code] || code);
-    const dayList = dayLabels.length ? dayLabels.join(", ") : "";
-    if (interval === 1) {
-      return dayList ? `Every ${dayList}` : "Every week";
-    }
-    return dayList
-      ? `Every ${intervalLabel}weeks on ${dayList}`
-      : `Every ${interval} weeks`;
-  }
-  if (frequency === "monthly") {
-    const dayNum = startDate ? Number(startDate.slice(-2)) : null;
-    const anchor = dayNum ? ` on the ${dayNum}${ordinalSuffix(dayNum)}` : "";
-    return interval > 1 ? `Every ${interval} months${anchor}` : `Monthly${anchor}`;
-  }
-  if (frequency === "yearly") {
-    const anchor = startDate ? ` on ${formatMonthDay(startDate)}` : "";
-    return interval > 1 ? `Every ${interval} years${anchor}` : `Yearly${anchor}`;
-  }
-  return "";
-}
-
-function ordinalSuffix(n) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return "th";
-  if (mod10 === 1) return "st";
-  if (mod10 === 2) return "nd";
-  if (mod10 === 3) return "rd";
-  return "th";
 }
 
 function StyledSelect({ options, value, onChange, disabled, testId }) {
