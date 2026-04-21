@@ -10,6 +10,7 @@ vi.mock("@/api", () => ({
   getCalendarPlaceSuggestions: vi.fn(),
   getCalendarPlaceDetails: vi.fn(),
   createCalendarEvent: vi.fn(),
+  createCalendarEventsBatch: vi.fn(),
   updateCalendarEvent: vi.fn(),
   deleteCalendarEvent: vi.fn(),
   getGmailAuthUrl: vi.fn(),

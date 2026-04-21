@@ -120,6 +120,8 @@ export const getCalendarPlaceDetails = (placeId, sessionToken) =>
   apiFetch(`/api/calendar/places/${encodeURIComponent(placeId)}${sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : ""}`);
 export const createCalendarEvent = (data) =>
   apiFetch("/api/calendar/events", { method: "POST", body: JSON.stringify(data) });
+export const createCalendarEventsBatch = (items) =>
+  apiFetch("/api/calendar/events/batch", { method: "POST", body: JSON.stringify({ items }) });
 export const updateCalendarEvent = (eventId, data) =>
   apiFetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(data) });
 export const deleteCalendarEvent = (eventId, data) =>

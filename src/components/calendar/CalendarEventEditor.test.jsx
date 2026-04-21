@@ -4,6 +4,7 @@ import CalendarModal from "./CalendarModal.jsx";
 
 const mockGetCalendarSources = vi.fn();
 const mockCreateCalendarEvent = vi.fn();
+const mockCreateCalendarEventsBatch = vi.fn();
 const mockUpdateCalendarEvent = vi.fn();
 const mockDeleteCalendarEvent = vi.fn();
 const mockGetGmailAuthUrl = vi.fn();
@@ -13,6 +14,7 @@ const mockGetCalendarPlaceDetails = vi.fn();
 vi.mock("@/api", () => ({
   getCalendarSources: (...args) => mockGetCalendarSources(...args),
   createCalendarEvent: (...args) => mockCreateCalendarEvent(...args),
+  createCalendarEventsBatch: (...args) => mockCreateCalendarEventsBatch(...args),
   updateCalendarEvent: (...args) => mockUpdateCalendarEvent(...args),
   deleteCalendarEvent: (...args) => mockDeleteCalendarEvent(...args),
   getGmailAuthUrl: (...args) => mockGetGmailAuthUrl(...args),
@@ -54,6 +56,7 @@ beforeEach(() => {
       location: "McDonald's, 123 Main St, Los Angeles, CA 90012, USA",
     },
   });
+  mockCreateCalendarEventsBatch.mockResolvedValue({ created: [], failed: [] });
 });
 
 function renderModal({
@@ -138,11 +141,7 @@ describe("Calendar event editor rail", () => {
     };
     const { refreshRange } = renderModal({ events: [event] });
 
-    fireEvent.click(await screen.findByText("Writable meeting"));
-    await waitFor(() => {
-      expect(screen.getAllByText("Writable meeting").length).toBeGreaterThan(1);
-    });
-    fireEvent.click(screen.getAllByText("Writable meeting")[1]);
+    fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
@@ -165,16 +164,85 @@ describe("Calendar event editor rail", () => {
     expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
   });
 
-  it("keeps recurring events in detail view instead of opening edit mode", async () => {
+  it("opens recurring events in edit mode and requires a scope before saving", async () => {
     renderModal({
       events: [
         {
           id: "recurring-1",
+          etag: '"etag-r1"',
           title: "Weekly sync",
           accountId: "gmail-main",
           calendarId: "primary",
-          startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-          endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+          recurringEventId: "series-1",
+          originalStartTime: "2026-04-20T16:00:00-07:00",
+          recurrence: {
+            frequency: "weekly",
+            interval: 1,
+            weekdays: ["MO"],
+            ends: { type: "never" },
+          },
+          startMs: new Date("2026-04-20T23:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T23:30:00.000Z").getTime(),
+          writable: true,
+          isRecurring: true,
+          allDay: false,
+          htmlLink: "https://calendar.google.com",
+        },
+      ],
+    });
+    mockUpdateCalendarEvent.mockResolvedValue({
+      event: {
+        id: "recurring-1",
+        title: "Weekly sync updated",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-20T23:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T23:30:00.000Z").getTime(),
+        writable: true,
+        allDay: false,
+      },
+    });
+
+    fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByTestId("calendar-recurring-scope-prompt")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-save").disabled).toBe(true);
+
+    fireEvent.click(screen.getByTestId("calendar-recurring-scope-one"));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+      expect(screen.queryByTestId("calendar-recurrence-section")).toBeNull();
+    });
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Weekly sync updated" },
+    });
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("recurring-1", expect.objectContaining({
+        title: "Weekly sync updated",
+        scope: "one",
+        recurringEventId: "series-1",
+        originalStartTime: "2026-04-20T16:00:00-07:00",
+        recurrence: undefined,
+      }));
+    });
+  });
+
+  it("deletes recurring events using the selected scope", async () => {
+    const { refreshRange } = renderModal({
+      events: [
+        {
+          id: "recurring-1",
+          etag: '"etag-r1"',
+          title: "Weekly sync",
+          accountId: "gmail-main",
+          calendarId: "primary",
+          recurringEventId: "series-1",
+          originalStartTime: "2026-04-20T16:00:00-07:00",
+          startMs: new Date("2026-04-20T23:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T23:30:00.000Z").getTime(),
           writable: true,
           isRecurring: true,
           allDay: false,
@@ -183,9 +251,29 @@ describe("Calendar event editor rail", () => {
       ],
     });
 
-    fireEvent.click(await screen.findByText("Weekly sync"));
-    expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
-    expect(await screen.findByRole("link", { name: /open in google calendar/i })).toBeTruthy();
+    fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("calendar-recurring-scope-following"));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-delete")).toBeTruthy();
+      expect(screen.getByTestId("calendar-event-delete").disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-event-delete"));
+    fireEvent.click(await screen.findByTestId("calendar-event-delete-confirm"));
+
+    await waitFor(() => {
+      expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("recurring-1", {
+        accountId: "gmail-main",
+        calendarId: "primary",
+        etag: '"etag-r1"',
+        scope: "following",
+        recurringEventId: "series-1",
+        originalStartTime: "2026-04-20T16:00:00-07:00",
+      });
+    });
+    expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
   });
 
   it("blocks save and shows inline validation for invalid end times", async () => {
@@ -261,6 +349,149 @@ describe("Calendar event editor rail", () => {
         endDate: "2026-04-21",
         startTime: "17:00",
         endTime: "17:30",
+      }));
+    });
+  });
+
+  it("renders batch review UI for batch NLP and saves via the batch API", async () => {
+    renderModal();
+    mockCreateCalendarEventsBatch.mockResolvedValue({
+      created: [
+        {
+          index: 0,
+          event: {
+            id: "batch-1",
+            title: "Work",
+            accountId: "gmail-main",
+            calendarId: "primary",
+            startMs: new Date("2026-04-21T11:15:00.000Z").getTime(),
+            endMs: new Date("2026-04-21T14:30:00.000Z").getTime(),
+            writable: true,
+            allDay: false,
+          },
+        },
+        {
+          index: 1,
+          event: {
+            id: "batch-2",
+            title: "Work",
+            accountId: "gmail-main",
+            calendarId: "primary",
+            startMs: new Date("2026-04-24T11:15:00.000Z").getTime(),
+            endMs: new Date("2026-04-24T14:30:00.000Z").getTime(),
+            writable: true,
+            allDay: false,
+          },
+        },
+      ],
+      failed: [],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work next tue, wed, thur at 4:15am to 7:30am" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 28, 2026/i);
+      expect(screen.getByTestId("calendar-batch-review")).toBeTruthy();
+      expect(screen.getByTestId("calendar-event-title-mode-preview").textContent).toMatch(/3 one-off events/i);
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-batch-remove-1"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-batch-row-2")).toBeNull();
+      expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create 2 events/i);
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEventsBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          title: "Work",
+          startDate: "2026-04-28",
+          endDate: "2026-04-28",
+          startTime: "04:15",
+          endTime: "07:30",
+        }),
+        expect.objectContaining({
+          title: "Work",
+          startDate: "2026-04-30",
+          endDate: "2026-04-30",
+          startTime: "04:15",
+          endTime: "07:30",
+        }),
+      ]);
+    });
+    expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
+  });
+
+  it("renders recurrence UI for recurring NLP and saves structured recurrence", async () => {
+    renderModal();
+    mockCreateCalendarEvent.mockResolvedValue({
+      event: {
+        id: "series-1",
+        title: "Work",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-20T10:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T15:00:00.000Z").getTime(),
+        writable: true,
+        allDay: false,
+        isRecurring: true,
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work at 3am to 8am every monday" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 20, 2026/i);
+      expect(screen.getByTestId("calendar-recurrence-section")).toBeTruthy();
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+      expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create recurring event/i);
+    });
+
+    fireEvent.change(screen.getByTestId("calendar-recurrence-frequency"), {
+      target: { value: "monthly" },
+    });
+    fireEvent.change(screen.getByTestId("calendar-recurrence-interval"), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByTestId("calendar-recurrence-ends-type"), {
+      target: { value: "onDate" },
+    });
+    fireEvent.change(screen.getByTestId("calendar-recurrence-until-date"), {
+      target: { value: "2026-08-20" },
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        title: "Work",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "03:00",
+        endTime: "08:00",
+        recurrence: {
+          frequency: "monthly",
+          interval: 2,
+          monthDay: 20,
+          ends: {
+            type: "onDate",
+            untilDate: "2026-08-20",
+          },
+        },
       }));
     });
   });

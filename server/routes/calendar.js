@@ -212,7 +212,19 @@ router.get("/places/:placeId", async (req, res) => {
 });
 
 router.post("/events", async (req, res) => {
-  const { accountId, calendarId, title, allDay, startDate, endDate, startTime, endTime, location, description } = req.body || {};
+  const {
+    accountId,
+    calendarId,
+    title,
+    allDay,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    location,
+    description,
+    recurrence,
+  } = req.body || {};
   try {
     const account = await loadCalendarAccount(accountId);
     const event = await createCalendarEvent(account, {
@@ -226,6 +238,7 @@ router.post("/events", async (req, res) => {
       endTime,
       location,
       description,
+      recurrence,
     });
     res.status(201).json({ event });
   } catch (err) {
@@ -233,9 +246,63 @@ router.post("/events", async (req, res) => {
   }
 });
 
+router.post("/events/batch", async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (!items.length) {
+    return res.status(400).json({
+      code: "calendar_batch_required",
+      message: "items[] is required.",
+    });
+  }
+
+  try {
+    const created = [];
+    const failed = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index] || {};
+      try {
+        const account = await loadCalendarAccount(item.accountId);
+        const event = await createCalendarEvent(account, item);
+        created.push({ index, event });
+      } catch (err) {
+        failed.push({
+          index,
+          input: item,
+          code: err?.code || "calendar_batch_item_failed",
+          message: err?.message || "Failed to create event.",
+        });
+      }
+    }
+
+    res.status(created.length ? 201 : 207).json({
+      created,
+      failed,
+    });
+  } catch (err) {
+    handleCalendarRouteError(res, err, "Failed to create calendar events");
+  }
+});
+
 router.patch("/events/:eventId", async (req, res) => {
   const { eventId } = req.params;
-  const { accountId, calendarId, etag, title, allDay, startDate, endDate, startTime, endTime, location, description } = req.body || {};
+  const {
+    accountId,
+    calendarId,
+    etag,
+    title,
+    allDay,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    location,
+    description,
+    recurrence,
+    scope,
+    recurringEventId,
+    originalStartTime,
+  } = req.body || {};
   try {
     const account = await loadCalendarAccount(accountId);
     const event = await updateCalendarEvent(account, eventId, {
@@ -249,6 +316,10 @@ router.patch("/events/:eventId", async (req, res) => {
       endTime,
       location,
       description,
+      recurrence,
+      scope,
+      recurringEventId,
+      originalStartTime,
     });
     res.json({ event });
   } catch (err) {
@@ -258,10 +329,16 @@ router.patch("/events/:eventId", async (req, res) => {
 
 router.delete("/events/:eventId", async (req, res) => {
   const { eventId } = req.params;
-  const { accountId, calendarId, etag } = req.body || {};
+  const { accountId, calendarId, etag, scope, recurringEventId, originalStartTime } = req.body || {};
   try {
     const account = await loadCalendarAccount(accountId);
-    await deleteCalendarEvent(account, eventId, { calendarId, etag });
+    await deleteCalendarEvent(account, eventId, {
+      calendarId,
+      etag,
+      scope,
+      recurringEventId,
+      originalStartTime,
+    });
     res.json({ ok: true });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to delete calendar event");

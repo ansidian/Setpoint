@@ -179,7 +179,7 @@ function eventMeta(ev) {
 }
 
 function isEditableEvent(ev) {
-  return !!(ev?.writable && !ev?.isRecurring);
+  return !!ev?.writable;
 }
 
 function renderActionLink({ href, label, icon: Icon }) {

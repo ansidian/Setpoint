@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Calendar as CalendarIcon, Check, ChevronDown, Clock3 } from "lucide-react";
+import { CalendarDays, Calendar as CalendarIcon, Check, ChevronDown, ChevronRight, Clock3, MapPin, Repeat, StickyNote } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
 import TimePickerView from "@/components/shared/pickers/TimePickerView";
 import CalendarLocationSuggestionsPanel from "./CalendarLocationSuggestionsPanel";
+import CalendarBatchReviewSection from "./CalendarBatchReviewSection";
+import CalendarRecurrenceSection, { formatRecurrenceSummary } from "./CalendarRecurrenceSection";
+import CalendarRecurringScopePrompt, { recurringScopeLabel } from "./CalendarRecurringScopePrompt";
 
 const DATE_PICKER_WIDTH = 300;
 const DATE_PICKER_HEIGHT = 386;
@@ -451,11 +454,90 @@ function SourcePickerPanel({
   );
 }
 
+function DetailSummaryChip({ icon: Icon, label }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "3px 8px",
+        borderRadius: 6,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        fontSize: 11,
+        color: "rgba(205,214,244,0.72)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <Icon size={10} style={{ color: "rgba(205,214,244,0.45)", flexShrink: 0 }} />
+      {label}
+    </span>
+  );
+}
+
+function DetailSummaryRow({ draft, recurrenceSummary, onToggle, expanded }) {
+  const dateLabel = draft.startDate === draft.endDate
+    ? formatDateLabel(draft.startDate)
+    : `${formatDateLabel(draft.startDate)} – ${formatDateLabel(draft.endDate)}`;
+  const timeLabel = draft.allDay
+    ? "All day"
+    : `${formatTimeLabel(draft.startTime)} – ${formatTimeLabel(draft.endTime)}`;
+  const hasLocation = !!draft.location?.trim();
+  const hasNotes = !!draft.description?.trim();
+  const Chevron = expanded ? ChevronDown : ChevronRight;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      data-testid="calendar-event-detail-toggle"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 10px",
+        borderRadius: 8,
+        border: "1px solid rgba(255,255,255,0.05)",
+        background: "rgba(255,255,255,0.02)",
+        cursor: "pointer",
+        width: "100%",
+        boxSizing: "border-box",
+        textAlign: "left",
+        fontFamily: "inherit",
+        transition: "background 140ms",
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.background = "rgba(255,255,255,0.04)";
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.background = "rgba(255,255,255,0.02)";
+      }}
+    >
+      <Chevron size={12} style={{ color: "rgba(205,214,244,0.45)", flexShrink: 0 }} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flex: 1, minWidth: 0 }}>
+        <DetailSummaryChip icon={CalendarDays} label={dateLabel} />
+        <DetailSummaryChip icon={Clock3} label={timeLabel} />
+        {recurrenceSummary ? <DetailSummaryChip icon={Repeat} label={recurrenceSummary} /> : null}
+        {hasLocation ? <DetailSummaryChip icon={MapPin} label={draft.location.length > 20 ? `${draft.location.slice(0, 20)}…` : draft.location} /> : null}
+        {hasNotes ? <DetailSummaryChip icon={StickyNote} label="Notes" /> : null}
+      </div>
+      <span style={{ fontSize: 10, color: "rgba(205,214,244,0.38)", flexShrink: 0 }}>
+        {expanded ? "Collapse" : "Edit"}
+      </span>
+    </button>
+  );
+}
+
 export default function CalendarEventEditorRail({ editor }) {
   const {
     draft,
     titleInput,
     titleAssist,
+    intentState,
+    batchDrafts,
+    recurrenceDraft,
+    recurringEditScope,
     writableCalendars,
     sourceGroups,
     sourcesLoading,
@@ -467,11 +549,17 @@ export default function CalendarEventEditorRail({ editor }) {
     deleting,
     confirmDelete,
     isEditing,
+    isEditingRecurring,
     locationSuggestions,
     locationSuggestionsLoading,
     locationSuggestionsError,
     activeLocationSuggestion,
     updateField,
+    updateBatchDraft,
+    removeBatchDraft,
+    updateRecurrenceDraft,
+    toggleRecurrenceWeekday,
+    selectRecurringEditScope,
     handleTitleInputChange,
     selectLocationSuggestion,
     moveActiveLocationSuggestion,
@@ -487,6 +575,15 @@ export default function CalendarEventEditorRail({ editor }) {
 
   const disabled = saving || deleting;
   const saveDisabled = disabled || !canSave;
+  const isBatchMode = !isEditing && intentState.mode === "batch";
+  const isRecurringMode = !isEditing && intentState.mode === "recurring";
+  const showRecurringScopePrompt = isEditingRecurring;
+  const showRecurringBuilder = recurrenceDraft && (
+    isRecurringMode || (isEditingRecurring && !!recurringEditScope && recurringEditScope !== "one")
+  );
+  const isCompactMode = isBatchMode || isRecurringMode;
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const showDetailFields = !isCompactMode || detailsExpanded;
   const [openPicker, setOpenPicker] = useState(null);
   const [activeSourceSuggestion, setActiveSourceSuggestion] = useState(0);
   const [dismissedAutoLocationQuery, setDismissedAutoLocationQuery] = useState("");
@@ -756,13 +853,31 @@ export default function CalendarEventEditorRail({ editor }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
           <div style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
-            {isEditing ? "Edit event" : "New event"}
+            {isEditing ? "Edit event" : isBatchMode ? "New batch" : "New event"}
           </div>
           <div style={{ marginTop: 3, fontSize: 11, color: "rgba(205,214,244,0.42)", lineHeight: 1.45 }}>
-            Single events only. Recurring events still open in Google Calendar.
+            {isEditing
+              ? isEditingRecurring
+                ? recurringEditScope
+                  ? `Applying changes to ${recurringScopeLabel(recurringEditScope).toLowerCase()}.`
+                  : "This is a recurring event."
+                : "Edit this event directly from the dashboard."
+              : isBatchMode
+                ? `${batchDrafts.length} one-off event${batchDrafts.length === 1 ? "" : "s"} ready for review before creating.`
+                : isRecurringMode
+                  ? "Structured recurrence is ready to review before creating the series."
+                  : "Natural language can create a single event, a batch of one-offs, or a recurring draft."}
           </div>
         </div>
       </div>
+
+      {showRecurringScopePrompt ? (
+        <CalendarRecurringScopePrompt
+          selectedScope={recurringEditScope}
+          disabled={disabled}
+          onSelectScope={selectRecurringEditScope}
+        />
+      ) : null}
 
       {error ? (
         <div
@@ -786,7 +901,7 @@ export default function CalendarEventEditorRail({ editor }) {
         </div>
       ) : null}
 
-      {!error && validationMessage ? (
+      {!error && validationMessage && !(isEditingRecurring && !recurringEditScope) ? (
         <div
           data-testid="calendar-event-validation"
           style={{
@@ -849,6 +964,22 @@ export default function CalendarEventEditorRail({ editor }) {
                   Parsed schedule: <span style={{ color: "#cba6da" }}>{titleAssist.preview}</span>
                 </div>
               ) : null}
+              {!isEditing && intentState.mode === "batch" ? (
+                <div
+                  data-testid="calendar-event-title-mode-preview"
+                  style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}
+                >
+                  Parsed intent: <span style={{ color: "#89dceb" }}>{batchDrafts.length} one-off events</span>
+                </div>
+              ) : null}
+              {!isEditing && intentState.mode === "recurring" ? (
+                <div
+                  data-testid="calendar-event-title-mode-preview"
+                  style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}
+                >
+                  Parsed intent: <span style={{ color: "#89dceb" }}>recurring event</span>
+                </div>
+              ) : null}
               {titleAssist.locationQuery ? (
                 <div
                   data-testid="calendar-event-title-location-preview"
@@ -907,146 +1038,179 @@ export default function CalendarEventEditorRail({ editor }) {
           />
         </div>
 
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: 12,
-            color: "rgba(205,214,244,0.72)",
-          }}
-        >
-          <input
-            data-testid="calendar-event-all-day"
-            type="checkbox"
-            checked={draft.allDay}
-            onChange={(event) => {
-              const nextAllDay = event.target.checked;
-              if (nextAllDay && (openPicker === "startTime" || openPicker === "endTime")) {
-                setOpenPicker(null);
-              }
-              updateField("allDay", nextAllDay);
-            }}
-            disabled={disabled}
-            style={{ accentColor: "#cba6da" }}
+        {isCompactMode ? (
+          <DetailSummaryRow
+            draft={draft}
+            recurrenceSummary={isRecurringMode ? formatRecurrenceSummary(recurrenceDraft, draft.startDate) : ""}
+            expanded={detailsExpanded}
+            onToggle={() => setDetailsExpanded((prev) => !prev)}
           />
-          All day
-        </label>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div>
-            <FieldLabel>Start</FieldLabel>
-            <PickerFieldButton
-              anchorRef={startDateRef}
-              icon={CalendarDays}
-              value={formatDateLabel(draft.startDate)}
-              placeholder="Choose date"
-              dataTestId="calendar-event-start-date"
-              onClick={() => !disabled && setOpenPicker("startDate")}
-              disabled={disabled}
-              invalid={invalidDateRange}
-              trailingLabel=""
-            />
-          </div>
-          <div>
-            <FieldLabel>End</FieldLabel>
-            <PickerFieldButton
-              anchorRef={endDateRef}
-              icon={CalendarDays}
-              value={formatDateLabel(draft.endDate)}
-              placeholder="Choose date"
-              dataTestId="calendar-event-end-date"
-              onClick={() => !disabled && setOpenPicker("endDate")}
-              disabled={disabled}
-              invalid={invalidDateRange}
-              trailingLabel=""
-            />
-          </div>
-        </div>
-
-        {!draft.allDay ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div>
-              <FieldLabel>Start time</FieldLabel>
-              <PickerFieldButton
-                anchorRef={startTimeRef}
-                icon={Clock3}
-                value={formatTimeLabel(draft.startTime)}
-                placeholder="Choose time"
-                dataTestId="calendar-event-start-time"
-                onClick={() => !disabled && setOpenPicker("startTime")}
-                disabled={disabled}
-                invalid={invalidTimeRange}
-                trailingLabel=""
-              />
-            </div>
-            <div>
-              <FieldLabel>End time</FieldLabel>
-              <PickerFieldButton
-                anchorRef={endTimeRef}
-                icon={Clock3}
-                value={formatTimeLabel(draft.endTime)}
-                placeholder="Choose time"
-                dataTestId="calendar-event-end-time"
-                onClick={() => !disabled && setOpenPicker("endTime")}
-                disabled={disabled}
-                invalid={invalidTimeRange}
-                trailingLabel=""
-              />
-            </div>
-          </div>
         ) : null}
 
-        <div>
-          <FieldLabel>Location</FieldLabel>
-          <input
-            ref={locationRef}
-            data-testid="calendar-event-location"
-            type="text"
-            value={draft.location}
-            onFocus={() => {
-              if (!disabled) setOpenPicker("location");
-            }}
-            onChange={(event) => {
-              updateField("location", event.target.value);
-              if (!disabled) setOpenPicker("location");
-            }}
-            onKeyDown={async (event) => {
-              if (await handleLocationSuggestionKey(event)) return;
-              event.stopPropagation();
-            }}
-            disabled={disabled}
-            placeholder="Search for a place or type your own"
-            style={textFieldStyle()}
-          />
-          {!locationSuggestionsError ? (
-            <div
+        {showDetailFields ? (
+          <>
+            <label
               style={{
-                marginTop: 6,
-                fontSize: 10.5,
-                color: "rgba(205,214,244,0.45)",
-                lineHeight: 1.45,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                color: "rgba(205,214,244,0.72)",
               }}
             >
-              Nearby suggestions are biased to your saved weather location.
-            </div>
-          ) : null}
-        </div>
+              <input
+                data-testid="calendar-event-all-day"
+                type="checkbox"
+                checked={draft.allDay}
+                onChange={(event) => {
+                  const nextAllDay = event.target.checked;
+                  if (nextAllDay && (openPicker === "startTime" || openPicker === "endTime")) {
+                    setOpenPicker(null);
+                  }
+                  updateField("allDay", nextAllDay);
+                }}
+                disabled={disabled}
+                style={{ accentColor: "#cba6da" }}
+              />
+              All day
+            </label>
 
-        <div>
-          <FieldLabel>Notes</FieldLabel>
-          <textarea
-            data-testid="calendar-event-description"
-            value={draft.description}
-            onKeyDown={stopKeyPropagation}
-            onChange={(event) => updateField("description", event.target.value)}
-            disabled={disabled}
-            rows={5}
-            placeholder="Optional"
-            style={{ ...textFieldStyle(), resize: "vertical", minHeight: 120 }}
-          />
-        </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <FieldLabel>Start</FieldLabel>
+                <PickerFieldButton
+                  anchorRef={startDateRef}
+                  icon={CalendarDays}
+                  value={formatDateLabel(draft.startDate)}
+                  placeholder="Choose date"
+                  dataTestId="calendar-event-start-date"
+                  onClick={() => !disabled && setOpenPicker("startDate")}
+                  disabled={disabled}
+                  invalid={invalidDateRange}
+                  trailingLabel=""
+                />
+              </div>
+              <div>
+                <FieldLabel>End</FieldLabel>
+                <PickerFieldButton
+                  anchorRef={endDateRef}
+                  icon={CalendarDays}
+                  value={formatDateLabel(draft.endDate)}
+                  placeholder="Choose date"
+                  dataTestId="calendar-event-end-date"
+                  onClick={() => !disabled && setOpenPicker("endDate")}
+                  disabled={disabled}
+                  invalid={invalidDateRange}
+                  trailingLabel=""
+                />
+              </div>
+            </div>
+
+            {!draft.allDay ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <FieldLabel>Start time</FieldLabel>
+                  <PickerFieldButton
+                    anchorRef={startTimeRef}
+                    icon={Clock3}
+                    value={formatTimeLabel(draft.startTime)}
+                    placeholder="Choose time"
+                    dataTestId="calendar-event-start-time"
+                    onClick={() => !disabled && setOpenPicker("startTime")}
+                    disabled={disabled}
+                    invalid={invalidTimeRange}
+                    trailingLabel=""
+                  />
+                </div>
+                <div>
+                  <FieldLabel>End time</FieldLabel>
+                  <PickerFieldButton
+                    anchorRef={endTimeRef}
+                    icon={Clock3}
+                    value={formatTimeLabel(draft.endTime)}
+                    placeholder="Choose time"
+                    dataTestId="calendar-event-end-time"
+                    onClick={() => !disabled && setOpenPicker("endTime")}
+                    disabled={disabled}
+                    invalid={invalidTimeRange}
+                    trailingLabel=""
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <FieldLabel>Location</FieldLabel>
+              <input
+                ref={locationRef}
+                data-testid="calendar-event-location"
+                type="text"
+                value={draft.location}
+                onFocus={() => {
+                  if (!disabled) setOpenPicker("location");
+                }}
+                onChange={(event) => {
+                  updateField("location", event.target.value);
+                  if (!disabled) setOpenPicker("location");
+                }}
+                onKeyDown={async (event) => {
+                  if (await handleLocationSuggestionKey(event)) return;
+                  event.stopPropagation();
+                }}
+                disabled={disabled}
+                placeholder="Search for a place or type your own"
+                style={textFieldStyle()}
+              />
+              {!locationSuggestionsError ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 10.5,
+                    color: "rgba(205,214,244,0.45)",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Nearby suggestions are biased to your saved weather location.
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <FieldLabel>Notes</FieldLabel>
+              <textarea
+                data-testid="calendar-event-description"
+                value={draft.description}
+                onKeyDown={stopKeyPropagation}
+                onChange={(event) => updateField("description", event.target.value)}
+                disabled={disabled}
+                rows={isCompactMode ? 3 : 5}
+                placeholder="Optional"
+                style={{ ...textFieldStyle(), resize: "vertical", minHeight: isCompactMode ? 60 : 120 }}
+              />
+            </div>
+          </>
+        ) : null}
       </div>
+
+      {isBatchMode ? (
+        <CalendarBatchReviewSection
+          batchDrafts={batchDrafts}
+          allDay={draft.allDay}
+          disabled={disabled}
+          onUpdateDraft={updateBatchDraft}
+          onRemoveDraft={removeBatchDraft}
+        />
+      ) : null}
+
+      {showRecurringBuilder ? (
+        <CalendarRecurrenceSection
+          recurrenceDraft={recurrenceDraft}
+          startDate={draft.startDate}
+          disabled={disabled}
+          onUpdateRecurrence={updateRecurrenceDraft}
+          onToggleWeekday={toggleRecurrenceWeekday}
+        />
+      ) : null}
 
       <div
         style={{
@@ -1063,7 +1227,7 @@ export default function CalendarEventEditorRail({ editor }) {
           onClick={save}
           disabled={saveDisabled}
         >
-          {saving ? "Saving..." : isEditing ? "Save changes" : "Create event"}
+          {saving ? "Saving..." : isEditing ? "Save changes" : isBatchMode ? (batchDrafts.some((d) => d.error) ? `Retry ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}` : `Create ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}`) : isRecurringMode ? "Create recurring event" : "Create event"}
         </ActionButton>
         <ActionButton subtle onClick={closeEditor} disabled={disabled}>
           Cancel
@@ -1088,7 +1252,7 @@ export default function CalendarEventEditorRail({ editor }) {
               dataTestId="calendar-event-delete"
               danger
               onClick={confirmDeleteIntent}
-              disabled={disabled}
+              disabled={disabled || (isEditingRecurring && !recurringEditScope)}
             >
               Delete
             </ActionButton>

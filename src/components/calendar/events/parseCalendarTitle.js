@@ -1,5 +1,6 @@
 import * as chrono from "chrono-node/en";
 import { epochFromLa, laComponents } from "@/components/inbox/helpers";
+import { parseCalendarIntent } from "./calendarTitleIntent";
 
 const DEFAULT_DURATION_MINUTES = 30;
 const TRAILING_CONNECTOR_RE = /(?:\s+(?:on|at|from|to|for))+\s*$/i;
@@ -312,10 +313,17 @@ export function parseCalendarTitle(input, options = {}) {
   if (!trimmed) {
     return {
       rawTitle,
+      mode: "single",
       cleanTitle: "",
+      titleAfterSourceCommit: "",
+      titleAfterLocationCommit: "",
       matchedText: "",
       locationQuery: "",
+      sourceQuery: "",
       parsedDateTime: null,
+      singleDraft: null,
+      batchDrafts: [],
+      recurrenceDraft: null,
       preview: "",
     };
   }
@@ -335,13 +343,14 @@ export function parseCalendarTitle(input, options = {}) {
     includeLocation: true,
     includeSource: false,
   });
-  const parsedFull = parseTemporalTitle(fullyExtracted.title, {
+  const intent = parseCalendarIntent(fullyExtracted.title, {
     now,
     baseDate,
     defaultStartTime,
     defaultEndTime,
+    parseTemporalTitle,
+    cleanTitle: (value) => cleanWhitespace(String(value || "").replace(TRAILING_CONNECTOR_RE, "")),
   });
-  const cleanTitle = cleanWhitespace(parsedFull.workingTitle.replace(TRAILING_CONNECTOR_RE, ""));
   const sourceCommitClean = cleanWhitespace(sourceCommitted.title.replace(TRAILING_CONNECTOR_RE, ""));
   const locationCommitClean = cleanWhitespace(locationCommitted.title.replace(TRAILING_CONNECTOR_RE, ""));
   const titleAfterSourceCommit = sourceCommitClean ? `${sourceCommitClean} ` : "";
@@ -349,19 +358,23 @@ export function parseCalendarTitle(input, options = {}) {
 
   return {
     rawTitle,
-    cleanTitle,
+    mode: intent.mode,
+    cleanTitle: intent.cleanTitle,
     titleAfterSourceCommit,
     titleAfterLocationCommit,
-    matchedText: parsedFull.matchedText,
+    matchedText: intent.matchedText,
     locationQuery: fullyExtracted.locationQuery,
     sourceQuery: fullyExtracted.sourceQuery,
-    parsedDateTime: parsedFull.parsedDateTime,
-    preview: parsedFull.parsedDateTime
+    parsedDateTime: intent.parsedDateTime,
+    singleDraft: intent.singleDraft,
+    batchDrafts: intent.batchDrafts,
+    recurrenceDraft: intent.recurrenceDraft,
+    preview: intent.parsedDateTime
       ? formatPreview(
-        parsedFull.parsedDateTime.startDate,
-        parsedFull.parsedDateTime.startTime,
-        parsedFull.parsedDateTime.endDate,
-        parsedFull.parsedDateTime.endTime,
+        intent.parsedDateTime.startDate,
+        intent.parsedDateTime.startTime,
+        intent.parsedDateTime.endDate,
+        intent.parsedDateTime.endTime,
       )
       : "",
   };

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getNextWeekRange, normalizeGoogleCalendarLink } from "./calendar.js";
+import {
+  buildGoogleRecurrenceRules,
+  extractStructuredRecurrence,
+  getNextWeekRange,
+  normalizeGoogleCalendarLink,
+  normalizeGoogleEvent,
+} from "./calendar.js";
 
 describe("getNextWeekRange", () => {
   afterEach(() => {
@@ -72,5 +78,92 @@ describe("normalizeGoogleCalendarLink", () => {
   it("leaves non-Google links untouched", () => {
     expect(normalizeGoogleCalendarLink("https://example.com/event/123", "me@example.com"))
       .toBe("https://example.com/event/123");
+  });
+});
+
+describe("buildGoogleRecurrenceRules", () => {
+  it("builds a weekly recurrence rule with weekdays", () => {
+    expect(buildGoogleRecurrenceRules(
+      {
+        frequency: "weekly",
+        weekdays: ["monday", "wed", "FR"],
+        ends: { type: "never" },
+      },
+      {
+        allDay: false,
+        startDate: "2026-04-20",
+        startTime: "03:00",
+      },
+    )).toEqual(["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE,FR"]);
+  });
+
+  it("builds a monthly recurrence rule with an inclusive until date", () => {
+    expect(buildGoogleRecurrenceRules(
+      {
+        frequency: "monthly",
+        interval: 2,
+        ends: { type: "onDate", untilDate: "2026-08-20" },
+      },
+      {
+        allDay: false,
+        startDate: "2026-04-20",
+        startTime: "03:00",
+      },
+    )).toEqual(["RRULE:FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=20;UNTIL=20260820T100000Z"]);
+  });
+});
+
+describe("extractStructuredRecurrence", () => {
+  it("parses a weekly RRULE into structured recurrence metadata", () => {
+    expect(extractStructuredRecurrence([
+      "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE;UNTIL=20260820T100000Z",
+    ])).toEqual({
+      frequency: "weekly",
+      interval: 1,
+      weekdays: ["MO", "WE"],
+      monthDay: null,
+      month: null,
+      ends: { type: "onDate", untilDate: "2026-08-20" },
+    });
+  });
+});
+
+describe("normalizeGoogleEvent", () => {
+  it("includes recurring identity and parsed recurrence metadata", () => {
+    const event = normalizeGoogleEvent({
+      account: {
+        id: "acct-1",
+        email: "me@example.com",
+        label: "Google",
+        color: "#4285f4",
+      },
+      calendar: {
+        id: "primary",
+        summary: "Primary",
+        writable: true,
+        backgroundColor: "#4285f4",
+      },
+      event: {
+        id: "series-1",
+        summary: "Weekly work",
+        htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/series-1",
+        start: { dateTime: "2026-04-20T03:00:00-07:00" },
+        end: { dateTime: "2026-04-20T08:00:00-07:00" },
+        recurrence: ["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO"],
+      },
+    });
+
+    expect(event.isRecurring).toBe(true);
+    expect(event.recurringEventId).toBe("series-1");
+    expect(event.recurringKind).toBe("series");
+    expect(event.recurrence).toEqual({
+      frequency: "weekly",
+      interval: 1,
+      weekdays: ["MO"],
+      monthDay: null,
+      month: null,
+      ends: { type: "never" },
+      rules: ["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO"],
+    });
   });
 });

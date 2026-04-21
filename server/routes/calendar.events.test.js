@@ -125,6 +125,84 @@ describe("calendar event routes", () => {
     );
   });
 
+  it("creates a recurring calendar event when recurrence is provided", async () => {
+    createCalendarEvent.mockResolvedValue({
+      id: "event-recurring-1",
+      title: "Work",
+      recurringEventId: "event-recurring-1",
+    });
+
+    const res = await request(makeApp())
+      .post("/api/calendar/events")
+      .send({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        title: "Work",
+        allDay: false,
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "03:00",
+        endTime: "08:00",
+        recurrence: {
+          frequency: "weekly",
+          weekdays: ["MO"],
+          ends: { type: "never" },
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-main" }),
+      expect.objectContaining({
+        title: "Work",
+        recurrence: expect.objectContaining({ frequency: "weekly" }),
+      }),
+    );
+  });
+
+  it("creates a batch of calendar events and reports per-item failures", async () => {
+    createCalendarEvent
+      .mockResolvedValueOnce({ id: "event-1", title: "Tue shift" })
+      .mockRejectedValueOnce({
+        status: 400,
+        code: "calendar_validation_error",
+        message: "Title is required.",
+      });
+
+    const res = await request(makeApp())
+      .post("/api/calendar/events/batch")
+      .send({
+        items: [
+          {
+            accountId: "gmail-main",
+            calendarId: "primary",
+            title: "Tue shift",
+            allDay: false,
+            startDate: "2026-04-21",
+            endDate: "2026-04-21",
+            startTime: "04:15",
+            endTime: "07:30",
+          },
+          {
+            accountId: "gmail-main",
+            calendarId: "primary",
+            title: "",
+            allDay: false,
+            startDate: "2026-04-22",
+            endDate: "2026-04-22",
+            startTime: "04:15",
+            endTime: "07:30",
+          },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.created).toHaveLength(1);
+    expect(res.body.failed).toHaveLength(1);
+    expect(res.body.failed[0].code).toBe("calendar_validation_error");
+    expect(createCalendarEvent).toHaveBeenCalledTimes(2);
+  });
+
   it("updates a calendar event", async () => {
     updateCalendarEvent.mockResolvedValue({ id: "event-1", title: "Updated" });
 
@@ -148,6 +226,38 @@ describe("calendar event routes", () => {
     );
   });
 
+  it("passes recurring edit scope through to the calendar service", async () => {
+    updateCalendarEvent.mockResolvedValue({ id: "event-1", title: "Weekly sync" });
+
+    const res = await request(makeApp())
+      .patch("/api/calendar/events/event-1")
+      .send({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        etag: '"etag-1"',
+        title: "Weekly sync",
+        allDay: false,
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "09:00",
+        endTime: "09:30",
+        scope: "following",
+        recurringEventId: "series-1",
+        originalStartTime: "2026-04-20T16:00:00.000Z",
+      });
+
+    expect(res.status).toBe(200);
+    expect(updateCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-main" }),
+      "event-1",
+      expect.objectContaining({
+        scope: "following",
+        recurringEventId: "series-1",
+        originalStartTime: "2026-04-20T16:00:00.000Z",
+      }),
+    );
+  });
+
   it("deletes a calendar event", async () => {
     deleteCalendarEvent.mockResolvedValue(undefined);
 
@@ -164,6 +274,33 @@ describe("calendar event routes", () => {
       expect.objectContaining({ id: "gmail-main" }),
       "event-1",
       expect.objectContaining({ calendarId: "primary", etag: '"etag-1"' }),
+    );
+  });
+
+  it("passes recurring delete scope through to the calendar service", async () => {
+    deleteCalendarEvent.mockResolvedValue(undefined);
+
+    const res = await request(makeApp())
+      .delete("/api/calendar/events/event-1")
+      .send({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        etag: '"etag-1"',
+        scope: "one",
+        recurringEventId: "series-1",
+        originalStartTime: "2026-04-20T16:00:00.000Z",
+      });
+
+    expect(res.status).toBe(200);
+    expect(deleteCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-main" }),
+      "event-1",
+      expect.objectContaining({
+        calendarId: "primary",
+        scope: "one",
+        recurringEventId: "series-1",
+        originalStartTime: "2026-04-20T16:00:00.000Z",
+      }),
     );
   });
 
