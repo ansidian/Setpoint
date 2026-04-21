@@ -8,7 +8,7 @@ import CalendarBatchReviewSection from "./CalendarBatchReviewSection";
 import CalendarRecurrenceSection, { formatRecurrenceSummary } from "./CalendarRecurrenceSection";
 import CalendarRecurringScopePrompt, { recurringScopeLabel } from "./CalendarRecurringScopePrompt";
 import SourcePickerPanel from "./CalendarSourcePickerPanel";
-import { FieldLabel, ActionButton, PickerFieldButton, stopKeyPropagation } from "./CalendarEditorControls";
+import { FieldLabel, ActionButton, PickerFieldButton } from "./CalendarEditorControls";
 import DetailSummaryRow from "./CalendarEventDetailSummary";
 import {
   ACCENT,
@@ -680,7 +680,7 @@ export default function CalendarEventEditorRail({ editor }) {
               <textarea
                 data-testid="calendar-event-description"
                 value={draft.description}
-                onKeyDown={stopKeyPropagation}
+                onKeyDown={(event) => event.stopPropagation()}
                 onChange={(event) => updateField("description", event.target.value)}
                 disabled={disabled}
                 rows={isCompactMode ? 3 : 5}

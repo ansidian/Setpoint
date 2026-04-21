@@ -80,10 +80,6 @@ export function ActionButton({
   );
 }
 
-export function stopKeyPropagation(event) {
-  event.stopPropagation();
-}
-
 export function PickerFieldButton(props) {
   const {
     anchorRef,
