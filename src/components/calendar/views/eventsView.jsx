@@ -182,6 +182,7 @@ function isEditableEvent(ev) {
   return !!ev?.writable;
 }
 
+// eslint-disable-next-line no-unused-vars -- Icon is used in JSX below
 function renderActionLink({ href, label, icon: Icon }) {
   if (!href) return null;
 

@@ -1,6 +1,7 @@
 import { CalendarDays, ChevronDown, ChevronRight, Clock3, MapPin, Repeat, StickyNote } from "lucide-react";
 import { formatDateLabel, formatTimeLabel } from "./calendarEditorUtils";
 
+// eslint-disable-next-line no-unused-vars -- Icon is used in JSX below
 function DetailSummaryChip({ icon: Icon, label }) {
   return (
     <span

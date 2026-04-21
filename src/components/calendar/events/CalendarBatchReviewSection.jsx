@@ -61,7 +61,8 @@ function toPacificYmd(epoch) {
   }).format(new Date(epoch));
 }
 
-function PickerButton({ icon: Icon, label, value, testId, disabled, anchorRef, onClick }) {
+// eslint-disable-next-line no-unused-vars -- Icon is used in JSX below
+function PickerButton({ icon: Icon, value, testId, disabled, anchorRef, onClick }) {
   return (
     <button
       ref={anchorRef}
