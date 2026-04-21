@@ -45,6 +45,25 @@ export default function CalendarEventEditorRail({ editor }) {
   } = editor;
 
   const pickers = useCalendarEditorPickers(editor);
+  const {
+    openPicker,
+    setOpenPicker,
+    titleRef,
+    sourceRef,
+    locationRef,
+    startDateRef,
+    endDateRef,
+    startTimeRef,
+    endTimeRef,
+    missingCalendar,
+    selectedSource,
+    invalidDateRange,
+    invalidTimeRange,
+    showTitleAssist,
+    onTitleKeyDown,
+    onTitleChange,
+    handleLocationSuggestionKey,
+  } = pickers;
 
   const disabled = saving || deleting;
   const saveDisabled = disabled || !canSave;
@@ -136,17 +155,17 @@ export default function CalendarEventEditorRail({ editor }) {
         <div>
           <FieldLabel>Title</FieldLabel>
           <input
-            ref={pickers.titleRef}
+            ref={titleRef}
             data-testid="calendar-event-title"
             type="text"
             value={titleInput}
-            onKeyDown={pickers.onTitleKeyDown}
-            onChange={pickers.onTitleChange}
+            onKeyDown={onTitleKeyDown}
+            onChange={onTitleChange}
             disabled={disabled}
             placeholder={isEditing ? "Event title" : "Dinner on Tue at 5pm"}
             style={textFieldStyle({ invalid: validationMessage === "Title is required." })}
           />
-          {pickers.showTitleAssist ? (
+          {showTitleAssist ? (
             <div
               style={{
                 marginTop: 8,
@@ -212,16 +231,16 @@ export default function CalendarEventEditorRail({ editor }) {
             readOnly
           />
           <PickerFieldButton
-            anchorRef={pickers.sourceRef}
+            anchorRef={sourceRef}
             icon={CalendarIcon}
-            value={pickers.selectedSource?.label || (sourcesLoading ? "Loading calendars..." : "")}
+            value={selectedSource?.label || (sourcesLoading ? "Loading calendars..." : "")}
             placeholder={writableCalendars.length ? "Choose a calendar" : "No writable calendars"}
             dataTestId="calendar-event-source-trigger"
-            onClick={() => !disabled && pickers.setOpenPicker("source")}
+            onClick={() => !disabled && setOpenPicker("source")}
             disabled={disabled || sourcesLoading || writableCalendars.length === 0}
-            invalid={pickers.missingCalendar}
+            invalid={missingCalendar}
             trailingLabel=""
-            leading={pickers.selectedSource ? (
+            leading={selectedSource ? (
               <span
                 aria-hidden
                 style={{
@@ -230,12 +249,12 @@ export default function CalendarEventEditorRail({ editor }) {
                   borderRadius: 7,
                   display: "inline-grid",
                   placeItems: "center",
-                  background: `color-mix(in srgb, ${pickers.selectedSource.color} 16%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${pickers.selectedSource.color} 28%, transparent)`,
+                  background: `color-mix(in srgb, ${selectedSource.color} 16%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${selectedSource.color} 28%, transparent)`,
                   flexShrink: 0,
                 }}
               >
-                <span style={sourceDotStyle(pickers.selectedSource.color)} />
+                <span style={sourceDotStyle(selectedSource.color)} />
               </span>
             ) : null}
           />
@@ -267,8 +286,8 @@ export default function CalendarEventEditorRail({ editor }) {
                 checked={draft.allDay}
                 onChange={(event) => {
                   const nextAllDay = event.target.checked;
-                  if (nextAllDay && (pickers.openPicker === "startTime" || pickers.openPicker === "endTime")) {
-                    pickers.setOpenPicker(null);
+                  if (nextAllDay && (openPicker === "startTime" || openPicker === "endTime")) {
+                    setOpenPicker(null);
                   }
                   updateField("allDay", nextAllDay);
                 }}
@@ -282,28 +301,28 @@ export default function CalendarEventEditorRail({ editor }) {
               <div>
                 <FieldLabel>Start</FieldLabel>
                 <PickerFieldButton
-                  anchorRef={pickers.startDateRef}
+                  anchorRef={startDateRef}
                   icon={CalendarDays}
                   value={formatDateLabel(draft.startDate)}
                   placeholder="Choose date"
                   dataTestId="calendar-event-start-date"
-                  onClick={() => !disabled && pickers.setOpenPicker("startDate")}
+                  onClick={() => !disabled && setOpenPicker("startDate")}
                   disabled={disabled}
-                  invalid={pickers.invalidDateRange}
+                  invalid={invalidDateRange}
                   trailingLabel=""
                 />
               </div>
               <div>
                 <FieldLabel>End</FieldLabel>
                 <PickerFieldButton
-                  anchorRef={pickers.endDateRef}
+                  anchorRef={endDateRef}
                   icon={CalendarDays}
                   value={formatDateLabel(draft.endDate)}
                   placeholder="Choose date"
                   dataTestId="calendar-event-end-date"
-                  onClick={() => !disabled && pickers.setOpenPicker("endDate")}
+                  onClick={() => !disabled && setOpenPicker("endDate")}
                   disabled={disabled}
-                  invalid={pickers.invalidDateRange}
+                  invalid={invalidDateRange}
                   trailingLabel=""
                 />
               </div>
@@ -314,28 +333,28 @@ export default function CalendarEventEditorRail({ editor }) {
                 <div>
                   <FieldLabel>Start time</FieldLabel>
                   <PickerFieldButton
-                    anchorRef={pickers.startTimeRef}
+                    anchorRef={startTimeRef}
                     icon={Clock3}
                     value={formatTimeLabel(draft.startTime)}
                     placeholder="Choose time"
                     dataTestId="calendar-event-start-time"
-                    onClick={() => !disabled && pickers.setOpenPicker("startTime")}
+                    onClick={() => !disabled && setOpenPicker("startTime")}
                     disabled={disabled}
-                    invalid={pickers.invalidTimeRange}
+                    invalid={invalidTimeRange}
                     trailingLabel=""
                   />
                 </div>
                 <div>
                   <FieldLabel>End time</FieldLabel>
                   <PickerFieldButton
-                    anchorRef={pickers.endTimeRef}
+                    anchorRef={endTimeRef}
                     icon={Clock3}
                     value={formatTimeLabel(draft.endTime)}
                     placeholder="Choose time"
                     dataTestId="calendar-event-end-time"
-                    onClick={() => !disabled && pickers.setOpenPicker("endTime")}
+                    onClick={() => !disabled && setOpenPicker("endTime")}
                     disabled={disabled}
-                    invalid={pickers.invalidTimeRange}
+                    invalid={invalidTimeRange}
                     trailingLabel=""
                   />
                 </div>
@@ -345,19 +364,19 @@ export default function CalendarEventEditorRail({ editor }) {
             <div>
               <FieldLabel>Location</FieldLabel>
               <input
-                ref={pickers.locationRef}
+                ref={locationRef}
                 data-testid="calendar-event-location"
                 type="text"
                 value={draft.location}
                 onFocus={() => {
-                  if (!disabled) pickers.setOpenPicker("location");
+                  if (!disabled) setOpenPicker("location");
                 }}
                 onChange={(event) => {
                   updateField("location", event.target.value);
-                  if (!disabled) pickers.setOpenPicker("location");
+                  if (!disabled) setOpenPicker("location");
                 }}
                 onKeyDown={async (event) => {
-                  if (await pickers.handleLocationSuggestionKey(event)) return;
+                  if (await handleLocationSuggestionKey(event)) return;
                   event.stopPropagation();
                 }}
                 disabled={disabled}
