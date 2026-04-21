@@ -336,6 +336,8 @@ export default function useCalendarEventEditor({
   const [sourcesLoading, setSourcesLoading] = useState(false);
   const [sourcesLoaded, setSourcesLoaded] = useState(false);
   const [draft, setDraft] = useState(() => defaultDraft(null));
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const [batchDrafts, setBatchDrafts] = useState([]);
   const [recurrenceDraft, setRecurrenceDraft] = useState(null);
   const [recurringEditScope, setRecurringEditScope] = useState(null);
@@ -521,7 +523,7 @@ export default function useCalendarEventEditor({
   useEffect(() => {
     if (mode !== "editor" || isEditing) return;
     if (intentState.mode === "recurring") {
-      setRecurrenceDraft(normalizeRecurrenceDraft(intentState.recurrenceDraft, draft));
+      setRecurrenceDraft(normalizeRecurrenceDraft(intentState.recurrenceDraft, draftRef.current));
       return;
     }
     setRecurrenceDraft((current) => (current ? null : current));

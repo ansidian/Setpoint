@@ -994,7 +994,7 @@ export async function updateCalendarEvent(account, eventId, input) {
 
 export async function deleteCalendarEvent(account, eventId, input) {
   const scope = input.scope || null;
-  const { auth, calendar, event } = await getMutableEventContext(account, input.calendarId, eventId);
+  const { auth, event } = await getMutableEventContext(account, input.calendarId, eventId);
 
   if (!isRecurringEventResource(event)) {
     await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(eventId)}`, {
