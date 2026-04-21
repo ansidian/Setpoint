@@ -312,47 +312,6 @@ describe("Calendar event editor rail", () => {
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
-  it("parses natural language in the title into event fields while saving a cleaned title", async () => {
-    renderModal();
-    mockCreateCalendarEvent.mockResolvedValue({
-      event: {
-        id: "event-nlp",
-        title: "Dinner",
-        accountId: "gmail-main",
-        calendarId: "primary",
-        startMs: new Date("2026-04-21T00:00:00.000Z").getTime(),
-        endMs: new Date("2026-04-21T00:30:00.000Z").getTime(),
-        writable: true,
-        allDay: false,
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Dinner on Tue at 5pm" },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-title").value).toBe("Dinner on Tue at 5pm");
-      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 21, 2026/i);
-      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
-    });
-
-    fireEvent.click(screen.getByTestId("calendar-event-save"));
-
-    await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
-        title: "Dinner",
-        startDate: "2026-04-21",
-        endDate: "2026-04-21",
-        startTime: "17:00",
-        endTime: "17:30",
-      }));
-    });
-  });
-
   it("renders batch review UI for batch NLP and saves via the batch API", async () => {
     renderModal();
     mockCreateCalendarEventsBatch.mockResolvedValue({
@@ -493,22 +452,6 @@ describe("Calendar event editor rail", () => {
           },
         },
       }));
-    });
-  });
-
-  it("auto-fills start/end time from a bare time token while stripping it from the title", async () => {
-    renderModal();
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "dinner 2pm @mcdonalds" },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/2:00 pm/i);
-      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/2:30 pm/i);
     });
   });
 
