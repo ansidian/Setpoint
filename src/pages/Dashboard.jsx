@@ -11,6 +11,7 @@ import CustomizePanel from "../components/shell/CustomizePanel";
 import DashboardHero from "../components/dashboard/DashboardHero";
 import TodayTimeline from "../components/dashboard/TodayTimeline";
 import { InsightsRail, DeadlinesRail, BillsRail, InboxPeek } from "../components/dashboard/rails/Rails";
+import NotesRail from "../components/notes/NotesRail";
 import DeadlineDetailPopover from "../components/dashboard/DeadlineDetailPopover";
 import InboxView from "../components/inbox/InboxView";
 import { Sun } from "lucide-react";
@@ -546,7 +547,7 @@ export function DashboardBody({
   isMobile = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onJumpSection,
 }) {
-  const { dashboardLayout, density, showInsights, showInboxPeek } = customize;
+  const { dashboardLayout, density, showInsights, showInboxPeek, showNotes } = customize;
   const effectiveLayout = isMobile ? "paper" : dashboardLayout;
   const ctx = useDashboard();
 
@@ -736,6 +737,7 @@ export function DashboardBody({
           >
             {showInsights && <InsightsRail accent={accent} insights={insights} onJump={handleRailJump} />}
             <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} />
+            {showNotes && <NotesRail accent={accent} />}
           </div>
           <aside style={{ padding: "24px 22px", display: "flex", flexDirection: "column", gap: 28 }}>
             <BillsRail accent={accent} bills={bills} onJump={handleRailJump} />

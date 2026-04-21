@@ -179,3 +179,10 @@ export const getLiveData = () => apiFetch("/api/live/all");
 // Important Senders
 export const getImportantSenders = () => apiFetch("/api/ea/important-senders");
 export const updateImportantSenders = (senders) => apiFetch("/api/ea/important-senders", { method: "PUT", body: JSON.stringify({ senders }) });
+
+// Notes
+export const getNotes = () => apiFetch("/api/notes");
+export const createNote = (content) => apiFetch("/api/notes", { method: "POST", body: JSON.stringify({ content }) });
+export const updateNote = (id, content) => apiFetch(`/api/notes/${id}`, { method: "PATCH", body: JSON.stringify({ content }) });
+export const deleteNote = (id) => apiFetch(`/api/notes/${id}`, { method: "DELETE" });
+export const reorderNotes = (noteIds) => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
