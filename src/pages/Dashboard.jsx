@@ -869,34 +869,33 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
   const updatedLabel = formatAgoLabel(dataUpdatedAt, nowMs);
   const aiLabel = formatAgoLabel(briefing.aiGeneratedAt, nowMs);
   const quietRefreshes = briefing.skippedAI ? Math.max(1, briefing.nonAiGenerationCount || 1) : 0;
+  const showTransientUpdate = !!updatedLabel && noticeActive;
+  const showPersistentUpdate = !!updatedLabel && briefing.skippedAI;
+  const activityLabel = showTransientUpdate || showPersistentUpdate ? `Updated ${updatedLabel}` : null;
+  const activityToneColor = showTransientUpdate ? "#a6e3a1" : "#89b4fa";
 
   const nextLine = nextBriefing
     ? `Next ${nextBriefing.label} at ${nextBriefing.timeLabel} (${nextBriefing.relativeLabel})`
     : "No schedules enabled";
-
-  if (noticeActive) {
-    return {
-      label: "Briefing updated",
-      headline: "Briefing updated just now",
-      detail: `${nextLine}${briefing.skippedAI && aiLabel ? ` · AI source ${aiLabel}` : ""}`,
-      toneColor: "#a6e3a1",
-    };
-  }
 
   if (briefing.skippedAI) {
     const quietLabel = quietRefreshes > 1 ? `Quiet refresh · ${quietRefreshes} cloned updates` : "Quiet refresh";
     return {
       label: "Latest briefing",
       headline: aiLabel ? `${quietLabel} · Claude source ${aiLabel}` : quietLabel,
-      detail: `${updatedLabel ? `Updated ${updatedLabel} · ` : ""}${nextLine}`,
+      detail: nextLine,
       toneColor: "#89b4fa",
+      activityLabel,
+      activityToneColor,
     };
   }
 
   return {
     label: "Latest briefing",
     headline: aiLabel ? `Claude refreshed ${aiLabel}` : "Claude refreshed this briefing",
-    detail: `${updatedLabel ? `Updated ${updatedLabel} · ` : ""}${nextLine}`,
+    detail: nextLine,
     toneColor: "#cba6da",
+    activityLabel,
+    activityToneColor,
   };
 }

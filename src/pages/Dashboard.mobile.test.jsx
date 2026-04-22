@@ -201,7 +201,42 @@ describe("RedesignShell mobile behavior", () => {
     );
 
     expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Quiet refresh");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Updated");
     expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Morning Briefing");
+  });
+
+  it("keeps the AI headline visible when a refresh notice becomes active", async () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    const view = render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    view.rerender(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell
+            {...props}
+            bd={{
+              ...props.bd,
+              latestId: "latest-2",
+              lastQuickRefreshAt: Date.now(),
+            }}
+          />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    await waitFor(() => {
+      const text = screen.getByTestId("shell-header-briefing-status").textContent;
+      expect(text).toContain("Claude refreshed");
+      expect(text).toContain("Updated");
+      expect(text).not.toContain("Briefing updated just now");
+    });
   });
 
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {

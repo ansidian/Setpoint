@@ -20,16 +20,18 @@ function todayParts() {
   };
 }
 
-function buildBriefing({ events = [], emailAccounts = [] } = {}) {
+function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) {
   const nowIso = new Date().toISOString();
   const unreadCount = emailAccounts.reduce(
     (count, account) => count + (account.unread || 0),
     0,
   );
-  return {
+  const baseBriefing = {
     generatedAt: "9:00 AM · Wednesday, April 22, 2026",
     dataUpdatedAt: nowIso,
     aiGeneratedAt: nowIso,
+    skippedAI: false,
+    nonAiGenerationCount: 0,
     weather: {
       temp: 68,
       high: 72,
@@ -53,6 +55,28 @@ function buildBriefing({ events = [], emailAccounts = [] } = {}) {
     emails: {
       summary: unreadCount ? `${unreadCount} emails.` : "0 emails.",
       accounts: emailAccounts,
+    },
+  };
+
+  return {
+    ...baseBriefing,
+    ...briefing,
+    weather: {
+      ...baseBriefing.weather,
+      ...(briefing.weather || {}),
+    },
+    ctm: {
+      ...baseBriefing.ctm,
+      ...(briefing.ctm || {}),
+    },
+    todoist: {
+      ...baseBriefing.todoist,
+      ...(briefing.todoist || {}),
+    },
+    emails: {
+      ...baseBriefing.emails,
+      ...(briefing.emails || {}),
+      accounts: briefing.emails?.accounts || emailAccounts,
     },
   };
 }
@@ -256,6 +280,7 @@ function buildInboxFixtureLiveEmails() {
 async function installBaseDashboardFixtures(page, {
   initialEvents = [],
   emailAccounts = [],
+  briefing = {},
   settings = {},
   liveData = {},
 } = {}) {
@@ -274,11 +299,11 @@ async function installBaseDashboardFixtures(page, {
   );
 
   await page.route("**/api/briefing/latest**", async (route) =>
-    json(route, { id: 9001, briefing: buildBriefing({ events, emailAccounts }) }),
+    json(route, { id: 9001, briefing: buildBriefing({ events, emailAccounts, briefing }) }),
   );
 
   await page.route("**/api/briefing/refresh", async (route) =>
-    json(route, { id: 9002, briefingJson: buildBriefing({ events, emailAccounts }) }),
+    json(route, { id: 9002, briefingJson: buildBriefing({ events, emailAccounts, briefing }) }),
   );
 
   await page.route("**/api/calendar/range**", async (route) => {
@@ -357,8 +382,8 @@ async function installCalendarCrudFixtures(page, base, initialEvents) {
   });
 }
 
-export async function installDashboardShellFixtures(page) {
-  await installBaseDashboardFixtures(page);
+export async function installDashboardShellFixtures(page, options = {}) {
+  await installBaseDashboardFixtures(page, options);
 }
 
 export async function installDashboardCalendarLayoutFixtures(page) {

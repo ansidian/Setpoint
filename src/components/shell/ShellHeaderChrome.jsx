@@ -253,7 +253,13 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
   if (!briefingStatus) return null;
 
   const toneColor = briefingStatus.toneColor || accent;
-  const title = [briefingStatus.label, briefingStatus.headline, briefingStatus.detail]
+  const activityToneColor = briefingStatus.activityToneColor || "#cdd6f4";
+  const title = [
+    briefingStatus.label,
+    briefingStatus.headline,
+    briefingStatus.activityLabel,
+    briefingStatus.detail,
+  ]
     .filter(Boolean)
     .join(" · ");
 
@@ -297,6 +303,28 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
         <OverflowMarquee>
           {briefingStatus.headline}
         </OverflowMarquee>
+        {briefingStatus.activityLabel ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "2px 8px",
+              borderRadius: 9999,
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: 1.2,
+              letterSpacing: 0.1,
+              color: activityToneColor,
+              background: `${activityToneColor}14`,
+              border: `1px solid ${activityToneColor}30`,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+              flexShrink: 0,
+            }}
+          >
+            {briefingStatus.activityLabel}
+          </span>
+        ) : null}
         {briefingStatus.detail ? (
           <OverflowMarquee
             style={{ flex: "0 1 180px" }}
