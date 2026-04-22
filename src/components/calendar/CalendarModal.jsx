@@ -345,6 +345,7 @@ export default function CalendarModal({
   const layout = getCalendarLayoutMetrics(viewportWidth);
   const panelWidth = `calc(100vw - ${layout.viewportMargin * 2}px)`;
   const showEventsLoadingState = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
+  const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
 
   const selectedDayState = selectedDay != null
     ? (activeView.getDayState?.(itemsByDay[selectedDay]) ?? buildFallbackDayState(itemsByDay[selectedDay]))
@@ -368,10 +369,10 @@ export default function CalendarModal({
   const hasSelectedDay = selectedDay != null;
   const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
   const showDetail = view === "deadlines"
-    ? showDeadlineEditor || (hasSelectedDay && selectedDayState.totalCount > 0)
+    ? showDeadlineEditor || (!showDeadlinesLoadingState && hasSelectedDay && selectedDayState.totalCount > 0)
     : hasSelectedDay && selectedDayState.totalCount > 0;
   const showEmptySelection = view === "deadlines"
-    ? hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor
+    ? hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor && !showDeadlinesLoadingState
     : hasSelectedDay && selectedDayState.totalCount === 0;
 
   return (

@@ -129,14 +129,19 @@ export default function Dashboard() {
   const historyTriggerRef = useRef(null);
 
   const [calendarDeadlines, setCalendarDeadlines] = useState(null);
+  const [calendarDeadlinesLoading, setCalendarDeadlinesLoading] = useState(false);
   const calendarDeadlinesLoadingRef = useRef(false);
   const loadCalendarDeadlines = (opts) => {
     if (calendarDeadlinesLoadingRef.current && !opts?.force) return;
     calendarDeadlinesLoadingRef.current = true;
+    setCalendarDeadlinesLoading(true);
     getCalendarDeadlines()
       .then((data) => setCalendarDeadlines(data))
       .catch((err) => console.error("Calendar deadlines fetch failed:", err))
-      .finally(() => { calendarDeadlinesLoadingRef.current = false; });
+      .finally(() => {
+        calendarDeadlinesLoadingRef.current = false;
+        setCalendarDeadlinesLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -189,6 +194,7 @@ export default function Dashboard() {
         setHistoryOpen={setHistoryOpen}
         historyTriggerRef={historyTriggerRef}
         calendarDeadlines={calendarDeadlines}
+        calendarDeadlinesLoading={calendarDeadlinesLoading}
         loadCalendarDeadlines={loadCalendarDeadlines}
       />
       {DevPanel && (
@@ -207,7 +213,7 @@ export function RedesignShell({
   bd, liveData, calendarRange, isMock = false, refreshHold, handleFullGeneration,
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
-  calendarDeadlines, loadCalendarDeadlines,
+  calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines,
 }) {
   const customize = useCustomize();
   const isMobile = useIsMobile();
@@ -601,8 +607,9 @@ export function RedesignShell({
             actualBudgetUrl: liveData.actualBudgetUrl,
           }}
           deadlinesData={{
-            ctm: calendarDeadlines?.ctm || briefing?.ctm,
-            todoist: calendarDeadlines?.todoist || briefing?.todoist,
+            ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
+            todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
+            isLoading: calendarDeadlinesLoading && !calendarDeadlines,
           }}
         />
       )}

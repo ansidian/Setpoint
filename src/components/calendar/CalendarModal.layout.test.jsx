@@ -259,6 +259,83 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.queryByRole("button", { name: /mark complete/i })).toBeNull();
   });
 
+  it("keeps the deadlines rail in summary mode while live deadline data is still loading", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          isLoading: true,
+          ctm: { upcoming: [] },
+          todoist: { upcoming: [] },
+        }}
+      />,
+    ));
+
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("summary");
+  });
+
+  it("does not render completed-only deadlines into the month cell preview", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-21"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
+            ],
+          },
+          todoist: { upcoming: [] },
+        }}
+      />,
+    ));
+
+    expect(screen.queryByText("Project due")).toBeNull();
+  });
+
+  it("uses the event-style font treatment for the selected deadline title", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+            ],
+          },
+          todoist: { upcoming: [] },
+        }}
+      />,
+    ));
+
+    expect(screen.getByTestId("calendar-selected-deadline-title").className).not.toContain("ea-display");
+  });
+
   it("allows selecting empty days and shows a date-specific empty rail", async () => {
     window.innerWidth = 1900;
 
@@ -849,5 +926,40 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getByDisplayValue("First task")).toBeTruthy();
+  });
+
+  it("closes the inline Todoist editor on Escape without closing the modal", async () => {
+    window.innerWidth = 1900;
+    const onClose = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={onClose}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
+    const input = await screen.findByPlaceholderText(/Buy groceries tomorrow/i);
+    input.focus();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

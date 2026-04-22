@@ -70,6 +70,7 @@ export default function AddTaskPanelView({
     <div
       ref={panelRef}
       data-testid={isInline ? "todoist-inline-editor" : "todoist-floating-editor"}
+      data-suspend-calendar-hotkeys="true"
       style={isInline
         ? buildInlineContainerStyle({ active })
         : buildContainerStyle({ isMobile, pos, active, keyboardOffset })}

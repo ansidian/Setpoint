@@ -293,7 +293,6 @@ function DetailCard({
             <Motion.div
               layout="position"
               transition={motion.layout}
-              className="ea-display"
               data-testid="calendar-selected-deadline-title"
               title={title}
               style={{
@@ -452,7 +451,6 @@ function DetailCard({
           <Motion.div
             layout="position"
             transition={motion.layout}
-            className="ea-display"
             data-testid="calendar-selected-deadline-title"
             title={title}
             style={{
@@ -665,7 +663,6 @@ function DeadlinesDetail({
               id: `${sourceOf(task)}-${task.id}`,
               timeLabel: task.due_time || "End of day",
               title: task.title || task.name || "Untitled",
-              titleClassName: "ea-display",
               subtitle,
               meta: metaParts.join(" · "),
               dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
@@ -693,7 +690,6 @@ function DeadlinesDetail({
               id: `${sourceOf(task)}-${task.id}`,
               timeLabel: task.due_time || "End of day",
               title: task.title || task.name || "Untitled",
-              titleClassName: "ea-display",
               subtitle,
               meta: metaParts.join(" · "),
               dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",

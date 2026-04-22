@@ -473,7 +473,7 @@ describe("calendar detail timeline", () => {
     expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Senior Design Deliverables");
   });
 
-  it("compresses completed items in deadline month cells into a subtle count", () => {
+  it("does not render completed deadlines into month cells when active items exist", () => {
     render(
       <div>
         {deadlinesView.renderCellContents({
@@ -487,10 +487,9 @@ describe("calendar detail timeline", () => {
 
     expect(screen.getByText("Open early")).toBeTruthy();
     expect(screen.queryByText("Complete early")).toBeNull();
-    expect(screen.getByText("1")).toBeTruthy();
   });
 
-  it("shows a completed deadline preview when a day has no active items", () => {
+  it("keeps completed-only deadline month cells visually quiet", () => {
     render(
       <div>
         {deadlinesView.renderCellContents({
@@ -501,7 +500,7 @@ describe("calendar detail timeline", () => {
       </div>,
     );
 
-    expect(screen.getByText("Complete early")).toBeTruthy();
+    expect(screen.queryByText("Complete early")).toBeNull();
   });
 
   it("shows unpaid bills first and hides paid bills behind a collapsed section", () => {
