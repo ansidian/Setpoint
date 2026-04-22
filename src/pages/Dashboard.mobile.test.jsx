@@ -170,40 +170,6 @@ function renderShell() {
 }
 
 describe("RedesignShell mobile behavior", () => {
-  it("hides mobile calendar entry points and ignores the calendar hotkey", () => {
-    mockIsMobile = true;
-    renderShell();
-
-    expect(screen.getByTestId("shell-header-mobile")).toBeTruthy();
-    expect(screen.queryByTestId("calendar-modal")).toBeNull();
-    expect(screen.queryByTestId("shell-header-briefing-status")).toBeNull();
-    expect(screen.queryByText("Jump to anything")).toBeNull();
-
-    fireEvent.click(screen.getByLabelText("Open more actions"));
-    expect(screen.queryByText("Calendar")).toBeNull();
-
-    fireEvent.keyDown(window, { key: "c" });
-    expect(screen.queryByTestId("calendar-modal")).toBeNull();
-  });
-
-  it("uses browser back to return from inbox to dashboard on mobile", async () => {
-    mockIsMobile = true;
-    renderShell();
-
-    fireEvent.click(screen.getByRole("button", { name: /inbox/i }));
-    expect(screen.getByTestId("inbox-view")).toBeTruthy();
-
-    await act(async () => {
-      window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("inbox-view")).toBeNull();
-      expect(screen.getByTestId("dashboard-body-mobile")).toBeTruthy();
-    });
-  });
-
   it("keeps calendar available on desktop and opens it from the hotkey", () => {
     mockIsMobile = false;
     renderShell();

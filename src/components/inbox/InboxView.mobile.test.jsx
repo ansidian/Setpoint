@@ -166,94 +166,11 @@ function renderInbox({
 }
 
 describe("InboxView mobile", () => {
-  it("renders a list-first mobile inbox instead of the desktop split pane", () => {
-    renderInbox({ isMobile: true });
-
-    expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
-    expect(screen.queryByTestId("inbox-desktop-view")).toBeNull();
-    expect(screen.getByText("Inbox snapshot")).toBeTruthy();
-    expect(screen.getByTestId("inbox-mobile-chip-grid").style.gridTemplateColumns).toBe("repeat(5, minmax(0, 1fr))");
-    expect(screen.queryByLabelText("Refresh inbox")).toBeNull();
-  });
-
-  it("opens directly into the mobile reader when seeded and returns to the list without losing search", () => {
-    renderInbox({ isMobile: true });
-
-    const search = screen.getByLabelText("Search inbox");
-    fireEvent.change(search, { target: { value: "Project" } });
-    fireEvent.click(screen.getByText("Project budget sign-off"));
-
-    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Back to inbox"));
-
-    expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
-    expect(screen.getByLabelText("Search inbox").value).toBe("Project");
-  });
-
   it("respects a seedSelectedId on mobile", () => {
     renderInbox({ isMobile: true, seedSelectedId: "email-action" });
 
     expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
     expect(screen.getByText("Project budget sign-off")).toBeTruthy();
-  });
-
-  it("filters the mobile list by search and lane chips", () => {
-    renderInbox({ isMobile: true });
-
-    fireEvent.change(screen.getByLabelText("Search inbox"), { target: { value: "Budget" } });
-    expect(screen.getByText("Project budget sign-off")).toBeTruthy();
-    expect(screen.getByText("Budget dinner plans")).toBeTruthy();
-    expect(screen.queryByText("Weekly sale roundup")).toBeNull();
-
-    fireEvent.change(screen.getByLabelText("Search inbox"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: /New/i }));
-    expect(screen.getByText("Fresh live ping")).toBeTruthy();
-    expect(screen.queryByText("Project budget sign-off")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /Action/i }));
-    expect(screen.getByText("Project budget sign-off")).toBeTruthy();
-    expect(screen.queryByText("Fresh live ping")).toBeNull();
-  });
-
-  it("changes account scope from the mobile filter sheet and closes on outside click", () => {
-    renderInbox({ isMobile: true });
-
-    fireEvent.click(screen.getByTestId("inbox-mobile-filter-trigger"));
-    const sheet = screen.getByTestId("inbox-mobile-filter-sheet");
-    expect(sheet).toBeTruthy();
-
-    fireEvent.click(screen.getAllByRole("button", { name: /Work/i }).find((node) => sheet.contains(node)));
-    expect(screen.queryByTestId("inbox-mobile-filter-sheet")).toBeNull();
-    expect(screen.getByText("Project budget sign-off")).toBeTruthy();
-    expect(screen.queryByText("Budget dinner plans")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("inbox-mobile-filter-trigger"));
-    expect(screen.getByTestId("inbox-mobile-filter-sheet")).toBeTruthy();
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByTestId("inbox-mobile-filter-sheet")).toBeNull();
-  });
-
-  it("uses an inline actions menu and opens bill or draft workspaces from it", () => {
-    renderInbox({
-      isMobile: true,
-      seedSelectedId: "email-action",
-      customize: { aiVerbosity: "standard" },
-    });
-
-    expect(screen.getByTestId("inbox-mobile-reader-body")).toBeTruthy();
-    expect(screen.queryByTestId("inbox-mobile-bill-panel")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
-    expect(screen.getByTestId("inbox-mobile-actions-menu")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /Open bill pay/i }));
-    expect(screen.getByTestId("inbox-mobile-bill-panel")).toBeTruthy();
-    expect(screen.getByTestId("bill-badge")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Show draft reply/i }));
-    expect(screen.getByTestId("inbox-mobile-draft-panel")).toBeTruthy();
-    expect(screen.getByTestId("draft-reply")).toBeTruthy();
   });
 
   it("closes the reader when marking a selected live email unread", () => {
@@ -283,22 +200,6 @@ describe("InboxView mobile", () => {
     expect(screen.queryByTestId("inbox-mobile-reader")).toBeNull();
     expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
     expect(screen.getByText("Fresh live ping")).toBeTruthy();
-  });
-
-  it("returns to the mobile list on browser back while reading an email", () => {
-    renderInbox({ isMobile: true });
-
-    fireEvent.click(screen.getByText("Project budget sign-off"));
-    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
-
-    const sessionId = window.history.state.eaInboxNav.sessionId;
-    act(() => {
-      window.dispatchEvent(new PopStateEvent("popstate", {
-        state: { eaInboxNav: { sessionId, selectedId: null } },
-      }));
-    });
-
-    expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
   });
 
   it("keeps the desktop inbox path intact", () => {

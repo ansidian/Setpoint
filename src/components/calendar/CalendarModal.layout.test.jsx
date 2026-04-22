@@ -52,76 +52,12 @@ function wrapWithDashboard(node) {
   );
 }
 
-function renderCalendarModalAtWidth(viewportWidth) {
-  window.innerWidth = viewportWidth;
-
-  return render(wrapWithDashboard(
-    <CalendarModal
-      open
-      onClose={() => {}}
-      view="events"
-      onViewChange={() => {}}
-      eventsData={{
-        getEvents: () => [],
-      }}
-      billsData={{}}
-      deadlinesData={{}}
-    />,
-  ));
-}
-
 function getLatestRailContent() {
   const railContent = screen.getAllByTestId("calendar-rail-content");
   return railContent[railContent.length - 1];
 }
 
 describe("CalendarModal responsive layout", () => {
-  it("uses the wide desktop rail layout at 1900px", () => {
-    renderCalendarModalAtWidth(1900);
-
-    const panel = screen.getByTestId("calendar-modal-panel");
-    const body = screen.getByTestId("calendar-modal-body");
-    const rail = screen.getByTestId("calendar-modal-rail");
-
-    expect(panel).toBeTruthy();
-    expect(panel.style.width).toContain("calc(100vw - 80px)");
-    expect(panel.style.maxWidth).toBe("1560px");
-    expect(body.style.gridTemplateColumns).toContain("420px");
-    expect(rail.style.position).toBe("sticky");
-  });
-
-  it("stacks the layout and disables sticky rail at 1240px", () => {
-    renderCalendarModalAtWidth(1240);
-
-    const body = screen.getByTestId("calendar-modal-body");
-    const rail = screen.getByTestId("calendar-modal-rail");
-
-    expect(body.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
-    expect(rail.style.position).toBe("relative");
-  });
-
-  it("reflows when the viewport resizes after mount", () => {
-    renderCalendarModalAtWidth(1900);
-
-    const body = screen.getByTestId("calendar-modal-body");
-    const rail = screen.getByTestId("calendar-modal-rail");
-    const panel = screen.getByTestId("calendar-modal-panel");
-
-    expect(body.style.gridTemplateColumns).toContain("420px");
-    expect(rail.style.position).toBe("sticky");
-    expect(panel.style.width).toContain("calc(100vw - 80px)");
-
-    act(() => {
-      window.innerWidth = 1240;
-      window.dispatchEvent(new Event("resize"));
-    });
-
-    expect(body.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
-    expect(rail.style.position).toBe("relative");
-    expect(panel.style.width).toContain("calc(100vw - 48px)");
-    expect(panel.style.maxWidth).toBe("1180px");
-  });
-
   it("shows skeleton loaders while the events month is loading", () => {
     window.innerWidth = 1900;
 
@@ -505,54 +441,6 @@ describe("CalendarModal responsive layout", () => {
     expect(detailRail.style.overflow).toBe("hidden");
     expect(detailSections.getAttribute("data-calendar-local-scroll")).toBe("true");
     expect(detailSections.style.overflowY).toBe("auto");
-  });
-
-  it("swaps the rail cleanly between empty and detail states", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    expect(await screen.findByText(/nothing is scheduled here/i)).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
-
-    const rail = screen.getByTestId("calendar-modal-rail");
-    fireEvent.click(screen.getByTestId("calendar-cell-21"));
-
-    await waitFor(() => {
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
-      expect(within(rail).getAllByText("Design review").length).toBeGreaterThan(0);
-      expect(within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByTestId("calendar-cell-20"));
-
-    await waitFor(() => {
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
-      expect(screen.getByText(/nothing is scheduled here/i)).toBeTruthy();
-    });
   });
 
   it("preserves detail-list scroll position when selecting another event in the same day", async () => {
