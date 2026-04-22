@@ -133,7 +133,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
     activeAccount, setActiveAccount,
     selectedEmail, setSelectedEmail,
     confirmDismissId, setConfirmDismissId, handleDismiss: onDismiss,
-    markAccountEmailsRead, markEmailRead, markEmailUnread,
+    markEmailRead, markEmailUnread,
     setLoadingBillId, emailSectionRef, totalNoiseCount,
   } = useDashboard();
 
@@ -141,6 +141,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
   const [noiseExpanded, setNoiseExpanded] = useState(false);
   const [openNoise, setOpenNoise] = useState(null);
   const [markingAllRead, setMarkingAllRead] = useState(false);
+  const [markAllReadError, setMarkAllReadError] = useState("");
   const [emailMenu, setEmailMenu] = useState(null); // { email, x, y }
 
   const hasUnread = currentAccount?.important?.some(e => !e.read);
@@ -294,11 +295,23 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
     const uids = currentAccount.important.map(e => e.uid || e.id);
     if (!uids.length) return;
     setMarkingAllRead(true);
+    setMarkAllReadError("");
     try {
-      await markAllEmailsAsRead(uids);
-      markAccountEmailsRead();
-    } catch {
-      // silently fail
+      const result = await markAllEmailsAsRead(uids);
+      const updatedUids = Array.isArray(result?.updatedUids) && result.updatedUids.length
+        ? result.updatedUids
+        : uids;
+      updatedUids.forEach((uid) => markEmailRead(uid));
+
+      const failedEntries = Array.isArray(result?.failed) ? result.failed : [];
+      const failedCount = failedEntries.reduce((sum, entry) => sum + (entry.uids?.length || 0), 0);
+      if (failedCount > 0) {
+        setMarkAllReadError(
+          `Marked ${updatedUids.length} email${updatedUids.length === 1 ? "" : "s"} read, but ${failedCount} could not be updated.`,
+        );
+      }
+    } catch (err) {
+      setMarkAllReadError(err.message || "Failed to mark emails as read.");
     }
     setMarkingAllRead(false);
   };
@@ -319,6 +332,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
               onClick={() => {
                 setActiveAccount(i);
                 setSelectedEmail(null);
+                setMarkAllReadError("");
               }}
               className="rounded-lg px-3 py-2 cursor-pointer flex items-center gap-2 transition-all duration-200"
               style={{
@@ -349,21 +363,28 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
 
       {/* Batch actions — contextual row above the email list */}
       {currentAccount.important.length > 0 && (
-        <div className="mb-3 flex items-center gap-1.5">
-          {(() => {
-            const carriedOver = currentAccount.important.filter(e => (e.seenCount || 1) >= 2);
-            if (!carriedOver.length) return null;
-            return (
-              <GhostAction onClick={() => carriedOver.forEach(e => onDismiss(e.id))}>
-                Dismiss {carriedOver.length} carried-over
-              </GhostAction>
-            );
-          })()}
-          <GhostAction onClick={handleMarkAllRead} disabled={markingAllRead} active={hasUnread}>
-            <CheckCheck size={11} className="inline -mt-px" />
-            {markingAllRead ? " Marking…" : " Mark all read"}
-          </GhostAction>
-        </div>
+        <>
+          <div className="mb-3 flex items-center gap-1.5">
+            {(() => {
+              const carriedOver = currentAccount.important.filter(e => (e.seenCount || 1) >= 2);
+              if (!carriedOver.length) return null;
+              return (
+                <GhostAction onClick={() => carriedOver.forEach(e => onDismiss(e.id))}>
+                  Dismiss {carriedOver.length} carried-over
+                </GhostAction>
+              );
+            })()}
+            <GhostAction onClick={handleMarkAllRead} disabled={markingAllRead} active={hasUnread}>
+              <CheckCheck size={11} className="inline -mt-px" />
+              {markingAllRead ? " Marking…" : " Mark all read"}
+            </GhostAction>
+          </div>
+          {markAllReadError ? (
+            <div className="mb-3 text-[10px] leading-relaxed text-[#f5c2e7]">
+              {markAllReadError}
+            </div>
+          ) : null}
+        </>
       )}
 
       <MotionList className="flex flex-col gap-1.5" loaded={loaded} delay={delay + 100} stagger={0.04}>

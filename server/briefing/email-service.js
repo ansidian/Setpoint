@@ -95,6 +95,19 @@ async function markEmailsUnreadInIndex(userId, uids) {
   });
 }
 
+function normalizeUidList(uids) {
+  const list = Array.isArray(uids) ? uids : [uids];
+  return [...new Set(list.filter(Boolean))];
+}
+
+function buildBatchReadFailure({ message, failed, total }) {
+  const err = new Error(message || `Failed to mark ${total} email${total === 1 ? "" : "s"} as read.`);
+  err.status = 502;
+  err.code = "email_mark_all_read_failed";
+  err.failed = failed;
+  return err;
+}
+
 // --- Read ops ---
 
 export async function getEmailBody(userId, uid) {
@@ -253,15 +266,21 @@ export async function trash(userId, uid) {
 }
 
 export async function markAllRead(userId, uids) {
+  const requestedUids = normalizeUidList(uids);
+  if (!requestedUids.length) {
+    return { updatedUids: [], failed: [] };
+  }
+
   const gmailUids = new Map();
   const icloudUids = [];
+  const failed = [];
 
   const accounts = await db.execute({
     sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND (type = 'gmail' OR type = 'icloud')",
     args: [userId],
   });
 
-  for (const uid of uids) {
+  for (const uid of requestedUids) {
     if (uid.startsWith("icloud-")) {
       icloudUids.push(uid);
     } else if (uid.startsWith("gmail-")) {
@@ -271,13 +290,29 @@ export async function markAllRead(userId, uids) {
       if (account) {
         if (!gmailUids.has(account.id)) gmailUids.set(account.id, { account, uids: [] });
         gmailUids.get(account.id).uids.push(uid);
+      } else {
+        failed.push({
+          provider: "gmail",
+          uids: [uid],
+          message: "Gmail account not found for one or more emails.",
+        });
       }
+    } else {
+      failed.push({
+        provider: "unknown",
+        uids: [uid],
+        message: "Unsupported email UID format.",
+      });
     }
   }
 
   const ops = [];
   for (const { account, uids: accUids } of gmailUids.values()) {
-    ops.push(gmailBatchMarkAsRead(account, accUids));
+    ops.push({
+      provider: "gmail",
+      uids: accUids,
+      run: () => gmailBatchMarkAsRead(account, accUids),
+    });
   }
   if (icloudUids.length) {
     const placeholders = icloudUids.map(() => "?").join(",");
@@ -294,20 +329,58 @@ export async function markAllRead(userId, uids) {
     for (const uid of icloudUids) {
       const accountId = accountIdByUid.get(uid) || fallbackIcloud?.id;
       const account = accounts.rows.find((a) => a.type === "icloud" && a.id === accountId);
-      if (!account) continue;
+      if (!account) {
+        failed.push({
+          provider: "icloud",
+          uids: [uid],
+          message: "iCloud account not found for one or more emails.",
+        });
+        continue;
+      }
       if (!groupedIcloud.has(account.id)) groupedIcloud.set(account.id, { account, uids: [] });
       groupedIcloud.get(account.id).uids.push(uid);
     }
 
     for (const { account, uids: accUids } of groupedIcloud.values()) {
       const password = decrypt(account.credentials_encrypted);
-      ops.push(icloudBatchMarkAsRead(account.email, password, accUids));
+      ops.push({
+        provider: "icloud",
+        uids: accUids,
+        run: () => icloudBatchMarkAsRead(account.email, password, accUids),
+      });
     }
   }
 
-  await Promise.all(ops);
-  await storedBriefingService.markEmailsRead(userId, uids);
-  await markEmailsReadInIndex(userId, uids);
+  const settled = await Promise.allSettled(ops.map((op) => op.run()));
+  const updatedUids = [];
+
+  settled.forEach((result, index) => {
+    const op = ops[index];
+    if (result.status === "fulfilled") {
+      updatedUids.push(...op.uids);
+      return;
+    }
+    failed.push({
+      provider: op.provider,
+      uids: op.uids,
+      message: result.reason?.message || "Failed to mark emails as read.",
+    });
+  });
+
+  if (updatedUids.length) {
+    await storedBriefingService.markEmailsRead(userId, updatedUids);
+    await markEmailsReadInIndex(userId, updatedUids);
+  }
+
+  if (failed.length && !updatedUids.length) {
+    throw buildBatchReadFailure({
+      message: failed[0]?.message,
+      failed,
+      total: requestedUids.length,
+    });
+  }
+
+  return { updatedUids, failed };
 }
 
 export async function snooze(userId, uid, untilTs, snapshot) {

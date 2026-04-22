@@ -123,6 +123,20 @@ router.get("/all", async (_req, res) => {
       }
     }
 
+    const briefingIndexReadByUid = new Map();
+    if (briefingEmailRefs.length) {
+      const placeholders = briefingEmailRefs.map(() => "?").join(",");
+      const indexedReads = await db.execute({
+        sql: `SELECT uid, read
+              FROM ea_email_index
+              WHERE user_id = ? AND uid IN (${placeholders})`,
+        args: [userId, ...briefingEmailRefs.map((ref) => ref.uid)],
+      });
+      for (const row of indexedReads.rows) {
+        briefingIndexReadByUid.set(row.uid, !!row.read);
+      }
+    }
+
     // Dynamic window: when the briefing carries emails, live only needs to
     // cover the gap since generation (min 1h, max 24h). With an empty
     // briefing (clean inbox or a failed generation), fall back to the 12h
@@ -321,17 +335,22 @@ router.get("/all", async (_req, res) => {
         if (liveReadByUid.has(ref.uid)) {
           return [ref.uid, liveReadByUid.get(ref.uid)];
         }
+        const fallbackRead = briefingIndexReadByUid.has(ref.uid)
+          ? briefingIndexReadByUid.get(ref.uid)
+          : null;
         if (ref.uid?.startsWith("gmail-")) {
           const acct = findProviderAccount(gmailAccounts, ref);
-          if (!acct) return [ref.uid, null];
-          return [ref.uid, await isGmailMessageRead(acct, ref.uid)];
+          if (!acct) return [ref.uid, fallbackRead];
+          const probed = await isGmailMessageRead(acct, ref.uid);
+          return [ref.uid, probed === null ? fallbackRead : probed];
         }
         if (ref.uid?.startsWith("icloud-")) {
           const acct = findProviderAccount(icloudAccounts, ref);
-          if (!acct) return [ref.uid, null];
-          return [ref.uid, await isIcloudMessageRead(acct.email, icloudPasswords.get(acct.id), ref.uid)];
+          if (!acct) return [ref.uid, fallbackRead];
+          const probed = await isIcloudMessageRead(acct.email, icloudPasswords.get(acct.id), ref.uid);
+          return [ref.uid, probed === null ? fallbackRead : probed];
         }
-        return [ref.uid, null];
+        return [ref.uid, fallbackRead];
       }),
     );
     for (const [uid, read] of briefingProbeResults) {

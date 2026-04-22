@@ -171,4 +171,44 @@ describe("GET /api/live/all — dynamic hoursBack", () => {
     expect(Object.prototype.hasOwnProperty.call(res.body.briefingReadStatus, "gmail-gmail-a-msg-2")).toBe(true);
     expect(res.body.briefingReadStatus["gmail-gmail-a-msg-2"]).toBe(false);
   });
+
+  it("falls back to indexed read state when provider probing cannot confirm the latest briefing row", async () => {
+    const uid = "gmail-gmail-a-msg-3";
+    mockDb.execute.mockImplementation(async ({ sql }) => {
+      if (sql.includes("FROM ea_briefings") && sql.includes("ORDER BY generated_at DESC LIMIT 1")) {
+        return {
+          rows: [{
+            id: 1,
+            generated_at: new Date(Date.now() - 2 * 3600_000).toISOString().slice(0, 19).replace("T", " "),
+            briefing_json: JSON.stringify({
+              emails: {
+                accounts: [{
+                  name: "Work",
+                  important: [{
+                    id: uid,
+                    uid,
+                    account_id: "gmail-a",
+                    account_email: "w@e.com",
+                    read: false,
+                  }],
+                  noise: [],
+                }],
+              },
+            }),
+          }],
+        };
+      }
+      if (sql.includes("FROM ea_email_index")) {
+        return { rows: [{ uid, read: 1 }] };
+      }
+      return { rows: [] };
+    });
+    isGmailMessageRead.mockResolvedValueOnce(null);
+
+    const handler = findHandler("get", "/all");
+    const res = makeRes();
+    await handler({}, res);
+
+    expect(res.body.briefingReadStatus).toEqual({ [uid]: true });
+  });
 });

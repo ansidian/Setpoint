@@ -108,8 +108,12 @@ router.post("/email/mark-all-read", async (req, res) => {
     return res.status(400).json({ message: "uids array required" });
   }
   try {
-    await emailService.markAllRead(EA_USER_ID, uids);
-    res.json({ ok: true });
+    const result = await emailService.markAllRead(EA_USER_ID, uids);
+    res.json({
+      ok: !result.failed?.length,
+      updatedUids: result.updatedUids || [],
+      failed: result.failed || [],
+    });
   } catch (err) {
     console.error("Error marking all emails as read:", err);
     res.status(err.status || 500).json({ message: err.message });

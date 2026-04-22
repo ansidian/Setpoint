@@ -26,9 +26,14 @@ vi.mock("./stored-briefing-service.js", () => ({
 }));
 vi.mock("./index.js", () => ({ loadUserConfig: vi.fn() }));
 
-const { __testing__ } = await import("./email-service.js");
+const gmail = await import("./gmail.js");
+const icloud = await import("./icloud.js");
+const storedBriefingService = await import("./stored-briefing-service.js");
+const emailService = await import("./email-service.js");
+const { __testing__ } = emailService;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mockDb.execute.mockReset();
 });
 
@@ -91,5 +96,57 @@ describe("buildEmailWebUrl", () => {
 
   it("returns null for non-gmail uids", () => {
     expect(__testing__.buildEmailWebUrl("icloud-1", "gmail-x", "x@y.com")).toBeNull();
+  });
+});
+
+describe("markAllRead", () => {
+  it("updates successful UID groups and reports partial failures", async () => {
+    const gmailUid = "gmail-gmail-work-msg1";
+    const icloudUid = "icloud-3193";
+    mockDb.execute
+      .mockResolvedValueOnce({
+        rows: [
+          { id: "gmail-work", email: "work@example.com", type: "gmail" },
+          { id: "icloud-main", email: "me@icloud.com", type: "icloud", credentials_encrypted: "enc" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ uid: icloudUid, account_id: "icloud-main" }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    gmail.batchMarkAsRead.mockResolvedValueOnce(undefined);
+    icloud.batchMarkAsRead.mockRejectedValueOnce(new Error("iCloud batch failed"));
+
+    const result = await emailService.markAllRead("u1", [gmailUid, icloudUid]);
+
+    expect(result).toEqual({
+      updatedUids: [gmailUid],
+      failed: [{
+        provider: "icloud",
+        uids: [icloudUid],
+        message: "iCloud batch failed",
+      }],
+    });
+    expect(storedBriefingService.markEmailsRead).toHaveBeenCalledWith("u1", [gmailUid]);
+    expect(mockDb.execute).toHaveBeenLastCalledWith({
+      sql: "UPDATE ea_email_index SET read = 1 WHERE user_id = ? AND uid IN (?)",
+      args: ["u1", gmailUid],
+    });
+  });
+
+  it("throws when every provider batch update fails", async () => {
+    const gmailUid = "gmail-gmail-work-msg1";
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [{ id: "gmail-work", email: "work@example.com", type: "gmail" }],
+    });
+    gmail.batchMarkAsRead.mockRejectedValueOnce(new Error("Gmail batch failed"));
+
+    await expect(emailService.markAllRead("u1", [gmailUid])).rejects.toMatchObject({
+      message: "Gmail batch failed",
+      code: "email_mark_all_read_failed",
+      status: 502,
+    });
+    expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
   });
 });
