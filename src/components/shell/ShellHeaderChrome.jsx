@@ -11,8 +11,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const DESKTOP_HEADER_CARD_MIN_HEIGHT = 64;
-
 export function Kbd({ children }) {
   return (
     <kbd
@@ -162,11 +160,9 @@ export function PaletteTriggerButton({ onOpenPalette }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        alignSelf: "stretch",
         gap: 6,
-        minHeight: DESKTOP_HEADER_CARD_MIN_HEIGHT,
-        padding: "0 14px",
-        borderRadius: 10,
+        padding: "4px 10px",
+        borderRadius: 8,
         fontSize: 11,
         fontFamily: "inherit",
         letterSpacing: 0.2,
@@ -199,10 +195,8 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-start",
-        justifyContent: "center",
         gap: 4,
         minWidth: 240,
-        minHeight: DESKTOP_HEADER_CARD_MIN_HEIGHT,
         maxWidth: 360,
         padding: "8px 12px",
         borderRadius: 10,
@@ -480,10 +474,8 @@ export function RefreshButton({
       style={{
         position: "relative",
         overflow: "hidden",
-        alignSelf: isMobile ? "center" : "stretch",
-        minHeight: isMobile ? undefined : DESKTOP_HEADER_CARD_MIN_HEIGHT,
-        padding: isMobile ? "7px 9px" : "0 14px",
-        borderRadius: isMobile ? 8 : 10,
+        padding: isMobile ? "7px 9px" : "5px 10px",
+        borderRadius: 8,
         border: `1px solid ${hover && !busy ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
         background: hover && !busy ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
         color: hover && !busy ? "#cdd6f4" : "rgba(205,214,244,0.85)",
