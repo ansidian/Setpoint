@@ -44,7 +44,7 @@ export function buildContainerStyle({ isMobile, pos, active, keyboardOffset }) {
   };
 }
 
-export function buildInlineContainerStyle({ active }) {
+export function buildInlineContainerStyle() {
   return {
     position: "relative",
     display: "flex",
@@ -55,9 +55,9 @@ export function buildInlineContainerStyle({ active }) {
     boxShadow: "none",
     overflowY: "auto",
     fontFamily: "inherit",
-    opacity: active ? 1 : 0,
-    transition: "opacity 180ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1)",
-    transform: active ? "translateY(0)" : "translateY(6px)",
+    opacity: 1,
+    transition: "none",
+    transform: "none",
   };
 }
 

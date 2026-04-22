@@ -1,5 +1,4 @@
 import { dayBucket, dueDateToMs } from "./redesign-helpers";
-import { daysUntil } from "./bill-utils";
 
 function urgentDeadlines(deadlines, now) {
   const out = [];
@@ -17,11 +16,14 @@ function urgentDeadlines(deadlines, now) {
   return out.sort((a, b) => a.dueAtMs - b.dueAtMs);
 }
 
-function unpaidBills(bills) {
+function unpaidBills(bills, now) {
   const out = [];
   for (const bill of bills || []) {
     if (!bill || bill.paid) continue;
-    const days = daysUntil(bill.next_date);
+    const targetMs = bill.next_date
+      ? new Date(`${bill.next_date}T12:00:00Z`).getTime()
+      : null;
+    const days = Number.isFinite(targetMs) ? dayBucket(targetMs, now) : null;
     if (days == null || days > 5) continue;
     out.push({ bill, days });
   }
@@ -104,7 +106,7 @@ export function deriveOpenDaySummary({ deadlines = [], bills = [], emails = null
     ...entry,
     daysUntil: dayBucket(entry.dueAtMs, now),
   }));
-  const bl = unpaidBills(bills);
+  const bl = unpaidBills(bills, now);
   const actionable = actionableEmailCount(emails);
 
   const items = [];

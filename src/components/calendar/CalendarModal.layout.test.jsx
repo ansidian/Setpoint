@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import CalendarModal from "./CalendarModal.jsx";
@@ -336,6 +336,54 @@ describe("CalendarModal responsive layout", () => {
 
     expect(await screen.findByText("Monday, April 20")).toBeTruthy();
     expect(screen.getByText(/no events on this day yet/i)).toBeTruthy();
+    expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
+  });
+
+  it("swaps the rail cleanly between empty and detail states", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    expect(await screen.findByText(/no events on this day yet/i)).toBeTruthy();
+    expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
+
+    const rail = screen.getByTestId("calendar-modal-rail");
+    fireEvent.click(screen.getByTestId("calendar-cell-21"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("detail");
+      expect(within(rail).getByText("Design review")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
+      expect(screen.getByText(/no events on this day yet/i)).toBeTruthy();
+    });
   });
 
   it("blocks modal hotkeys while typing in the editor", async () => {

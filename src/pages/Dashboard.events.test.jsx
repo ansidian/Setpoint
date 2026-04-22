@@ -32,12 +32,25 @@ function makeBriefing(events = []) {
   };
 }
 
-function renderDashboardBody({ briefing, ensureRange, onOpenDeadlinesCalendar = () => {} }) {
+function renderDashboardBody({
+  briefing,
+  ensureRange,
+  onOpenDeadlinesCalendar = () => {},
+  liveData: liveDataOverrides = {},
+}) {
   return render(
     <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <DashboardBody
         briefing={briefing}
-        liveData={{ liveBills: [], liveWeather: briefing.weather, liveEmails: [] }}
+        liveData={{
+          liveBills: [],
+          liveWeather: briefing.weather,
+          liveEmails: [],
+          billsLoading: false,
+          actualConfigured: false,
+          isPolling: false,
+          ...liveDataOverrides,
+        }}
         calendarRange={{
           ensureRange,
           getEvents: vi.fn(),
@@ -80,6 +93,9 @@ describe("Dashboard event loading", () => {
 
     expect(screen.getAllByText("Seeded focus block").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("dashboard-event-skeletons")).toBeNull();
+    expect(screen.getByTestId("focus-window-refresh-status")).toBeTruthy();
+    expect(screen.getByTestId("timeline-refresh-status")).toBeTruthy();
+    expect(screen.getAllByText("Updating Google Calendar").length).toBe(2);
   });
 
   it("shows event skeletons only when there is no seed data and the first fetch is pending", () => {
@@ -95,6 +111,29 @@ describe("Dashboard event loading", () => {
     expect(screen.getByTestId("dashboard-event-skeletons")).toBeTruthy();
     expect(screen.getByTestId("focus-window-skeleton")).toBeTruthy();
     expect(screen.getAllByText("Essay").length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("focus-window-refresh-status")).toBeNull();
+    expect(screen.queryByTestId("timeline-refresh-status")).toBeNull();
+  });
+
+  it("shows a local bills placeholder while Actual data is still loading", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    renderDashboardBody({
+      briefing: makeBriefing([]),
+      ensureRange: vi.fn().mockResolvedValue([]),
+      liveData: {
+        liveBills: [],
+        billsLoading: true,
+        actualConfigured: true,
+        isPolling: true,
+      },
+    });
+
+    expect(screen.getByTestId("bills-rail-loading-placeholder")).toBeTruthy();
+    expect(screen.getByTestId("bills-rail-refresh-status")).toBeTruthy();
+    expect(screen.queryByText("No upcoming bills")).toBeNull();
   });
 
   it("deep links the pressure pill to the nearest deadline day", () => {

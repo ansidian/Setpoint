@@ -107,12 +107,16 @@ export default function useAddTaskPanelController({
   const DELETE_HOLD_MS = 500;
 
   const requestClose = useCallback(() => {
+    if (isInline) {
+      onClose();
+      return;
+    }
     if (closeTimerRef.current) return;
     setClosing(true);
     closeTimerRef.current = setTimeout(() => {
       onClose();
     }, 180);
-  }, [onClose]);
+  }, [isInline, onClose]);
 
   useEffect(() => () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);

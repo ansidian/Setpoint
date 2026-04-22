@@ -99,6 +99,15 @@ function hasExplicitDate(component) {
     || component.isCertain("weekday");
 }
 
+function compareTimes(startTime, endTime) {
+  const start = timePartsFromString(startTime);
+  const end = timePartsFromString(endTime);
+  if (!start || !end) return null;
+  const startMinutes = start.hour * 60 + start.minute;
+  const endMinutes = end.hour * 60 + end.minute;
+  return endMinutes - startMinutes;
+}
+
 function formatPreview(startDate, startTime, endDate, endTime) {
   if (!startDate) return "";
   const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
@@ -261,6 +270,7 @@ function parseTemporalTitle(inputTitle, options = {}) {
     workingTitle = cleanWhitespace(`${before} ${after}`.replace(TRAILING_CONNECTOR_RE, ""));
 
     const explicitDate = hasExplicitDate(parsed.start);
+    const explicitEndDate = parsed.end ? hasExplicitDate(parsed.end) : false;
     const fallbackDate = baseDate || buildDateFromComponent(parsed.start);
     const startDate = explicitDate
       ? buildDateFromComponent(parsed.start)
@@ -280,6 +290,12 @@ function parseTemporalTitle(inputTitle, options = {}) {
         const next = plusMinutes(startDate, startTime, DEFAULT_DURATION_MINUTES);
         derivedEndDate = next.date;
         derivedEndTime = next.time;
+      }
+      if (startTime && derivedEndTime && !explicitEndDate) {
+        const diff = compareTimes(startTime, derivedEndTime);
+        derivedEndDate = diff != null && diff < 0
+          ? plusMinutes(startDate, startTime, 24 * 60).date
+          : startDate;
       }
 
       parsedDateTime = {

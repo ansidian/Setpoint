@@ -171,7 +171,9 @@ describe("parseCalendarTitle", () => {
     ]);
     expect(parsed.singleDraft).toMatchObject({
       startDate: "2026-04-28",
+      endDate: "2026-04-28",
       startTime: "04:15",
+      endTime: "07:30",
     });
   });
 
@@ -254,6 +256,7 @@ describe("parseCalendarTitle", () => {
     expect(parsed.batchDrafts).toHaveLength(3);
     expect(parsed.batchDrafts[0]).toMatchObject({
       startDate: "2026-04-28",
+      endDate: "2026-04-28",
       startTime: "04:15",
       endTime: "07:30",
     });

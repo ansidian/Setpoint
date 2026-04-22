@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
+import { motion as Motion } from "motion/react";
 import { getCalendarDeadlines, deleteBriefing } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
@@ -542,6 +543,71 @@ export function RedesignShell({
 /* ======================================================================
  * DASHBOARD BODY — hero + timeline + rails (layout variants)
  * ====================================================================== */
+const dashboardSectionTransition = {
+  type: "spring",
+  stiffness: 290,
+  damping: 32,
+  mass: 0.98,
+  bounce: 0,
+};
+
+const dashboardFadeTransition = {
+  duration: 0.24,
+  ease: [0.16, 1, 0.3, 1],
+};
+
+const dashboardStageDelays = {
+  hero: 0.02,
+  primary: 0.06,
+  secondary: 0.1,
+  tertiary: 0.14,
+};
+
+function DashboardLayoutFrame({ layoutMode, maxWidth, style, children, testId }) {
+  return (
+    <Motion.div
+      key={layoutMode}
+      data-testid={testId}
+      data-layout-mode={layoutMode}
+      initial={{ opacity: 0, y: 14, scale: 0.992 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{
+        opacity: { ...dashboardFadeTransition, delay: dashboardStageDelays.hero },
+        y: { ...dashboardFadeTransition, delay: dashboardStageDelays.hero },
+        scale: { ...dashboardFadeTransition, delay: dashboardStageDelays.hero },
+      }}
+      style={{ maxWidth, margin: "0 auto", ...style }}
+    >
+      {children}
+    </Motion.div>
+  );
+}
+
+function DashboardSceneRegion({
+  children,
+  delay = 0,
+  initial = { opacity: 0, y: 12, scale: 0.996 },
+  style,
+}) {
+  return (
+    <Motion.div
+      layout
+      initial={initial}
+      animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+      transition={{
+        layout: dashboardSectionTransition,
+        opacity: { ...dashboardFadeTransition, delay },
+        y: { ...dashboardFadeTransition, delay },
+        x: { ...dashboardFadeTransition, delay },
+        scale: { ...dashboardFadeTransition, delay },
+      }}
+      style={style}
+    >
+      {children}
+    </Motion.div>
+  );
+}
+
 export function DashboardBody({
   briefing, liveData, calendarRange, customize, accent,
   isMobile = false,
@@ -589,6 +655,14 @@ export function DashboardBody({
   const emailAccounts = ctx.emailAccounts;
   const pressureNow = useMemo(() => new Date(`${today}T12:00:00Z`).getTime(), [today]);
   const displayEvents = liveEventsReady ? events : seededEvents;
+  const eventLoadingState = liveEventsReady
+    ? "ready"
+    : seededEvents.length > 0
+      ? "refreshing"
+      : "empty_loading";
+  const billsLoadingState = liveData.isPolling && liveData.actualConfigured && liveData.billsLoading && !bills.length
+    ? "empty_loading"
+    : "ready";
   const pressureFocusDate = useMemo(
     () => focusPressureDate(deadlines, pressureNow),
     [deadlines, pressureNow],
@@ -621,7 +695,7 @@ export function DashboardBody({
       liveCalendar={displayEvents}
       liveBills={bills}
       onOpenPressure={() => onOpenDeadlinesCalendar?.(pressureFocusDate)}
-      showEventSkeletons={!seededEvents.length && !liveEventsReady}
+      eventLoadingState={eventLoadingState}
       onJump={(payload, anchor) => {
         if (payload?.kind === "deadline") {
           // Callout carries { title, sub, ... } but not the full task — find it.
@@ -645,7 +719,7 @@ export function DashboardBody({
       events={displayEvents}
       deadlines={deadlines}
       onJump={handleRailJump}
-      showEventSkeletons={!seededEvents.length && !liveEventsReady}
+      eventLoadingState={eventLoadingState}
     />
   );
 
@@ -655,7 +729,13 @@ export function DashboardBody({
         <InsightsRail accent={accent} insights={insights} onJump={handleRailJump} />
       )}
       <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} isMobile={isMobile} />
-      <BillsRail accent={accent} bills={bills} onJump={handleRailJump} isMobile={isMobile} />
+      <BillsRail
+        accent={accent}
+        bills={bills}
+        onJump={handleRailJump}
+        isMobile={isMobile}
+        loadingState={billsLoadingState}
+      />
       {showInboxPeek && (
         <InboxPeek
           accent={accent}
@@ -670,15 +750,26 @@ export function DashboardBody({
 
   if (isMobile) {
     return (
-      <div
-        data-testid="dashboard-body-mobile"
-        data-layout-mode={effectiveLayout}
+      <DashboardLayoutFrame
+        testId="dashboard-body-mobile"
+        layoutMode={effectiveLayout}
+        maxWidth={640}
         style={{ width: "100%", maxWidth: 640, margin: "0 auto", padding: "0 0 32px" }}
       >
         {hero}
-        <div style={{ padding: "20px 16px 0", display: "flex", flexDirection: "column", gap: 24 }}>
+        <DashboardSceneRegion
+          delay={dashboardStageDelays.primary}
+          initial={{ opacity: 0, y: 14, scale: 0.994 }}
+          style={{ padding: "20px 16px 0", display: "flex", flexDirection: "column", gap: 24 }}
+        >
           <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} isMobile />
-          <BillsRail accent={accent} bills={bills} onJump={handleRailJump} isMobile />
+          <BillsRail
+            accent={accent}
+            bills={bills}
+            onJump={handleRailJump}
+            isMobile
+            loadingState={billsLoadingState}
+          />
           {showInboxPeek && (
             <InboxPeek
               accent={accent}
@@ -697,39 +788,53 @@ export function DashboardBody({
               maxItems={2}
             />
           )}
-        </div>
+        </DashboardSceneRegion>
         <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "20px 16px 0" }} />
         {timeline}
-      </div>
+      </DashboardLayoutFrame>
     );
   }
 
   if (effectiveLayout === "paper") {
     return (
-      <div data-layout-mode={effectiveLayout} style={{ maxWidth: 820, margin: "0 auto", padding: "0 20px 80px" }}>
+      <DashboardLayoutFrame layoutMode={effectiveLayout} maxWidth={820} style={{ padding: "0 20px 80px" }}>
         {hero}
         {timeline}
         <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "0 36px" }} />
-        <div style={{ padding: "28px 36px", display: "flex", flexDirection: "column", gap: 36 }}>
+        <DashboardSceneRegion
+          delay={dashboardStageDelays.secondary}
+          initial={{ opacity: 0, y: 16, scale: 0.994 }}
+          style={{ padding: "28px 36px", display: "flex", flexDirection: "column", gap: 36 }}
+        >
           {rails}
-        </div>
-      </div>
+        </DashboardSceneRegion>
+      </DashboardLayoutFrame>
     );
   }
 
   if (effectiveLayout === "command") {
     return (
-      <div data-layout-mode={effectiveLayout} style={{ maxWidth: 1520, margin: "0 auto" }}>
+      <DashboardLayoutFrame layoutMode={effectiveLayout} maxWidth={1520}>
         {hero}
-        <div
+        <DashboardSceneRegion
+          delay={dashboardStageDelays.primary}
+          initial={{ opacity: 0, y: 16, scale: 0.994 }}
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) 300px",
             gap: 0, borderTop: "1px solid rgba(255,255,255,0.03)",
           }}
         >
-          <div style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>{timeline}</div>
-          <div
+          <DashboardSceneRegion
+            delay={dashboardStageDelays.primary}
+            initial={{ opacity: 0, x: -18, y: 8, scale: 0.996 }}
+            style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}
+          >
+            {timeline}
+          </DashboardSceneRegion>
+          <DashboardSceneRegion
+            delay={dashboardStageDelays.secondary}
+            initial={{ opacity: 0, y: 12, scale: 0.996 }}
             style={{
               padding: "24px 28px", display: "flex", flexDirection: "column", gap: 28,
               borderRight: "1px solid rgba(255,255,255,0.05)",
@@ -738,9 +843,18 @@ export function DashboardBody({
             {showInsights && <InsightsRail accent={accent} insights={insights} onJump={handleRailJump} />}
             <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} />
             {showNotes && <NotesRail accent={accent} />}
-          </div>
-          <aside style={{ padding: "24px 22px", display: "flex", flexDirection: "column", gap: 28 }}>
-            <BillsRail accent={accent} bills={bills} onJump={handleRailJump} />
+          </DashboardSceneRegion>
+          <DashboardSceneRegion
+            delay={dashboardStageDelays.tertiary}
+            initial={{ opacity: 0, x: 18, y: 8, scale: 0.996 }}
+            style={{ padding: "24px 22px", display: "flex", flexDirection: "column", gap: 28 }}
+          >
+            <BillsRail
+              accent={accent}
+              bills={bills}
+              onJump={handleRailJump}
+              loadingState={billsLoadingState}
+            />
             {showInboxPeek && (
               <InboxPeek
                 accent={accent}
@@ -749,17 +863,19 @@ export function DashboardBody({
                 onOpenInbox={() => onOpenEmail(null)}
               />
             )}
-          </aside>
-        </div>
-      </div>
+          </DashboardSceneRegion>
+        </DashboardSceneRegion>
+      </DashboardLayoutFrame>
     );
   }
 
   // focus (default)
   return (
-    <div data-layout-mode={effectiveLayout} style={{ maxWidth: 1440, margin: "0 auto" }}>
+    <DashboardLayoutFrame layoutMode={effectiveLayout} maxWidth={1440}>
       {hero}
-      <div
+      <DashboardSceneRegion
+        delay={dashboardStageDelays.primary}
+        initial={{ opacity: 0, y: 16, scale: 0.994 }}
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) 360px",
@@ -767,8 +883,15 @@ export function DashboardBody({
           borderTop: "1px solid rgba(255,255,255,0.03)",
         }}
       >
-        <div>{timeline}</div>
-        <aside
+        <DashboardSceneRegion
+          delay={dashboardStageDelays.primary}
+          initial={{ opacity: 0, x: -12, y: 8, scale: 0.996 }}
+        >
+          {timeline}
+        </DashboardSceneRegion>
+        <DashboardSceneRegion
+          delay={dashboardStageDelays.secondary}
+          initial={{ opacity: 0, x: 14, y: 10, scale: 0.996 }}
           style={{
             borderLeft: "1px solid rgba(255,255,255,0.05)",
             padding: "24px 28px",
@@ -776,9 +899,9 @@ export function DashboardBody({
           }}
         >
           {rails}
-        </aside>
-      </div>
-    </div>
+        </DashboardSceneRegion>
+      </DashboardSceneRegion>
+    </DashboardLayoutFrame>
   );
 }
 

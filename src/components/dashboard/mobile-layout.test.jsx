@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DashboardHero from "./DashboardHero.jsx";
 import TodayTimeline from "./TodayTimeline.jsx";
@@ -117,6 +117,19 @@ describe("mobile dashboard layout", () => {
     const layoutRoot = document.querySelector('[data-layout-mode="command"]');
     expect(layoutRoot).toBeTruthy();
   });
+
+  it("gives the inbox peek open button an interactive hover state", () => {
+    renderDashboardBody({ isMobile: false, dashboardLayout: "focus" });
+
+    const openButton = screen.getByRole("button", { name: /open/i });
+    expect(openButton.style.background).toBe("rgba(255, 255, 255, 0.015)");
+    expect(openButton.style.color).toBe("rgba(205, 214, 244, 0.7)");
+
+    fireEvent.mouseEnter(openButton);
+
+    expect(openButton.style.background).toBe("rgba(203, 166, 218, 0.08)");
+    expect(openButton.style.color).toBe("rgb(203, 166, 218)");
+  });
 });
 
 describe("DashboardHero mobile layout", () => {
@@ -204,6 +217,67 @@ describe("DashboardHero mobile layout", () => {
     expect(screen.getByTestId("focus-window-open-day-light")).toBeTruthy();
     expect(screen.getByText(/Calendar is open/i)).toBeTruthy();
     expect(screen.queryByText(/\d+h \d+m/)).toBeNull();
+  });
+
+  it("gives the focus pressure pill an interactive hover state", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    render(
+      <DashboardHero
+        accent="#cba6da"
+        density="comfortable"
+        briefing={makeBriefing({
+          calendar: [],
+          ctm: {
+            upcoming: [
+              { id: "ctm-1", title: "Finalize deck", due_date: "2026-04-20", source: "canvas", class_name: "Ops", status: "open" },
+            ],
+          },
+          todoist: { upcoming: [] },
+        })}
+        liveBills={[]}
+        liveCalendar={[]}
+        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
+        onJump={() => {}}
+        onOpenPressure={() => {}}
+      />,
+    );
+
+    const pressureButton = screen.getByRole("button", { name: /deadline soon/i });
+    expect(pressureButton.style.background).toBe("rgba(249, 226, 175, 0.08)");
+    expect(pressureButton.style.border).toBe("1px solid rgba(249, 226, 175, 0.18)");
+
+    fireEvent.mouseEnter(pressureButton);
+
+    expect(pressureButton.style.background).toBe("rgba(249, 226, 175, 0.12)");
+    expect(pressureButton.style.border).toBe("1px solid rgba(249, 226, 175, 0.3)");
+  });
+});
+
+describe("TodayTimeline controls", () => {
+  it("gives inactive filter chips a clearer hover state", () => {
+    render(
+      <TodayTimeline
+        accent="#cba6da"
+        events={[]}
+        deadlines={[]}
+        onJump={() => {}}
+      />,
+    );
+
+    const deadlinesFilter = screen.getByRole("switch", { name: /deadlines/i });
+    fireEvent.click(deadlinesFilter);
+
+    expect(deadlinesFilter.getAttribute("aria-checked")).toBe("false");
+    expect(deadlinesFilter.style.background).toBe("transparent");
+    expect(deadlinesFilter.style.color).toBe("rgba(205, 214, 244, 0.5)");
+
+    fireEvent.mouseEnter(deadlinesFilter);
+
+    expect(deadlinesFilter.style.background).toBe("rgba(255, 255, 255, 0.035)");
+    expect(deadlinesFilter.style.color).toBe("rgba(205, 214, 244, 0.82)");
   });
 });
 

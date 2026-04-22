@@ -79,7 +79,7 @@ export default function DashboardHero({
   userName = "",
   onJump,
   onOpenPressure,
-  showEventSkeletons = false,
+  eventLoadingState = "ready",
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -327,7 +327,7 @@ export default function DashboardHero({
             accent={accent}
             isMobile={isMobile}
             onOpenPressure={onOpenPressure}
-            showSkeletons={showEventSkeletons}
+            eventLoadingState={eventLoadingState}
           />
         </div>
       </div>
@@ -358,7 +358,51 @@ export default function DashboardHero({
   );
 }
 
-function FocusCard({ focusWindows, openDaySummary, accent, isMobile = false, onOpenPressure, showSkeletons = false }) {
+function FocusRefreshStatus({ accent }) {
+  return (
+    <div
+      data-testid="focus-window-refresh-status"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        marginBottom: 8,
+        padding: "3px 8px",
+        borderRadius: 9999,
+        border: `1px solid ${accent}38`,
+        background: `${accent}14`,
+        fontSize: 9.5,
+        fontWeight: 600,
+        letterSpacing: 0.25,
+        color: "#cdd6f4",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: 99,
+          background: accent,
+          boxShadow: `0 0 6px ${accent}70`,
+          animation: "dashPulse 1.8s ease-in-out infinite",
+        }}
+      />
+      Updating Google Calendar
+    </div>
+  );
+}
+
+function FocusCard({
+  focusWindows,
+  openDaySummary,
+  accent,
+  isMobile = false,
+  onOpenPressure,
+  eventLoadingState = "ready",
+}) {
+  const [pressureHover, setPressureHover] = useState(false);
+  const [pressureFocus, setPressureFocus] = useState(false);
   const pressureLabel = focusWindows.pressure.level === "high"
     ? `${focusWindows.pressure.overdue + focusWindows.pressure.today} urgent deadline${focusWindows.pressure.overdue + focusWindows.pressure.today === 1 ? "" : "s"}`
     : focusWindows.pressure.level === "medium"
@@ -368,6 +412,9 @@ function FocusCard({ focusWindows, openDaySummary, accent, isMobile = false, onO
   const backup = focusWindows.backupWindow;
   const fallback = focusWindows.fallback;
   const isOpenDay = primary?.quality === "Rest of day open";
+  const pressureActive = pressureHover || pressureFocus;
+  const showSkeletons = eventLoadingState === "empty_loading";
+  const showRefreshStatus = eventLoadingState === "refreshing";
 
   return (
     <div
@@ -412,21 +459,29 @@ function FocusCard({ focusWindows, openDaySummary, accent, isMobile = false, onO
           <button
             type="button"
             onClick={() => onOpenPressure?.()}
+            onMouseEnter={() => setPressureHover(true)}
+            onMouseLeave={() => setPressureHover(false)}
+            onFocus={() => setPressureFocus(true)}
+            onBlur={() => setPressureFocus(false)}
             style={{
               fontSize: 10,
               color: "#f9e2af",
+              fontWeight: 600,
               fontFamily: "inherit",
-              background: "rgba(249,226,175,0.08)",
-              border: "1px solid rgba(249,226,175,0.18)",
+              background: pressureActive ? "rgba(249,226,175,0.12)" : "rgba(249,226,175,0.08)",
+              border: `1px solid ${pressureActive ? "rgba(249,226,175,0.3)" : "rgba(249,226,175,0.18)"}`,
               borderRadius: 9999,
               padding: "3px 8px",
               cursor: "pointer",
+              transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
             }}
           >
             {pressureLabel}
           </button>
         )}
       </div>
+
+      {showRefreshStatus && <FocusRefreshStatus accent={accent} />}
 
       {showSkeletons ? (
         <div data-testid="focus-window-skeleton" style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -189,4 +189,23 @@ describe("AddTaskPanel due picker", () => {
     expect(screen.queryByLabelText("Close")).toBeNull();
     expect(screen.queryByText(/Esc to cancel/i)).toBeNull();
   });
+
+  it("closes the inline editor immediately when cancel is pressed", () => {
+    const onClose = vi.fn();
+
+    render(
+      <AddTaskPanel
+        host="inline"
+        onClose={onClose}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

@@ -8,6 +8,7 @@ import { daysLabel, urgencyForDays, deriveLane } from "../../../lib/redesign-hel
 import { formatFullDate } from "../../../lib/dashboard-helpers";
 import { resolveInsight } from "../../../lib/insight-resolver";
 import { Icon } from "@/lib/icons.jsx";
+import { Skeleton } from "@/components/ui/skeleton";
 import AddTaskPanel from "../../todoist/AddTaskPanel";
 import Tooltip from "../../shared/Tooltip";
 import { useDashboard } from "../../../context/DashboardContext";
@@ -87,6 +88,50 @@ const AddTodoistButton = forwardRef(function AddTodoistButton({ accent, open, on
     </button>
   );
 });
+
+function OpenInboxButton({ accent, onClick }) {
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const active = hover || focus;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setFocus(true)}
+      onBlur={() => setFocus(false)}
+      style={{
+        padding: "3px 8px",
+        borderRadius: 6,
+        border: `1px solid ${active ? `${accent}3f` : "rgba(255,255,255,0.08)"}`,
+        background: active ? `${accent}14` : "rgba(255,255,255,0.015)",
+        color: active ? accent : "rgba(205,214,244,0.7)",
+        fontSize: 10,
+        fontFamily: "inherit",
+        fontWeight: 600,
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        transition: "background 140ms ease, border-color 140ms ease, color 140ms ease",
+      }}
+    >
+      <span>Open</span>
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          transform: active ? "translateX(1.5px)" : "translateX(0)",
+          transition: "transform 140ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
+        <ArrowRight size={9} />
+      </span>
+    </button>
+  );
+}
 
 function DeadlineStatusIcon({ status, size = 12 }) {
   if (status === "complete") return <CheckCircle2 size={size} color="#a6e3a1" />;
@@ -613,7 +658,41 @@ function PaidChip() {
   );
 }
 
-export function BillsRail({ accent, bills = [], onJump, isMobile = false }) {
+function BillsRailLoadingPlaceholder({ isMobile = false }) {
+  return (
+    <div
+      data-testid="bills-rail-loading-placeholder"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        paddingTop: 2,
+      }}
+    >
+      {[0, 1].map((index) => (
+        <div
+          key={index}
+          style={{
+            padding: isMobile ? "10px 2px" : "9px 2px",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            display: "grid",
+            gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "1fr auto",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0 }}>
+            <Skeleton className="h-[12px] w-[52%] bg-white/10" />
+            <Skeleton className="h-[10px] w-[36%] bg-white/7" />
+          </div>
+          {!isMobile && <Skeleton className="h-[18px] w-[64px] bg-white/8" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function BillsRail({ accent, bills = [], onJump, isMobile = false, loadingState = "ready" }) {
   // Show paid AND unpaid upcoming bills. Drop bills whose due date is strictly
   // in the past (days < 0) — once overdue, they belong on the calendar's
   // history, not the dashboard. Paid bills that are still upcoming remain
@@ -635,6 +714,7 @@ export function BillsRail({ accent, bills = [], onJump, isMobile = false }) {
   const nextWeekTotal = upcoming
     .filter((x) => x.days != null && x.days <= 7 && !x.b.paid)
     .reduce((s, x) => s + (x.b.amount || 0), 0);
+  const showLoadingPlaceholder = loadingState === "empty_loading";
 
   return (
     <div data-sect="bills">
@@ -642,13 +722,23 @@ export function BillsRail({ accent, bills = [], onJump, isMobile = false }) {
         title="Bills"
         isMobile={isMobile}
         right={
-          <div style={{ fontSize: 10, color: "rgba(205,214,244,0.5)" }}>
-            Next 7d ·{" "}
-            <span style={{ color: "#cdd6f4", fontWeight: 600 }}>{formatAmount(nextWeekTotal)}</span>
-          </div>
+          showLoadingPlaceholder ? (
+            <div
+              data-testid="bills-rail-refresh-status"
+              style={{ fontSize: 10, color: "rgba(205,214,244,0.46)" }}
+            >
+              Loading Actual...
+            </div>
+          ) : (
+            <div style={{ fontSize: 10, color: "rgba(205,214,244,0.5)" }}>
+              Next 7d ·{" "}
+              <span style={{ color: "#cdd6f4", fontWeight: 600 }}>{formatAmount(nextWeekTotal)}</span>
+            </div>
+          )
         }
       />
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
+        {showLoadingPlaceholder ? <BillsRailLoadingPlaceholder isMobile={isMobile} /> : null}
         {upcoming.map(({ b, days }) => {
           const paid = !!b.paid;
           return (
@@ -786,13 +876,13 @@ export function BillsRail({ accent, bills = [], onJump, isMobile = false }) {
             </div>
           );
         })}
-        {upcoming.length === 0 && <EmptyRow icon={CreditCard} label="No upcoming bills" />}
+        {upcoming.length === 0 && !showLoadingPlaceholder && <EmptyRow icon={CreditCard} label="No upcoming bills" />}
       </div>
     </div>
   );
 }
 
-export function InboxPeek({ emailAccounts = [], onJump, onOpenInbox, isMobile = false }) {
+export function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox, isMobile = false }) {
   const flat = useMemo(() => {
     const all = [];
     for (const acc of emailAccounts) {
@@ -824,19 +914,7 @@ export function InboxPeek({ emailAccounts = [], onJump, onOpenInbox, isMobile = 
                 {needsYou} needs you
               </span>
             )}
-            <button
-              type="button"
-              onClick={onOpenInbox}
-              style={{
-                padding: "3px 8px", borderRadius: 6,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "transparent", color: "rgba(205,214,244,0.7)",
-                fontSize: 10, fontFamily: "inherit", cursor: "pointer",
-                display: "inline-flex", alignItems: "center", gap: 4,
-              }}
-            >
-              Open <ArrowRight size={9} />
-            </button>
+            <OpenInboxButton accent={accent} onClick={onOpenInbox} />
           </div>
         }
       />
