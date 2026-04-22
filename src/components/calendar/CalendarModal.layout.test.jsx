@@ -335,7 +335,7 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     expect(await screen.findByText("Monday, April 20")).toBeTruthy();
-    expect(screen.getByText(/no events on this day yet/i)).toBeTruthy();
+    expect(screen.getByText(/no events are scheduled on this date/i)).toBeTruthy();
     expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
   });
 
@@ -367,7 +367,7 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(await screen.findByText(/no events on this day yet/i)).toBeTruthy();
+    expect(await screen.findByText(/no events are scheduled on this date/i)).toBeTruthy();
     expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
 
     const rail = screen.getByTestId("calendar-modal-rail");
@@ -382,7 +382,7 @@ describe("CalendarModal responsive layout", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
-      expect(screen.getByText(/no events on this day yet/i)).toBeTruthy();
+      expect(screen.getByText(/no events are scheduled on this date/i)).toBeTruthy();
     });
   });
 

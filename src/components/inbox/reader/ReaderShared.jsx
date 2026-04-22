@@ -61,6 +61,10 @@ export function ReaderEmptyState() {
         flex: 1,
         background: "rgba(22,22,30,0.5)",
         padding: 20,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "stretch",
+        justifyContent: "center",
       }}
     >
       <EmptyStateSplash
@@ -70,14 +74,20 @@ export function ReaderEmptyState() {
         message={(
           <>
             Open a thread to keep context visible while you work.
-            <span style={{ display: "block", marginTop: 8, fontSize: 11, color: "rgba(205,214,244,0.44)" }}>
+            <span
+              style={{
+                display: "block",
+                marginTop: 12,
+                fontSize: 11,
+                color: "rgba(205,214,244,0.44)",
+              }}
+            >
               <Kbd>J</Kbd> <Kbd>K</Kbd> to move through the list.
             </span>
           </>
         )}
         compact
-        minHeight={260}
-        align="start"
+        minHeight={320}
       />
     </div>
   );

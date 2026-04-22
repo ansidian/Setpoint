@@ -5,6 +5,7 @@ import { AnimatePresence, motion as Motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import billsView from "./views/billsView.jsx";
 import { getCalendarLayoutMetrics } from "./calendarLayout.js";
+import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "./CalendarRailStates.jsx";
 import deadlinesView from "./views/deadlinesView.jsx";
 import eventsView from "./views/eventsView.jsx";
 import CalendarEventEditorRail from "./events/CalendarEventEditorRail.jsx";
@@ -198,71 +199,6 @@ function CalendarCell({
   );
 }
 
-function CalendarSummary({ view, viewYear, viewMonth, currentYear, currentMonth, todayDate, itemsByDay, computed, data, activeView }) {
-  // Default-state side rail content. Renders the view-supplied footer
-  // (already shows totals + legend) inside the new card layout, plus a
-  // friendly empty-state hint at the top.
-  const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
-  const monthLabel = new Date(viewYear, viewMonth).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
-  return (
-    <div style={{ flex: 1, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <div
-          style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: 2.6, textTransform: "uppercase",
-            color: "rgba(205,214,244,0.55)",
-          }}
-        >
-          {view === "bills" ? "Bills overview" : view === "events" ? "Events overview" : "Deadlines overview"}
-        </div>
-        <div className="ea-display" style={{ marginTop: 4, fontSize: 18, color: "#fff", letterSpacing: -0.2 }}>
-          {isCurrentMonth ? "This month · " : ""}{monthLabel}
-        </div>
-      </div>
-      <div style={{ height: 1, background: "rgba(255,255,255,0.04)" }} />
-      {view === "events" && data?.isLoading ? (
-        <div
-          data-testid="calendar-events-rail-skeleton"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            padding: "12px 14px",
-            borderRadius: 10,
-            background: "rgba(255,255,255,0.025)",
-            border: "1px solid rgba(255,255,255,0.05)",
-          }}
-        >
-          <Skeleton className="h-[11px] w-[148px] bg-white/8" />
-          <Skeleton className="h-[18px] w-[212px] bg-white/10" />
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 2 }}>
-            <Skeleton className="h-[10px] w-full bg-white/7" />
-            <Skeleton className="h-[10px] w-[88%] bg-white/7" />
-            <Skeleton className="h-[10px] w-[72%] bg-white/7" />
-          </div>
-        </div>
-      ) : (
-        <div style={{ fontSize: 12, color: "rgba(205,214,244,0.55)", lineHeight: 1.5 }}>
-          Click any day to drill in. Items are color-coded by source on the rail.
-        </div>
-      )}
-      <span style={{ flex: 1 }} />
-      {/* The view's existing footer renderer becomes the per-month summary
-          card now that it lives in the rail instead of below the grid. */}
-      {activeView.renderFooter?.({ viewYear, viewMonth, currentYear, currentMonth, todayDate, itemsByDay, computed, data })}
-    </div>
-  );
-}
-
-function formatFullDate(year, month, day) {
-  return new Date(year, month, day).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 function isEditableTarget(target) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -273,42 +209,6 @@ function isEditableTarget(target) {
 function isSuspendedHotkeyTarget(target) {
   return target instanceof HTMLElement
     && !!target.closest("[data-suspend-calendar-hotkeys='true']");
-}
-
-function CalendarSelectedDayEmptyState({ view, selectedDay, viewYear, viewMonth }) {
-  const description = view === "events"
-    ? "No events on this day yet. Creating a new event will prefill this date."
-    : view === "bills"
-      ? "No scheduled bills land on this date."
-      : "No deadlines are due on this date.";
-
-  return (
-    <div style={{ flex: 1, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <div style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
-          {formatFullDate(viewYear, viewMonth, selectedDay)}
-        </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-          No items
-        </div>
-      </div>
-      <div
-        style={{
-          padding: "14px 14px 16px",
-          borderRadius: 10,
-          border: "1px solid rgba(255,255,255,0.05)",
-          background: "rgba(255,255,255,0.02)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <div style={{ fontSize: 12, color: "rgba(205,214,244,0.72)", lineHeight: 1.55 }}>
-          {description}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 const railSwapLayoutTransition = {
@@ -1219,14 +1119,21 @@ export default function CalendarModal({
                       },
                     })
                   ) : showEmptySelection ? (
-                    <CalendarSelectedDayEmptyState
+                    <CalendarSelectedDayEmptyRail
                       view={view}
                       selectedDay={selectedDay}
                       viewYear={viewYear}
                       viewMonth={viewMonth}
+                      currentYear={currentYear}
+                      currentMonth={currentMonth}
+                      todayDate={todayDate}
+                      itemsByDay={itemsByDay}
+                      computed={computed}
+                      data={viewData}
+                      activeView={activeView}
                     />
                   ) : (
-                    <CalendarSummary
+                    <CalendarOverviewRail
                       view={view}
                       viewYear={viewYear}
                       viewMonth={viewMonth}
