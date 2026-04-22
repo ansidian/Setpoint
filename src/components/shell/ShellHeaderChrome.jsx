@@ -187,30 +187,34 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
   if (!briefingStatus) return null;
 
   const toneColor = briefingStatus.toneColor || accent;
+  const title = [briefingStatus.label, briefingStatus.headline, briefingStatus.detail]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
       data-testid="shell-header-briefing-status"
+      title={title}
       style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 4,
-        minWidth: 240,
-        maxWidth: 360,
-        padding: "8px 12px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 10,
+        minWidth: 0,
+        maxWidth: 460,
+        padding: "4px 12px",
         borderRadius: 10,
         background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.025))",
         border: "1px solid rgba(255,255,255,0.06)",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+        whiteSpace: "nowrap",
       }}
     >
       <div
         style={{
-          width: "100%",
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
           gap: 8,
+          flexShrink: 0,
         }}
       >
         <span
@@ -230,7 +234,6 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
             letterSpacing: 1.6,
             textTransform: "uppercase",
             color: toneColor,
-            minWidth: 0,
           }}
         >
           {briefingStatus.label}
@@ -238,27 +241,53 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
       </div>
       <div
         style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: "rgba(245,247,255,0.92)",
-          letterSpacing: 0.1,
-          lineHeight: 1.25,
+          width: 1,
+          alignSelf: "stretch",
+          background: "rgba(255,255,255,0.08)",
+          flexShrink: 0,
+        }}
+      />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 8,
+          minWidth: 0,
+          overflow: "hidden",
         }}
       >
-        {briefingStatus.headline}
-      </div>
-      {briefingStatus.detail ? (
         <div
           style={{
-            fontSize: 10.5,
-            color: "rgba(205,214,244,0.58)",
-            lineHeight: 1.35,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "rgba(245,247,255,0.92)",
             letterSpacing: 0.1,
+            lineHeight: 1.25,
           }}
         >
-          {briefingStatus.detail}
+          {briefingStatus.headline}
         </div>
-      ) : null}
+        {briefingStatus.detail ? (
+          <div
+            style={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: 10.5,
+              color: "rgba(205,214,244,0.58)",
+              lineHeight: 1.35,
+              letterSpacing: 0.1,
+            }}
+          >
+            {briefingStatus.detail}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
