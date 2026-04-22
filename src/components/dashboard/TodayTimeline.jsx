@@ -333,26 +333,32 @@ function TimelineRow({ item, now, accent, onJump, isMobile = false }) {
       }}
       style={{
         position: "relative",
-        padding: isMobile ? "10px 10px 10px 22px" : "9px 12px",
+        padding: isMobile ? "10px 10px 10px 22px" : "11px 12px",
         marginBottom: 4,
-        borderRadius: 9,
+        borderRadius: 10,
         cursor: "pointer",
         opacity,
-        border: "1px solid transparent",
-        transition: "all 130ms",
+        border: isLive ? `1px solid ${accent}24` : "1px solid transparent",
+        transition: "transform 180ms ease, background 130ms ease, border-color 130ms ease",
         display: "grid",
         gridTemplateColumns: isMobile ? `${timeColumnWidth}px minmax(0, 1fr)` : `${timeColumnWidth}px 1fr auto`,
         gap: isMobile ? 10 : 14,
         alignItems: isMobile ? "start" : "center",
         background: isLive ? `${accent}08` : "transparent",
-        ...(isLive ? { borderColor: `${accent}30` } : {}),
       }}
       onMouseEnter={(e) => {
-        if (!isLive)
-          e.currentTarget.style.background = "rgba(255,255,255,0.025)";
+        if (!isLive) {
+          e.currentTarget.style.background = "rgba(255,255,255,0.024)";
+          e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)";
+          e.currentTarget.style.transform = "translateX(2px)";
+        }
       }}
       onMouseLeave={(e) => {
-        if (!isLive) e.currentTarget.style.background = "transparent";
+        if (!isLive) {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.borderColor = "transparent";
+          e.currentTarget.style.transform = "translateX(0)";
+        }
       }}
     >
       {/* Rail dot */}
@@ -571,7 +577,7 @@ export default function TodayTimeline({
     <div
       data-sect="timeline"
       data-testid={isMobile ? "today-timeline-mobile" : "today-timeline"}
-      style={{ padding: isMobile ? "18px 16px 20px" : density === "compact" ? "18px 32px" : "24px 36px" }}
+      style={{ padding: isMobile ? "18px 16px 20px" : density === "compact" ? "22px 24px 24px" : "26px 28px 28px" }}
     >
       <SectionHeader
         title={
@@ -631,7 +637,7 @@ export default function TodayTimeline({
       <Motion.div
         layout
         transition={timelineSettleTransition}
-        style={{ marginTop: 16 }}
+        style={{ marginTop: 14 }}
       >
         {showEventSkeletons && (
           <div
@@ -809,7 +815,7 @@ function DayGroup({ day, items, now, accent, onJump, isFirst, isMobile = false }
   /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
-    <div style={{ marginBottom: 28 }}>
+    <div style={{ marginBottom: 24 }}>
       {!hideHeader && (
         <div
           style={{
@@ -862,6 +868,7 @@ function DayGroup({ day, items, now, accent, onJump, isFirst, isMobile = false }
           position: "relative",
           paddingLeft: gutter,
           minHeight: isToday && items.length === 0 ? 28 : undefined,
+          paddingTop: 4,
         }}
       >
         <div

@@ -125,7 +125,7 @@ export default function DashboardHero({
   const stacked = stack || isMobile;
   const outerPadding = isMobile
     ? "20px 16px 18px"
-    : compact ? "24px 28px 20px" : "40px 36px 32px";
+    : compact ? "22px 22px 18px" : "26px 24px 20px";
   const WeatherIcon = (weather?.icon && WEATHER_ICONS[weather.icon]) || Sun;
 
   return (
@@ -133,9 +133,18 @@ export default function DashboardHero({
       data-testid={isMobile ? "dashboard-hero-mobile" : "dashboard-hero"}
       style={{
         padding: outerPadding,
-        borderBottom: "1px solid rgba(255,255,255,0.05)",
         position: "relative",
         overflow: "hidden",
+        margin: isMobile ? "0" : "16px 0 0",
+        borderRadius: isMobile ? 0 : 24,
+        border: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
+        background: isMobile
+          ? "transparent"
+          : [
+              `radial-gradient(circle at top right, ${accent}14 0%, transparent 32%)`,
+              "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.008) 100%)",
+              "#10121a",
+            ].join(", "),
       }}
     >
       {/* Ambient accent glow */}
@@ -143,17 +152,40 @@ export default function DashboardHero({
         aria-hidden
         style={{
           position: "absolute",
-          top: -152,
-          right: 0,
-          width: 250,
-          height: 250,
-          background: `radial-gradient(circle, ${accent}16 0%, ${accent}10 32%, transparent 74%)`,
-          filter: "blur(10px)",
-          opacity: 0.95,
-          WebkitMaskImage:
-            "linear-gradient(90deg, transparent 0%, black 20%, black 72%, transparent 100%)",
-          maskImage:
-            "linear-gradient(90deg, transparent 0%, black 20%, black 72%, transparent 100%)",
+          top: -200,
+          right: -120,
+          width: 440,
+          height: 440,
+          background: `radial-gradient(circle, ${accent}14 0%, ${accent}08 28%, transparent 72%)`,
+          filter: "blur(28px)",
+          opacity: 0.78,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: isMobile ? -80 : -40,
+          top: isMobile ? 20 : 18,
+          width: isMobile ? "120%" : "68%",
+          height: isMobile ? 220 : 260,
+          background: [
+            `radial-gradient(circle at 0% 30%, ${accent}10 0%, transparent 46%)`,
+            "linear-gradient(90deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0) 72%)",
+          ].join(", "),
+          filter: "blur(2px)",
+          opacity: isMobile ? 0.85 : 1,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 24%)",
           pointerEvents: "none",
         }}
       />
@@ -161,14 +193,14 @@ export default function DashboardHero({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: stacked ? "1fr" : "minmax(0, 1fr) 240px",
-          gap: stacked ? (isMobile ? 14 : 18) : 40,
+          gridTemplateColumns: stacked ? "1fr" : "minmax(0, 1fr) 276px",
+          gap: stacked ? (isMobile ? 14 : 20) : 32,
           alignItems: "start",
           position: "relative",
         }}
       >
         {/* Greeting + state-of-day */}
-        <div>
+        <div style={{ minWidth: 0, maxWidth: isMobile ? "100%" : 700 }}>
           <div
             style={{
               fontSize: 10,
@@ -199,38 +231,51 @@ export default function DashboardHero({
           <h1
             className="ea-display"
             style={{
-              margin: isMobile ? "0 0 10px" : "0 0 14px",
-              fontSize: isMobile ? 24 : compact ? 28 : 40,
+              margin: isMobile ? "0 0 12px" : "0 0 12px",
+              fontSize: isMobile ? 24 : compact ? 35 : 41,
               fontWeight: 300,
-              letterSpacing: isMobile ? -0.4 : -0.6,
-              lineHeight: isMobile ? 1.08 : 1.1,
+              letterSpacing: isMobile ? -0.4 : -0.95,
+              lineHeight: isMobile ? 1.08 : 0.98,
               color: "#cdd6f4",
               textWrap: "balance",
+              maxWidth: isMobile ? "100%" : 480,
             }}
           >
             <span style={{ display: "block" }}>{greet.text}.</span>
-            {!isMobile && stateOfDay.headline && (
-              <span
+          </h1>
+
+          {!isMobile && stateOfDay.headline && (
+            <div
+              style={{
+                maxWidth: isMobile ? "100%" : 660,
+                padding: isMobile ? "0 0 0 14px" : "0 0 0 18px",
+                borderLeft: `2px solid ${accent}55`,
+                marginBottom: isMobile ? 12 : 12,
+              }}
+            >
+              <div
+                className="ea-display"
                 style={{
-                  color: "rgba(205,214,244,0.5)",
+                  fontSize: isMobile ? 18 : compact ? 23 : 26,
+                  lineHeight: isMobile ? 1.16 : 1.12,
+                  letterSpacing: isMobile ? -0.2 : -0.35,
+                  color: "rgba(221,226,247,0.78)",
                   fontStyle: "italic",
-                  fontWeight: 300,
-                  display: "block",
-                  marginTop: isMobile ? 4 : 2,
+                  textWrap: "pretty",
                 }}
               >
                 {stateOfDay.headline}
-              </span>
-            )}
-          </h1>
+              </div>
+            </div>
+          )}
 
           {stateOfDay.summary && (
             <p
               style={{
                 margin: "0 0 6px",
-                maxWidth: isMobile ? "100%" : 680,
-                fontSize: isMobile ? 13 : compact ? 14 : 15,
-                lineHeight: isMobile ? 1.55 : 1.65,
+                maxWidth: isMobile ? "100%" : 560,
+                fontSize: isMobile ? 13 : compact ? 14 : 14.5,
+                lineHeight: isMobile ? 1.55 : 1.58,
                 color: "rgba(205,214,244,0.72)",
                 textWrap: "pretty",
               }}
@@ -245,11 +290,7 @@ export default function DashboardHero({
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              marginTop: isMobile ? 4 : 6,
-              padding: isMobile ? "2px 8px" : "3px 9px",
-              borderRadius: 99,
-              background: "rgba(255,255,255,0.025)",
-              border: "1px solid rgba(255,255,255,0.05)",
+              marginTop: isMobile ? 4 : 8,
               fontSize: isMobile ? 9 : 10,
               letterSpacing: 0.3,
               color: "rgba(205,214,244,0.4)",
@@ -266,18 +307,19 @@ export default function DashboardHero({
           style={{
             display: "flex",
             flexDirection: stacked && !isMobile ? "row" : "column",
-            gap: isMobile ? 8 : 10,
+            gap: isMobile ? 8 : 14,
             minWidth: 0,
+            paddingLeft: isMobile ? 0 : 22,
+            borderLeft: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
           }}
         >
           <div
             style={{
               flex: stacked && !isMobile ? 1 : "unset",
-              padding: isMobile ? "12px 14px" : "14px 16px",
-              borderRadius: 12,
-              background:
-                "linear-gradient(155deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015))",
-              border: "1px solid rgba(255,255,255,0.06)",
+              padding: isMobile ? "12px 14px" : "0 0 12px",
+              borderRadius: 0,
+              background: "transparent",
+              border: "none",
               display: "grid",
               gridTemplateColumns: "auto 1fr",
               gap: 12,
@@ -289,7 +331,7 @@ export default function DashboardHero({
                 width: isMobile ? 38 : 42,
                 height: isMobile ? 38 : 42,
                 borderRadius: 10,
-                background: "rgba(255,255,255,0.03)",
+                background: isMobile ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.025)",
                 display: "grid",
                 placeItems: "center",
               }}
@@ -299,7 +341,7 @@ export default function DashboardHero({
             <div>
               <div
               style={{
-                fontSize: isMobile ? 16 : 18,
+                fontSize: isMobile ? 16 : 20,
                 fontWeight: 500,
                 color: "#cdd6f4",
                 lineHeight: 1,
@@ -338,9 +380,12 @@ export default function DashboardHero({
           style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : `repeat(${theCallouts.length}, 1fr)`,
-            gap: isMobile ? 8 : 10,
-            marginTop: isMobile ? 16 : compact ? 22 : 28,
+            gap: isMobile ? 8 : 18,
+            marginTop: isMobile ? 16 : compact ? 16 : 18,
             position: "relative",
+            paddingTop: isMobile ? 0 : 12,
+            borderTop: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
+            alignItems: "stretch",
           }}
         >
           {theCallouts.map((c, i) => (
@@ -421,10 +466,10 @@ function FocusCard({
       data-testid="focus-window-card"
       style={{
         flex: "unset",
-        padding: isMobile ? "12px 14px" : "12px 14px 14px",
-        borderRadius: 12,
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.05)",
+        padding: isMobile ? "12px 14px" : "14px 0 0",
+        borderRadius: 0,
+        background: "transparent",
+        borderTop: isMobile ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(255,255,255,0.06)",
       }}
     >
       <div
@@ -753,29 +798,50 @@ function Callout({ icon, lead, title, sub, urgency, accent, onJump, kind, isMobi
       onClick={(e) => onJump?.(e.currentTarget)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onJump?.(e.currentTarget); }}
       style={{
-        padding: isMobile ? "12px 14px" : "14px 16px", borderRadius: 11,
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        padding: isMobile ? "12px 14px" : "12px 16px 14px",
+        borderRadius: isMobile ? 14 : 16,
+        background: isMobile
+          ? "rgba(255,255,255,0.018)"
+          : "linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.012) 100%)",
+        border: "1px solid rgba(255,255,255,0.05)",
         cursor: "pointer", position: "relative", overflow: "hidden",
-        transition: "all 150ms",
+        transition: "transform 220ms ease, background 150ms ease, border-color 150ms ease",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-        e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+        e.currentTarget.style.background = "linear-gradient(180deg, rgba(255,255,255,0.032) 0%, rgba(255,255,255,0.018) 100%)";
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+        e.currentTarget.style.transform = "translateY(-1px)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "rgba(255,255,255,0.025)";
-        e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+        e.currentTarget.style.background = isMobile
+          ? "rgba(255,255,255,0.018)"
+          : "linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.012) 100%)";
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+        e.currentTarget.style.transform = "translateY(0)";
       }}
     >
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: uc.bar }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: isMobile ? 0 : 12,
+          bottom: isMobile ? 0 : 12,
+          width: 2,
+          background: uc.bar,
+          borderRadius: 9999,
+        }}
+      />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
         <div
           style={{
             width: isMobile ? 20 : 22, height: isMobile ? 20 : 22, borderRadius: 6,
-            background: "rgba(255,255,255,0.04)",
+            background: isMobile ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.03)",
             display: "grid", placeItems: "center",
+            flexShrink: 0,
           }}
         >
           <Icon size={isMobile ? 10 : 11} color={uc.dot} />
@@ -793,6 +859,8 @@ function Callout({ icon, lead, title, sub, urgency, accent, onJump, kind, isMobi
           style={{
             fontSize: isMobile ? 10 : 10.5, fontWeight: 600, letterSpacing: 0.2,
             color: uc.dot,
+            whiteSpace: "nowrap",
+            marginLeft: "auto",
           }}
         >
           {lead}
@@ -802,7 +870,8 @@ function Callout({ icon, lead, title, sub, urgency, accent, onJump, kind, isMobi
       <div
         style={{
           fontSize: isMobile ? 13 : 14, fontWeight: 500, color: "#cdd6f4", lineHeight: 1.35,
-          marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          paddingRight: isMobile ? 0 : 8,
         }}
       >
         {title}
@@ -812,6 +881,7 @@ function Callout({ icon, lead, title, sub, urgency, accent, onJump, kind, isMobi
           style={{
             fontSize: isMobile ? 11 : 11.5, color: "rgba(205,214,244,0.55)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            paddingRight: isMobile ? 0 : 8,
           }}
         >
           {sub}
