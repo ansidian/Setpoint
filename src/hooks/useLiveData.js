@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getLiveData } from "../api";
 
+const LIVE_POLL_INTERVAL_MS = 2 * 60 * 1000;
+const LIVE_FOCUS_COOLDOWN_MS = 15 * 1000;
+
 export default function useLiveData({ disabled = false } = {}) {
   const [liveEmails, setLiveEmails] = useState([]);
   const [liveCalendar, setLiveCalendar] = useState(null);
@@ -25,10 +28,12 @@ export default function useLiveData({ disabled = false } = {}) {
   const [resurfacedEntries, setResurfacedEntries] = useState([]);
   const mountedRef = useRef(true);
   const fetchingRef = useRef(false);
+  const lastFetchStartedAtRef = useRef(0);
 
   const fetchLive = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
+    lastFetchStartedAtRef.current = Date.now();
     setIsPolling(true);
     try {
       const data = await getLiveData();
@@ -77,6 +82,31 @@ export default function useLiveData({ disabled = false } = {}) {
 
     return () => {
       mountedRef.current = false;
+    };
+  }, [fetchLive, disabled]);
+
+  useEffect(() => {
+    if (disabled) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      fetchLive();
+    };
+
+    const refreshOnReturn = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetchStartedAtRef.current < LIVE_FOCUS_COOLDOWN_MS) return;
+      fetchLive();
+    };
+
+    const intervalId = setInterval(refreshIfVisible, LIVE_POLL_INTERVAL_MS);
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
     };
   }, [fetchLive, disabled]);
 

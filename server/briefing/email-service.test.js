@@ -179,4 +179,28 @@ describe("markAllRead", () => {
     });
     expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
   });
+
+  it("routes legacy Gmail UID prefixes through the canonical account for batch updates", async () => {
+    const gmailUid = "gmail-gmail-old-msg1";
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [
+        { id: "gmail-old", email: "dup@example.com", type: "gmail", updated_at: "2026-04-18T10:00:00Z" },
+        { id: "gmail-fresh", email: "dup@example.com", type: "gmail", updated_at: "2026-04-20T10:00:00Z" },
+      ],
+    });
+    gmail.batchMarkAsRead.mockResolvedValueOnce(undefined);
+
+    const result = await emailService.markAllRead("u1", [gmailUid]);
+
+    expect(result).toEqual({ updatedUids: [gmailUid], failed: [] });
+    expect(gmail.batchMarkAsRead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "gmail-fresh",
+        canonical_id: "gmail-fresh",
+        uid_account_id: "gmail-old",
+      }),
+      [gmailUid],
+    );
+    expect(storedBriefingService.markEmailsRead).toHaveBeenCalledWith("u1", [gmailUid]);
+  });
 });

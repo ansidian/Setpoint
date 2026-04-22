@@ -312,30 +312,77 @@ export async function markAllRead(userId, uids) {
     sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND (type = 'gmail' OR type = 'icloud')",
     args: [userId],
   });
+  const rawGmailAccounts = accounts.rows
+    .filter((account) => account.type === "gmail")
+    .map((account) => ({ ...account, type: account.type || "gmail" }));
+  const canonicalGmailAccounts = canonicalizeConfiguredAccounts(rawGmailAccounts);
+  const unresolvedGmailUids = [];
 
   for (const uid of requestedUids) {
     if (uid.startsWith("icloud-")) {
       icloudUids.push(uid);
     } else if (uid.startsWith("gmail-")) {
-      const account = accounts.rows.find(
-        (a) => a.type === "gmail" && uid.startsWith(`gmail-${a.id}-`),
-      );
-      if (account) {
-        if (!gmailUids.has(account.id)) gmailUids.set(account.id, { account, uids: [] });
-        gmailUids.get(account.id).uids.push(uid);
-      } else {
-        failed.push({
-          provider: "gmail",
-          uids: [uid],
-          message: "Gmail account not found for one or more emails.",
-        });
+      const matchedPrefix = rawGmailAccounts.find((account) => uid.startsWith(`gmail-${account.id}-`)) || null;
+      const matchedEmail = matchedPrefix?.email
+        ? normalizeEmailAddress(matchedPrefix.email)
+        : null;
+
+      if (!matchedPrefix || !matchedEmail) {
+        unresolvedGmailUids.push(uid);
+        continue;
       }
+
+      const canonical = canonicalGmailAccounts.find(
+        (account) => normalizeEmailAddress(account.email) === matchedEmail,
+      ) || matchedPrefix;
+      const account = canonical.id === matchedPrefix.id
+        ? canonical
+        : { ...canonical, canonical_id: canonical.id, uid_account_id: matchedPrefix.id };
+      const accountKey = account.canonical_id || account.id;
+      if (!gmailUids.has(accountKey)) gmailUids.set(accountKey, { account, uids: [] });
+      gmailUids.get(accountKey).uids.push(uid);
     } else {
       failed.push({
         provider: "unknown",
         uids: [uid],
         message: "Unsupported email UID format.",
       });
+    }
+  }
+
+  if (unresolvedGmailUids.length) {
+    const placeholders = unresolvedGmailUids.map(() => "?").join(",");
+    const indexed = await db.execute({
+      sql: `SELECT uid, account_id, account_email
+            FROM ea_email_index
+            WHERE user_id = ? AND uid IN (${placeholders})`,
+      args: [userId, ...unresolvedGmailUids],
+    });
+    const indexedByUid = new Map(indexed.rows.map((row) => [row.uid, row]));
+
+    for (const uid of unresolvedGmailUids) {
+      const indexedRow = indexedByUid.get(uid);
+      const indexedEmail = normalizeEmailAddress(indexedRow?.account_email);
+      const canonical = indexedEmail
+        ? canonicalGmailAccounts.find((account) => normalizeEmailAddress(account.email) === indexedEmail)
+        : null;
+
+      if (!canonical) {
+        failed.push({
+          provider: "gmail",
+          uids: [uid],
+          message: "Gmail account not found for one or more emails.",
+        });
+        continue;
+      }
+
+      const uidAccountId = indexedRow?.account_id || canonical.id;
+      const account = uidAccountId === canonical.id
+        ? canonical
+        : { ...canonical, canonical_id: canonical.id, uid_account_id: uidAccountId };
+      const accountKey = account.canonical_id || account.id;
+      if (!gmailUids.has(accountKey)) gmailUids.set(accountKey, { account, uids: [] });
+      gmailUids.get(accountKey).uids.push(uid);
     }
   }
 
