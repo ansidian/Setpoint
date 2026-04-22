@@ -183,35 +183,82 @@ export function PaletteTriggerButton({ onOpenPalette }) {
   );
 }
 
-export function NextBriefingPill({ accent, nextBriefingLabel }) {
-  if (!nextBriefingLabel) return null;
+export function BriefingStatusPill({ accent, briefingStatus }) {
+  if (!briefingStatus) return null;
+
+  const toneColor = briefingStatus.toneColor || accent;
 
   return (
     <div
-      data-testid="shell-header-next-briefing"
+      data-testid="shell-header-briefing-status"
       style={{
         display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 10px",
-        borderRadius: 8,
-        background: "rgba(255,255,255,0.03)",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 4,
+        minWidth: 240,
+        maxWidth: 360,
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.025))",
         border: "1px solid rgba(255,255,255,0.06)",
-        fontSize: 10.5,
-        color: "rgba(205,214,244,0.55)",
-        letterSpacing: 0.2,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
     >
-      <span
+      <div
         style={{
-          width: 5,
-          height: 5,
-          borderRadius: 99,
-          background: accent,
-          boxShadow: `0 0 6px ${accent}`,
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
         }}
-      />
-      {nextBriefingLabel}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 99,
+            background: toneColor,
+            boxShadow: `0 0 8px ${toneColor}`,
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 9.5,
+            fontWeight: 700,
+            letterSpacing: 1.6,
+            textTransform: "uppercase",
+            color: toneColor,
+            minWidth: 0,
+          }}
+        >
+          {briefingStatus.label}
+        </span>
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: "rgba(245,247,255,0.92)",
+          letterSpacing: 0.1,
+          lineHeight: 1.25,
+        }}
+      >
+        {briefingStatus.headline}
+      </div>
+      {briefingStatus.detail ? (
+        <div
+          style={{
+            fontSize: 10.5,
+            color: "rgba(205,214,244,0.58)",
+            lineHeight: 1.35,
+            letterSpacing: 0.1,
+          }}
+        >
+          {briefingStatus.detail}
+        </div>
+      ) : null}
     </div>
   );
 }

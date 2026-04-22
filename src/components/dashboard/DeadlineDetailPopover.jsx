@@ -9,7 +9,7 @@ import { daysUntil } from "../../lib/bill-utils";
 import { daysLabel, urgencyForDays } from "../../lib/redesign-helpers";
 import AddTaskPanel from "../todoist/AddTaskPanel";
 
-function ActionButton({ icon: Icon, label, onClick, accent, variant = "default", disabled }) {
+function ActionButton({ icon: Icon, label, onClick, accent, variant = "default", disabled, loading = false }) {
   const [hover, setHover] = useState(false);
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
@@ -54,7 +54,21 @@ function ActionButton({ icon: Icon, label, onClick, accent, variant = "default",
         transition: "all 120ms", whiteSpace: "nowrap",
       }}
     >
-      {Icon && <Icon size={11} />}
+      {loading ? (
+        <span
+          aria-hidden
+          style={{
+            width: 11,
+            height: 11,
+            borderRadius: "50%",
+            border: "1.5px solid currentColor",
+            borderTopColor: "transparent",
+            animation: "spin 700ms linear infinite",
+          }}
+        />
+      ) : (
+        Icon ? <Icon size={11} /> : null
+      )}
       <span>{label}</span>
     </button>
   );
@@ -132,6 +146,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
   const panelRef = useRef(null);
   const [pos, setPos] = useState(() => computePos(anchor));
   const [editing, setEditing] = useState(false);
+  const [completingState, setCompletingState] = useState({ taskId: null, pending: false });
   const editAnchorRef = useRef(null);
   const { handleCompleteTask, handleUpdateTaskStatus, handleUpdateTask } = useDashboard();
 
@@ -171,7 +186,8 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
 
   const isTodoist = task.source === "todoist";
   const isCanvas = task.source === "canvas";
-  const isComplete = task.status === "complete";
+  const completing = completingState.pending && completingState.taskId === task.id;
+  const isComplete = task.status === "complete" || completing;
   const isInProgress = task.status === "in_progress";
   const ctmUrl = `https://ctm.andysu.tech/#/event/${task.id}`;
 
@@ -303,10 +319,18 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
               {!isComplete && (
                 <ActionButton
                   icon={Check}
-                  label="Mark complete"
+                  label={completing ? "Completing..." : "Mark complete"}
                   variant="primary"
                   accent={accent}
-                  onClick={() => { handleCompleteTask(task.id); onClose(); }}
+                  disabled={completing}
+                  loading={completing}
+                  onClick={() => {
+                    setCompletingState({ taskId: task.id, pending: true });
+                    Promise.resolve(handleCompleteTask(task.id)).catch(() => {
+                      setCompletingState({ taskId: task.id, pending: false });
+                    });
+                    window.setTimeout(() => onClose(), 720);
+                  }}
                 />
               )}
               <div ref={editAnchorRef} style={{ display: "inline-flex" }}>
@@ -314,6 +338,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
                   icon={Pencil}
                   label="Edit"
                   accent={accent}
+                  disabled={completing}
                   onClick={() => setEditing(true)}
                 />
               </div>
@@ -323,6 +348,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
                   label="Open in Todoist"
                   variant="accent"
                   accent={accent}
+                  disabled={completing}
                   onClick={() => { openInNewTab(task.url); onClose(); }}
                 />
               )}

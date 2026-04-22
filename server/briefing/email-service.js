@@ -18,6 +18,7 @@ import {
 } from "./icloud.js";
 import * as storedBriefingService from "./stored-briefing-service.js";
 import { loadUserConfig } from "./index.js";
+import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "./account-canonical.js";
 
 // --- Private helpers ---
 
@@ -46,9 +47,45 @@ async function findAccountByUid(userId, uid) {
       sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail'",
       args: [userId],
     });
-    const account = result.rows.find((a) => uid.startsWith(`gmail-${a.id}-`));
-    if (!account) return null;
-    return { type: "gmail", account };
+    const rawAccounts = result.rows.map((account) => ({ ...account, type: account.type || "gmail" }));
+    const canonicalAccounts = canonicalizeConfiguredAccounts(rawAccounts);
+    const matchedPrefix = rawAccounts.find((account) => uid.startsWith(`gmail-${account.id}-`)) || null;
+    const matchedEmail = matchedPrefix?.email
+      ? normalizeEmailAddress(matchedPrefix.email)
+      : null;
+
+    if (matchedPrefix && matchedEmail) {
+      const canonical = canonicalAccounts.find(
+        (account) => normalizeEmailAddress(account.email) === matchedEmail,
+      ) || matchedPrefix;
+      return {
+        type: "gmail",
+        account: canonical.id === matchedPrefix.id
+          ? canonical
+          : { ...canonical, canonical_id: canonical.id, uid_account_id: matchedPrefix.id },
+      };
+    }
+
+    const indexed = await db.execute({
+      sql: `SELECT account_id, account_email
+            FROM ea_email_index
+            WHERE user_id = ? AND uid = ?
+            LIMIT 1`,
+      args: [userId, uid],
+    });
+    const indexedEmail = normalizeEmailAddress(indexed.rows[0]?.account_email);
+    if (!indexedEmail) return null;
+    const canonical = canonicalAccounts.find(
+      (account) => normalizeEmailAddress(account.email) === indexedEmail,
+    );
+    if (!canonical) return null;
+    const uidAccountId = indexed.rows[0]?.account_id || canonical.id;
+    return {
+      type: "gmail",
+      account: uidAccountId === canonical.id
+        ? canonical
+        : { ...canonical, canonical_id: canonical.id, uid_account_id: uidAccountId },
+    };
   }
   return null;
 }
@@ -126,17 +163,13 @@ export async function getEmailBody(userId, uid) {
     return fetchIcloudBody(account.email, password, uid);
   }
   if (uid.startsWith("gmail-")) {
-    const accounts = await db.execute({
-      sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail'",
-      args: [userId],
-    });
-    const account = accounts.rows.find((a) => uid.startsWith(`gmail-${a.id}-`));
-    if (!account) {
+    const found = await findAccountByUid(userId, uid);
+    if (!found?.account) {
       const err = new Error("Gmail account not found");
       err.status = 404;
       throw err;
     }
-    return fetchGmailBody(account, uid);
+    return fetchGmailBody(found.account, uid);
   }
   const err = new Error("Unknown email uid format");
   err.status = 400;

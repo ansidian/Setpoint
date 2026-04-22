@@ -1,4 +1,5 @@
 import db from "../db/connection.js";
+import { canonicalizeConfiguredAccounts } from "./account-canonical.js";
 
 // --- Core primitives ---
 
@@ -206,8 +207,9 @@ export async function mergeAccountPrefs(briefing, userId) {
     sql: "SELECT id, email, label, color, icon FROM ea_accounts WHERE user_id = ?",
     args: [userId],
   });
-  const byEmail = new Map(result.rows.map((a) => [a.email, a]));
-  const byLabel = new Map(result.rows.map((a) => [a.label, a]));
+  const canonicalAccounts = canonicalizeConfiguredAccounts(result.rows);
+  const byEmail = new Map(canonicalAccounts.map((a) => [a.email, a]));
+  const byLabel = new Map(canonicalAccounts.map((a) => [a.label, a]));
   for (const acc of briefing.emails.accounts) {
     const dbAcc = byLabel.get(acc.name) || byEmail.get(acc.name);
     if (dbAcc) {

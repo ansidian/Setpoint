@@ -77,6 +77,10 @@ beforeEach(() => {
 function makeBriefing() {
   return {
     aiInsights: [],
+    aiGeneratedAt: "2026-04-19T15:00:00.000Z",
+    dataUpdatedAt: "2026-04-19T15:04:00.000Z",
+    skippedAI: false,
+    nonAiGenerationCount: 0,
     emails: {
       summary: "Brief summary",
       accounts: [
@@ -104,12 +108,13 @@ function makeProps() {
   return {
     bd: {
       briefing: makeBriefing(),
-      schedules: [{ enabled: true, hour: 9, minute: 0 }],
+      schedules: [{ enabled: true, time: "09:00", label: "Morning Briefing" }],
       refreshing: false,
       generating: false,
       genProgress: null,
       viewingPast: null,
       latestId: "latest",
+      lastQuickRefreshAt: null,
       handleQuickRefresh: vi.fn(),
       selectHistory: vi.fn(),
     },
@@ -171,7 +176,7 @@ describe("RedesignShell mobile behavior", () => {
 
     expect(screen.getByTestId("shell-header-mobile")).toBeTruthy();
     expect(screen.queryByTestId("calendar-modal")).toBeNull();
-    expect(screen.queryByTestId("shell-header-next-briefing")).toBeNull();
+    expect(screen.queryByTestId("shell-header-briefing-status")).toBeNull();
     expect(screen.queryByText("Jump to anything")).toBeNull();
 
     fireEvent.click(screen.getByLabelText("Open more actions"));
@@ -205,9 +210,32 @@ describe("RedesignShell mobile behavior", () => {
 
     expect(screen.getByTestId("shell-header-desktop")).toBeTruthy();
     expect(screen.getByTestId("calendar-modal").textContent).toBe("closed");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Morning Briefing");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Claude refreshed");
 
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+  });
+
+  it("describes clone-path briefings in the shell status surface", () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    props.bd.briefing = {
+      ...makeBriefing(),
+      skippedAI: true,
+      nonAiGenerationCount: 2,
+    };
+
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Quiet refresh");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Morning Briefing");
   });
 
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {

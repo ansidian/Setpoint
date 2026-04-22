@@ -68,6 +68,36 @@ describe("findAccountByUid", () => {
     expect(out.account.id).toBe("gmail-y@z.com");
   });
 
+  it("routes duplicate Gmail prefixes through the canonical account credentials", async () => {
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [
+        { id: "gmail-old", email: "dup@example.com", updated_at: "2026-04-18T10:00:00Z" },
+        { id: "gmail-fresh", email: "dup@example.com", updated_at: "2026-04-20T10:00:00Z" },
+      ],
+    });
+
+    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-old-msg123");
+
+    expect(out.account.id).toBe("gmail-fresh");
+    expect(out.account.uid_account_id).toBe("gmail-old");
+    expect(out.account.canonical_id).toBe("gmail-fresh");
+  });
+
+  it("falls back through indexed account_email when no Gmail prefix row matches", async () => {
+    mockDb.execute
+      .mockResolvedValueOnce({
+        rows: [{ id: "gmail-fresh", email: "dup@example.com", updated_at: "2026-04-20T10:00:00Z" }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ account_id: "gmail-legacy", account_email: "dup@example.com" }],
+      });
+
+    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-legacy-msg123");
+
+    expect(out.account.id).toBe("gmail-fresh");
+    expect(out.account.uid_account_id).toBe("gmail-legacy");
+  });
+
   it("returns null for unknown prefix", async () => {
     const out = await __testing__.findAccountByUid("u1", "unknown-xyz");
     expect(out).toBeNull();

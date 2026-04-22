@@ -92,6 +92,13 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
   }, [setBriefing, setCalendarDeadlines]);
 
   const handleCompleteTask = useCallback(async (taskId) => {
+    const existingTask = briefing?.todoist?.upcoming?.find(
+      (t) => !t._tombstone && (String(t.id) === String(taskId) || t.todoist_id === String(taskId))
+    ) || briefing?.ctm?.upcoming?.find(
+      (t) => !t._tombstone && (String(t.id) === String(taskId) || t.todoist_id === String(taskId))
+    );
+    if (!existingTask || existingTask._completing || existingTask.status === "complete") return;
+
     const flagCompleting = (root) => {
       if (!root) return root;
       const updated = JSON.parse(JSON.stringify(root));
@@ -132,7 +139,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     }
 
     setTimeout(() => removeCompletedTask(taskId), 600);
-  }, [expandedTask, setBriefing, setCalendarDeadlines, removeCompletedTask]);
+  }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming, expandedTask, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const handleDismissGhost = useCallback((todoistId) => {
     dismissTombstone(todoistId).catch(() => {});

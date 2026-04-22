@@ -8,6 +8,7 @@ import {
 import { LANE, briefingPhaseLabel } from "../../lib/redesign-helpers";
 import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
 import EmailRow from "./EmailRow";
+import EmptyStateSplash from "../shared/EmptyStateSplash";
 
 /* ======================================================================
  * LIST (swimlane or flat)
@@ -362,14 +363,17 @@ export default function InboxList({
           </div>
         )}
         {emails.length === 0 && (
-          <div
-            style={{
-              padding: 40, textAlign: "center",
-              color: "rgba(205,214,244,0.4)", fontSize: 12,
-            }}
-          >
-            <Mail size={22} color="rgba(205,214,244,0.25)" style={{ marginBottom: 10 }} />
-            <div>No emails here.</div>
+          <div style={{ padding: 20 }}>
+            <EmptyStateSplash
+              icon={<Mail size={26} strokeWidth={1.8} />}
+              eyebrow="Inbox"
+              title={searchQuery ? "No emails match this view" : "No emails available"}
+              message={searchQuery
+                ? "Try clearing the query, switching lanes, or checking another account."
+                : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
+              compact
+              minHeight={260}
+            />
           </div>
         )}
       </div>
