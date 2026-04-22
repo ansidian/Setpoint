@@ -4,7 +4,7 @@ export function renderBillsFooter({ viewYear, viewMonth, computed }) {
   return (
     <div
       style={{
-        padding: "12px 14px",
+        padding: "10px 12px",
         background: "rgba(255,255,255,0.02)",
         border: "1px solid rgba(255,255,255,0.05)",
         borderRadius: 10,
@@ -26,7 +26,7 @@ export function renderBillsFooter({ viewYear, viewMonth, computed }) {
       </span>
       <span
         style={{
-          fontSize: 22,
+          fontSize: 20,
           fontWeight: 500,
           color: "#fff",
           fontVariantNumeric: "tabular-nums",

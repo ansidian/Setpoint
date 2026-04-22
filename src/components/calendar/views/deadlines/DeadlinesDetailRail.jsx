@@ -23,6 +23,7 @@ function ActionButton({ icon, label, onClick, accent, variant = "default", disab
   const IconComponent = icon;
   const isPrimary = variant === "primary";
   const isAccent = variant === "accent";
+  const isGhost = variant === "ghost";
   const accentSoftWash = `color-mix(in srgb, ${accent} 10%, transparent)`;
   const accentBorder = `color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.06))`;
   const accentHoverBorder = `color-mix(in srgb, ${accent} 24%, rgba(255,255,255,0.08))`;
@@ -31,26 +32,36 @@ function ActionButton({ icon, label, onClick, accent, variant = "default", disab
     ? "#a6e3a1"
     : isAccent
       ? accent
+      : isGhost
+        ? "rgba(205,214,244,0.66)"
       : "rgba(205,214,244,0.8)";
   const background = isPrimary
     ? "rgba(166,227,161,0.1)"
     : isAccent
       ? "rgba(255,255,255,0.015)"
+      : isGhost
+        ? "transparent"
       : "rgba(255,255,255,0.02)";
   const border = isPrimary
     ? "1px solid rgba(166,227,161,0.28)"
     : isAccent
       ? `1px solid ${accentBorder}`
+      : isGhost
+        ? "1px solid transparent"
       : "1px solid rgba(255,255,255,0.08)";
   const hoverBackground = isPrimary
     ? "rgba(166,227,161,0.16)"
     : isAccent
       ? accentSoftWash
+      : isGhost
+        ? "rgba(255,255,255,0.03)"
       : "rgba(255,255,255,0.045)";
   const hoverBorder = isPrimary
     ? "rgba(166,227,161,0.4)"
     : isAccent
       ? accentHoverBorder
+      : isGhost
+        ? "rgba(255,255,255,0.04)"
       : "rgba(255,255,255,0.14)";
   const hoverShadow = isPrimary
     ? "0 8px 18px rgba(166,227,161,0.12)"
@@ -69,9 +80,9 @@ function ActionButton({ icon, label, onClick, accent, variant = "default", disab
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        padding: "7px 11px",
+        padding: isGhost ? "6px 8px" : "7px 11px",
         borderRadius: 8,
-        fontSize: 11,
+        fontSize: isGhost ? 10.5 : 11,
         fontWeight: 600,
         fontFamily: "inherit",
         cursor: disabled ? "default" : "pointer",
@@ -80,7 +91,7 @@ function ActionButton({ icon, label, onClick, accent, variant = "default", disab
         color,
         opacity: disabled ? 0.58 : 1,
         whiteSpace: "nowrap",
-        transform: hovered && !isAccent && !disabled ? "translateY(-1px)" : "translateY(0)",
+        transform: hovered && !disabled && !isGhost ? "translateY(-1px)" : "translateY(0)",
         boxShadow: hovered ? hoverShadow : "none",
         transition: "background 140ms, border-color 140ms, transform 140ms, box-shadow 140ms",
       }}
@@ -105,32 +116,82 @@ function ActionButton({ icon, label, onClick, accent, variant = "default", disab
   );
 }
 
-function InfoRow({ label, value, color }) {
+function MetaChip({ children, tone = "default" }) {
+  const styles = tone === "accent"
+    ? {
+        color: "#f5e0dc",
+        border: "1px solid rgba(245,224,220,0.14)",
+        background: "rgba(245,224,220,0.08)",
+      }
+    : tone === "quiet"
+      ? {
+          color: "rgba(205,214,244,0.58)",
+          border: "1px solid rgba(255,255,255,0.05)",
+          background: "rgba(255,255,255,0.018)",
+        }
+      : {
+          color: "rgba(205,214,244,0.74)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          background: "rgba(255,255,255,0.03)",
+        };
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
-      <span
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "4px 8px",
+        borderRadius: 999,
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: 0.1,
+        ...styles,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function DetailFact({ label, value, color }) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: "10px 11px 9px",
+        borderRadius: 10,
+        border: "1px solid rgba(255,255,255,0.05)",
+        background: "rgba(255,255,255,0.016)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div
         style={{
           color: "rgba(205,214,244,0.45)",
-          letterSpacing: 0.3,
+          letterSpacing: 1.2,
           textTransform: "uppercase",
-          fontSize: 9.5,
-          fontWeight: 600,
-          width: 60,
+          fontSize: 9,
+          fontWeight: 700,
         }}
       >
         {label}
-      </span>
-      <span
+      </div>
+      <div
         style={{
           color: color || "rgba(205,214,244,0.85)",
           fontWeight: 500,
-          display: "inline-flex",
+          display: "flex",
           alignItems: "center",
           gap: 6,
+          fontSize: 11.5,
+          lineHeight: 1.3,
+          minHeight: 15,
         }}
       >
         {value}
-      </span>
+      </div>
     </div>
   );
 }
@@ -177,40 +238,62 @@ function DetailCard({ task, accent, onEdit, onComplete, onStatusChange }) {
         ? "#f9e2af"
         : accent
     : "rgba(205,214,244,0.7)";
+  const contextLabel = task.class_name || task.project_name;
+  const showPriorityChip = isTodoist && PRIORITY_META[task.priority];
+  const showPointsChip = task.points_possible != null;
 
   return (
     <div
       style={{
-        padding: "14px 14px 12px",
-        borderRadius: 10,
-        border: "1px solid rgba(255,255,255,0.05)",
-        background: "rgba(255,255,255,0.02)",
+        minHeight: 188,
+        padding: "13px 14px 12px",
+        borderRadius: 14,
+        border: `1px solid color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.05))`,
+        background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 12%, transparent), transparent 44%), linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.018))`,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
         display: "flex",
         flexDirection: "column",
         gap: 10,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span
-          aria-hidden
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            background: sourceColor,
-            boxShadow: `0 0 0 1px ${sourceColor}22, 0 0 8px ${sourceColor}2b`,
-          }}
-        />
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span
+            aria-hidden
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              background: sourceColor,
+              boxShadow: `0 0 0 1px ${sourceColor}22, 0 0 8px ${sourceColor}2b`,
+            }}
+          />
+          <div
+            style={{
+              fontSize: 9.5,
+              fontWeight: 700,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: sourceColor,
+            }}
+          >
+            {sourceLabel}
+          </div>
+        </div>
         <div
           style={{
-            fontSize: 9.5,
+            flexShrink: 0,
+            padding: "5px 8px",
+            borderRadius: 999,
+            border: `1px solid ${dueColor}30`,
+            background: `${dueColor}14`,
+            color: dueColor,
+            fontSize: 10,
             fontWeight: 700,
-            letterSpacing: 2,
-            textTransform: "uppercase",
-            color: sourceColor,
+            letterSpacing: 0.2,
           }}
         >
-          {sourceLabel}
+          {task.due_date ? daysLabel(dueDays) : "No due date"}
         </div>
       </div>
 
@@ -218,132 +301,149 @@ function DetailCard({ task, accent, onEdit, onComplete, onStatusChange }) {
         <div
           className="ea-display"
           style={{
-            fontSize: 15,
+            fontSize: 18,
             fontWeight: 500,
             color: "#fff",
-            lineHeight: 1.3,
-            letterSpacing: -0.2,
+            lineHeight: 1.15,
+            letterSpacing: -0.32,
             textDecoration: normalizedStatus === "complete" ? "line-through" : "none",
             textDecorationColor: "rgba(205,214,244,0.35)",
           }}
         >
           {task.title || "Untitled task"}
         </div>
-        {(task.class_name || task.project_name) && (
+        {contextLabel ? (
           <div
             style={{
-              marginTop: 4,
-              fontSize: 11,
-              color: "rgba(205,214,244,0.5)",
+              marginTop: 5,
+              fontSize: 10.5,
+              color: "rgba(205,214,244,0.54)",
             }}
           >
-            {task.class_name || task.project_name}
+            {contextLabel}
           </div>
-        )}
+        ) : null}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <InfoRow
+      {(showPriorityChip || showPointsChip || !isTodoist) ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {showPriorityChip ? <PriorityBadge level={task.priority} /> : null}
+          {showPointsChip ? <MetaChip tone="quiet">{task.points_possible} pts</MetaChip> : null}
+          {!isTodoist ? <MetaChip tone="quiet">{sourceLabel}</MetaChip> : null}
+        </div>
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
+        <DetailFact
           label="Due"
           value={task.due_date
             ? `${daysLabel(dueDays)}${task.due_time ? ` · ${task.due_time}` : ""}`
             : "No due date"}
           color={dueColor}
         />
-        <InfoRow label="Status" value={statusLabel(task.status)} />
-        {isTodoist && PRIORITY_META[task.priority] && (
-          <InfoRow label="Priority" value={<PriorityBadge level={task.priority} />} />
-        )}
-        {task.points_possible != null && (
-          <InfoRow label="Points" value={`${task.points_possible}`} />
-        )}
+        <DetailFact label="Status" value={statusLabel(task.status)} />
       </div>
 
       <div
         style={{
+          marginTop: "auto",
           paddingTop: 10,
           borderTop: "1px solid rgba(255,255,255,0.04)",
           display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 10,
           flexWrap: "wrap",
-          gap: 6,
         }}
       >
-        {isTodoist ? (
-          <>
-            {normalizedStatus !== "complete" && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {isTodoist ? (
+            <>
+              {normalizedStatus !== "complete" && (
+                <ActionButton
+                  icon={Check}
+                  label={isCompleting ? "Completing..." : "Mark complete"}
+                  variant="primary"
+                  accent={accent}
+                  disabled={isCompleting}
+                  loading={isCompleting}
+                  onClick={() => onComplete(task.id)}
+                />
+              )}
               <ActionButton
-                icon={Check}
-                label={isCompleting ? "Completing..." : "Mark complete"}
-                variant="primary"
+                icon={Pencil}
+                label="Edit"
                 accent={accent}
                 disabled={isCompleting}
-                loading={isCompleting}
-                onClick={() => onComplete(task.id)}
+                onClick={() => onEdit(task)}
               />
-            )}
-            <ActionButton
-              icon={Pencil}
-              label="Edit"
-              accent={accent}
-              disabled={isCompleting}
-              onClick={() => onEdit(task)}
-            />
-            {task.url && (
+            </>
+          ) : (
+            <>
+              {normalizedStatus !== "complete" && (
+                <ActionButton
+                  icon={Check}
+                  label="Mark complete"
+                  variant="primary"
+                  accent={accent}
+                  onClick={() => onStatusChange(task.id, "complete")}
+                />
+              )}
+              {normalizedStatus !== "in_progress" && (
+                <ActionButton
+                  icon={CircleDashed}
+                  label="In progress"
+                  accent={accent}
+                  onClick={() => onStatusChange(task.id, "in_progress")}
+                />
+              )}
+              {normalizedStatus !== "incomplete" && (
+                <ActionButton
+                  icon={Circle}
+                  label="Reopen"
+                  accent={accent}
+                  onClick={() => onStatusChange(task.id, "incomplete")}
+                />
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginRight: -4 }}>
+          {isTodoist ? (
+            <>
+              {task.url && (
+                <ActionButton
+                  icon={ExternalLink}
+                  label="Open in Todoist"
+                  variant="ghost"
+                  accent={accent}
+                  disabled={isCompleting}
+                  onClick={() => openInNewTab(task.url)}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              {task.url && /instructure\.com|canvas/i.test(task.url) && (
+                <ActionButton
+                  icon={ExternalLink}
+                  label="Open in Canvas"
+                  variant="ghost"
+                  accent={accent}
+                  onClick={() => openInNewTab(task.url)}
+                />
+              )}
               <ActionButton
                 icon={ExternalLink}
-                label="Open in Todoist"
-                variant="accent"
+                label="Open in CTM"
+                variant="ghost"
                 accent={accent}
-                disabled={isCompleting}
-                onClick={() => openInNewTab(task.url)}
+                onClick={() => openInNewTab(ctmUrl)}
               />
-            )}
-          </>
-        ) : (
-          <>
-            {normalizedStatus !== "complete" && (
-              <ActionButton
-                icon={Check}
-                label="Mark complete"
-                variant="primary"
-                accent={accent}
-                onClick={() => onStatusChange(task.id, "complete")}
-              />
-            )}
-            {normalizedStatus !== "in_progress" && (
-              <ActionButton
-                icon={CircleDashed}
-                label="In progress"
-                accent={accent}
-                onClick={() => onStatusChange(task.id, "in_progress")}
-              />
-            )}
-            {normalizedStatus !== "incomplete" && (
-              <ActionButton
-                icon={Circle}
-                label="Reopen"
-                accent={accent}
-                onClick={() => onStatusChange(task.id, "incomplete")}
-              />
-            )}
-            {task.url && /instructure\.com|canvas/i.test(task.url) && (
-              <ActionButton
-                icon={ExternalLink}
-                label="Open in Canvas"
-                variant="accent"
-                accent={accent}
-                onClick={() => openInNewTab(task.url)}
-              />
-            )}
-            <ActionButton
-              icon={ExternalLink}
-              label="Open in CTM"
-              variant="accent"
-              accent={accent}
-              onClick={() => openInNewTab(ctmUrl)}
-            />
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -418,8 +518,10 @@ function DeadlinesDetail({
 
   return (
     <TimelineDetailRail
+      eyebrow="Deadline ledger"
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={summary}
+      accent={accent}
       headerContent={
         selectedTask ? (
           <DetailCard

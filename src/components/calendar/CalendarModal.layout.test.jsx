@@ -70,6 +70,11 @@ function renderCalendarModalAtWidth(viewportWidth) {
   ));
 }
 
+function getLatestRailContent() {
+  const railContent = screen.getAllByTestId("calendar-rail-content");
+  return railContent[railContent.length - 1];
+}
+
 describe("CalendarModal responsive layout", () => {
   it("uses the wide desktop rail layout at 1900px", () => {
     renderCalendarModalAtWidth(1900);
@@ -335,8 +340,168 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     expect(await screen.findByText("Monday, April 20")).toBeTruthy();
-    expect(screen.getByText(/no events are scheduled on this date/i)).toBeTruthy();
-    expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
+    const emptyRail = screen.getByTestId("calendar-selected-empty-rail");
+    expect(emptyRail).toBeTruthy();
+    expect(within(emptyRail).getByText("Open day")).toBeTruthy();
+    expect(within(emptyRail).getByText(/nothing is scheduled here/i)).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+  });
+
+  it("allows deselecting today's empty selection", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+
+      const { rerender } = render(wrapWithDashboard(
+        <CalendarModal
+          open={false}
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={{ getEvents: () => [] }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      await act(async () => {
+        rerender(wrapWithDashboard(
+          <CalendarModal
+            open
+            onClose={() => {}}
+            view="events"
+            onViewChange={() => {}}
+            eventsData={{ getEvents: () => [] }}
+            billsData={{}}
+            deadlinesData={{}}
+          />,
+        ));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText("Monday, April 20")).toBeTruthy();
+
+      const todayCell = screen.getByTestId("calendar-cell-20");
+      expect(within(todayCell).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+
+      const emptyRailFrame = screen.getByTestId("calendar-selected-empty-rail-frame");
+      expect(emptyRailFrame.style.overflow).toBe("hidden");
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+
+      fireEvent.click(todayCell);
+
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("summary");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the no-selection overview rail non-scrollable", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("summary");
+    expect(screen.getByTestId("calendar-overview-rail-frame").style.overflow).toBe("hidden");
+  });
+
+  it.each([
+    {
+      view: "events",
+      eventsData: {
+        getEvents: () => ([
+          {
+            id: "event-1",
+            title: "Design review",
+            startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+            allDay: false,
+            color: "#4285f4",
+          },
+        ]),
+      },
+      billsData: {},
+      deadlinesData: {},
+      expectedText: "Design review",
+    },
+    {
+      view: "bills",
+      eventsData: { getEvents: () => [] },
+      billsData: {
+        schedules: [
+          {
+            id: "bill-1",
+            name: "Rent",
+            next_date: "2026-04-20",
+            paid: false,
+            type: "bill",
+            conditions: [
+              { field: "amount", value: { num1: 180000 } },
+              { field: "payee", value: "payee-1" },
+            ],
+          },
+        ],
+        payeeMap: {
+          "payee-1": "Landlord",
+        },
+      },
+      deadlinesData: {},
+      expectedText: "Rent",
+    },
+    {
+      view: "deadlines",
+      eventsData: { getEvents: () => [] },
+      billsData: {},
+      deadlinesData: {
+        ctm: {
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
+        },
+      },
+      expectedText: "Project due",
+    },
+  ])("renders a non-scroll detail rail for $view", async ({
+    view,
+    eventsData,
+    billsData,
+    deadlinesData,
+    expectedText,
+  }) => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view={view}
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={eventsData}
+        billsData={billsData}
+        deadlinesData={deadlinesData}
+      />,
+    ));
+
+    const detailRail = await screen.findByTestId("timeline-detail-rail");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
+    expect(within(detailRail).getAllByText(expectedText).length).toBeGreaterThan(0);
+    expect(detailRail.style.overflow).toBe("hidden");
   });
 
   it("swaps the rail cleanly between empty and detail states", async () => {
@@ -367,23 +532,110 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(await screen.findByText(/no events are scheduled on this date/i)).toBeTruthy();
-    expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
+    expect(await screen.findByText(/nothing is scheduled here/i)).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
 
     const rail = screen.getByTestId("calendar-modal-rail");
     fireEvent.click(screen.getByTestId("calendar-cell-21"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("detail");
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
       expect(within(rail).getByText("Design review")).toBeTruthy();
+      expect(within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
     });
 
     fireEvent.click(screen.getByTestId("calendar-cell-20"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-rail-content").getAttribute("data-rail-content-kind")).toBe("empty");
-      expect(screen.getByText(/no events are scheduled on this date/i)).toBeTruthy();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+      expect(screen.getByText(/nothing is scheduled here/i)).toBeTruthy();
     });
+  });
+
+  it("updates between empty-day selections without remounting the empty rail", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    expect(await screen.findByText("Monday, April 20")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+
+    fireEvent.click(screen.getByTestId("calendar-cell-22"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Wednesday, April 22")).toBeTruthy();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+      expect(screen.getAllByTestId("calendar-rail-content")).toHaveLength(1);
+    });
+  });
+
+  it.each([
+    {
+      view: "bills",
+      expectedTitle: "Clear billing day",
+      expectedRailCopy: /no bills land on this date/i,
+      billsData: {},
+      deadlinesData: {},
+    },
+    {
+      view: "deadlines",
+      expectedTitle: "Open deadline day",
+      expectedRailCopy: /no deadlines are due on this date/i,
+      billsData: {},
+      deadlinesData: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+    },
+  ])("renders the compact selected-empty-day treatment for $view", async ({
+    view,
+    expectedTitle,
+    expectedRailCopy,
+    billsData,
+    deadlinesData,
+  }) => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view={view}
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={billsData}
+        deadlinesData={deadlinesData}
+      />,
+    ));
+
+    expect(await screen.findByText("Monday, April 20")).toBeTruthy();
+    const emptyRail = screen.getByTestId("calendar-selected-empty-rail");
+    expect(within(emptyRail).getByText(expectedTitle)).toBeTruthy();
+    expect(within(emptyRail).getByText(expectedRailCopy)).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+    expect(screen.getByTestId("calendar-selected-empty-rail-frame").style.overflow).toBe("hidden");
   });
 
   it("blocks modal hotkeys while typing in the editor", async () => {

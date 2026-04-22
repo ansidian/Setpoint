@@ -34,8 +34,8 @@ function SectionLabel({
             alignItems: "center",
             gap: 6,
             fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: 2.2,
+            fontWeight: 700,
+            letterSpacing: 2.1,
             textTransform: "uppercase",
             color: "rgba(205,214,244,0.5)",
           }}
@@ -47,7 +47,7 @@ function SectionLabel({
           style={{
             fontSize: 10,
             fontWeight: 600,
-            letterSpacing: 1.2,
+            letterSpacing: 1.1,
             color: "rgba(205,214,244,0.34)",
           }}
         >
@@ -61,8 +61,8 @@ function SectionLabel({
     <div
       style={{
         fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: 2.2,
+        fontWeight: 700,
+        letterSpacing: 2.1,
         textTransform: "uppercase",
         color: "rgba(205,214,244,0.5)",
       }}
@@ -97,13 +97,13 @@ function TimelineRow({ item }) {
       style={{
         position: "relative",
         display: "grid",
-        gridTemplateColumns: "72px 18px minmax(0, 1fr)",
-        gap: 12,
+        gridTemplateColumns: "68px 16px minmax(0, 1fr)",
+        gap: 10,
         alignItems: "start",
-        padding: "4px 0",
-        borderRadius: 8,
+        padding: "5px 0",
+        borderRadius: 9,
         cursor: interactive ? "pointer" : "default",
-        opacity: item.complete ? 0.52 : 1,
+        opacity: item.complete ? 0.54 : 1,
         transition: "opacity 130ms",
       }}
       onMouseEnter={() => {
@@ -115,18 +115,19 @@ function TimelineRow({ item }) {
     >
       <div
         style={{
-          paddingTop: 12,
-          fontSize: 11,
-          fontWeight: 500,
+          paddingTop: 10,
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: 0.1,
           fontVariantNumeric: "tabular-nums",
-          color: item.timeColor || "rgba(205,214,244,0.7)",
+          color: item.timeColor || "rgba(205,214,244,0.62)",
           whiteSpace: "nowrap",
         }}
       >
         {item.timeLabel}
       </div>
 
-      <div style={{ position: "relative", minHeight: 68 }}>
+      <div style={{ position: "relative", minHeight: 58 }}>
         <div
           aria-hidden
           style={{
@@ -135,7 +136,9 @@ function TimelineRow({ item }) {
             top: 0,
             bottom: 0,
             width: 1,
-            background: "rgba(255,255,255,0.06)",
+            background: item.selected
+              ? "rgba(203,166,218,0.18)"
+              : "rgba(255,255,255,0.055)",
           }}
         />
         <div
@@ -143,15 +146,17 @@ function TimelineRow({ item }) {
           style={{
             position: "absolute",
             left: 2,
-            top: 6,
-            width: 13,
-            height: 13,
+            top: 5,
+            width: 12,
+            height: 12,
             borderRadius: 9999,
             background: "#0d0d15",
             display: "grid",
             placeItems: "center",
             border: `1px solid ${item.dotColor ? `${item.dotColor}55` : "rgba(255,255,255,0.15)"}`,
-            boxShadow: item.dotColor ? `0 0 0 1px ${item.dotColor}16` : "none",
+            boxShadow: item.dotColor
+              ? `0 0 0 1px ${item.dotColor}16, 0 0 10px ${item.dotColor}12`
+              : "none",
           }}
         >
           <div
@@ -166,21 +171,27 @@ function TimelineRow({ item }) {
       </div>
 
       <div
-        style={{
-          minWidth: 0,
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto",
-          gap: 8,
-          alignItems: "start",
-          padding: "10px 14px",
-          borderRadius: 12,
-          border: item.selected ? "1px solid rgba(203,166,218,0.32)" : "1px solid transparent",
+          style={{
+            minWidth: 0,
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            gap: 7,
+            alignItems: "start",
+            padding: "10px 12px 9px",
+            borderRadius: 11,
+            border: item.selected
+              ? "1px solid rgba(203,166,218,0.26)"
+              : hovered
+              ? "1px solid rgba(255,255,255,0.05)"
+              : "1px solid rgba(255,255,255,0.03)",
           background: item.selected
-            ? "rgba(203,166,218,0.08)"
+            ? "linear-gradient(180deg, rgba(203,166,218,0.11), rgba(203,166,218,0.05))"
             : hovered
-              ? "rgba(255,255,255,0.025)"
-              : "transparent",
-          boxShadow: item.selected ? "0 0 0 1px rgba(203,166,218,0.06)" : "none",
+              ? "rgba(255,255,255,0.028)"
+              : "rgba(255,255,255,0.012)",
+          boxShadow: item.selected
+            ? "0 0 0 1px rgba(203,166,218,0.05), inset 0 1px 0 rgba(255,255,255,0.03)"
+            : "inset 0 1px 0 rgba(255,255,255,0.02)",
           transition: "background 130ms, border-color 130ms, box-shadow 130ms",
         }}
       >
@@ -189,9 +200,10 @@ function TimelineRow({ item }) {
             className={item.titleClassName}
             style={{
               fontSize: 12.5,
-              color: "#e2e8f0",
-              fontWeight: 500,
-              lineHeight: 1.35,
+              color: "#eef2ff",
+              fontWeight: item.selected ? 600 : 500,
+              lineHeight: 1.3,
+              letterSpacing: -0.08,
               textDecoration: item.complete ? "line-through" : "none",
               textDecorationColor: "rgba(205,214,244,0.3)",
             }}
@@ -201,9 +213,9 @@ function TimelineRow({ item }) {
           {item.subtitle && (
             <div
               style={{
-                marginTop: 2,
-                fontSize: 10.5,
-                color: "rgba(205,214,244,0.55)",
+                marginTop: 3,
+                fontSize: 10,
+                color: "rgba(205,214,244,0.52)",
                 lineHeight: 1.4,
               }}
             >
@@ -214,8 +226,8 @@ function TimelineRow({ item }) {
             <div
               style={{
                 marginTop: 4,
-                fontSize: 10,
-                color: "rgba(205,214,244,0.4)",
+                fontSize: 9.5,
+                color: "rgba(205,214,244,0.38)",
                 lineHeight: 1.4,
               }}
             >
@@ -232,8 +244,10 @@ function TimelineRow({ item }) {
 }
 
 export default function TimelineDetailRail({
+  eyebrow = "Day detail",
   title,
   summary,
+  accent = "var(--ea-accent)",
   headerContent = null,
   sections = [],
 }) {
@@ -243,26 +257,92 @@ export default function TimelineDetailRail({
   });
 
   return (
-    <div style={{ padding: "16px 20px", overflow: "auto", flex: 1 }}>
+    <div
+      data-testid="timeline-detail-rail"
+      style={{
+        padding: "16px 18px 18px",
+        overflow: "hidden",
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
+          flexDirection: "column",
           gap: 12,
         }}
       >
-        <div style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
-          {title}
+        <div
+          data-testid="timeline-detail-masthead"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            padding: "14px 14px 12px",
+            borderRadius: 14,
+            border: `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.05))`,
+            background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 14%, transparent), transparent 42%), linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))`,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: 2.2,
+                  textTransform: "uppercase",
+                  color: "rgba(205,214,244,0.48)",
+                }}
+              >
+                {eyebrow}
+              </div>
+              <div
+                className="ea-display"
+                style={{
+                  marginTop: 6,
+                  fontSize: 22,
+                  lineHeight: 1.05,
+                  letterSpacing: -0.38,
+                  color: "#f6f7fb",
+                }}
+              >
+                {title}
+              </div>
+            </div>
+          </div>
+          {summary ? (
+            <div
+              style={{
+                alignSelf: "flex-start",
+                padding: "6px 9px",
+                borderRadius: 999,
+                border: `1px solid color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.06))`,
+                background: `color-mix(in srgb, ${accent} 8%, rgba(255,255,255,0.03))`,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.15,
+                color: "rgba(238,242,255,0.74)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {summary}
+            </div>
+          ) : null}
         </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-          {summary}
-        </div>
+
+        {headerContent ? (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            {headerContent}
+          </div>
+        ) : null}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {headerContent}
         {visibleSections.map((section) => (
           <div key={section.id} data-testid={`timeline-detail-section-${section.id}`}>
             <SectionLabel
@@ -275,7 +355,7 @@ export default function TimelineDetailRail({
               {section.label}
             </SectionLabel>
             {(!section.collapsible || section.expanded) && (
-              <div style={{ marginTop: 8, display: "flex", flexDirection: "column" }}>
+              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
                 {section.items.map((item) => (
                   <TimelineRow key={item.id} item={item} />
                 ))}

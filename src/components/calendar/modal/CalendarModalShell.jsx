@@ -47,6 +47,7 @@ export default function CalendarModalShell({
   deadlineEditor,
   focusDeadlineTask,
 }) {
+  const railHeight = 6 * layout.cellHeight + 5 * layout.gridGap + (layout.railHeightOffset || 30);
   const contentKind = view === "events" && eventEditor.isEditorOpen
     ? "editor"
     : view === "deadlines" && deadlineEditor?.mode
@@ -64,7 +65,7 @@ export default function CalendarModalShell({
       : showDetail
         ? `detail-${view}-${viewYear}-${viewMonth}-${selectedDay}-${effectiveSelectedItemId || "none"}-${selectedDayState.totalCount}`
         : showEmptySelection
-          ? `empty-${view}-${viewYear}-${viewMonth}-${selectedDay}`
+          ? `empty-${view}-${viewYear}-${viewMonth}`
           : `summary-${view}-${viewYear}-${viewMonth}`;
 
   return createPortal(
@@ -159,7 +160,7 @@ export default function CalendarModalShell({
                 background: "rgba(255,255,255,0.02)",
                 border: "1px solid rgba(255,255,255,0.05)",
                 borderRadius: 12,
-                minHeight: 6 * layout.cellHeight + 5 * layout.gridGap + 30,
+                height: railHeight,
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
@@ -211,6 +212,9 @@ export default function CalendarModalShell({
                     computed={computed}
                     data={viewData}
                     activeView={activeView}
+                    setSelectedDay={setSelectedDay}
+                    setSelectedItemId={setSelectedItemId}
+                    setDeadlineEditor={setDeadlineEditor}
                   />
                 ) : (
                   <CalendarOverviewRail

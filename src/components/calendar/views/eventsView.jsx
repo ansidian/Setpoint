@@ -264,8 +264,10 @@ function renderDetail({ selectedDay, viewYear, viewMonth, items, onSelectEvent }
 
   return (
     <TimelineDetailRail
+      eyebrow="Events ledger"
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
+      accent="#89b4fa"
       sections={[
         {
           id: "all-day",
@@ -293,7 +295,7 @@ function renderFooter({ computed }) {
         display: "flex",
         alignItems: "baseline",
         justifyContent: "space-between",
-        padding: "8px 0",
+        padding: "6px 0",
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}
     >
@@ -302,7 +304,7 @@ function renderFooter({ computed }) {
       </span>
       <span
         style={{
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: 500,
           color: "#fff",
           fontVariantNumeric: "tabular-nums",
@@ -317,7 +319,7 @@ function renderFooter({ computed }) {
   return (
     <div
       style={{
-        padding: "12px 14px",
+        padding: "10px 12px",
         background: "rgba(255,255,255,0.02)",
         border: "1px solid rgba(255,255,255,0.05)",
         borderRadius: 10,
@@ -333,7 +335,7 @@ function renderFooter({ computed }) {
           display: "flex",
           alignItems: "baseline",
           justifyContent: "space-between",
-          paddingTop: 8,
+          paddingTop: 6,
         }}
       >
         <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)" }}>
@@ -341,7 +343,7 @@ function renderFooter({ computed }) {
         </span>
         <span
           style={{
-            fontSize: 13,
+            fontSize: 12,
             color: "rgba(205,214,244,0.8)",
             fontVariantNumeric: "tabular-nums",
           }}

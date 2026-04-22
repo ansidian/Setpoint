@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const GRID_ROWS = 6;
 
 function CalendarCell({
+  view,
   day,
   items,
   hasItems,
@@ -95,6 +97,16 @@ function CalendarCell({
     return () => observer.disconnect();
   }, []);
 
+  const renderedCellContents = renderCellContents?.({
+    items,
+    hasOverdue,
+    contentHeight,
+    isToday,
+    loading,
+    pastTone,
+    isSelected,
+  });
+
   return (
     <div
       onClick={onClick}
@@ -175,7 +187,18 @@ function CalendarCell({
           overflow: "hidden",
         }}
       >
-        {renderCellContents?.({ items, hasOverdue, contentHeight, isToday, loading, pastTone })}
+        {isSelected ? (
+          <CalendarSelectedCellFrame
+            view={view}
+            isEmpty={!hasItems}
+            pastTone={pastTone}
+            isToday={isToday}
+          >
+            {renderedCellContents}
+          </CalendarSelectedCellFrame>
+        ) : (
+          renderedCellContents
+        )}
       </div>
     </div>
   );
@@ -300,6 +323,7 @@ export default function CalendarGrid({
             return (
               <CalendarCell
                 key={day}
+                view={view}
                 day={day}
                 items={cellItems}
                 hasItems={hasItems}

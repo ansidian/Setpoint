@@ -77,8 +77,10 @@ function BillsDetail({ selectedDay, viewYear, viewMonth, items, data }) {
 
   return (
     <TimelineDetailRail
+      eyebrow="Billing ledger"
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={summary}
+      accent="#a6e3a1"
       sections={[
         {
           id: "active-bills",

@@ -55,6 +55,7 @@ describe("calendar detail timeline", () => {
     expect(rows[0]).toContain("Offsite");
     expect(rows[1]).toContain("Morning review");
     expect(rows[2]).toContain("Later meeting");
+    expect(screen.getByTestId("timeline-detail-masthead").textContent).toContain("Events ledger");
     expect(screen.queryByText("Work Calendar")).toBeNull();
   });
 
@@ -168,6 +169,7 @@ describe("calendar detail timeline", () => {
     const rows = screen.getAllByTestId("timeline-detail-row");
     expect(rows[0].textContent).toContain("Open early");
     expect(rows[1].textContent).toContain("End of day");
+    expect(screen.getByTestId("timeline-detail-masthead").textContent).toContain("Deadline ledger");
     expect(screen.getByRole("button", { name: /edit/i })).toBeTruthy();
     expect(screen.queryByText("Complete early")).toBeNull();
     expect(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines").textContent).toContain("1");

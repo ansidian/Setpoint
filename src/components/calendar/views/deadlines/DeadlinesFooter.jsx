@@ -51,14 +51,14 @@ export function renderDeadlinesFooter({ viewYear, viewMonth, currentYear, curren
         display: "flex",
         alignItems: "baseline",
         justifyContent: "space-between",
-        padding: "8px 0",
+        padding: "6px 0",
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}
     >
       <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)" }}>{label}</span>
       <span
         style={{
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: 500,
           color: "#fff",
           fontVariantNumeric: "tabular-nums",
@@ -73,7 +73,7 @@ export function renderDeadlinesFooter({ viewYear, viewMonth, currentYear, curren
   return (
     <div
       style={{
-        padding: "12px 14px",
+        padding: "10px 12px",
         background: "rgba(255,255,255,0.02)",
         border: "1px solid rgba(255,255,255,0.05)",
         borderRadius: 10,
@@ -85,7 +85,7 @@ export function renderDeadlinesFooter({ viewYear, viewMonth, currentYear, curren
       {isCurrentMonth && <StatRow value={dueToday} label="Due today" />}
       {isCurrentMonth && <StatRow value={dueThisWeek} label="Due this week" />}
       <StatRow value={total} label="Total this month" />
-      <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 8 }}>
         <LegendDot color={SOURCE_COLORS.canvas} label="Canvas" />
         <LegendDot color={SOURCE_COLORS.todoist} label="Todoist" />
       </div>
