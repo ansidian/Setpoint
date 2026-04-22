@@ -50,4 +50,10 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  {
+    files: ['playwright.config.js', 'e2e/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ])

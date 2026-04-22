@@ -18,6 +18,9 @@ morning-briefing.jsx
 CLAUDE.md
 .playwright-mcp
 .playwright-cli
+playwright/.auth/
+playwright-report/
+test-results/
 My-Finances-*/
 dist-ssr
 *.local
