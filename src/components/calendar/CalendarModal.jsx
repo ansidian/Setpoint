@@ -1,18 +1,10 @@
-import { createPortal } from "react-dom";
-import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
-import { ChevronLeft, ChevronRight, X, Receipt, ListChecks, Calendar as CalendarIcon } from "lucide-react";
-import { AnimatePresence, motion as Motion } from "motion/react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useEffect, useMemo, useRef, useState } from "react";
 import billsView from "./views/billsView.jsx";
-import { getCalendarLayoutMetrics } from "./calendarLayout.js";
-import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "./CalendarRailStates.jsx";
 import deadlinesView from "./views/deadlinesView.jsx";
 import eventsView from "./views/eventsView.jsx";
-import CalendarEventEditorRail from "./events/CalendarEventEditorRail.jsx";
+import { getCalendarLayoutMetrics } from "./calendarLayout.js";
 import useCalendarEventEditor from "./events/useCalendarEventEditor.js";
-
-const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const GRID_ROWS = 6;
+import CalendarModalShell from "./modal/CalendarModalShell.jsx";
 
 const VIEWS = {
   events: eventsView,
@@ -24,179 +16,6 @@ function getMonthData(year, month) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   return { firstDay, daysInMonth };
-}
-
-function CalendarCell({
-  day,
-  items,
-  hasItems,
-  isToday,
-  isSelected,
-  pastTone,
-  hasOverdue,
-  allComplete,
-  loading,
-  onClick,
-  renderCellContents,
-}) {
-  // Minimal cells: hairline borders, a strong date badge for "today", purple
-  // ring on selection, and subtle status accents instead of heavy
-  // bg/border combinations.
-  const todayAccent = "var(--ea-accent)";
-  let cellBg = "rgba(255,255,255,0.015)";
-  let cellBorder = "1px solid rgba(255,255,255,0.04)";
-  let cellShadow = "none";
-  let dateColor = "rgba(205,214,244,0.7)";
-  let dateWeight = 400;
-  let accentBar = null;
-  let todayWash = null;
-  let dateBadgeBg = "transparent";
-  let dateBadgeBorder = "1px solid transparent";
-  let dateBadgeShadow = "none";
-
-  if (isSelected) {
-    cellBg = "rgba(203,166,218,0.06)";
-    cellBorder = "1px solid rgba(203,166,218,0.4)";
-    cellShadow = "0 0 0 1px rgba(203,166,218,0.18), 0 4px 14px rgba(203,166,218,0.18)";
-    dateColor = "#cba6da";
-    dateWeight = 600;
-  } else if (allComplete) {
-    accentBar = "#a6e3a1";
-    dateColor = "rgba(166,227,161,0.85)";
-  } else if (hasOverdue) {
-    accentBar = "#f38ba8";
-    dateColor = "rgba(243,139,168,0.9)";
-  } else if (hasItems) {
-    dateColor = "#cdd6f4";
-    dateWeight = 500;
-  }
-
-  if (!isSelected && !isToday && pastTone) {
-    cellBg = pastTone === "items" ? "rgba(255,255,255,0.01)" : "rgba(255,255,255,0.006)";
-    cellBorder = pastTone === "items"
-      ? "1px solid rgba(255,255,255,0.028)"
-      : "1px solid rgba(255,255,255,0.022)";
-    dateColor = pastTone === "items" ? "rgba(205,214,244,0.48)" : "rgba(205,214,244,0.33)";
-    if (!hasItems) {
-      dateWeight = 400;
-    }
-  }
-
-  if (isToday) {
-    todayWash = isSelected
-      ? `linear-gradient(180deg, color-mix(in srgb, ${todayAccent} 16%, transparent), color-mix(in srgb, ${todayAccent} 6%, transparent) 56%, transparent)`
-      : `linear-gradient(180deg, color-mix(in srgb, ${todayAccent} 20%, transparent), color-mix(in srgb, ${todayAccent} 8%, transparent) 58%, transparent)`;
-    dateColor = isSelected ? "#ffffff" : todayAccent;
-    dateWeight = 700;
-    dateBadgeBg = isSelected
-      ? `color-mix(in srgb, ${todayAccent} 32%, transparent)`
-      : `color-mix(in srgb, ${todayAccent} 18%, transparent)`;
-    dateBadgeBorder = isSelected
-      ? `1px solid color-mix(in srgb, ${todayAccent} 56%, white 12%)`
-      : `1px solid color-mix(in srgb, ${todayAccent} 42%, transparent)`;
-    dateBadgeShadow = isSelected
-      ? `0 0 0 1px color-mix(in srgb, ${todayAccent} 18%, transparent), 0 6px 18px color-mix(in srgb, ${todayAccent} 24%, transparent)`
-      : `0 4px 12px color-mix(in srgb, ${todayAccent} 18%, transparent)`;
-  }
-
-  const contentRef = useRef(null);
-  const [contentHeight, setContentHeight] = useState(0);
-
-  useLayoutEffect(() => {
-    const el = contentRef.current;
-    if (!el) return undefined;
-
-    const updateHeight = () => {
-      setContentHeight(el.clientHeight || 0);
-    };
-
-    updateHeight();
-
-    if (typeof window.ResizeObserver !== "function") {
-      window.addEventListener("resize", updateHeight);
-      return () => window.removeEventListener("resize", updateHeight);
-    }
-
-    const observer = new window.ResizeObserver((entries) => {
-      const nextHeight = entries[0]?.contentRect?.height;
-      setContentHeight(nextHeight || el.clientHeight || 0);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div
-      onClick={onClick}
-      aria-current={isToday ? "date" : undefined}
-      data-testid={`calendar-cell-${day}`}
-      data-past-tone={pastTone || "none"}
-      style={{
-        position: "relative",
-        minWidth: 0, overflow: "hidden", borderRadius: 8,
-        padding: "7px 9px",
-        background: cellBg, border: cellBorder, boxShadow: cellShadow,
-        cursor: "pointer",
-        transition: "box-shadow 150ms, border-color 150ms, background 150ms",
-        display: "flex", flexDirection: "column", gap: 3,
-      }}
-    >
-      {todayWash && (
-        <span
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: 1,
-            borderRadius: 7,
-            background: todayWash,
-            pointerEvents: "none",
-          }}
-        />
-      )}
-      {accentBar && (
-        <span
-          style={{
-            position: "absolute", left: 0, top: 8, bottom: 8, width: 2,
-            background: accentBar, borderRadius: 2, opacity: 0.55,
-          }}
-        />
-      )}
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minWidth: isToday ? 24 : undefined,
-            height: isToday ? 24 : undefined,
-            padding: isToday ? "0 8px" : 0,
-            borderRadius: 999,
-            fontSize: 12.5,
-            color: dateColor,
-            fontWeight: dateWeight,
-            fontVariantNumeric: "tabular-nums",
-            background: dateBadgeBg,
-            border: dateBadgeBorder,
-            boxShadow: dateBadgeShadow,
-            transition: "background 150ms, border-color 150ms, box-shadow 150ms",
-          }}
-        >
-          {day}
-        </span>
-      </div>
-      <div
-        ref={contentRef}
-        style={{
-          position: "relative",
-          minHeight: 0,
-          flex: 1,
-          overflow: "hidden",
-        }}
-      >
-        {renderCellContents?.({ items, hasOverdue, contentHeight, isToday, loading, pastTone })}
-      </div>
-    </div>
-  );
 }
 
 function isEditableTarget(target) {
@@ -211,81 +30,11 @@ function isSuspendedHotkeyTarget(target) {
     && !!target.closest("[data-suspend-calendar-hotkeys='true']");
 }
 
-const railSwapLayoutTransition = {
-  type: "spring",
-  stiffness: 340,
-  damping: 34,
-  mass: 0.9,
-  bounce: 0,
-};
-
-const railSwapFadeTransition = {
-  duration: 0.18,
-  ease: [0.22, 1, 0.36, 1],
-};
-
-function AnimatedRailContent({ contentKey, contentKind, children }) {
-  const shouldLift = contentKind === "detail" || contentKind === "empty";
-
-  return (
-    <Motion.div
-      layout
-      transition={railSwapLayoutTransition}
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <AnimatePresence initial={false} mode="popLayout">
-        <Motion.div
-          key={contentKey}
-          data-testid="calendar-rail-content"
-          data-rail-content-kind={contentKind}
-          layout
-          initial={{
-            opacity: 0,
-            y: shouldLift ? 6 : 4,
-            scale: shouldLift ? 0.992 : 0.996,
-          }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            scale: 1,
-          }}
-          exit={{
-            opacity: 0,
-            y: shouldLift ? -4 : -2,
-            scale: 0.996,
-          }}
-          transition={{
-            layout: railSwapLayoutTransition,
-            opacity: railSwapFadeTransition,
-            y: railSwapFadeTransition,
-            scale: railSwapFadeTransition,
-          }}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            transformOrigin: "top center",
-            willChange: "opacity, transform",
-          }}
-        >
-          {children}
-        </Motion.div>
-      </AnimatePresence>
-    </Motion.div>
-  );
-}
-
 function parseFocusDate(focusDate) {
   if (!focusDate) return null;
-  const d = new Date(`${focusDate}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
+  const date = new Date(`${focusDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
 }
 
 function buildFallbackDayState(rawItems) {
@@ -298,63 +47,6 @@ function buildFallbackDayState(rawItems) {
     completedCount: 0,
     totalCount: items.length,
   };
-}
-
-function CalendarEventsGridSkeleton({
-  firstDay,
-  daysInMonth,
-  trailingEmpty,
-  cellHeight,
-  gridGap,
-}) {
-  const rowWidths = cellHeight >= 96
-    ? ["84%", "71%", "58%"]
-    : ["86%", "63%"];
-
-  return (
-    <div
-      data-testid="calendar-events-grid-skeleton"
-      aria-hidden="true"
-      style={{
-        position: "absolute",
-        inset: 0,
-        display: "grid",
-        gridTemplateColumns: "repeat(7, 1fr)",
-        gridTemplateRows: `repeat(${GRID_ROWS}, ${cellHeight}px)`,
-        gap: gridGap,
-        pointerEvents: "none",
-      }}
-    >
-      {Array.from({ length: firstDay }, (_, i) => (
-        <div key={`sk-empty-${i}`} />
-      ))}
-      {Array.from({ length: daysInMonth }, (_, i) => (
-        <div
-          key={`sk-day-${i}`}
-          style={{
-            padding: "28px 9px 8px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 5,
-            minHeight: 0,
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {rowWidths.map((width, rowIndex) => (
-              <Skeleton
-                key={rowIndex}
-                className="h-[10px] rounded-sm bg-white/8"
-                style={{ width, opacity: rowIndex === rowWidths.length - 1 ? 0.72 : 1 }}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-      {Array.from({ length: trailingEmpty }, (_, i) => (
-        <div key={`sk-trail-${i}`} />
-      ))}
-    </div>
-  );
 }
 
 export default function CalendarModal({
@@ -378,21 +70,22 @@ export default function CalendarModal({
       ? { month: initialFocus.getMonth(), year: initialFocus.getFullYear() }
       : { month: currentMonth, year: currentYear }
   ));
-  const [selectedDay, setSelectedDay] = useState(() => (
-    initialFocus ? initialFocus.getDate() : null
-  ));
-  const [selectedItemId, setSelectedItemId] = useState(() => (
-    open && focusItemId ? String(focusItemId) : null
-  ));
+  const [selectedDay, setSelectedDay] = useState(() => (initialFocus ? initialFocus.getDate() : null));
+  const [selectedItemId, setSelectedItemId] = useState(() => (open && focusItemId ? String(focusItemId) : null));
   const [deadlineEditor, setDeadlineEditor] = useState(null);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [pendingFocusDate, setPendingFocusDate] = useState(null);
+  const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
+  const navigateMonthRef = useRef(null);
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevView, setPrevView] = useState(view);
 
   const viewMonth = viewDate.month;
   const viewYear = viewDate.year;
-
   const activeView = VIEWS[view] || billsView;
+
   const viewData = useMemo(() => {
     if (view === "events") {
       return {
@@ -424,24 +117,21 @@ export default function CalendarModal({
   });
   const closeEventEditor = eventEditor.closeEditor;
 
-  const navigateMonthRef = useRef(null);
+  function navigateMonth(dir) {
+    closeEventEditor();
+    setSelectedDay(null);
+    setSelectedItemId(null);
+    setDeadlineEditor(null);
+    setViewDate((prev) => {
+      const next = prev.month + dir;
+      if (next > 11) return { month: 0, year: prev.year + 1 };
+      if (next < 0) return { month: 11, year: prev.year - 1 };
+      return { month: next, year: prev.year };
+    });
+  }
   useEffect(() => {
-    navigateMonthRef.current = (dir) => {
-      closeEventEditor();
-      setSelectedDay(null);
-      setSelectedItemId(null);
-      setDeadlineEditor(null);
-      setViewDate((prev) => {
-        const next = prev.month + dir;
-        if (next > 11) return { month: 0, year: prev.year + 1 };
-        if (next < 0) return { month: 11, year: prev.year - 1 };
-        return { month: next, year: prev.year };
-      });
-    };
+    navigateMonthRef.current = navigateMonth;
   });
-  const navigateMonth = (dir) => navigateMonthRef.current?.(dir);
-  const [pendingFocusDate, setPendingFocusDate] = useState(null);
-  const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
 
   function focusDeadlineTask(task) {
     const focus = parseFocusDate(task?.due_date);
@@ -453,10 +143,6 @@ export default function CalendarModal({
     setDeadlineEditor(null);
   }
 
-  // Reset state when modal opens. If a focusDate is supplied, jump to that
-  // month and auto-select the day cell (e.g. clicking a bill drills straight
-  // into its due-day's detail rail).
-  const [prevOpen, setPrevOpen] = useState(open);
   const openingWithFocus = prevOpen !== open && open
     ? parseFocusDate(focusDate)
     : null;
@@ -479,10 +165,6 @@ export default function CalendarModal({
     }
   }
 
-  // On view change: honor pending focus drill-in; otherwise preserve the
-  // user's current month/year and day selection verbatim — switching views
-  // is not an intent to reset navigation state.
-  const [prevView, setPrevView] = useState(view);
   if (prevView !== view) {
     setPrevView(view);
     closeEventEditor();
@@ -497,19 +179,17 @@ export default function CalendarModal({
     }
   }
 
-  // Allow views to opt out of outside-click close (e.g., when a popover is open)
   const suppressOutsideClickRef = useRef(null);
-  const suppressOutsideClick = useCallback((test) => {
+  function suppressOutsideClick(test) {
     suppressOutsideClickRef.current = test;
-  }, []);
+  }
 
   useEffect(() => {
-    if (!open) return;
-    function handleClick(e) {
-      if (suppressOutsideClickRef.current?.(e.target)) return;
-      // Ignore clicks inside floating menus/dialogs rendered in portals outside the panel.
-      if (e.target.closest?.('[role="menu"], [role="dialog"]')) return;
-      if (panelRef.current && !panelRef.current.contains(e.target)) {
+    if (!open) return undefined;
+    function handleClick(event) {
+      if (suppressOutsideClickRef.current?.(event.target)) return;
+      if (event.target.closest?.('[role="menu"], [role="dialog"]')) return;
+      if (panelRef.current && !panelRef.current.contains(event.target)) {
         onClose();
       }
     }
@@ -521,131 +201,122 @@ export default function CalendarModal({
     function handleResize() {
       setViewportWidth(window.innerWidth);
     }
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !open) return;
-    function onWheel(e) {
-      const { scrollTop, scrollHeight, clientHeight } = el;
+    const element = scrollRef.current;
+    if (!element || !open) return undefined;
+    function onWheel(event) {
+      const { scrollTop, scrollHeight, clientHeight } = element;
       const maxScroll = scrollHeight - clientHeight;
-      if (maxScroll <= 0) { e.preventDefault(); return; }
-      const atTop = scrollTop <= 0 && e.deltaY < 0;
-      const atBottom = scrollTop >= maxScroll && e.deltaY > 0;
-      if (atTop || atBottom) e.preventDefault();
+      if (maxScroll <= 0) {
+        event.preventDefault();
+        return;
+      }
+      const atTop = scrollTop <= 0 && event.deltaY < 0;
+      const atBottom = scrollTop >= maxScroll && event.deltaY > 0;
+      if (atTop || atBottom) event.preventDefault();
     }
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
   }, [open]);
 
   const computed = useMemo(
     () => activeView.compute({ data: viewData, viewYear, viewMonth }),
     [activeView, viewData, viewYear, viewMonth],
   );
-
   const itemsByDay = useMemo(() => computed.itemsByDay || {}, [computed.itemsByDay]);
 
   const { firstDay, daysInMonth } = getMonthData(viewYear, viewMonth);
   const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
   const todayDate = now.getDate();
-  const totalCells = firstDay + daysInMonth;
-  const trailingEmpty = GRID_ROWS * 7 - totalCells;
-
+  const trailingEmpty = 42 - (firstDay + daysInMonth);
   const canGoPrev = activeView.canNavigateBack
     ? activeView.canNavigateBack({ viewYear, viewMonth, currentYear, currentMonth, data: viewData, computed })
     : !isCurrentMonth;
 
   useEffect(() => {
-    if (!open) return;
-    function handleKey(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
-        e.preventDefault();
-        e.stopPropagation();
+    if (!open) return undefined;
+    function handleKey(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+        event.preventDefault();
+        event.stopPropagation();
         return;
       }
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isSuspendedHotkeyTarget(event.target)) return;
 
-      if (isSuspendedHotkeyTarget(e.target)) return;
-
-      if (isEditableTarget(e.target)) {
-        if (e.key === "Escape") {
+      if (isEditableTarget(event.target)) {
+        if (event.key === "Escape") {
           onClose();
-          e.preventDefault();
-          e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
         }
         return;
       }
 
-      switch (e.key) {
+      switch (event.key) {
         case "Escape":
           onClose();
-          e.stopPropagation();
+          event.stopPropagation();
           break;
         case "ArrowLeft":
         case "p":
-          if (canGoPrev) {
-            navigateMonthRef.current(-1);
-          }
-          e.preventDefault();
-          e.stopPropagation();
+          if (canGoPrev) navigateMonthRef.current?.(-1);
+          event.preventDefault();
+          event.stopPropagation();
           break;
         case "ArrowRight":
         case "n":
-          navigateMonthRef.current(1);
-          e.preventDefault();
-          e.stopPropagation();
+          navigateMonthRef.current?.(1);
+          event.preventDefault();
+          event.stopPropagation();
           break;
         case "t":
         case "T":
           closeEventEditor();
           setViewDate({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
-          e.preventDefault();
-          e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
           break;
         case "c":
         case "C":
           if (view === "events" && eventEditor.editable) {
             eventEditor.openCreate();
           } else if (view === "deadlines") {
-            setDeadlineEditor({
-              mode: "create",
-              seedDate: null,
-            });
+            setDeadlineEditor({ mode: "create", seedDate: null });
           }
-          e.preventDefault();
-          e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
           break;
         case "1":
-          // Scoped to the modal — stopPropagation prevents the shell's
-          // 1=Dashboard hotkey from firing underneath.
           if (view !== "events") onViewChange?.("events");
-          e.preventDefault();
-          e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
           break;
         case "2":
           if (view !== "bills") onViewChange?.("bills");
-          e.preventDefault();
-          e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
           break;
         case "3":
           if (view !== "deadlines") onViewChange?.("deadlines");
-          e.preventDefault();
-          e.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
           break;
         default:
-          if (e.key.length === 1 && e.key !== "r" && e.key !== "R") {
-            e.stopPropagation();
+          if (event.key.length === 1 && event.key !== "r" && event.key !== "R") {
+            event.stopPropagation();
           }
           break;
       }
     }
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose, currentMonth, currentYear, canGoPrev, view, onViewChange, closeEventEditor, eventEditor, todayDate]);
+  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, onViewChange, closeEventEditor, eventEditor]);
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
@@ -655,16 +326,13 @@ export default function CalendarModal({
     eventsData.ensureRange(start, end);
   }, [open, view, viewYear, viewMonth, eventsData]);
 
+  if (!open) return null;
+
   const monthName = new Date(viewYear, viewMonth).toLocaleDateString("en-US", { month: "long" });
   const monthYear = String(viewYear);
   const layout = getCalendarLayoutMetrics(viewportWidth);
   const panelWidth = `calc(100vw - ${layout.viewportMargin * 2}px)`;
-  const showEventsLoadingState =
-    view === "events" &&
-    viewData?.isLoading &&
-    (computed?.totalEvents || 0) === 0;
-
-  if (!open) return null;
+  const showEventsLoadingState = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
 
   const selectedDayState = selectedDay != null
     ? (activeView.getDayState?.(itemsByDay[selectedDay]) ?? buildFallbackDayState(itemsByDay[selectedDay]))
@@ -689,470 +357,48 @@ export default function CalendarModal({
     ? hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor
     : hasSelectedDay && selectedDayState.totalCount === 0;
 
-  const HeaderExtras = activeView.HeaderExtras;
-
-  return createPortal(
-    <>
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 49,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(0,0,0,0.5)",
-        }}
-      >
-        <div
-          ref={panelRef}
-          data-testid="calendar-modal-panel"
-          className="isolate flex flex-col animate-in fade-in zoom-in-95 duration-200"
-          style={{
-            width: panelWidth,
-            maxWidth: `${layout.shellMaxWidth}px`,
-            maxHeight: layout.shellMaxHeight,
-            background: "radial-gradient(ellipse at top left, #1a1a2a, #0d0d15 70%)",
-            borderRadius: 14,
-            border: "1px solid rgba(255,255,255,0.06)",
-            boxShadow: "0 30px 80px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
-          <div
-            ref={scrollRef}
-            className="overflow-y-auto overscroll-contain flex-1"
-            style={{ padding: layout.shellPadding }}
-          >
-            {/* Header — eyebrow + display title pattern from the mock */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginBottom: 22, gap: 12 }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "auto minmax(0, 1fr)",
-                  alignItems: "center",
-                  gap: 18,
-                  justifySelf: "start",
-                  minWidth: 0,
-                }}
-              >
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button
-                    onClick={() => canGoPrev && navigateMonth(-1)}
-                    aria-label="Previous month"
-                    onMouseEnter={(event) => {
-                      if (!canGoPrev) return;
-                      event.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                      event.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
-                      event.currentTarget.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(event) => {
-                      event.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                      event.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-                      event.currentTarget.style.transform = "translateY(0)";
-                    }}
-                    style={{
-                      color: canGoPrev ? "rgba(205,214,244,0.7)" : "rgba(205,214,244,0.18)",
-                      cursor: canGoPrev ? "pointer" : "default",
-                      width: 36, height: 36,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      borderRadius: 8,
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      fontFamily: "inherit",
-                      transform: "translateY(0)",
-                      transition: "transform 140ms, background 140ms, border-color 140ms",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    onClick={() => navigateMonth(1)}
-                    aria-label="Next month"
-                    onMouseEnter={(event) => {
-                      event.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                      event.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
-                      event.currentTarget.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(event) => {
-                      event.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                      event.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-                      event.currentTarget.style.transform = "translateY(0)";
-                    }}
-                    style={{
-                      color: "rgba(205,214,244,0.7)",
-                      cursor: "pointer",
-                      width: 36, height: 36,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      borderRadius: 8,
-                      background: "rgba(255,255,255,0.03)",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      fontFamily: "inherit",
-                      transform: "translateY(0)",
-                      transition: "transform 140ms, background 140ms, border-color 140ms",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 10, fontWeight: 600, letterSpacing: 2.6, textTransform: "uppercase",
-                      color: "rgba(205,214,244,0.55)",
-                    }}
-                  >
-                    Calendar · {VIEWS[view]?.label || "Bills"}
-                  </div>
-                  <div
-                    className="ea-display"
-                    style={{
-                      fontSize: 28, fontWeight: 500, color: "#fff",
-                      letterSpacing: -0.4, lineHeight: 1.05,
-                      whiteSpace: layout.headerWrap ? "normal" : "nowrap",
-                    }}
-                  >
-                    {monthName}{" "}
-                    <span style={{ color: "rgba(205,214,244,0.4)", fontWeight: 400 }}>{monthYear}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Segmented view switcher */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.05)",
-                  borderRadius: 8,
-                  padding: 2,
-                  gap: 2,
-                  justifySelf: "center",
-                }}
-              >
-                {[
-                  { key: "events", label: "Events", Icon: CalendarIcon, hint: "1" },
-                  { key: "bills", label: "Bills", Icon: Receipt, hint: "2" },
-                  { key: "deadlines", label: "Deadlines", Icon: ListChecks, hint: "3" },
-                ].map((opt) => {
-                  const active = view === opt.key;
-                  const { Icon } = opt;
-                  return (
-                    <button
-                      key={opt.key}
-                      onClick={() => !active && onViewChange?.(opt.key)}
-                      onMouseEnter={(event) => {
-                        if (active) return;
-                        event.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                        event.currentTarget.style.color = "rgba(205,214,244,0.82)";
-                        event.currentTarget.style.transform = "translateY(-1px)";
-                      }}
-                      onMouseLeave={(event) => {
-                        if (active) return;
-                        event.currentTarget.style.background = "transparent";
-                        event.currentTarget.style.color = "rgba(205,214,244,0.55)";
-                        event.currentTarget.style.transform = "translateY(0)";
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 7,
-                        padding: "6px 12px",
-                        borderRadius: 6,
-                        fontSize: 11,
-                        fontWeight: 500,
-                        letterSpacing: 0.3,
-                        border: "none",
-                        cursor: active ? "default" : "pointer",
-                        fontFamily: "inherit",
-                        background: active ? "rgba(203,166,218,0.12)" : "transparent",
-                        color: active ? "#cba6da" : "rgba(205,214,244,0.55)",
-                        transform: "translateY(0)",
-                        transition: "transform 140ms, background 150ms, color 150ms",
-                      }}
-                    >
-                      <Icon size={11} strokeWidth={1.8} />
-                      {opt.label}
-                      <kbd
-                        style={{
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          minWidth: 16, height: 16, padding: "0 4px",
-                          fontSize: 9.5, fontFamily: "Fira Code, ui-monospace, monospace", fontWeight: 500,
-                          color: active ? "#cba6da" : "rgba(205,214,244,0.45)",
-                          background: active ? "rgba(203,166,218,0.10)" : "rgba(255,255,255,0.04)",
-                          border: `1px solid ${active ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.06)"}`,
-                          borderRadius: 4, letterSpacing: 0,
-                          marginLeft: 2,
-                        }}
-                      >
-                        {opt.hint}
-                      </kbd>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 6, justifySelf: "end" }}>
-                {HeaderExtras ? (
-                  <HeaderExtras
-                    data={viewData}
-                    computed={computed}
-                    suppressOutsideClick={suppressOutsideClick}
-                    editor={eventEditor}
-                    selectedDay={selectedDay}
-                    viewYear={viewYear}
-                    viewMonth={viewMonth}
-                    onCreateTask={(seedDate) => {
-                      setDeadlineEditor({
-                        mode: "create",
-                        seedDate: seedDate || null,
-                      });
-                    }}
-                  />
-                ) : null}
-                <button
-                  onClick={onClose}
-                  aria-label="Close"
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                    event.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
-                    event.currentTarget.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                    event.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-                    event.currentTarget.style.transform = "translateY(0)";
-                  }}
-                  style={{
-                    color: "rgba(205,214,244,0.7)",
-                    cursor: "pointer",
-                    width: 36, height: 36,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    borderRadius: 8,
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    fontFamily: "inherit",
-                    transform: "translateY(0)",
-                    transition: "transform 140ms, background 140ms, border-color 140ms",
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Body: calendar (left) + side rail (right) */}
-            <div
-              data-testid="calendar-modal-body"
-              style={{
-                display: "grid",
-                gridTemplateColumns: layout.stacked ? "minmax(0, 1fr)" : `minmax(0, 1fr) ${layout.railWidth}px`,
-                gap: layout.contentGap,
-                alignItems: "start",
-              }}
-            >
-              <div style={{ minWidth: 0, position: "relative" }}>
-                {/* Day-of-week headers */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: layout.weekHeaderGap, marginBottom: 8 }}>
-                  {DAYS.map((d) => (
-                    <div
-                      key={d}
-                      style={{
-                        textAlign: "center", fontSize: 10, fontWeight: 600,
-                        color: "rgba(205,214,244,0.4)",
-                        padding: 4, letterSpacing: 1.6, textTransform: "uppercase",
-                      }}
-                    >
-                      {d}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Calendar grid */}
-                <div style={{ position: "relative" }}>
-                  <div
-                    key={`${view}-${viewYear}-${viewMonth}`}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(7, 1fr)",
-                      gridTemplateRows: `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
-                      gap: layout.gridGap,
-                    }}
-                  >
-                    {Array.from({ length: firstDay }, (_, i) => (
-                      <div key={`empty-${i}`} />
-                    ))}
-
-                    {Array.from({ length: daysInMonth }, (_, i) => {
-                      const day = i + 1;
-                      const rawItems = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
-                      const dayState = activeView.getDayState?.(itemsByDay[day]) ?? buildFallbackDayState(itemsByDay[day]);
-                      const cellItems = activeView.getDayState ? dayState : rawItems;
-                      const hasItems = dayState.totalCount > 0;
-                      const isToday = isCurrentMonth && day === todayDate;
-                      const isSelected = selectedDay === day;
-                      const hasOverdue = activeView.hasOverdue?.(dayState) || false;
-                      const allComplete = activeView.allComplete?.(dayState) || false;
-                      const isPastDay = view === "events"
-                        && new Date(viewYear, viewMonth, day) < new Date(currentYear, currentMonth, todayDate);
-                      const pastTone = isPastDay ? (hasItems ? "items" : "empty") : null;
-
-                      return (
-                        <CalendarCell
-                          key={day}
-                          day={day}
-                          items={cellItems}
-                          hasItems={hasItems}
-                          isToday={isToday}
-                          isSelected={isSelected}
-                          pastTone={pastTone}
-                          hasOverdue={hasOverdue}
-                          allComplete={allComplete}
-                          loading={viewData?.isLoading}
-                          onClick={() => {
-                            closeEventEditor();
-                            if (isSelected) {
-                              setSelectedDay(null);
-                              setSelectedItemId(null);
-                              setDeadlineEditor(null);
-                              return;
-                            }
-                            setSelectedDay(day);
-                            if (view === "deadlines") {
-                              setDeadlineEditor(null);
-                              const nextId = activeView.getDefaultSelectedItemId?.(dayState);
-                              setSelectedItemId(nextId ? String(nextId) : null);
-                            }
-                          }}
-                          renderCellContents={activeView.renderCellContents}
-                        />
-                      );
-                    })}
-
-                    {Array.from({ length: trailingEmpty }, (_, i) => (
-                      <div key={`trail-${i}`} />
-                    ))}
-                  </div>
-                  {showEventsLoadingState && (
-                    <CalendarEventsGridSkeleton
-                      firstDay={firstDay}
-                      daysInMonth={daysInMonth}
-                      trailingEmpty={trailingEmpty}
-                      cellHeight={layout.cellHeight}
-                      gridGap={layout.gridGap}
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Side rail — detail when a day is selected, summary otherwise */}
-              <aside
-                data-testid="calendar-modal-rail"
-                style={{
-                  position: layout.stickyRail ? "sticky" : "relative",
-                  top: 0,
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.05)",
-                  borderRadius: 12,
-                  minHeight: GRID_ROWS * layout.cellHeight + (GRID_ROWS - 1) * layout.gridGap + 30,
-                  display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden",
-                }}
-              >
-                <AnimatedRailContent
-                  contentKind={
-                    view === "events" && eventEditor.isEditorOpen
-                      ? "editor"
-                      : view === "deadlines" && deadlineEditor?.mode
-                        ? "editor"
-                        : showDetail
-                          ? "detail"
-                          : showEmptySelection
-                            ? "empty"
-                            : "summary"
-                  }
-                  contentKey={
-                    view === "events" && eventEditor.isEditorOpen
-                      ? `editor-${eventEditor.isEditing ? eventEditor.editingEvent?.id || "edit" : "new"}`
-                      : view === "deadlines" && deadlineEditor?.mode
-                        ? `deadline-editor-${deadlineEditor.mode}-${deadlineEditor.taskId || deadlineEditor.seedDate || "new"}`
-                      : showDetail
-                        ? `detail-${view}-${viewYear}-${viewMonth}-${selectedDay}-${effectiveSelectedItemId || "none"}-${selectedDayState.totalCount}`
-                        : showEmptySelection
-                          ? `empty-${view}-${viewYear}-${viewMonth}-${selectedDay}`
-                          : `summary-${view}-${viewYear}-${viewMonth}`
-                  }
-                >
-                  {view === "events" && eventEditor.isEditorOpen ? (
-                    <CalendarEventEditorRail editor={eventEditor} />
-                  ) : activeView.renderSidebar ? (
-                    activeView.renderSidebar({ selectedDay, itemsByDay, viewYear, viewMonth, data: viewData })
-                  ) : showDetail ? (
-                    activeView.renderDetail?.({
-                      selectedDay,
-                      viewYear,
-                      viewMonth,
-                      items: selectedItems,
-                      data: viewData,
-                      computed,
-                      onSelectEvent: eventEditor.openEdit,
-                      selectedItemId: effectiveSelectedItemId,
-                      onSelectItem: (itemId) => {
-                        setSelectedItemId(String(itemId));
-                        setDeadlineEditor(null);
-                      },
-                      editorState: deadlineEditor,
-                      onStartEdit: (task) => {
-                        setSelectedItemId(String(task.id));
-                        setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
-                      },
-                      onCloseEditor: () => setDeadlineEditor(null),
-                      onTaskSaved: focusDeadlineTask,
-                      onTaskDeleted: (taskId) => {
-                        setDeadlineEditor(null);
-                        if (String(effectiveSelectedItemId) === String(taskId)) {
-                          setSelectedItemId(null);
-                        }
-                      },
-                    })
-                  ) : showEmptySelection ? (
-                    <CalendarSelectedDayEmptyRail
-                      view={view}
-                      selectedDay={selectedDay}
-                      viewYear={viewYear}
-                      viewMonth={viewMonth}
-                      currentYear={currentYear}
-                      currentMonth={currentMonth}
-                      todayDate={todayDate}
-                      itemsByDay={itemsByDay}
-                      computed={computed}
-                      data={viewData}
-                      activeView={activeView}
-                    />
-                  ) : (
-                    <CalendarOverviewRail
-                      view={view}
-                      viewYear={viewYear}
-                      viewMonth={viewMonth}
-                      currentYear={currentYear}
-                      currentMonth={currentMonth}
-                      todayDate={todayDate}
-                      itemsByDay={itemsByDay}
-                      computed={computed}
-                      data={viewData}
-                      activeView={activeView}
-                    />
-                  )}
-                </AnimatedRailContent>
-              </aside>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>,
-    document.body,
+  return (
+    <CalendarModalShell
+      panelRef={panelRef}
+      scrollRef={scrollRef}
+      panelWidth={panelWidth}
+      layout={layout}
+      view={view}
+      monthName={monthName}
+      monthYear={monthYear}
+      canGoPrev={canGoPrev}
+      navigateMonth={navigateMonth}
+      onViewChange={onViewChange}
+      HeaderExtras={activeView.HeaderExtras}
+      viewData={viewData}
+      computed={computed}
+      suppressOutsideClick={suppressOutsideClick}
+      eventEditor={eventEditor}
+      selectedDay={selectedDay}
+      viewYear={viewYear}
+      viewMonth={viewMonth}
+      setDeadlineEditor={setDeadlineEditor}
+      onClose={onClose}
+      activeView={activeView}
+      currentYear={currentYear}
+      currentMonth={currentMonth}
+      todayDate={todayDate}
+      firstDay={firstDay}
+      daysInMonth={daysInMonth}
+      trailingEmpty={trailingEmpty}
+      itemsByDay={itemsByDay}
+      showEventsLoadingState={showEventsLoadingState}
+      buildFallbackDayState={buildFallbackDayState}
+      closeEventEditor={closeEventEditor}
+      setSelectedDay={setSelectedDay}
+      setSelectedItemId={setSelectedItemId}
+      showDetail={showDetail}
+      showEmptySelection={showEmptySelection}
+      effectiveSelectedItemId={effectiveSelectedItemId}
+      selectedDayState={selectedDayState}
+      selectedItems={selectedItems}
+      deadlineEditor={deadlineEditor}
+      focusDeadlineTask={focusDeadlineTask}
+    />
   );
 }

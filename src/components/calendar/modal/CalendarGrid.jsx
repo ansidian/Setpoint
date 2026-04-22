@@ -1,0 +1,347 @@
+import { useLayoutEffect, useRef, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const GRID_ROWS = 6;
+
+function CalendarCell({
+  day,
+  items,
+  hasItems,
+  isToday,
+  isSelected,
+  pastTone,
+  hasOverdue,
+  allComplete,
+  loading,
+  onClick,
+  renderCellContents,
+}) {
+  const todayAccent = "var(--ea-accent)";
+  let cellBg = "rgba(255,255,255,0.015)";
+  let cellBorder = "1px solid rgba(255,255,255,0.04)";
+  let cellShadow = "none";
+  let dateColor = "rgba(205,214,244,0.7)";
+  let dateWeight = 400;
+  let accentBar = null;
+  let todayWash = null;
+  let dateBadgeBg = "transparent";
+  let dateBadgeBorder = "1px solid transparent";
+  let dateBadgeShadow = "none";
+
+  if (isSelected) {
+    cellBg = "rgba(203,166,218,0.06)";
+    cellBorder = "1px solid rgba(203,166,218,0.4)";
+    cellShadow = "0 0 0 1px rgba(203,166,218,0.18), 0 4px 14px rgba(203,166,218,0.18)";
+    dateColor = "#cba6da";
+    dateWeight = 600;
+  } else if (allComplete) {
+    accentBar = "#a6e3a1";
+    dateColor = "rgba(166,227,161,0.85)";
+  } else if (hasOverdue) {
+    accentBar = "#f38ba8";
+    dateColor = "rgba(243,139,168,0.9)";
+  } else if (hasItems) {
+    dateColor = "#cdd6f4";
+    dateWeight = 500;
+  }
+
+  if (!isSelected && !isToday && pastTone) {
+    cellBg = pastTone === "items" ? "rgba(255,255,255,0.01)" : "rgba(255,255,255,0.006)";
+    cellBorder = pastTone === "items"
+      ? "1px solid rgba(255,255,255,0.028)"
+      : "1px solid rgba(255,255,255,0.022)";
+    dateColor = pastTone === "items" ? "rgba(205,214,244,0.48)" : "rgba(205,214,244,0.33)";
+    if (!hasItems) dateWeight = 400;
+  }
+
+  if (isToday) {
+    todayWash = isSelected
+      ? `linear-gradient(180deg, color-mix(in srgb, ${todayAccent} 16%, transparent), color-mix(in srgb, ${todayAccent} 6%, transparent) 56%, transparent)`
+      : `linear-gradient(180deg, color-mix(in srgb, ${todayAccent} 20%, transparent), color-mix(in srgb, ${todayAccent} 8%, transparent) 58%, transparent)`;
+    dateColor = isSelected ? "#ffffff" : todayAccent;
+    dateWeight = 700;
+    dateBadgeBg = isSelected
+      ? `color-mix(in srgb, ${todayAccent} 32%, transparent)`
+      : `color-mix(in srgb, ${todayAccent} 18%, transparent)`;
+    dateBadgeBorder = isSelected
+      ? `1px solid color-mix(in srgb, ${todayAccent} 56%, white 12%)`
+      : `1px solid color-mix(in srgb, ${todayAccent} 42%, transparent)`;
+    dateBadgeShadow = isSelected
+      ? `0 0 0 1px color-mix(in srgb, ${todayAccent} 18%, transparent), 0 6px 18px color-mix(in srgb, ${todayAccent} 24%, transparent)`
+      : `0 4px 12px color-mix(in srgb, ${todayAccent} 18%, transparent)`;
+  }
+
+  const contentRef = useRef(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const element = contentRef.current;
+    if (!element) return undefined;
+
+    const updateHeight = () => setContentHeight(element.clientHeight || 0);
+    updateHeight();
+
+    if (typeof window.ResizeObserver !== "function") {
+      window.addEventListener("resize", updateHeight);
+      return () => window.removeEventListener("resize", updateHeight);
+    }
+
+    const observer = new window.ResizeObserver((entries) => {
+      const nextHeight = entries[0]?.contentRect?.height;
+      setContentHeight(nextHeight || element.clientHeight || 0);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      onClick={onClick}
+      aria-current={isToday ? "date" : undefined}
+      data-testid={`calendar-cell-${day}`}
+      data-past-tone={pastTone || "none"}
+      style={{
+        position: "relative",
+        minWidth: 0,
+        overflow: "hidden",
+        borderRadius: 8,
+        padding: "7px 9px",
+        background: cellBg,
+        border: cellBorder,
+        boxShadow: cellShadow,
+        cursor: "pointer",
+        transition: "box-shadow 150ms, border-color 150ms, background 150ms",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+      }}
+    >
+      {todayWash && (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 1,
+            borderRadius: 7,
+            background: todayWash,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      {accentBar && (
+        <span
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 8,
+            bottom: 8,
+            width: 2,
+            background: accentBar,
+            borderRadius: 2,
+            opacity: 0.55,
+          }}
+        />
+      )}
+      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: isToday ? 24 : undefined,
+            height: isToday ? 24 : undefined,
+            padding: isToday ? "0 8px" : 0,
+            borderRadius: 999,
+            fontSize: 12.5,
+            color: dateColor,
+            fontWeight: dateWeight,
+            fontVariantNumeric: "tabular-nums",
+            background: dateBadgeBg,
+            border: dateBadgeBorder,
+            boxShadow: dateBadgeShadow,
+            transition: "background 150ms, border-color 150ms, box-shadow 150ms",
+          }}
+        >
+          {day}
+        </span>
+      </div>
+      <div
+        ref={contentRef}
+        style={{
+          position: "relative",
+          minHeight: 0,
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
+        {renderCellContents?.({ items, hasOverdue, contentHeight, isToday, loading, pastTone })}
+      </div>
+    </div>
+  );
+}
+
+function CalendarEventsGridSkeleton({ firstDay, daysInMonth, trailingEmpty, cellHeight, gridGap }) {
+  const rowWidths = cellHeight >= 96 ? ["84%", "71%", "58%"] : ["86%", "63%"];
+
+  return (
+    <div
+      data-testid="calendar-events-grid-skeleton"
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        gridTemplateColumns: "repeat(7, 1fr)",
+        gridTemplateRows: `repeat(${GRID_ROWS}, ${cellHeight}px)`,
+        gap: gridGap,
+        pointerEvents: "none",
+      }}
+    >
+      {Array.from({ length: firstDay }, (_, index) => <div key={`sk-empty-${index}`} />)}
+      {Array.from({ length: daysInMonth }, (_, index) => (
+        <div
+          key={`sk-day-${index}`}
+          style={{
+            padding: "28px 9px 8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 5,
+            minHeight: 0,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {rowWidths.map((width, rowIndex) => (
+              <Skeleton
+                key={rowIndex}
+                className="h-[10px] rounded-sm bg-white/8"
+                style={{ width, opacity: rowIndex === rowWidths.length - 1 ? 0.72 : 1 }}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+      {Array.from({ length: trailingEmpty }, (_, index) => <div key={`sk-trail-${index}`} />)}
+    </div>
+  );
+}
+
+export default function CalendarGrid({
+  view,
+  viewYear,
+  viewMonth,
+  currentYear,
+  currentMonth,
+  todayDate,
+  firstDay,
+  daysInMonth,
+  trailingEmpty,
+  itemsByDay,
+  selectedDay,
+  viewData,
+  activeView,
+  layout,
+  showEventsLoadingState,
+  buildFallbackDayState,
+  closeEventEditor,
+  setSelectedDay,
+  setSelectedItemId,
+  setDeadlineEditor,
+}) {
+  const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
+
+  return (
+    <div style={{ minWidth: 0, position: "relative" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: layout.weekHeaderGap, marginBottom: 8 }}>
+        {DAYS.map((day) => (
+          <div
+            key={day}
+            style={{
+              textAlign: "center",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "rgba(205,214,244,0.4)",
+              padding: 4,
+              letterSpacing: 1.6,
+              textTransform: "uppercase",
+            }}
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ position: "relative" }}>
+        <div
+          key={`${view}-${viewYear}-${viewMonth}`}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gridTemplateRows: `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
+            gap: layout.gridGap,
+          }}
+        >
+          {Array.from({ length: firstDay }, (_, index) => <div key={`empty-${index}`} />)}
+
+          {Array.from({ length: daysInMonth }, (_, index) => {
+            const day = index + 1;
+            const rawItems = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
+            const dayState = activeView.getDayState?.(itemsByDay[day]) ?? buildFallbackDayState(itemsByDay[day]);
+            const cellItems = activeView.getDayState ? dayState : rawItems;
+            const hasItems = dayState.totalCount > 0;
+            const isToday = isCurrentMonth && day === todayDate;
+            const isSelected = selectedDay === day;
+            const hasOverdue = activeView.hasOverdue?.(dayState) || false;
+            const allComplete = activeView.allComplete?.(dayState) || false;
+            const isPastDay = view === "events"
+              && new Date(viewYear, viewMonth, day) < new Date(currentYear, currentMonth, todayDate);
+            const pastTone = isPastDay ? (hasItems ? "items" : "empty") : null;
+
+            return (
+              <CalendarCell
+                key={day}
+                day={day}
+                items={cellItems}
+                hasItems={hasItems}
+                isToday={isToday}
+                isSelected={isSelected}
+                pastTone={pastTone}
+                hasOverdue={hasOverdue}
+                allComplete={allComplete}
+                loading={viewData?.isLoading}
+                onClick={() => {
+                  closeEventEditor();
+                  if (isSelected) {
+                    setSelectedDay(null);
+                    setSelectedItemId(null);
+                    setDeadlineEditor(null);
+                    return;
+                  }
+                  setSelectedDay(day);
+                  if (view === "deadlines") {
+                    setDeadlineEditor(null);
+                    const nextId = activeView.getDefaultSelectedItemId?.(dayState);
+                    setSelectedItemId(nextId ? String(nextId) : null);
+                  }
+                }}
+                renderCellContents={activeView.renderCellContents}
+              />
+            );
+          })}
+
+          {Array.from({ length: trailingEmpty }, (_, index) => <div key={`trail-${index}`} />)}
+        </div>
+
+        {showEventsLoadingState && (
+          <CalendarEventsGridSkeleton
+            firstDay={firstDay}
+            daysInMonth={daysInMonth}
+            trailingEmpty={trailingEmpty}
+            cellHeight={layout.cellHeight}
+            gridGap={layout.gridGap}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
