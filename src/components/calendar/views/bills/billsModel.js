@@ -75,6 +75,12 @@ export function getDayState(rawItems) {
   return groupBills(Array.isArray(rawItems) ? rawItems : []);
 }
 
+export function getDefaultSelectedItemId(items = []) {
+  const state = getDayState(items);
+  const fallback = state.activeItems[0] || state.completedItems[0];
+  return String(fallback?.id || "");
+}
+
 export function compute({ data, viewYear, viewMonth }) {
   const schedules = data?.schedules || [];
   const recentTransactions = data?.recentTransactions || [];

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computePlacement } from "@/components/inbox/helpers";
 
@@ -20,20 +20,34 @@ export default function AnchoredFloatingPanel({
   const resolvedPanelRef = panelRef || internalPanelRef;
   const [pos, setPos] = useState(null);
 
-  useEffect(() => {
-    function updatePos() {
-      const rect = anchorRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      let resolvedWidth = matchAnchorWidth ? rect.width : width;
-      if (typeof minWidth === "number") resolvedWidth = Math.max(resolvedWidth, minWidth);
-      if (typeof maxWidth === "number") resolvedWidth = Math.min(resolvedWidth, maxWidth);
-      setPos({
-        ...computePlacement(rect, resolvedWidth, height),
-        width: resolvedWidth,
-        height,
-      });
-    }
+  const updatePos = useCallback(() => {
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let resolvedWidth = matchAnchorWidth ? rect.width : width;
+    if (typeof minWidth === "number") resolvedWidth = Math.max(resolvedWidth, minWidth);
+    if (typeof maxWidth === "number") resolvedWidth = Math.min(resolvedWidth, maxWidth);
 
+    const measuredHeight = resolvedPanelRef.current?.getBoundingClientRect?.().height;
+    const placementHeight = typeof measuredHeight === "number" && measuredHeight > 0
+      ? measuredHeight
+      : height;
+    const nextPos = {
+      ...computePlacement(rect, resolvedWidth, placementHeight),
+      width: resolvedWidth,
+    };
+
+    setPos((prev) => {
+      if (prev
+        && prev.top === nextPos.top
+        && prev.left === nextPos.left
+        && prev.width === nextPos.width) {
+        return prev;
+      }
+      return nextPos;
+    });
+  }, [anchorRef, height, matchAnchorWidth, maxWidth, minWidth, resolvedPanelRef, width]);
+
+  useEffect(() => {
     updatePos();
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
@@ -41,7 +55,21 @@ export default function AnchoredFloatingPanel({
       window.removeEventListener("scroll", updatePos, true);
       window.removeEventListener("resize", updatePos);
     };
-  }, [anchorRef, height, matchAnchorWidth, maxWidth, minWidth, width]);
+  }, [updatePos]);
+
+  useLayoutEffect(() => {
+    if (!pos) return;
+    updatePos();
+  }, [children, pos, updatePos]);
+
+  useEffect(() => {
+    const element = resolvedPanelRef.current;
+    if (!element || typeof window.ResizeObserver !== "function") return undefined;
+
+    const observer = new window.ResizeObserver(() => updatePos());
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [pos, resolvedPanelRef, updatePos]);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -80,7 +108,7 @@ export default function AnchoredFloatingPanel({
         top: pos.top,
         left: pos.left,
         width: pos.width,
-        maxHeight: typeof pos.height === "number" ? `min(${pos.height}px, calc(100vh - 20px))` : undefined,
+        maxHeight: typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined,
         overflowY: "auto",
         overscrollBehavior: "contain",
         isolation: "isolate",

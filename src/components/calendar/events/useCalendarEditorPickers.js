@@ -131,7 +131,7 @@ export default function useCalendarEditorPickers(editor) {
     && !!draft.startTime
     && !!draft.endTime
     && `${draft.endDate}T${draft.endTime}:00` < `${draft.startDate}T${draft.startTime}:00`;
-  const showTitleAssist = !isEditing && (!!titleAssist.preview || !!titleAssist.locationQuery || !!titleAssist.sourceQuery);
+  const showTitleAssist = !!titleAssist.preview || !!titleAssist.locationQuery || !!titleAssist.sourceQuery;
   const parsedSourceQuery = String(titleAssist.sourceQuery || "").trim();
   const parsedLocationQuery = String(titleAssist.locationQuery || "").trim();
   const filteredSourceSuggestions = useMemo(() => {
@@ -165,11 +165,9 @@ export default function useCalendarEditorPickers(editor) {
       || locationSuggestions.length > 0
       || String(draft.location || "").trim().length >= 2
     );
-  const shouldConsumeParsedSourceFromTitle = !isEditing
-    && !!parsedSourceQuery
+  const shouldConsumeParsedSourceFromTitle = !!parsedSourceQuery
     && titleInput !== titleAssist.titleAfterSourceCommit;
-  const shouldConsumeParsedLocationFromTitle = !isEditing
-    && !!parsedLocationQuery
+  const shouldConsumeParsedLocationFromTitle = !!parsedLocationQuery
     && draft.location === parsedLocationQuery
     && titleInput !== titleAssist.titleAfterLocationCommit;
 

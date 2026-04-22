@@ -344,9 +344,9 @@ export default function CalendarGrid({
                   setSelectedDay(day);
                   if (view === "deadlines") {
                     setDeadlineEditor(null);
-                    const nextId = activeView.getDefaultSelectedItemId?.(dayState);
-                    setSelectedItemId(nextId ? String(nextId) : null);
                   }
+                  const nextId = activeView.getDefaultSelectedItemId?.(dayState);
+                  setSelectedItemId(nextId ? String(nextId) : null);
                 }}
                 renderCellContents={activeView.renderCellContents}
               />

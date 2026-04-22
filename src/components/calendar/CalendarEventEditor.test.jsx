@@ -125,7 +125,7 @@ describe("Calendar event editor rail", () => {
     expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
   });
 
-  it("opens writable event rows in edit mode and deletes only after confirmation", async () => {
+  it("keeps the selected event row selection-only and edits from the selected event action", async () => {
     const event = {
       id: "event-1",
       etag: '"etag-1"',
@@ -142,6 +142,9 @@ describe("Calendar event editor rail", () => {
     const { refreshRange } = renderModal({ events: [event] });
 
     fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
+    expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
@@ -203,7 +206,7 @@ describe("Calendar event editor rail", () => {
       },
     });
 
-    fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
+    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     expect(screen.getByTestId("calendar-recurring-scope-prompt")).toBeTruthy();
     expect(screen.getByTestId("calendar-event-save").disabled).toBe(true);
@@ -251,7 +254,7 @@ describe("Calendar event editor rail", () => {
       ],
     });
 
-    fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
+    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("calendar-recurring-scope-following"));
@@ -429,8 +432,12 @@ describe("Calendar event editor rail", () => {
     fireEvent.change(screen.getByTestId("calendar-recurrence-ends-type"), {
       target: { value: "onDate" },
     });
-    fireEvent.change(screen.getByTestId("calendar-recurrence-until-date"), {
-      target: { value: "2026-08-20" },
+    fireEvent.click(await screen.findByTestId("calendar-recurrence-until-date"));
+    fireEvent.click(within(await screen.findByLabelText("Recurrence end date picker")).getByRole("button", { name: "24" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Recurrence end date picker")).toBeNull();
+      expect(screen.getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 24, 2026/i);
     });
 
     fireEvent.click(screen.getByTestId("calendar-event-save"));
@@ -448,9 +455,102 @@ describe("Calendar event editor rail", () => {
           monthDay: 20,
           ends: {
             type: "onDate",
-            untilDate: "2026-08-20",
+            untilDate: "2026-04-24",
           },
         },
+      }));
+    });
+  });
+
+  it("keeps the editor open when selecting a recurrence ends option from the floating listbox", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work at 3am to 8am every monday" },
+    });
+
+    const recurrenceSection = await screen.findByTestId("calendar-recurrence-section");
+    expect(recurrenceSection).toBeTruthy();
+
+    fireEvent.click(within(recurrenceSection).getByRole("button", { name: /^never$/i }));
+    expect(screen.getByRole("listbox", { name: /select option/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("option", { name: /on date/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+      expect(screen.getByTestId("calendar-recurrence-ends-type").value).toBe("onDate");
+      expect(screen.getByTestId("calendar-recurrence-until-date")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-recurrence-until-date"));
+    fireEvent.click(within(await screen.findByLabelText("Recurrence end date picker")).getByRole("button", { name: "25" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+      expect(screen.queryByLabelText("Recurrence end date picker")).toBeNull();
+      expect(screen.getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 25, 2026/i);
+    });
+  });
+
+  it("applies parsed title changes while editing an existing event", async () => {
+    renderModal({
+      events: [
+        {
+          id: "event-edit-nlp",
+          etag: '"etag-edit-nlp"',
+          title: "Planning block",
+          accountId: "gmail-main",
+          calendarId: "primary",
+          startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+          writable: true,
+          isRecurring: false,
+          allDay: false,
+          htmlLink: "https://calendar.google.com",
+        },
+      ],
+    });
+    mockUpdateCalendarEvent.mockResolvedValue({
+      event: {
+        id: "event-edit-nlp",
+        title: "Dinner",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-21T00:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-21T00:30:00.000Z").getTime(),
+        writable: true,
+        allDay: false,
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Dinner on Apr 21 at 5pm" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 21, 2026/i);
+      expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/apr 21, 2026/i);
+      expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/apr 21, 2026/i);
+      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/5:00 pm/i);
+      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/5:30 pm/i);
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-edit-nlp", expect.objectContaining({
+        title: "Dinner",
+        startDate: "2026-04-21",
+        endDate: "2026-04-21",
+        startTime: "17:00",
+        endTime: "17:30",
       }));
     });
   });

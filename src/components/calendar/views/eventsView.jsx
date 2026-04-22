@@ -1,13 +1,22 @@
-import { ExternalLink, Video, Calendar as CalendarIcon } from "lucide-react";
+/* eslint-disable react-refresh/only-export-components */
+import { Calendar as CalendarIcon, ExternalLink, Pencil, Video } from "lucide-react";
+import { AnimatePresence, motion as Motion } from "motion/react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
+import {
+  RailAction,
+  RailFactTile,
+  RailHeroCard,
+  RailMetaChip,
+} from "../DetailRailPrimitives.jsx";
 import { formatEventDuration } from "../../../lib/redesign-helpers";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
+import { useDetailRailMotion } from "../detailRailMotion.js";
 
 const EVENT_ROW_HEIGHT = 12;
 const STACK_GAP = 2;
 const MORE_ROW_HEIGHT = 10;
-
+const MEETING_PROVIDER_PREFIX = /^\s*(?:[\[(]\s*(?:zoom|google meet|meet|teams|webex)\s*[\])]|(?:zoom|google meet|meet|teams|webex))\s*[:\-]?\s*/i;
 function getStackHeight(visibleCount, hasMore) {
   if (visibleCount <= 0) return 0;
   const childCount = visibleCount + (hasMore ? 1 : 0);
@@ -53,6 +62,48 @@ function pacificTime(ms) {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+function eventTimeRange(ev) {
+  if (ev?.allDay) return ev.duration || "All day";
+  const start = ev?.startMs ? pacificTime(ev.startMs) : null;
+  const end = ev?.endMs ? pacificTime(ev.endMs) : null;
+  if (start && end && start !== end) return `${start} - ${end}`;
+  return start || end || eventMeta(ev) || "";
+}
+
+function sanitizeEventDisplayTitle(value) {
+  const title = String(value || "").trim();
+  if (!title) return "(No title)";
+  const cleaned = title.replace(MEETING_PROVIDER_PREFIX, "").trim();
+  return cleaned || title;
+}
+
+function condenseLocationLabel(text, maxLength = 56) {
+  const label = getLocationDisplayLabel(text);
+  if (!label || label.length <= maxLength || label === "Zoom meeting") return label;
+  const parts = label.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 1) return label;
+
+  const firstTwo = parts.slice(0, 2).join(", ");
+  if (firstTwo.length <= maxLength) return firstTwo;
+  return parts[0] || label;
+}
+
+function compactEventTimeRange(ev) {
+  if (ev?.allDay) return ev.duration || "All day";
+  const start = ev?.startMs ? pacificTime(ev.startMs) : null;
+  const end = ev?.endMs ? pacificTime(ev.endMs) : null;
+  if (!start || !end || start === end) return eventTimeRange(ev);
+
+  const startMatch = start.match(/^(\d{1,2}:\d{2})\s*(AM|PM)$/);
+  const endMatch = end.match(/^(\d{1,2}:\d{2})\s*(AM|PM)$/);
+  if (!startMatch || !endMatch) return `${start} - ${end}`;
+
+  const [, startTime, startMeridiem] = startMatch;
+  const [, endTime, endMeridiem] = endMatch;
+  if (startMeridiem === endMeridiem) return `${startTime}-${endTime} ${endMeridiem}`;
+  return `${startTime} ${startMeridiem}-${endTime} ${endMeridiem}`;
 }
 
 function compute({ data, viewYear, viewMonth }) {
@@ -169,7 +220,7 @@ function eventSubtitle(ev) {
   if (ev.attendees?.length) {
     return `with ${ev.attendees.slice(0, 3).join(", ")}${ev.attendees.length > 3 ? ` +${ev.attendees.length - 3}` : ""}`;
   }
-  if (ev.location) return getLocationDisplayLabel(ev.location);
+  if (ev.location) return condenseLocationLabel(ev.location, 40);
   return ev.subtitle || "";
 }
 
@@ -178,89 +229,373 @@ function eventMeta(ev) {
   return formatEventDuration(ev.startMs, ev.endMs) || ev.duration || "";
 }
 
+function selectedEventAccessoryLabel(ev) {
+  if (ev.location) return condenseLocationLabel(ev.location, 56);
+  if (ev.attendees?.length) {
+    return `${ev.attendees.length} attendee${ev.attendees.length === 1 ? "" : "s"}`;
+  }
+  return null;
+}
+
+function shouldCompressSelectedCard(ev) {
+  if (!ev) return false;
+  const displayTitle = sanitizeEventDisplayTitle(ev.title);
+  const accessoryLabel = selectedEventAccessoryLabel(ev) || "";
+  const titleWordCount = displayTitle.split(/\s+/).filter(Boolean).length;
+  return Boolean(
+    extractZoomMeetingUrl(ev)
+    || displayTitle.length >= 34
+    || titleWordCount >= 6
+    || accessoryLabel.length >= 44
+  );
+}
+
 function isEditableEvent(ev) {
   return !!ev?.writable;
 }
 
-// eslint-disable-next-line no-unused-vars -- Icon is used in JSX below
-function renderActionLink({ href, label, icon: Icon }) {
-  if (!href) return null;
+function getEventSelectionId(ev) {
+  if (!ev) return null;
+  return String(ev?.id || ev?.iCalUID || ev?.htmlLink || ev?.openUrl || `${ev?.startMs || 0}-${ev?.endMs || 0}-${ev?.title || "event"}`);
+}
+
+function orderDetailEvents(items = []) {
+  return [...items].sort((a, b) => {
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    return (a.startMs || 0) - (b.startMs || 0);
+  });
+}
+
+export function getDefaultSelectedItemId(items = []) {
+  const ordered = orderDetailEvents(Array.isArray(items) ? items : items?.items || []);
+  return ordered[0] ? getEventSelectionId(ordered[0]) : null;
+}
+
+function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = false }) {
+  const motion = useDetailRailMotion();
+  const editable = isEditableEvent(ev);
+  const zoomUrl = extractZoomMeetingUrl(ev);
+  const displayTitle = sanitizeEventDisplayTitle(ev.title);
+  const location = ev.location ? getLocationDisplayLabel(ev.location) : null;
+  const attendeeSummary = ev.attendees?.length
+    ? `${ev.attendees.length} attendee${ev.attendees.length === 1 ? "" : "s"}`
+    : null;
+  const calendarUrl = ev.openUrl || ev.htmlLink;
+  const durationLabel = !ev.allDay ? eventMeta(ev) : null;
+  const accessoryLabel = location || attendeeSummary || null;
+  const density = ultraCompact ? "compressed" : compact ? "compact" : "default";
+
+  if (ultraCompact) {
+    return (
+      <Motion.div
+        layout
+        transition={motion.layout}
+        data-testid="calendar-selected-event-card"
+        data-density={density}
+      >
+        <RailHeroCard accent="#89b4fa" compact>
+          <Motion.div layout transition={motion.layout} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                color: "rgba(205,214,244,0.56)",
+              }}
+            >
+              Selected event
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+              {durationLabel ? <RailMetaChip tone="quiet">{durationLabel}</RailMetaChip> : null}
+              {ev.isRecurring ? <RailMetaChip tone="quiet">Recurring</RailMetaChip> : null}
+              {!editable ? <RailMetaChip tone="quiet">Read-only</RailMetaChip> : null}
+            </div>
+          </Motion.div>
+
+          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Motion.div
+              layout="position"
+              transition={motion.layout}
+              data-testid="calendar-selected-event-title"
+              title={displayTitle}
+              style={{
+                fontSize: 17,
+                lineHeight: 1.08,
+                letterSpacing: -0.3,
+                color: "#fff",
+                fontWeight: 500,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {displayTitle}
+            </Motion.div>
+            <Motion.div
+              layout
+              transition={motion.layout}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "baseline",
+                gap: "2px 8px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 12.5,
+                  lineHeight: 1.35,
+                  color: "#89b4fa",
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {compactEventTimeRange(ev)}
+              </span>
+              {accessoryLabel ? (
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    lineHeight: 1.4,
+                    color: "rgba(205,214,244,0.56)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {accessoryLabel}
+                </span>
+              ) : null}
+            </Motion.div>
+          </Motion.div>
+
+          <Motion.div
+            layout
+            transition={motion.layout}
+            style={{
+              paddingTop: 10,
+              borderTop: "1px solid rgba(255,255,255,0.04)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {zoomUrl ? (
+                <RailAction
+                  icon={Video}
+                  label="Join Zoom"
+                  href={zoomUrl}
+                  accent="#89b4fa"
+                  tone="accent"
+                  size="compact"
+                />
+              ) : null}
+              {editable ? (
+                <RailAction
+                  icon={Pencil}
+                  label="Edit"
+                  onClick={() => onEditEvent?.(ev)}
+                  accent="#89b4fa"
+                  size="compact"
+                />
+              ) : null}
+            </div>
+            {calendarUrl ? (
+              <RailAction
+                icon={ExternalLink}
+                label="Open Calendar"
+                href={calendarUrl}
+                accent="#89b4fa"
+                tone={zoomUrl || editable ? "ghost" : "accent"}
+                size="compact"
+              />
+            ) : null}
+          </Motion.div>
+        </RailHeroCard>
+      </Motion.div>
+    );
+  }
 
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={label}
-      title={label}
-      onClick={(event) => event.stopPropagation()}
-      style={{
-        color: "rgba(205,214,244,0.4)",
-        padding: 4,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: 6,
-        transform: "translateY(0)",
-        transition: "transform 140ms, color 140ms, background 140ms",
-      }}
-      onMouseEnter={(event) => {
-        event.currentTarget.style.color = "#cba6da";
-        event.currentTarget.style.background = "rgba(203,166,218,0.12)";
-        event.currentTarget.style.transform = "translateY(-1px)";
-      }}
-      onMouseLeave={(event) => {
-        event.currentTarget.style.color = "rgba(205,214,244,0.4)";
-        event.currentTarget.style.background = "transparent";
-        event.currentTarget.style.transform = "translateY(0)";
-      }}
+    <Motion.div
+      layout
+      transition={motion.layout}
+      data-testid="calendar-selected-event-card"
+      data-density={density}
     >
-      <Icon size={12} />
-    </a>
+      <RailHeroCard accent="#89b4fa">
+        <Motion.div layout transition={motion.layout} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: "rgba(205,214,244,0.56)",
+            }}
+          >
+            Selected event
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+            {durationLabel ? <RailMetaChip tone="quiet">{durationLabel}</RailMetaChip> : null}
+            {ev.allDay ? <RailMetaChip tone="quiet">All day</RailMetaChip> : null}
+            {ev.isRecurring ? <RailMetaChip tone="quiet">Recurring</RailMetaChip> : null}
+            {!editable ? <RailMetaChip tone="quiet">Read-only</RailMetaChip> : null}
+          </div>
+        </Motion.div>
+
+        <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}>
+          <Motion.div
+            layout="position"
+            transition={motion.layout}
+            data-testid="calendar-selected-event-title"
+            title={displayTitle}
+            style={{
+              fontSize: compact ? 20 : 24,
+              lineHeight: 1.08,
+              letterSpacing: -0.4,
+              color: "#fff",
+              fontWeight: 500,
+              display: "-webkit-box",
+              WebkitLineClamp: compact ? 2 : 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {displayTitle}
+          </Motion.div>
+        </Motion.div>
+
+        <AnimatePresence initial={false} mode="popLayout">
+          <Motion.div
+            key={accessoryLabel ? "fact-grid-double" : "fact-grid-single"}
+            layout
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{
+              layout: motion.layout,
+              opacity: motion.fade,
+            }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: accessoryLabel ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
+              gap: 8,
+            }}
+          >
+            <RailFactTile
+              label="Time"
+              value={eventTimeRange(ev)}
+              color="#89b4fa"
+              valueNoWrap
+              valueFontSize={11}
+            />
+            {accessoryLabel ? (
+              <RailFactTile
+                label={location ? "Where" : "People"}
+                value={accessoryLabel}
+              />
+            ) : null}
+          </Motion.div>
+        </AnimatePresence>
+
+        <Motion.div
+          layout
+          transition={motion.layout}
+          style={{
+            marginTop: "auto",
+            paddingTop: compact ? 10 : 12,
+            borderTop: "1px solid rgba(255,255,255,0.04)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {zoomUrl ? (
+              <RailAction
+                icon={Video}
+                label="Join Zoom meeting"
+                href={zoomUrl}
+                accent="#89b4fa"
+                tone="accent"
+              />
+            ) : null}
+            {editable ? (
+              <RailAction
+                icon={Pencil}
+                label="Edit details"
+                onClick={() => onEditEvent?.(ev)}
+                accent="#89b4fa"
+              />
+            ) : null}
+          </div>
+          {calendarUrl ? (
+            <RailAction
+              icon={ExternalLink}
+              label="Open in Google Calendar"
+              href={calendarUrl}
+              accent="#89b4fa"
+              tone={zoomUrl || editable ? "ghost" : "accent"}
+            />
+          ) : null}
+        </Motion.div>
+      </RailHeroCard>
+    </Motion.div>
   );
 }
 
-function toRailItem(ev, index, onSelectEvent) {
-  const editable = isEditableEvent(ev);
-  const zoomUrl = extractZoomMeetingUrl(ev);
+function toRailItem(ev, onSelectItem, selectedItemId) {
   const meta = [
     eventMeta(ev),
     ev.isRecurring ? "Recurring" : null,
     ev.writable === false ? "Read-only" : null,
   ].filter(Boolean).join(" · ");
+  const selectionId = getEventSelectionId(ev);
+  const isSelected = String(selectionId) === String(selectedItemId);
 
   return {
-    id: `${ev.id || ev.htmlLink || ev.title || "event"}-${index}`,
+    id: selectionId,
     timeLabel: ev.allDay ? "All day" : pacificTime(ev.startMs),
-    title: ev.title || "(No title)",
+    title: sanitizeEventDisplayTitle(ev.title),
     subtitle: eventSubtitle(ev),
     meta,
+    selected: isSelected,
     dotColor: ev.color || ev.sourceColor || "#4285f4",
-    onClick: editable ? () => onSelectEvent?.(ev) : undefined,
-    trailing: (
-      <>
-        {renderActionLink({
-          href: zoomUrl,
-          label: "Join Zoom meeting",
-          icon: Video,
-        })}
-        {renderActionLink({
-          href: ev.openUrl || ev.htmlLink,
-          label: "Open in Google Calendar",
-          icon: ExternalLink,
-        })}
-      </>
-    ),
+    onClick: !isSelected && onSelectItem
+        ? () => onSelectItem(selectionId)
+        : undefined,
   };
 }
 
-function renderDetail({ selectedDay, viewYear, viewMonth, items, onSelectEvent }) {
-  const ordered = [...items].sort((a, b) => {
-    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
-    return (a.startMs || 0) - (b.startMs || 0);
-  });
+function renderDetail({
+  selectedDay,
+  viewYear,
+  viewMonth,
+  items,
+  selectedItemId,
+  onSelectItem,
+  onEditEvent,
+}) {
+  const ordered = orderDetailEvents(items);
   const allDayItems = ordered.filter((item) => item.allDay);
   const timedItems = ordered.filter((item) => !item.allDay);
+  const compactDetail = ordered.length >= 3;
+  const selectedEvent = ordered.find((item) => String(getEventSelectionId(item)) === String(selectedItemId))
+    || ordered[0]
+    || null;
+  const compressedSelectedCard = shouldCompressSelectedCard(selectedEvent);
+  const ultraCompactDetail = ordered.length >= 3 || compressedSelectedCard;
+  const effectiveCompactDetail = compactDetail || compressedSelectedCard;
 
   return (
     <TimelineDetailRail
@@ -268,16 +603,32 @@ function renderDetail({ selectedDay, viewYear, viewMonth, items, onSelectEvent }
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
       accent="#89b4fa"
+      headerContent={selectedEvent ? (
+        <EventSelectedCard
+          ev={selectedEvent}
+          onEditEvent={onEditEvent}
+          compact={effectiveCompactDetail}
+          ultraCompact={ultraCompactDetail}
+        />
+      ) : null}
       sections={[
         {
           id: "all-day",
           label: "All day",
-          items: allDayItems.map((item, index) => toRailItem(item, index, onSelectEvent)),
+          items: allDayItems.map((item) => toRailItem(
+            item,
+            onSelectItem,
+            selectedEvent ? getEventSelectionId(selectedEvent) : null,
+          )),
         },
         {
           id: "timed",
           label: "By time",
-          items: timedItems.map((item, index) => toRailItem(item, index, onSelectEvent)),
+          items: timedItems.map((item) => toRailItem(
+            item,
+            onSelectItem,
+            selectedEvent ? getEventSelectionId(selectedEvent) : null,
+          )),
         },
       ]}
     />
@@ -364,6 +715,8 @@ const eventsView = {
   renderFooter,
   HeaderExtras: EventsHeaderExtras,
   icon: CalendarIcon,
+  getDefaultSelectedItemId,
+  getItemId: getEventSelectionId,
   label: "Events",
 };
 

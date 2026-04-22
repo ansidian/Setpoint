@@ -63,7 +63,7 @@ export default function CalendarModalShell({
     : view === "deadlines" && deadlineEditor?.mode
       ? `deadline-editor-${deadlineEditor.mode}-${deadlineEditor.taskId || deadlineEditor.seedDate || "new"}`
       : showDetail
-        ? `detail-${view}-${viewYear}-${viewMonth}-${selectedDay}-${effectiveSelectedItemId || "none"}-${selectedDayState.totalCount}`
+        ? `detail-${view}-${viewYear}-${viewMonth}-${selectedDay}-${selectedDayState.totalCount}`
         : showEmptySelection
           ? `empty-${view}-${viewYear}-${viewMonth}`
           : `summary-${view}-${viewYear}-${viewMonth}`;
@@ -179,12 +179,12 @@ export default function CalendarModalShell({
                     items: selectedItems,
                     data: viewData,
                     computed,
-                    onSelectEvent: eventEditor.openEdit,
                     selectedItemId: effectiveSelectedItemId,
                     onSelectItem: (itemId) => {
                       setSelectedItemId(String(itemId));
                       setDeadlineEditor(null);
                     },
+                    onEditEvent: eventEditor.openEdit,
                     editorState: deadlineEditor,
                     onStartEdit: (task) => {
                       setSelectedItemId(String(task.id));

@@ -476,7 +476,7 @@ describe("CalendarModal responsive layout", () => {
       },
       expectedText: "Project due",
     },
-  ])("renders a non-scroll detail rail for $view", async ({
+  ])("renders a locally scrollable detail rail for $view", async ({
     view,
     eventsData,
     billsData,
@@ -499,9 +499,12 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     const detailRail = await screen.findByTestId("timeline-detail-rail");
+    const detailSections = await screen.findByTestId("timeline-detail-sections");
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
     expect(within(detailRail).getAllByText(expectedText).length).toBeGreaterThan(0);
     expect(detailRail.style.overflow).toBe("hidden");
+    expect(detailSections.getAttribute("data-calendar-local-scroll")).toBe("true");
+    expect(detailSections.style.overflowY).toBe("auto");
   });
 
   it("swaps the rail cleanly between empty and detail states", async () => {
@@ -540,7 +543,7 @@ describe("CalendarModal responsive layout", () => {
 
     await waitFor(() => {
       expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
-      expect(within(rail).getByText("Design review")).toBeTruthy();
+      expect(within(rail).getAllByText("Design review").length).toBeGreaterThan(0);
       expect(within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
     });
 
@@ -549,6 +552,72 @@ describe("CalendarModal responsive layout", () => {
     await waitFor(() => {
       expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
       expect(screen.getByText(/nothing is scheduled here/i)).toBeTruthy();
+    });
+  });
+
+  it("preserves detail-list scroll position when selecting another event in the same day", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-22"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Work",
+              startMs: new Date("2026-04-22T11:15:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T15:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#cba6da",
+              writable: true,
+            },
+            {
+              id: "event-2",
+              title: "Poster deadline",
+              startMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#f9e2af",
+            },
+            {
+              id: "event-3",
+              title: "Assignment block",
+              startMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T20:30:00.000Z").getTime(),
+              allDay: false,
+              color: "#f38ba8",
+            },
+            {
+              id: "event-4",
+              title: "Late workshop",
+              startMs: new Date("2026-04-22T23:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-23T00:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#89b4fa",
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const detailSections = await screen.findByTestId("timeline-detail-sections");
+    const initialRailContent = getLatestRailContent();
+    const rows = within(detailSections).getAllByTestId("timeline-detail-row");
+
+    detailSections.scrollTop = 180;
+    fireEvent.click(rows[3]);
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-modal-rail")).getAllByText("Late workshop").length).toBeGreaterThan(0);
+      expect(getLatestRailContent()).toBe(initialRailContent);
+      expect(detailSections.scrollTop).toBe(180);
     });
   });
 

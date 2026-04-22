@@ -1,7 +1,16 @@
-import { useCallback, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays, ChevronDown } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
-import { WEEKDAY_OPTIONS, formatMonthDay, formatRecurrenceSummary } from "./calendarEditorUtils";
+import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
+import { PickerFieldButton } from "./CalendarEditorControls";
+import {
+  ACCENT,
+  WEEKDAY_OPTIONS,
+  formatDateLabel,
+  formatMonthDay,
+  formatRecurrenceSummary,
+  toPacificYmd,
+} from "./calendarEditorUtils";
 
 const FREQUENCY_OPTIONS = [
   { value: "daily", label: "Daily" },
@@ -17,6 +26,8 @@ const ENDS_OPTIONS = [
 ];
 
 const SELECT_PANEL_WIDTH = 180;
+const DATE_PICKER_WIDTH = 300;
+const DATE_PICKER_HEIGHT = 386;
 
 function fieldLabelStyle() {
   return {
@@ -195,6 +206,74 @@ function InlineInput({ type, value, testId, disabled, onChange, min, step }) {
   );
 }
 
+function RecurrenceUntilDatePicker({ value, startDate, disabled, onChange, testId }) {
+  const [open, setOpen] = useState(false);
+  const [nowTick] = useState(() => Date.now());
+  const anchorRef = useRef(null);
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+    }
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!disabled) return;
+    setOpen(false);
+  }, [disabled]);
+
+  return (
+    <>
+      <PickerFieldButton
+        anchorRef={anchorRef}
+        icon={CalendarDays}
+        value={value ? formatDateLabel(value) : ""}
+        placeholder="Choose date"
+        dataTestId={testId}
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        disabled={disabled}
+        trailingLabel=""
+      />
+      {open ? (
+        <AnchoredFloatingPanel
+          anchorRef={anchorRef}
+          panelRef={panelRef}
+          onClose={() => setOpen(false)}
+          width={DATE_PICKER_WIDTH}
+          height={DATE_PICKER_HEIGHT}
+          role="dialog"
+          ariaLabel="Recurrence end date picker"
+          style={{ overflow: "hidden", padding: 8, zIndex: 10001 }}
+        >
+          <CalendarDateTimeView
+            nowTick={nowTick}
+            initialEpoch={new Date(`${value || startDate || "2026-01-01"}T12:00:00Z`).getTime()}
+            onSelect={(epoch) => {
+              onChange(toPacificYmd(epoch));
+              setOpen(false);
+            }}
+            onBack={() => setOpen(false)}
+            accent={ACCENT}
+            confirmLabel="Set recurrence end date"
+            mode="date-only"
+            allowPastDates
+            submitOnDateSelect
+          />
+        </AnchoredFloatingPanel>
+      ) : null}
+    </>
+  );
+}
+
 export default function CalendarRecurrenceSection({
   recurrenceDraft,
   startDate,
@@ -309,9 +388,9 @@ export default function CalendarRecurrenceSection({
         {recurrenceDraft.ends?.type === "onDate" ? (
           <div>
             <div style={fieldLabelStyle()}>Until</div>
-            <InlineInput
-              type="date"
+            <RecurrenceUntilDatePicker
               value={recurrenceDraft.ends?.untilDate || ""}
+              startDate={startDate}
               testId="calendar-recurrence-until-date"
               disabled={disabled}
               onChange={(value) => onUpdateRecurrence("untilDate", value)}

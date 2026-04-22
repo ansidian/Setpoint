@@ -188,7 +188,7 @@ export default function CalendarModal({
     if (!open) return undefined;
     function handleClick(event) {
       if (suppressOutsideClickRef.current?.(event.target)) return;
-      if (event.target.closest?.('[role="menu"], [role="dialog"]')) return;
+      if (event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]')) return;
       if (panelRef.current && !panelRef.current.contains(event.target)) {
         onClose();
       }
@@ -209,6 +209,18 @@ export default function CalendarModal({
     const element = scrollRef.current;
     if (!element || !open) return undefined;
     function onWheel(event) {
+      const localScrollElement = event.target instanceof HTMLElement
+        ? event.target.closest("[data-calendar-local-scroll='true']")
+        : null;
+      if (localScrollElement && localScrollElement !== element) {
+        const localMaxScroll = localScrollElement.scrollHeight - localScrollElement.clientHeight;
+        if (localMaxScroll > 0) {
+          const localAtTop = localScrollElement.scrollTop <= 0 && event.deltaY < 0;
+          const localAtBottom = localScrollElement.scrollTop >= localMaxScroll && event.deltaY > 0;
+          if (!localAtTop && !localAtBottom) return;
+        }
+      }
+
       const { scrollTop, scrollHeight, clientHeight } = element;
       const maxScroll = scrollHeight - clientHeight;
       if (maxScroll <= 0) {
@@ -338,16 +350,21 @@ export default function CalendarModal({
     ? (activeView.getDayState?.(itemsByDay[selectedDay]) ?? buildFallbackDayState(itemsByDay[selectedDay]))
     : buildFallbackDayState([]);
   const selectedItems = activeView.getDayState ? selectedDayState : selectedDayState.items;
-  const effectiveSelectedItemId = view === "deadlines"
-    ? (() => {
-        if (selectedDay == null || selectedDayState.totalCount === 0) return null;
-        const combinedItems = [...selectedDayState.activeItems, ...selectedDayState.completedItems];
-        const hasSelectedItem = combinedItems.some((item) => String(item.id) === String(selectedItemId));
-        if (hasSelectedItem) return String(selectedItemId);
-        const fallbackId = activeView.getDefaultSelectedItemId?.(selectedDayState);
-        return fallbackId ? String(fallbackId) : null;
-      })()
-    : selectedItemId;
+  const effectiveSelectedItemId = (() => {
+    if (selectedDay == null || selectedDayState.totalCount === 0) return null;
+    if (!activeView.getDefaultSelectedItemId) return selectedItemId;
+
+    const pool = view === "deadlines"
+      ? [...selectedDayState.activeItems, ...selectedDayState.completedItems]
+      : Array.isArray(selectedItems)
+        ? selectedItems
+        : selectedDayState.items || [];
+    const resolveItemId = activeView.getItemId || ((item) => item?.id);
+    const hasSelectedItem = pool.some((item) => String(resolveItemId(item)) === String(selectedItemId));
+    if (hasSelectedItem) return String(selectedItemId);
+    const fallbackId = activeView.getDefaultSelectedItemId(selectedDayState);
+    return fallbackId ? String(fallbackId) : null;
+  })();
   const hasSelectedDay = selectedDay != null;
   const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
   const showDetail = view === "deadlines"
