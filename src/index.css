@@ -200,6 +200,27 @@ body {
 @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 8px rgba(166,227,161,0.1); } 50% { box-shadow: 0 0 16px rgba(166,227,161,0.25); } }
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes briefingStatusMarquee {
+  0%, 12% { transform: translateX(0); }
+  45%, 55% { transform: translateX(var(--briefing-scroll-distance, 0)); }
+  88%, 100% { transform: translateX(0); }
+}
+
+.briefing-status-scroll {
+  animation: briefingStatusMarquee var(--briefing-scroll-duration, 10s) ease-in-out 1.2s infinite;
+  will-change: transform;
+}
+
+.briefing-status-scroll:hover,
+.briefing-status-scroll:focus-visible {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .briefing-status-scroll {
+    animation: none;
+  }
+}
 
 /* Clickable summary badges */
 .badge-clickable:hover {

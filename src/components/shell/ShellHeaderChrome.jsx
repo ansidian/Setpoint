@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sparkles,
   LayoutList,
@@ -183,6 +183,72 @@ export function PaletteTriggerButton({ onOpenPalette }) {
   );
 }
 
+function OverflowMarquee({ children, style, className }) {
+  const containerRef = useRef(null);
+  const contentRef = useRef(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return undefined;
+
+    const measure = () => {
+      const nextOverflow = Math.max(0, Math.ceil(content.scrollWidth - container.clientWidth));
+      setOverflowPx(nextOverflow > 6 ? nextOverflow : 0);
+    };
+
+    measure();
+
+    const observer = typeof ResizeObserver === "function"
+      ? new ResizeObserver(measure)
+      : null;
+
+    observer?.observe(container);
+    observer?.observe(content);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [children]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        flex: "1 1 auto",
+        minWidth: 0,
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        ...style,
+      }}
+    >
+      <div
+        ref={contentRef}
+        className={overflowPx ? ["briefing-status-scroll", className].filter(Boolean).join(" ") : className}
+        style={{
+          display: "inline-block",
+          minWidth: overflowPx ? "max-content" : "100%",
+          textOverflow: overflowPx ? "clip" : "ellipsis",
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+          fontSize: 12,
+          fontWeight: 600,
+          color: "rgba(245,247,255,0.92)",
+          letterSpacing: 0.1,
+          lineHeight: 1.25,
+          "--briefing-scroll-distance": `-${overflowPx}px`,
+          "--briefing-scroll-duration": `${Math.max(8, overflowPx / 18)}s`,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function BriefingStatusPill({ accent, briefingStatus }) {
   if (!briefingStatus) return null;
 
@@ -198,7 +264,7 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 10,
+        gap: 8,
         minWidth: 0,
         maxWidth: 460,
         padding: "4px 12px",
@@ -213,8 +279,9 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 8,
-          flexShrink: 0,
+          gap: 10,
+          flex: "1 1 auto",
+          minWidth: 0,
         }}
       >
         <span
@@ -227,65 +294,25 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
             flexShrink: 0,
           }}
         />
-        <span
-          style={{
-            fontSize: 9.5,
-            fontWeight: 700,
-            letterSpacing: 1.6,
-            textTransform: "uppercase",
-            color: toneColor,
-          }}
-        >
-          {briefingStatus.label}
-        </span>
-      </div>
-      <div
-        style={{
-          width: 1,
-          alignSelf: "stretch",
-          background: "rgba(255,255,255,0.08)",
-          flexShrink: 0,
-        }}
-      />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 8,
-          minWidth: 0,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: 12,
-            fontWeight: 600,
-            color: "rgba(245,247,255,0.92)",
-            letterSpacing: 0.1,
-            lineHeight: 1.25,
-          }}
-        >
+        <OverflowMarquee>
           {briefingStatus.headline}
-        </div>
+        </OverflowMarquee>
         {briefingStatus.detail ? (
-          <div
-            style={{
-              minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+          <OverflowMarquee
+            style={{ flex: "0 1 180px" }}
+            className="briefing-status-detail"
+          >
+            <span
+              style={{
               fontSize: 10.5,
               color: "rgba(205,214,244,0.58)",
               lineHeight: 1.35,
               letterSpacing: 0.1,
             }}
-          >
-            {briefingStatus.detail}
-          </div>
+            >
+              {briefingStatus.detail}
+            </span>
+          </OverflowMarquee>
         ) : null}
       </div>
     </div>
