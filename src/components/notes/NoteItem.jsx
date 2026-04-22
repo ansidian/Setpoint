@@ -15,7 +15,7 @@ export default function NoteItem({ note, accent, onUpdate, onDelete }) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: note.id });
+  } = useSortable({ id: note.id, disabled: editing });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -65,9 +65,17 @@ export default function NoteItem({ note, accent, onUpdate, onDelete }) {
     e.target.style.height = e.target.scrollHeight + "px";
   };
 
+  const handlePointerDownCapture = useCallback((event) => {
+    const interactive = event.target.closest("a, button, textarea, input");
+    if (interactive) event.stopPropagation();
+  }, []);
+
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onPointerDownCapture={handlePointerDownCapture}
       style={{
         ...style,
         display: "flex",
@@ -80,6 +88,7 @@ export default function NoteItem({ note, accent, onUpdate, onDelete }) {
           : "1px solid rgba(255,255,255, 0.04)",
         borderRadius: 8,
         position: "relative",
+        cursor: editing ? "text" : isDragging ? "grabbing" : "grab",
       }}
       className="group"
     >
@@ -91,14 +100,11 @@ export default function NoteItem({ note, accent, onUpdate, onDelete }) {
 
       {/* Drag handle */}
       <div
-        {...attributes}
-        {...listeners}
         style={{
           color: "rgba(255,255,255, 0.15)",
           fontSize: 11,
           paddingTop: 1,
           flexShrink: 0,
-          cursor: isDragging ? "grabbing" : "grab",
           position: "relative",
           lineHeight: 1.5,
         }}
