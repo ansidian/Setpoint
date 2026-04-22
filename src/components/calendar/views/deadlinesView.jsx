@@ -267,7 +267,7 @@ function renderCellContents({ items }) {
   );
 }
 
-function ActionButton({ icon, label, onClick, accent, variant = "default" }) {
+function ActionButton({ icon, label, onClick, accent, variant = "default", disabled = false, loading = false }) {
   const [hovered, setHovered] = useState(false);
   const IconComponent = icon;
   const isPrimary = variant === "primary";
@@ -311,6 +311,7 @@ function ActionButton({ icon, label, onClick, accent, variant = "default" }) {
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -322,17 +323,32 @@ function ActionButton({ icon, label, onClick, accent, variant = "default" }) {
         fontSize: 11,
         fontWeight: 600,
         fontFamily: "inherit",
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
         background: hovered ? hoverBackground : background,
         border: hovered ? `1px solid ${hoverBorder}` : border,
         color,
+        opacity: disabled ? 0.58 : 1,
         whiteSpace: "nowrap",
-        transform: hovered && !isAccent ? "translateY(-1px)" : "translateY(0)",
+        transform: hovered && !isAccent && !disabled ? "translateY(-1px)" : "translateY(0)",
         boxShadow: hovered ? hoverShadow : "none",
         transition: "background 140ms, border-color 140ms, transform 140ms, box-shadow 140ms",
       }}
     >
-      <IconComponent size={11} />
+      {loading ? (
+        <span
+          aria-hidden
+          style={{
+            width: 11,
+            height: 11,
+            borderRadius: "50%",
+            border: "1.5px solid currentColor",
+            borderTopColor: "transparent",
+            animation: "spin 700ms linear infinite",
+          }}
+        />
+      ) : (
+        <IconComponent size={11} />
+      )}
       <span>{label}</span>
     </button>
   );
@@ -399,6 +415,7 @@ function DetailCard({ task, accent, onEdit, onComplete, onStatusChange }) {
   const sourceColor = SOURCE_COLORS[source] || accent;
   const isTodoist = source === "todoist";
   const normalizedStatus = normalizeStatus(task.status);
+  const isCompleting = !!task._completing;
   const ctmUrl = `https://ctm.andysu.tech/#/event/${task.id}`;
   const dueDays = daysUntil(task.due_date);
   const urgency = urgencyForDays(dueDays, accent);
@@ -505,9 +522,11 @@ function DetailCard({ task, accent, onEdit, onComplete, onStatusChange }) {
             {normalizedStatus !== "complete" && (
               <ActionButton
                 icon={Check}
-                label="Mark complete"
+                label={isCompleting ? "Completing..." : "Mark complete"}
                 variant="primary"
                 accent={accent}
+                disabled={isCompleting}
+                loading={isCompleting}
                 onClick={() => onComplete(task.id)}
               />
             )}
@@ -515,6 +534,7 @@ function DetailCard({ task, accent, onEdit, onComplete, onStatusChange }) {
               icon={Pencil}
               label="Edit"
               accent={accent}
+              disabled={isCompleting}
               onClick={() => onEdit(task)}
             />
             {task.url && (
@@ -523,6 +543,7 @@ function DetailCard({ task, accent, onEdit, onComplete, onStatusChange }) {
                 label="Open in Todoist"
                 variant="accent"
                 accent={accent}
+                disabled={isCompleting}
                 onClick={() => openInNewTab(task.url)}
               />
             )}

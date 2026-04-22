@@ -15,6 +15,7 @@ import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
 } from "../briefing/bill-extractors/catalog.js";
+import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 
 const router = Router();
 
@@ -111,7 +112,7 @@ router.get("/accounts", async (req, res) => {
       sql: "SELECT id, type, email, label, color, icon, calendar_enabled, sort_order, created_at FROM ea_accounts WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC",
       args: [userId],
     });
-    res.json(result.rows);
+    res.json(canonicalizeConfiguredAccounts(result.rows));
   } catch (err) {
     console.error("Error listing accounts:", err);
     res.status(500).json({ message: "Failed to list accounts" });

@@ -29,6 +29,7 @@ import useIsMobile from "../hooks/useIsMobile";
 import useBrowserBackDismiss from "../hooks/useBrowserBackDismiss";
 import { focusPressureDate } from "../lib/focus-windows";
 import { mergeReadState } from "../components/inbox/helpers";
+import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 
@@ -145,19 +146,23 @@ export default function Dashboard() {
   }
   if (!bd.briefing) {
     return (
-      <div className="min-h-screen text-foreground font-sans flex flex-col items-center justify-center gap-4 p-6">
-        <Sun size={48} className="text-[#f9e2af]" />
-        <h1 className="ea-display text-[28px] font-normal text-[#f8fafc] m-0">
-          No briefings yet
-        </h1>
-        <p className="text-sm text-muted-foreground m-0 text-center max-w-[400px]">
-          Connect your email accounts in Settings, then generate your first briefing.
-        </p>
-        <div className="flex gap-3 mt-2">
-          <Button onClick={handleFullGeneration}>Generate First Briefing</Button>
-          <Button variant="outline" asChild><Link to="/settings">Settings</Link></Button>
+      <div className="min-h-screen text-foreground font-sans flex items-center justify-center p-6">
+        <div className="w-full max-w-[880px]">
+          <EmptyStateSplash
+            icon={<Sun size={46} className="text-[#f9e2af]" />}
+            eyebrow="Briefings"
+            title="No briefings yet"
+            message="Connect the inboxes and services that feed the dashboard, then generate the first briefing to seed the workspace."
+            actions={(
+              <>
+                <Button onClick={handleFullGeneration}>Generate First Briefing</Button>
+                <Button variant="outline" asChild><Link to="/settings">Settings</Link></Button>
+              </>
+            )}
+            minHeight={360}
+          />
+          {bd.generating && <div className="mt-4"><RefreshBanner progress={bd.genProgress} /></div>}
         </div>
-        {bd.generating && <div className="mt-4"><RefreshBanner progress={bd.genProgress} /></div>}
       </div>
     );
   }
@@ -234,6 +239,12 @@ export function RedesignShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [liveReadOverrides, setLiveReadOverrides] = useState({});
+  const [inboxSession, setInboxSession] = useState({
+    accountId: "__all",
+    lane: "__all",
+    search: "",
+    selectedId: null,
+  });
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarView, setCalendarView] = useState(() => {
@@ -302,9 +313,13 @@ export function RedesignShell({
   }, [setShellTab]);
 
   // Email click anywhere → switch to inbox and let its state handle selection.
-  const [inboxSeedId, setInboxSeedId] = useState(null);
   const openEmailInInbox = useCallback((id) => {
-    setInboxSeedId(id);
+    if (id) {
+      setInboxSession((prev) => ({
+        ...prev,
+        selectedId: id,
+      }));
+    }
     setShellTab("inbox");
   }, [setShellTab]);
 
@@ -345,7 +360,47 @@ export function RedesignShell({
     isMock,
   ]);
 
-  const nextBriefingLabel = formatNextBriefingLabel(bd.schedules);
+  const [briefingStatusNow, setBriefingStatusNow] = useState(() => Date.now());
+  const [briefingNoticeUntil, setBriefingNoticeUntil] = useState(0);
+  const statusInitRef = useRef(false);
+  const prevLatestIdRef = useRef(bd.latestId);
+  const prevRefreshAtRef = useRef(bd.lastQuickRefreshAt);
+
+  useEffect(() => {
+    const id = setInterval(() => setBriefingStatusNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!statusInitRef.current) {
+      statusInitRef.current = true;
+      prevLatestIdRef.current = bd.latestId;
+      prevRefreshAtRef.current = bd.lastQuickRefreshAt;
+      return;
+    }
+
+    const latestChanged = bd.latestId && prevLatestIdRef.current && prevLatestIdRef.current !== bd.latestId;
+    const quickRefreshChanged = bd.lastQuickRefreshAt && prevRefreshAtRef.current !== bd.lastQuickRefreshAt;
+    if (latestChanged || quickRefreshChanged) {
+      setBriefingNoticeUntil(Date.now() + 45_000);
+    }
+    prevLatestIdRef.current = bd.latestId;
+    prevRefreshAtRef.current = bd.lastQuickRefreshAt;
+  }, [bd.latestId, bd.lastQuickRefreshAt]);
+
+  const nextBriefing = useMemo(
+    () => getNextBriefingSchedule(bd.schedules, briefingStatusNow),
+    [bd.schedules, briefingStatusNow],
+  );
+  const briefingStatus = useMemo(
+    () => buildBriefingStatus({
+      briefing,
+      nextBriefing,
+      nowMs: briefingStatusNow,
+      noticeActive: briefingNoticeUntil > briefingStatusNow,
+    }),
+    [briefing, nextBriefing, briefingNoticeUntil, briefingStatusNow],
+  );
 
   useEffect(() => {
     const activeUids = new Set();
@@ -418,7 +473,7 @@ export function RedesignShell({
         onOpenCustomize={() => setCustomizeOpen((v) => !v)}
         onOpenHistory={() => setHistoryOpen((v) => !v)}
         onOpenCalendar={() => openCalendar()}
-        nextBriefingLabel={nextBriefingLabel}
+        briefingStatus={briefingStatus}
         liveUnreadCount={liveUnreadCount}
         refreshHold={refreshHold}
         refreshing={bd.refreshing}
@@ -474,7 +529,8 @@ export function RedesignShell({
             resurfacedEntries={liveData.resurfacedEntries}
             onOpenDashboard={() => setShellTab("dashboard")}
             onRefresh={onQuickRefresh}
-            seedSelectedId={inboxSeedId}
+            sessionState={inboxSession}
+            onSessionStateChange={setInboxSession}
             isMobile={isMobile}
           />
         )}
@@ -782,22 +838,117 @@ export function DashboardBody({
   );
 }
 
-function formatNextBriefingLabel(schedules) {
+function parseScheduleClock(schedule) {
+  if (typeof schedule?.time === "string" && /^\d{2}:\d{2}$/.test(schedule.time)) {
+    const [hour, minute] = schedule.time.split(":").map(Number);
+    return { hour, minute };
+  }
+  if (schedule?.hour != null) {
+    return { hour: Number(schedule.hour), minute: Number(schedule.minute ?? 0) };
+  }
+  return null;
+}
+
+function formatRelativeWindow(targetMs, nowMs) {
+  const diffMs = Math.max(0, targetMs - nowMs);
+  const totalMinutes = Math.round(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `in ${minutes}m`;
+  if (minutes === 0) return `in ${hours}h`;
+  return `in ${hours}h ${minutes}m`;
+}
+
+function formatClockTime(date, timeZone = "America/Los_Angeles") {
+  return date.toLocaleTimeString("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getNextBriefingSchedule(schedules, nowMs = Date.now()) {
   if (!Array.isArray(schedules) || schedules.length === 0) return null;
-  const now = new Date();
+  const now = new Date(nowMs);
   const upcoming = schedules
-    .filter((s) => s.enabled !== false && s.hour != null)
-    .map((s) => {
+    .filter((schedule) => schedule?.enabled !== false)
+    .map((schedule) => {
+      const clock = parseScheduleClock(schedule);
+      if (!clock) return null;
       const next = new Date(now);
-      next.setHours(s.hour, s.minute ?? 0, 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      return { s, ms: next.getTime() };
+      next.setHours(clock.hour, clock.minute, 0, 0);
+      if (next.getTime() <= nowMs) next.setDate(next.getDate() + 1);
+      return {
+        schedule,
+        nextMs: next.getTime(),
+        label: schedule.label || "Scheduled briefing",
+        timeLabel: formatClockTime(next, schedule.tz || "America/Los_Angeles"),
+      };
     })
-    .sort((a, b) => a.ms - b.ms);
-  if (upcoming.length === 0) return null;
-  const diffMs = upcoming[0].ms - now.getTime();
-  const h = Math.floor(diffMs / 3600000);
-  const m = Math.round((diffMs % 3600000) / 60000);
-  const label = h <= 0 ? `${m}m` : `${h}h ${m}m`;
-  return `Next briefing · ${label}`;
+    .filter(Boolean)
+    .sort((a, b) => a.nextMs - b.nextMs);
+
+  if (!upcoming.length) return null;
+  const next = upcoming[0];
+  return {
+    ...next,
+    relativeLabel: formatRelativeWindow(next.nextMs, nowMs),
+  };
+}
+
+function formatAgoLabel(iso, nowMs = Date.now()) {
+  if (!iso) return null;
+  const dt = new Date(iso);
+  const diffMs = Math.max(0, nowMs - dt.getTime());
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
+  if (!briefing) return nextBriefing ? {
+    label: "Schedule",
+    headline: `${nextBriefing.label} ${nextBriefing.relativeLabel}`,
+    detail: `${nextBriefing.timeLabel}`,
+    toneColor: "#89b4fa",
+  } : null;
+
+  const dataUpdatedAt = briefing.dataUpdatedAt || briefing.aiGeneratedAt || null;
+  const updatedLabel = formatAgoLabel(dataUpdatedAt, nowMs);
+  const aiLabel = formatAgoLabel(briefing.aiGeneratedAt, nowMs);
+  const quietRefreshes = briefing.skippedAI ? Math.max(1, briefing.nonAiGenerationCount || 1) : 0;
+
+  const nextLine = nextBriefing
+    ? `Next ${nextBriefing.label} at ${nextBriefing.timeLabel} (${nextBriefing.relativeLabel})`
+    : "No schedules enabled";
+
+  if (noticeActive) {
+    return {
+      label: "Briefing updated",
+      headline: "Briefing updated just now",
+      detail: `${nextLine}${briefing.skippedAI && aiLabel ? ` · AI source ${aiLabel}` : ""}`,
+      toneColor: "#a6e3a1",
+    };
+  }
+
+  if (briefing.skippedAI) {
+    const quietLabel = quietRefreshes > 1 ? `Quiet refresh · ${quietRefreshes} cloned updates` : "Quiet refresh";
+    return {
+      label: "Latest briefing",
+      headline: aiLabel ? `${quietLabel} · Claude source ${aiLabel}` : quietLabel,
+      detail: `${updatedLabel ? `Updated ${updatedLabel} · ` : ""}${nextLine}`,
+      toneColor: "#89b4fa",
+    };
+  }
+
+  return {
+    label: "Latest briefing",
+    headline: aiLabel ? `Claude refreshed ${aiLabel}` : "Claude refreshed this briefing",
+    detail: `${updatedLabel ? `Updated ${updatedLabel} · ` : ""}${nextLine}`,
+    toneColor: "#cba6da",
+  };
 }

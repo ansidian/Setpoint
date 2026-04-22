@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  BriefingStatusPill,
   ConfirmGenerateToast,
-  NextBriefingPill,
   OverflowMenu,
   PaletteTriggerButton,
   RefreshButton,
@@ -23,7 +23,7 @@ export default function ShellHeader({
   onOpenCustomize,
   onOpenHistory,
   onOpenCalendar,
-  nextBriefingLabel,
+  briefingStatus,
   liveUnreadCount = 0,
   refreshHold,
   refreshing,
@@ -88,7 +88,7 @@ export default function ShellHeader({
       <div style={{ flex: 1 }} />
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
       {!isMobile && (
-        <NextBriefingPill accent={accent} nextBriefingLabel={nextBriefingLabel} />
+        <BriefingStatusPill accent={accent} briefingStatus={briefingStatus} />
       )}
       <RefreshButton
         accent={accent}

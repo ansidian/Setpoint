@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, Mail } from "lucide-react";
 import { Kbd } from "../primitives";
+import EmptyStateSplash from "../../shared/EmptyStateSplash";
 
 export function MobileSection({ title, accent, open, onToggle, children, testId }) {
   return (
@@ -58,20 +59,26 @@ export function ReaderEmptyState() {
     <div
       style={{
         flex: 1,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 10,
-        color: "rgba(205,214,244,0.35)",
         background: "rgba(22,22,30,0.5)",
+        padding: 20,
       }}
     >
-      <Mail size={32} color="rgba(205,214,244,0.15)" />
-      <div style={{ fontSize: 12 }}>Select an email</div>
-      <div style={{ fontSize: 10, color: "rgba(205,214,244,0.3)" }}>
-        <Kbd>J</Kbd> <Kbd>K</Kbd> to navigate
-      </div>
+      <EmptyStateSplash
+        icon={<Mail size={34} strokeWidth={1.8} />}
+        eyebrow="Inbox reader"
+        title="Select an email"
+        message={(
+          <>
+            Open a thread to keep context visible while you work.
+            <span style={{ display: "block", marginTop: 8, fontSize: 11, color: "rgba(205,214,244,0.44)" }}>
+              <Kbd>J</Kbd> <Kbd>K</Kbd> to move through the list.
+            </span>
+          </>
+        )}
+        compact
+        minHeight={260}
+        align="start"
+      />
     </div>
   );
 }

@@ -31,18 +31,19 @@ export default function useInboxController({
   pinnedSnapshots = [],
   snoozedEntries = [],
   resurfacedEntries = [],
-  seedSelectedId,
   customize,
   isMobile = false,
   briefingGeneratedAt,
+  sessionState,
+  onSessionStateChange = () => {},
 }) {
-  const [accountId, setAccountId] = useState("__all");
-  const [lane, setLane] = useState("__all");
-  const [search, setSearch] = useState("");
+  const accountId = sessionState?.accountId || "__all";
+  const lane = sessionState?.lane || "__all";
+  const search = sessionState?.search || "";
   const searchRef = useRef(null);
   const mobileFilterTriggerRef = useRef(null);
   const mobileFilterPanelRef = useRef(null);
-  const [selectedId, setSelectedId] = useState(seedSelectedId || null);
+  const selectedId = sessionState?.selectedId || null;
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [pinnedSet, setPinnedSet] = useState(() => new Set(pinnedIds || []));
   const [pinnedSnapshotMap, setPinnedSnapshotMap] = useState(
@@ -57,6 +58,34 @@ export default function useInboxController({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [liveTrashedUids, setLiveTrashedUids] = useState(() => new Set());
   const [billOpen, setBillOpen] = useState(false);
+
+  const setSessionField = useCallback((field, value) => {
+    onSessionStateChange((prev) => ({
+      accountId: prev?.accountId || "__all",
+      lane: prev?.lane || "__all",
+      search: prev?.search || "",
+      selectedId: prev?.selectedId || null,
+      ...prev,
+      [field]: typeof value === "function" ? value(prev?.[field] ?? null) : value,
+    }));
+  }, [onSessionStateChange]);
+
+  const setAccountId = useCallback((value) => {
+    setSessionField("accountId", value);
+  }, [setSessionField]);
+
+  const setLane = useCallback((value) => {
+    setSessionField("lane", value);
+  }, [setSessionField]);
+
+  const setSearch = useCallback((value) => {
+    setSessionField("search", value);
+  }, [setSessionField]);
+
+  const setSelectedId = useCallback((value) => {
+    setSessionField("selectedId", value);
+  }, [setSessionField]);
+
   const { markEmailRead, markEmailUnread, handleDismiss } = useDashboard();
   const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId });
 
@@ -64,11 +93,6 @@ export default function useInboxController({
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (seedSelectedId) setSelectedId(seedSelectedId);
-  }, [seedSelectedId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -214,6 +238,12 @@ export default function useInboxController({
   }, [selectedId, flatEmails]);
 
   useEffect(() => {
+    if (!selectedId) return;
+    if (selectedEmail) return;
+    setSelectedId(null);
+  }, [selectedEmail, selectedId, setSelectedId]);
+
+  useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBillOpen(false);
   }, [selectedId]);
@@ -251,7 +281,7 @@ export default function useInboxController({
     const nextIndex = Math.max(0, Math.min(visibleEmails.length - 1, index + direction));
     const next = visibleEmails[nextIndex];
     if (next) setSelectedId(next.id || next.uid);
-  }, [visibleEmails, selectedId]);
+  }, [visibleEmails, selectedId, setSelectedId]);
 
   const buildEmailSnapshot = useCallback((email) => {
     if (!email) return null;

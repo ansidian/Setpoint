@@ -11,6 +11,7 @@ import { getCategories, getUpcomingBills } from "./actual.js";
 import { embedAndStore, getContextForBriefing, isEmbeddingAvailable } from "../embeddings/index.js";
 import { indexEmails, isIndexEmpty } from "./email-index.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";
+import { canonicalizeConfiguredAccounts } from "./account-canonical.js";
 
 // Shared: load accounts + settings, return them
 export async function loadUserConfig(userId) {
@@ -18,7 +19,7 @@ export async function loadUserConfig(userId) {
     sql: "SELECT * FROM ea_accounts WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC",
     args: [userId],
   });
-  const accounts = accountsResult.rows;
+  const accounts = canonicalizeConfiguredAccounts(accountsResult.rows);
 
   const settingsResult = await db.execute({
     sql: "SELECT * FROM ea_settings WHERE user_id = ?",

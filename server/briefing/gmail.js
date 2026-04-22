@@ -1,6 +1,7 @@
 import db from "../db/connection.js";
 import { encrypt, decrypt } from "./encryption.js";
 import { htmlToPlainText } from "./html-to-text.js";
+import { findCanonicalGmailAccount, normalizeEmailAddress } from "./account-canonical.js";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -29,7 +30,7 @@ export function getAuthUrl(state) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-export async function handleCallback(code, accountId, userId) {
+export async function handleCallback(code, _accountId, userId) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -63,14 +64,21 @@ export async function handleCallback(code, accountId, userId) {
   const profile = await profileRes.json();
   const email = profile.emailAddress;
 
-  // Use email-based ID so multiple Gmail accounts each get their own row
-  const emailBasedId = `gmail-${email}`;
-
-  const maxSort = await db.execute({
-    sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM ea_accounts WHERE user_id = ?",
+  const existingAccounts = await db.execute({
+    sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail' ORDER BY sort_order ASC, created_at ASC",
     args: [userId],
   });
-  const nextSort = maxSort.rows[0].next;
+  const canonical = findCanonicalGmailAccount(existingAccounts.rows, email);
+  const targetAccountId = canonical?.id || `gmail-${normalizeEmailAddress(email)}`;
+
+  let nextSort = canonical?.sort_order;
+  if (nextSort == null) {
+    const maxSort = await db.execute({
+      sql: "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM ea_accounts WHERE user_id = ?",
+      args: [userId],
+    });
+    nextSort = maxSort.rows[0].next;
+  }
 
   await db.execute({
     sql: `INSERT INTO ea_accounts (id, user_id, type, email, label, credentials_encrypted, sort_order)
@@ -80,20 +88,21 @@ export async function handleCallback(code, accountId, userId) {
             email = excluded.email,
             updated_at = datetime('now')`,
     args: [
-      emailBasedId,
+      targetAccountId,
       userId,
       email,
-      email, // label defaults to email, user can rename later
+      canonical?.label || email,
       encrypt(JSON.stringify(credentials)),
       nextSort,
     ],
   });
 
-  return { email, accountId: emailBasedId };
+  return { email, accountId: targetAccountId };
 }
 
 async function getValidToken(account) {
   const credentials = JSON.parse(decrypt(account.credentials_encrypted));
+  const canonicalAccountId = account.canonical_id || account.id;
 
   // Refresh if token expires within 5 minutes
   if (credentials.expires_at < Date.now() + 5 * 60 * 1000) {
@@ -122,7 +131,7 @@ async function getValidToken(account) {
 
     await db.execute({
       sql: `UPDATE ea_accounts SET credentials_encrypted = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [encrypt(JSON.stringify(credentials)), account.id],
+      args: [encrypt(JSON.stringify(credentials)), canonicalAccountId],
     });
   }
 
@@ -291,7 +300,7 @@ export async function fetchEmailBody(account, uid) {
 // --- Email actions (requires gmail.modify scope) ---
 
 function extractMessageId(account, uid) {
-  const prefix = `gmail-${account.id}-`;
+  const prefix = `gmail-${account.uid_account_id || account.id}-`;
   return uid.startsWith(prefix) ? uid.slice(prefix.length) : uid;
 }
 
@@ -392,7 +401,8 @@ const SNOOZE_LABEL_NAME = "EA/Snoozed";
 const labelIdCache = new Map(); // accountId → { [name]: labelId }
 
 async function getOrCreateLabel(account, name) {
-  const cache = labelIdCache.get(account.id) || {};
+  const cacheKey = account.canonical_id || account.id;
+  const cache = labelIdCache.get(cacheKey) || {};
   if (cache[name]) return cache[name];
 
   const token = await getValidToken(account);
@@ -405,7 +415,7 @@ async function getOrCreateLabel(account, name) {
   const found = labels.find((l) => l.name === name);
   if (found) {
     cache[name] = found.id;
-    labelIdCache.set(account.id, cache);
+    labelIdCache.set(cacheKey, cache);
     return found.id;
   }
 
@@ -424,7 +434,7 @@ async function getOrCreateLabel(account, name) {
   if (!createRes.ok) throw new Error(`Gmail labels.create failed: ${createRes.status}`);
   const created = await createRes.json();
   cache[name] = created.id;
-  labelIdCache.set(account.id, cache);
+  labelIdCache.set(cacheKey, cache);
   return created.id;
 }
 
