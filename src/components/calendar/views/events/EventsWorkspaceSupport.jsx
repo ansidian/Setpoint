@@ -1,5 +1,4 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Calendar, MapPin, Sparkles, Video } from "lucide-react";
 import {
   EmptyDayCard,
   getOverviewModel,
@@ -8,16 +7,10 @@ import {
   OverviewHero,
   SpotlightCard,
 } from "../../CalendarRailStates.jsx";
-import {
-  RailAction,
-  RailFactTile,
-  RailHeroCard,
-  RailMetaChip,
-} from "../../DetailRailPrimitives.jsx";
-import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links";
+import { RailMetaChip } from "../../DetailRailPrimitives.jsx";
+import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { formatRecurrenceSummary } from "../../events/calendarEditorUtils.js";
 import {
-  CompactBandAction,
   compactPanelStyle,
   compactEyebrowStyle,
   compactValueStyle,
@@ -199,119 +192,6 @@ function editorModeLabel(editor) {
   return "New event";
 }
 
-function EventSupportCard({ event, onEditEvent, compact = false }) {
-  const displayTitle = sanitizeEventDisplayTitle(event?.title);
-  const zoomUrl = extractZoomMeetingUrl(event);
-  const location = event?.location ? getLocationDisplayLabel(event.location) : null;
-
-  return (
-    <div data-testid="calendar-selected-event-card">
-      <RailHeroCard accent="#89b4fa" compact={compact}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 2,
-              textTransform: "uppercase",
-              color: "rgba(205,214,244,0.56)",
-            }}
-          >
-            Selected event
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {event?.allDay ? <RailMetaChip tone="quiet" compact={compact}>All day</RailMetaChip> : null}
-            {event?.isRecurring ? <RailMetaChip tone="quiet" compact={compact}>Recurring</RailMetaChip> : null}
-            {event?.writable === false ? <RailMetaChip tone="quiet" compact={compact}>Read-only</RailMetaChip> : null}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}>
-          <div
-            data-testid="calendar-selected-event-title"
-            title={displayTitle}
-            style={{
-              fontSize: compact ? 20 : 24,
-              lineHeight: 1.06,
-              letterSpacing: compact ? -0.34 : -0.44,
-              color: "#fff",
-              fontWeight: 500,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {displayTitle}
-          </div>
-          <div style={{ fontSize: compact ? 11.5 : 12.5, lineHeight: 1.35, color: "#89b4fa", fontVariantNumeric: "tabular-nums" }}>
-            {eventTimeRange(event)}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: compact ? 6 : 8 }}>
-          <RailFactTile
-            label="Where"
-            value={location || "No location"}
-            color={location ? "rgba(238,242,255,0.88)" : "rgba(205,214,244,0.6)"}
-            compact={compact}
-          />
-          <RailFactTile
-            label="People"
-            value={event?.attendees?.length ? `${event.attendees.length} attendee${event.attendees.length === 1 ? "" : "s"}` : "No attendees"}
-            compact={compact}
-          />
-        </div>
-
-        <div
-          style={{
-            marginTop: "auto",
-            paddingTop: compact ? 8 : 10,
-            borderTop: "1px solid rgba(255,255,255,0.04)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: compact ? 8 : 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {zoomUrl ? (
-              <RailAction
-                icon={Video}
-                label="Join Zoom"
-                href={zoomUrl}
-                accent="#89b4fa"
-                tone="accent"
-                size={compact ? "compact" : "default"}
-              />
-            ) : null}
-            {event?.writable ? (
-              <RailAction
-                icon={Sparkles}
-                label="Edit details"
-                onClick={() => onEditEvent?.(event)}
-                accent="#89b4fa"
-                size={compact ? "compact" : "default"}
-              />
-            ) : null}
-          </div>
-          {event?.htmlLink || event?.openUrl ? (
-            <RailAction
-              icon={Calendar}
-              label="Open Calendar"
-              href={event.openUrl || event.htmlLink}
-              accent="#89b4fa"
-              tone={zoomUrl || event?.writable ? "ghost" : "accent"}
-              size={compact ? "compact" : "default"}
-            />
-          ) : null}
-        </div>
-      </RailHeroCard>
-    </div>
-  );
-}
-
 function OverviewSupport({ layout, model, computed, itemsByDay, viewYear, viewMonth, currentYear, currentMonth, todayDate, data }) {
   const compactBand = !layout.stacked;
   const nextBusyWindow = findNextBusyWindow(
@@ -491,107 +371,6 @@ function EmptySupport({ layout, model, itemsByDay, selectedDay, viewYear, viewMo
             </div>
           </div>
         ) : null}
-      </div>
-    </div>
-  );
-}
-
-function DetailSupport({ layout, selectedEvent, selectedDayState, selectedDay, viewYear, viewMonth, onEditEvent }) {
-  const compactBand = !layout.stacked;
-  const ordered = orderEvents(selectedDayState?.items || []);
-  const timedCount = ordered.filter((item) => !item.allDay).length;
-  const allDayCount = ordered.filter((item) => item.allDay).length;
-  const location = selectedEvent?.location ? getLocationDisplayLabel(selectedEvent.location) : "No location";
-  const attendeeSummary = selectedEvent?.attendees?.length
-    ? `${selectedEvent.attendees.length} attendee${selectedEvent.attendees.length === 1 ? "" : "s"}`
-    : "No attendees";
-
-  if (compactBand) {
-    return (
-      <div style={bandGridStyle(layout)}>
-        <div data-testid="calendar-selected-event-card" style={compactPanelStyle("#89b4fa", true)}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={compactEyebrowStyle()}>Selected event</div>
-            {selectedEvent?.writable ? (
-              <CompactBandAction label="Edit details" onClick={() => onEditEvent?.(selectedEvent)} color="#89b4fa" />
-            ) : null}
-          </div>
-          <div
-            data-testid="calendar-selected-event-title"
-            title={sanitizeEventDisplayTitle(selectedEvent?.title)}
-            style={{
-              ...compactValueStyle("#fff", 18),
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {sanitizeEventDisplayTitle(selectedEvent?.title)}
-          </div>
-          <div style={compactDetailStyle()}>
-            {eventTimeRange(selectedEvent)} · {location}
-          </div>
-        </div>
-
-        <div style={compactPanelStyle()}>
-          <div style={compactEyebrowStyle()}>Selected day</div>
-          <div style={compactValueStyle("#89b4fa", 18)}>
-            {formatShortDate(viewYear, viewMonth, selectedDay)}
-          </div>
-          <div style={compactDetailStyle()}>
-            {ordered.length} event{ordered.length === 1 ? "" : "s"} · {timedCount} timed · {allDayCount} all-day
-          </div>
-        </div>
-
-        <div style={compactPanelStyle()}>
-          <div style={compactEyebrowStyle()}>Context</div>
-          <div style={compactDetailStyle()}>{location}</div>
-          <div style={compactDetailStyle()}>{attendeeSummary}</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={bandGridStyle(layout)}>
-      <EventSupportCard event={selectedEvent} onEditEvent={onEditEvent} compact={compactBand} />
-      <div style={stackStyle()}>
-        <MetricCard
-          label="Selected day"
-          value={formatShortDate(viewYear, viewMonth, selectedDay)}
-          detail={`${ordered.length} event${ordered.length === 1 ? "" : "s"} on this day`}
-          accent="#89b4fa"
-          compact={compactBand}
-        />
-        <MetricCard
-          label="Timed"
-          value={`${timedCount}`}
-          detail={timedCount ? "Time-bound events still shaping the day" : "No timed events"}
-          accent="#89b4fa"
-          compact={compactBand}
-        />
-      </div>
-      <div style={stackStyle()}>
-        <MetricCard
-          label="All-day"
-          value={`${allDayCount}`}
-          detail={allDayCount ? "Longer holds sitting over the grid" : "No all-day holds"}
-          accent="#89b4fa"
-          compact={compactBand}
-        />
-        <div style={{ ...panelStyle(), display: "flex", flexDirection: "column", gap: compactBand ? 6 : 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(205,214,244,0.44)" }}>
-            Context
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: compactBand ? 6 : 8 }}>
-            <RailFactTile label="Time" value={eventTimeRange(selectedEvent)} color="#89b4fa" valueNoWrap compact={compactBand} />
-            <RailFactTile
-              label="Where"
-              value={selectedEvent?.location ? getLocationDisplayLabel(selectedEvent.location) : "No location"}
-              compact={compactBand}
-            />
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -1016,10 +795,6 @@ function EditorSupport({ layout, editor, selectedDay, viewYear, viewMonth }) {
 
 export function renderEventsWorkspaceSupport(props) {
   const model = getOverviewModel(props);
-  const selectedItems = Array.isArray(props.selectedItems)
-    ? props.selectedItems
-    : props.selectedDayState?.items || [];
-  const selectedEvent = orderEvents(selectedItems).find((item) => String(item.id || item.iCalUID || item.htmlLink || item.openUrl) === String(props.selectedItemId)) || null;
   const handleSelectDay = (day) => {
     props.setDeadlineEditor?.(null);
     props.setSelectedItemId?.(null);
@@ -1034,20 +809,6 @@ export function renderEventsWorkspaceSupport(props) {
         selectedDay={props.selectedDay}
         viewYear={props.viewYear}
         viewMonth={props.viewMonth}
-      />
-    );
-  }
-
-  if (props.mode === "detail" && selectedEvent) {
-    return (
-      <DetailSupport
-        layout={props.layout}
-        selectedEvent={selectedEvent}
-        selectedDayState={props.selectedDayState}
-        selectedDay={props.selectedDay}
-        viewYear={props.viewYear}
-        viewMonth={props.viewMonth}
-        onEditEvent={props.eventEditor?.openEdit}
       />
     );
   }

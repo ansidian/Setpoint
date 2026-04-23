@@ -183,6 +183,44 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getAllByText("Design review").length).toBeGreaterThan(0);
   });
 
+  it("keeps the selected event when clicking its selected day cell again", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const dayCell = screen.getByTestId("calendar-cell-20");
+    fireEvent.click(within(dayCell).getByTestId("calendar-cell-item-chip"));
+    expect(screen.getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
+
+    fireEvent.click(dayCell);
+
+    expect(screen.getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
+  });
+
   it("dims past event days more than future days without dimming today", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
@@ -439,7 +477,7 @@ describe("CalendarModal responsive layout", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
   });
 
-  it("allows deselecting today's empty selection", async () => {
+  it("keeps today's empty selection when clicking the selected day again", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
 
@@ -484,8 +522,8 @@ describe("CalendarModal responsive layout", () => {
 
       fireEvent.click(todayCell);
 
-      expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("summary");
+      expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
     } finally {
       vi.useRealTimers();
     }

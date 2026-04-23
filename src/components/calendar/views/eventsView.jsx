@@ -454,7 +454,6 @@ function renderDetail({
   supportBandActive = false,
 }) {
   const ordered = orderDetailEvents(items);
-  const shouldRenderHeader = !supportBandActive;
   const allDayItems = [];
   const timedItems = [];
   let selectedEvent = null;
@@ -467,7 +466,7 @@ function renderDetail({
       timedItems.push(railItem);
     }
 
-    if (shouldRenderHeader && !selectedEvent && String(railItem.id) === String(selectedItemId)) {
+    if (!selectedEvent && String(railItem.id) === String(selectedItemId)) {
       selectedEvent = item;
     }
   }
@@ -484,7 +483,7 @@ function renderDetail({
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
       accent="#89b4fa"
       supportBandActive={supportBandActive}
-      headerContent={shouldRenderHeader && selectedEvent ? (
+      headerContent={selectedEvent ? (
         <EventSelectedCard
           ev={selectedEvent}
           onEditEvent={onEditEvent}

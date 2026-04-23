@@ -149,6 +149,42 @@ describe("calendar detail timeline", () => {
     expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
   });
 
+  it("keeps selected event details in the rail when workspace support is active", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 16,
+        viewYear: 2026,
+        viewMonth: 3,
+        selectedItemId: "event-2",
+        supportBandActive: true,
+        items: [
+          {
+            id: "event-1",
+            title: "Morning review",
+            startMs: new Date("2026-04-16T16:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-16T16:30:00.000Z").getTime(),
+            color: "#cba6da",
+            allDay: false,
+          },
+          {
+            id: "event-2",
+            title: "Design review",
+            startMs: new Date("2026-04-16T17:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-16T18:00:00.000Z").getTime(),
+            color: "#89b4fa",
+            location: "Room A",
+            writable: true,
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByTestId("timeline-detail-rail").getAttribute("data-support-band-active")).toBe("true");
+    expect(screen.getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
+    expect(screen.getByRole("button", { name: /edit details/i })).toBeTruthy();
+  });
+
   it("shows a Join Zoom action for vanity subdomain links in the location", () => {
     render(
       eventsView.renderDetail({

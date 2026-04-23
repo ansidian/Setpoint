@@ -295,16 +295,12 @@ export default function CalendarGrid({
       ? overflowPopover
       : null;
 
-  function handleSelectDay(day, isSelected, dayHasSelectedItem) {
+  function handleSelectDay(day, isSelected) {
+    if (isSelected) return;
+
     closeEventEditor();
     if (view === "deadlines") {
       setDeadlineEditor(null);
-    }
-
-    if (isSelected && !dayHasSelectedItem) {
-      setSelectedDay(null);
-      setSelectedItemId(null);
-      return;
     }
 
     setSelectedDay(day);
@@ -402,7 +398,7 @@ export default function CalendarGrid({
                 hasOverdue={hasOverdue}
                 allComplete={allComplete}
                 loading={viewData?.isLoading}
-                onSelectDay={() => handleSelectDay(day, isSelected, dayHasSelectedItem)}
+                onSelectDay={() => handleSelectDay(day, isSelected)}
                 onSelectItem={(itemId) => handleSelectItem(day, itemId)}
                 onOpenOverflow={({ triggerElement, hiddenItems, totalCount, visibleCount }) => {
                   const anchorKey = `${view}-${viewYear}-${viewMonth}-${day}`;

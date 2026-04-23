@@ -48,7 +48,7 @@ export default function AnimatedRailContent({ contentKey, contentKind, children 
       transition={railSwapPositionTransition}
       style={contentStyle}
     >
-      <AnimatePresence initial={false} mode="sync">
+      <AnimatePresence initial={false} mode="popLayout">
         <Motion.div
           key={contentKey}
           data-testid="calendar-rail-content"

@@ -47,8 +47,8 @@ test("uses the full-screen workspace rail layout and reflows at the narrow fallb
   await expect(supportBand).toHaveAttribute("data-support-mode", "empty");
   await expect.poll(() => body.evaluate((node) => node.firstElementChild?.style.gridTemplateRows || "")).toBe("minmax(0px, 1fr) auto");
   await expect.poll(() => body.evaluate((node) => node.firstElementChild?.style.gap || "")).toBe("0px");
-  await expect.poll(() => inlineStyle(supportBand, "height")).toBe("auto");
-  await expect.poll(() => inlineStyle(supportBand, "minHeight")).toBe("112px");
+  await expect.poll(() => inlineStyle(supportBand, "height")).toBe("126px");
+  await expect.poll(() => inlineStyle(supportBand, "minHeight")).toBe("");
   await expect.poll(() => supportBand.evaluate((node) => !!node.querySelector("[data-calendar-local-scroll='true']"))).toBe(false);
   await expect.poll(() => inlineStyle(monthGrid, "gridTemplateRows")).toBe("repeat(5, minmax(0px, 1fr))");
 
@@ -66,7 +66,7 @@ test("uses the full-screen workspace rail layout and reflows at the narrow fallb
   await expect.poll(() => inlineStyle(rail, "position")).toBe("sticky");
   await expect.poll(() => body.evaluate((node) => node.firstElementChild?.style.gridTemplateRows || "")).toBe("minmax(0px, 1fr) auto");
   await expect.poll(() => inlineStyle(supportBand, "height")).toBe("auto");
-  await expect.poll(() => inlineStyle(supportBand, "minHeight")).toBe("92px");
+  await expect.poll(() => inlineStyle(supportBand, "minHeight")).toBe("106px");
 
   await resizeViewport(page, { width: 1100, height: 1000 });
 
@@ -77,7 +77,7 @@ test("uses the full-screen workspace rail layout and reflows at the narrow fallb
   await expect.poll(() => body.evaluate((node) => node.firstElementChild?.style.gridTemplateRows || "")).toBe("auto auto");
 });
 
-test("moves selected-event context into the support band while the rail becomes agenda-first", async ({ page }) => {
+test("keeps selected-event context in the rail while the support band stays day-focused", async ({ page }) => {
   const fixture = await installDashboardCalendarLayoutFixtures(page);
   await page.setViewportSize({ width: 1900, height: 1200 });
 
@@ -104,8 +104,9 @@ test("moves selected-event context into the support band while the rail becomes 
 
   await page.getByTestId(`calendar-cell-${fixture.eventDay}`).getByTestId("calendar-cell-item-chip").click();
 
-  await expect(page.getByTestId("calendar-selected-event-card")).toBeVisible();
-  await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.eventTitle);
+  await expect(rail.getByTestId("calendar-selected-event-card")).toBeVisible();
+  await expect(rail.getByTestId("calendar-selected-event-title")).toContainText(fixture.eventTitle);
+  await expect(supportBand.getByTestId("calendar-selected-event-card")).toHaveCount(0);
 
   await page.getByTestId(`calendar-cell-${fixture.todayDay}`).click();
 
@@ -137,7 +138,7 @@ test("widens the context stage and keeps the grid visible when entering editor m
   await expect(page.getByTestId("calendar-modal-editor-expanded")).toBeVisible();
   await expect(supportBand).toHaveAttribute("data-support-mode", "editor");
   await expect(rail).toHaveAttribute("data-context-mode", "editor");
-  await expect.poll(() => inlineStyle(supportBand, "minHeight")).toBe("60px");
+  await expect.poll(() => inlineStyle(supportBand, "height")).toBe("60px");
   await expect.poll(() => supportBand.evaluate((node) => !!node.querySelector("[data-calendar-local-scroll='true']"))).toBe(false);
   await expect(supportBand).not.toContainText(/draft rhythm/i);
   await expect(supportBand).not.toContainText(/\d{4}-\d{2}-\d{2}/);
