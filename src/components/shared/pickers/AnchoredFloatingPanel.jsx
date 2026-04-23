@@ -20,6 +20,7 @@ export default function AnchoredFloatingPanel({
   const resolvedPanelRef = panelRef || internalPanelRef;
   const [pos, setPos] = useState(null);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ref.current access is intentionally excluded from deps
   const updatePos = useCallback(() => {
     const rect = anchorRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -48,6 +49,7 @@ export default function AnchoredFloatingPanel({
   }, [anchorRef, height, matchAnchorWidth, maxWidth, minWidth, resolvedPanelRef, width]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM measurement for initial positioning
     updatePos();
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
@@ -59,6 +61,7 @@ export default function AnchoredFloatingPanel({
 
   useLayoutEffect(() => {
     if (!pos) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-measure DOM after content change
     updatePos();
   }, [children, pos, updatePos]);
 
