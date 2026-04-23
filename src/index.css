@@ -164,6 +164,22 @@ body {
   font-family: var(--serif-choice, "Instrument Serif"), Georgia, serif;
 }
 
+.mouse-spotlight-canvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 300px;
+  pointer-events: none;
+  z-index: 9999;
+  display: block;
+  opacity: 0;
+  transform: translate3d(-9999px, -9999px, 0);
+  transition: opacity 120ms ease-out;
+  will-change: transform, opacity;
+  contain: strict;
+}
+
 /* Animations */
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes livepulse { 0% { transform: scale(1); opacity: 0.4; } 100% { transform: scale(2.2); opacity: 0; } }

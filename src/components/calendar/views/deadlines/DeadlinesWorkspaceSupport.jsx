@@ -23,8 +23,11 @@ import {
   openInNewTab,
   sourceLabelFor,
   sourceOf,
-  statusLabel,
 } from "./deadlinesModel.js";
+import {
+  DeadlineStatusBadge,
+  DeadlineStatusValue,
+} from "./DeadlineStatusIndicator.jsx";
 import { useDashboard } from "../../../../context/DashboardContext.jsx";
 import {
   CompactBandAction,
@@ -156,7 +159,11 @@ function DeadlineSupportCard({ task, accent, onStartEdit, compact = false }) {
                 {priorityMeta.label}
               </RailMetaChip>
             ) : null}
-            <RailMetaChip tone="quiet" compact={compact}>{statusLabel(normalizedStatus)}</RailMetaChip>
+            <DeadlineStatusBadge
+              status={normalizedStatus}
+              compact={compact}
+              testId="calendar-selected-deadline-status"
+            />
           </div>
         </div>
 
@@ -574,7 +581,11 @@ function DetailSupport({ layout, task, selectedDayState, selectedDay, viewYear, 
           compact={compactBand}
         />
         <div style={{ ...panelStyle(), display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: compactBand ? 6 : 8 }}>
-          <RailFactTile label="Status" value={statusLabel(task?.status)} color={accent} compact={compactBand} />
+          <RailFactTile
+            label="Status"
+            value={<DeadlineStatusValue status={task?.status} size={compactBand ? 11 : 12} />}
+            compact={compactBand}
+          />
           <RailFactTile label="Context" value={deadlineContext(task) || "No context"} compact={compactBand} />
         </div>
       </div>

@@ -354,11 +354,15 @@ describe("calendar detail timeline", () => {
     expect(rows[1].textContent).toContain("End of day");
     expect(screen.getByTestId("timeline-detail-masthead").textContent).toContain("Deadline ledger");
     expect(screen.getByRole("button", { name: /edit/i })).toBeTruthy();
+    expect(screen.getByTestId("calendar-selected-deadline-status").textContent).toContain("Incomplete");
+    expect(screen.getByTestId("deadline-status-indicator-todo-1").getAttribute("aria-label")).toBe("Incomplete");
+    expect(screen.getByTestId("deadline-status-indicator-todo-3").getAttribute("aria-label")).toBe("Incomplete");
     expect(screen.queryByText("Complete early")).toBeNull();
     expect(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines").textContent).toContain("1");
 
     fireEvent.click(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines"));
     expect(screen.getByText("Complete early")).toBeTruthy();
+    expect(screen.getByTestId("deadline-status-indicator-todo-2").getAttribute("aria-label")).toBe("Complete");
 
     const completedRows = screen.getAllByTestId("timeline-detail-row");
     expect(completedRows[2].getAttribute("data-complete")).toBe("true");
@@ -438,7 +442,8 @@ describe("calendar detail timeline", () => {
     );
 
     expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByRole("button", { name: /complete/i })).toBeTruthy();
+    expect(screen.getByTestId("calendar-selected-deadline-status").textContent).toContain("Incomplete");
+    expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /open todoist/i })).toBeTruthy();
   });
 
@@ -477,6 +482,7 @@ describe("calendar detail timeline", () => {
 
     expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
     expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Senior Design Deliverables");
+    expect(screen.getByTestId("calendar-selected-deadline-status").textContent).toContain("Incomplete");
   });
 
   it("does not render completed deadlines into month cells when active items exist", () => {

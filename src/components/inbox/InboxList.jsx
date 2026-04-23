@@ -1,5 +1,3 @@
-// eslint-disable-next-line no-unused-vars
-import { motion } from "motion/react";
 import { useState, useMemo } from "react";
 import {
   Mail, Search, CheckCheck, RefreshCw,
@@ -41,11 +39,8 @@ export default function InboxList({
   const renderRows = (list) => list.map((email) => {
     const rowKey = email.id || email.uid;
     return (
-      <motion.div
+      <div
         key={rowKey}
-        layout
-        layoutId={rowKey}
-        transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
         <EmailRow
           email={email}
@@ -57,7 +52,7 @@ export default function InboxList({
           accent={accent}
           pinned={!!(pinnedIds?.has?.(email.uid) || pinnedIds?.has?.(email.id))}
         />
-      </motion.div>
+      </div>
     );
   });
 
@@ -117,7 +112,7 @@ export default function InboxList({
                 border: "1px solid rgba(255,255,255,0.08)",
                 borderRadius: 4, cursor: "pointer",
                 color: "rgba(205,214,244,0.7)", fontFamily: "inherit",
-                transition: "all 120ms",
+                transition: "background 120ms, border-color 120ms, color 120ms",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "rgba(243,139,168,0.14)";
@@ -363,17 +358,32 @@ export default function InboxList({
           </div>
         )}
         {emails.length === 0 && (
-          <div style={{ padding: 20 }}>
-            <EmptyStateSplash
-              icon={<Mail size={26} strokeWidth={1.8} />}
-              eyebrow="Inbox"
-              title={searchQuery ? "No emails match this view" : "No emails available"}
-              message={searchQuery
-                ? "Try clearing the query, switching lanes, or checking another account."
-                : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
-              compact
-              minHeight={260}
-            />
+          <div
+            style={{
+              padding: "20px 20px 0",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "flex-start",
+            }}
+          >
+            <div
+              data-testid="inbox-list-empty-state-card"
+              style={{
+                width: "100%",
+                aspectRatio: "1 / 1",
+              }}
+            >
+              <EmptyStateSplash
+                icon={<Mail size={26} strokeWidth={1.8} />}
+                eyebrow="Inbox"
+                title={searchQuery ? "No emails match this view" : "No emails available"}
+                message={searchQuery
+                  ? "Try clearing the query, switching lanes, or checking another account."
+                  : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
+                compact
+                minHeight="100%"
+              />
+            </div>
           </div>
         )}
       </div>

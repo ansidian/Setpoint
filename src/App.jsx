@@ -5,6 +5,7 @@ import { checkAuth } from "./api";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import SettingsChrome from "./components/settings/SettingsChrome";
+import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 const Settings = lazy(() => import("./pages/Settings"));
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
 
   return (
     <TooltipProvider>
+      <MouseSpotlightCanvas />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={

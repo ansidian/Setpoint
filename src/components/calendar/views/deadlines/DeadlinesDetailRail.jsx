@@ -23,8 +23,12 @@ import {
   SOURCE_COLORS,
   sourceLabelFor,
   sourceOf,
-  statusLabel,
 } from "./deadlinesModel.js";
+import {
+  DeadlineStatusBadge,
+  DeadlineStatusIcon,
+  DeadlineStatusValue,
+} from "./DeadlineStatusIndicator.jsx";
 
 function PriorityBadge({ level }) {
   const meta = PRIORITY_META[level];
@@ -55,7 +59,7 @@ function deadlineDueDetailLabel(task) {
 }
 
 function deadlineSecondaryMeta(task) {
-  return [deadlineContextLabel(task), statusLabel(task.status)].filter(Boolean).join(" · ");
+  return deadlineContextLabel(task);
 }
 
 function shouldCompressDeadlineCard(task) {
@@ -316,8 +320,8 @@ function DetailCard({
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                alignItems: "baseline",
-                gap: "2px 8px",
+                alignItems: "center",
+                gap: "6px 8px",
               }}
             >
               <span
@@ -332,6 +336,11 @@ function DetailCard({
               >
                 {dueDetailLabel}
               </span>
+              <DeadlineStatusBadge
+                status={task.status}
+                compact
+                testId="calendar-selected-deadline-status"
+              />
               {secondaryMeta ? (
                 <span
                   style={{
@@ -507,7 +516,13 @@ function DetailCard({
           />
           <RailFactTile
             label="Status"
-            value={statusLabel(task.status)}
+            value={(
+              <DeadlineStatusValue
+                status={task.status}
+                size={compact ? 11 : 12}
+                testId="calendar-selected-deadline-status"
+              />
+            )}
             valueNoWrap
             valueFontSize={compact ? 11 : 12}
           />
@@ -664,6 +679,13 @@ function DeadlinesDetail({
               meta: metaParts.join(" · "),
               dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
               complete: normalizeStatus(task.status) === "complete",
+              trailing: (
+                <DeadlineStatusIcon
+                  status={task.status}
+                  size={14}
+                  testId={`deadline-status-indicator-${task.id}`}
+                />
+              ),
               selected: String(task.id) === String(selectedItemId),
               onClick: () => onSelectItem?.(String(task.id)),
             };
@@ -691,6 +713,13 @@ function DeadlinesDetail({
               meta: metaParts.join(" · "),
               dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
               complete: true,
+              trailing: (
+                <DeadlineStatusIcon
+                  status={task.status}
+                  size={14}
+                  testId={`deadline-status-indicator-${task.id}`}
+                />
+              ),
               selected: String(task.id) === String(selectedItemId),
               onClick: () => onSelectItem?.(String(task.id)),
             };

@@ -60,35 +60,43 @@ export function ReaderEmptyState() {
       style={{
         flex: 1,
         background: "rgba(22,22,30,0.5)",
-        padding: 20,
+        padding: "20px 20px 0",
         display: "flex",
         flexDirection: "column",
-        alignItems: "stretch",
-        justifyContent: "center",
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
       }}
     >
-      <EmptyStateSplash
-        icon={<Mail size={34} strokeWidth={1.8} />}
-        eyebrow="Inbox reader"
-        title="Select an email"
-        message={(
-          <>
-            Open a thread to keep context visible while you work.
-            <span
-              style={{
-                display: "block",
-                marginTop: 12,
-                fontSize: 11,
-                color: "rgba(205,214,244,0.44)",
-              }}
-            >
-              <Kbd>J</Kbd> <Kbd>K</Kbd> to move through the list.
-            </span>
-          </>
-        )}
-        compact
-        minHeight={320}
-      />
+      <div
+        data-testid="inbox-reader-empty-state-card"
+        style={{
+          width: "100%",
+          aspectRatio: "1 / 1",
+        }}
+      >
+        <EmptyStateSplash
+          icon={<Mail size={34} strokeWidth={1.8} />}
+          eyebrow="Inbox reader"
+          title="Select an email"
+          message={(
+            <>
+              Open a thread to keep context visible while you work.
+              <span
+                style={{
+                  display: "block",
+                  marginTop: 12,
+                  fontSize: 11,
+                  color: "rgba(205,214,244,0.44)",
+                }}
+              >
+                <Kbd>J</Kbd> <Kbd>K</Kbd> to move through the list.
+              </span>
+            </>
+          )}
+          compact
+          minHeight="100%"
+        />
+      </div>
     </div>
   );
 }

@@ -301,7 +301,8 @@ describe("CalendarModal responsive layout", () => {
 
     expect(screen.getByText("Monday, April 20")).toBeTruthy();
     expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /complete/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
+    expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Incomplete");
   });
 
   it("falls back to a completed deadline when a day has no active items", () => {
@@ -330,6 +331,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
     expect(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /mark complete/i })).toBeNull();
+    expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Complete");
   });
 
   it("keeps the deadlines rail in summary mode while live deadline data is still loading", () => {
