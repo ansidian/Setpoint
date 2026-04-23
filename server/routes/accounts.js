@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import db from "../db/connection.js";
-import { requireCookieSession } from "../middleware/auth.js";
+import { hashToken, requireCookieSession } from "../middleware/auth.js";
 import { encrypt, decrypt } from "../briefing/encryption.js";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../briefing/gmail.js";
 import { testConnection as testIcloud } from "../briefing/icloud.js";
@@ -18,10 +18,37 @@ import {
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 
 const router = Router();
+const GMAIL_OAUTH_BIND_COOKIE = "ea_oauth_bind";
+const GMAIL_OAUTH_BIND_COOKIE_PATH = "/api/ea/accounts/gmail/callback";
+
+function gmailOauthBindCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 10 * 60 * 1000,
+    path: GMAIL_OAUTH_BIND_COOKIE_PATH,
+  };
+}
+
+function clearGmailOauthBindCookie(res) {
+  res.clearCookie(GMAIL_OAUTH_BIND_COOKIE, { path: GMAIL_OAUTH_BIND_COOKIE_PATH });
+}
 
 // Gmail OAuth callback — no auth required (it's a redirect from Google)
 router.get("/accounts/gmail/callback", async (req, res) => {
-  const { code, state: csrfToken } = req.query;
+  const { code, state: csrfToken, error: oauthError } = req.query;
+  const oauthBindCookie = req.cookies?.[GMAIL_OAUTH_BIND_COOKIE];
+  clearGmailOauthBindCookie(res);
+  if (oauthError) {
+    if (csrfToken) {
+      await db.execute({
+        sql: "DELETE FROM ea_csrf_tokens WHERE token = ?",
+        args: [csrfToken],
+      }).catch(() => {});
+    }
+    return res.status(400).send(`Google OAuth error: ${oauthError}`);
+  }
   if (!code || !csrfToken) {
     return res.status(400).send("Missing code or state parameter");
   }
@@ -29,7 +56,7 @@ router.get("/accounts/gmail/callback", async (req, res) => {
   try {
     // Validate CSRF token (SEC-03)
     const csrfResult = await db.execute({
-      sql: "SELECT account_label, expires_at FROM ea_csrf_tokens WHERE token = ?",
+      sql: "SELECT account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label FROM ea_csrf_tokens WHERE token = ?",
       args: [csrfToken],
     });
 
@@ -49,12 +76,19 @@ router.get("/accounts/gmail/callback", async (req, res) => {
     if (Date.now() > csrfRow.expires_at) {
       return res.status(400).send("OAuth state expired - please try again");
     }
+    if (!oauthBindCookie || !csrfRow.browser_bind_hash) {
+      return res.status(400).send("OAuth browser binding missing - please try again");
+    }
+    if (hashToken(oauthBindCookie) !== csrfRow.browser_bind_hash) {
+      return res.status(400).send("OAuth browser binding mismatch - please try again");
+    }
 
     // Recover userId and label from DB (tamper-proof)
-    const [userId, label] = csrfRow.account_label.split(":");
-    const accountId = csrfRow.account_label;
+    const [legacyUserId, ...legacyLabelParts] = String(csrfRow.account_label || "").split(":");
+    const userId = csrfRow.oauth_user_id || legacyUserId;
+    const label = csrfRow.oauth_label ?? legacyLabelParts.join(":");
 
-    const result = await handleCallback(code, accountId, userId);
+    const result = await handleCallback(code, null, userId);
     if (label && label !== "Gmail") {
       await db.execute({
         sql: "UPDATE ea_accounts SET label = ? WHERE id = ?",
@@ -122,15 +156,17 @@ router.get("/accounts", async (req, res) => {
 router.get("/accounts/gmail/auth", async (req, res) => {
   const userId = process.env.EA_USER_ID;
   const label = req.query.label || "Gmail";
+  const oauthBind = crypto.randomBytes(32).toString("base64url");
 
   // Generate CSRF token and store with label
   const csrfToken = crypto.randomUUID();
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
   await db.execute({
-    sql: "INSERT INTO ea_csrf_tokens (token, account_label, expires_at) VALUES (?, ?, ?)",
-    args: [csrfToken, `${userId}:${label}`, expiresAt],
+    sql: "INSERT INTO ea_csrf_tokens (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label) VALUES (?, ?, ?, ?, ?, ?)",
+    args: [csrfToken, `${userId}:${label}`, expiresAt, hashToken(oauthBind), userId, label],
   });
 
+  res.cookie(GMAIL_OAUTH_BIND_COOKIE, oauthBind, gmailOauthBindCookieOptions());
   res.json({ url: getAuthUrl(csrfToken) });
 });
 

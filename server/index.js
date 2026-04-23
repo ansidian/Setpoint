@@ -19,6 +19,7 @@ import { initScheduler, startBackgroundIndexer } from "./briefing/scheduler.js";
 import { startSnoozeWaker } from "./briefing/snooze-waker.js";
 import { migrate } from "./db/migrate.js";
 import { migrateLegacyEncryption } from "./db/migrate-encryption.js";
+import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
 
 
 // fail fast if critical env vars are missing
@@ -35,9 +36,9 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Trust first proxy (Render, Vite dev proxy) so req.ip reflects the real client
-app.set("trust proxy", 1);
+app.set("trust proxy", getTrustProxySetting());
 
+applySecurityMiddleware(app);
 app.use(express.json());
 app.use(cookieParser());
 

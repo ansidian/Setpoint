@@ -12,6 +12,8 @@ import db from "../db/connection.js";
 
 const router = Router();
 const EA_PASSWORD_HASH = process.env.EA_PASSWORD_HASH;
+const API_TOKEN_TTL_DAYS = Number.parseInt(process.env.EA_API_TOKEN_TTL_DAYS || "90", 10) || 90;
+const API_TOKEN_TTL_MS = API_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 const KNOWN_SCOPES = new Set(["actual:write"]);
 
@@ -107,11 +109,12 @@ router.post("/api-tokens", tokenMintLimiter, requireCookieSession, async (req, r
   try {
     const raw = "eatk_" + crypto.randomBytes(32).toString("base64url");
     const hash = crypto.createHash("sha256").update(raw).digest("hex");
+    const expiresAt = Date.now() + API_TOKEN_TTL_MS;
     await db.execute({
-      sql: "INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at) VALUES (?, ?, ?, ?)",
-      args: [hash, label.trim(), JSON.stringify(requestedScopes), Date.now()],
+      sql: "INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+      args: [hash, label.trim(), JSON.stringify(requestedScopes), Date.now(), expiresAt],
     });
-    res.json({ token: raw, label: label.trim(), scopes: requestedScopes });
+    res.json({ token: raw, label: label.trim(), scopes: requestedScopes, expires_at: expiresAt });
   } catch (err) {
     console.error("Error creating api token:", err);
     res.status(500).json({ message: "Failed to create token" });

@@ -28,9 +28,14 @@ beforeEach(() => {
       scopes: ["actual:write"],
       created_at: Date.UTC(2026, 3, 19),
       last_used_at: null,
+      expires_at: Date.UTC(2026, 6, 18),
     },
   ]);
-  mockApi.createApiToken.mockResolvedValue({ token: "secret-token", label: "Phone" });
+  mockApi.createApiToken.mockResolvedValue({
+    token: "secret-token",
+    label: "Phone",
+    expires_at: Date.UTC(2026, 6, 18),
+  });
   mockApi.revokeApiToken.mockResolvedValue({});
   Object.assign(navigator, {
     clipboard: {
@@ -63,6 +68,7 @@ describe("ApiTokensCard", () => {
     });
     expect(screen.getByText("secret-token")).toBeTruthy();
     expect(screen.getByText("Copy now")).toBeTruthy();
+    expect(screen.getAllByText(/Expires Jul/i).length).toBeGreaterThan(0);
   });
 
   it("shows create errors without clearing the form", async () => {

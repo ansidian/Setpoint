@@ -280,7 +280,8 @@ API fetch (apiFetch wrapper)
 ```mermaid
 graph LR
     Request --> TP[trust proxy]
-    TP --> JSON[express.json]
+    TP --> Sec[security headers]
+    Sec --> JSON[express.json]
     JSON --> Cookie[cookieParser]
     Cookie --> CSRF{"CSRF Check\n(x-requested-with header OR\nBearer token OR login path)"}
     CSRF -->|non-GET| Validate
@@ -334,10 +335,10 @@ sequenceDiagram
 
 Two auth paths exist, but they no longer feed a single shared "any auth works" guard:
 
-1. **Cookie session** — 32-byte hex tokens in `ea_sessions`, 30-day TTL, lazy-deleted on expired validation. Used by the browser SPA and required by normal dashboard routes.
-2. **Bearer API token** — `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, optional expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). Bearer requests are exempt from the `x-requested-with` CSRF check — they carry their own unforgeable secret.
+1. **Cookie session** — browser receives raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Validation supports lazy migration of any legacy raw rows still present. Used by the browser SPA and required by normal dashboard routes.
+2. **Bearer API token** — `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check — they carry their own unforgeable secret.
 
-Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`.
+Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
 
 ## Briefing Pipeline
 
@@ -784,7 +785,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 
 ### API Tokens (Bearer auth)
 
-Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted.
+Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted, and new tokens receive a default 90-day expiry.
 
 ## Deployment
 
@@ -801,5 +802,7 @@ Token management endpoints live under `/api/auth`. Bearer tokens authenticate by
 3. `?mock=1&scenario=name` on `/api/briefing/latest` for dev fixtures
 
 **Environment variables:** See `.env.example` for full reference. Key secrets: `EA_PASSWORD_HASH` (bcrypt), `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, database tokens.
+
+**Security defaults:** production enables HSTS + CSP + frame/referrer/permissions headers. `trust proxy` defaults to `1` only in production and can be overridden via `TRUST_PROXY`.
 
 **Cost optimization:** `/api/ea/suspend` calls Render API to suspend the service when not in use.

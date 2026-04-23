@@ -77,7 +77,7 @@ export default function ApiTokensCard() {
     setCreateError(null);
     try {
       const result = await createApiToken(label.trim(), ["actual:write"]);
-      setNewToken({ token: result.token, label: result.label });
+      setNewToken({ token: result.token, label: result.label, expiresAt: result.expires_at });
       setLabel("");
       const nextTokens = await listApiTokens();
       setTokens(nextTokens);
@@ -124,6 +124,9 @@ export default function ApiTokensCard() {
               <div className="mb-2 flex items-center justify-between gap-3">
                 <StatusPill tone="warning">Copy now</StatusPill>
                 <span className="text-[11px] text-muted-foreground/70">Label: {newToken.label}</span>
+              </div>
+              <div className="mb-2 text-[11px] text-muted-foreground/70">
+                Expires {formatDate(newToken.expiresAt)}
               </div>
               <div className="mb-3 rounded-lg border border-black/10 bg-black/30 px-3 py-2 font-mono text-xs break-all select-all">
                 {newToken.token}
@@ -203,6 +206,7 @@ export default function ApiTokensCard() {
                     <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground/65">
                       <span>Created {formatDate(token.created_at)}</span>
                       <span>Last used {formatDate(token.last_used_at)}</span>
+                      <span>Expires {formatDate(token.expires_at)}</span>
                     </div>
                   </div>
                   <Button

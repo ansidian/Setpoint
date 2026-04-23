@@ -2,9 +2,14 @@ import crypto from "crypto";
 import db from "../db/connection.js";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_TOKEN_PREFIX = "sha256:";
 
-function hashToken(raw) {
+export function hashToken(raw) {
   return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+function hashSessionToken(raw) {
+  return SESSION_TOKEN_PREFIX + hashToken(raw);
 }
 
 export async function validateBearer(raw) {
@@ -28,8 +33,8 @@ export async function validateBearer(raw) {
 
 export async function deleteSession(token) {
   await db.execute({
-    sql: "DELETE FROM ea_sessions WHERE token = ?",
-    args: [token],
+    sql: "DELETE FROM ea_sessions WHERE token IN (?, ?)",
+    args: [token, hashSessionToken(token)],
   });
 }
 
@@ -38,25 +43,41 @@ export async function createSession() {
   const expiresAt = Date.now() + SESSION_MAX_AGE_MS;
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-    args: [token, expiresAt],
+    args: [hashSessionToken(token), expiresAt],
   });
   return token;
 }
 
 export async function validateSession(token) {
   if (!token) return false;
-  const result = await db.execute({
+  const hashedToken = hashSessionToken(token);
+  let result = await db.execute({
     sql: "SELECT expires_at FROM ea_sessions WHERE token = ?",
-    args: [token],
+    args: [hashedToken],
   });
+  let storedToken = hashedToken;
+
+  if (!result.rows.length) {
+    result = await db.execute({
+      sql: "SELECT expires_at FROM ea_sessions WHERE token = ?",
+      args: [token],
+    });
+    storedToken = token;
+  }
   if (!result.rows.length) return false;
   if (Date.now() > result.rows[0].expires_at) {
     // Lazy cleanup — delete expired session
     await db.execute({
       sql: "DELETE FROM ea_sessions WHERE token = ?",
-      args: [token],
+      args: [storedToken],
     });
     return false;
+  }
+  if (storedToken === token) {
+    await db.execute({
+      sql: "UPDATE ea_sessions SET token = ? WHERE token = ?",
+      args: [hashedToken, token],
+    }).catch((err) => console.error("[EA] session hash migration failed:", err.message));
   }
   return true;
 }
