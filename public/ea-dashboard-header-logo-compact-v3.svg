@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="78" height="32" viewBox="0 0 78 32" fill="none">
 
   <defs>
     <linearGradient id="brandGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
@@ -11,10 +11,14 @@
       <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
       <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
+    <filter id="markGlow" x="-45%" y="-45%" width="190%" height="190%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.4" flood-color="#CBA6DA" flood-opacity="0.22"/>
+    </filter>
+
   </defs>
 
 
-  <g transform="translate(0,0) scale(1.000000)">
+  <g transform="translate(0,4) scale(1.000000)" filter="url(#markGlow)">
     <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="6.75" fill="url(#brandGrad)"/>
     <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="6.75" fill="url(#shine)"/>
     <rect x="1.15" y="1.15" width="21.7" height="21.7" rx="6.35" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="0.8"/>
@@ -25,4 +29,7 @@
     <rect x="6.2" y="14.15" width="11.9" height="1.55" rx="0.78" fill="#11111B" fill-opacity="0.22"/>
   </g>
 
+  <g transform="translate(0,20.8) scale(1,-1)">
+    <path d="M0.970,0.000 L9.055,0.000 L9.055,1.790 L3.033,1.790 L3.033,5.032 L8.603,5.032 L8.603,6.790 L3.033,6.790 L3.033,9.853 L9.055,9.853 L9.055,11.640 L0.970,11.640 L0.970,0.000 Z M9.681,0.000 L11.898,0.000 L12.851,2.783 L17.368,2.783 L18.298,0.000 L20.571,0.000 L16.431,11.640 L13.836,11.640 L9.681,0.000 Z M13.431,4.478 L13.993,6.117 C14.343,7.188 14.696,8.305 15.133,9.773 C15.571,8.305 15.913,7.188 16.258,6.117 L16.806,4.478 L13.431,4.478 Z" transform="translate(35.030,0)" fill="#DCE3FF" fill-opacity="0.90"/>
+  </g>
 </svg>

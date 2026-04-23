@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { KeyRound, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { login } from "../api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -53,16 +53,15 @@ export default function Login({ onLogin }) {
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
         <form className="w-full max-w-[380px]" onSubmit={handleSubmit}>
           <Card className="bg-card/85 backdrop-blur-[2px]">
-            <CardHeader className="items-center gap-2 border-b border-white/[0.04] pb-5 text-center">
-              <div className="flex size-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-primary shadow-[0_0_10px_rgba(203,166,218,0.2)]">
-                <KeyRound size={16} />
-              </div>
+            <CardHeader className="items-center gap-3 border-b border-white/[0.04] pb-5 text-center">
+              <img
+                src="/ea-dashboard-header-logo-v3.svg"
+                alt="EA Dashboard"
+                style={{ height: 32, filter: "drop-shadow(0 2px 8px rgba(203,166,218,0.18))" }}
+              />
               <div className="text-[11px] font-semibold tracking-[2.5px] uppercase text-muted-foreground">
                 Private Access
               </div>
-              <h1 className="ea-display text-[32px] leading-none font-normal text-foreground">
-                EA Dashboard
-              </h1>
               <CardDescription className="text-[13px] text-muted-foreground/70">
                 Enter your password to continue
               </CardDescription>

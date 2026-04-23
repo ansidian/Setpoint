@@ -78,7 +78,7 @@ export default function ShellHeader({
         zIndex: 40,
       }}
     >
-      <ShellBrand accent={accent} isMobile={isMobile} />
+      <ShellBrand isMobile={isMobile} />
       <ShellTabs
         isMobile={isMobile}
         tab={tab}

@@ -36,33 +36,19 @@ export function Kbd({ children }) {
   );
 }
 
-export function ShellBrand({ accent, isMobile }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 7 : 9, flexShrink: 0 }}>
-      <div
-        style={{
-          width: isMobile ? 20 : 22,
-          height: isMobile ? 20 : 22,
-          borderRadius: 7,
-          background: `linear-gradient(135deg, ${accent}, ${accent}60)`,
-          display: "grid",
-          placeItems: "center",
-          boxShadow: `0 0 18px ${accent}38`,
-        }}
-      >
-        <Sparkles size={11} color="#0b0b13" strokeWidth={2.5} />
-      </div>
-      <div
-        style={{
-          fontSize: isMobile ? 11 : 12,
-          fontWeight: 600,
-          letterSpacing: 0.4,
-          color: "rgba(205,214,244,0.85)",
-        }}
-      >
-        EA
-      </div>
-    </div>
+export function ShellBrand({ isMobile }) {
+  return isMobile ? (
+    <img
+      src="/ea-dashboard-mark-v3.svg"
+      alt="EA Dashboard"
+      style={{ height: 20, width: 20, flexShrink: 0 }}
+    />
+  ) : (
+    <img
+      src="/ea-dashboard-header-logo-compact-v3.svg"
+      alt="EA Dashboard"
+      style={{ height: 24, flexShrink: 0 }}
+    />
   );
 }
 
