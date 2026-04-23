@@ -1,6 +1,6 @@
 import { Router } from "express";
 import db from "../db/connection.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.js";
 import { loadUserConfig } from "../briefing/index.js";
 import { fetchEmails as fetchGmailEmails, isMessageRead as isGmailMessageRead } from "../briefing/gmail.js";
 import { fetchEmails as fetchIcloudEmails, isMessageRead as isIcloudMessageRead } from "../briefing/icloud.js";
@@ -10,7 +10,7 @@ import { getUpcomingBills, getRecentTransactions, getMetadata as getActualMetada
 import { decrypt } from "../briefing/encryption.js";
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireCookieSession);
 
 // Extract all email UIDs from a briefing's email accounts
 function getBriefingEmailUids(briefing) {

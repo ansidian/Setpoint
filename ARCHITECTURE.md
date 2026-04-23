@@ -332,10 +332,10 @@ sequenceDiagram
     S->>B: 200 briefing data (or 401 if expired)
 ```
 
-Two auth paths feed `requireAuth`:
+Two auth paths exist, but they no longer feed a single shared "any auth works" guard:
 
-1. **Cookie session** — 32-byte hex tokens in `ea_sessions`, 30-day TTL, lazy-deleted on expired validation. Used by the browser SPA.
-2. **Bearer API token** — `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, optional expiry). Used by external integrations (shortcuts, scripts). Bearer requests are exempt from the `x-requested-with` CSRF check — they carry their own unforgeable secret.
+1. **Cookie session** — 32-byte hex tokens in `ea_sessions`, 30-day TTL, lazy-deleted on expired validation. Used by the browser SPA and required by normal dashboard routes.
+2. **Bearer API token** — `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, optional expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). Bearer requests are exempt from the `x-requested-with` CSRF check — they carry their own unforgeable secret.
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`.
 
@@ -784,7 +784,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 
 ### API Tokens (Bearer auth)
 
-Token management endpoints live under `/api/ea` (see Accounts & Settings). Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check. Raw tokens are shown once on creation; only `token_hash` is persisted.
+Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted.
 
 ## Deployment
 

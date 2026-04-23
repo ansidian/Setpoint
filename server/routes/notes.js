@@ -1,9 +1,9 @@
 import { Router } from "express";
 import db from "../db/connection.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.js";
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireCookieSession);
 
 const userId = () => process.env.EA_USER_ID;
 

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.js";
 import { embedText, searchSimilar, isEmbeddingAvailable } from "../embeddings/index.js";
 import { seedEmbeddings, getDevQueryVector } from "../db/dev-seed-embeddings.js";
 
@@ -7,7 +7,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireCookieSession);
 
 // --- Tier 1: Vector search ---
 

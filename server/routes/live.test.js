@@ -7,7 +7,7 @@ const isGmailMessageRead = vi.fn();
 const isIcloudMessageRead = vi.fn();
 
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
-vi.mock("../middleware/auth.js", () => ({ requireAuth: (_req, _res, next) => next() }));
+vi.mock("../middleware/auth.js", () => ({ requireCookieSession: (_req, _res, next) => next() }));
 vi.mock("../briefing/encryption.js", () => ({ decrypt: (v) => v }));
 vi.mock("../briefing/gmail.js", () => ({
   fetchEmails: (...a) => gmailFetchEmails(...a),

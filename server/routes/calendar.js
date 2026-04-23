@@ -1,6 +1,6 @@
 import { Router } from "express";
 import db from "../db/connection.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.js";
 import { fetchCTMDeadlinesAll } from "../briefing/ctm.js";
 import { fetchTodoistTasksAll } from "../briefing/todoist.js";
 import {
@@ -26,7 +26,7 @@ import {
 import { hydrateRecurringTombstones, addDaysIso } from "../briefing/tombstones.js";
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireCookieSession);
 
 function handleCalendarRouteError(res, err, fallbackMessage) {
   if (err?.status && err?.code) {

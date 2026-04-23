@@ -61,18 +61,57 @@ export async function validateSession(token) {
   return true;
 }
 
-export async function requireAuth(req, res, next) {
+function getBearerToken(req) {
   const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    const ctx = await validateBearer(authHeader.slice(7).trim());
-    if (ctx) {
-      req.apiToken = ctx;
-      return next();
-    }
-  }
-  const token = req.cookies?.ea_session;
-  if (await validateSession(token)) {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  return authHeader.slice(7).trim();
+}
+
+export async function requireCookieSession(req, res, next) {
+  if (await validateSession(req.cookies?.ea_session)) {
     return next();
   }
   return res.status(401).json({ message: "Not authenticated" });
+}
+
+export function requireApiTokenScope(requiredScope) {
+  return async function requireScopedApiToken(req, res, next) {
+    const raw = getBearerToken(req);
+    if (!raw) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const ctx = await validateBearer(raw);
+    if (!ctx) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (!ctx.scopes.includes(requiredScope)) {
+      return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
+    }
+
+    req.apiToken = ctx;
+    return next();
+  };
+}
+
+export function requireCookieSessionOrApiTokenScope(requiredScope) {
+  return async function requireCookieOrScopedToken(req, res, next) {
+    const raw = getBearerToken(req);
+    if (raw) {
+      const ctx = await validateBearer(raw);
+      if (ctx?.scopes.includes(requiredScope)) {
+        req.apiToken = ctx;
+        return next();
+      }
+      if (await validateSession(req.cookies?.ea_session)) {
+        return next();
+      }
+      if (ctx) {
+        return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
+      }
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    return requireCookieSession(req, res, next);
+  };
 }

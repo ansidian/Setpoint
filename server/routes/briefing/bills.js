@@ -1,7 +1,9 @@
 import { Router } from "express";
+import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.js";
 import * as billsService from "../../briefing/bills-service.js";
 
 const router = Router();
+const quickTxnRouter = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
 
 router.post("/actual/send", async (req, res) => {
@@ -17,10 +19,7 @@ router.post("/actual/send", async (req, res) => {
   }
 });
 
-router.post("/actual/quick-txn", async (req, res) => {
-  if (req.apiToken && !req.apiToken.scopes.includes("actual:write")) {
-    return res.status(403).json({ message: "Token lacks actual:write scope" });
-  }
+quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("actual:write"), async (req, res) => {
   const { account, amount, payee, type, date, notes, category } = req.body || {};
   if (!account || amount == null || !payee) {
     return res.status(400).json({ message: "account, amount, and payee are required" });
@@ -113,4 +112,5 @@ router.post("/actual/test", async (req, res) => {
   }
 });
 
+export { quickTxnRouter };
 export default router;

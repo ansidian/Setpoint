@@ -4,7 +4,7 @@ import request from "supertest";
 
 // Mock deps before importing the route
 vi.mock("../middleware/auth.js", () => ({
-  requireAuth: (_req, _res, next) => next(),
+  requireCookieSession: (_req, _res, next) => next(),
 }));
 vi.mock("../briefing/index.js", () => ({
   loadUserConfig: vi.fn(),

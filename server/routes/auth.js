@@ -2,7 +2,12 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
-import { createSession, validateSession, deleteSession } from "../middleware/auth.js";
+import {
+  createSession,
+  validateSession,
+  deleteSession,
+  requireCookieSession,
+} from "../middleware/auth.js";
 import db from "../db/connection.js";
 
 const router = Router();
@@ -18,13 +23,6 @@ const tokenMintLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-// Cookie-only gate for token-management endpoints. Intentionally does NOT accept
-// bearer auth — a bearer token must not be able to mint or list other tokens.
-async function requireCookieSession(req, res, next) {
-  if (await validateSession(req.cookies?.ea_session)) return next();
-  return res.status(401).json({ message: "Not authenticated" });
-}
 
 // Rate limit login: 5 attempts per 15 minutes per IP
 const loginLimiter = rateLimit({

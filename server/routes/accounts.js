@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import db from "../db/connection.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireCookieSession } from "../middleware/auth.js";
 import { encrypt, decrypt } from "../briefing/encryption.js";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../briefing/gmail.js";
 import { testConnection as testIcloud } from "../briefing/icloud.js";
@@ -70,7 +70,7 @@ router.get("/accounts/gmail/callback", async (req, res) => {
 });
 
 // All other routes require auth
-router.use(requireAuth);
+router.use(requireCookieSession);
 
 router.post("/suspend", async (req, res) => {
   const apiKey = process.env.RENDER_API_KEY;
@@ -486,7 +486,7 @@ router.get("/bill-extract-models", async (_req, res) => {
 
 // --- Important Senders ---
 
-router.get("/important-senders", requireAuth, async (req, res) => {
+router.get("/important-senders", async (req, res) => {
   const userId = process.env.EA_USER_ID;
   try {
     const result = await db.execute({
@@ -501,7 +501,7 @@ router.get("/important-senders", requireAuth, async (req, res) => {
   }
 });
 
-router.put("/important-senders", requireAuth, async (req, res) => {
+router.put("/important-senders", async (req, res) => {
   const userId = process.env.EA_USER_ID;
   const { senders } = req.body;
   if (!Array.isArray(senders)) {
