@@ -136,6 +136,26 @@ describe("Dashboard event loading", () => {
     expect(screen.queryByText("No upcoming bills")).toBeNull();
   });
 
+  it("keeps the bills placeholder during initial Actual loading before polling flips on", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    renderDashboardBody({
+      briefing: makeBriefing([]),
+      ensureRange: vi.fn().mockResolvedValue([]),
+      liveData: {
+        liveBills: [],
+        billsLoading: true,
+        actualConfigured: true,
+        isPolling: false,
+      },
+    });
+
+    expect(screen.getByTestId("bills-rail-loading-placeholder")).toBeTruthy();
+    expect(screen.queryByText("No upcoming bills")).toBeNull();
+  });
+
   it("deep links the pressure pill to the nearest deadline day", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();

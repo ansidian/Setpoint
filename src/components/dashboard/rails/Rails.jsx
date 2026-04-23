@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useReducer, useRef, useState, forwardRef } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import {
-  Sparkles, AlertCircle, CreditCard, ArrowRight, Inbox, Plus,
+  Sparkles, AlertCircle, CreditCard, ArrowRight, Inbox,
   Circle, CircleDashed, CheckCircle2, Check, Flag,
 } from "lucide-react";
 import { daysUntil, formatAmount } from "../../../lib/bill-utils";
@@ -9,9 +9,7 @@ import { formatFullDate } from "../../../lib/dashboard-helpers";
 import { resolveInsight } from "../../../lib/insight-resolver";
 import { Icon } from "@/lib/icons.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
-import AddTaskPanel from "../../todoist/AddTaskPanel";
 import Tooltip from "../../shared/Tooltip";
-import { useDashboard } from "../../../context/DashboardContext";
 
 function SectionHeader({ title, subtitle, right, isMobile = false }) {
   return (
@@ -61,33 +59,6 @@ function UrgencyPill({ days, accent, compact, verbose = false }) {
     </div>
   );
 }
-
-const AddTodoistButton = forwardRef(function AddTodoistButton({ accent, open, onClick }, ref) {
-  const [hover, setHover] = useState(false);
-  const active = open || hover;
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 4,
-        padding: "3px 8px", borderRadius: 6, cursor: "pointer",
-        fontFamily: "inherit", fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
-        background: active ? `${accent}1c` : `${accent}0d`,
-        border: `1px solid ${active ? `${accent}55` : `${accent}28`}`,
-        color: active ? "#fff" : accent,
-        transition: "all 120ms",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <Plus size={10} />
-      <span>Todoist</span>
-    </button>
-  );
-});
 
 function OpenInboxButton({ accent, onClick }) {
   const [hover, setHover] = useState(false);
@@ -381,34 +352,13 @@ export function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false
 
   const openCount = deadlines.filter((d) => d.status !== "complete").length;
 
-  const { handleAddTask } = useDashboard();
-  const [addOpen, setAddOpen] = useState(false);
-  const addBtnRef = useRef(null);
-
   return (
     <div data-sect="deadlines">
       <SectionHeader
         title="Deadlines"
         isMobile={isMobile}
-        right={
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <CountBadge n={openCount} />
-            <AddTodoistButton
-              ref={addBtnRef}
-              accent={accent}
-              open={addOpen}
-              onClick={() => setAddOpen((v) => !v)}
-            />
-          </div>
-        }
+        right={<CountBadge n={openCount} />}
       />
-      {addOpen && (
-        <AddTaskPanel
-          anchorRef={addBtnRef}
-          onClose={() => setAddOpen(false)}
-          onTaskAdded={(task) => { handleAddTask(task); setAddOpen(false); }}
-        />
-      )}
       <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
         {grouped.open.length > 0 && (
           <div>
@@ -658,6 +608,10 @@ function PaidChip() {
   );
 }
 
+const MAX_VISIBLE_BILLS = 5;
+const BILL_ROW_MIN_HEIGHT = 51;
+const BILL_ROW_MIN_HEIGHT_MOBILE = 72;
+
 function BillsRailLoadingPlaceholder({ isMobile = false }) {
   return (
     <div
@@ -669,10 +623,11 @@ function BillsRailLoadingPlaceholder({ isMobile = false }) {
         paddingTop: 2,
       }}
     >
-      {[0, 1].map((index) => (
+      {Array.from({ length: MAX_VISIBLE_BILLS }).map((_, index) => (
         <div
           key={index}
           style={{
+            minHeight: isMobile ? BILL_ROW_MIN_HEIGHT_MOBILE : BILL_ROW_MIN_HEIGHT,
             padding: isMobile ? "10px 2px" : "9px 2px",
             borderBottom: "1px solid rgba(255,255,255,0.04)",
             display: "grid",
@@ -715,6 +670,7 @@ export function BillsRail({ accent, bills = [], onJump, isMobile = false, loadin
     .filter((x) => x.days != null && x.days <= 7 && !x.b.paid)
     .reduce((s, x) => s + (x.b.amount || 0), 0);
   const showLoadingPlaceholder = loadingState === "empty_loading";
+  const reservedListMinHeight = (isMobile ? BILL_ROW_MIN_HEIGHT_MOBILE : BILL_ROW_MIN_HEIGHT) * MAX_VISIBLE_BILLS;
 
   return (
     <div data-sect="bills">
@@ -737,7 +693,14 @@ export function BillsRail({ accent, bills = [], onJump, isMobile = false, loadin
           )
         }
       />
-      <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          marginTop: 10,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: showLoadingPlaceholder || upcoming.length > 0 ? reservedListMinHeight : undefined,
+        }}
+      >
         {showLoadingPlaceholder ? <BillsRailLoadingPlaceholder isMobile={isMobile} /> : null}
         {upcoming.map(({ b, days }) => {
           const paid = !!b.paid;
@@ -763,6 +726,7 @@ export function BillsRail({ accent, bills = [], onJump, isMobile = false, loadin
                   : "1fr auto auto",
                 gap: 10,
                 alignItems: isMobile ? "start" : "center",
+                minHeight: isMobile ? BILL_ROW_MIN_HEIGHT_MOBILE : BILL_ROW_MIN_HEIGHT,
                 padding: isMobile ? "10px 2px" : "9px 2px",
                 borderBottom: "1px solid rgba(255,255,255,0.04)",
                 cursor: "pointer",

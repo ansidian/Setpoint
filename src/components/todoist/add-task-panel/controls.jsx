@@ -1,5 +1,99 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { FieldLabel } from "../../calendar/events/CalendarEditorControls";
+
+function useFloatingMenu({ open, triggerRef, panelRef, onClose, minWidth = 120, maxHeight = 180 }) {
+  const [pos, setPos] = useState(null);
+
+  const updatePos = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8;
+    const width = Math.max(rect.width, minWidth);
+    const left = Math.min(
+      Math.max(margin, rect.left),
+      Math.max(margin, window.innerWidth - width - margin),
+    );
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const opensAbove = spaceBelow < Math.min(maxHeight, 120) && spaceAbove > spaceBelow;
+    const availableHeight = Math.max(96, Math.min(maxHeight, opensAbove ? spaceAbove - 4 : spaceBelow - 4));
+    const top = opensAbove
+      ? Math.max(margin, rect.top - availableHeight - 4)
+      : Math.min(window.innerHeight - margin - availableHeight, rect.bottom + 4);
+    setPos({ top, left, width, maxHeight: availableHeight });
+  }, [maxHeight, minWidth, triggerRef]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
+  }, [open, updatePos]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function handlePointerDown(event) {
+      if (triggerRef.current?.contains(event.target)) return;
+      if (panelRef.current?.contains(event.target)) return;
+      onClose();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open, onClose, panelRef, triggerRef]);
+
+  useEffect(() => {
+    const element = panelRef.current;
+    if (!open || !element) return undefined;
+    function handleWheel(event) {
+      const atTop = element.scrollTop <= 0 && event.deltaY < 0;
+      const atBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 1 && event.deltaY > 0;
+      if (atTop || atBottom) event.preventDefault();
+    }
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleWheel);
+  }, [open, panelRef, pos]);
+
+  return pos;
+}
+
+function FloatingMenu({ open, triggerRef, panelRef, onClose, children, minWidth = 120, maxHeight = 180 }) {
+  const pos = useFloatingMenu({ open, triggerRef, panelRef, onClose, minWidth, maxHeight });
+  if (!open || !pos) return null;
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      role="listbox"
+      style={{
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        width: pos.width,
+        maxHeight: pos.maxHeight,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        isolation: "isolate",
+        background: "#16161e",
+        border: "1px solid rgba(205,214,244,0.12)",
+        borderRadius: 8,
+        zIndex: 10002,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+      }}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
 
 export function PriorityIndicator({ level }) {
   const colors = {
@@ -41,34 +135,17 @@ export function Dropdown({
   color,
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function handleClick(event) {
-      if (!ref.current?.contains(event.target)) setOpen(false);
-    }
-    document.addEventListener("pointerdown", handleClick);
-    return () => document.removeEventListener("pointerdown", handleClick);
-  }, [open]);
+  const [hover, setHover] = useState(false);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
 
   const borderColor = color ? `${color}33` : "rgba(205,214,244,0.08)";
-  const bgColor = color ? `${color}0d` : "rgba(205,214,244,0.04)";
 
   return (
-    <div ref={ref} style={{ position: "relative", flex: 1 }}>
+    <div style={{ position: "relative", flex: 1 }}>
+      <FieldLabel>{label}</FieldLabel>
       <div
-        style={{
-          color: "rgba(205,214,244,0.4)",
-          fontSize: 10,
-          textTransform: "uppercase",
-          letterSpacing: "1.5px",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-      <div
+        ref={triggerRef}
         role="button"
         tabIndex={0}
         onClick={() => setOpen((value) => !value)}
@@ -79,39 +156,33 @@ export function Dropdown({
           }
         }}
         style={{
-          background: bgColor,
+          background: hover ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.03)",
           border: `1px solid ${borderColor}`,
           borderRadius: 8,
-          padding: "8px 12px",
-          fontSize: 12,
+          padding: "9px 12px",
+          fontSize: 12.5,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           cursor: "pointer",
           color: color || "rgba(205,214,244,0.35)",
-          transition: "all 0.2s",
+          transform: hover ? "translateY(-1px)" : "translateY(0)",
+          transition: "transform 140ms, background 140ms, border-color 140ms",
         }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
       >
         <span>{renderValue ? renderValue(value) : value || "None"}</span>
         <ChevronDown size={12} style={{ opacity: 0.5 }} />
       </div>
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            marginTop: 4,
-            background: "#16161e",
-            border: "1px solid rgba(205,214,244,0.12)",
-            borderRadius: 8,
-            maxHeight: 160,
-            overflowY: "auto",
-            zIndex: 10,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-          }}
-        >
+      <FloatingMenu
+        open={open}
+        triggerRef={triggerRef}
+        panelRef={menuRef}
+        onClose={() => setOpen(false)}
+        minWidth={160}
+        maxHeight={180}
+      >
           {options.map((opt, index) => (
             <div
               key={opt.id ?? opt.value ?? index}
@@ -147,8 +218,7 @@ export function Dropdown({
               {renderOption ? renderOption(opt) : opt.name || opt.label}
             </div>
           ))}
-        </div>
-      )}
+      </FloatingMenu>
     </div>
   );
 }
@@ -260,22 +330,15 @@ export function TokenAutocomplete({ cursorPos, input, items, type, onSelect }) {
 
 export function LabelPicker({ available, onAdd }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function handleClick(event) {
-      if (!ref.current?.contains(event.target)) setOpen(false);
-    }
-    document.addEventListener("pointerdown", handleClick);
-    return () => document.removeEventListener("pointerdown", handleClick);
-  }, [open]);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
 
   if (!available.length) return null;
 
   return (
-    <span ref={ref} style={{ position: "relative" }}>
+    <span style={{ position: "relative" }}>
       <span
+        ref={triggerRef}
         role="button"
         tabIndex={0}
         onClick={() => setOpen((value) => !value)}
@@ -293,23 +356,14 @@ export function LabelPicker({ available, onAdd }) {
       >
         + label
       </span>
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "100%",
-            left: 0,
-            marginBottom: 4,
-            background: "#16161e",
-            border: "1px solid rgba(205,214,244,0.12)",
-            borderRadius: 8,
-            maxHeight: 120,
-            overflowY: "auto",
-            zIndex: 10,
-            boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-            minWidth: 120,
-          }}
-        >
+      <FloatingMenu
+        open={open}
+        triggerRef={triggerRef}
+        panelRef={menuRef}
+        onClose={() => setOpen(false)}
+        minWidth={120}
+        maxHeight={140}
+      >
           {available.map((label) => (
             <div
               key={label.id}
@@ -341,8 +395,7 @@ export function LabelPicker({ available, onAdd }) {
               {label.name}
             </div>
           ))}
-        </div>
-      )}
+      </FloatingMenu>
     </span>
   );
 }

@@ -48,6 +48,28 @@ test("creates a calendar event from the header action using deterministic fixtur
   await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.createdTitle);
 });
 
+test("opens a fresh event editor from the dashboard Add Event action every time", async ({ page }) => {
+  await installDashboardCalendarCreateFixtures(page);
+
+  await page.goto("/");
+  await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Event" }).click();
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
+  await page.getByTestId("calendar-event-title").fill("Temporary draft");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("calendar-modal-panel")).toBeHidden();
+
+  await page.getByRole("button", { name: "Add Event" }).click();
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
+  await expect(page.getByTestId("calendar-event-title")).toHaveValue("");
+});
+
 test("requires a recurring scope before saving recurring event edits", async ({ page }) => {
   const fixture = await installDashboardRecurringCalendarFixtures(page);
 

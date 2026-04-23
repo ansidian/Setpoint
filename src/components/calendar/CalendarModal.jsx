@@ -63,6 +63,7 @@ export default function CalendarModal({
   deadlinesData,
   focusDate,
   focusItemId,
+  openRequestId = 0,
 }) {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -85,12 +86,14 @@ export default function CalendarModal({
   const navigateMonthRef = useRef(null);
   const [prevOpen, setPrevOpen] = useState(open);
   const [prevView, setPrevView] = useState(view);
+  const [prevOpenRequestId, setPrevOpenRequestId] = useState(openRequestId);
 
   const syncSnapshot = useMemo(() => {
     const didOpen = !prevOpen && open;
     const didViewChange = prevView !== view;
+    const didOpenRequest = open && prevOpenRequestId !== openRequestId;
 
-    if (!didOpen && !didViewChange) return null;
+    if (!didOpen && !didViewChange && !didOpenRequest) return null;
 
     let nextViewDate = viewDate;
     let nextSelectedDay = selectedDay;
@@ -98,6 +101,7 @@ export default function CalendarModal({
     let nextPendingFocusDate = pendingFocusDate;
     let nextPendingFocusItemId = pendingFocusItemId;
     const openingFocus = didOpen ? parseFocusDate(focusDate) : null;
+    const requestFocus = didOpenRequest ? parseFocusDate(focusDate) : null;
 
     if (didOpen) {
       nextPendingFocusDate = focusDate || null;
@@ -115,11 +119,26 @@ export default function CalendarModal({
       }
     }
 
+    if (didOpenRequest && !didOpen) {
+      nextPendingFocusDate = focusDate || null;
+      nextPendingFocusItemId = focusItemId ? String(focusItemId) : null;
+
+      if (requestFocus) {
+        nextViewDate = { month: requestFocus.getMonth(), year: requestFocus.getFullYear() };
+        nextSelectedDay = requestFocus.getDate();
+        nextSelectedItemId = focusItemId ? String(focusItemId) : null;
+      } else if (focusItemId) {
+        nextSelectedItemId = String(focusItemId);
+      }
+    }
+
     if (didViewChange) {
-      const pendingFocus = openingFocus || parseFocusDate(nextPendingFocusDate);
+      const pendingFocus = openingFocus || requestFocus || parseFocusDate(nextPendingFocusDate);
       const nextFocusedItemId = openingFocus
         ? (focusItemId ? String(focusItemId) : null)
-        : (nextPendingFocusItemId ? String(nextPendingFocusItemId) : null);
+        : requestFocus
+          ? (focusItemId ? String(focusItemId) : null)
+          : (nextPendingFocusItemId ? String(nextPendingFocusItemId) : null);
 
       if (pendingFocus) {
         nextViewDate = { month: pendingFocus.getMonth(), year: pendingFocus.getFullYear() };
@@ -138,8 +157,9 @@ export default function CalendarModal({
       nextSelectedItemId,
       nextPendingFocusDate,
       nextPendingFocusItemId,
+      openCreate: (didOpen || didOpenRequest) && focusItemId === "new",
     };
-  }, [open, view, prevOpen, prevView, focusDate, focusItemId, viewDate, selectedDay, selectedItemId, pendingFocusDate, pendingFocusItemId]);
+  }, [open, view, prevOpen, prevView, prevOpenRequestId, openRequestId, focusDate, focusItemId, viewDate, selectedDay, selectedItemId, pendingFocusDate, pendingFocusItemId]);
 
   const activeViewDate = syncSnapshot?.nextViewDate || viewDate;
   const activeSelectedDay = syncSnapshot ? syncSnapshot.nextSelectedDay : selectedDay;
@@ -178,6 +198,12 @@ export default function CalendarModal({
     refreshRange: eventsData?.refreshRange,
     onFocusDate: focusEditorDate,
   });
+
+  useEffect(() => {
+    if (syncSnapshot?.openCreate && view === "events" && eventEditor.editable) {
+      eventEditor.openCreate();
+    }
+  }, [syncSnapshot?.openCreate, view, eventEditor.editable, eventEditor]);
   const closeEventEditor = eventEditor.closeEditor;
 
   function navigateMonth(dir) {
@@ -233,6 +259,9 @@ export default function CalendarModal({
     }
     if (prevView !== view) {
       setPrevView(view);
+    }
+    if (prevOpenRequestId !== openRequestId) {
+      setPrevOpenRequestId(openRequestId);
     }
   });
 

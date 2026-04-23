@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CheckCircle, CalendarPlus } from "lucide-react";
 import { greetingFor } from "../../lib/redesign-helpers";
 import { deriveFocusWindows } from "../../lib/focus-windows";
 import { deriveOpenDaySummary } from "../../lib/open-day-summary";
@@ -26,6 +27,7 @@ export default function DashboardHero({
   liveBills,
   userName = "",
   onJump,
+  onQuickAction,
   onOpenPressure,
   eventLoadingState = "ready",
 }) {
@@ -79,57 +81,12 @@ export default function DashboardHero({
         overflow: "hidden",
         margin: isMobile ? "0" : "16px 0 0",
         borderRadius: isMobile ? 0 : 24,
-        border: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
+        border: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
         background: isMobile
           ? "transparent"
-          : [
-              `radial-gradient(circle at top right, ${accent}14 0%, transparent 32%)`,
-              "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.008) 100%)",
-              "#10121a",
-            ].join(", "),
+          : "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
       }}
     >
-      {/* Ambient accent glow */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: -200,
-          right: -120,
-          width: 520,
-          height: 520,
-          background: `radial-gradient(circle, ${accent}12 0%, ${accent}08 24%, ${accent}03 52%, transparent 72%)`,
-          opacity: 0.7,
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          left: isMobile ? -80 : -40,
-          top: isMobile ? 20 : 18,
-          width: isMobile ? "120%" : "68%",
-          height: isMobile ? 220 : 260,
-          background: [
-            `radial-gradient(circle at 0% 30%, ${accent}10 0%, transparent 46%)`,
-            "linear-gradient(90deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0) 72%)",
-          ].join(", "),
-          opacity: isMobile ? 0.85 : 1,
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 24%)",
-          pointerEvents: "none",
-        }}
-      />
-
       <div
         style={{
           display: "grid",
@@ -160,6 +117,54 @@ export default function DashboardHero({
           weather={weather}
           weatherIcon={WeatherIcon}
         />
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: isMobile ? 8 : 10,
+          marginTop: isMobile ? 16 : 24,
+          flexWrap: "wrap",
+          position: "relative",
+          zIndex: 10,
+        }}
+      >
+        {[
+          { label: "New Task", icon: CheckCircle, action: "task" },
+          { label: "Add Event", icon: CalendarPlus, action: "event" },
+        ].map((item, i) => (
+          <button
+            key={i}
+            onClick={() => onQuickAction?.(item.action)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: isMobile ? "8px 14px" : "8px 16px",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "#cdd6f4",
+              fontSize: isMobile ? 12 : 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            <item.icon size={isMobile ? 14 : 16} color={accent} />
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {theCallouts.length > 0 && (

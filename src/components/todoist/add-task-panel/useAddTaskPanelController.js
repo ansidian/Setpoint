@@ -88,8 +88,6 @@ export default function useAddTaskPanelController({
   const deleteStartRef = useRef(null);
   const deleteTimerRef = useRef(null);
   const deleteIntervalRef = useRef(null);
-  const [saveHover, setSaveHover] = useState(false);
-  const [deleteHover, setDeleteHover] = useState(false);
   const [pos, setPos] = useState(null);
   const isMobile = useIsMobile();
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -285,6 +283,10 @@ export default function useAddTaskPanelController({
       setPos({ inline: true });
       return;
     }
+    if (host === "modal") {
+      setPos({ modal: true });
+      return;
+    }
     if (isMobile) {
       setPos({ mobile: true });
       return;
@@ -310,7 +312,7 @@ export default function useAddTaskPanelController({
     }
 
     setPos({ top, left, width: panelWidth });
-  }, [anchorRef, isInline, isMobile]);
+  }, [anchorRef, isInline, host, isMobile]);
 
   useEffect(() => {
     if (isInline) return undefined;
@@ -485,10 +487,6 @@ export default function useAddTaskPanelController({
     error,
     deleteProgress,
     deleting,
-    saveHover,
-    setSaveHover,
-    deleteHover,
-    setDeleteHover,
     pos,
     isMobile,
     keyboardOffset,

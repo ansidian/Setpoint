@@ -1,7 +1,7 @@
-export function buildContainerStyle({ isMobile, pos, active, keyboardOffset }) {
+export function buildContainerStyle({ isMobile, pos, host, active, keyboardOffset }) {
   const base = {
     position: "fixed",
-    background: "radial-gradient(ellipse at top left, #1a1a2a, #0d0d15 70%)",
+    background: "#16161e",
     border: "1px solid rgba(255,255,255,0.06)",
     padding: 0,
     zIndex: 9999,
@@ -27,6 +27,23 @@ export function buildContainerStyle({ isMobile, pos, active, keyboardOffset }) {
       paddingBottom: "env(safe-area-inset-bottom)",
       transform: active ? "translateY(0)" : "translateY(100%)",
       transformOrigin: "bottom center",
+    };
+  }
+
+  if (host === "modal") {
+    return {
+      ...base,
+      top: "50%",
+      left: "50%",
+      width: 560,
+      maxWidth: "92vw",
+      maxHeight: "85vh",
+      overflowY: "auto",
+      borderRadius: 16,
+      boxShadow: "0 40px 100px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.06)",
+      transform: active ? "translate(-50%, -50%) scale(1)" : "translate(-50%, -48%) scale(0.96)",
+      transformOrigin: "center center",
+      transition: "opacity 200ms ease, transform 240ms cubic-bezier(0.16, 1, 0.3, 1)",
     };
   }
 
@@ -75,22 +92,5 @@ export function buildDropdownRowStyle(isMobile) {
     flexDirection: isMobile ? "column" : "row",
     gap: 8,
     marginBottom: 8,
-  };
-}
-
-export function buildTextareaStyle(isMobile) {
-  return {
-    width: "100%",
-    background: "rgba(205,214,244,0.04)",
-    border: "1px solid rgba(205,214,244,0.08)",
-    borderRadius: 8,
-    padding: "10px 12px",
-    color: "#cdd6f4",
-    fontSize: 12,
-    outline: "none",
-    resize: isMobile ? "none" : "vertical",
-    minHeight: 40,
-    boxSizing: "border-box",
-    fontFamily: "inherit",
   };
 }

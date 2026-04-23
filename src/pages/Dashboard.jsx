@@ -10,6 +10,7 @@ import CommandPalette from "../components/shell/CommandPalette";
 import CustomizePanel from "../components/shell/CustomizePanel";
 import DashboardHero from "../components/dashboard/DashboardHero";
 import TodayTimeline from "../components/dashboard/TodayTimeline";
+import AddTaskPanel from "../components/todoist/AddTaskPanel";
 import { InsightsRail, DeadlinesRail, BillsRail, InboxPeek } from "../components/dashboard/rails/Rails";
 import NotesRail from "../components/notes/NotesRail";
 import DeadlineDetailPopover from "../components/dashboard/DeadlineDetailPopover";
@@ -240,6 +241,7 @@ export function RedesignShell({
   });
 
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
   const [calendarView, setCalendarView] = useState(() => {
     try {
       const saved = localStorage.getItem("calendar:lastView");
@@ -250,6 +252,7 @@ export function RedesignShell({
   const showBills = !!liveData.actualConfigured;
   const [calendarFocus, setCalendarFocus] = useState(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
   const dismissCalendar = useBrowserBackDismiss({
     enabled: !isMobile && calendarOpen,
     historyKey: "eaDashboardCalendarModal",
@@ -262,6 +265,7 @@ export function RedesignShell({
     try { localStorage.setItem("calendar:lastView", resolved); } catch { /* ignore */ }
     setCalendarFocus(focusDate || null);
     setCalendarFocusItemId(focusItemId ? String(focusItemId) : null);
+    setCalendarOpenRequestId((value) => value + 1);
     setCalendarOpen(true);
     if (resolved === "deadlines") loadCalendarDeadlines();
   };
@@ -513,9 +517,10 @@ export function RedesignShell({
               });
             }}
             onOpenBillsCalendar={(date) => openCalendar("bills", date || null)}
-            onOpenEventsCalendar={(date) => openCalendar("events", date || null)}
+            onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId)}
             onOpenDeadlinesCalendar={(date) => openCalendar("deadlines", date || null)}
             onJumpSection={jumpToSection}
+            setAddTaskOpen={setAddTaskOpen}
           />
         ) : (
           <InboxView
@@ -549,6 +554,26 @@ export function RedesignShell({
         />
       )}
 
+      {addTaskOpen && (
+        <AddTaskPanel
+          host={isMobile ? "anchored" : "modal"}
+          onClose={() => setAddTaskOpen(false)}
+          onTaskAdded={(task) => {
+            bd.setBriefing((prev) => {
+              if (!prev?.todoist) return prev;
+              return {
+                ...prev,
+                todoist: {
+                  ...prev.todoist,
+                  upcoming: [...(prev.todoist.upcoming || []), task],
+                },
+              };
+            });
+            setAddTaskOpen(false);
+          }}
+        />
+      )}
+
       <CommandPalette
         open={paletteOpen}
         accent={accent}
@@ -577,6 +602,7 @@ export function RedesignShell({
       {!isMobile && (
         <CalendarModal
           open={calendarOpen}
+          openRequestId={calendarOpenRequestId}
           onClose={dismissCalendar}
           view={calendarView}
           onViewChange={changeCalendarView}
@@ -603,7 +629,7 @@ export function RedesignShell({
 export function DashboardBody({
   briefing, liveData, calendarRange, customize, accent,
   isMobile = false,
-  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onJumpSection,
+  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onJumpSection, setAddTaskOpen,
 }) {
   const { dashboardLayout, density, showInsights, showInboxPeek, showNotes } = customize;
   const effectiveLayout = isMobile ? "paper" : dashboardLayout;
@@ -652,7 +678,7 @@ export function DashboardBody({
     : seededEvents.length > 0
       ? "refreshing"
       : "empty_loading";
-  const billsLoadingState = liveData.isPolling && liveData.actualConfigured && liveData.billsLoading && !bills.length
+  const billsLoadingState = liveData.actualConfigured && liveData.billsLoading && !bills.length
     ? "empty_loading"
     : "ready";
   const pressureFocusDate = useMemo(
@@ -688,6 +714,13 @@ export function DashboardBody({
       liveBills={bills}
       onOpenPressure={() => onOpenDeadlinesCalendar?.(pressureFocusDate)}
       eventLoadingState={eventLoadingState}
+      onQuickAction={(action) => {
+        if (action === "task") {
+          setAddTaskOpen(true);
+        } else if (action === "event") {
+          onOpenEventsCalendar(today, "new");
+        }
+      }}
       onJump={(payload, anchor) => {
         if (payload?.kind === "deadline") {
           // Callout carries { title, sub, ... } but not the full task — find it.

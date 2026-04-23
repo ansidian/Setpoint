@@ -28,9 +28,9 @@ export default function HeroCalloutCard({
         padding: isMobile ? "12px 14px" : "12px 16px 14px",
         borderRadius: isMobile ? 14 : 16,
         background: isMobile
-          ? "rgba(255,255,255,0.018)"
-          : "linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.012) 100%)",
-        border: "1px solid rgba(255,255,255,0.05)",
+          ? "rgba(255,255,255,0.03)"
+          : "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
         cursor: "pointer",
         position: "relative",
         overflow: "hidden",
@@ -40,16 +40,23 @@ export default function HeroCalloutCard({
         justifyContent: "center",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "linear-gradient(180deg, rgba(255,255,255,0.032) 0%, rgba(255,255,255,0.018) 100%)";
-        e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-        e.currentTarget.style.transform = "translateY(-1px)";
+        e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+        e.currentTarget.style.transform = "translateY(-2px)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = isMobile
-          ? "rgba(255,255,255,0.018)"
-          : "linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.012) 100%)";
-        e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+          ? "rgba(255,255,255,0.03)"
+          : "rgba(255,255,255,0.04)";
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
         e.currentTarget.style.transform = "translateY(0)";
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.outline = `2px solid ${accent}`;
+        e.currentTarget.style.outlineOffset = "2px";
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.outline = "none";
       }}
     >
       <div

@@ -26,6 +26,13 @@ export function ActionButton({
   disabled = false,
   onClick,
   dataTestId,
+  onPointerDown,
+  onPointerUp,
+  onPointerEnter,
+  onPointerLeave,
+  onPointerCancel,
+  title,
+  ...rest
 }) {
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -60,7 +67,16 @@ export function ActionButton({
       }}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onPointerCancel={onPointerCancel}
+      title={title}
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
         padding: "8px 10px",
         borderRadius: 8,
         border,
@@ -74,6 +90,7 @@ export function ActionButton({
         transform: hover && !pressed && !disabled ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 140ms, background 140ms, border-color 140ms, color 140ms, opacity 140ms",
       }}
+      {...rest}
     >
       {children}
     </button>
@@ -88,6 +105,7 @@ export function PickerFieldButton(props) {
     placeholder,
     onClick,
     dataTestId,
+    ariaLabel,
     disabled = false,
     invalid = false,
     leading = null,
@@ -100,6 +118,7 @@ export function PickerFieldButton(props) {
     <button
       ref={anchorRef}
       data-testid={dataTestId}
+      aria-label={ariaLabel}
       type="button"
       onClick={onClick}
       disabled={disabled}
