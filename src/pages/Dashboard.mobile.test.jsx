@@ -176,8 +176,10 @@ describe("RedesignShell mobile behavior", () => {
 
     expect(screen.getByTestId("shell-header-desktop")).toBeTruthy();
     expect(screen.getByTestId("calendar-modal").textContent).toBe("closed");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Morning Briefing");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Claude refreshed");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Claude");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
+    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
+    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Claude refreshed");
 
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
@@ -200,9 +202,10 @@ describe("RedesignShell mobile behavior", () => {
       </BrowserRouter>,
     );
 
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Quiet refresh");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Updated");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Morning Briefing");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Quiet x2");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).not.toContain("Updated");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
+    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
   });
 
   it("keeps the AI headline visible when a refresh notice becomes active", async () => {
@@ -233,10 +236,56 @@ describe("RedesignShell mobile behavior", () => {
 
     await waitFor(() => {
       const text = screen.getByTestId("shell-header-briefing-status").textContent;
-      expect(text).toContain("Claude refreshed");
+      expect(text).toContain("Claude");
       expect(text).toContain("Updated");
       expect(text).not.toContain("Briefing updated just now");
+      expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Claude refreshed");
     });
+  });
+
+  it("compacts just-now update copy in the shell status pill", () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    props.bd.briefing = {
+      ...makeBriefing(),
+      dataUpdatedAt: new Date().toISOString(),
+      skippedAI: true,
+      nonAiGenerationCount: 1,
+    };
+
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    const status = screen.getByTestId("shell-header-briefing-status");
+    expect(status.textContent).toContain("Updated");
+    expect(status.textContent).not.toContain("Updated just now");
+    expect(status.getAttribute("title")).toContain("Updated just now");
+  });
+
+  it("drops the update badge after one minute", () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    props.bd.briefing = {
+      ...makeBriefing(),
+      dataUpdatedAt: new Date(Date.now() - 61_000).toISOString(),
+      skippedAI: true,
+      nonAiGenerationCount: 1,
+    };
+
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).not.toContain("Updated");
   });
 
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {

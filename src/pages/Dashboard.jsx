@@ -375,7 +375,7 @@ export function RedesignShell({
     const latestChanged = bd.latestId && prevLatestIdRef.current && prevLatestIdRef.current !== bd.latestId;
     const quickRefreshChanged = bd.lastQuickRefreshAt && prevRefreshAtRef.current !== bd.lastQuickRefreshAt;
     if (latestChanged || quickRefreshChanged) {
-      setBriefingNoticeUntil(Date.now() + 45_000);
+      setBriefingNoticeUntil(Date.now() + 60_000);
     }
     prevLatestIdRef.current = bd.latestId;
     prevRefreshAtRef.current = bd.lastQuickRefreshAt;
@@ -845,6 +845,10 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
     label: "Schedule",
     headline: `${nextBriefing.label} ${nextBriefing.relativeLabel}`,
     detail: `${nextBriefing.timeLabel}`,
+    sourceLabel: "Scheduled",
+    ageLabel: nextBriefing.relativeLabel,
+    nextLabel: `Next ${nextBriefing.timeLabel}`,
+    nextDetail: nextBriefing.label,
     toneColor: "#89b4fa",
   } : null;
 
@@ -852,10 +856,12 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
   const updatedLabel = formatAgoLabel(dataUpdatedAt, nowMs);
   const aiLabel = formatAgoLabel(briefing.aiGeneratedAt, nowMs);
   const quietRefreshes = briefing.skippedAI ? Math.max(1, briefing.nonAiGenerationCount || 1) : 0;
-  const showTransientUpdate = !!updatedLabel && noticeActive;
-  const showPersistentUpdate = !!updatedLabel && briefing.skippedAI;
-  const activityLabel = showTransientUpdate || showPersistentUpdate ? `Updated ${updatedLabel}` : null;
-  const activityToneColor = showTransientUpdate ? "#a6e3a1" : "#89b4fa";
+  const dataUpdatedMs = dataUpdatedAt ? new Date(dataUpdatedAt).getTime() : Number.NaN;
+  const showRecentUpdate = Number.isFinite(dataUpdatedMs) && nowMs - dataUpdatedMs < 60_000;
+  const showUpdateBadge = !!updatedLabel && (noticeActive || showRecentUpdate);
+  const activityLabel = showUpdateBadge ? `Updated ${updatedLabel}` : null;
+  const activityShortLabel = showUpdateBadge ? "Updated" : null;
+  const activityToneColor = "#a6e3a1";
 
   const nextLine = nextBriefing
     ? `Next ${nextBriefing.label} at ${nextBriefing.timeLabel} (${nextBriefing.relativeLabel})`
@@ -867,8 +873,13 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
       label: "Latest briefing",
       headline: aiLabel ? `${quietLabel} · Claude source ${aiLabel}` : quietLabel,
       detail: nextLine,
+      sourceLabel: quietRefreshes > 1 ? `Quiet x${quietRefreshes}` : "Quiet",
+      ageLabel: aiLabel,
+      nextLabel: nextBriefing ? `Next ${nextBriefing.timeLabel}` : "No schedule",
+      nextDetail: nextBriefing?.label || null,
       toneColor: "#89b4fa",
       activityLabel,
+      activityShortLabel,
       activityToneColor,
     };
   }
@@ -877,8 +888,13 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
     label: "Latest briefing",
     headline: aiLabel ? `Claude refreshed ${aiLabel}` : "Claude refreshed this briefing",
     detail: nextLine,
+    sourceLabel: "Claude",
+    ageLabel: aiLabel,
+    nextLabel: nextBriefing ? `Next ${nextBriefing.timeLabel}` : "No schedule",
+    nextDetail: nextBriefing?.label || null,
     toneColor: "#cba6da",
     activityLabel,
+    activityShortLabel,
     activityToneColor,
   };
 }

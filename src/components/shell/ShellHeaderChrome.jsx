@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Sparkles,
   LayoutList,
@@ -169,69 +169,27 @@ export function PaletteTriggerButton({ onOpenPalette }) {
   );
 }
 
-function OverflowMarquee({ children, style, className }) {
-  const containerRef = useRef(null);
-  const contentRef = useRef(null);
-  const [overflowPx, setOverflowPx] = useState(0);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return undefined;
-
-    const measure = () => {
-      const nextOverflow = Math.max(0, Math.ceil(content.scrollWidth - container.clientWidth));
-      setOverflowPx(nextOverflow > 6 ? nextOverflow : 0);
-    };
-
-    measure();
-
-    const observer = typeof ResizeObserver === "function"
-      ? new ResizeObserver(measure)
-      : null;
-
-    observer?.observe(container);
-    observer?.observe(content);
-    window.addEventListener("resize", measure);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [children]);
+function StatusText({ children, color = "rgba(245,247,255,0.9)", maxWidth = 132, weight = 600 }) {
+  if (!children) return null;
 
   return (
-    <div
-      ref={containerRef}
+    <span
       style={{
-        flex: "1 1 auto",
         minWidth: 0,
+        maxWidth,
         overflow: "hidden",
+        textOverflow: "ellipsis",
         whiteSpace: "nowrap",
-        ...style,
+        fontSize: 12,
+        fontWeight: weight,
+        color,
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        fontVariantNumeric: "tabular-nums",
       }}
     >
-      <div
-        ref={contentRef}
-        className={overflowPx ? ["briefing-status-scroll", className].filter(Boolean).join(" ") : className}
-        style={{
-          display: "inline-block",
-          minWidth: overflowPx ? "max-content" : "100%",
-          textOverflow: overflowPx ? "clip" : "ellipsis",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          fontSize: 12,
-          fontWeight: 600,
-          color: "rgba(245,247,255,0.92)",
-          letterSpacing: 0.1,
-          lineHeight: 1.25,
-          "--briefing-scroll-distance": `-${overflowPx}px`,
-          "--briefing-scroll-duration": `${Math.max(8, overflowPx / 18)}s`,
-        }}
-      >
-        {children}
-      </div>
-    </div>
+      {children}
+    </span>
   );
 }
 
@@ -240,6 +198,11 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
 
   const toneColor = briefingStatus.toneColor || accent;
   const activityToneColor = briefingStatus.activityToneColor || "#cdd6f4";
+  const activityDisplayLabel = briefingStatus.activityShortLabel || briefingStatus.activityLabel;
+  const primaryLabel = [
+    briefingStatus.sourceLabel || briefingStatus.label,
+    briefingStatus.ageLabel,
+  ].filter(Boolean).join(" · ");
   const title = [
     briefingStatus.label,
     briefingStatus.headline,
@@ -253,82 +216,89 @@ export function BriefingStatusPill({ accent, briefingStatus }) {
     <div
       data-testid="shell-header-briefing-status"
       title={title}
+      aria-label={title}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
+        gap: 9,
         minWidth: 0,
-        maxWidth: 460,
-        padding: "4px 12px",
+        maxWidth: 372,
+        minHeight: 30,
+        padding: "5px 10px",
         borderRadius: 10,
         background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.025))",
         border: "1px solid rgba(255,255,255,0.06)",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
         whiteSpace: "nowrap",
+        boxSizing: "border-box",
       }}
     >
-      <div
+      <span
+        aria-hidden
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          flex: "1 1 auto",
-          minWidth: 0,
+          width: 6,
+          height: 6,
+          borderRadius: 99,
+          background: toneColor,
+          boxShadow: `0 0 8px ${toneColor}`,
+          flexShrink: 0,
         }}
-      >
+      />
+      <StatusText maxWidth={142}>{primaryLabel}</StatusText>
+      {activityDisplayLabel ? (
         <span
           style={{
-            width: 6,
-            height: 6,
-            borderRadius: 99,
-            background: toneColor,
-            boxShadow: `0 0 8px ${toneColor}`,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            maxWidth: 92,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            padding: "3px 7px",
+            borderRadius: 9999,
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: 1.1,
+            letterSpacing: 0,
+            color: activityToneColor,
+            background: `${activityToneColor}14`,
+            border: `1px solid ${activityToneColor}30`,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
             flexShrink: 0,
+            fontVariantNumeric: "tabular-nums",
           }}
-        />
-        <OverflowMarquee>
-          {briefingStatus.headline}
-        </OverflowMarquee>
-        {briefingStatus.activityLabel ? (
+        >
+          {activityDisplayLabel}
+        </span>
+      ) : null}
+      {briefingStatus.nextLabel ? (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            minWidth: 0,
+            paddingLeft: activityDisplayLabel ? 0 : 2,
+            color: "rgba(205,214,244,0.52)",
+            flex: "0 1 auto",
+          }}
+        >
           <span
+            aria-hidden
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "2px 8px",
-              borderRadius: 9999,
-              fontSize: 10,
-              fontWeight: 700,
-              lineHeight: 1.2,
-              letterSpacing: 0.1,
-              color: activityToneColor,
-              background: `${activityToneColor}14`,
-              border: `1px solid ${activityToneColor}30`,
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+              width: 1,
+              height: 14,
+              background: "rgba(255,255,255,0.08)",
               flexShrink: 0,
             }}
-          >
-            {briefingStatus.activityLabel}
-          </span>
-        ) : null}
-        {briefingStatus.detail ? (
-          <OverflowMarquee
-            style={{ flex: "0 1 180px" }}
-            className="briefing-status-detail"
-          >
-            <span
-              style={{
-              fontSize: 10.5,
-              color: "rgba(205,214,244,0.58)",
-              lineHeight: 1.35,
-              letterSpacing: 0.1,
-            }}
-            >
-              {briefingStatus.detail}
-            </span>
-          </OverflowMarquee>
-        ) : null}
-      </div>
+          />
+          <StatusText color="rgba(205,214,244,0.58)" maxWidth={84} weight={500}>
+            {briefingStatus.nextLabel}
+          </StatusText>
+        </span>
+      ) : null}
     </div>
   );
 }
