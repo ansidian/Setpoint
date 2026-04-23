@@ -54,6 +54,17 @@ function countUnreadEmails(emails = []) {
   return emails.filter((email) => !email.read).length;
 }
 
+function applyReadState(emails = [], uidSet, read) {
+  let changed = false;
+  for (const email of emails) {
+    if ((uidSet.has(email.id) || uidSet.has(email.uid)) && !!email.read !== !!read) {
+      email.read = !!read;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 // --- Email mutations ---
 
 export async function markEmailsRead(userId, uids) {
@@ -61,12 +72,8 @@ export async function markEmailsRead(userId, uids) {
   return mutateLatest(userId, (briefing) => {
     let changed = false;
     for (const acct of briefing.emails?.accounts || []) {
-      for (const email of (acct.important ?? [])) {
-        if ((uidSet.has(email.id) || uidSet.has(email.uid)) && !email.read) {
-          email.read = true;
-          changed = true;
-        }
-      }
+      changed = applyReadState(acct.important ?? [], uidSet, true) || changed;
+      changed = applyReadState(acct.noise ?? [], uidSet, true) || changed;
       acct.unread = countUnreadEmails(acct.important);
     }
     return changed;
@@ -78,12 +85,8 @@ export async function markEmailsUnread(userId, uids) {
   return mutateLatest(userId, (briefing) => {
     let changed = false;
     for (const acct of briefing.emails?.accounts || []) {
-      for (const email of (acct.important ?? [])) {
-        if ((uidSet.has(email.id) || uidSet.has(email.uid)) && email.read) {
-          email.read = false;
-          changed = true;
-        }
-      }
+      changed = applyReadState(acct.important ?? [], uidSet, false) || changed;
+      changed = applyReadState(acct.noise ?? [], uidSet, false) || changed;
       acct.unread = countUnreadEmails(acct.important);
     }
     return changed;

@@ -28,6 +28,7 @@ import useCalendarRange from "../hooks/useCalendarRange";
 import useIsMobile from "../hooks/useIsMobile";
 import useBrowserBackDismiss from "../hooks/useBrowserBackDismiss";
 import { focusPressureDate } from "../lib/focus-windows";
+import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import { mergeReadState } from "../components/inbox/helpers";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import {
@@ -103,25 +104,7 @@ export default function Dashboard() {
   useEffect(() => {
     const status = liveData.briefingReadStatus;
     if (!status || !Object.keys(status).length) return;
-    bd.setBriefing((prev) => {
-      if (!prev?.emails?.accounts) return prev;
-      let changed = false;
-      const accounts = prev.emails.accounts.map((acct) => {
-        const important = acct.important.map((e) => {
-          const key = e.uid || e.id;
-          if (!key || !Object.prototype.hasOwnProperty.call(status, key)) return e;
-          const nextRead = !!status[key];
-          if (e.read !== nextRead) {
-            changed = true;
-            return { ...e, read: nextRead };
-          }
-          return e;
-        });
-        if (important === acct.important) return acct;
-        return { ...acct, important, unread: important.filter((email) => !email.read).length };
-      });
-      return changed ? { ...prev, emails: { ...prev.emails, accounts } } : prev;
-    });
+    bd.setBriefing((prev) => reconcileBriefingReadStatus(prev, status));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- bd.setBriefing is stable
   }, [liveData.briefingReadStatus]);
 

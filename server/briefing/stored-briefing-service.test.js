@@ -75,6 +75,25 @@ describe("markEmailsRead", () => {
 
     expect(getUpdatedBriefing().emails.accounts[0].important[0].read).toBe(true);
   });
+
+  it("updates matching noise rows without changing unread count", async () => {
+    seedLatest({
+      emails: {
+        accounts: [{
+          important: [{ id: "gmail-important", read: false }],
+          noise: [{ uid: "gmail-noise", read: false }],
+          unread: 1,
+        }],
+      },
+    });
+    captureUpdate();
+
+    await markEmailsRead("u1", ["gmail-noise"]);
+
+    const acct = getUpdatedBriefing().emails.accounts[0];
+    expect(acct.noise[0].read).toBe(true);
+    expect(acct.unread).toBe(1);
+  });
 });
 
 describe("markEmailsUnread", () => {
@@ -89,6 +108,25 @@ describe("markEmailsUnread", () => {
     const acct = getUpdatedBriefing().emails.accounts[0];
     expect(acct.important[0].read).toBe(false);
     expect(acct.unread).toBe(1);
+  });
+
+  it("updates matching noise rows without changing unread count", async () => {
+    seedLatest({
+      emails: {
+        accounts: [{
+          important: [{ id: "gmail-important", read: true }],
+          noise: [{ uid: "gmail-noise", read: true }],
+          unread: 0,
+        }],
+      },
+    });
+    captureUpdate();
+
+    await markEmailsUnread("u1", ["gmail-noise"]);
+
+    const acct = getUpdatedBriefing().emails.accounts[0];
+    expect(acct.noise[0].read).toBe(false);
+    expect(acct.unread).toBe(0);
   });
 });
 

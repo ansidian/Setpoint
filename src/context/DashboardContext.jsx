@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useMemo } from "react";
 import { dismissEmail, completeTask, updateTaskStatus, dismissTombstone } from "../api";
+import { markBriefingAccountEmailsRead, setBriefingEmailReadState } from "../lib/briefing-email-state";
 
 const DashboardContext = createContext(null);
 
@@ -16,30 +17,11 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
   };
 
   const markAccountEmailsRead = useCallback(() => {
-    setBriefing(prev => {
-      const updated = JSON.parse(JSON.stringify(prev));
-      const acct = updated.emails?.accounts?.[activeAccount];
-      if (acct) {
-        for (const e of acct.important) e.read = true;
-        recountUnread(acct);
-      }
-      return updated;
-    });
+    setBriefing((prev) => markBriefingAccountEmailsRead(prev, activeAccount));
   }, [activeAccount, setBriefing]);
 
   const setEmailReadState = useCallback((emailKey, read) => {
-    setBriefing(prev => {
-      const updated = JSON.parse(JSON.stringify(prev));
-      for (const acct of updated.emails?.accounts || []) {
-        for (const e of acct.important || []) {
-          if (e.id === emailKey || e.uid === emailKey) {
-            e.read = read;
-          }
-        }
-        recountUnread(acct);
-      }
-      return updated;
-    });
+    setBriefing((prev) => setBriefingEmailReadState(prev, emailKey, read));
   }, [setBriefing]);
 
   const markEmailRead = useCallback((emailKey) => setEmailReadState(emailKey, true), [setEmailReadState]);

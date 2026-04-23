@@ -596,6 +596,8 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
         email={openNoise}
         onClose={closeNoise}
         navigation={noiseNav}
+        onMarkedRead={markEmailRead}
+        onMarkedUnread={markEmailUnread}
       />
 
       {emailMenu && (

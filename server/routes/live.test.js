@@ -211,4 +211,44 @@ describe("GET /api/live/all — dynamic hoursBack", () => {
 
     expect(res.body.briefingReadStatus).toEqual({ [uid]: true });
   });
+
+  it("reconciles briefing noise read state from provider/index data too", async () => {
+    const uid = "gmail-gmail-a-noise-1";
+    mockDb.execute.mockImplementation(async ({ sql }) => {
+      if (sql.includes("FROM ea_briefings") && sql.includes("ORDER BY generated_at DESC LIMIT 1")) {
+        return {
+          rows: [{
+            id: 1,
+            generated_at: new Date(Date.now() - 2 * 3600_000).toISOString().slice(0, 19).replace("T", " "),
+            briefing_json: JSON.stringify({
+              emails: {
+                accounts: [{
+                  name: "Work",
+                  important: [],
+                  noise: [{
+                    id: uid,
+                    uid,
+                    account_id: "gmail-a",
+                    account_email: "w@e.com",
+                    read: false,
+                  }],
+                }],
+              },
+            }),
+          }],
+        };
+      }
+      if (sql.includes("FROM ea_email_index")) {
+        return { rows: [{ uid, read: 1 }] };
+      }
+      return { rows: [] };
+    });
+    isGmailMessageRead.mockResolvedValueOnce(null);
+
+    const handler = findHandler("get", "/all");
+    const res = makeRes();
+    await handler({}, res);
+
+    expect(res.body.briefingReadStatus).toEqual({ [uid]: true });
+  });
 });

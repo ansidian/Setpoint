@@ -288,8 +288,7 @@ export function fixEmailAccounts(briefingJson, inputEmails, dbAccounts) {
       const id = email.id || email.uid;
       const original = emailLookup.get(id);
       if (original?.message_id) email.message_id = original.message_id;
-      // Sync read status from fresh Gmail/iCloud fetch
-      if (original?.read && !email.read) email.read = true;
+      if (typeof original?.read === "boolean") email.read = original.read;
       allTriaged.push({ email, accountLabel: original?.label || acct.name });
     }
   }
@@ -328,6 +327,9 @@ export function fixEmailAccounts(briefingJson, inputEmails, dbAccounts) {
     for (const n of acct.noise || []) {
       const nid = n.id || n.uid;
       if (nid && allImportantIds.has(nid)) continue;
+      const original = emailLookup.get(nid);
+      if (original?.message_id) n.message_id = original.message_id;
+      if (typeof original?.read === "boolean") n.read = original.read;
       g.noise.push(n);
     }
   }
@@ -694,6 +696,8 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       if (!e.uid) e.uid = orig.uid;
       if (!e.account_id) e.account_id = orig.account_id;
       if (!e.account_email) e.account_email = orig.account_email;
+      if (!e.message_id && orig.message_id) e.message_id = orig.message_id;
+      if (typeof orig.read === "boolean") e.read = orig.read;
     }
     for (const acct of briefingJson.emails?.accounts || []) {
       for (const e of acct.important) reattach(e);

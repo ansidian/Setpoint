@@ -224,6 +224,31 @@ describe("fixEmailAccounts", () => {
     expect(gmail.unread).toBe(2);
   });
 
+  it("copies current read state onto preserved noise entries", () => {
+    const inputEmails = [
+      { uid: "e1", account_label: "Gmail", account_icon: "G", account_color: "#red", read: true },
+    ];
+    const dbAccounts = [
+      { type: "gmail", label: "Gmail", icon: "G", color: "#red" },
+    ];
+    const briefingJson = {
+      emails: {
+        accounts: [{
+          name: "Gmail",
+          important: [],
+          noise: [{ id: "e1", subject: "Promo", from: "Store" }],
+          noise_count: 1,
+          unread: 0,
+        }],
+      },
+    };
+
+    fixEmailAccounts(briefingJson, inputEmails, dbAccounts);
+
+    const gmail = briefingJson.emails.accounts.find((a) => a.name === "Gmail");
+    expect(gmail.noise[0].read).toBe(true);
+  });
+
   it("logs console.warn with [Briefing] tag and still completes when email count in does not equal email count out", () => {
     // RED: fails because fixEmailAccounts is not yet exported from index.js
     // (calling undefined throws TypeError) — and even if callable, no warn code exists.
