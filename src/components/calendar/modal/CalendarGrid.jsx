@@ -1,14 +1,17 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
+import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const GRID_ROWS = 6;
+const CELL_HEADER_HEIGHT = 24;
 
 function CalendarCell({
   view,
   day,
   items,
+  selectedItemId,
   hasItems,
   isToday,
   isSelected,
@@ -16,7 +19,9 @@ function CalendarCell({
   hasOverdue,
   allComplete,
   loading,
-  onClick,
+  onSelectDay,
+  onSelectItem,
+  onOpenOverflow,
   renderCellContents,
 }) {
   const todayAccent = "var(--ea-accent)";
@@ -105,11 +110,17 @@ function CalendarCell({
     loading,
     pastTone,
     isSelected,
+    day,
+    selectedItemId,
+    overflowOpen: false,
+    onSelectDay: () => onSelectDay?.(),
+    onSelectItem,
+    onOpenOverflow,
   });
 
   return (
     <div
-      onClick={onClick}
+      onClick={() => onSelectDay?.()}
       aria-current={isToday ? "date" : undefined}
       data-testid={`calendar-cell-${day}`}
       data-past-tone={pastTone || "none"}
@@ -118,7 +129,7 @@ function CalendarCell({
         minWidth: 0,
         overflow: "hidden",
         borderRadius: 8,
-        padding: "7px 9px",
+        padding: "6px 8px",
         background: cellBg,
         border: cellBorder,
         boxShadow: cellShadow,
@@ -126,7 +137,7 @@ function CalendarCell({
         transition: "box-shadow 150ms, border-color 150ms, background 150ms",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 2,
       }}
     >
       {todayWash && (
@@ -155,7 +166,16 @@ function CalendarCell({
           }}
         />
       )}
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          minHeight: CELL_HEADER_HEIGHT,
+          flexShrink: 0,
+        }}
+      >
         <span
           style={{
             display: "inline-flex",
@@ -166,6 +186,7 @@ function CalendarCell({
             padding: isToday ? "0 8px" : 0,
             borderRadius: 999,
             fontSize: 12.5,
+            lineHeight: 1,
             color: dateColor,
             fontWeight: dateWeight,
             fontVariantNumeric: "tabular-nums",
@@ -204,19 +225,29 @@ function CalendarCell({
   );
 }
 
-function CalendarEventsGridSkeleton({ firstDay, daysInMonth, trailingEmpty, cellHeight, gridGap }) {
+function CalendarGridSkeleton({
+  firstDay,
+  daysInMonth,
+  trailingEmpty,
+  cellHeight,
+  gridGap,
+  fillHeight,
+  rowCount,
+}) {
   const rowWidths = cellHeight >= 96 ? ["84%", "71%", "58%"] : ["86%", "63%"];
 
   return (
     <div
-      data-testid="calendar-events-grid-skeleton"
+      data-testid="calendar-grid-skeleton"
       aria-hidden="true"
       style={{
         position: "absolute",
         inset: 0,
         display: "grid",
         gridTemplateColumns: "repeat(7, 1fr)",
-        gridTemplateRows: `repeat(${GRID_ROWS}, ${cellHeight}px)`,
+        gridTemplateRows: fillHeight
+          ? `repeat(${rowCount}, minmax(0, 1fr))`
+          : `repeat(${GRID_ROWS}, ${cellHeight}px)`,
         gap: gridGap,
         pointerEvents: "none",
       }}
@@ -261,10 +292,12 @@ export default function CalendarGrid({
   trailingEmpty,
   itemsByDay,
   selectedDay,
+  selectedItemId,
   viewData,
   activeView,
   layout,
-  showEventsLoadingState,
+  suppressOutsideClick,
+  showGridSkeleton,
   buildFallbackDayState,
   closeEventEditor,
   setSelectedDay,
@@ -272,10 +305,62 @@ export default function CalendarGrid({
   setDeadlineEditor,
 }) {
   const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
+  const fillGridHeight = !layout.stacked;
+  const gridRowCount = fillGridHeight
+    ? Math.max(1, Math.ceil((firstDay + daysInMonth) / 7))
+    : GRID_ROWS;
+  const resolvedTrailingEmpty = fillGridHeight
+    ? Math.max(0, gridRowCount * 7 - firstDay - daysInMonth)
+    : trailingEmpty;
+  const [overflowPopover, setOverflowPopover] = useState(null);
+  const resolvedPopover = overflowPopover
+    && overflowPopover.view === view
+    && overflowPopover.viewYear === viewYear
+    && overflowPopover.viewMonth === viewMonth
+      ? overflowPopover
+      : null;
+
+  function handleSelectDay(day, isSelected, dayHasSelectedItem) {
+    closeEventEditor();
+    if (view === "deadlines") {
+      setDeadlineEditor(null);
+    }
+
+    if (isSelected && !dayHasSelectedItem) {
+      setSelectedDay(null);
+      setSelectedItemId(null);
+      return;
+    }
+
+    setSelectedDay(day);
+    setSelectedItemId(null);
+  }
+
+  function handleSelectItem(day, itemId) {
+    closeEventEditor();
+    if (view === "deadlines") {
+      setDeadlineEditor(null);
+    }
+    setSelectedDay(day);
+    setSelectedItemId(itemId != null ? String(itemId) : null);
+    setOverflowPopover(null);
+  }
 
   return (
-    <div style={{ minWidth: 0, position: "relative" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: layout.weekHeaderGap, marginBottom: 8 }}>
+    <div
+      data-testid="calendar-grid-shell"
+      style={{
+        minWidth: 0,
+        width: "100%",
+        flex: 1,
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        height: "100%",
+      }}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: layout.weekHeaderGap, marginBottom: 8, flexShrink: 0 }}>
         {DAYS.map((day) => (
           <div
             key={day}
@@ -294,13 +379,17 @@ export default function CalendarGrid({
         ))}
       </div>
 
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
         <div
+          data-testid="calendar-grid-month"
           key={`${view}-${viewYear}-${viewMonth}`}
           style={{
+            height: "100%",
             display: "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
-            gridTemplateRows: `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
+            gridTemplateRows: fillGridHeight
+              ? `repeat(${gridRowCount}, minmax(0, 1fr))`
+              : `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
             gap: layout.gridGap,
           }}
         >
@@ -311,6 +400,7 @@ export default function CalendarGrid({
             const rawItems = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
             const dayState = activeView.getDayState?.(itemsByDay[day]) ?? buildFallbackDayState(itemsByDay[day]);
             const cellItems = activeView.getDayState ? dayState : rawItems;
+            const selectionPool = Array.isArray(dayState.items) ? dayState.items : rawItems;
             const hasItems = dayState.totalCount > 0;
             const isToday = isCurrentMonth && day === todayDate;
             const isSelected = selectedDay === day;
@@ -319,6 +409,9 @@ export default function CalendarGrid({
             const isPastDay = view === "events"
               && new Date(viewYear, viewMonth, day) < new Date(currentYear, currentMonth, todayDate);
             const pastTone = isPastDay ? (hasItems ? "items" : "empty") : null;
+            const resolveItemId = activeView.getItemId || ((item) => item?.id);
+            const dayHasSelectedItem = isSelected && selectionPool.some((item) => String(resolveItemId(item)) === String(selectedItemId));
+            const overflowOpen = resolvedPopover?.day === day;
 
             return (
               <CalendarCell
@@ -326,6 +419,7 @@ export default function CalendarGrid({
                 view={view}
                 day={day}
                 items={cellItems}
+                selectedItemId={dayHasSelectedItem ? selectedItemId : null}
                 hasItems={hasItems}
                 isToday={isToday}
                 isSelected={isSelected}
@@ -333,39 +427,68 @@ export default function CalendarGrid({
                 hasOverdue={hasOverdue}
                 allComplete={allComplete}
                 loading={viewData?.isLoading}
-                onClick={() => {
-                  closeEventEditor();
-                  if (isSelected) {
-                    setSelectedDay(null);
-                    setSelectedItemId(null);
-                    setDeadlineEditor(null);
-                    return;
-                  }
-                  setSelectedDay(day);
-                  if (view === "deadlines") {
-                    setDeadlineEditor(null);
-                  }
-                  const nextId = activeView.getDefaultSelectedItemId?.(dayState);
-                  setSelectedItemId(nextId ? String(nextId) : null);
+                onSelectDay={() => handleSelectDay(day, isSelected, dayHasSelectedItem)}
+                onSelectItem={(itemId) => handleSelectItem(day, itemId)}
+                onOpenOverflow={({ triggerElement, hiddenItems, totalCount, visibleCount }) => {
+                  const anchorKey = `${view}-${viewYear}-${viewMonth}-${day}`;
+                  setOverflowPopover((current) => {
+                    if (current?.anchorKey === anchorKey) {
+                      return null;
+                    }
+                    return {
+                      triggerElement,
+                      items: hiddenItems,
+                      totalCount,
+                      visibleCount,
+                      label: new Date(viewYear, viewMonth, day).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                      }),
+                      viewLabel: activeView.label || (view[0].toUpperCase() + view.slice(1)),
+                      day,
+                      view,
+                      viewYear,
+                      viewMonth,
+                      anchorKey,
+                    };
+                  });
                 }}
-                renderCellContents={activeView.renderCellContents}
+                renderCellContents={(args) => activeView.renderCellContents?.({
+                  ...args,
+                  overflowOpen,
+                  layout,
+                })}
               />
             );
           })}
 
-          {Array.from({ length: trailingEmpty }, (_, index) => <div key={`trail-${index}`} />)}
+          {Array.from({ length: resolvedTrailingEmpty }, (_, index) => <div key={`trail-${index}`} />)}
         </div>
 
-        {showEventsLoadingState && (
-          <CalendarEventsGridSkeleton
+        {showGridSkeleton && (
+          <CalendarGridSkeleton
             firstDay={firstDay}
             daysInMonth={daysInMonth}
-            trailingEmpty={trailingEmpty}
+            trailingEmpty={resolvedTrailingEmpty}
             cellHeight={layout.cellHeight}
             gridGap={layout.gridGap}
+            fillHeight={fillGridHeight}
+            rowCount={gridRowCount}
           />
         )}
       </div>
+
+      <CalendarCellOverflowPopover
+        popover={resolvedPopover}
+        selectedItemId={selectedItemId}
+        onSelectItem={(itemId) => {
+          if (resolvedPopover?.day == null) return;
+          handleSelectItem(resolvedPopover.day, itemId);
+        }}
+        onClose={() => setOverflowPopover(null)}
+        suppressOutsideClick={suppressOutsideClick}
+      />
     </div>
   );
 }

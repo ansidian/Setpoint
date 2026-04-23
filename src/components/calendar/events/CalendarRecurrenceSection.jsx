@@ -213,7 +213,7 @@ function RecurrenceUntilDatePicker({ value, startDate, disabled, onChange, testI
   const panelRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || disabled) return undefined;
 
     function handleKeyDown(event) {
       if (event.key !== "Escape") return;
@@ -224,12 +224,9 @@ function RecurrenceUntilDatePicker({ value, startDate, disabled, onChange, testI
 
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [open]);
+  }, [open, disabled]);
 
-  useEffect(() => {
-    if (!disabled) return;
-    setOpen(false);
-  }, [disabled]);
+  const showPicker = open && !disabled;
 
   return (
     <>
@@ -243,7 +240,7 @@ function RecurrenceUntilDatePicker({ value, startDate, disabled, onChange, testI
         disabled={disabled}
         trailingLabel=""
       />
-      {open ? (
+      {showPicker ? (
         <AnchoredFloatingPanel
           anchorRef={anchorRef}
           panelRef={panelRef}

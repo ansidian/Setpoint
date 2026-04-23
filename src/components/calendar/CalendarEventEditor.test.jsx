@@ -204,10 +204,15 @@ describe("Calendar event editor rail", () => {
     });
 
     await waitFor(() => {
+      const supportBand = screen.getByTestId("calendar-modal-support-band");
       expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 28, 2026/i);
       expect(screen.getByTestId("calendar-batch-review")).toBeTruthy();
       expect(screen.getByTestId("calendar-event-title-mode-preview").textContent).toMatch(/3 one-off events/i);
       expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+      expect(supportBand.textContent).toMatch(/3 events/i);
+      expect(supportBand.textContent).toMatch(/apr 28/i);
+      expect(supportBand.textContent).not.toMatch(/choose a calendar/i);
+      expect(supportBand.textContent).not.toMatch(/ready for details/i);
     });
 
     fireEvent.click(screen.getByTestId("calendar-batch-remove-1"));
@@ -374,6 +379,7 @@ describe("Calendar event editor rail", () => {
       },
     });
 
+    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
     fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 

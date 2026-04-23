@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCalendarViewMeta } from "./calendarEmptyStateMeta.js";
@@ -71,7 +72,7 @@ function countOpenDeadlinesInRange(items = [], start, end) {
   }, 0);
 }
 
-function getOverviewModel({
+export function getOverviewModel({
   view,
   viewYear,
   viewMonth,
@@ -238,7 +239,7 @@ function heroCardStyle(accent) {
   };
 }
 
-function OverviewHero({ model, compact = false }) {
+export function OverviewHero({ model, compact = false }) {
   const Icon = model.icon;
 
   return (
@@ -305,7 +306,21 @@ function OverviewHero({ model, compact = false }) {
           {model.title}
         </div>
 
-        <div style={{ fontSize: 12.5, lineHeight: compact ? 1.54 : 1.62, color: "rgba(205,214,244,0.62)" }}>
+        <div
+          style={{
+            fontSize: 12.5,
+            lineHeight: compact ? 1.54 : 1.62,
+            color: "rgba(205,214,244,0.62)",
+            ...(compact
+              ? {
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }
+              : {}),
+          }}
+        >
           {model.description}
         </div>
       </div>
@@ -313,7 +328,7 @@ function OverviewHero({ model, compact = false }) {
   );
 }
 
-function SpotlightCard({ accent, label, value, detail, compact = false }) {
+export function SpotlightCard({ accent, label, value, detail, compact = false }) {
   return (
     <div
       style={{
@@ -339,14 +354,29 @@ function SpotlightCard({ accent, label, value, detail, compact = false }) {
       >
         {value}
       </div>
-      <div style={{ marginTop: 8, fontSize: 11.5, lineHeight: compact ? 1.48 : 1.55, color: "rgba(205,214,244,0.56)" }}>
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 11.5,
+          lineHeight: compact ? 1.48 : 1.55,
+          color: "rgba(205,214,244,0.56)",
+          ...(compact
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }
+            : {}),
+        }}
+      >
         {detail}
       </div>
     </div>
   );
 }
 
-function MetricCard({ label, value, detail, accent, compact = false }) {
+export function MetricCard({ label, value, detail, accent, compact = false }) {
   return (
     <div
       style={{
@@ -372,14 +402,29 @@ function MetricCard({ label, value, detail, accent, compact = false }) {
       >
         {value}
       </div>
-      <div style={{ marginTop: compact ? 7 : 8, fontSize: 11, lineHeight: compact ? 1.42 : 1.5, color: "rgba(205,214,244,0.48)" }}>
+      <div
+        style={{
+          marginTop: compact ? 7 : 8,
+          fontSize: 11,
+          lineHeight: compact ? 1.42 : 1.5,
+          color: "rgba(205,214,244,0.48)",
+          ...(compact
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }
+            : {}),
+        }}
+      >
         {detail}
       </div>
     </div>
   );
 }
 
-function FooterFrame({ label, children }) {
+export function FooterFrame({ label, children }) {
   if (!children) return null;
 
   return (
@@ -392,7 +437,7 @@ function FooterFrame({ label, children }) {
   );
 }
 
-function EventsLoadingFrame() {
+export function EventsLoadingFrame() {
   return (
     <div
       data-testid="calendar-events-rail-skeleton"
@@ -419,7 +464,7 @@ function EventsLoadingFrame() {
   );
 }
 
-function EmptyDayCard({ model, viewYear, viewMonth, selectedDay }) {
+export function EmptyDayCard({ model, viewYear, viewMonth, selectedDay, compact = false }) {
   const Icon = model.icon;
 
   return (
@@ -427,7 +472,7 @@ function EmptyDayCard({ model, viewYear, viewMonth, selectedDay }) {
       data-testid="calendar-selected-empty-rail"
       style={{
         ...heroCardStyle(model.accent),
-        padding: 14,
+        padding: compact ? 12 : 14,
       }}
     >
       <div
@@ -446,10 +491,10 @@ function EmptyDayCard({ model, viewYear, viewMonth, selectedDay }) {
           zIndex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: compact ? 8 : 10,
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: compact ? 10 : 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <span
               aria-hidden
@@ -462,20 +507,20 @@ function EmptyDayCard({ model, viewYear, viewMonth, selectedDay }) {
                 boxShadow: `0 0 8px color-mix(in srgb, ${model.accent} 34%, transparent)`,
               }}
             />
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 5, minWidth: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.2, textTransform: "uppercase", color: "rgba(205,214,244,0.48)" }}>
                 {model.selectedDayLabel}
               </div>
-              <div style={{ fontSize: 11, lineHeight: 1.25, color: "rgba(205,214,244,0.58)" }}>
+              <div style={{ fontSize: compact ? 10.5 : 11, lineHeight: 1.25, color: "rgba(205,214,244,0.58)" }}>
                 {model.emptyDayLabel}
               </div>
             </div>
           </div>
           <div
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 12,
+              width: compact ? 30 : 34,
+              height: compact ? 30 : 34,
+              borderRadius: compact ? 10 : 12,
               display: "grid",
               placeItems: "center",
               flexShrink: 0,
@@ -484,15 +529,30 @@ function EmptyDayCard({ model, viewYear, viewMonth, selectedDay }) {
               color: model.accent,
             }}
           >
-            <Icon size={15} strokeWidth={1.9} />
+            <Icon size={compact ? 13 : 15} strokeWidth={1.9} />
           </div>
         </div>
 
-        <div className="ea-display" style={{ fontSize: 21, lineHeight: 1.04, letterSpacing: -0.34, color: "#fff" }}>
+        <div className="ea-display" style={{ fontSize: compact ? 18 : 21, lineHeight: 1.04, letterSpacing: compact ? -0.28 : -0.34, color: "#fff" }}>
           {formatFullDate(viewYear, viewMonth, selectedDay)}
         </div>
 
-        <div style={{ maxWidth: 260, fontSize: 12, lineHeight: 1.46, color: "rgba(205,214,244,0.62)" }}>
+        <div
+          style={{
+            maxWidth: compact ? "100%" : 260,
+            fontSize: compact ? 11 : 12,
+            lineHeight: 1.46,
+            color: "rgba(205,214,244,0.62)",
+            ...(compact
+              ? {
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }
+              : {}),
+          }}
+        >
           {model.railDescription}
         </div>
       </div>
@@ -545,6 +605,7 @@ function NeighborRow({
   viewYear,
   viewMonth,
   onSelectDay,
+  compact = false,
 }) {
   const hasDay = Number.isFinite(day);
   const Icon = direction === "prev" ? ArrowLeft : ArrowRight;
@@ -565,9 +626,9 @@ function NeighborRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: compact ? 8 : 10,
         width: "100%",
-        padding: "10px 12px",
+        padding: compact ? "8px 10px" : "10px 12px",
         borderRadius: 9,
         border: hasDay
           ? `1px solid color-mix(in srgb, ${accent} 14%, rgba(255,255,255,0.05))`
@@ -585,9 +646,9 @@ function NeighborRow({
       <span
         aria-hidden
         style={{
-          width: 24,
-          height: 24,
-          borderRadius: 7,
+          width: compact ? 22 : 24,
+          height: compact ? 22 : 24,
+          borderRadius: compact ? 6 : 7,
           display: "grid",
           placeItems: "center",
           flexShrink: 0,
@@ -600,12 +661,12 @@ function NeighborRow({
             : "1px solid rgba(255,255,255,0.05)",
         }}
       >
-        <Icon size={13} strokeWidth={2} />
+        <Icon size={compact ? 12 : 13} strokeWidth={2} />
       </span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, flex: 1 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: compact ? 2 : 3, minWidth: 0, flex: 1 }}>
         <div
           style={{
-            fontSize: 9.5,
+            fontSize: compact ? 9 : 9.5,
             fontWeight: 700,
             letterSpacing: 1.6,
             textTransform: "uppercase",
@@ -616,7 +677,7 @@ function NeighborRow({
         </div>
         <div
           style={{
-            fontSize: 12.5,
+            fontSize: compact ? 11.5 : 12.5,
             color: hasDay ? "#eef2ff" : "rgba(205,214,244,0.55)",
             fontWeight: 500,
             overflow: "hidden",
@@ -631,7 +692,7 @@ function NeighborRow({
         <div
           style={{
             flexShrink: 0,
-            fontSize: 11,
+            fontSize: compact ? 10 : 11,
             fontWeight: 600,
             color: "rgba(205,214,244,0.66)",
             fontVariantNumeric: "tabular-nums",
@@ -644,7 +705,7 @@ function NeighborRow({
   );
 }
 
-function NearbyActivityCard({
+export function NearbyActivityCard({
   model,
   activeView,
   itemsByDay,
@@ -652,6 +713,7 @@ function NearbyActivityCard({
   viewYear,
   viewMonth,
   onSelectDay,
+  compact = false,
 }) {
   const { prev, next } = findNeighborDays(itemsByDay, selectedDay);
   const noun = model.itemNoun || "item";
@@ -660,7 +722,7 @@ function NearbyActivityCard({
   return (
     <div
       data-testid="calendar-empty-rail-neighbors"
-      style={{ display: "flex", flexDirection: "column", gap: 8 }}
+      style={{ display: "flex", flexDirection: "column", gap: compact ? 6 : 8 }}
     >
       <div
         style={{
@@ -684,6 +746,7 @@ function NearbyActivityCard({
         viewYear={viewYear}
         viewMonth={viewMonth}
         onSelectDay={onSelectDay}
+        compact={compact}
       />
       <NeighborRow
         direction="next"
@@ -696,19 +759,22 @@ function NearbyActivityCard({
         viewYear={viewYear}
         viewMonth={viewMonth}
         onSelectDay={onSelectDay}
+        compact={compact}
       />
       {isClearMonth ? (
         <div
           style={{
-            padding: "10px 12px",
+            padding: compact ? "8px 10px" : "10px 12px",
             borderRadius: 10,
             border: "1px dashed rgba(255,255,255,0.06)",
-            fontSize: 11,
+            fontSize: compact ? 10.5 : 11,
             lineHeight: 1.55,
             color: "rgba(205,214,244,0.52)",
           }}
         >
-          The month is clear in both directions. Use ←/→ or click any day to browse.
+          {compact
+            ? "Month is clear both ways. Browse with arrows or click any day."
+            : "The month is clear in both directions. Use ←/→ or click any day to browse."}
         </div>
       ) : null}
     </div>
@@ -717,46 +783,70 @@ function NearbyActivityCard({
 
 export function CalendarOverviewRail(props) {
   const model = getOverviewModel(props);
-  const footer = props.activeView.renderFooter?.(props);
 
   return (
     <div data-testid="calendar-overview-rail-frame" style={railStaticStyle()}>
       <div style={{ ...railContentStyle({ compact: true }), justifyContent: "space-between" }}>
-        <OverviewHero model={model} compact />
-
-        {props.view === "events" && props.data?.isLoading ? (
-          <EventsLoadingFrame />
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, flexShrink: 0 }}>
-            <SpotlightCard {...model.spotlight} accent={model.accent} compact />
-            {model.stats.map((stat) => (
-              <MetricCard
-                key={stat.label}
-                {...stat}
-                accent={model.accent}
-                compact
-              />
-            ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 14,
+              border: `1px solid color-mix(in srgb, ${model.accent} 16%, rgba(255,255,255,0.05))`,
+              background: `radial-gradient(circle at top left, color-mix(in srgb, ${model.accent} 12%, transparent), transparent 50%), linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.018))`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                color: "rgba(205,214,244,0.48)",
+              }}
+            >
+              Month navigator
+            </div>
+            <div className="ea-display" style={{ fontSize: 22, lineHeight: 1.02, letterSpacing: -0.36, color: "#f5f7ff" }}>
+              {model.title}
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.5, color: "rgba(205,214,244,0.58)" }}>
+              Browse the month from here while the support band below the grid carries the heavier summary and planning context.
+            </div>
           </div>
-        )}
+
+          {props.view === "events" && props.data?.isLoading ? (
+            <EventsLoadingFrame />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, flexShrink: 0 }}>
+              {model.stats.map((stat) => (
+                <MetricCard
+                  key={stat.label}
+                  {...stat}
+                  accent={model.accent}
+                  compact
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         <div
           style={{
-            padding: "9px 11px",
+            padding: "10px 12px",
             borderRadius: 12,
             border: "1px solid rgba(255,255,255,0.05)",
             background: "rgba(255,255,255,0.018)",
             fontSize: 11,
-            lineHeight: 1.48,
-            color: "rgba(205,214,244,0.56)",
+            lineHeight: 1.52,
+            color: "rgba(205,214,244,0.54)",
             flexShrink: 0,
           }}
         >
-          Select any day to drill into the rail without losing the month context.
-        </div>
-
-        <div style={{ marginTop: "auto" }}>
-          <FooterFrame label={model.footerLabel}>{footer}</FooterFrame>
+          Click a day, use `T` to jump back to today, and keep the month visible while the right stage becomes the navigator.
         </div>
       </div>
     </div>
@@ -764,9 +854,6 @@ export function CalendarOverviewRail(props) {
 }
 
 export function CalendarSelectedDayEmptyRail(props) {
-  const model = getCalendarViewMeta(props.view);
-  const overview = getOverviewModel(props);
-  const footer = props.activeView.renderFooter?.(props);
   const handleSelectDay = (day) => {
     props.setDeadlineEditor?.(null);
     props.setSelectedItemId?.(null);
@@ -777,15 +864,38 @@ export function CalendarSelectedDayEmptyRail(props) {
     <div data-testid="calendar-selected-empty-rail-frame" style={railStaticStyle()}>
       <div style={{ ...railContentStyle({ compact: true }), justifyContent: "space-between" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
-          <EmptyDayCard
-            model={model}
-            viewYear={props.viewYear}
-            viewMonth={props.viewMonth}
-            selectedDay={props.selectedDay}
-          />
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.05)",
+              background: "rgba(255,255,255,0.018)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                color: "rgba(205,214,244,0.46)",
+              }}
+            >
+              Clear day navigator
+            </div>
+            <div className="ea-display" style={{ fontSize: 18, lineHeight: 1.02, letterSpacing: -0.3, color: "#f5f7ff" }}>
+              Nothing is scheduled here
+            </div>
+            <div style={{ fontSize: 11.5, lineHeight: 1.5, color: "rgba(205,214,244,0.56)" }}>
+              The support band below the grid carries the selected-day context. Use nearby activity here to move without losing the current month framing.
+            </div>
+          </div>
 
           <NearbyActivityCard
-            model={model}
+            model={getCalendarViewMeta(props.view)}
             activeView={props.activeView}
             itemsByDay={props.itemsByDay}
             selectedDay={props.selectedDay}
@@ -793,10 +903,6 @@ export function CalendarSelectedDayEmptyRail(props) {
             viewMonth={props.viewMonth}
             onSelectDay={handleSelectDay}
           />
-        </div>
-
-        <div style={{ marginTop: "auto" }}>
-          <FooterFrame label={overview.footerLabel}>{footer}</FooterFrame>
         </div>
       </div>
     </div>

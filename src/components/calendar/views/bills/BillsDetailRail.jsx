@@ -172,15 +172,13 @@ function BillsDetail({
   data,
   selectedItemId,
   onSelectItem,
+  supportBandActive = false,
 }) {
   const actualBudgetUrl = data?.actualBudgetUrl;
   const state = getDayState(items);
   const [showCompleted, setShowCompleted] = useState(state.activeCount === 0 && state.completedCount > 0);
   const allItems = [...state.activeItems, ...state.completedItems];
-  const selectedBill = allItems.find((bill) => String(bill.id) === String(selectedItemId))
-    || state.activeItems[0]
-    || state.completedItems[0]
-    || null;
+  const selectedBill = allItems.find((bill) => String(bill.id) === String(selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
   const summary = [
     `${state.activeCount} unpaid`,
@@ -194,14 +192,15 @@ function BillsDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={summary}
       accent="#a6e3a1"
-      headerContent={selectedBill ? (
+      supportBandActive={supportBandActive}
+      headerContent={supportBandActive ? null : selectedBill ? (
         <BillSelectedCard bill={selectedBill} actualBudgetUrl={actualBudgetUrl} compact={compactDetail} />
       ) : null}
       sections={[
         {
           id: "active-bills",
           label: "Unpaid",
-          items: state.activeItems.map((bill) => toBillRailItem(bill, selectedBill?.id, onSelectItem)),
+          items: state.activeItems.map((bill) => toBillRailItem(bill, selectedItemId, onSelectItem)),
         },
         {
           id: "completed-bills",
@@ -210,7 +209,7 @@ function BillsDetail({
           expanded: showCompleted,
           onToggle: () => setShowCompleted((prev) => !prev),
           itemCount: state.completedCount,
-          items: state.completedItems.map((bill) => toBillRailItem(bill, selectedBill?.id, onSelectItem)),
+          items: state.completedItems.map((bill) => toBillRailItem(bill, selectedItemId, onSelectItem)),
         },
       ]}
     />

@@ -58,6 +58,74 @@ function getLatestRailContent() {
 }
 
 describe("CalendarModal responsive layout", () => {
+  it("fills the viewport as a workspace and only stacks at the narrow fallback", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = screen.getByTestId("calendar-modal-panel");
+    const body = screen.getByTestId("calendar-modal-body");
+    const rail = screen.getByTestId("calendar-modal-rail");
+    const supportBand = screen.getByTestId("calendar-modal-support-band");
+    const workspaceColumn = body.firstElementChild;
+    const monthGrid = screen.getByTestId("calendar-grid-month");
+
+    expect(panel.style.width).toBe("calc(100vw - 32px)");
+    expect(panel.style.height).toBe("calc(100vh - 32px)");
+    expect(body.style.gridTemplateColumns).toContain("320px");
+    expect(rail.style.position).toBe("sticky");
+    expect(supportBand.getAttribute("data-support-mode")).toBe("overview");
+    expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr) auto");
+    expect(workspaceColumn?.style.gap).toBe("0px");
+    expect(monthGrid.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
+    expect(supportBand.style.height).toBe("126px");
+    expect(supportBand.querySelector("[data-calendar-local-scroll='true']")).toBeNull();
+    expect(body.firstElementChild?.contains(supportBand)).toBe(true);
+    expect(body.lastElementChild).toBe(rail);
+
+    await act(async () => {
+      window.innerWidth = 1240;
+      window.dispatchEvent(new Event("resize"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(panel.style.width).toBe("calc(100vw - 48px)");
+      expect(panel.style.height).toBe("calc(100vh - 48px)");
+      expect(body.style.gridTemplateColumns).toContain("272px");
+      expect(rail.style.position).toBe("sticky");
+      expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr) auto");
+      expect(supportBand.style.height).toBe("auto");
+      expect(supportBand.style.minHeight).toBe("106px");
+    });
+
+    await act(async () => {
+      window.innerWidth = 1100;
+      window.dispatchEvent(new Event("resize"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(panel.style.width).toBe("calc(100vw - 32px)");
+      expect(panel.style.height).toBe("calc(100vh - 32px)");
+      expect(body.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
+      expect(rail.style.position).toBe("relative");
+      expect(workspaceColumn?.style.gridTemplateRows).toBe("auto auto");
+      expect(body.firstElementChild?.contains(supportBand)).toBe(true);
+      expect(body.lastElementChild).toBe(rail);
+    });
+  });
+
   it("shows skeleton loaders while the events month is loading", () => {
     window.innerWidth = 1900;
 
@@ -76,7 +144,12 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(screen.getByTestId("calendar-events-grid-skeleton")).toBeTruthy();
+    const monthGrid = screen.getByTestId("calendar-grid-month");
+    const skeleton = screen.getByTestId("calendar-grid-skeleton");
+
+    expect(monthGrid.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
+    expect(skeleton.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
+    expect(skeleton).toBeTruthy();
     expect(screen.getByTestId("calendar-events-rail-skeleton")).toBeTruthy();
   });
 
@@ -228,7 +301,7 @@ describe("CalendarModal responsive layout", () => {
 
     expect(screen.getByText("Monday, April 20")).toBeTruthy();
     expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /complete/i })).toBeTruthy();
   });
 
   it("falls back to a completed deadline when a day has no active items", () => {
@@ -306,7 +379,9 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(screen.queryByText("Project due")).toBeNull();
+    const quietChip = screen.getByText("Project due").closest("button");
+    expect(quietChip).toBeTruthy();
+    expect(quietChip?.style.textDecoration).toContain("line-through");
   });
 
   it("uses the event-style font treatment for the selected deadline title", () => {
@@ -767,6 +842,55 @@ describe("CalendarModal responsive layout", () => {
     }
   });
 
+  it("widens the context stage and collapses the support band when entering editor mode", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          focusDate="2026-04-23"
+          eventsData={{
+            editable: true,
+            getEvents: () => [],
+          }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const body = screen.getByTestId("calendar-modal-body");
+      const supportBand = screen.getByTestId("calendar-modal-support-band");
+
+      fireEvent.keyDown(document, { key: "c" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+      expect(screen.getByTestId("calendar-event-editor-rail").getAttribute("data-editor-layout")).toBe("desktop-staged");
+      expect(screen.getByTestId("calendar-event-editor-detail-layout").getAttribute("data-layout-mode")).toBe("desktop-staged");
+      expect(screen.getByTestId("calendar-modal-editor-expanded")).toBeTruthy();
+      expect(body.style.gridTemplateColumns).toContain("620px");
+      expect(supportBand.getAttribute("data-support-mode")).toBe("editor");
+      expect(supportBand.style.height).toBe("60px");
+      expect(supportBand.querySelector("[data-calendar-local-scroll='true']")).toBeNull();
+      expect(supportBand.textContent).not.toMatch(/draft rhythm/i);
+      expect(supportBand.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+      expect(supportBand.textContent).not.toMatch(/choose a calendar/i);
+      expect(supportBand.textContent).not.toMatch(/ready for details/i);
+      expect(screen.getByTestId("calendar-cell-23")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("refetches the visible events month when the open modal gets a refreshed eventsData object", async () => {
     window.innerWidth = 1900;
     const ensureRange = vi.fn().mockResolvedValue([]);
@@ -928,7 +1052,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByDisplayValue("First task")).toBeTruthy();
   });
 
-  it("closes the inline Todoist editor on Escape without closing the modal", async () => {
+  it("closes the inline Todoist editor from its local exit action without closing the modal", async () => {
     window.innerWidth = 1900;
     const onClose = vi.fn();
 
@@ -952,10 +1076,8 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
-    const input = await screen.findByPlaceholderText(/Buy groceries tomorrow/i);
-    input.focus();
-
-    fireEvent.keyDown(window, { key: "Escape" });
+    const inlineEditor = await screen.findByTestId("todoist-inline-editor");
+    fireEvent.click(within(inlineEditor).getByRole("button", { name: /^cancel$/i }));
 
     await waitFor(() => {
       expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();

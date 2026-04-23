@@ -112,6 +112,7 @@ describe("calendar detail timeline", () => {
         selectedDay: 16,
         viewYear: 2026,
         viewMonth: 3,
+        selectedItemId: "event-2",
         items: [
           {
             id: "event-1",
@@ -154,6 +155,7 @@ describe("calendar detail timeline", () => {
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
+        selectedItemId: "zoom-location",
         items: [
           {
             id: "zoom-location",
@@ -183,6 +185,7 @@ describe("calendar detail timeline", () => {
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
+        selectedItemId: "zoom-description",
         items: [
           {
             id: "zoom-description",
@@ -248,6 +251,7 @@ describe("calendar detail timeline", () => {
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
+        selectedItemId: "non-zoom",
         items: [
           {
             id: "non-zoom",
@@ -272,6 +276,7 @@ describe("calendar detail timeline", () => {
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
+        selectedItemId: "no-accessory",
         items: [
           {
             id: "no-accessory",
@@ -297,6 +302,7 @@ describe("calendar detail timeline", () => {
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
+        selectedItemId: "time-nowrap",
         items: [
           {
             id: "time-nowrap",
@@ -486,7 +492,8 @@ describe("calendar detail timeline", () => {
     );
 
     expect(screen.getByText("Open early")).toBeTruthy();
-    expect(screen.queryByText("Complete early")).toBeNull();
+    expect(screen.getByText("Complete early")).toBeTruthy();
+    expect(screen.getByText("Complete early").closest("button")?.style.textDecoration).toContain("line-through");
   });
 
   it("keeps completed-only deadline month cells visually quiet", () => {
@@ -500,7 +507,8 @@ describe("calendar detail timeline", () => {
       </div>,
     );
 
-    expect(screen.queryByText("Complete early")).toBeNull();
+    expect(screen.getByText("Complete early")).toBeTruthy();
+    expect(screen.getByText("Complete early").closest("button")?.style.textDecoration).toContain("line-through");
   });
 
   it("shows unpaid bills first and hides paid bills behind a collapsed section", () => {

@@ -15,6 +15,37 @@ const railSwapFadeTransition = {
 
 export default function AnimatedRailContent({ contentKey, contentKind, children }) {
   const shouldLift = contentKind === "detail" || contentKind === "empty";
+  const instantSwap = contentKind === "editor";
+
+  if (instantSwap) {
+    return (
+      <Motion.div
+        layout
+        transition={railSwapLayoutTransition}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <Motion.div
+          key={contentKey}
+          data-testid="calendar-rail-content"
+          data-rail-content-kind={contentKind}
+          layout
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {children}
+        </Motion.div>
+      </Motion.div>
+    );
+  }
 
   return (
     <Motion.div

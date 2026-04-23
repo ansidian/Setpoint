@@ -20,7 +20,7 @@ export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, chi
   );
 }
 
-export function RailMetaChip({ children, tone = "default", color = null }) {
+export function RailMetaChip({ children, tone = "default", color = null, compact = false }) {
   const styles = tone === "quiet"
     ? {
         color: "rgba(205,214,244,0.62)",
@@ -45,9 +45,9 @@ export function RailMetaChip({ children, tone = "default", color = null }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 6,
-        padding: "5px 10px",
+        padding: compact ? "4px 8px" : "5px 10px",
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: compact ? 10 : 11,
         fontWeight: 600,
         letterSpacing: 0.12,
         whiteSpace: "nowrap",
@@ -59,18 +59,25 @@ export function RailMetaChip({ children, tone = "default", color = null }) {
   );
 }
 
-export function RailFactTile({ label, value, color, valueNoWrap = false, valueFontSize = null }) {
+export function RailFactTile({
+  label,
+  value,
+  color,
+  valueNoWrap = false,
+  valueFontSize = null,
+  compact = false,
+}) {
   return (
     <div
       style={{
         minWidth: 0,
-        padding: "12px",
+        padding: compact ? "10px" : "12px",
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.05)",
         background: "rgba(255,255,255,0.016)",
         display: "flex",
         flexDirection: "column",
-        gap: 7,
+        gap: compact ? 5 : 7,
       }}
     >
       <div
@@ -78,7 +85,7 @@ export function RailFactTile({ label, value, color, valueNoWrap = false, valueFo
           color: "rgba(205,214,244,0.45)",
           letterSpacing: 1.4,
           textTransform: "uppercase",
-          fontSize: 9,
+          fontSize: compact ? 8.5 : 9,
           fontWeight: 700,
         }}
       >
@@ -91,13 +98,20 @@ export function RailFactTile({ label, value, color, valueNoWrap = false, valueFo
           display: "flex",
           alignItems: "center",
           gap: 6,
-          fontSize: valueFontSize || 13,
+          fontSize: valueFontSize || (compact ? 12 : 13),
           lineHeight: 1.35,
           minHeight: 18,
-          whiteSpace: valueNoWrap ? "nowrap" : "normal",
-          overflow: valueNoWrap ? "hidden" : "visible",
+          whiteSpace: valueNoWrap ? "nowrap" : compact ? "normal" : "normal",
+          overflow: valueNoWrap || compact ? "hidden" : "visible",
           textOverflow: valueNoWrap ? "ellipsis" : "clip",
           fontVariantNumeric: valueNoWrap ? "tabular-nums" : undefined,
+          ...(compact && !valueNoWrap
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+              }
+            : {}),
         }}
       >
         {value}

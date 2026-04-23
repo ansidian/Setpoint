@@ -11,39 +11,11 @@ import {
 import { formatEventDuration } from "../../../lib/redesign-helpers";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
+import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
+import { renderEventsWorkspaceSupport } from "./events/EventsWorkspaceSupport.jsx";
 import { useDetailRailMotion } from "../detailRailMotion.js";
 
-const EVENT_ROW_HEIGHT = 12;
-const STACK_GAP = 2;
-const MORE_ROW_HEIGHT = 10;
-const MEETING_PROVIDER_PREFIX = /^\s*(?:[\[(]\s*(?:zoom|google meet|meet|teams|webex)\s*[\])]|(?:zoom|google meet|meet|teams|webex))\s*[:\-]?\s*/i;
-function getStackHeight(visibleCount, hasMore) {
-  if (visibleCount <= 0) return 0;
-  const childCount = visibleCount + (hasMore ? 1 : 0);
-  return (
-    visibleCount * EVENT_ROW_HEIGHT +
-    (hasMore ? MORE_ROW_HEIGHT : 0) +
-    Math.max(0, childCount - 1) * STACK_GAP
-  );
-}
-
-function getVisibleEventCount(itemCount, contentHeight) {
-  if (itemCount <= 0) return 0;
-  const fallback = Math.min(itemCount, 2);
-
-  if (!Number.isFinite(contentHeight) || contentHeight <= 0) {
-    return fallback;
-  }
-
-  for (let visibleCount = itemCount; visibleCount >= 1; visibleCount -= 1) {
-    const hiddenCount = itemCount - visibleCount;
-    if (getStackHeight(visibleCount, hiddenCount > 0) <= contentHeight) {
-      return visibleCount;
-    }
-  }
-
-  return 1;
-}
+const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 
 function pacificYMD(ms) {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -133,79 +105,6 @@ function compute({ data, viewYear, viewMonth }) {
 
 function canNavigateBack() {
   return true;
-}
-
-function renderCellContents({ items, contentHeight, pastTone }) {
-  if (!items?.length) return null;
-  const maxVisible = getVisibleEventCount(items.length, contentHeight);
-  const extra = items.length > maxVisible ? items.length - maxVisible : 0;
-  const isPast = pastTone === "items";
-  const contentOpacity = isPast ? 0.86 : 1;
-  const dotOpacity = isPast ? 0.62 : 1;
-  const textColor = isPast ? "rgba(205,214,244,0.43)" : "rgba(205,214,244,0.55)";
-  const moreColor = isPast ? "rgba(205,214,244,0.36)" : "rgba(205,214,244,0.5)";
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        minWidth: 0,
-        opacity: contentOpacity,
-        filter: isPast ? "saturate(0.9)" : "none",
-        transition: "opacity 150ms, filter 150ms",
-      }}
-    >
-      {items.slice(0, maxVisible).map((ev, i) => (
-        <div
-          key={`${ev.id || ev.htmlLink || ev.title || "event"}-${i}`}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            fontSize: 10.5,
-            lineHeight: 1.1,
-            minWidth: 0,
-          }}
-        >
-          <span
-            style={{
-              flexShrink: 0,
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: ev.color || "rgba(205,214,244,0.45)",
-              boxShadow: ev.color ? `0 0 4px ${ev.color}${isPast ? "34" : "60"}` : "none",
-              opacity: dotOpacity,
-            }}
-          />
-          <span
-            style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              minWidth: 0,
-              color: textColor,
-            }}
-          >
-            {ev.title || "(No title)"}
-          </span>
-        </div>
-      ))}
-      {extra > 0 && (
-        <div
-          style={{
-            fontSize: 9,
-            lineHeight: 1,
-            color: moreColor,
-            paddingLeft: 11,
-          }}
-        >
-          +{extra} more
-        </div>
-      )}
-    </div>
-  );
 }
 
 function formatFullDate(year, month, day) {
@@ -318,7 +217,6 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
               layout="position"
               transition={motion.layout}
               data-testid="calendar-selected-event-title"
-              title={displayTitle}
               style={{
                 fontSize: 17,
                 lineHeight: 1.08,
@@ -456,7 +354,6 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
             layout="position"
             transition={motion.layout}
             data-testid="calendar-selected-event-title"
-            title={displayTitle}
             style={{
               fontSize: compact ? 20 : 24,
               lineHeight: 1.08,
@@ -585,14 +482,13 @@ function renderDetail({
   selectedItemId,
   onSelectItem,
   onEditEvent,
+  supportBandActive = false,
 }) {
   const ordered = orderDetailEvents(items);
   const allDayItems = ordered.filter((item) => item.allDay);
   const timedItems = ordered.filter((item) => !item.allDay);
   const compactDetail = ordered.length >= 3;
-  const selectedEvent = ordered.find((item) => String(getEventSelectionId(item)) === String(selectedItemId))
-    || ordered[0]
-    || null;
+  const selectedEvent = ordered.find((item) => String(getEventSelectionId(item)) === String(selectedItemId)) || null;
   const compressedSelectedCard = shouldCompressSelectedCard(selectedEvent);
   const ultraCompactDetail = ordered.length >= 3 || compressedSelectedCard;
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;
@@ -603,7 +499,8 @@ function renderDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
       accent="#89b4fa"
-      headerContent={selectedEvent ? (
+      supportBandActive={supportBandActive}
+      headerContent={supportBandActive ? null : selectedEvent ? (
         <EventSelectedCard
           ev={selectedEvent}
           onEditEvent={onEditEvent}
@@ -618,7 +515,7 @@ function renderDetail({
           items: allDayItems.map((item) => toRailItem(
             item,
             onSelectItem,
-            selectedEvent ? getEventSelectionId(selectedEvent) : null,
+            selectedItemId,
           )),
         },
         {
@@ -627,7 +524,7 @@ function renderDetail({
           items: timedItems.map((item) => toRailItem(
             item,
             onSelectItem,
-            selectedEvent ? getEventSelectionId(selectedEvent) : null,
+            selectedItemId,
           )),
         },
       ]}
@@ -710,9 +607,10 @@ const eventsView = {
   compute,
   canNavigateBack,
   getVisibleEventCount,
-  renderCellContents,
+  renderCellContents: renderEventsCellContents,
   renderDetail,
   renderFooter,
+  renderWorkspaceSupport: renderEventsWorkspaceSupport,
   HeaderExtras: EventsHeaderExtras,
   icon: CalendarIcon,
   getDefaultSelectedItemId,

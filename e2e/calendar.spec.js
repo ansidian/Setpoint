@@ -13,6 +13,7 @@ test("edits a calendar event from the detail rail using deterministic fixtures",
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
   await expect(page.getByTestId(`calendar-cell-${fixture.day}`)).toBeVisible();
   await expect(page.getByTestId("timeline-detail-rail")).toBeVisible();
+  await page.getByTestId(`calendar-cell-${fixture.day}`).getByTestId("calendar-cell-item-chip").click();
   await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.initialTitle);
   await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.initialTitle);
 

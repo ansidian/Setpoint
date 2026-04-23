@@ -6,42 +6,48 @@ export const BREAKPOINTS = {
 
 export function getCalendarLayoutMetrics(viewportWidth) {
   if (viewportWidth >= BREAKPOINTS.xl) {
-    const viewportMargin = 40;
+    const viewportMargin = 16;
     return {
       tier: "xl",
       viewportMargin,
-      shellMaxWidth: 1560,
-      shellMaxHeight: "calc(100vh - 56px)",
-      shellPadding: 32,
-      contentGap: 28,
+      shellHeight: "calc(100vh - 32px)",
+      shellPadding: 16,
+      contentGap: 12,
       gridGap: 8,
       weekHeaderGap: 6,
-      railWidth: 420,
-      cellHeight: 108,
-      railHeightOffset: 84,
+      contextWidth: 320,
+      editorWidth: 620,
+      supportBandMinHeight: 126,
+      supportBandCollapsedHeight: 60,
+      cellHeight: 140,
+      railHeightOffset: 92,
       stacked: false,
       stickyRail: true,
       headerWrap: false,
+      headerStacked: false,
     };
   }
 
   if (viewportWidth >= BREAKPOINTS.lg) {
-    const viewportMargin = 32;
+    const viewportMargin = 20;
     return {
       tier: "lg",
       viewportMargin,
-      shellMaxWidth: 1400,
-      shellMaxHeight: "calc(100vh - 44px)",
-      shellPadding: 28,
-      contentGap: 24,
+      shellHeight: "calc(100vh - 40px)",
+      shellPadding: 14,
+      contentGap: 12,
       gridGap: 6,
       weekHeaderGap: 5,
-      railWidth: 380,
-      cellHeight: 96,
-      railHeightOffset: 72,
+      contextWidth: 296,
+      editorWidth: 560,
+      supportBandMinHeight: 116,
+      supportBandCollapsedHeight: 56,
+      cellHeight: 124,
+      railHeightOffset: 82,
       stacked: false,
       stickyRail: true,
       headerWrap: false,
+      headerStacked: false,
     };
   }
 
@@ -50,18 +56,21 @@ export function getCalendarLayoutMetrics(viewportWidth) {
     return {
       tier: "md",
       viewportMargin,
-      shellMaxWidth: 1180,
-      shellMaxHeight: "calc(100vh - 36px)",
-      shellPadding: 20,
-      contentGap: 18,
+      shellHeight: "calc(100vh - 48px)",
+      shellPadding: 14,
+      contentGap: 12,
       gridGap: 5,
       weekHeaderGap: 4,
-      railWidth: 0,
-      cellHeight: 82,
-      railHeightOffset: 50,
-      stacked: true,
-      stickyRail: false,
-      headerWrap: true,
+      contextWidth: 272,
+      editorWidth: 480,
+      supportBandMinHeight: 106,
+      supportBandCollapsedHeight: 52,
+      cellHeight: 108,
+      railHeightOffset: 72,
+      stacked: false,
+      stickyRail: true,
+      headerWrap: false,
+      headerStacked: false,
     };
   }
 
@@ -69,17 +78,20 @@ export function getCalendarLayoutMetrics(viewportWidth) {
   return {
     tier: "sm",
     viewportMargin,
-    shellMaxWidth: 960,
-    shellMaxHeight: "calc(100vh - 24px)",
+    shellHeight: "calc(100vh - 32px)",
     shellPadding: 16,
     contentGap: 16,
     gridGap: 4,
     weekHeaderGap: 4,
-    railWidth: 0,
-    cellHeight: 72,
-    railHeightOffset: 42,
+    contextWidth: 0,
+    editorWidth: 0,
+    supportBandMinHeight: 180,
+    supportBandCollapsedHeight: 104,
+    cellHeight: 76,
+    railHeightOffset: 48,
     stacked: true,
     stickyRail: false,
     headerWrap: true,
+    headerStacked: true,
   };
 }

@@ -294,7 +294,6 @@ function DetailCard({
               layout="position"
               transition={motion.layout}
               data-testid="calendar-selected-deadline-title"
-              title={title}
               style={{
                 fontSize: 17,
                 fontWeight: 500,
@@ -452,7 +451,6 @@ function DetailCard({
             layout="position"
             transition={motion.layout}
             data-testid="calendar-selected-deadline-title"
-            title={title}
             style={{
               fontSize: compact ? 17 : 18,
               fontWeight: 500,
@@ -572,6 +570,7 @@ function DeadlinesDetail({
   onTaskSaved,
   onTaskDeleted,
   accent = "var(--ea-accent)",
+  supportBandActive = false,
 }) {
   const {
     handleCompleteTask,
@@ -583,10 +582,7 @@ function DeadlinesDetail({
 
   const state = getDayState(items);
   const allItems = [...state.activeItems, ...state.completedItems];
-  const selectedTask = allItems.find((task) => String(task.id) === String(selectedItemId))
-    || state.activeItems[0]
-    || state.completedItems[0]
-    || null;
+  const selectedTask = allItems.find((task) => String(task.id) === String(selectedItemId)) || null;
   const compressedSelectedCard = state.totalCount >= 2 || shouldCompressDeadlineCard(selectedTask);
   const compactDetail = state.totalCount >= 2;
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;
@@ -635,8 +631,9 @@ function DeadlinesDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay)}
       summary={summary}
       accent={accent}
+      supportBandActive={supportBandActive}
       headerContent={
-        selectedTask ? (
+        supportBandActive ? null : selectedTask ? (
           <DetailCard
             task={selectedTask}
             accent={accent}
@@ -667,7 +664,7 @@ function DeadlinesDetail({
               meta: metaParts.join(" · "),
               dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
               complete: normalizeStatus(task.status) === "complete",
-              selected: String(task.id) === String(selectedTask?.id),
+              selected: String(task.id) === String(selectedItemId),
               onClick: () => onSelectItem?.(String(task.id)),
             };
           }),
@@ -694,7 +691,7 @@ function DeadlinesDetail({
               meta: metaParts.join(" · "),
               dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
               complete: true,
-              selected: String(task.id) === String(selectedTask?.id),
+              selected: String(task.id) === String(selectedItemId),
               onClick: () => onSelectItem?.(String(task.id)),
             };
           }),

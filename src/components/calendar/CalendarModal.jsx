@@ -170,10 +170,13 @@ export default function CalendarModal({
     closeEventEditor();
     setDeadlineEditor(null);
     const pendingFocus = openingWithFocus || parseFocusDate(pendingFocusDate);
+    const nextFocusedItemId = openingWithFocus
+      ? (focusItemId ? String(focusItemId) : null)
+      : (pendingFocusItemId ? String(pendingFocusItemId) : null);
     if (pendingFocus) {
       setViewDate({ month: pendingFocus.getMonth(), year: pendingFocus.getFullYear() });
       setSelectedDay(pendingFocus.getDate());
-      setSelectedItemId(pendingFocusItemId ? String(pendingFocusItemId) : null);
+      setSelectedItemId(nextFocusedItemId);
       setPendingFocusDate(null);
       setPendingFocusItemId(null);
     }
@@ -258,6 +261,14 @@ export default function CalendarModal({
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
+        setDeadlineEditor(null);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       if (isSuspendedHotkeyTarget(event.target)) return;
 
       if (isEditableTarget(event.target)) {
@@ -291,6 +302,26 @@ export default function CalendarModal({
           closeEventEditor();
           setViewDate({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
+          event.preventDefault();
+          event.stopPropagation();
+          break;
+        case "e":
+        case "E":
+          if (selectedItemId != null) {
+            if (view === "events" && eventEditor.editable) {
+              const dayItems = itemsByDay[selectedDay] || [];
+              const resolveId = activeView.getItemId;
+              const ev = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
+              if (ev) eventEditor.openEdit(ev);
+            } else if (view === "deadlines") {
+              const dayState = itemsByDay[selectedDay];
+              const pool = dayState?.items || dayState || [];
+              const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
+              if (task?.source === "todoist") {
+                setDeadlineEditor({ mode: "edit", taskId: String(selectedItemId) });
+              }
+            }
+          }
           event.preventDefault();
           event.stopPropagation();
           break;
@@ -328,7 +359,7 @@ export default function CalendarModal({
     }
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, onViewChange, closeEventEditor, eventEditor]);
+  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, onViewChange, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, activeView, itemsByDay, setDeadlineEditor]);
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
@@ -344,8 +375,9 @@ export default function CalendarModal({
   const monthYear = String(viewYear);
   const layout = getCalendarLayoutMetrics(viewportWidth);
   const panelWidth = `calc(100vw - ${layout.viewportMargin * 2}px)`;
-  const showEventsLoadingState = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
+  const showEventsLoading = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
   const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
+  const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
 
   const selectedDayState = selectedDay != null
     ? (activeView.getDayState?.(itemsByDay[selectedDay]) ?? buildFallbackDayState(itemsByDay[selectedDay]))
@@ -353,18 +385,17 @@ export default function CalendarModal({
   const selectedItems = activeView.getDayState ? selectedDayState : selectedDayState.items;
   const effectiveSelectedItemId = (() => {
     if (selectedDay == null || selectedDayState.totalCount === 0) return null;
-    if (!activeView.getDefaultSelectedItemId) return selectedItemId;
+    if (selectedItemId == null) return null;
+    if (!activeView.getItemId) return selectedItemId;
 
     const pool = view === "deadlines"
       ? [...selectedDayState.activeItems, ...selectedDayState.completedItems]
       : Array.isArray(selectedItems)
         ? selectedItems
         : selectedDayState.items || [];
-    const resolveItemId = activeView.getItemId || ((item) => item?.id);
+    const resolveItemId = activeView.getItemId;
     const hasSelectedItem = pool.some((item) => String(resolveItemId(item)) === String(selectedItemId));
-    if (hasSelectedItem) return String(selectedItemId);
-    const fallbackId = activeView.getDefaultSelectedItemId(selectedDayState);
-    return fallbackId ? String(fallbackId) : null;
+    return hasSelectedItem ? String(selectedItemId) : null;
   })();
   const hasSelectedDay = selectedDay != null;
   const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
@@ -405,7 +436,7 @@ export default function CalendarModal({
       daysInMonth={daysInMonth}
       trailingEmpty={trailingEmpty}
       itemsByDay={itemsByDay}
-      showEventsLoadingState={showEventsLoadingState}
+      showGridSkeleton={showGridSkeleton}
       buildFallbackDayState={buildFallbackDayState}
       closeEventEditor={closeEventEditor}
       setSelectedDay={setSelectedDay}

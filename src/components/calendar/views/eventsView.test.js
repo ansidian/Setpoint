@@ -79,11 +79,11 @@ describe("eventsView.canNavigateBack", () => {
 
 describe("eventsView.getVisibleEventCount", () => {
   it("shows more rows when a taller cell can fit them", () => {
-    expect(eventsView.getVisibleEventCount(4, 54)).toBe(4);
-    expect(eventsView.getVisibleEventCount(4, 38)).toBe(2);
+    expect(eventsView.getVisibleEventCount(4, 132, { tier: "lg" })).toBe(4);
+    expect(eventsView.getVisibleEventCount(4, 96, { tier: "lg" })).toBe(2);
   });
 
   it("reserves space for the +n more row when needed", () => {
-    expect(eventsView.getVisibleEventCount(5, 54)).toBe(3);
+    expect(eventsView.getVisibleEventCount(5, 130, { tier: "lg" })).toBe(3);
   });
 });

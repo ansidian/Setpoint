@@ -43,6 +43,7 @@ test("creates a calendar event from the header action using deterministic fixtur
   });
 
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
+  await page.getByTestId("calendar-cell-item-chip").filter({ hasText: fixture.createdTitle }).first().click();
   await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.createdTitle);
   await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.createdTitle);
 });
@@ -52,6 +53,7 @@ test("requires a recurring scope before saving recurring event edits", async ({ 
 
   await openCalendar(page);
 
+  await page.getByTestId("calendar-cell-item-chip").filter({ hasText: fixture.recurringTitle }).first().click();
   await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.recurringTitle);
 
   await page.getByRole("button", { name: "Edit details" }).click();
@@ -92,6 +94,7 @@ test("deletes recurring events using the selected scope", async ({ page }) => {
 
   await openCalendar(page);
 
+  await page.getByTestId("calendar-cell-item-chip").filter({ hasText: fixture.recurringTitle }).first().click();
   await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.recurringTitle);
 
   await page.getByRole("button", { name: "Edit details" }).click();

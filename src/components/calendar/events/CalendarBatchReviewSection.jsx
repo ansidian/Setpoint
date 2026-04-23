@@ -13,13 +13,29 @@ const ACCENT = "var(--ea-accent)";
 function sectionCardStyle() {
   return {
     marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 14,
     border: "1px solid rgba(255,255,255,0.05)",
-    background: "rgba(255,255,255,0.03)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.028), rgba(255,255,255,0.018))",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
     display: "flex",
     flexDirection: "column",
-    gap: 12,
+    gap: 14,
+  };
+}
+
+function rowShellStyle(hasError) {
+  return {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: hasError ? "1px solid rgba(243,139,168,0.2)" : "1px solid rgba(255,255,255,0.045)",
+    background: hasError
+      ? "linear-gradient(180deg, rgba(243,139,168,0.08), rgba(243,139,168,0.03))"
+      : "linear-gradient(180deg, rgba(255,255,255,0.024), rgba(255,255,255,0.014))",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025)",
   };
 }
 
@@ -74,10 +90,10 @@ function PickerButton({ icon: Icon, value, testId, disabled, anchorRef, onClick 
         display: "flex",
         alignItems: "center",
         gap: 6,
-        padding: "6px 8px",
+        padding: "8px 10px",
         borderRadius: 6,
         border: "1px solid rgba(255,255,255,0.06)",
-        background: "rgba(255,255,255,0.03)",
+        background: "rgba(255,255,255,0.024)",
         color: "#cdd6f4",
         fontSize: 11.5,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -89,12 +105,12 @@ function PickerButton({ icon: Icon, value, testId, disabled, anchorRef, onClick 
       }}
       onMouseEnter={(event) => {
         if (!disabled) {
-          event.currentTarget.style.background = "rgba(255,255,255,0.045)";
+          event.currentTarget.style.background = "rgba(255,255,255,0.04)";
           event.currentTarget.style.transform = "translateY(-1px)";
         }
       }}
       onMouseLeave={(event) => {
-        event.currentTarget.style.background = "rgba(255,255,255,0.03)";
+        event.currentTarget.style.background = "rgba(255,255,255,0.024)";
         event.currentTarget.style.transform = "translateY(0)";
       }}
     >
@@ -157,20 +173,12 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
   return (
     <div
       data-testid={`calendar-batch-row-${index}`}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        padding: "10px 12px",
-        borderRadius: 8,
-        border: hasError ? "1px solid rgba(243,139,168,0.18)" : "1px solid rgba(255,255,255,0.05)",
-        background: hasError ? "rgba(243,139,168,0.04)" : "rgba(22,22,30,0.88)",
-      }}
+      style={rowShellStyle(hasError)}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: "#e2e8f0" }}>
           Event {index + 1}
-          <span style={{ fontWeight: 400, color: "rgba(205,214,244,0.48)", marginLeft: 8 }}>
+          <span style={{ fontWeight: 400, color: "rgba(205,214,244,0.54)", marginLeft: 8 }}>
             {formatDate(item.startDate)}
             {!allDay ? ` · ${formatTime(item.startTime)}–${formatTime(item.endTime)}` : ""}
           </span>
@@ -185,15 +193,28 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            border: "1px solid rgba(243,139,168,0.2)",
-            background: "rgba(243,139,168,0.06)",
+            width: 26,
+            height: 26,
+            borderRadius: 8,
+            border: "1px solid rgba(243,139,168,0.18)",
+            background: "rgba(243,139,168,0.04)",
             color: disabled ? "rgba(243,139,168,0.35)" : "#f38ba8",
             cursor: disabled ? "not-allowed" : "pointer",
             padding: 0,
             flexShrink: 0,
+            transition: "background 140ms, border-color 140ms, transform 140ms",
+          }}
+          onMouseEnter={(event) => {
+            if (!disabled) {
+              event.currentTarget.style.background = "rgba(243,139,168,0.08)";
+              event.currentTarget.style.borderColor = "rgba(243,139,168,0.28)";
+              event.currentTarget.style.transform = "translateY(-1px)";
+            }
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background = "rgba(243,139,168,0.04)";
+            event.currentTarget.style.borderColor = "rgba(243,139,168,0.18)";
+            event.currentTarget.style.transform = "translateY(0)";
           }}
         >
           <X size={12} />
@@ -216,7 +237,7 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <div>
           <div style={fieldLabelStyle()}>Start</div>
           <PickerButton
@@ -242,7 +263,7 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
       </div>
 
       {!allDay ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <div>
             <div style={fieldLabelStyle()}>Start time</div>
             <PickerButton
@@ -337,7 +358,7 @@ export default function CalendarBatchReviewSection({
   return (
     <div data-testid="calendar-batch-review" style={sectionCardStyle()}>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "#e2e8f0" }}>
           Batch Review
         </div>
         <div style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.5 }}>
@@ -345,7 +366,7 @@ export default function CalendarBatchReviewSection({
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {batchDrafts.map((item, index) => (
           <BatchRow
             key={item.id}

@@ -1,56 +1,70 @@
-/* eslint-disable react-refresh/only-export-components */
-import { MAX_PILLS, getDayState, SOURCE_COLORS, sourceOf } from "./deadlinesModel.js";
+import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
+import { getDayState, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
 
-export function renderDeadlinesCellContents({ items }) {
+const LG_DEADLINE_CHIP_METRICS = {
+  itemHeight: 30,
+  moreHeight: 28,
+  gap: 4,
+  fallback: 2,
+};
+
+const MD_DEADLINE_CHIP_METRICS = {
+  itemHeight: 28,
+  moreHeight: 26,
+  gap: 4,
+  fallback: 2,
+};
+
+function resolveDeadlineChipMetrics(layout) {
+  const tier = layout?.tier;
+  if (tier === "xl" || tier === "lg") return LG_DEADLINE_CHIP_METRICS;
+  return MD_DEADLINE_CHIP_METRICS;
+}
+
+function toDeadlineDescriptor(task) {
+  const source = sourceOf(task);
+  const accent = SOURCE_COLORS[source] || "rgba(255,255,255,0.3)";
+  const timeLabel = task.due_time || sourceLabelFor(task);
+
+  return {
+    id: String(task.id),
+    title: task.title || task.name || "Untitled",
+    detail: [task.class_name || task.project_name, statusLabel(task.status)].filter(Boolean).join(" · "),
+    leadingLabel: timeLabel,
+    accent,
+    leadingColor: accent,
+    complete: task.status === "complete",
+    quiet: task.status === "complete",
+  };
+}
+
+export function renderDeadlinesCellContents({
+  items,
+  contentHeight,
+  pastTone,
+  selectedItemId,
+  onSelectItem,
+  onOpenOverflow,
+  overflowOpen,
+  layout,
+  day,
+}) {
   const state = getDayState(items);
+  const descriptors = state.items.map(toDeadlineDescriptor);
+
+  if (!descriptors.length) return null;
 
   return (
-    <>
-      {state.activeItems.slice(0, MAX_PILLS).map((task) => {
-        const source = sourceOf(task);
-        const dot = SOURCE_COLORS[source] || "rgba(255,255,255,0.3)";
-        return (
-          <div
-            key={`${source}-${task.id}`}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 11,
-              marginTop: 3,
-              minWidth: 0,
-            }}
-          >
-            <span
-              style={{
-                flexShrink: 0,
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: dot,
-                opacity: 0.9,
-                boxShadow: `0 0 4px ${dot}60`,
-              }}
-            />
-            <span
-              style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                minWidth: 0,
-                color: "rgba(205,214,244,0.55)",
-              }}
-            >
-              {task.title || task.name || "Untitled"}
-            </span>
-          </div>
-        );
-      })}
-      {state.activeCount > MAX_PILLS && (
-        <div style={{ fontSize: 10, color: "rgba(203,166,218,0.6)", marginTop: 2 }}>
-          +{state.activeCount - MAX_PILLS} more
-        </div>
-      )}
-    </>
+    <CalendarCellItemStack
+      day={day}
+      items={descriptors}
+      contentHeight={contentHeight}
+      selectedItemId={selectedItemId}
+      onSelectItem={onSelectItem}
+      onOpenOverflow={onOpenOverflow}
+      pastTone={pastTone}
+      metrics={resolveDeadlineChipMetrics(layout)}
+      overflowOpen={overflowOpen}
+    />
   );
 }

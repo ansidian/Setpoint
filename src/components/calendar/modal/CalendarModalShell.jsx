@@ -4,6 +4,112 @@ import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
+import CalendarWorkspaceSupportBand from "./CalendarWorkspaceSupportBand.jsx";
+
+function buildContextContent({
+  layout,
+  view,
+  activeView,
+  eventEditor,
+  deadlineEditor,
+  selectedDay,
+  itemsByDay,
+  viewYear,
+  viewMonth,
+  viewData,
+  computed,
+  currentYear,
+  currentMonth,
+  todayDate,
+  showDetail,
+  showEmptySelection,
+  effectiveSelectedItemId,
+  selectedItems,
+  setSelectedDay,
+  setSelectedItemId,
+  setDeadlineEditor,
+  focusDeadlineTask,
+}) {
+  if (view === "events" && eventEditor.isEditorOpen) {
+    return (
+      <CalendarEventEditorRail
+        editor={eventEditor}
+        expandedDesktop={!layout.stacked}
+      />
+    );
+  }
+
+  if (activeView.renderSidebar) {
+    return activeView.renderSidebar({ selectedDay, itemsByDay, viewYear, viewMonth, data: viewData });
+  }
+
+  if (showDetail) {
+    return activeView.renderDetail?.({
+      selectedDay,
+      viewYear,
+      viewMonth,
+      items: selectedItems,
+      data: viewData,
+      computed,
+      selectedItemId: effectiveSelectedItemId,
+      supportBandActive: true,
+      onSelectItem: (itemId) => {
+        setSelectedItemId(String(itemId));
+        setDeadlineEditor(null);
+      },
+      onEditEvent: eventEditor.openEdit,
+      editorState: deadlineEditor,
+      onStartEdit: (task) => {
+        setSelectedItemId(String(task.id));
+        setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
+      },
+      onCloseEditor: () => setDeadlineEditor(null),
+      onTaskSaved: focusDeadlineTask,
+      onTaskDeleted: (taskId) => {
+        setDeadlineEditor(null);
+        if (String(effectiveSelectedItemId) === String(taskId)) {
+          setSelectedItemId(null);
+        }
+      },
+    });
+  }
+
+  if (showEmptySelection) {
+    return (
+      <CalendarSelectedDayEmptyRail
+        view={view}
+        selectedDay={selectedDay}
+        viewYear={viewYear}
+        viewMonth={viewMonth}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        todayDate={todayDate}
+        itemsByDay={itemsByDay}
+        computed={computed}
+        data={viewData}
+        activeView={activeView}
+        setSelectedDay={setSelectedDay}
+        setSelectedItemId={setSelectedItemId}
+        setDeadlineEditor={setDeadlineEditor}
+      />
+    );
+  }
+
+  return (
+    <CalendarOverviewRail
+      view={view}
+      viewYear={viewYear}
+      viewMonth={viewMonth}
+      currentYear={currentYear}
+      currentMonth={currentMonth}
+      todayDate={todayDate}
+      itemsByDay={itemsByDay}
+      computed={computed}
+      data={viewData}
+      activeView={activeView}
+    />
+  );
+}
 
 export default function CalendarModalShell({
   panelRef,
@@ -34,7 +140,7 @@ export default function CalendarModalShell({
   daysInMonth,
   trailingEmpty,
   itemsByDay,
-  showEventsLoadingState,
+  showGridSkeleton,
   buildFallbackDayState,
   closeEventEditor,
   setSelectedDay,
@@ -47,8 +153,7 @@ export default function CalendarModalShell({
   deadlineEditor,
   focusDeadlineTask,
 }) {
-  const railHeight = 6 * layout.cellHeight + 5 * layout.gridGap + (layout.railHeightOffset || 30);
-  const contentKind = view === "events" && eventEditor.isEditorOpen
+  const workspaceMode = view === "events" && eventEditor.isEditorOpen
     ? "editor"
     : view === "deadlines" && deadlineEditor?.mode
       ? "editor"
@@ -56,7 +161,8 @@ export default function CalendarModalShell({
         ? "detail"
         : showEmptySelection
           ? "empty"
-          : "summary";
+          : "overview";
+  const contentKind = workspaceMode === "overview" ? "summary" : workspaceMode;
 
   const contentKey = view === "events" && eventEditor.isEditorOpen
     ? `editor-${eventEditor.isEditing ? eventEditor.editingEvent?.id || "edit" : "new"}`
@@ -68,6 +174,56 @@ export default function CalendarModalShell({
           ? `empty-${view}-${viewYear}-${viewMonth}`
           : `summary-${view}-${viewYear}-${viewMonth}`;
 
+  const contextWidth = workspaceMode === "editor" ? layout.editorWidth : layout.contextWidth;
+  const leftColumnGap = layout.stacked ? layout.contentGap : 0;
+
+  const supportProps = {
+    activeView,
+    view,
+    data: viewData,
+    computed,
+    currentYear,
+    currentMonth,
+    todayDate,
+    viewYear,
+    viewMonth,
+    itemsByDay,
+    selectedDay,
+    selectedItemId: effectiveSelectedItemId,
+    selectedItems,
+    selectedDayState,
+    eventEditor,
+    deadlineEditor,
+    setSelectedDay,
+    setSelectedItemId,
+    setDeadlineEditor,
+  };
+
+  const contextContent = buildContextContent({
+    layout,
+    view,
+    activeView,
+    eventEditor,
+    deadlineEditor,
+    selectedDay,
+    itemsByDay,
+    viewYear,
+    viewMonth,
+    viewData,
+    computed,
+    currentYear,
+    currentMonth,
+    todayDate,
+    showDetail,
+    showEmptySelection,
+    effectiveSelectedItemId,
+    selectedItems,
+    setSelectedDay,
+    setSelectedItemId,
+    setDeadlineEditor,
+    focusDeadlineTask,
+  });
+
   return createPortal(
     <div
       style={{
@@ -77,7 +233,12 @@ export default function CalendarModalShell({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0,0,0,0.5)",
+        padding: layout.viewportMargin,
+        background: [
+          "radial-gradient(circle at top, rgba(203,166,218,0.10), transparent 28%)",
+          "radial-gradient(circle at 100% 0%, rgba(137,180,250,0.07), transparent 22%)",
+          "rgba(4,6,10,0.72)",
+        ].join(", "),
       }}
     >
       <div
@@ -85,19 +246,46 @@ export default function CalendarModalShell({
         data-testid="calendar-modal-panel"
         className="isolate flex flex-col animate-in fade-in zoom-in-95 duration-200"
         style={{
+          position: "relative",
           width: panelWidth,
-          maxWidth: `${layout.shellMaxWidth}px`,
-          maxHeight: layout.shellMaxHeight,
-          background: "radial-gradient(ellipse at top left, #1a1a2a, #0d0d15 70%)",
-          borderRadius: 14,
+          height: layout.shellHeight,
+          overflow: "hidden",
+          backgroundColor: "#16161e",
+          backgroundImage: [
+            "radial-gradient(circle at top left, rgba(203,166,218,0.14), transparent 30%)",
+            "radial-gradient(circle at 86% 8%, rgba(137,180,250,0.08), transparent 24%)",
+            "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01) 18%, rgba(255,255,255,0.01) 82%, rgba(255,255,255,0.025))",
+          ].join(", "),
+          borderRadius: 16,
           border: "1px solid rgba(255,255,255,0.06)",
-          boxShadow: "0 30px 80px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.04)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         }}
       >
         <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            backgroundImage: "radial-gradient(rgba(255,255,255,0.035) 0.8px, transparent 0.8px)",
+            backgroundSize: "22px 22px",
+            opacity: 0.18,
+            maskImage: "linear-gradient(180deg, rgba(0,0,0,0.34), rgba(0,0,0,0) 38%)",
+          }}
+        />
+        <div
           ref={scrollRef}
           className="overflow-y-auto overscroll-contain flex-1"
-          style={{ padding: layout.shellPadding }}
+          style={{
+            position: "relative",
+            zIndex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: layout.contentGap,
+            minHeight: 0,
+            height: "100%",
+            padding: layout.shellPadding,
+          }}
         >
           <CalendarModalHeader
             view={view}
@@ -124,112 +312,92 @@ export default function CalendarModalShell({
             data-testid="calendar-modal-body"
             style={{
               display: "grid",
-              gridTemplateColumns: layout.stacked ? "minmax(0, 1fr)" : `minmax(0, 1fr) ${layout.railWidth}px`,
+              gridTemplateColumns: layout.stacked ? "minmax(0, 1fr)" : `minmax(0, 1fr) ${contextWidth}px`,
               gap: layout.contentGap,
-              alignItems: "start",
+              alignItems: "stretch",
+              flex: 1,
+              minHeight: 0,
+              overflow: layout.stacked ? "visible" : "hidden",
             }}
           >
-            <CalendarGrid
-              view={view}
-              viewYear={viewYear}
-              viewMonth={viewMonth}
-              currentYear={currentYear}
-              currentMonth={currentMonth}
-              todayDate={todayDate}
-              firstDay={firstDay}
-              daysInMonth={daysInMonth}
-              trailingEmpty={trailingEmpty}
-              itemsByDay={itemsByDay}
-              selectedDay={selectedDay}
-              viewData={viewData}
-              activeView={activeView}
-              layout={layout}
-              showEventsLoadingState={showEventsLoadingState}
-              buildFallbackDayState={buildFallbackDayState}
-              closeEventEditor={closeEventEditor}
-              setSelectedDay={setSelectedDay}
-              setSelectedItemId={setSelectedItemId}
-              setDeadlineEditor={setDeadlineEditor}
-            />
+            <div
+              style={{
+                minWidth: 0,
+                minHeight: 0,
+                display: "grid",
+                gridTemplateRows: layout.stacked
+                  ? "auto auto"
+                  : "minmax(0, 1fr) auto",
+                gap: leftColumnGap,
+                overflow: layout.stacked ? "visible" : "hidden",
+              }}
+            >
+              <div style={{ minWidth: 0, minHeight: 0, display: "flex", flex: 1 }}>
+                <CalendarGrid
+                  view={view}
+                  viewYear={viewYear}
+                  viewMonth={viewMonth}
+                  currentYear={currentYear}
+                  currentMonth={currentMonth}
+                  todayDate={todayDate}
+                  firstDay={firstDay}
+                  daysInMonth={daysInMonth}
+                  trailingEmpty={trailingEmpty}
+                  itemsByDay={itemsByDay}
+                  selectedDay={selectedDay}
+                  selectedItemId={effectiveSelectedItemId}
+                  viewData={viewData}
+                  activeView={activeView}
+                  layout={layout}
+                  suppressOutsideClick={suppressOutsideClick}
+                  showGridSkeleton={showGridSkeleton}
+                  buildFallbackDayState={buildFallbackDayState}
+                  closeEventEditor={closeEventEditor}
+                  setSelectedDay={setSelectedDay}
+                  setSelectedItemId={setSelectedItemId}
+                  setDeadlineEditor={setDeadlineEditor}
+                />
+              </div>
+
+              <CalendarWorkspaceSupportBand
+                layout={layout}
+                mode={workspaceMode}
+                activeView={activeView}
+                supportProps={supportProps}
+              />
+            </div>
 
             <aside
               data-testid="calendar-modal-rail"
+              data-context-mode={workspaceMode}
               style={{
-                position: layout.stickyRail ? "sticky" : "relative",
+                position: layout.stacked ? "relative" : layout.stickyRail ? "sticky" : "relative",
                 top: 0,
-                background: "rgba(255,255,255,0.02)",
+                minHeight: 0,
+                height: layout.stacked ? "auto" : "100%",
+                background: "linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02))",
                 border: "1px solid rgba(255,255,255,0.05)",
-                borderRadius: 12,
-                height: railHeight,
+                borderRadius: 16,
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
               }}
             >
               <AnimatedRailContent contentKind={contentKind} contentKey={contentKey}>
-                {view === "events" && eventEditor.isEditorOpen ? (
-                  <CalendarEventEditorRail editor={eventEditor} />
-                ) : activeView.renderSidebar ? (
-                  activeView.renderSidebar({ selectedDay, itemsByDay, viewYear, viewMonth, data: viewData })
-                ) : showDetail ? (
-                  activeView.renderDetail?.({
-                    selectedDay,
-                    viewYear,
-                    viewMonth,
-                    items: selectedItems,
-                    data: viewData,
-                    computed,
-                    selectedItemId: effectiveSelectedItemId,
-                    onSelectItem: (itemId) => {
-                      setSelectedItemId(String(itemId));
-                      setDeadlineEditor(null);
-                    },
-                    onEditEvent: eventEditor.openEdit,
-                    editorState: deadlineEditor,
-                    onStartEdit: (task) => {
-                      setSelectedItemId(String(task.id));
-                      setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
-                    },
-                    onCloseEditor: () => setDeadlineEditor(null),
-                    onTaskSaved: focusDeadlineTask,
-                    onTaskDeleted: (taskId) => {
-                      setDeadlineEditor(null);
-                      if (String(effectiveSelectedItemId) === String(taskId)) {
-                        setSelectedItemId(null);
-                      }
-                    },
-                  })
-                ) : showEmptySelection ? (
-                  <CalendarSelectedDayEmptyRail
-                    view={view}
-                    selectedDay={selectedDay}
-                    viewYear={viewYear}
-                    viewMonth={viewMonth}
-                    currentYear={currentYear}
-                    currentMonth={currentMonth}
-                    todayDate={todayDate}
-                    itemsByDay={itemsByDay}
-                    computed={computed}
-                    data={viewData}
-                    activeView={activeView}
-                    setSelectedDay={setSelectedDay}
-                    setSelectedItemId={setSelectedItemId}
-                    setDeadlineEditor={setDeadlineEditor}
-                  />
-                ) : (
-                  <CalendarOverviewRail
-                    view={view}
-                    viewYear={viewYear}
-                    viewMonth={viewMonth}
-                    currentYear={currentYear}
-                    currentMonth={currentMonth}
-                    todayDate={todayDate}
-                    itemsByDay={itemsByDay}
-                    computed={computed}
-                    data={viewData}
-                    activeView={activeView}
-                  />
-                )}
+                {workspaceMode === "editor" ? (
+                  <div
+                    data-testid="calendar-modal-editor-expanded"
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    {contextContent}
+                  </div>
+                ) : contextContent}
               </AnimatedRailContent>
             </aside>
           </div>
