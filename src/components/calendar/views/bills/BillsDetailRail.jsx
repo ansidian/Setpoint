@@ -4,6 +4,8 @@ import { ExternalLink } from "lucide-react";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
   RailAction,
+  RailActionDock,
+  RailActionGroup,
   RailFactTile,
   RailHeroCard,
   RailMetaChip,
@@ -17,14 +19,13 @@ function getScheduleUrl(bill, actualBudgetUrl) {
     : null;
 }
 
-function BillSelectedCard({ bill, actualBudgetUrl, compact = false }) {
+function BillSelectedCard({ bill, compact = false, actions }) {
   const days = daysUntil(bill.next_date);
   const urgency = urgencyColor(days);
-  const scheduleUrl = getScheduleUrl(bill, actualBudgetUrl);
   const statusLabel = bill.paid ? "Cleared" : "Scheduled";
 
   return (
-    <RailHeroCard accent="#a6e3a1">
+    <RailHeroCard accent="#a6e3a1" actions={actions}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span
@@ -104,33 +105,26 @@ function BillSelectedCard({ bill, actualBudgetUrl, compact = false }) {
         />
         <RailFactTile label="Status" value={statusLabel} />
       </div>
-
-      <div
-        style={{
-          marginTop: "auto",
-          paddingTop: compact ? 10 : 12,
-          borderTop: "1px solid rgba(255,255,255,0.04)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {bill.type === "transfer" ? <RailMetaChip tone="quiet">Transfer</RailMetaChip> : null}
-        </div>
-        {scheduleUrl ? (
-          <RailAction
-            icon={ExternalLink}
-            label="Open in Actual"
-            href={scheduleUrl}
-          accent="#a6e3a1"
-          tone="accent"
-        />
-      ) : null}
-      </div>
     </RailHeroCard>
+  );
+}
+
+function BillSelectedActions({ bill, actualBudgetUrl, compact = false }) {
+  if (!bill) return null;
+  const scheduleUrl = getScheduleUrl(bill, actualBudgetUrl);
+  if (!scheduleUrl) return null;
+
+  return (
+    <RailActionGroup align="end">
+      <RailAction
+        icon={ExternalLink}
+        label="Open in Actual"
+        href={scheduleUrl}
+        accent="#a6e3a1"
+        tone="accent"
+        size={compact ? "compact" : "default"}
+      />
+    </RailActionGroup>
   );
 }
 
@@ -180,6 +174,7 @@ function BillsDetail({
   const allItems = [...state.activeItems, ...state.completedItems];
   const selectedBill = allItems.find((bill) => String(bill.id) === String(selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
+  const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
   const summary = [
     `${state.activeCount} unpaid`,
     state.completedCount ? `${state.completedCount} paid` : null,
@@ -193,8 +188,27 @@ function BillsDetail({
       summary={summary}
       accent="#a6e3a1"
       supportBandActive={supportBandActive}
+      actionContent={supportBandActive && selectedBill && selectedScheduleUrl ? (
+        <RailActionDock accent="#a6e3a1" compact>
+          <BillSelectedActions
+            bill={selectedBill}
+            actualBudgetUrl={actualBudgetUrl}
+            compact
+          />
+        </RailActionDock>
+      ) : null}
       headerContent={supportBandActive ? null : selectedBill ? (
-        <BillSelectedCard bill={selectedBill} actualBudgetUrl={actualBudgetUrl} compact={compactDetail} />
+        <BillSelectedCard
+          bill={selectedBill}
+          compact={compactDetail}
+          actions={selectedScheduleUrl ? (
+            <BillSelectedActions
+              bill={selectedBill}
+              actualBudgetUrl={actualBudgetUrl}
+              compact={compactDetail}
+            />
+          ) : null}
+        />
       ) : null}
       sections={[
         {

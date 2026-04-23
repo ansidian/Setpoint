@@ -8,6 +8,7 @@ import { useDashboard } from "../../../../context/DashboardContext.jsx";
 import AddTaskPanel from "../../../todoist/AddTaskPanel";
 import {
   RailAction,
+  RailActionGroup,
   RailFactTile,
   RailHeroCard,
   RailMetaChip,
@@ -203,14 +204,57 @@ function DeadlineExternalActions({
   );
 }
 
-function DetailCard({
+function DeadlineSelectedActions({
   task,
   accent,
   onEdit,
   onComplete,
   onStatusChange,
   compact = false,
+}) {
+  if (!task) return null;
+  const source = sourceOf(task);
+  const isTodoist = source === "todoist";
+  const normalizedStatus = normalizeStatus(task.status);
+  const isCompleting = !!task._completing;
+  const ctmUrl = `https://ctm.andysu.tech/#/event/${task.id}`;
+  const hasExternalActions = isTodoist
+    ? !!task.url
+    : true;
+
+  return (
+    <RailActionGroup>
+      <DeadlinePrimaryActions
+        task={task}
+        isTodoist={isTodoist}
+        normalizedStatus={normalizedStatus}
+        isCompleting={isCompleting}
+        accent={accent}
+        onComplete={onComplete}
+        onEdit={onEdit}
+        onStatusChange={onStatusChange}
+        compact={compact}
+      />
+      {hasExternalActions ? (
+        <DeadlineExternalActions
+          task={task}
+          isTodoist={isTodoist}
+          isCompleting={isCompleting}
+          accent={accent}
+          ctmUrl={ctmUrl}
+          compact={compact}
+        />
+      ) : null}
+    </RailActionGroup>
+  );
+}
+
+function DetailCard({
+  task,
+  accent,
+  compact = false,
   ultraCompact = false,
+  actions,
 }) {
   const motion = useDetailRailMotion();
   const source = sourceOf(task);
@@ -218,8 +262,6 @@ function DetailCard({
   const sourceColor = SOURCE_COLORS[source] || accent;
   const isTodoist = source === "todoist";
   const normalizedStatus = normalizeStatus(task.status);
-  const isCompleting = !!task._completing;
-  const ctmUrl = `https://ctm.andysu.tech/#/event/${task.id}`;
   const dueDays = daysUntil(task.due_date);
   const urgency = urgencyForDays(dueDays, accent);
   const dueColor = task.due_date
@@ -245,12 +287,13 @@ function DetailCard({
         transition={motion.layout}
         data-testid="calendar-selected-deadline-card"
         data-density={density}
+        style={{ flexShrink: 0 }}
       >
-        <RailHeroCard accent={accent} compact>
+        <RailHeroCard accent={accent} compact actions={actions}>
           <Motion.div
             layout
             transition={motion.layout}
-            style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}
+            style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexShrink: 0 }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <span
@@ -270,6 +313,7 @@ function DetailCard({
                   letterSpacing: 2,
                   textTransform: "uppercase",
                   color: sourceColor,
+                  whiteSpace: "nowrap",
                 }}
               >
                 {sourceLabel}
@@ -293,7 +337,7 @@ function DetailCard({
             </div>
           </Motion.div>
 
-          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
             <Motion.div
               layout="position"
               transition={motion.layout}
@@ -358,44 +402,6 @@ function DetailCard({
               ) : null}
             </Motion.div>
           </Motion.div>
-
-          <Motion.div
-            layout
-            transition={motion.layout}
-            style={{
-              paddingTop: 10,
-              borderTop: "1px solid rgba(255,255,255,0.04)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <DeadlinePrimaryActions
-                task={task}
-                isTodoist={isTodoist}
-                normalizedStatus={normalizedStatus}
-                isCompleting={isCompleting}
-                accent={accent}
-                onComplete={onComplete}
-                onEdit={onEdit}
-                onStatusChange={onStatusChange}
-                compact
-              />
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <DeadlineExternalActions
-                task={task}
-                isTodoist={isTodoist}
-                isCompleting={isCompleting}
-                accent={accent}
-                ctmUrl={ctmUrl}
-                compact
-              />
-            </div>
-          </Motion.div>
         </RailHeroCard>
       </Motion.div>
     );
@@ -407,12 +413,13 @@ function DetailCard({
       transition={motion.layout}
       data-testid="calendar-selected-deadline-card"
       data-density={density}
+      style={{ flexShrink: 0 }}
     >
-      <RailHeroCard accent={accent} compact={compact}>
+      <RailHeroCard accent={accent} compact={compact} actions={actions}>
         <Motion.div
           layout
           transition={motion.layout}
-          style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}
+          style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexShrink: 0 }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <span
@@ -432,6 +439,7 @@ function DetailCard({
                 letterSpacing: 2,
                 textTransform: "uppercase",
                 color: sourceColor,
+                whiteSpace: "nowrap",
               }}
             >
               {sourceLabel}
@@ -455,7 +463,7 @@ function DetailCard({
           </div>
         </Motion.div>
 
-        <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}>
+        <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6, flexShrink: 0 }}>
           <Motion.div
             layout="position"
             transition={motion.layout}
@@ -495,7 +503,7 @@ function DetailCard({
         </Motion.div>
 
         {!compact && (showPriorityChip || showPointsChip || !isTodoist) ? (
-          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
             {showPriorityChip ? <PriorityBadge level={task.priority} /> : null}
             {showPointsChip ? <RailMetaChip tone="quiet">{task.points_possible} pts</RailMetaChip> : null}
             {!isTodoist ? <RailMetaChip tone="quiet">{sourceLabel}</RailMetaChip> : null}
@@ -505,7 +513,7 @@ function DetailCard({
         <Motion.div
           layout
           transition={motion.layout}
-          style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}
+          style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, flexShrink: 0 }}
         >
           <RailFactTile
             label="Due"
@@ -526,46 +534,6 @@ function DetailCard({
             valueNoWrap
             valueFontSize={compact ? 11 : 12}
           />
-        </Motion.div>
-
-        <Motion.div
-          layout
-          transition={motion.layout}
-          style={{
-            marginTop: "auto",
-            paddingTop: compact ? 8 : 10,
-            borderTop: "1px solid rgba(255,255,255,0.04)",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <DeadlinePrimaryActions
-              task={task}
-              isTodoist={isTodoist}
-              normalizedStatus={normalizedStatus}
-              isCompleting={isCompleting}
-              accent={accent}
-              onComplete={onComplete}
-              onEdit={onEdit}
-              onStatusChange={onStatusChange}
-              compact={compact}
-            />
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <DeadlineExternalActions
-              task={task}
-              isTodoist={isTodoist}
-              isCompleting={isCompleting}
-              accent={accent}
-              ctmUrl={ctmUrl}
-              compact={compact}
-            />
-          </div>
         </Motion.div>
       </RailHeroCard>
     </Motion.div>
@@ -648,15 +616,22 @@ function DeadlinesDetail({
       accent={accent}
       supportBandActive={supportBandActive}
       headerContent={
-        supportBandActive ? null : selectedTask ? (
+        selectedTask ? (
           <DetailCard
             task={selectedTask}
             accent={accent}
             compact={effectiveCompactDetail}
             ultraCompact={compressedSelectedCard}
-            onEdit={onStartEdit}
-            onComplete={handleCompleteTask}
-            onStatusChange={handleUpdateTaskStatus}
+            actions={
+              <DeadlineSelectedActions
+                task={selectedTask}
+                accent={accent}
+                onEdit={onStartEdit}
+                onComplete={handleCompleteTask}
+                onStatusChange={handleUpdateTaskStatus}
+                compact={effectiveCompactDetail || supportBandActive}
+              />
+            }
           />
         ) : null
       }

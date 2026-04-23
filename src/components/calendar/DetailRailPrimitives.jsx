@@ -1,11 +1,12 @@
 import { useState } from "react";
 
-export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, children }) {
+export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, actions, children }) {
+  const pad = compact ? 12 : 14;
   return (
     <div
       style={{
         minHeight: 0,
-        padding: compact ? "12px" : "14px",
+        padding: pad,
         borderRadius: compact ? 14 : 16,
         border: `1px solid color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.05))`,
         background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 14%, transparent), transparent 44%), linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))`,
@@ -16,6 +17,30 @@ export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, chi
       }}
     >
       {children}
+      {actions ? (
+        <>
+          <div
+            style={{
+              height: 1,
+              background: "rgba(255,255,255,0.05)",
+              margin: `0 -${pad}px`,
+            }}
+          />
+          <div
+            data-testid="timeline-detail-action-dock"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              gap: compact ? 6 : 8,
+              flexWrap: "wrap",
+              minWidth: 0,
+            }}
+          >
+            {actions}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -116,6 +141,56 @@ export function RailFactTile({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+export function RailActionDock({
+  accent = "var(--ea-accent)",
+  compact = false,
+  children,
+}) {
+  if (!children) return null;
+
+  return (
+    <div
+      data-testid="timeline-detail-action-dock"
+      style={{
+        flexShrink: 0,
+        padding: compact ? "8px" : "9px",
+        borderRadius: 14,
+        border: `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.06))`,
+        background: `linear-gradient(180deg, color-mix(in srgb, ${accent} 8%, rgba(255,255,255,0.028)), rgba(255,255,255,0.018))`,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: compact ? 6 : 8,
+        flexWrap: "wrap",
+        minWidth: 0,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function RailActionGroup({ align = "start", children }) {
+  if (!children) return null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: align === "end" ? "flex-end" : "flex-start",
+        gap: 8,
+        flexWrap: "wrap",
+        minWidth: 0,
+        marginLeft: align === "end" ? "auto" : undefined,
+      }}
+    >
+      {children}
     </div>
   );
 }

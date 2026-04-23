@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Check, Circle, CircleDashed, ExternalLink, Flag, ListChecks, Pencil } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import {
   EmptyDayCard,
   getOverviewModel,
@@ -9,28 +9,17 @@ import {
   SpotlightCard,
 } from "../../CalendarRailStates.jsx";
 import {
-  RailAction,
   RailFactTile,
   RailHeroCard,
   RailMetaChip,
 } from "../../DetailRailPrimitives.jsx";
-import { daysUntil } from "../../../../lib/bill-utils";
-import { daysLabel, urgencyForDays } from "../../../../lib/redesign-helpers";
 import {
-  PRIORITY_META,
   SOURCE_COLORS,
   normalizeStatus,
-  openInNewTab,
   sourceLabelFor,
   sourceOf,
 } from "./deadlinesModel.js";
 import {
-  DeadlineStatusBadge,
-  DeadlineStatusValue,
-} from "./DeadlineStatusIndicator.jsx";
-import { useDashboard } from "../../../../context/DashboardContext.jsx";
-import {
-  CompactBandAction,
   compactPanelStyle,
   compactEyebrowStyle,
   compactValueStyle,
@@ -105,10 +94,6 @@ function deadlineTitle(task) {
   return task?.title || task?.name || "Untitled task";
 }
 
-function deadlineContext(task) {
-  return task?.class_name || task?.project_name || null;
-}
-
 function sourceMix(data) {
   const all = [
     ...(data?.ctm?.upcoming || []),
@@ -119,196 +104,6 @@ function sourceMix(data) {
     acc[source] = (acc[source] || 0) + 1;
     return acc;
   }, {});
-}
-
-function DeadlineSupportCard({ task, accent, onStartEdit, compact = false }) {
-  const { handleCompleteTask, handleUpdateTaskStatus } = useDashboard();
-  const source = sourceOf(task);
-  const isTodoist = source === "todoist";
-  const sourceColor = SOURCE_COLORS[source] || accent;
-  const ctmUrl = `https://ctm.andysu.tech/#/event/${task?.id}`;
-  const dueDays = daysUntil(task?.due_date);
-  const urgency = urgencyForDays(dueDays, accent);
-  const dueColor = task?.due_date ? (urgency.key === "high" ? "#f38ba8" : urgency.key === "medium" ? "#f9e2af" : accent) : "rgba(205,214,244,0.7)";
-  const normalizedStatus = normalizeStatus(task?.status);
-  const priorityMeta = PRIORITY_META[task?.priority];
-
-  return (
-    <div data-testid="calendar-selected-deadline-card">
-      <RailHeroCard accent={accent} compact={compact}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <span
-              aria-hidden
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 999,
-                background: sourceColor,
-                boxShadow: `0 0 0 1px ${sourceColor}22, 0 0 8px ${sourceColor}2b`,
-              }}
-            />
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: sourceColor }}>
-              {sourceLabelFor(task)}
-            </div>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {priorityMeta ? (
-              <RailMetaChip tone="accent" color={priorityMeta.color} compact={compact}>
-                <Flag size={10} strokeWidth={2.2} />
-                {priorityMeta.label}
-              </RailMetaChip>
-            ) : null}
-            <DeadlineStatusBadge
-              status={normalizedStatus}
-              compact={compact}
-              testId="calendar-selected-deadline-status"
-            />
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}>
-          <div
-            data-testid="calendar-selected-deadline-title"
-            style={{
-              fontSize: compact ? 20 : 24,
-              lineHeight: 1.06,
-              letterSpacing: compact ? -0.34 : -0.44,
-              color: "#fff",
-              fontWeight: 500,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {deadlineTitle(task)}
-          </div>
-          <div style={{ ...clampStyle(2), fontSize: compact ? 11 : 12.5, lineHeight: 1.35, color: "rgba(205,214,244,0.58)" }}>
-            {deadlineContext(task) || "Task context unavailable"}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: compact ? 6 : 8 }}>
-          <RailFactTile
-            label="Due"
-            value={task?.due_date ? `${daysLabel(dueDays)} · ${task.due_time || "End of day"}` : "No due date"}
-            color={dueColor}
-            compact={compact}
-          />
-          <RailFactTile
-            label="Source"
-            value={sourceLabelFor(task)}
-            color={sourceColor}
-            compact={compact}
-          />
-        </div>
-
-        <div
-          style={{
-            marginTop: "auto",
-            paddingTop: compact ? 8 : 10,
-            borderTop: "1px solid rgba(255,255,255,0.04)",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: compact ? 8 : 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {isTodoist ? (
-              <>
-                {normalizedStatus !== "complete" ? (
-                  <RailAction
-                    icon={Check}
-                    label="Mark complete"
-                    accent={accent}
-                    tone="success"
-                    size={compact ? "compact" : "default"}
-                    onClick={() => handleCompleteTask(task.id)}
-                  />
-                ) : null}
-                <RailAction
-                  icon={Pencil}
-                  label="Edit"
-                  accent={accent}
-                  size={compact ? "compact" : "default"}
-                  onClick={() => onStartEdit?.(task)}
-                />
-              </>
-            ) : (
-              <>
-                {normalizedStatus !== "complete" ? (
-                  <RailAction
-                    icon={Check}
-                    label="Mark complete"
-                    accent={accent}
-                    tone="success"
-                    size={compact ? "compact" : "default"}
-                    onClick={() => handleUpdateTaskStatus(task.id, "complete")}
-                  />
-                ) : null}
-                {normalizedStatus !== "in_progress" ? (
-                  <RailAction
-                    icon={CircleDashed}
-                    label="In progress"
-                    accent={accent}
-                    size={compact ? "compact" : "default"}
-                    onClick={() => handleUpdateTaskStatus(task.id, "in_progress")}
-                  />
-                ) : null}
-                {normalizedStatus !== "incomplete" ? (
-                  <RailAction
-                    icon={Circle}
-                    label="Reopen"
-                    accent={accent}
-                    size={compact ? "compact" : "default"}
-                    onClick={() => handleUpdateTaskStatus(task.id, "incomplete")}
-                  />
-                ) : null}
-              </>
-            )}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {isTodoist ? (
-              task?.url ? (
-                <RailAction
-                  icon={ExternalLink}
-                  label="Open in Todoist"
-                  accent={accent}
-                  tone="ghost"
-                  size={compact ? "compact" : "default"}
-                  onClick={() => openInNewTab(task.url)}
-                />
-              ) : null
-            ) : (
-              <>
-                {task?.url && /instructure\.com|canvas/i.test(task.url) ? (
-                  <RailAction
-                    icon={ExternalLink}
-                    label="Open in Canvas"
-                    accent={accent}
-                    tone="ghost"
-                    size={compact ? "compact" : "default"}
-                    onClick={() => openInNewTab(task.url)}
-                  />
-                ) : null}
-                <RailAction
-                  icon={ExternalLink}
-                  label="Open in CTM"
-                  accent={accent}
-                  tone="ghost"
-                  size={compact ? "compact" : "default"}
-                  onClick={() => openInNewTab(ctmUrl)}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </RailHeroCard>
-    </div>
-  );
 }
 
 function OverviewSupport({ layout, model, data }) {
@@ -462,131 +257,6 @@ function EmptySupport({ layout, model, itemsByDay, selectedDay, viewYear, viewMo
             Press `C` to seed a new task while keeping the month grid visible and the right stage ready for list navigation.
             </div>
           ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailSupport({ layout, task, selectedDayState, selectedDay, viewYear, viewMonth, onStartEdit, accent }) {
-  const { handleCompleteTask, handleUpdateTaskStatus } = useDashboard();
-  const compactBand = !layout.stacked;
-  const dueDays = daysUntil(task?.due_date);
-  const normalizedStatus = normalizeStatus(task?.status);
-  const source = sourceOf(task);
-  const isTodoist = source === "todoist";
-  const ctmUrl = `https://ctm.andysu.tech/#/event/${task?.id}`;
-
-  if (compactBand) {
-    return (
-      <div style={bandGridStyle(layout)}>
-        <div data-testid="calendar-selected-deadline-card" style={compactPanelStyle(accent, true)}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={compactEyebrowStyle()}>{sourceLabelFor(task)}</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {isTodoist ? (
-                <>
-                  {normalizedStatus !== "complete" ? (
-                    <CompactBandAction label="Complete" color="#a6e3a1" tone="success" onClick={() => handleCompleteTask(task.id)} />
-                  ) : null}
-                  <CompactBandAction label="Edit" color="#cba6da" onClick={() => onStartEdit?.(task)} />
-                  {task?.url ? <CompactBandAction label="Todoist" color="rgba(205,214,244,0.62)" onClick={() => openInNewTab(task.url)} /> : null}
-                </>
-              ) : (
-                <>
-                  {normalizedStatus !== "complete" ? (
-                    <CompactBandAction label="Complete" color="#a6e3a1" tone="success" onClick={() => handleUpdateTaskStatus(task.id, "complete")} />
-                  ) : null}
-                  {normalizedStatus !== "in_progress" ? (
-                    <CompactBandAction label="In progress" color="#cba6da" onClick={() => handleUpdateTaskStatus(task.id, "in_progress")} />
-                  ) : null}
-                  {normalizedStatus !== "incomplete" ? (
-                    <CompactBandAction label="Reopen" color="#cba6da" onClick={() => handleUpdateTaskStatus(task.id, "incomplete")} />
-                  ) : null}
-                  {task?.url && /instructure\.com|canvas/i.test(task.url) ? (
-                    <CompactBandAction label="Canvas" color="rgba(205,214,244,0.62)" onClick={() => openInNewTab(task.url)} />
-                  ) : null}
-                  <CompactBandAction label="CTM" color="rgba(205,214,244,0.62)" onClick={() => openInNewTab(ctmUrl)} />
-                </>
-              )}
-            </div>
-          </div>
-          <div
-            data-testid="calendar-selected-deadline-title"
-            title={deadlineTitle(task)}
-            style={{
-              ...compactValueStyle("#fff", 18),
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {deadlineTitle(task)}
-          </div>
-          <div style={compactDetailStyle()}>
-            {task?.due_date ? `${daysLabel(dueDays)} · ${task.due_time || "End of day"}` : "No due date"}
-          </div>
-        </div>
-
-        <div style={compactPanelStyle()}>
-          <div style={compactEyebrowStyle()}>Selected day</div>
-          <div style={compactValueStyle(accent, 18)}>
-            {formatShortDate(viewYear, viewMonth, selectedDay)}
-          </div>
-          <div style={compactDetailStyle()}>
-            {selectedDayState?.totalCount || 0} deadline{selectedDayState?.totalCount === 1 ? "" : "s"} on this date
-          </div>
-        </div>
-
-        <div style={compactPanelStyle()}>
-          <div style={compactEyebrowStyle()}>Status</div>
-          <div style={compactMetricRowStyle()}>
-            <span style={{ fontSize: 11, lineHeight: 1.35, color: "rgba(205,214,244,0.62)" }}>Open</span>
-            <span style={{ fontSize: 16, lineHeight: 1, color: accent, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{selectedDayState?.activeCount || 0}</span>
-          </div>
-          <div style={compactMetricRowStyle()}>
-            <span style={{ fontSize: 11, lineHeight: 1.35, color: "rgba(205,214,244,0.62)" }}>Complete</span>
-            <span style={{ fontSize: 16, lineHeight: 1, color: accent, fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>{selectedDayState?.completedCount || 0}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={bandGridStyle(layout)}>
-      <DeadlineSupportCard task={task} accent={accent} onStartEdit={onStartEdit} compact={compactBand} />
-      <div style={stackStyle()}>
-        <MetricCard
-          label="Selected day"
-          value={formatShortDate(viewYear, viewMonth, selectedDay)}
-          detail={`${selectedDayState?.totalCount || 0} deadline${selectedDayState?.totalCount === 1 ? "" : "s"} on this date`}
-          accent={accent}
-          compact={compactBand}
-        />
-        <MetricCard
-          label="Open"
-          value={`${selectedDayState?.activeCount || 0}`}
-          detail={selectedDayState?.activeCount ? "Still needs attention" : "Everything here is complete"}
-          accent={accent}
-          compact={compactBand}
-        />
-      </div>
-      <div style={stackStyle()}>
-        <MetricCard
-          label="Complete"
-          value={`${selectedDayState?.completedCount || 0}`}
-          detail={selectedDayState?.completedCount ? "Already cleared on this day" : "Nothing complete yet"}
-          accent={accent}
-          compact={compactBand}
-        />
-        <div style={{ ...panelStyle(), display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: compactBand ? 6 : 8 }}>
-          <RailFactTile
-            label="Status"
-            value={<DeadlineStatusValue status={task?.status} size={compactBand ? 11 : 12} />}
-            compact={compactBand}
-          />
-          <RailFactTile label="Context" value={deadlineContext(task) || "No context"} compact={compactBand} />
         </div>
       </div>
     </div>
@@ -774,11 +444,6 @@ export function renderDeadlinesWorkspaceSupport(props) {
     props.setSelectedItemId?.(null);
     props.setSelectedDay?.(day);
   };
-  const handleStartEdit = (task) => {
-    props.setSelectedItemId?.(String(task.id));
-    props.setDeadlineEditor?.({ mode: "edit", taskId: String(task.id) });
-  };
-
   if (props.mode === "editor" && props.deadlineEditor) {
     return (
       <EditorSupport
@@ -788,21 +453,6 @@ export function renderDeadlinesWorkspaceSupport(props) {
         selectedDay={props.selectedDay}
         viewYear={props.viewYear}
         viewMonth={props.viewMonth}
-        accent={accent}
-      />
-    );
-  }
-
-  if (props.mode === "detail" && selectedTask) {
-    return (
-      <DetailSupport
-        layout={props.layout}
-        task={selectedTask}
-        selectedDayState={props.selectedDayState}
-        selectedDay={props.selectedDay}
-        viewYear={props.viewYear}
-        viewMonth={props.viewMonth}
-        onStartEdit={handleStartEdit}
         accent={accent}
       />
     );

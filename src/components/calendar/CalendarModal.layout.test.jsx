@@ -339,7 +339,7 @@ describe("CalendarModal responsive layout", () => {
 
     expect(screen.getByText("Monday, April 20")).toBeTruthy();
     expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
     expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Incomplete");
   });
 

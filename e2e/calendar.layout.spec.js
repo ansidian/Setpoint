@@ -116,6 +116,35 @@ test("keeps selected-event context in the rail while the support band stays day-
   await expect(page.getByTestId("calendar-selected-empty-rail").getByText(/Nothing is scheduled here/i)).toBeVisible();
 });
 
+test("keeps selected-deadline context in the rail while the support band stays day-focused", async ({ page }) => {
+  const fixture = await installDashboardCalendarLayoutFixtures(page);
+  await page.setViewportSize({ width: 1900, height: 1200 });
+
+  await openCalendar(page);
+
+  const supportBand = page.getByTestId("calendar-modal-support-band");
+  const rail = page.getByTestId("calendar-modal-rail");
+
+  await page.getByRole("button", { name: /deadlines/i }).click();
+  await expect(page.getByTestId(`calendar-cell-${fixture.deadlineDay}`)).toBeVisible();
+  await expect(supportBand).toHaveAttribute("data-support-mode", "empty");
+  await expect(rail).toHaveAttribute("data-context-mode", "empty");
+
+  await page.getByTestId(`calendar-cell-${fixture.deadlineDay}`).click();
+
+  await expect(supportBand).toHaveAttribute("data-support-mode", "detail");
+  await expect(rail).toHaveAttribute("data-context-mode", "detail");
+  await expect(page.getByTestId("timeline-detail-rail")).toBeVisible();
+  await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.deadlineTitle);
+  await expect(page.getByTestId("calendar-selected-deadline-card")).toHaveCount(0);
+
+  await page.getByTestId(`calendar-cell-${fixture.deadlineDay}`).getByTestId("calendar-cell-item-chip").click();
+
+  await expect(rail.getByTestId("calendar-selected-deadline-card")).toBeVisible();
+  await expect(rail.getByTestId("calendar-selected-deadline-title")).toContainText(fixture.deadlineTitle);
+  await expect(supportBand.getByTestId("calendar-selected-deadline-card")).toHaveCount(0);
+});
+
 test("widens the context stage and keeps the grid visible when entering editor mode", async ({ page }) => {
   const fixture = await installDashboardCalendarLayoutFixtures(page);
   await page.setViewportSize({ width: 1900, height: 1200 });

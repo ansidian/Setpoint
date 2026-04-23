@@ -317,6 +317,7 @@ export default function TimelineDetailRail({
   title,
   summary,
   accent = "var(--ea-accent)",
+  actionContent = null,
   headerContent = null,
   sections = [],
   supportBandActive = false,
@@ -423,6 +424,12 @@ export default function TimelineDetailRail({
         {headerContent ? (
           <div style={{ flexShrink: 0 }}>
             {headerContent}
+          </div>
+        ) : null}
+
+        {actionContent ? (
+          <div style={{ flexShrink: 0 }}>
+            {actionContent}
           </div>
         ) : null}
       </div>
