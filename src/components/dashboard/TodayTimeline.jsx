@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion as Motion } from "motion/react";
+import { AnimatePresence, motion as Motion } from "motion/react";
 import { buildTimeline } from "../../lib/redesign-helpers";
 import TimelineDayGroup from "./timeline/TimelineDayGroup";
 import TimelineHeader from "./timeline/TimelineHeader";
@@ -68,24 +68,35 @@ export default function TodayTimeline({
         todayLabel={todayLabel}
       />
 
-      <Motion.div
-        layout
-        transition={timelineSettleTransition}
-        style={{ marginTop: 14 }}
-      >
+      <div style={{ marginTop: 14 }}>
         {showEventSkeletons && <TimelineSkeleton isMobile={isMobile} />}
-        {groups.map(([day, dayItems], gi) => (
-          <TimelineDayGroup
-            key={day}
-            day={day}
-            items={dayItems}
-            now={now}
-            accent={accent}
-            onJump={onJump}
-            isFirst={gi === 0}
-            isMobile={isMobile}
-          />
-        ))}
+        <AnimatePresence initial={false} mode="popLayout">
+          {groups.map(([day, dayItems], gi) => (
+            <Motion.div
+              key={day}
+              layout="position"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{
+                layout: timelineSettleTransition,
+                opacity: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+                y: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+              }}
+              style={{ willChange: "transform, opacity" }}
+            >
+              <TimelineDayGroup
+                day={day}
+                items={dayItems}
+                now={now}
+                accent={accent}
+                onJump={onJump}
+                isFirst={gi === 0}
+                isMobile={isMobile}
+              />
+            </Motion.div>
+          ))}
+        </AnimatePresence>
         {groups.length === 0 && !showEventSkeletons && (
           <div
             style={{
@@ -98,7 +109,7 @@ export default function TodayTimeline({
             Nothing on the calendar matching this filter.
           </div>
         )}
-      </Motion.div>
+      </div>
     </div>
   );
 }

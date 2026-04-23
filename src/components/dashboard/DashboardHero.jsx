@@ -96,11 +96,10 @@ export default function DashboardHero({
           position: "absolute",
           top: -200,
           right: -120,
-          width: 440,
-          height: 440,
-          background: `radial-gradient(circle, ${accent}14 0%, ${accent}08 28%, transparent 72%)`,
-          filter: "blur(28px)",
-          opacity: 0.78,
+          width: 520,
+          height: 520,
+          background: `radial-gradient(circle, ${accent}12 0%, ${accent}08 24%, ${accent}03 52%, transparent 72%)`,
+          opacity: 0.7,
           pointerEvents: "none",
         }}
       />
@@ -116,7 +115,6 @@ export default function DashboardHero({
             `radial-gradient(circle at 0% 30%, ${accent}10 0%, transparent 46%)`,
             "linear-gradient(90deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0) 72%)",
           ].join(", "),
-          filter: "blur(2px)",
           opacity: isMobile ? 0.85 : 1,
           pointerEvents: "none",
         }}

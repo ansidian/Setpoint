@@ -1,73 +1,62 @@
 import { AnimatePresence, motion as Motion } from "motion/react";
 
-const railSwapLayoutTransition = {
+const railSwapPositionTransition = {
   type: "spring",
-  stiffness: 340,
-  damping: 34,
-  mass: 0.9,
+  stiffness: 300,
+  damping: 32,
+  mass: 0.95,
   bounce: 0,
 };
 
 const railSwapFadeTransition = {
-  duration: 0.18,
+  duration: 0.24,
   ease: [0.22, 1, 0.36, 1],
 };
 
 export default function AnimatedRailContent({ contentKey, contentKind, children }) {
   const shouldLift = contentKind === "detail" || contentKind === "empty";
   const instantSwap = contentKind === "editor";
+  const contentStyle = {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+  };
 
   if (instantSwap) {
     return (
       <Motion.div
-        layout
-        transition={railSwapLayoutTransition}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}
+        layout="position"
+        transition={railSwapPositionTransition}
+        style={contentStyle}
       >
-        <Motion.div
+        <div
           key={contentKey}
           data-testid="calendar-rail-content"
           data-rail-content-kind={contentKind}
-          layout
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-          }}
+          style={contentStyle}
         >
           {children}
-        </Motion.div>
+        </div>
       </Motion.div>
     );
   }
 
   return (
     <Motion.div
-      layout
-      transition={railSwapLayoutTransition}
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-      }}
+      layout="position"
+      transition={railSwapPositionTransition}
+      style={contentStyle}
     >
-      <AnimatePresence initial={false} mode="popLayout">
+      <AnimatePresence initial={false} mode="sync">
         <Motion.div
           key={contentKey}
           data-testid="calendar-rail-content"
           data-rail-content-kind={contentKind}
-          layout
           initial={{
             opacity: 0,
-            y: shouldLift ? 6 : 4,
-            scale: shouldLift ? 0.992 : 0.996,
+            y: shouldLift ? 10 : 6,
+            scale: shouldLift ? 0.986 : 0.992,
           }}
           animate={{
             opacity: 1,
@@ -76,20 +65,16 @@ export default function AnimatedRailContent({ contentKey, contentKind, children 
           }}
           exit={{
             opacity: 0,
-            y: shouldLift ? -4 : -2,
-            scale: 0.996,
+            y: shouldLift ? -8 : -4,
+            scale: 0.992,
           }}
           transition={{
-            layout: railSwapLayoutTransition,
             opacity: railSwapFadeTransition,
             y: railSwapFadeTransition,
             scale: railSwapFadeTransition,
           }}
           style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
+            ...contentStyle,
             transformOrigin: "top center",
             willChange: "opacity, transform",
           }}

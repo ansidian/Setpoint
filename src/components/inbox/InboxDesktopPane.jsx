@@ -101,7 +101,6 @@ export default function InboxDesktopPane({
               flexDirection: "column",
               minHeight: 0,
               overflow: "hidden",
-              transition: "flex-basis 320ms cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           >
             <InboxList

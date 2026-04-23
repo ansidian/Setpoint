@@ -19,15 +19,15 @@ import {
 } from "./calendarEditorUtils";
 
 const editorModeTransition = {
-  duration: 0.26,
+  duration: 0.3,
   ease: [0.22, 1, 0.36, 1],
 };
 
-const editorModeLayoutTransition = {
+const editorModePositionTransition = {
   type: "spring",
-  stiffness: 260,
-  damping: 28,
-  mass: 0.92,
+  stiffness: 280,
+  damping: 30,
+  mass: 0.96,
   bounce: 0,
 };
 
@@ -175,20 +175,18 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
         </div>
 
         <Motion.div
-          layout
-          transition={editorModeLayoutTransition}
+          layout="position"
+          transition={editorModePositionTransition}
           style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}
         >
-          <AnimatePresence initial={false} mode="popLayout">
+          <AnimatePresence initial={false} mode="sync">
             <Motion.div
               key={editorModeKey}
               data-testid={`calendar-event-editor-mode-${editorModeKey}`}
-              layout
-              initial={{ opacity: 0, y: 18, scale: 0.984 }}
+              initial={{ opacity: 0, y: 20, scale: 0.982 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.992 }}
+              exit={{ opacity: 0, y: -12, scale: 0.99 }}
               transition={{
-                layout: editorModeLayoutTransition,
                 opacity: editorModeTransition,
                 y: editorModeTransition,
                 scale: editorModeTransition,

@@ -45,7 +45,7 @@ export default function Section({
   return (
     <div
       className={cn(
-        "min-w-0 transition-all duration-[600ms] [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]",
+        "min-w-0 transition-[opacity,transform] duration-[600ms] [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]",
         loaded ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
         t.wrapper,
         className,
@@ -107,8 +107,16 @@ export default function Section({
         style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
-          {collapsible && <div className="h-3" />}
-          {children}
+          <div
+            className="transition-[opacity,transform] duration-200 ease-out"
+            style={{
+              opacity: isExpanded ? 1 : 0,
+              transform: isExpanded ? "translateY(0)" : "translateY(-4px)",
+            }}
+          >
+            {collapsible && <div className="h-3" />}
+            {children}
+          </div>
         </div>
       </div>
     </div>

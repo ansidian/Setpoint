@@ -159,31 +159,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.mouse-spotlight {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 300px;
-  height: 300px;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0;
-  border-radius: 9999px;
-  background-image:
-    radial-gradient(oklch(0.4 0.04 304.77) 0.5px, transparent 0.5px);
-  background-size: 10px 10px;
-  background-repeat: repeat;
-  transform: translate3d(-9999px, -9999px, 0);
-  will-change: transform, background-position, opacity;
-  contain: layout paint style;
-  mask-image: radial-gradient(circle, oklch(0 0 0 / 0.65), transparent 70%);
-  -webkit-mask-image: radial-gradient(
-    circle,
-    oklch(0 0 0 / 0.65),
-    transparent 70%
-  );
-}
-
 /* Display serif (hero greeting) — overridable via --serif-choice */
 .ea-display {
   font-family: var(--serif-choice, "Instrument Serif"), Georgia, serif;
@@ -234,10 +209,11 @@ body {
 }
 .badge-pulse {
   animation: badgePulse 2s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 @keyframes badgePulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(243,139,168,0); }
-  50% { box-shadow: 0 0 8px 2px rgba(243,139,168,0.15); }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.02); opacity: 0.88; }
 }
 
 /* Reduced motion */

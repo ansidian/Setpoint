@@ -144,10 +144,10 @@ export default function NotesRail({ accent }) {
                 {notes.map((note) => (
                   <motion.div
                     key={note.id}
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.985 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                   >
                     <NoteItem
                       note={note}
