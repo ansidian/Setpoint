@@ -6,6 +6,11 @@ import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 import CalendarWorkspaceSupportBand from "./CalendarWorkspaceSupportBand.jsx";
 
+function getPanelEntryClassName(tier) {
+  if (tier === "xl") return "animate-in fade-in duration-150";
+  return "animate-in fade-in slide-in-from-top-1 duration-150";
+}
+
 function buildContextContent({
   layout,
   view,
@@ -226,6 +231,7 @@ export default function CalendarModalShell({
 
   return createPortal(
     <div
+      className="animate-in fade-in duration-150"
       style={{
         position: "fixed",
         inset: 0,
@@ -244,7 +250,7 @@ export default function CalendarModalShell({
       <div
         ref={panelRef}
         data-testid="calendar-modal-panel"
-        className="isolate flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        className={`isolate flex flex-col ${getPanelEntryClassName(layout.tier)}`}
         style={{
           position: "relative",
           width: panelWidth,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import billsView from "./views/billsView.jsx";
 import deadlinesView from "./views/deadlinesView.jsx";
 import eventsView from "./views/eventsView.jsx";
@@ -49,6 +49,10 @@ function buildFallbackDayState(rawItems) {
   };
 }
 
+function isSameViewDate(a, b) {
+  return a?.month === b?.month && a?.year === b?.year;
+}
+
 export default function CalendarModal({
   open,
   onClose,
@@ -82,8 +86,67 @@ export default function CalendarModal({
   const [prevOpen, setPrevOpen] = useState(open);
   const [prevView, setPrevView] = useState(view);
 
-  const viewMonth = viewDate.month;
-  const viewYear = viewDate.year;
+  const syncSnapshot = useMemo(() => {
+    const didOpen = !prevOpen && open;
+    const didViewChange = prevView !== view;
+
+    if (!didOpen && !didViewChange) return null;
+
+    let nextViewDate = viewDate;
+    let nextSelectedDay = selectedDay;
+    let nextSelectedItemId = selectedItemId;
+    let nextPendingFocusDate = pendingFocusDate;
+    let nextPendingFocusItemId = pendingFocusItemId;
+    const openingFocus = didOpen ? parseFocusDate(focusDate) : null;
+
+    if (didOpen) {
+      nextPendingFocusDate = focusDate || null;
+      nextPendingFocusItemId = focusItemId ? String(focusItemId) : null;
+
+      if (openingFocus) {
+        nextViewDate = { month: openingFocus.getMonth(), year: openingFocus.getFullYear() };
+        nextSelectedDay = openingFocus.getDate();
+        nextSelectedItemId = focusItemId ? String(focusItemId) : null;
+      } else {
+        const today = new Date();
+        nextViewDate = { month: today.getMonth(), year: today.getFullYear() };
+        nextSelectedDay = today.getDate();
+        nextSelectedItemId = null;
+      }
+    }
+
+    if (didViewChange) {
+      const pendingFocus = openingFocus || parseFocusDate(nextPendingFocusDate);
+      const nextFocusedItemId = openingFocus
+        ? (focusItemId ? String(focusItemId) : null)
+        : (nextPendingFocusItemId ? String(nextPendingFocusItemId) : null);
+
+      if (pendingFocus) {
+        nextViewDate = { month: pendingFocus.getMonth(), year: pendingFocus.getFullYear() };
+        nextSelectedDay = pendingFocus.getDate();
+        nextSelectedItemId = nextFocusedItemId;
+        nextPendingFocusDate = null;
+        nextPendingFocusItemId = null;
+      }
+    }
+
+    return {
+      didViewChange,
+      resetDeadlineEditor: didOpen || didViewChange,
+      nextViewDate,
+      nextSelectedDay,
+      nextSelectedItemId,
+      nextPendingFocusDate,
+      nextPendingFocusItemId,
+    };
+  }, [open, view, prevOpen, prevView, focusDate, focusItemId, viewDate, selectedDay, selectedItemId, pendingFocusDate, pendingFocusItemId]);
+
+  const activeViewDate = syncSnapshot?.nextViewDate || viewDate;
+  const activeSelectedDay = syncSnapshot ? syncSnapshot.nextSelectedDay : selectedDay;
+  const activeSelectedItemId = syncSnapshot ? syncSnapshot.nextSelectedItemId : selectedItemId;
+
+  const viewMonth = activeViewDate.month;
+  const viewYear = activeViewDate.year;
   const activeView = VIEWS[view] || billsView;
 
   const viewData = useMemo(() => {
@@ -109,7 +172,7 @@ export default function CalendarModal({
     open,
     view,
     editable: !!eventsData?.editable,
-    selectedDay,
+    selectedDay: activeSelectedDay,
     viewYear,
     viewMonth,
     refreshRange: eventsData?.refreshRange,
@@ -143,44 +206,39 @@ export default function CalendarModal({
     setDeadlineEditor(null);
   }
 
-  const openingWithFocus = prevOpen !== open && open
-    ? parseFocusDate(focusDate)
-    : null;
-  if (prevOpen !== open) {
-    setPrevOpen(open);
-    if (open) {
-      const focus = parseFocusDate(focusDate);
-      setPendingFocusDate(focusDate || null);
-      setPendingFocusItemId(focusItemId ? String(focusItemId) : null);
+  const commitSyncSnapshot = useEffectEvent((snapshot) => {
+    if (snapshot?.didViewChange) {
+      closeEventEditor();
+    }
+    if (snapshot?.resetDeadlineEditor) {
       setDeadlineEditor(null);
-      if (focus) {
-        setViewDate({ month: focus.getMonth(), year: focus.getFullYear() });
-        setSelectedDay(focus.getDate());
-        setSelectedItemId(focusItemId ? String(focusItemId) : null);
-      } else {
-        setViewDate({ month: currentMonth, year: currentYear });
-        setSelectedDay(now.getDate());
-        setSelectedItemId(null);
-      }
     }
-  }
+    if (snapshot && !isSameViewDate(viewDate, snapshot.nextViewDate)) {
+      setViewDate(snapshot.nextViewDate);
+    }
+    if (snapshot && selectedDay !== snapshot.nextSelectedDay) {
+      setSelectedDay(snapshot.nextSelectedDay);
+    }
+    if (snapshot && selectedItemId !== snapshot.nextSelectedItemId) {
+      setSelectedItemId(snapshot.nextSelectedItemId);
+    }
+    if (snapshot && pendingFocusDate !== snapshot.nextPendingFocusDate) {
+      setPendingFocusDate(snapshot.nextPendingFocusDate);
+    }
+    if (snapshot && pendingFocusItemId !== snapshot.nextPendingFocusItemId) {
+      setPendingFocusItemId(snapshot.nextPendingFocusItemId);
+    }
+    if (prevOpen !== open) {
+      setPrevOpen(open);
+    }
+    if (prevView !== view) {
+      setPrevView(view);
+    }
+  });
 
-  if (prevView !== view) {
-    setPrevView(view);
-    closeEventEditor();
-    setDeadlineEditor(null);
-    const pendingFocus = openingWithFocus || parseFocusDate(pendingFocusDate);
-    const nextFocusedItemId = openingWithFocus
-      ? (focusItemId ? String(focusItemId) : null)
-      : (pendingFocusItemId ? String(pendingFocusItemId) : null);
-    if (pendingFocus) {
-      setViewDate({ month: pendingFocus.getMonth(), year: pendingFocus.getFullYear() });
-      setSelectedDay(pendingFocus.getDate());
-      setSelectedItemId(nextFocusedItemId);
-      setPendingFocusDate(null);
-      setPendingFocusItemId(null);
-    }
-  }
+  useLayoutEffect(() => {
+    commitSyncSnapshot(syncSnapshot);
+  }, [syncSnapshot]);
 
   const suppressOutsideClickRef = useRef(null);
   function suppressOutsideClick(test) {
@@ -379,14 +437,14 @@ export default function CalendarModal({
   const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
   const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
 
-  const selectedDayState = selectedDay != null
-    ? (activeView.getDayState?.(itemsByDay[selectedDay]) ?? buildFallbackDayState(itemsByDay[selectedDay]))
+  const selectedDayState = activeSelectedDay != null
+    ? (activeView.getDayState?.(itemsByDay[activeSelectedDay]) ?? buildFallbackDayState(itemsByDay[activeSelectedDay]))
     : buildFallbackDayState([]);
   const selectedItems = activeView.getDayState ? selectedDayState : selectedDayState.items;
   const effectiveSelectedItemId = (() => {
-    if (selectedDay == null || selectedDayState.totalCount === 0) return null;
-    if (selectedItemId == null) return null;
-    if (!activeView.getItemId) return selectedItemId;
+    if (activeSelectedDay == null || selectedDayState.totalCount === 0) return null;
+    if (activeSelectedItemId == null) return null;
+    if (!activeView.getItemId) return activeSelectedItemId;
 
     const pool = view === "deadlines"
       ? [...selectedDayState.activeItems, ...selectedDayState.completedItems]
@@ -394,10 +452,10 @@ export default function CalendarModal({
         ? selectedItems
         : selectedDayState.items || [];
     const resolveItemId = activeView.getItemId;
-    const hasSelectedItem = pool.some((item) => String(resolveItemId(item)) === String(selectedItemId));
-    return hasSelectedItem ? String(selectedItemId) : null;
+    const hasSelectedItem = pool.some((item) => String(resolveItemId(item)) === String(activeSelectedItemId));
+    return hasSelectedItem ? String(activeSelectedItemId) : null;
   })();
-  const hasSelectedDay = selectedDay != null;
+  const hasSelectedDay = activeSelectedDay != null;
   const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
   const showDetail = view === "deadlines"
     ? showDeadlineEditor || (!showDeadlinesLoadingState && hasSelectedDay && selectedDayState.totalCount > 0)
@@ -423,7 +481,7 @@ export default function CalendarModal({
       computed={computed}
       suppressOutsideClick={suppressOutsideClick}
       eventEditor={eventEditor}
-      selectedDay={selectedDay}
+      selectedDay={activeSelectedDay}
       viewYear={viewYear}
       viewMonth={viewMonth}
       setDeadlineEditor={setDeadlineEditor}

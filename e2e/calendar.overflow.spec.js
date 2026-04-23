@@ -210,7 +210,7 @@ test("shows hover style deltas for visible event chips", async ({ page }) => {
   await expectHoverStyleDifference(page, visibleChip, "event chip");
 });
 
-test("keeps four visible chips when selecting a dense desktop day from the cell header", async ({ page }) => {
+test("keeps the xl dense-day chip count stable when selecting from the cell header", async ({ page }) => {
   const parts = currentMonthParts();
   const [day] = pickOverflowDays(parts);
   const events = buildDayEvents({
@@ -228,8 +228,8 @@ test("keeps four visible chips when selecting a dense desktop day from the cell 
   const cell = page.getByTestId(`calendar-cell-${day}`);
   const supportBand = page.getByTestId("calendar-modal-support-band");
 
-  await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(4);
-  await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+2 more");
+  await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(3);
+  await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+3 more");
 
   await cell.click({
     position: {
@@ -240,8 +240,8 @@ test("keeps four visible chips when selecting a dense desktop day from the cell 
 
   await expect(supportBand).toHaveAttribute("data-support-mode", "detail");
   await expect(page.getByTestId("calendar-selected-event-card")).toHaveCount(0);
-  await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(4);
-  await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+2 more");
+  await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(3);
+  await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+3 more");
 });
 
 test("shows hover style deltas for overflow rows", async ({ page }) => {

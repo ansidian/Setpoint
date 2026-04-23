@@ -1,5 +1,5 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
-import { getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
+import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 
 const LG_EVENT_CHIP_METRICS = {
@@ -18,8 +18,11 @@ const MD_EVENT_CHIP_METRICS = {
 
 function resolveEventChipMetrics(layout) {
   const tier = layout?.tier;
-  if (tier === "xl" || tier === "lg") return LG_EVENT_CHIP_METRICS;
-  return MD_EVENT_CHIP_METRICS;
+  const base = tier === "xl" || tier === "lg" ? LG_EVENT_CHIP_METRICS : MD_EVENT_CHIP_METRICS;
+  return {
+    ...base,
+    ...getCalendarCellCapacity(layout),
+  };
 }
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
@@ -69,13 +72,12 @@ function toEventDescriptor(ev) {
   };
 }
 
-export function getVisibleEventCount(itemCount, contentHeight, layout) {
-  return getVisibleCellItemCount(itemCount, contentHeight, resolveEventChipMetrics(layout));
+export function getVisibleEventCount(itemCount, layout) {
+  return getVisibleCellItemCount(itemCount, resolveEventChipMetrics(layout));
 }
 
 export function renderEventsCellContents({
   items,
-  contentHeight,
   pastTone,
   selectedItemId,
   onSelectItem,
@@ -90,7 +92,6 @@ export function renderEventsCellContents({
     <CalendarCellItemStack
       day={day}
       items={items.map(toEventDescriptor)}
-      contentHeight={contentHeight}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}

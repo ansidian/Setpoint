@@ -76,7 +76,6 @@ function SectionLabel({
 
 function TimelineRow({ item, compact = false }) {
   const [hovered, setHovered] = useState(false);
-  const motion = useDetailRailMotion();
   const interactive = typeof item.onClick === "function";
   const rowMetrics = compact
     ? {
@@ -144,13 +143,13 @@ function TimelineRow({ item, compact = false }) {
             item.onClick?.(event);
           }
         },
+        onMouseEnter: () => setHovered(true),
+        onMouseLeave: () => setHovered(false),
       }
     : {};
 
   return (
-    <Motion.div
-      layout
-      transition={motion.layout}
+    <div
       data-testid="timeline-detail-row"
       data-complete={item.complete ? "true" : "false"}
       data-selected={item.selected ? "true" : "false"}
@@ -168,16 +167,8 @@ function TimelineRow({ item, compact = false }) {
         opacity: item.complete ? 0.54 : 1,
         transition: "opacity 130ms",
       }}
-      onMouseEnter={() => {
-        if (interactive) setHovered(true);
-      }}
-      onMouseLeave={() => {
-        if (interactive) setHovered(false);
-      }}
     >
-      <Motion.div
-        layout="position"
-        transition={motion.layout}
+      <div
         style={{
           paddingTop: rowMetrics.timePadTop,
           fontSize: rowMetrics.timeFontSize,
@@ -189,13 +180,9 @@ function TimelineRow({ item, compact = false }) {
         }}
       >
         {item.timeLabel}
-      </Motion.div>
+      </div>
 
-      <Motion.div
-        layout="position"
-        transition={motion.layout}
-        style={{ position: "relative", minHeight: rowMetrics.railMinHeight }}
-      >
+      <div style={{ position: "relative", minHeight: rowMetrics.railMinHeight }}>
         <div
           aria-hidden
           style={{
@@ -236,11 +223,9 @@ function TimelineRow({ item, compact = false }) {
             }}
           />
         </div>
-      </Motion.div>
+      </div>
 
-      <Motion.div
-        layout
-        transition={motion.layout}
+      <div
         style={{
           minWidth: 0,
           display: "grid",
@@ -266,10 +251,8 @@ function TimelineRow({ item, compact = false }) {
           transition: "background 130ms, border-color 130ms, box-shadow 130ms",
         }}
       >
-        <Motion.div layout transition={motion.layout} style={{ minWidth: 0 }}>
-          <Motion.div
-            layout="position"
-            transition={motion.layout}
+        <div style={{ minWidth: 0 }}>
+          <div
             className={item.titleClassName}
             style={{
               fontSize: rowMetrics.titleFontSize,
@@ -286,11 +269,9 @@ function TimelineRow({ item, compact = false }) {
             }}
           >
             {item.title}
-          </Motion.div>
+          </div>
           {item.subtitle && (
-            <Motion.div
-              layout="position"
-              transition={motion.layout}
+            <div
               style={{
                 marginTop: rowMetrics.subtitleMarginTop,
                 fontSize: rowMetrics.subtitleFontSize,
@@ -303,12 +284,10 @@ function TimelineRow({ item, compact = false }) {
               }}
             >
               {item.subtitle}
-            </Motion.div>
+            </div>
           )}
           {item.meta && (
-            <Motion.div
-              layout="position"
-              transition={motion.layout}
+            <div
               style={{
                 marginTop: rowMetrics.metaMarginTop,
                 fontSize: rowMetrics.metaFontSize,
@@ -320,18 +299,16 @@ function TimelineRow({ item, compact = false }) {
               }}
             >
               {item.meta}
-            </Motion.div>
+            </div>
           )}
-        </Motion.div>
-        <Motion.div
-          layout="position"
-          transition={motion.layout}
+        </div>
+        <div
           style={{ display: "flex", alignItems: compact ? "flex-start" : "center", alignSelf: compact ? "start" : "center", gap: rowMetrics.trailingGap }}
         >
           {item.trailing}
-        </Motion.div>
-      </Motion.div>
-    </Motion.div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -357,9 +334,7 @@ export default function TimelineDetailRail({
   const compactRows = totalItemCount >= 3;
 
   return (
-    <Motion.div
-      layout
-      transition={motion.layout}
+    <div
       data-testid="timeline-detail-rail"
       data-density={compactRows ? "compact" : "default"}
       data-support-band-active={supportBandActive ? "true" : "false"}
@@ -372,18 +347,14 @@ export default function TimelineDetailRail({
         gap: 10,
       }}
     >
-      <Motion.div
-        layout
-        transition={motion.layout}
+      <div
         style={{
           display: "flex",
           flexDirection: "column",
           gap: 8,
         }}
       >
-        <Motion.div
-          layout
-          transition={motion.layout}
+        <div
           data-testid="timeline-detail-masthead"
           style={{
             display: "flex",
@@ -398,11 +369,9 @@ export default function TimelineDetailRail({
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
           }}
         >
-          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: compactMasthead ? 4 : 6, minWidth: 0 }}>
-            <Motion.div layout transition={motion.layout} style={{ minWidth: 0 }}>
-              <Motion.div
-                layout="position"
-                transition={motion.layout}
+          <div style={{ display: "flex", flexDirection: "column", gap: compactMasthead ? 4 : 6, minWidth: 0 }}>
+            <div style={{ minWidth: 0 }}>
+              <div
                 style={{
                   fontSize: supportBandActive ? 9.5 : compactMasthead ? 10 : 11,
                   fontWeight: 700,
@@ -412,10 +381,8 @@ export default function TimelineDetailRail({
                 }}
               >
                 {eyebrow}
-              </Motion.div>
-              <Motion.div
-                layout="position"
-                transition={motion.layout}
+              </div>
+              <div
                 className="ea-display"
                 style={{
                   marginTop: compactMasthead ? 2 : 6,
@@ -429,13 +396,11 @@ export default function TimelineDetailRail({
                 }}
               >
                 {title}
-              </Motion.div>
-            </Motion.div>
-          </Motion.div>
+              </div>
+            </div>
+          </div>
           {summary ? (
-            <Motion.div
-              layout="position"
-              transition={motion.layout}
+            <div
               style={{
                 alignSelf: compactMasthead ? "center" : "flex-start",
                 flexShrink: 0,
@@ -451,20 +416,18 @@ export default function TimelineDetailRail({
               }}
             >
               {summary}
-            </Motion.div>
+            </div>
           ) : null}
-        </Motion.div>
+        </div>
 
         {headerContent ? (
-          <Motion.div layout transition={motion.layout} style={{ flexShrink: 0 }}>
+          <div style={{ flexShrink: 0 }}>
             {headerContent}
-          </Motion.div>
+          </div>
         ) : null}
-      </Motion.div>
+      </div>
 
-      <Motion.div
-        layout
-        transition={motion.layout}
+      <div
         data-testid="timeline-detail-sections"
         data-calendar-local-scroll="true"
         style={{
@@ -479,12 +442,7 @@ export default function TimelineDetailRail({
         }}
       >
         {visibleSections.map((section) => (
-          <Motion.div
-            key={section.id}
-            layout
-            transition={motion.layout}
-            data-testid={`timeline-detail-section-${section.id}`}
-          >
+          <div key={section.id} data-testid={`timeline-detail-section-${section.id}`}>
             <SectionLabel
               collapsible={section.collapsible}
               expanded={section.expanded}
@@ -498,40 +456,29 @@ export default function TimelineDetailRail({
               {(!section.collapsible || section.expanded) ? (
                 <Motion.div
                   key={`${section.id}-content`}
-                  layout
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{
                     height: motion.fade,
                     opacity: motion.fade,
-                    layout: motion.layout,
                   }}
                   style={{
                     overflow: "hidden",
                   }}
                 >
-                  <Motion.div
-                    layout
-                    transition={motion.layout}
-                    style={{ marginTop: compactRows ? 4 : 6, display: "flex", flexDirection: "column", gap: compactRows ? 2 : 3 }}
-                  >
+                  <div style={{ marginTop: compactRows ? 4 : 6, display: "flex", flexDirection: "column", gap: compactRows ? 2 : 3 }}>
                     {section.items.map((item) => (
                       <TimelineRow key={item.id} item={item} compact={compactRows} />
                     ))}
-                  </Motion.div>
+                  </div>
                 </Motion.div>
               ) : null}
             </AnimatePresence>
-          </Motion.div>
+          </div>
         ))}
         {!visibleSections.length ? (
-          <Motion.div
-            layout
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={motion.fade}
+          <div
             style={{
               padding: "12px 0",
               fontSize: 12,
@@ -539,9 +486,9 @@ export default function TimelineDetailRail({
             }}
           >
             No items for this day.
-          </Motion.div>
+          </div>
         ) : null}
-      </Motion.div>
-    </Motion.div>
+      </div>
+    </div>
   );
 }

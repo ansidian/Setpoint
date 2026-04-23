@@ -125,7 +125,6 @@ function MoreButton({
 export default function CalendarCellItemStack({
   day,
   items,
-  contentHeight,
   selectedItemId,
   onSelectItem,
   onOpenOverflow,
@@ -137,7 +136,7 @@ export default function CalendarCellItemStack({
   const [moreActive, setMoreActive] = useState(false);
 
   if (!items?.length) return null;
-  const visibleCount = getVisibleCellItemCount(items.length, contentHeight, metrics);
+  const visibleCount = getVisibleCellItemCount(items.length, metrics);
   const hiddenCount = Math.max(0, items.length - visibleCount);
   const visibleItems = items.slice(0, visibleCount);
   const hiddenItems = items.slice(visibleCount);

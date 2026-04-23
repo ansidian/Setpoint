@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
@@ -79,33 +79,9 @@ function CalendarCell({
       : `0 4px 12px color-mix(in srgb, ${todayAccent} 18%, transparent)`;
   }
 
-  const contentRef = useRef(null);
-  const [contentHeight, setContentHeight] = useState(0);
-
-  useLayoutEffect(() => {
-    const element = contentRef.current;
-    if (!element) return undefined;
-
-    const updateHeight = () => setContentHeight(element.clientHeight || 0);
-    updateHeight();
-
-    if (typeof window.ResizeObserver !== "function") {
-      window.addEventListener("resize", updateHeight);
-      return () => window.removeEventListener("resize", updateHeight);
-    }
-
-    const observer = new window.ResizeObserver((entries) => {
-      const nextHeight = entries[0]?.contentRect?.height;
-      setContentHeight(nextHeight || element.clientHeight || 0);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   const renderedCellContents = renderCellContents?.({
     items,
     hasOverdue,
-    contentHeight,
     isToday,
     loading,
     pastTone,
@@ -200,7 +176,6 @@ function CalendarCell({
         </span>
       </div>
       <div
-        ref={contentRef}
         style={{
           position: "relative",
           minHeight: 0,

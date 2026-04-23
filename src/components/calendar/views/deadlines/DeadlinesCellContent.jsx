@@ -1,4 +1,5 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
+import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { getDayState, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
 
 const LG_DEADLINE_CHIP_METRICS = {
@@ -17,8 +18,11 @@ const MD_DEADLINE_CHIP_METRICS = {
 
 function resolveDeadlineChipMetrics(layout) {
   const tier = layout?.tier;
-  if (tier === "xl" || tier === "lg") return LG_DEADLINE_CHIP_METRICS;
-  return MD_DEADLINE_CHIP_METRICS;
+  const base = tier === "xl" || tier === "lg" ? LG_DEADLINE_CHIP_METRICS : MD_DEADLINE_CHIP_METRICS;
+  return {
+    ...base,
+    ...getCalendarCellCapacity(layout),
+  };
 }
 
 function toDeadlineDescriptor(task) {
@@ -40,7 +44,6 @@ function toDeadlineDescriptor(task) {
 
 export function renderDeadlinesCellContents({
   items,
-  contentHeight,
   pastTone,
   selectedItemId,
   onSelectItem,
@@ -58,7 +61,6 @@ export function renderDeadlinesCellContents({
     <CalendarCellItemStack
       day={day}
       items={descriptors}
-      contentHeight={contentHeight}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}

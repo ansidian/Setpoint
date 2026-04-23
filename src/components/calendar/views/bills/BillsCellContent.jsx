@@ -1,4 +1,5 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
+import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
 import { getDayState, relativeDateLabel } from "./billsModel.js";
 
@@ -18,8 +19,11 @@ const MD_BILL_CHIP_METRICS = {
 
 function resolveBillChipMetrics(layout) {
   const tier = layout?.tier;
-  if (tier === "xl" || tier === "lg") return LG_BILL_CHIP_METRICS;
-  return MD_BILL_CHIP_METRICS;
+  const base = tier === "xl" || tier === "lg" ? LG_BILL_CHIP_METRICS : MD_BILL_CHIP_METRICS;
+  return {
+    ...base,
+    ...getCalendarCellCapacity(layout),
+  };
 }
 
 function toBillDescriptor(bill) {
@@ -56,7 +60,6 @@ function toBillDescriptor(bill) {
 
 export function renderBillsCellContents({
   items,
-  contentHeight,
   pastTone,
   selectedItemId,
   onSelectItem,
@@ -74,7 +77,6 @@ export function renderBillsCellContents({
     <CalendarCellItemStack
       day={day}
       items={descriptors}
-      contentHeight={contentHeight}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}

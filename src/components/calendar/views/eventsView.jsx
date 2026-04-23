@@ -1,6 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Calendar as CalendarIcon, ExternalLink, Pencil, Video } from "lucide-react";
-import { AnimatePresence, motion as Motion } from "motion/react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
 import {
   RailAction,
@@ -13,27 +12,33 @@ import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/cal
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
 import { renderEventsWorkspaceSupport } from "./events/EventsWorkspaceSupport.jsx";
-import { useDetailRailMotion } from "../detailRailMotion.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
+const PACIFIC_TIME_ZONE = "America/Los_Angeles";
+const PACIFIC_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PACIFIC_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: PACIFIC_TIME_ZONE,
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+const FULL_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
 
 function pacificYMD(ms) {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return fmt.format(new Date(ms));
+  return PACIFIC_YMD_FORMATTER.format(new Date(ms));
 }
 
 function pacificTime(ms) {
-  return new Date(ms).toLocaleTimeString("en-US", {
-    timeZone: "America/Los_Angeles",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return PACIFIC_TIME_FORMATTER.format(new Date(ms));
 }
 
 function eventTimeRange(ev) {
@@ -108,11 +113,7 @@ function canNavigateBack() {
 }
 
 function formatFullDate(year, month, day) {
-  return new Date(year, month, day).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  return FULL_DATE_FORMATTER.format(new Date(year, month, day));
 }
 
 function eventSubtitle(ev) {
@@ -171,7 +172,6 @@ export function getDefaultSelectedItemId(items = []) {
 }
 
 function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = false }) {
-  const motion = useDetailRailMotion();
   const editable = isEditableEvent(ev);
   const zoomUrl = extractZoomMeetingUrl(ev);
   const displayTitle = sanitizeEventDisplayTitle(ev.title);
@@ -186,14 +186,9 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
 
   if (ultraCompact) {
     return (
-      <Motion.div
-        layout
-        transition={motion.layout}
-        data-testid="calendar-selected-event-card"
-        data-density={density}
-      >
+      <div data-testid="calendar-selected-event-card" data-density={density}>
         <RailHeroCard accent="#89b4fa" compact>
-          <Motion.div layout transition={motion.layout} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
             <div
               style={{
                 fontSize: 10,
@@ -210,12 +205,10 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
               {ev.isRecurring ? <RailMetaChip tone="quiet">Recurring</RailMetaChip> : null}
               {!editable ? <RailMetaChip tone="quiet">Read-only</RailMetaChip> : null}
             </div>
-          </Motion.div>
+          </div>
 
-          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <Motion.div
-              layout="position"
-              transition={motion.layout}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div
               data-testid="calendar-selected-event-title"
               style={{
                 fontSize: 17,
@@ -230,10 +223,8 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
               }}
             >
               {displayTitle}
-            </Motion.div>
-            <Motion.div
-              layout
-              transition={motion.layout}
+            </div>
+            <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
@@ -268,12 +259,10 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
                   {accessoryLabel}
                 </span>
               ) : null}
-            </Motion.div>
-          </Motion.div>
+            </div>
+          </div>
 
-          <Motion.div
-            layout
-            transition={motion.layout}
+          <div
             style={{
               paddingTop: 10,
               borderTop: "1px solid rgba(255,255,255,0.04)",
@@ -315,21 +304,16 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
                 size="compact"
               />
             ) : null}
-          </Motion.div>
+          </div>
         </RailHeroCard>
-      </Motion.div>
+      </div>
     );
   }
 
   return (
-    <Motion.div
-      layout
-      transition={motion.layout}
-      data-testid="calendar-selected-event-card"
-      data-density={density}
-    >
+    <div data-testid="calendar-selected-event-card" data-density={density}>
       <RailHeroCard accent="#89b4fa">
-        <Motion.div layout transition={motion.layout} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
           <div
             style={{
               fontSize: 10,
@@ -347,12 +331,10 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
             {ev.isRecurring ? <RailMetaChip tone="quiet">Recurring</RailMetaChip> : null}
             {!editable ? <RailMetaChip tone="quiet">Read-only</RailMetaChip> : null}
           </div>
-        </Motion.div>
+        </div>
 
-        <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}>
-          <Motion.div
-            layout="position"
-            transition={motion.layout}
+        <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 6 }}>
+          <div
             data-testid="calendar-selected-event-title"
             style={{
               fontSize: compact ? 20 : 24,
@@ -367,45 +349,32 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
             }}
           >
             {displayTitle}
-          </Motion.div>
-        </Motion.div>
+          </div>
+        </div>
 
-        <AnimatePresence initial={false} mode="popLayout">
-          <Motion.div
-            key={accessoryLabel ? "fact-grid-double" : "fact-grid-single"}
-            layout
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{
-              layout: motion.layout,
-              opacity: motion.fade,
-            }}
-            style={{
-              display: "grid",
-              gridTemplateColumns: accessoryLabel ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
-              gap: 8,
-            }}
-          >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: accessoryLabel ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
+            gap: 8,
+          }}
+        >
+          <RailFactTile
+            label="Time"
+            value={eventTimeRange(ev)}
+            color="#89b4fa"
+            valueNoWrap
+            valueFontSize={11}
+          />
+          {accessoryLabel ? (
             <RailFactTile
-              label="Time"
-              value={eventTimeRange(ev)}
-              color="#89b4fa"
-              valueNoWrap
-              valueFontSize={11}
+              label={location ? "Where" : "People"}
+              value={accessoryLabel}
             />
-            {accessoryLabel ? (
-              <RailFactTile
-                label={location ? "Where" : "People"}
-                value={accessoryLabel}
-              />
-            ) : null}
-          </Motion.div>
-        </AnimatePresence>
+          ) : null}
+        </div>
 
-        <Motion.div
-          layout
-          transition={motion.layout}
+        <div
           style={{
             marginTop: "auto",
             paddingTop: compact ? 10 : 12,
@@ -445,9 +414,9 @@ function EventSelectedCard({ ev, onEditEvent, compact = false, ultraCompact = fa
               tone={zoomUrl || editable ? "ghost" : "accent"}
             />
           ) : null}
-        </Motion.div>
+        </div>
       </RailHeroCard>
-    </Motion.div>
+    </div>
   );
 }
 
@@ -485,11 +454,26 @@ function renderDetail({
   supportBandActive = false,
 }) {
   const ordered = orderDetailEvents(items);
-  const allDayItems = ordered.filter((item) => item.allDay);
-  const timedItems = ordered.filter((item) => !item.allDay);
+  const shouldRenderHeader = !supportBandActive;
+  const allDayItems = [];
+  const timedItems = [];
+  let selectedEvent = null;
+
+  for (const item of ordered) {
+    const railItem = toRailItem(item, onSelectItem, selectedItemId);
+    if (item.allDay) {
+      allDayItems.push(railItem);
+    } else {
+      timedItems.push(railItem);
+    }
+
+    if (shouldRenderHeader && !selectedEvent && String(railItem.id) === String(selectedItemId)) {
+      selectedEvent = item;
+    }
+  }
+
   const compactDetail = ordered.length >= 3;
-  const selectedEvent = ordered.find((item) => String(getEventSelectionId(item)) === String(selectedItemId)) || null;
-  const compressedSelectedCard = shouldCompressSelectedCard(selectedEvent);
+  const compressedSelectedCard = selectedEvent ? shouldCompressSelectedCard(selectedEvent) : false;
   const ultraCompactDetail = ordered.length >= 3 || compressedSelectedCard;
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;
 
@@ -500,7 +484,7 @@ function renderDetail({
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
       accent="#89b4fa"
       supportBandActive={supportBandActive}
-      headerContent={supportBandActive ? null : selectedEvent ? (
+      headerContent={shouldRenderHeader && selectedEvent ? (
         <EventSelectedCard
           ev={selectedEvent}
           onEditEvent={onEditEvent}
@@ -512,20 +496,12 @@ function renderDetail({
         {
           id: "all-day",
           label: "All day",
-          items: allDayItems.map((item) => toRailItem(
-            item,
-            onSelectItem,
-            selectedItemId,
-          )),
+          items: allDayItems,
         },
         {
           id: "timed",
           label: "By time",
-          items: timedItems.map((item) => toRailItem(
-            item,
-            onSelectItem,
-            selectedItemId,
-          )),
+          items: timedItems,
         },
       ]}
     />

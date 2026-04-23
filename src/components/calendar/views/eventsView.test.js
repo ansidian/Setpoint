@@ -78,12 +78,13 @@ describe("eventsView.canNavigateBack", () => {
 });
 
 describe("eventsView.getVisibleEventCount", () => {
-  it("shows more rows when a taller cell can fit them", () => {
-    expect(eventsView.getVisibleEventCount(4, 132, { tier: "lg" })).toBe(4);
-    expect(eventsView.getVisibleEventCount(4, 96, { tier: "lg" })).toBe(2);
+  it("uses stable tier-based capacity for regular and overflow states", () => {
+    expect(eventsView.getVisibleEventCount(3, { tier: "lg" })).toBe(3);
+    expect(eventsView.getVisibleEventCount(4, { tier: "lg" })).toBe(2);
   });
 
-  it("reserves space for the +n more row when needed", () => {
-    expect(eventsView.getVisibleEventCount(5, 130, { tier: "lg" })).toBe(3);
+  it("allows denser xl cells without measuring rendered height", () => {
+    expect(eventsView.getVisibleEventCount(4, { tier: "xl" })).toBe(4);
+    expect(eventsView.getVisibleEventCount(5, { tier: "xl" })).toBe(3);
   });
 });
