@@ -32,6 +32,7 @@ export function ActionButton({
   onPointerLeave,
   onPointerCancel,
   title,
+  style,
   ...rest
 }) {
   const [hover, setHover] = useState(false);
@@ -89,6 +90,7 @@ export function ActionButton({
         opacity: disabled ? 0.72 : 1,
         transform: hover && !pressed && !disabled ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 140ms, background 140ms, border-color 140ms, color 140ms, opacity 140ms",
+        ...style,
       }}
       {...rest}
     >

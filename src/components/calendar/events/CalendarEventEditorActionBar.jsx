@@ -27,6 +27,8 @@ export default function CalendarEventEditorActionBar({
       style={{
         display: "flex",
         flexWrap: "wrap",
+        justifyContent: "space-between",
+        alignItems: "center",
         gap: 8,
         marginTop: 18,
         paddingTop: 14,
@@ -34,7 +36,7 @@ export default function CalendarEventEditorActionBar({
       }}
     >
       {confirmDelete ? (
-        <>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
           <ActionButton
             dataTestId="calendar-event-delete-confirm"
             danger
@@ -46,28 +48,32 @@ export default function CalendarEventEditorActionBar({
           <ActionButton subtle onClick={cancelDelete} disabled={disabled}>
             Keep event
           </ActionButton>
-        </>
+        </div>
       ) : (
         <>
-          <ActionButton
-            dataTestId="calendar-event-save"
-            onClick={save}
-            disabled={saveDisabled}
-          >
-            {saving ? "Saving..." : isEditing ? "Save changes" : isBatchMode ? (batchDrafts.some((d) => d.error) ? `Retry ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}` : `Create ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}`) : isRecurringMode ? "Create recurring event" : "Create event"}
-          </ActionButton>
-          <ActionButton subtle onClick={closeEditor} disabled={disabled}>
-            Cancel
-          </ActionButton>
-          {isEditing ? (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
             <ActionButton
-              dataTestId="calendar-event-delete"
-              danger
-              onClick={confirmDeleteIntent}
-              disabled={disabled || (isEditingRecurring && !recurringEditScope)}
+              dataTestId="calendar-event-save"
+              onClick={save}
+              disabled={saveDisabled}
             >
-              Delete
+              {saving ? "Saving..." : isEditing ? "Save changes" : isBatchMode ? (batchDrafts.some((d) => d.error) ? `Retry ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}` : `Create ${batchDrafts.length} event${batchDrafts.length === 1 ? "" : "s"}`) : isRecurringMode ? "Create recurring event" : "Create event"}
             </ActionButton>
+            <ActionButton subtle onClick={closeEditor} disabled={disabled}>
+              Cancel
+            </ActionButton>
+          </div>
+          {isEditing ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+              <ActionButton
+                dataTestId="calendar-event-delete"
+                danger
+                onClick={confirmDeleteIntent}
+                disabled={disabled || (isEditingRecurring && !recurringEditScope)}
+              >
+                Delete
+              </ActionButton>
+            </div>
           ) : null}
         </>
       )}
