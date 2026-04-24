@@ -381,6 +381,8 @@ export default function useCalendarEventEditor({
   viewYear,
   viewMonth,
   refreshRange,
+  upsertEvents,
+  removeEvent,
   onFocusDate,
 }) {
   const [mode, setMode] = useState("detail");
@@ -413,6 +415,10 @@ export default function useCalendarEventEditor({
   const locationSuggestionsRef = useRef([]);
   const activeLocationSuggestionRef = useRef(0);
   const editorHistoryTokenRef = useRef(null);
+  const sourceGroupsRef = useRef([]);
+  const sourcesLoadedRef = useRef(false);
+  const sourcesRequestRef = useRef(null);
+  const editorRequestIdRef = useRef(0);
 
   const selectedDate = ymdFromView({ viewYear, viewMonth, selectedDay });
   const writableCalendars = useMemo(
@@ -471,27 +477,43 @@ export default function useCalendarEventEditor({
   }, [saveAttempted, touchedFields.title, validationMessage]);
   const canSave = editable && !saving && !deleting && !validationMessage;
 
+  useLayoutEffect(() => {
+    sourceGroupsRef.current = sourceGroups;
+  }, [sourceGroups]);
+
+  useLayoutEffect(() => {
+    sourcesLoadedRef.current = sourcesLoaded;
+  }, [sourcesLoaded]);
+
   const ensureSources = useCallback(async () => {
     if (!editable) return [];
-    if (sourcesLoaded) return sourceGroups;
+    if (sourcesLoadedRef.current) return sourceGroupsRef.current;
+    if (sourcesRequestRef.current) return sourcesRequestRef.current;
 
     setSourcesLoading(true);
     setError(null);
     setErrorCode(null);
-    try {
+    sourcesRequestRef.current = (async () => {
       const data = await getCalendarSources();
       const groups = data?.accounts || [];
+      sourceGroupsRef.current = groups;
+      sourcesLoadedRef.current = true;
       setSourceGroups(groups);
       setSourcesLoaded(true);
       return groups;
+    })();
+
+    try {
+      return await sourcesRequestRef.current;
     } catch (err) {
       setError(err.message || "Failed to load calendar sources.");
       setErrorCode(err.code || null);
       return [];
     } finally {
+      sourcesRequestRef.current = null;
       setSourcesLoading(false);
     }
-  }, [editable, sourceGroups, sourcesLoaded]);
+  }, [editable]);
 
   useLayoutEffect(() => {
     locationSuggestionsRef.current = locationSuggestions;
@@ -578,6 +600,7 @@ export default function useCalendarEventEditor({
   }, [intentState.mode, intentState.recurrenceDraft, isEditingRecurring, mode, recurringEditScope]);
 
   const clearEditorState = useCallback(() => {
+    editorRequestIdRef.current += 1;
     setMode("detail");
     setEditingEvent(null);
     setConfirmDelete(false);
@@ -650,8 +673,10 @@ export default function useCalendarEventEditor({
 
   const openCreate = useCallback(async () => {
     if (!editable) return;
-    const groups = await ensureSources();
-    const nextDraft = seedDefaultCalendar(defaultDraft(selectedDate), groups);
+    const requestId = editorRequestIdRef.current + 1;
+    editorRequestIdRef.current = requestId;
+    const initialGroups = sourceGroupsRef.current;
+    const nextDraft = seedDefaultCalendar(defaultDraft(selectedDate), initialGroups);
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
     setTitleInput("");
@@ -671,6 +696,14 @@ export default function useCalendarEventEditor({
       setPlacesSessionToken,
     });
     setMode("editor");
+    setError(null);
+    setErrorCode(null);
+
+    const groups = await ensureSources();
+    if (editorRequestIdRef.current !== requestId) return;
+
+    setDraft((current) => seedDefaultCalendar(current, groups));
+    setCreateSeedDraft((current) => seedDefaultCalendar(current, groups));
     if (!flattenWritableCalendars(groups).length) {
       const reason = inferNoWritableReason(groups);
       setError(reason === "calendar_reauth_required"
@@ -928,7 +961,8 @@ export default function useCalendarEventEditor({
           .filter(Boolean);
         const failed = result?.failed || [];
         const bounds = mergeBounds(...createdEvents.map((event) => eventBounds(event)));
-        if (bounds) await refreshRange?.(bounds.start, bounds.end);
+        if (failed.length && bounds) await refreshRange?.(bounds.start, bounds.end);
+        else upsertEvents?.(createdEvents);
         if (createdEvents[0]?.startMs) onFocusDate?.(pacificYMD(createdEvents[0].startMs));
 
         if (failed.length) {
@@ -973,7 +1007,11 @@ export default function useCalendarEventEditor({
       }
 
       const bounds = mergeBounds(eventBounds(editingEvent), draftBounds(draft), eventBounds(savedEvent));
-      if (bounds) await refreshRange?.(bounds.start, bounds.end);
+      if ((!editingEvent && intentState.mode === "recurring") || (editingEvent && (isEditingRecurring || shouldSendRecurrence))) {
+        if (bounds) await refreshRange?.(bounds.start, bounds.end);
+      } else {
+        upsertEvents?.(savedEvent);
+      }
       onFocusDate?.(pacificYMD(savedEvent.startMs));
       setMode("detail");
       setEditingEvent(null);
@@ -984,7 +1022,7 @@ export default function useCalendarEventEditor({
     } finally {
       setSaving(false);
     }
-  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, intentState.mode, isEditingRecurring, onFocusDate, recurrenceDraft, recurringEditScope, refreshRange, validationMessage]);
+  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, intentState.mode, isEditingRecurring, onFocusDate, recurrenceDraft, recurringEditScope, refreshRange, upsertEvents, validationMessage]);
 
   const reconnect = useCallback(async () => {
     try {
@@ -1022,7 +1060,11 @@ export default function useCalendarEventEditor({
         originalStartTime: isEditingRecurring ? editingEvent.originalStartTime : undefined,
       });
       const bounds = eventBounds(editingEvent);
-      if (bounds) await refreshRange?.(bounds.start, bounds.end);
+      if (isEditingRecurring) {
+        if (bounds) await refreshRange?.(bounds.start, bounds.end);
+      } else {
+        removeEvent?.(editingEvent.id);
+      }
       closeEditor();
     } catch (err) {
       setError(err.message || "Failed to delete event.");
@@ -1030,7 +1072,7 @@ export default function useCalendarEventEditor({
     } finally {
       setDeleting(false);
     }
-  }, [closeEditor, editingEvent, isEditingRecurring, recurringEditScope, refreshRange]);
+  }, [closeEditor, editingEvent, isEditingRecurring, recurringEditScope, refreshRange, removeEvent]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -1096,6 +1138,7 @@ export default function useCalendarEventEditor({
     locationSuggestionsLoading,
     locationSuggestionsError,
     activeLocationSuggestion,
+    prefetchSources: ensureSources,
     openCreate,
     openEdit,
     closeEditor,

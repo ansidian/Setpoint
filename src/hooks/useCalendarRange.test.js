@@ -137,4 +137,23 @@ describe("useCalendarRange", () => {
     );
     expect(events.map((e) => e.title)).toEqual(["within"]);
   });
+
+  it("locally upserts and removes events in cached months", async () => {
+    const original = { id: "event-1", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "Original" };
+    const updated = { id: "event-1", startMs: new Date("2026-04-21T18:00:00Z").getTime(), title: "Updated" };
+    getCalendarRange.mockResolvedValue({ events: [original] });
+    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-01", "2026-04-30");
+    });
+
+    act(() => result.current.upsertEvents(updated));
+    expect(result.current.getEvents(2026, 3)).toEqual([updated]);
+    expect(getCalendarRange).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.removeEvent("event-1"));
+    expect(result.current.getEvents(2026, 3)).toEqual([]);
+    expect(getCalendarRange).toHaveBeenCalledTimes(1);
+  });
 });

@@ -63,6 +63,8 @@ function renderModal({
   events = [],
   focusDate = "2026-04-20",
   refreshRange = vi.fn().mockResolvedValue([]),
+  upsertEvents = vi.fn(),
+  removeEvent = vi.fn(),
 } = {}) {
   const utils = render(
     <CalendarModal
@@ -75,15 +77,54 @@ function renderModal({
         editable: true,
         getEvents: () => events,
         refreshRange,
+        upsertEvents,
+        removeEvent,
       }}
       billsData={{}}
       deadlinesData={{}}
     />,
   );
-  return { ...utils, refreshRange };
+  return { ...utils, refreshRange, upsertEvents, removeEvent };
 }
 
 describe("Calendar event editor rail", () => {
+  it("opens the create editor before calendar sources finish loading", async () => {
+    let resolveSources;
+    mockGetCalendarSources.mockReturnValue(new Promise((resolve) => {
+      resolveSources = resolve;
+    }));
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-source").value).toBe("");
+    expect(mockGetCalendarSources).toHaveBeenCalledTimes(1);
+
+    resolveSources({
+      accounts: [
+        {
+          accountId: "gmail-main",
+          accountLabel: "Google",
+          accountEmail: "me@example.com",
+          calendars: [
+            {
+              id: "primary",
+              summary: "Personal",
+              accessRole: "owner",
+              primary: true,
+              writable: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-source").value).toBe("gmail-main::primary");
+    });
+  });
+
   it("deletes a selected single event from the detail action", async () => {
     const event = {
       id: "event-1",
@@ -98,7 +139,7 @@ describe("Calendar event editor rail", () => {
       allDay: false,
       htmlLink: "https://calendar.google.com",
     };
-    const { refreshRange } = renderModal({ events: [event] });
+    const { refreshRange, removeEvent } = renderModal({ events: [event] });
 
     fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
     expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
@@ -123,7 +164,8 @@ describe("Calendar event editor rail", () => {
         etag: '"etag-1"',
       });
     });
-    expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
+    expect(removeEvent).toHaveBeenCalledWith("event-1");
+    expect(refreshRange).not.toHaveBeenCalled();
   });
 
   it("blocks save and shows inline validation for invalid end times", async () => {

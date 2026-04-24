@@ -26,6 +26,22 @@ function monthBounds(key) {
   return { start, end };
 }
 
+function monthKeyFromEpochMs(epochMs) {
+  if (!Number.isFinite(epochMs)) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date(epochMs));
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  return year && month ? `${year}-${month}` : null;
+}
+
+function eventIdentity(event) {
+  return event?.id == null ? null : String(event.id);
+}
+
 export default function useCalendarRange({ disabled = false } = {}) {
   const cacheRef = useRef(new Map()); // monthKey -> event[]
   const inFlightRef = useRef(new Map()); // monthKey -> Promise<void>
@@ -113,11 +129,52 @@ export default function useCalendarRange({ disabled = false } = {}) {
     forceUpdate((n) => n + 1);
   }, []);
 
+  const upsertEvents = useCallback((events) => {
+    if (disabled) return;
+    const list = (Array.isArray(events) ? events : [events]).filter((event) => event?.id);
+    if (!list.length) return;
+
+    for (const event of list) {
+      const id = eventIdentity(event);
+      for (const [key, cachedEvents] of cacheRef.current.entries()) {
+        cacheRef.current.set(
+          key,
+          (cachedEvents || []).filter((cachedEvent) => eventIdentity(cachedEvent) !== id),
+        );
+      }
+
+      const key = monthKeyFromEpochMs(event.startMs);
+      if (!key || !cacheRef.current.has(key)) continue;
+      cacheRef.current.set(key, [...(cacheRef.current.get(key) || []), event]);
+    }
+
+    setRevision((value) => value + 1);
+    forceUpdate((n) => n + 1);
+  }, [disabled]);
+
+  const removeEvent = useCallback((eventId) => {
+    if (disabled || eventId == null) return;
+    const id = String(eventId);
+    let changed = false;
+    for (const [key, cachedEvents] of cacheRef.current.entries()) {
+      const next = (cachedEvents || []).filter((event) => eventIdentity(event) !== id);
+      if (next.length !== (cachedEvents || []).length) {
+        cacheRef.current.set(key, next);
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    setRevision((value) => value + 1);
+    forceUpdate((n) => n + 1);
+  }, [disabled]);
+
   return {
     getEvents,
     ensureRange,
     refreshRange,
     invalidate,
+    upsertEvents,
+    removeEvent,
     hasMonth,
     isMonthLoading,
     loading,

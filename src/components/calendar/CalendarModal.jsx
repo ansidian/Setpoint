@@ -77,7 +77,11 @@ export default function CalendarModal({
   ));
   const [selectedDay, setSelectedDay] = useState(() => (initialFocus ? initialFocus.getDate() : null));
   const [selectedItemId, setSelectedItemId] = useState(() => (open && focusItemId ? String(focusItemId) : null));
-  const [deadlineEditor, setDeadlineEditor] = useState(null);
+  const [deadlineEditor, setDeadlineEditor] = useState(() => (
+    open && view === "deadlines" && focusItemId === "new"
+      ? { mode: "create", seedDate: focusDate || null }
+      : null
+  ));
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [pendingFocusDate, setPendingFocusDate] = useState(null);
   const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
@@ -196,14 +200,29 @@ export default function CalendarModal({
     viewYear,
     viewMonth,
     refreshRange: eventsData?.refreshRange,
+    upsertEvents: eventsData?.upsertEvents,
+    removeEvent: eventsData?.removeEvent,
     onFocusDate: focusEditorDate,
   });
 
-  useEffect(() => {
+  const openEventCreate = eventEditor.openCreate;
+  const prefetchEventSources = eventEditor.prefetchSources;
+  useLayoutEffect(() => {
     if (syncSnapshot?.openCreate && view === "events" && eventEditor.editable) {
-      eventEditor.openCreate();
+      openEventCreate();
     }
-  }, [syncSnapshot?.openCreate, view, eventEditor.editable, eventEditor]);
+  }, [syncSnapshot?.openCreate, view, eventEditor.editable, openEventCreate]);
+
+  useEffect(() => {
+    if (!eventEditor.editable || typeof window === "undefined") return undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(() => prefetchEventSources(), { timeout: 2000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(() => prefetchEventSources(), 400);
+    return () => window.clearTimeout(id);
+  }, [open, view, eventEditor.editable, prefetchEventSources]);
+
   const closeEventEditor = eventEditor.closeEditor;
 
   function navigateMonth(dir) {
@@ -236,7 +255,9 @@ export default function CalendarModal({
     if (snapshot?.didViewChange) {
       closeEventEditor();
     }
-    if (snapshot?.resetDeadlineEditor) {
+    if (snapshot?.openCreate && view === "deadlines") {
+      setDeadlineEditor({ mode: "create", seedDate: focusDate || null });
+    } else if (snapshot?.resetDeadlineEditor) {
       setDeadlineEditor(null);
     }
     if (snapshot && !isSameViewDate(viewDate, snapshot.nextViewDate)) {
@@ -453,8 +474,12 @@ export default function CalendarModal({
     const start = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-01`;
     const last = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
     const end = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+    if (eventEditor.isEditorOpen) {
+      const id = window.setTimeout(() => eventsData.ensureRange(start, end), 260);
+      return () => window.clearTimeout(id);
+    }
     eventsData.ensureRange(start, end);
-  }, [open, view, viewYear, viewMonth, eventsData]);
+  }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen]);
 
   if (!open) return null;
 
