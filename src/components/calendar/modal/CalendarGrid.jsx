@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
@@ -6,6 +6,15 @@ import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const GRID_ROWS = 6;
 const CELL_HEADER_HEIGHT = 24;
+const MONTH_WHEEL_THRESHOLD_PX = 180;
+const MONTH_WHEEL_COOLDOWN_MS = 420;
+const WHEEL_LINE_PX = 32;
+
+function normalizeWheelDeltaY(event, fallbackPagePx) {
+  if (event.deltaMode === 1) return event.deltaY * WHEEL_LINE_PX;
+  if (event.deltaMode === 2) return event.deltaY * fallbackPagePx;
+  return event.deltaY;
+}
 
 function CalendarCell({
   view,
@@ -278,7 +287,11 @@ export default function CalendarGrid({
   setSelectedDay,
   setSelectedItemId,
   setDeadlineEditor,
+  canGoPrev = true,
+  navigateMonth,
 }) {
+  const gridShellRef = useRef(null);
+  const monthWheelRef = useRef({ accumulatedY: 0, lastNavigateAt: -Infinity });
   const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
   const fillGridHeight = !layout.stacked;
   const gridRowCount = fillGridHeight
@@ -317,8 +330,47 @@ export default function CalendarGrid({
     setOverflowPopover(null);
   }
 
+  useEffect(() => {
+    const element = gridShellRef.current;
+    if (!element || layout.stacked || !navigateMonth) return undefined;
+
+    function handleMonthWheel(event) {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
+
+      const absX = Math.abs(event.deltaX || 0);
+      const absY = Math.abs(event.deltaY || 0);
+      if (absY === 0 || absX > absY) return;
+
+      const normalizedY = normalizeWheelDeltaY(event, element.clientHeight || window.innerHeight || 800);
+      const direction = normalizedY > 0 ? 1 : -1;
+      if (direction < 0 && !canGoPrev) {
+        monthWheelRef.current.accumulatedY = 0;
+        return;
+      }
+
+      if (event.cancelable) event.preventDefault();
+
+      const now = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+      if (now - monthWheelRef.current.lastNavigateAt < MONTH_WHEEL_COOLDOWN_MS) return;
+
+      monthWheelRef.current.accumulatedY += normalizedY;
+      if (Math.abs(monthWheelRef.current.accumulatedY) < MONTH_WHEEL_THRESHOLD_PX) return;
+
+      const monthDirection = monthWheelRef.current.accumulatedY > 0 ? 1 : -1;
+      if (monthDirection > 0 || canGoPrev) {
+        navigateMonth(monthDirection);
+        monthWheelRef.current.lastNavigateAt = now;
+      }
+      monthWheelRef.current.accumulatedY = 0;
+    }
+
+    element.addEventListener("wheel", handleMonthWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleMonthWheel);
+  }, [canGoPrev, layout.stacked, navigateMonth]);
+
   return (
     <div
+      ref={gridShellRef}
       data-testid="calendar-grid-shell"
       style={{
         minWidth: 0,

@@ -87,7 +87,7 @@ function buildEvent(day, index) {
   };
 }
 
-function renderGrid(itemsByDay) {
+function renderGrid(itemsByDay, overrides = {}) {
   const props = {
     view: "events",
     viewYear: VIEW_YEAR,
@@ -117,6 +117,9 @@ function renderGrid(itemsByDay) {
     setSelectedDay: vi.fn(),
     setSelectedItemId: vi.fn(),
     setDeadlineEditor: vi.fn(),
+    canGoPrev: true,
+    navigateMonth: vi.fn(),
+    ...overrides,
   };
 
   return render(<CalendarGrid {...props} />);
@@ -193,6 +196,46 @@ afterEach(() => {
 });
 
 describe("CalendarGrid overflow motion coverage", () => {
+  it("uses vertical wheel momentum on the month grid to navigate one month", () => {
+    const navigateMonth = vi.fn();
+    renderGrid({}, { navigateMonth });
+
+    const gridShell = screen.getByTestId("calendar-grid-shell");
+    fireEvent.wheel(gridShell, { deltaY: 100, deltaMode: 0, cancelable: true });
+    expect(navigateMonth).not.toHaveBeenCalled();
+
+    fireEvent.wheel(gridShell, { deltaY: 90, deltaMode: 0, cancelable: true });
+    expect(navigateMonth).toHaveBeenCalledWith(1);
+    expect(navigateMonth).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not navigate the month grid for horizontal-dominant wheel gestures", () => {
+    const navigateMonth = vi.fn();
+    renderGrid({}, { navigateMonth });
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaX: 260,
+      deltaY: 80,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    expect(navigateMonth).not.toHaveBeenCalled();
+  });
+
+  it("does not wheel-navigate to a previous month when the view disallows it", () => {
+    const navigateMonth = vi.fn();
+    renderGrid({}, { canGoPrev: false, navigateMonth });
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: -260,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    expect(navigateMonth).not.toHaveBeenCalled();
+  });
+
   it("shows same visible chip count for today and non-today cells with matching event counts", async () => {
     renderGrid({
       14: Array.from({ length: 4 }, (_, index) => buildEvent(14, index)),

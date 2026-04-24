@@ -362,6 +362,8 @@ export default function CalendarModalShell({
                   setSelectedDay={setSelectedDay}
                   setSelectedItemId={setSelectedItemId}
                   setDeadlineEditor={setDeadlineEditor}
+                  canGoPrev={canGoPrev}
+                  navigateMonth={navigateMonth}
                 />
               </div>
 
@@ -390,7 +392,7 @@ export default function CalendarModalShell({
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
               }}
             >
-              <AnimatedRailContent contentKind={contentKind} contentKey={contentKey}>
+              <AnimatedRailContent contentKind={contentKind} contentKey={contentKey} layoutTier={layout.tier}>
                 {workspaceMode === "editor" ? (
                   <div
                     data-testid="calendar-modal-editor-expanded"

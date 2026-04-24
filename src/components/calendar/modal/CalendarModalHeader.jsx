@@ -176,6 +176,7 @@ export default function CalendarModalHeader({
             </div>
             <div
               className="ea-display"
+              data-testid="calendar-month-title"
               style={{
                 fontSize: titleSize,
                 fontWeight: 500,

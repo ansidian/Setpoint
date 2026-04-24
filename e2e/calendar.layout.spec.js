@@ -77,6 +77,27 @@ test("uses the full-screen workspace rail layout and reflows at the narrow fallb
   await expect.poll(() => body.evaluate((node) => node.firstElementChild?.style.gridTemplateRows || "")).toBe("auto auto");
 });
 
+test("navigates the calendar month from vertical wheel input on the grid", async ({ page }) => {
+  await installDashboardCalendarLayoutFixtures(page);
+  await page.setViewportSize({ width: 1900, height: 1200 });
+
+  await openCalendar(page);
+
+  const now = new Date();
+  const nextMonthLabel = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  await expect(page.getByTestId("calendar-month-title")).toContainText(
+    new Date(now.getFullYear(), now.getMonth(), 1)
+      .toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+  );
+
+  await page.getByTestId("calendar-grid-shell").hover();
+  await page.mouse.wheel(0, 220);
+
+  await expect(page.getByTestId("calendar-month-title")).toContainText(nextMonthLabel);
+});
+
 test("keeps selected-event context in the rail while the support band stays day-focused", async ({ page }) => {
   const fixture = await installDashboardCalendarLayoutFixtures(page);
   await page.setViewportSize({ width: 1900, height: 1200 });
