@@ -88,6 +88,28 @@ describe("AddTaskPanel due picker", () => {
     );
   });
 
+  it("submits recurring NLP as cleaned content plus Todoist due_string", async () => {
+    render(<PanelHarness />);
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Water plants every weekday at 9am !2" },
+    });
+
+    expect(screen.getByTestId("todoist-recurring-preview").textContent).toContain("Every Mon, Tue, Wed, Thu, Fri at 9 AM");
+
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+
+    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "Water plants",
+        priority: 2,
+        due_string: "every weekday at 9am",
+      }),
+    );
+  });
+
   it("toggles the due picker closed when the due trigger is clicked again", () => {
     render(<PanelHarness />);
     vi.runOnlyPendingTimers();
@@ -207,5 +229,41 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a two-step delete confirmation instead of hold-to-delete", async () => {
+    const onTaskDeleted = vi.fn();
+
+    render(
+      <AddTaskPanel
+        host="inline"
+        editingTask={{
+          id: "todo-delete",
+          title: "Remove me",
+          description: "",
+          class_name: "Inbox",
+          priority: 4,
+          labels: [],
+          due_date: "2026-04-21",
+          due_time: "2:30 PM",
+        }}
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={onTaskDeleted}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    fireEvent.click(screen.getByTestId("todoist-delete"));
+    expect(mockDeleteTodoistTask).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getByTestId("todoist-delete-confirm")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("todoist-delete-confirm"));
+    await vi.runAllTimersAsync();
+
+    expect(mockDeleteTodoistTask).toHaveBeenCalledWith("todo-delete");
+    expect(onTaskDeleted).toHaveBeenCalledWith("todo-delete");
   });
 });

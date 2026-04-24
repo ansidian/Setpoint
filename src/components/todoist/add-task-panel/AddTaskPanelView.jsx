@@ -28,8 +28,8 @@ export default function AddTaskPanelView({
     pickerDueEpoch,
     submitting,
     error,
-    deleteProgress,
     deleting,
+    confirmDelete,
     pos,
     isMobile,
     keyboardOffset,
@@ -39,6 +39,7 @@ export default function AddTaskPanelView({
     inputRef,
     dueTriggerRef,
     duePickerRef,
+    recurrenceSummary,
     resolvedProject,
     resolvedPriority,
     resolvedLabels,
@@ -52,12 +53,13 @@ export default function AddTaskPanelView({
     handleAutocompleteSelect,
     canSubmit,
     handleSubmit,
+    confirmDeleteIntent,
+    deleteTask,
     handleKeyDown,
     priorityOptions,
     active,
     requestClose,
     cancelDelete,
-    startDelete,
     isInline,
     host,
   } = controller;
@@ -171,6 +173,30 @@ export default function AddTaskPanelView({
                 onSelect={handleAutocompleteSelect}
               />
             )}
+            {recurrenceSummary ? (
+              <div
+                data-testid="todoist-recurring-preview"
+                style={{
+                  marginTop: 8,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  maxWidth: "100%",
+                  padding: "5px 8px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(137,180,250,0.18)",
+                  background: "rgba(137,180,250,0.08)",
+                  color: "#89b4fa",
+                  fontSize: 11,
+                  lineHeight: 1.3,
+                }}
+              >
+                <CalendarClock size={11} />
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  Recurs {recurrenceSummary}
+                </span>
+              </div>
+            ) : null}
           </div>
 
           <div>
@@ -340,60 +366,53 @@ export default function AddTaskPanelView({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            gap: 12,
             paddingTop: 4,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {isInline && (
-              <ActionButton subtle onClick={requestClose}>
-                Cancel
-              </ActionButton>
+            {confirmDelete ? (
+              <>
+                <ActionButton
+                  dataTestId="todoist-delete-confirm"
+                  danger
+                  onClick={deleteTask}
+                  disabled={deleting || submitting}
+                >
+                  {deleting ? "Deleting..." : "Confirm delete"}
+                </ActionButton>
+                <ActionButton subtle onClick={cancelDelete} disabled={deleting || submitting}>
+                  Keep task
+                </ActionButton>
+              </>
+            ) : (
+              <>
+                <ActionButton
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || submitting || deleting}
+                >
+                  {submitting ? (isEdit ? "Saving..." : "Adding...") : (isEdit ? "Save" : "Add task")}
+                </ActionButton>
+                {isInline && (
+                  <ActionButton subtle onClick={requestClose} disabled={submitting || deleting}>
+                    Cancel
+                  </ActionButton>
+                )}
+              </>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {isEdit && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            {isEdit && !confirmDelete ? (
               <ActionButton
+                dataTestId="todoist-delete"
                 danger
-                onPointerDown={startDelete}
-                onPointerUp={() => {
-                  cancelDelete();
-                }}
-                onPointerLeave={cancelDelete}
-                onPointerCancel={cancelDelete}
+                onClick={confirmDeleteIntent}
                 disabled={deleting || submitting}
-                title="Hold to delete"
-                style={{
-                  position: "relative",
-                  overflow: "hidden",
-                }}
               >
-                {deleteProgress > 0 && (
-                  <span
-                    aria-hidden
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: `${deleteProgress * 100}%`,
-                      background: "linear-gradient(90deg, rgba(243,139,168,0.38), rgba(243,139,168,0.15))",
-                      pointerEvents: "none",
-                      transition: "width 40ms linear",
-                    }}
-                  />
-                )}
-                <Trash2 size={11} style={{ position: "relative" }} />
-                <span style={{ position: "relative" }}>
-                  {deleting ? "Deleting…" : "Delete"}
-                </span>
+                <Trash2 size={11} />
+                Delete
               </ActionButton>
-            )}
-            <ActionButton
-              onClick={handleSubmit}
-              disabled={!canSubmit || submitting || deleting}
-            >
-              {submitting ? (isEdit ? "Saving…" : "Adding…") : (isEdit ? "Save" : "Add task")}
-            </ActionButton>
+            ) : null}
           </div>
         </div>
       </div>

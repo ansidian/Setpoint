@@ -32,6 +32,9 @@ const WEEKDAY_CODE_BY_TOKEN = {
 };
 
 const DATE_LIST_ITEM_RE = /(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/gi;
+const WEEKDAY_TOKEN_PATTERN = "(?:sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday|s)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\\b";
+const WEEKDAY_LIST_PATTERN = `(?:${WEEKDAY_TOKEN_PATTERN})(?:\\s*(?:,|and)?\\s+(?:${WEEKDAY_TOKEN_PATTERN}))*|weekdays?|weekends?`;
+const WEEKLY_RECURRING_RE = new RegExp(`\\bevery\\s+(${WEEKDAY_LIST_PATTERN})`, "i");
 
 function clampTime(value, fallback) {
   return value || fallback || null;
@@ -74,8 +77,8 @@ function weekdaysFromListText(listText) {
   const normalized = String(listText)
     .toLowerCase()
     .replace(/[.]/g, "")
-    .replace(/\bweekdays\b/g, "monday tuesday wednesday thursday friday")
-    .replace(/\bweekends\b/g, "saturday sunday")
+    .replace(/\bweekdays?\b/g, "monday tuesday wednesday thursday friday")
+    .replace(/\bweekends?\b/g, "saturday sunday")
     .replace(/\band\b/g, " ")
     .replace(/,/g, " ")
     .replace(/\s+/g, " ")
@@ -172,7 +175,7 @@ function parseExplicitDate(value, baseDate) {
 }
 
 function parseWeeklyRecurringIntent(title, context) {
-  const match = title.match(/\bevery\s+((?:sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday|s)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b(?:\s*(?:,|and)\s*(?:sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday|s)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b)*(?:\s+and\s+(?:sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday|s)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b)*|weekdays|weekends)/i);
+  const match = title.match(WEEKLY_RECURRING_RE);
   if (!match) return null;
 
   const weekdays = weekdaysFromListText(match[1]);
@@ -184,7 +187,10 @@ function parseWeeklyRecurringIntent(title, context) {
   const cleanTitle = context.cleanTitle(temporal.workingTitle);
   const anchorBaseDate = context.baseDate || currentPacificDate(context.now);
   const startDate = resolveWeekdayOccurrence(anchorBaseDate, weekdays[0], "this");
-  const singleDraft = normalizeParsedDraft(cleanTitle, temporal.parsedDateTime, {
+  const recurringDateTime = temporal.parsedDateTime
+    ? { ...temporal.parsedDateTime, startDate, endDate: startDate }
+    : null;
+  const singleDraft = normalizeParsedDraft(cleanTitle, recurringDateTime, {
     startDate,
     endDate: startDate,
     defaultStartTime: context.defaultStartTime,

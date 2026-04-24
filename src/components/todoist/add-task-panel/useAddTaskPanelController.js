@@ -83,17 +83,14 @@ export default function useAddTaskPanelController({
   }, [editingTask?.due_date, editingTask?.due_time, seededCreateDue]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [deleteProgress, setDeleteProgress] = useState(0);
   const [deleting, setDeleting] = useState(false);
-  const deleteStartRef = useRef(null);
-  const deleteTimerRef = useRef(null);
-  const deleteIntervalRef = useRef(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [pos, setPos] = useState(null);
   const isMobile = useIsMobile();
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [autocompleteType, setAutocompleteType] = useState(null);
   const [cursorPos, setCursorPos] = useState(0);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => isInline);
   const [closing, setClosing] = useState(false);
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   const [duePickerNow, setDuePickerNow] = useState(() => Date.now());
@@ -102,7 +99,6 @@ export default function useAddTaskPanelController({
   const inputRef = useRef(null);
   const dueTriggerRef = useRef(null);
   const duePickerRef = useRef(null);
-  const DELETE_HOLD_MS = 500;
 
   const requestClose = useCallback(() => {
     if (isInline) {
@@ -120,46 +116,29 @@ export default function useAddTaskPanelController({
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
   }, []);
 
+  const confirmDeleteIntent = useCallback(() => {
+    if (!isEdit || deleting) return;
+    setConfirmDelete(true);
+    setError(null);
+  }, [deleting, isEdit]);
+
   const cancelDelete = useCallback(() => {
-    if (deleteTimerRef.current) {
-      clearTimeout(deleteTimerRef.current);
-      deleteTimerRef.current = null;
-    }
-    if (deleteIntervalRef.current) {
-      clearInterval(deleteIntervalRef.current);
-      deleteIntervalRef.current = null;
-    }
-    deleteStartRef.current = null;
-    setDeleteProgress(0);
+    setConfirmDelete(false);
   }, []);
 
-  useEffect(() => () => cancelDelete(), [cancelDelete]);
-
-  const startDelete = useCallback(() => {
-    if (!isEdit || deleting || deleteTimerRef.current || !editingTask?.id) return;
+  const deleteTask = useCallback(async () => {
+    if (!isEdit || deleting || !editingTask?.id) return;
     setError(null);
-    deleteStartRef.current = Date.now();
-    setDeleteProgress(0);
-    deleteIntervalRef.current = setInterval(() => {
-      const progress = Math.min((Date.now() - deleteStartRef.current) / DELETE_HOLD_MS, 1);
-      setDeleteProgress(progress);
-    }, 16);
-    deleteTimerRef.current = setTimeout(async () => {
-      clearInterval(deleteIntervalRef.current);
-      deleteIntervalRef.current = null;
-      deleteTimerRef.current = null;
-      setDeleteProgress(0);
-      setDeleting(true);
-      try {
-        await deleteTodoistTask(editingTask.id);
-        onTaskDeleted?.(editingTask.id);
-        requestClose();
-      } catch (err) {
-        setError(err.message || "Failed to delete task");
-        setDeleting(false);
-      }
-    }, DELETE_HOLD_MS);
-  }, [DELETE_HOLD_MS, deleting, editingTask, isEdit, onTaskDeleted, requestClose]);
+    setDeleting(true);
+    try {
+      await deleteTodoistTask(editingTask.id);
+      onTaskDeleted?.(editingTask.id);
+      requestClose();
+    } catch (err) {
+      setError(err.message || "Failed to delete task");
+      setDeleting(false);
+    }
+  }, [deleting, editingTask, isEdit, onTaskDeleted, requestClose]);
 
   useEffect(() => {
     getTodoistProjects()
@@ -209,8 +188,9 @@ export default function useAddTaskPanelController({
       : [];
   const resolvedDue = overrides.due
     ? manualDue?.dueString || null
-    : parsed.datePhrase || seededCreateDue?.dueString || null;
+    : parsed.recurringDueString || parsed.datePhrase || seededCreateDue?.dueString || null;
   const dueDisplay = manualDue?.display || parsed.dateFormatted || seededDueDisplay || "";
+  const recurrenceSummary = !overrides.due ? parsed.recurrenceSummary : null;
   const pickerDueEpoch = manualDue?.epochMs ?? seededDueEpoch;
 
   const openDuePicker = useCallback(() => {
@@ -356,13 +336,18 @@ export default function useAddTaskPanelController({
   }, [isInline, updatePos]);
 
   useEffect(() => {
+    if (isInline) {
+      inputRef.current?.focus({ preventScroll: true });
+      return undefined;
+    }
+
     const raf = requestAnimationFrame(() => setVisible(true));
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(timer);
     };
-  }, []);
+  }, [isInline]);
 
   useEffect(() => {
     if (isInline) return undefined;
@@ -452,7 +437,8 @@ export default function useAddTaskPanelController({
     if (autocompleteType) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      handleSubmit();
+      if (confirmDelete) deleteTask();
+      else handleSubmit();
     }
   };
 
@@ -485,8 +471,8 @@ export default function useAddTaskPanelController({
     pickerDueEpoch,
     submitting,
     error,
-    deleteProgress,
     deleting,
+    confirmDelete,
     pos,
     isMobile,
     keyboardOffset,
@@ -497,6 +483,7 @@ export default function useAddTaskPanelController({
     dueTriggerRef,
     duePickerRef,
     parsed,
+    recurrenceSummary,
     resolvedProject,
     resolvedPriority,
     resolvedLabels,
@@ -511,12 +498,13 @@ export default function useAddTaskPanelController({
     handleAutocompleteSelect,
     canSubmit,
     handleSubmit,
+    confirmDeleteIntent,
+    deleteTask,
     handleKeyDown,
     priorityOptions,
-    active: visible && !closing,
+    active: isInline || (visible && !closing),
     requestClose,
     cancelDelete,
-    startDelete,
     host,
     isInline,
   };

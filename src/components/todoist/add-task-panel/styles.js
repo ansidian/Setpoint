@@ -63,18 +63,17 @@ export function buildContainerStyle({ isMobile, pos, host, active, keyboardOffse
 
 export function buildInlineContainerStyle() {
   return {
-    position: "relative",
     display: "flex",
     flexDirection: "column",
-    minHeight: "100%",
+    flex: 1,
+    minHeight: 0,
     background: "transparent",
     border: "none",
     boxShadow: "none",
-    overflowY: "auto",
+    overflow: "auto",
+    overscrollBehavior: "contain",
     fontFamily: "inherit",
     opacity: 1,
-    transition: "none",
-    transform: "none",
   };
 }
 

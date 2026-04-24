@@ -1,3 +1,6 @@
+import { formatRecurrenceSummary } from "../../calendar/events/calendarEditorUtils";
+import { parseCalendarTitle } from "../../calendar/events/parseCalendarTitle";
+
 const PRIORITY_RE = /(?:^|\s)(!([1-4])?)(?:\s|$)/;
 const PROJECT_RE = /#(\w+)/g;
 const LABEL_RE = /@(\w+)/g;
@@ -6,6 +9,15 @@ const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_LONG = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const TIME_RE = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
+const TODOIST_WEEKDAY_BY_CODE = {
+  SU: "sun",
+  MO: "mon",
+  TU: "tue",
+  WE: "wed",
+  TH: "thu",
+  FR: "fri",
+  SA: "sat",
+};
 
 const DATE_TIME_PATTERNS = [
   { re: /\b(today|tonight|tomorrow)(?:\s+at)?\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i, type: "relative_time" },
@@ -47,6 +59,75 @@ function formatTime(time) {
   if (hour === 0) hour = 12;
   else if (hour > 12) hour -= 12;
   return time.minute ? `${hour}:${String(time.minute).padStart(2, "0")} ${ampm}` : `${hour} ${ampm}`;
+}
+
+function formatDraftTime(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+  if (!match) return "";
+  return formatTime({ hour: Number(match[1]), minute: Number(match[2]) });
+}
+
+function formatTodoistTime(value) {
+  return formatDraftTime(value).replace(/\s/g, "").toLowerCase();
+}
+
+function buildRecurringDisplay(recurrenceDraft, includeTime = false) {
+  const summary = formatRecurrenceSummary(recurrenceDraft, recurrenceDraft?.startDate);
+  const time = includeTime ? formatDraftTime(recurrenceDraft?.startTime) : "";
+  return [summary, time ? `at ${time}` : ""].filter(Boolean).join(" ");
+}
+
+function formatTodoistWeekdays(weekdays) {
+  const codes = Array.isArray(weekdays) ? weekdays : [];
+  if (codes.join(",") === "MO,TU,WE,TH,FR") return "weekday";
+  if (codes.join(",") === "SA,SU") return "weekend";
+  return codes.map((code) => TODOIST_WEEKDAY_BY_CODE[code]).filter(Boolean).join(", ");
+}
+
+function buildTodoistRecurringDueString(recurrenceDraft, includeTime = false) {
+  if (!recurrenceDraft?.frequency) return null;
+  const interval = Math.max(1, Number(recurrenceDraft.interval) || 1);
+  let dueString = null;
+
+  if (recurrenceDraft.frequency === "daily") {
+    dueString = interval > 1 ? `every ${interval} days` : "every day";
+  } else if (recurrenceDraft.frequency === "weekly") {
+    const weekdayList = formatTodoistWeekdays(recurrenceDraft.weekdays);
+    if (interval === 1) {
+      dueString = weekdayList ? `every ${weekdayList}` : "every week";
+    } else {
+      dueString = `every ${interval} weeks`;
+    }
+  } else if (recurrenceDraft.frequency === "monthly") {
+    dueString = interval > 1 ? `every ${interval} months` : "every month";
+  } else if (recurrenceDraft.frequency === "yearly") {
+    dueString = interval > 1 ? `every ${interval} years` : "every year";
+  }
+
+  const time = includeTime ? formatTodoistTime(recurrenceDraft.startTime) : "";
+  return [dueString, time ? `at ${time}` : ""].filter(Boolean).join(" ") || null;
+}
+
+function parseRecurringDue(input) {
+  const parsed = parseCalendarTitle(input, {
+    defaultStartTime: null,
+    defaultEndTime: null,
+  });
+
+  if (parsed.mode !== "recurring" || !parsed.recurrenceDraft) return null;
+
+  const hasExplicitTime = !!parsed.parsedDateTime?.hasTime;
+  const dueString = buildTodoistRecurringDueString(parsed.recurrenceDraft, hasExplicitTime)
+    || parsed.matchedText
+    || input.replace(parsed.cleanTitle, "").trim();
+  if (!dueString) return null;
+
+  return {
+    cleanTitle: parsed.cleanTitle.replace(/\s+\b(?:at|by|on|from|to)\b$/i, "").trim(),
+    dueString,
+    recurrenceDraft: parsed.recurrenceDraft,
+    recurrenceSummary: buildRecurringDisplay(parsed.recurrenceDraft, hasExplicitTime),
+  };
 }
 
 function getNextDayOfWeek(dayName, fromDate) {
@@ -199,6 +280,9 @@ export function parseTokens(input, projects, labels) {
     labels: [],
     datePhrase: null,
     dateFormatted: null,
+    recurrenceDraft: null,
+    recurrenceSummary: null,
+    recurringDueString: null,
     stripped: input,
   };
 
@@ -227,6 +311,17 @@ export function parseTokens(input, projects, labels) {
       result.labels.push(label);
       result.stripped = result.stripped.replace(match[0], "");
     }
+  }
+
+  const recurring = parseRecurringDue(result.stripped);
+  if (recurring) {
+    result.recurringDueString = recurring.dueString;
+    result.recurrenceDraft = recurring.recurrenceDraft;
+    result.recurrenceSummary = recurring.recurrenceSummary;
+    result.dateFormatted = recurring.recurrenceSummary;
+    result.stripped = recurring.cleanTitle || result.stripped.replace(recurring.dueString, "");
+    result.stripped = result.stripped.replace(/\s{2,}/g, " ").trim();
+    return result;
   }
 
   const resolved = resolveDate(result.stripped);

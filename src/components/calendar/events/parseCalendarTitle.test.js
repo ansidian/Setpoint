@@ -243,6 +243,24 @@ describe("parseCalendarTitle", () => {
     });
   });
 
+  it("parses chained weekday recurrence without commas or and", () => {
+    const parsed = parseCalendarTitle("Work every tue thu fri at 9am", {
+      now: new Date("2026-04-20T19:00:00.000Z").getTime(),
+      baseDate: "2026-04-20",
+    });
+
+    expect(parsed.mode).toBe("recurring");
+    expect(parsed.cleanTitle).toBe("Work");
+    expect(parsed.recurrenceDraft).toMatchObject({
+      frequency: "weekly",
+      weekdays: ["TU", "TH", "FR"],
+    });
+    expect(parsed.singleDraft).toMatchObject({
+      startDate: "2026-04-21",
+      startTime: "09:00",
+    });
+  });
+
   it("parses batch intent when temporal tokens precede the weekday list", () => {
     const parsed = parseCalendarTitle("Work at 4:15am to 7:30am next tue, wed, thur", {
       now: new Date("2026-04-20T19:00:00.000Z").getTime(),
