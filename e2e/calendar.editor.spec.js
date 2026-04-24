@@ -11,6 +11,79 @@ async function openCalendar(page) {
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
 }
 
+async function clickButtonInPage(page, label) {
+  await page.evaluate((buttonLabel) => {
+    const button = [...document.querySelectorAll("button")]
+      .find((node) => (node.textContent || "").includes(buttonLabel));
+    if (!button) throw new Error(`Button not found: ${buttonLabel}`);
+    button.click();
+  }, label);
+}
+
+async function recordEditorRailEntrance(page, buttonLabel) {
+  await page.evaluate(() => {
+    window.__calendarRailEntranceSamples = [];
+    window.__calendarRailEntranceStop = false;
+    window.__calendarRailEntranceStart = performance.now();
+
+    const sample = () => {
+      const target = document.querySelector("[data-testid='calendar-event-editor-rail']")
+        || document.querySelector("[data-testid='todoist-inline-editor']");
+      const wrapper = document.querySelector("[data-testid='calendar-rail-content']")?.parentElement;
+
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        const transform = wrapper ? getComputedStyle(wrapper).transform : "none";
+        const translateX = transform && transform !== "none"
+          ? new DOMMatrixReadOnly(transform).m41
+          : 0;
+
+        window.__calendarRailEntranceSamples.push({
+          t: performance.now() - window.__calendarRailEntranceStart,
+          x: rect.x,
+          translateX,
+        });
+      }
+
+      if (!window.__calendarRailEntranceStop) requestAnimationFrame(sample);
+    };
+
+    requestAnimationFrame(sample);
+  });
+
+  await clickButtonInPage(page, buttonLabel);
+  await page.waitForTimeout(520);
+
+  const samples = await page.evaluate(() => {
+    window.__calendarRailEntranceStop = true;
+    return window.__calendarRailEntranceSamples;
+  });
+
+  expect(samples.length).toBeGreaterThan(10);
+
+  const firstTime = samples[0].t;
+  const finalX = samples[samples.length - 1].x;
+  return samples.map((sample) => ({
+    elapsed: sample.t - firstTime,
+    x: sample.x,
+    remaining: sample.x - finalX,
+    translateX: sample.translateX,
+  }));
+}
+
+function sampleRailAt(samples, elapsedMs) {
+  return samples.reduce((closest, sample) => (
+    Math.abs(sample.elapsed - elapsedMs) < Math.abs(closest.elapsed - elapsedMs) ? sample : closest
+  ), samples[0]);
+}
+
+function expectRailProjectionFrame(samples, elapsedMs) {
+  const frame = sampleRailAt(samples, elapsedMs);
+  expect(frame.translateX).toBeGreaterThan(64);
+  expect(frame.remaining).toBeGreaterThan(64);
+  expect(Math.abs(frame.remaining - frame.translateX)).toBeLessThan(70);
+}
+
 test("creates a calendar event from the header action using deterministic fixtures", async ({ page }) => {
   const fixture = await installDashboardCalendarCreateFixtures(page);
 
@@ -68,6 +141,29 @@ test("opens a fresh event editor from the dashboard Add Event action every time"
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
   await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
   await expect(page.getByTestId("calendar-event-title")).toHaveValue("");
+});
+
+test("matches the Todoist inline editor rail entrance to the event editor", async ({ page }) => {
+  await installDashboardCalendarCreateFixtures(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
+
+  await openCalendar(page);
+  await expect(page.getByTestId("calendar-selected-empty-rail")).toBeVisible();
+
+  const eventSamples = await recordEditorRailEntrance(page, "New event");
+  await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByTestId("calendar-event-editor-rail")).toBeHidden();
+
+  await page.getByRole("button", { name: "Deadlines" }).click();
+  await expect(page.getByRole("button", { name: /new todoist/i })).toBeVisible();
+  await page.waitForTimeout(360);
+
+  const taskSamples = await recordEditorRailEntrance(page, "New Todoist");
+  await expect(page.getByTestId("todoist-inline-editor")).toBeVisible();
+
+  expectRailProjectionFrame(eventSamples, 100);
+  expectRailProjectionFrame(taskSamples, 100);
 });
 
 test("requires a recurring scope before saving recurring event edits", async ({ page }) => {

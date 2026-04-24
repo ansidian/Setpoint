@@ -9,6 +9,7 @@ import CalendarEventEditorActionBar from "./CalendarEventEditorActionBar";
 import DetailSummaryRow from "./CalendarEventDetailSummary";
 import CalendarEventEditorPanels from "./CalendarEventEditorPanels";
 import useCalendarEditorPickers from "./useCalendarEditorPickers";
+import { EDITOR_ENTRANCE_TRANSITION, EDITOR_POSITION_TRANSITION } from "../detailRailMotion";
 import {
   formatDateLabel,
   formatTimeLabel,
@@ -18,18 +19,8 @@ import {
   textFieldStyle,
 } from "./calendarEditorUtils";
 
-const editorModeTransition = {
-  duration: 0.3,
-  ease: [0.22, 1, 0.36, 1],
-};
-
-const editorModePositionTransition = {
-  type: "spring",
-  stiffness: 280,
-  damping: 30,
-  mass: 0.96,
-  bounce: 0,
-};
+const editorModeTransition = EDITOR_ENTRANCE_TRANSITION;
+const editorModePositionTransition = EDITOR_POSITION_TRANSITION;
 
 function editorSurfaceStyle() {
   return {

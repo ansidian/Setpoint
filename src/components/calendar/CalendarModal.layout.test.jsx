@@ -291,6 +291,8 @@ describe("CalendarModal responsive layout", () => {
 
       expect(screen.getByRole("button", { name: /cancel/i })).toBeTruthy();
       expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
+      expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
     } finally {
       vi.useRealTimers();
     }
@@ -339,7 +341,7 @@ describe("CalendarModal responsive layout", () => {
 
     expect(screen.getByText("Monday, April 20")).toBeTruthy();
     expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^complete$/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Incomplete");
   });
 
@@ -1034,6 +1036,29 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getByText("Pick a due date and time")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
+    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
+  });
+
+  it("opens a blank inline Todoist editor from a deadlines create focus request", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusItemId="new"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
+    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
   });
 
   it("opens a blank inline Todoist editor from c in deadlines view", async () => {
@@ -1090,6 +1115,8 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getByDisplayValue("First task")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
+    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
   });
 
   it("closes the inline Todoist editor from its local exit action without closing the modal", async () => {
@@ -1120,8 +1147,12 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(within(inlineEditor).getByRole("button", { name: /^cancel$/i }));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
+      expect(screen.getByText("Deadline ledger")).toBeTruthy();
     });
+    expect(screen.getAllByTestId("calendar-rail-content").some((content) => (
+      content.getAttribute("data-rail-content-kind") === "detail"
+      && content.textContent.includes("Deadline ledger")
+    ))).toBe(true);
     expect(onClose).not.toHaveBeenCalled();
   });
 });
