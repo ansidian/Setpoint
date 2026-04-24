@@ -33,4 +33,9 @@ describe("mapTodoistTask", () => {
     const out = __testing__.mapTodoistTask(raw, projects);
     expect(out.is_recurring).toBe(false);
   });
+
+  it("uses the all-dated Todoist filter instead of a short due window", async () => {
+    const { __testing__ } = await import("./todoist.js");
+    expect(__testing__.TODOIST_DUE_TASKS_QUERY).toBe("!no date");
+  });
 });

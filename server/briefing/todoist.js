@@ -2,6 +2,7 @@ import { decrypt } from "./encryption.js";
 import db from "../db/connection.js";
 
 const BASE_URL = "https://api.todoist.com/api/v1";
+const TODOIST_DUE_TASKS_QUERY = "!no date";
 
 // Todoist's REST API inverts our UI priority scale: API 4 = urgent, API 1 =
 // natural/no priority. Dashboard uses 1 = urgent, 4 = low, null = none.
@@ -150,21 +151,20 @@ export async function fetchTodoistTasks(userId) {
   if (!token) return [];
 
   const projects = await fetchProjects(token);
-  const tasks = await fetchTodoistFiltered(token, "due before: +8 days");
+  const tasks = await fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY);
 
   return tasks
     .filter(t => !t.checked && !t.is_deleted && t.due)
     .map(t => mapTodoistTask(t, projects));
 }
 
-// Full-horizon fetch for the calendar modal: overdue + future incomplete, up to 1 year out.
+// Full-horizon fetch for the calendar modal: overdue + future incomplete.
 export async function fetchTodoistTasksAll(userId) {
   const token = await getToken(userId);
   if (!token) return [];
 
   const projects = await fetchProjects(token);
-  // "due before: +N days" already includes overdue items in Todoist filter syntax.
-  const tasks = await fetchTodoistFiltered(token, "due before: +365 days");
+  const tasks = await fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY);
 
   return tasks
     .filter(t => !t.checked && !t.is_deleted && t.due)
@@ -172,15 +172,13 @@ export async function fetchTodoistTasksAll(userId) {
 }
 
 // Lean full-horizon id probe used by tombstone orphan detection. Returns a
-// Set of id strings for every non-deleted, non-checked task within the next
-// year — wide enough to cover weekly/monthly recurrences whose advanced
-// next occurrence sits past the briefing's +8 day window. Returns null when
-// Todoist isn't configured; callers must treat null as "can't verify" and
-// skip pruning rather than wiping every tombstone.
+// Set of id strings for every non-deleted, non-checked task with a due date.
+// Returns null when Todoist isn't configured; callers must treat null as
+// "can't verify" and skip pruning rather than wiping every tombstone.
 export async function fetchTodoistTaskIdSet(userId) {
   const token = await getToken(userId);
   if (!token) return null;
-  const tasks = await fetchTodoistFiltered(token, "due before: +365 days");
+  const tasks = await fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY);
   return new Set(
     tasks
       .filter(t => !t.is_deleted && !t.checked)
@@ -311,4 +309,4 @@ export async function testConnection(userId) {
 }
 
 // Test-only exports (do not use in production code)
-export const __testing__ = { mapTodoistTask };
+export const __testing__ = { mapTodoistTask, TODOIST_DUE_TASKS_QUERY };

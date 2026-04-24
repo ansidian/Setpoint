@@ -32,6 +32,10 @@ function toPacificDate(isoStr) {
   return isoStr.split("T")[0];
 }
 
+function todayPacific() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+}
+
 async function ctmFetch(path, options = {}) {
   const res = await fetch(`${CTM_API_URL}${path}`, {
     ...options,
@@ -71,20 +75,27 @@ export async function fetchCTMDeadlines() {
     return [];
   }
 
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const weekOut = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const today = todayPacific();
 
   // Include "complete" so tasks completed externally (in CTM directly) stay
-  // visible until their due date passes. The due_after: today filter naturally
-  // drops them once the day rolls over.
-  const params = new URLSearchParams({
-    status: "incomplete,in_progress,complete",
+  // visible until their due date passes. Fetch active items without a date
+  // ceiling so overdue and future work both show up, but keep completed fetches
+  // bounded to today+ so old completed history does not bloat the briefing.
+  const activeParams = new URLSearchParams({
+    status: "incomplete,in_progress",
+    exclude_source: "todoist",
+  });
+  const completedParams = new URLSearchParams({
+    status: "complete",
     due_after: today,
-    due_before: weekOut,
     exclude_source: "todoist",
   });
 
-  const events = await ctmFetch(`/events?${params}`);
+  const [activeEvents, completedEvents] = await Promise.all([
+    ctmFetch(`/events?${activeParams}`),
+    ctmFetch(`/events?${completedParams}`),
+  ]);
+  const events = [...activeEvents, ...completedEvents];
   return events.map(mapCTMEvent);
 }
 
