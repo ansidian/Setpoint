@@ -523,7 +523,7 @@ export default function useCalendarEventEditor({
     activeLocationSuggestionRef.current = activeLocationSuggestion;
   }, [activeLocationSuggestion]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || view !== "events") {
       setMode("detail");
       setEditingEvent(null);

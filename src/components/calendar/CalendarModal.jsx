@@ -207,11 +207,6 @@ export default function CalendarModal({
 
   const openEventCreate = eventEditor.openCreate;
   const prefetchEventSources = eventEditor.prefetchSources;
-  useLayoutEffect(() => {
-    if (syncSnapshot?.openCreate && view === "events" && eventEditor.editable) {
-      openEventCreate();
-    }
-  }, [syncSnapshot?.openCreate, view, eventEditor.editable, openEventCreate]);
 
   useEffect(() => {
     if (!eventEditor.editable || typeof window === "undefined") return undefined;
@@ -288,7 +283,13 @@ export default function CalendarModal({
 
   useLayoutEffect(() => {
     commitSyncSnapshot(syncSnapshot);
-  }, [syncSnapshot]);
+  }, [syncSnapshot, open, view, openRequestId]);
+
+  useLayoutEffect(() => {
+    if (syncSnapshot?.openCreate && view === "events" && eventEditor.editable) {
+      openEventCreate();
+    }
+  }, [syncSnapshot?.openCreate, view, eventEditor.editable, openEventCreate]);
 
   const suppressOutsideClickRef = useRef(null);
   function suppressOutsideClick(test) {

@@ -143,6 +143,28 @@ test("opens a fresh event editor from the dashboard Add Event action every time"
   await expect(page.getByTestId("calendar-event-title")).toHaveValue("");
 });
 
+test("opens event create from g+c after dismissing a g+t Todoist create request", async ({ page }) => {
+  await installDashboardCalendarCreateFixtures(page);
+
+  await page.goto("/");
+  await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
+
+  await page.keyboard.press("g");
+  await page.keyboard.press("t");
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await expect(page.getByTestId("todoist-inline-editor")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("todoist-inline-editor")).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("calendar-modal-panel")).toBeHidden();
+
+  await page.keyboard.press("g");
+  await page.keyboard.press("c");
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await expect(page.getByTestId("calendar-event-editor-rail")).toBeVisible();
+});
+
 test("matches the Todoist inline editor rail entrance to the event editor", async ({ page }) => {
   await installDashboardCalendarCreateFixtures(page);
   await page.setViewportSize({ width: 1440, height: 960 });

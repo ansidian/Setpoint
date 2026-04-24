@@ -1061,6 +1061,56 @@ describe("CalendarModal responsive layout", () => {
     expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
   });
 
+  it("opens event create after closing a Todoist create focus request", async () => {
+    window.innerWidth = 1900;
+    const props = {
+      onClose: () => {},
+      onViewChange: () => {},
+      eventsData: {
+        editable: true,
+        getEvents: () => [],
+      },
+      billsData: {},
+      deadlinesData: { todoist: { upcoming: [] } },
+    };
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        {...props}
+        open
+        openRequestId={1}
+        view="deadlines"
+        focusItemId="new"
+      />,
+    ));
+
+    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        {...props}
+        open={false}
+        openRequestId={1}
+        view="deadlines"
+        focusItemId="new"
+      />,
+    ));
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        {...props}
+        open
+        openRequestId={2}
+        view="events"
+        focusItemId="new"
+      />,
+    ));
+
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
+  });
+
   it("opens a blank inline Todoist editor from c in deadlines view", async () => {
     window.innerWidth = 1900;
 
