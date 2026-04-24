@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardBody } from "./Dashboard.jsx";
 import { DashboardProvider } from "../context/DashboardContext.jsx";
@@ -36,6 +36,7 @@ function renderDashboardBody({
   briefing,
   ensureRange,
   onOpenDeadlinesCalendar = () => {},
+  onOpenEventsCalendar = () => {},
   liveData: liveDataOverrides = {},
 }) {
   return render(
@@ -71,7 +72,7 @@ function renderDashboardBody({
         onOpenEmail={() => {}}
         onOpenDeadline={() => {}}
         onOpenBillsCalendar={() => {}}
-        onOpenEventsCalendar={() => {}}
+        onOpenEventsCalendar={onOpenEventsCalendar}
         onOpenDeadlinesCalendar={onOpenDeadlinesCalendar}
         onJumpSection={() => {}}
       />
@@ -170,6 +171,27 @@ describe("Dashboard event loading", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /deadline soon/i }));
     expect(onOpenDeadlinesCalendar).toHaveBeenCalledWith("2026-04-20");
+  });
+
+  it("deep links timeline events to the selected calendar chip", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const onOpenEventsCalendar = vi.fn();
+    const event = {
+      ...makeEvent(now, "Roadmap sync"),
+      id: "event-1",
+    };
+    renderDashboardBody({
+      briefing: makeBriefing([event]),
+      ensureRange: vi.fn(() => new Promise(() => {})),
+      onOpenEventsCalendar,
+    });
+
+    fireEvent.click(within(screen.getByTestId("today-timeline")).getByText("Roadmap sync"));
+
+    expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1");
   });
 
   it("refetches the live event window when calendar revision changes", async () => {

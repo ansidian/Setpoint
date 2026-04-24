@@ -1,6 +1,7 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
+import { getEventSelectionId } from "../../../../lib/redesign-helpers";
 
 const LG_EVENT_CHIP_METRICS = {
   itemHeight: 30,
@@ -63,7 +64,7 @@ function eventDetail(ev) {
 
 function toEventDescriptor(ev) {
   return {
-    id: String(ev?.id || ev?.iCalUID || ev?.htmlLink || ev?.openUrl || `${ev?.startMs || 0}-${ev?.title || "event"}`),
+    id: getEventSelectionId(ev),
     title: sanitizeEventDisplayTitle(ev?.title),
     detail: eventDetail(ev),
     leadingLabel: ev?.allDay ? "All day" : pacificTime(ev?.startMs),

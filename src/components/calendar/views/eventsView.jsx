@@ -7,7 +7,7 @@ import {
   RailHeroCard,
   RailMetaChip,
 } from "../DetailRailPrimitives.jsx";
-import { formatEventDuration } from "../../../lib/redesign-helpers";
+import { formatEventDuration, getEventSelectionId } from "../../../lib/redesign-helpers";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
@@ -131,11 +131,6 @@ function eventMeta(ev) {
 
 function isEditableEvent(ev) {
   return !!ev?.writable;
-}
-
-function getEventSelectionId(ev) {
-  if (!ev) return null;
-  return String(ev?.id || ev?.iCalUID || ev?.htmlLink || ev?.openUrl || `${ev?.startMs || 0}-${ev?.endMs || 0}-${ev?.title || "event"}`);
 }
 
 function orderDetailEvents(items = []) {

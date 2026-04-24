@@ -128,6 +128,17 @@ export function eventState(ev, now = Date.now()) {
   return "future";
 }
 
+export function getEventSelectionId(ev) {
+  if (!ev) return null;
+  return String(
+    ev.id
+      || ev.iCalUID
+      || ev.htmlLink
+      || ev.openUrl
+      || `${ev.startMs || 0}-${ev.endMs || 0}-${ev.title || "event"}`,
+  );
+}
+
 // Bucket an instant-in-ms into a day offset relative to today (Pacific tz).
 export function dayBucket(ms, now = Date.now()) {
   const fmt = new Intl.DateTimeFormat("en-CA", {

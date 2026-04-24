@@ -13,6 +13,7 @@ import {
   eventState,
   formatEventDuration,
   formatEventTime,
+  getEventSelectionId,
   overdueLabel,
   urgencyForDays,
 } from "../../../lib/redesign-helpers";
@@ -79,7 +80,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     meta = formatEventDuration(event.startMs, event.endMs);
     urgency = isLive ? "high" : "low";
     railDotColor = event.color || event.sourceColor || accent;
-    jumpPayload = { kind: "event", id: event.id, data: event };
+    jumpPayload = { kind: "event", id: getEventSelectionId(event), data: event };
   } else if (item.kind === "deadline") {
     const deadline = item.data;
     const days = daysUntil(deadline.due_date);

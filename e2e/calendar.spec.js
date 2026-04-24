@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 import { installDashboardCalendarFixtures } from "./support/dashboard-fixtures.js";
 
+test("opens a selected calendar event from the dashboard timeline", async ({ page }) => {
+  const fixture = await installDashboardCalendarFixtures(page);
+
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("shell-header-desktop")).toBeVisible();
+
+  await page.getByTestId("today-timeline").getByText(fixture.initialTitle).click();
+
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
+  await expect(page.getByTestId("calendar-selected-event-title")).toContainText(fixture.initialTitle);
+  await expect(page.getByTestId("timeline-detail-row").first()).toContainText(fixture.initialTitle);
+});
+
 test("edits a calendar event from the detail rail using deterministic fixtures", async ({ page }) => {
   const fixture = await installDashboardCalendarFixtures(page);
 

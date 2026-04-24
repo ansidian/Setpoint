@@ -29,6 +29,7 @@ import useCalendarRange from "../hooks/useCalendarRange";
 import useIsMobile from "../hooks/useIsMobile";
 import useBrowserBackDismiss from "../hooks/useBrowserBackDismiss";
 import { focusPressureDate } from "../lib/focus-windows";
+import { getEventSelectionId } from "../lib/redesign-helpers";
 import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import { mergeReadState } from "../components/inbox/helpers";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
@@ -751,7 +752,7 @@ export function DashboardBody({
       const ymd = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Los_Angeles",
       }).format(new Date(payload.data.startMs));
-      onOpenEventsCalendar(ymd);
+      onOpenEventsCalendar(ymd, payload.id || getEventSelectionId(payload.data));
     }
   }, [onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 
