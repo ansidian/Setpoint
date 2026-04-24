@@ -4,6 +4,58 @@ import { markBriefingAccountEmailsRead, setBriefingEmailReadState } from "../lib
 
 const DashboardContext = createContext(null);
 
+function recalculateTodoistStats(root) {
+  if (!root?.todoist?.upcoming) return root;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  let dueToday = 0;
+  let dueThisWeek = 0;
+  for (const task of root.todoist.upcoming) {
+    if (task._tombstone || task.status === "complete") continue;
+    if (task.due_date === today) dueToday += 1;
+    if (task.due_date >= today && task.due_date <= weekFromNow) dueThisWeek += 1;
+  }
+  root.todoist.stats = {
+    incomplete: root.todoist.upcoming.filter((task) => !task._tombstone && task.status !== "complete").length,
+    dueToday,
+    dueThisWeek,
+    totalPoints: 0,
+  };
+  return root;
+}
+
+function ensureTodoistSection(root) {
+  if (!root.todoist) {
+    root.todoist = { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+  }
+  if (!Array.isArray(root.todoist.upcoming)) root.todoist.upcoming = [];
+  return root.todoist;
+}
+
+function applyTodoistTaskUpsert(root, task, { merge = false } = {}) {
+  if (!root || !task?.id) return root;
+  const updated = JSON.parse(JSON.stringify(root));
+  const todoist = ensureTodoistSection(updated);
+  const index = todoist.upcoming.findIndex(
+    (entry) => !entry._tombstone && String(entry.id) === String(task.id),
+  );
+  if (index >= 0) {
+    todoist.upcoming[index] = merge ? { ...todoist.upcoming[index], ...task } : task;
+  } else {
+    todoist.upcoming.push(task);
+  }
+  return recalculateTodoistStats(updated);
+}
+
+function applyTodoistTaskDelete(root, taskId) {
+  if (!root?.todoist?.upcoming) return root;
+  const updated = JSON.parse(JSON.stringify(root));
+  updated.todoist.upcoming = updated.todoist.upcoming.filter(
+    (task) => task._tombstone || String(task.id) !== String(taskId),
+  );
+  return recalculateTodoistStats(updated);
+}
+
 export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines, children }) {
   const [activeAccount, setActiveAccount] = useState(0);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -153,86 +205,25 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
   }, [setBriefing, setCalendarDeadlines]);
 
   const handleUpdateTask = useCallback((updatedTask) => {
-    const applyUpdate = (root) => {
-      if (!root) return root;
-      const updated = JSON.parse(JSON.stringify(root));
-      if (!updated.todoist?.upcoming) return updated;
-      // Only match live rows — tombstones share the id with their live
-      // next-occurrence and must be left alone by edits to the live row.
-      const idx = updated.todoist.upcoming.findIndex(
-        t => !t._tombstone && String(t.id) === String(updatedTask.id),
-      );
-      // Merge (don't replace) so local-only fields — status, _completing —
-      // survive the edit. The server response intentionally omits `status`.
-      if (idx >= 0) {
-        updated.todoist.upcoming[idx] = {
-          ...updated.todoist.upcoming[idx],
-          ...updatedTask,
-        };
-      }
-
-      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-      const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-      let dueToday = 0, dueThisWeek = 0;
-      for (const d of updated.todoist.upcoming) {
-        if (d.due_date === today) dueToday++;
-        if (d.due_date >= today && d.due_date <= weekFromNow) dueThisWeek++;
-      }
-      updated.todoist.stats = { incomplete: updated.todoist.upcoming.length, dueToday, dueThisWeek, totalPoints: 0 };
-      return updated;
-    };
-    setBriefing(prev => applyUpdate(prev));
-    setCalendarDeadlines?.(prev => (prev ? applyUpdate(prev) : prev));
+    setBriefing(prev => applyTodoistTaskUpsert(prev, updatedTask, { merge: true }));
+    setCalendarDeadlines?.(prev => (prev ? applyTodoistTaskUpsert(prev, updatedTask, { merge: true }) : prev));
   }, [setBriefing, setCalendarDeadlines]);
 
   // State-only: the panel owns the network call (matching create/update) so
   // it can surface "Failed to delete" inline without a second roundtrip.
   const handleDeleteTask = useCallback((taskId) => {
-    const applyDelete = (root) => {
-      if (!root?.todoist?.upcoming) return root;
-      const updated = JSON.parse(JSON.stringify(root));
-      updated.todoist.upcoming = updated.todoist.upcoming.filter(
-        (t) => t._tombstone || String(t.id) !== String(taskId),
-      );
-      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-      const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-      let dueToday = 0, dueThisWeek = 0;
-      for (const d of updated.todoist.upcoming) {
-        if (d.due_date === today) dueToday++;
-        if (d.due_date >= today && d.due_date <= weekFromNow) dueThisWeek++;
-      }
-      updated.todoist.stats = {
-        incomplete: updated.todoist.upcoming.filter((t) => !t._tombstone && t.status !== "complete").length,
-        dueToday,
-        dueThisWeek,
-        totalPoints: 0,
-      };
-      return updated;
-    };
-    setBriefing((prev) => applyDelete(prev));
-    setCalendarDeadlines?.((prev) => (prev ? applyDelete(prev) : prev));
+    setBriefing((prev) => applyTodoistTaskDelete(prev, taskId));
+    setCalendarDeadlines?.((prev) => (prev ? applyTodoistTaskDelete(prev, taskId) : prev));
     if (String(expandedTask) === String(taskId)) setExpandedTask(null);
   }, [expandedTask, setBriefing, setCalendarDeadlines]);
 
   const handleAddTask = useCallback((task) => {
-    setBriefing(prev => {
-      const updated = JSON.parse(JSON.stringify(prev));
-      if (!updated.todoist) updated.todoist = { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
-      updated.todoist.upcoming.push(task);
-
-      // Recalculate stats
-      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-      const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-      let dueToday = 0, dueThisWeek = 0;
-      for (const d of updated.todoist.upcoming) {
-        if (d.due_date === today) dueToday++;
-        if (d.due_date >= today && d.due_date <= weekFromNow) dueThisWeek++;
-      }
-      updated.todoist.stats = { incomplete: updated.todoist.upcoming.length, dueToday, dueThisWeek, totalPoints: 0 };
-
-      return updated;
-    });
-  }, [setBriefing]);
+    setBriefing(prev => applyTodoistTaskUpsert(prev, task));
+    setCalendarDeadlines?.(prev => applyTodoistTaskUpsert(
+      prev || { ctm: { upcoming: [], stats: null }, todoist: { upcoming: [] } },
+      task,
+    ));
+  }, [setBriefing, setCalendarDeadlines]);
 
   const handleUpdateTaskStatus = useCallback(async (taskId, status) => {
     updateTaskStatus(taskId, status).catch(() => {});
