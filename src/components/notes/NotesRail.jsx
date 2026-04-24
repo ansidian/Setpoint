@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   DndContext,
   closestCenter,
@@ -20,6 +20,14 @@ export default function NotesRail({ accent }) {
   const [notes, setNotes] = useState([]);
   const [input, setInput] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const inputRef = useRef(null);
+
+  const resizeInput = useCallback((element = inputRef.current) => {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
+    element.style.overflowY = element.scrollHeight > 160 ? "auto" : "hidden";
+  }, []);
 
   useEffect(() => {
     getNotes()
@@ -39,7 +47,8 @@ export default function NotesRail({ accent }) {
 
   const handleCreate = useCallback(
     async (e) => {
-      if (e.key !== "Enter") return;
+      if (e.key !== "Enter" || e.shiftKey) return;
+      e.preventDefault();
       const content = input.trim();
       if (!content) return;
       setInput("");
@@ -53,6 +62,10 @@ export default function NotesRail({ accent }) {
     },
     [input],
   );
+
+  useEffect(() => {
+    resizeInput();
+  }, [input, resizeInput]);
 
   const handleUpdate = useCallback(async (id, content) => {
     setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, content } : n)));
@@ -112,12 +125,16 @@ export default function NotesRail({ accent }) {
       </div>
 
       {/* Always-visible input */}
-      <input
-        type="text"
+      <textarea
+        ref={inputRef}
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={(e) => {
+          setInput(e.target.value);
+          resizeInput(e.target);
+        }}
         onKeyDown={handleCreate}
         placeholder="Jot something down..."
+        rows={1}
         style={{
           width: "100%",
           background: "rgba(255,255,255, 0.04)",
@@ -126,10 +143,15 @@ export default function NotesRail({ accent }) {
           padding: "8px 12px",
           color: "#cdd6f4",
           fontSize: 12,
+          lineHeight: 1.5,
           fontFamily: "inherit",
           outline: "none",
           marginBottom: 14,
           boxSizing: "border-box",
+          minHeight: 36,
+          maxHeight: 160,
+          resize: "none",
+          overflowY: "hidden",
         }}
         onFocus={(e) => (e.target.style.borderColor = "rgba(203,166,218, 0.3)")}
         onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255, 0.08)")}
