@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import {
   LayoutList, Inbox, Clock, AlertCircle, CreditCard, Sparkles,
   RefreshCw, Search, ArrowRight, Calendar, History, Settings as SettingsIcon, Sliders,
+  CalendarPlus, ListPlus,
 } from "lucide-react";
 
 /**
@@ -40,6 +41,8 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "insights",     icon: Sparkles,   label: "AI insights",     kind: "scroll", payload: "insights" },
     { id: "deadlines",    icon: AlertCircle, label: "Deadlines",      kind: "scroll", payload: "deadlines" },
     { id: "bills",        icon: CreditCard, label: "Bills",           kind: "scroll", payload: "bills" },
+    { id: "new-todoist",  icon: ListPlus,   label: "New Todoist task", hint: "G T", kind: "todoist" },
+    { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
     { id: "calendar",     icon: Calendar,   label: "Open calendar",   hint: "C", kind: "calendar" },
     { id: "history",      icon: History,    label: "Briefing history", kind: "history" },
     { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },

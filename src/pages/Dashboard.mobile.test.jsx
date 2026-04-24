@@ -15,16 +15,23 @@ vi.mock("../hooks/useCustomize", () => ({
 }));
 
 vi.mock("../components/calendar/CalendarModal", () => ({
-  default: function CalendarModalMock({ open, focusDate = null, focusItemId = null }) {
+  default: function CalendarModalMock({ open, view = "", focusDate = null, focusItemId = null }) {
     return (
       <div
         data-testid="calendar-modal"
+        data-view={view}
         data-focus-date={focusDate || ""}
         data-focus-item-id={focusItemId || ""}
       >
         {open ? "open" : "closed"}
       </div>
     );
+  },
+}));
+
+vi.mock("../components/todoist/AddTaskPanel", () => ({
+  default: function AddTaskPanelMock() {
+    return <div data-testid="add-task-panel" />;
   },
 }));
 
@@ -180,6 +187,40 @@ describe("RedesignShell mobile behavior", () => {
     expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
     expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
     expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Claude refreshed");
+
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+  });
+
+  it("opens create surfaces from dashboard action chords", () => {
+    mockIsMobile = false;
+    renderShell();
+
+    fireEvent.keyDown(window, { key: "g" });
+    fireEvent.keyDown(window, { key: "t" });
+    expect(screen.queryByTestId("add-task-panel")).toBeNull();
+    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+    expect(screen.getByTestId("calendar-modal").getAttribute("data-view")).toBe("deadlines");
+    expect(screen.getByTestId("calendar-modal").getAttribute("data-focus-item-id")).toBe("new");
+
+    fireEvent.keyDown(window, { key: "g" });
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+    expect(screen.getByTestId("calendar-modal").getAttribute("data-view")).toBe("events");
+    expect(screen.getByTestId("calendar-modal").getAttribute("data-focus-item-id")).toBe("new");
+  });
+
+  it("keeps single-key calendar open and ignores chords while typing", () => {
+    mockIsMobile = false;
+    renderShell();
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "g" });
+    fireEvent.keyDown(input, { key: "t" });
+    expect(screen.queryByTestId("add-task-panel")).toBeNull();
+    input.remove();
 
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("calendar-modal").textContent).toBe("open");

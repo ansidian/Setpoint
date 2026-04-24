@@ -201,6 +201,7 @@ export function RedesignShell({
 }) {
   const customize = useCustomize();
   const isMobile = useIsMobile();
+  const { handleAddTask } = useDashboard();
   const [tab, setTab] = useState(() => {
     try {
       const saved = localStorage.getItem("ea:tab");
@@ -253,6 +254,8 @@ export function RedesignShell({
   const [calendarFocus, setCalendarFocus] = useState(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const actionChordRef = useRef(null);
+  const actionChordTimerRef = useRef(null);
   const dismissCalendar = useBrowserBackDismiss({
     enabled: !isMobile && calendarOpen,
     historyKey: "eaDashboardCalendarModal",
@@ -269,6 +272,14 @@ export function RedesignShell({
     setCalendarOpen(true);
     if (resolved === "deadlines") loadCalendarDeadlines();
   };
+  const openTodoistCreate = useCallback(() => {
+    if (isMobile) {
+      setAddTaskOpen(true);
+      return;
+    }
+    openCalendar("deadlines", null, "new");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
   const changeCalendarView = (v) => {
     setCalendarView(v);
     try { localStorage.setItem("calendar:lastView", v); } catch { /* ignore */ }
@@ -279,23 +290,67 @@ export function RedesignShell({
     if (isMobile && calendarOpen) setCalendarOpen(false);
   }, [isMobile, calendarOpen]);
 
-  // Global hotkeys: ⌘K palette, c calendar
+  useEffect(() => () => {
+    if (actionChordTimerRef.current) clearTimeout(actionChordTimerRef.current);
+  }, []);
+
+  // Global hotkeys: ⌘K palette, c calendar, g+key action chords
   useEffect(() => {
+    const clearActionChord = () => {
+      actionChordRef.current = null;
+      if (actionChordTimerRef.current) {
+        clearTimeout(actionChordTimerRef.current);
+        actionChordTimerRef.current = null;
+      }
+    };
+
     function onKey(e) {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+      const target = e.target;
+      if (
+        target.tagName === "INPUT"
+        || target.tagName === "TEXTAREA"
+        || target.isContentEditable
+        || target.closest?.("[data-suspend-calendar-hotkeys='true']")
+      ) {
+        clearActionChord();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen(true);
         return;
       }
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "c" && !calendarOpen) { openCalendar(); }
-      if (e.key === "h") { setHistoryOpen((v) => !v); }
+      const key = e.key.toLowerCase();
+
+      if (actionChordRef.current === "g") {
+        clearActionChord();
+        if (key === "t") {
+          e.preventDefault();
+          openTodoistCreate();
+          return;
+        }
+        if (key === "e" || key === "c") {
+          e.preventDefault();
+          openCalendar("events", null, "new");
+          return;
+        }
+      }
+
+      if (key === "g") {
+        actionChordRef.current = "g";
+        actionChordTimerRef.current = setTimeout(clearActionChord, 900);
+        e.preventDefault();
+        return;
+      }
+
+      if (key === "c" && !calendarOpen) { openCalendar(); }
+      if (key === "h") { setHistoryOpen((v) => !v); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarOpen, isMobile]);
+  }, [calendarOpen, isMobile, openTodoistCreate]);
 
   const { accent } = customize;
   const briefing = bd.briefing;
@@ -327,17 +382,21 @@ export function RedesignShell({
     if (item.kind === "tab") setShellTab(item.payload);
     else if (item.kind === "scroll") jumpToSection(item.payload);
     else if (item.kind === "calendar") openCalendar();
+    else if (item.kind === "todoist") openTodoistCreate();
+    else if (item.kind === "event") openCalendar("events", null, "new");
     else if (item.kind === "history") setHistoryOpen(true);
     else if (item.kind === "customize") setCustomizeOpen(true);
     else if (item.kind === "refresh") onQuickRefresh?.();
     else if (item.kind === "regenerate") handleFullGeneration();
     else if (item.kind === "settings") window.location.href = "/settings";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpToSection, onQuickRefresh, handleFullGeneration, setShellTab]);
+  }, [jumpToSection, onQuickRefresh, handleFullGeneration, openTodoistCreate, setShellTab]);
 
   const eventsData = useMemo(() => ({
     ensureRange: calendarRange.ensureRange,
     refreshRange: calendarRange.refreshRange,
+    upsertEvents: calendarRange.upsertEvents,
+    removeEvent: calendarRange.removeEvent,
     getEvents: calendarRange.getEvents,
     hasMonth: calendarRange.hasMonth,
     isMonthLoading: calendarRange.isMonthLoading,
@@ -348,6 +407,8 @@ export function RedesignShell({
   }), [
     calendarRange.ensureRange,
     calendarRange.refreshRange,
+    calendarRange.upsertEvents,
+    calendarRange.removeEvent,
     calendarRange.getEvents,
     calendarRange.hasMonth,
     calendarRange.isMonthLoading,
@@ -519,6 +580,7 @@ export function RedesignShell({
             onOpenBillsCalendar={(date) => openCalendar("bills", date || null)}
             onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId)}
             onOpenDeadlinesCalendar={(date) => openCalendar("deadlines", date || null)}
+            onOpenTodoistCreate={openTodoistCreate}
             onJumpSection={jumpToSection}
             setAddTaskOpen={setAddTaskOpen}
           />
@@ -554,21 +616,12 @@ export function RedesignShell({
         />
       )}
 
-      {addTaskOpen && (
+      {isMobile && addTaskOpen && (
         <AddTaskPanel
-          host={isMobile ? "anchored" : "modal"}
+          host="anchored"
           onClose={() => setAddTaskOpen(false)}
           onTaskAdded={(task) => {
-            bd.setBriefing((prev) => {
-              if (!prev?.todoist) return prev;
-              return {
-                ...prev,
-                todoist: {
-                  ...prev.todoist,
-                  upcoming: [...(prev.todoist.upcoming || []), task],
-                },
-              };
-            });
+            handleAddTask(task);
             setAddTaskOpen(false);
           }}
         />
@@ -629,7 +682,7 @@ export function RedesignShell({
 export function DashboardBody({
   briefing, liveData, calendarRange, customize, accent,
   isMobile = false,
-  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onJumpSection, setAddTaskOpen,
+  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenTodoistCreate, onJumpSection, setAddTaskOpen,
 }) {
   const { dashboardLayout, density, showInsights, showInboxPeek, showNotes } = customize;
   const effectiveLayout = isMobile ? "paper" : dashboardLayout;
@@ -716,7 +769,8 @@ export function DashboardBody({
       eventLoadingState={eventLoadingState}
       onQuickAction={(action) => {
         if (action === "task") {
-          setAddTaskOpen(true);
+          if (onOpenTodoistCreate) onOpenTodoistCreate();
+          else setAddTaskOpen?.(true);
         } else if (action === "event") {
           onOpenEventsCalendar(today, "new");
         }
