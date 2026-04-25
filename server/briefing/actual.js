@@ -343,7 +343,9 @@ async function upsertTransferSchedule(billData) {
   const payees = await actualApi.getPayees();
   const transferPayee = payees.find(p => p.transfer_acct === billData.from_account_id);
   if (!transferPayee) {
-    throw new Error(`No transfer payee found for account ${billData.from_account_id}`);
+    const err = new Error("No transfer payee found for selected source account");
+    err.status = 400;
+    throw err;
   }
 
   // Past-date: create posted transfer transaction
@@ -476,8 +478,10 @@ export function sendBill(billData, userId) {
 
       if (billData.type === "transfer") {
         // Transfer: use from/to account IDs for schedule upsert
-        if (!billData.from_account_id || !billData.to_account_id) {
-          throw new Error("Transfer requires from_account_id and to_account_id");
+        if (!billData.from_account_id || !billData.to_account_id || !billData.schedule_name) {
+          const err = new Error("Transfer requires from_account_id, to_account_id, and schedule_name");
+          err.status = 400;
+          throw err;
         }
         result = await upsertTransferSchedule(billData);
       } else if (billData.type === "bill") {

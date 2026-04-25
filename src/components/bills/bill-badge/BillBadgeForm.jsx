@@ -391,6 +391,7 @@ export default function BillBadgeForm({
   extractState,
   state,
   successMessage,
+  errorMessage,
   editPayee,
   setEditPayee,
   editAmount,
@@ -490,7 +491,9 @@ export default function BillBadgeForm({
             onSend={handleSend}
           />
           {state === "error" && (
-            <div className="text-[11px] text-[#f38ba8] mt-1.5">Failed to send — check fields and try again.</div>
+            <div className="text-[11px] text-[#f38ba8] mt-1.5">
+              {errorMessage || "Failed to send — check fields and try again."}
+            </div>
           )}
         </>
       )}

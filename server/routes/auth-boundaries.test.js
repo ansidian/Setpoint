@@ -115,7 +115,7 @@ vi.mock("../briefing/bill-extractors/catalog.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const { createQuickTxn } = await import("../briefing/bills-service.js");
+const { createQuickTxn, sendBill } = await import("../briefing/bills-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const liveRoutes = (await import("./live.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
@@ -249,6 +249,38 @@ describe("auth boundaries", () => {
       "user-1",
       expect.objectContaining({ accountName: "Checking", amount: 18.5, payee: "Lunch" }),
     );
+  });
+
+  it("allows transfer bill sends without a payee when transfer fields are present", async () => {
+    setSessionRow();
+    const payload = {
+      type: "transfer",
+      amount: 197.5,
+      due_date: "2026-04-30",
+      from_account_id: "acct-checking",
+      to_account_id: "acct-card",
+      schedule_name: "Credit Card Payment",
+    };
+
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/send")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(sendBill).toHaveBeenCalledWith("user-1", expect.objectContaining(payload));
+  });
+
+  it("rejects transfer bill sends with missing transfer fields before calling Actual", async () => {
+    setSessionRow();
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/send")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ type: "transfer", amount: 197.5, due_date: "2026-04-30", from_account_id: "acct-checking" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/from_account_id, to_account_id, and schedule_name/);
+    expect(sendBill).not.toHaveBeenCalled();
   });
 
   it("keeps normal cookie session access on protected routes", async () => {

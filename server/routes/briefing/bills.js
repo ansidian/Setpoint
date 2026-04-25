@@ -6,10 +6,36 @@ const router = Router();
 const quickTxnRouter = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
 
+function isBlank(value) {
+  return value == null || String(value).trim() === "";
+}
+
+function validateSendBillPayload(billData) {
+  if (!billData || typeof billData !== "object") return "bill data is required";
+  if (isBlank(billData.type)) return "type is required";
+  if (billData.amount == null || billData.amount === "") return "amount is required";
+
+  const amount = Number(billData.amount);
+  if (!Number.isFinite(amount)) return "amount must be a number";
+  if (amount <= 0) return "amount must be greater than 0";
+  if (isBlank(billData.due_date)) return "due_date is required";
+
+  if (billData.type === "transfer") {
+    if (isBlank(billData.from_account_id) || isBlank(billData.to_account_id) || isBlank(billData.schedule_name)) {
+      return "from_account_id, to_account_id, and schedule_name are required for transfers";
+    }
+    return null;
+  }
+
+  if (isBlank(billData.payee)) return "payee is required";
+  return null;
+}
+
 router.post("/actual/send", async (req, res) => {
   const billData = req.body;
-  if (!billData?.payee || !billData?.amount || !billData?.type) {
-    return res.status(400).json({ message: "payee, amount, and type are required" });
+  const validationError = validateSendBillPayload(billData);
+  if (validationError) {
+    return res.status(400).json({ message: validationError });
   }
   try {
     res.json(await billsService.sendBill(EA_USER_ID, billData));

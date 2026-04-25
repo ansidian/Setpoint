@@ -22,6 +22,7 @@ export default function useBillBadgeForm({
   const [extractState, setExtractState] = useState("idle");
   const [state, setState] = useState("idle");
   const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [editPayee, setEditPayee] = useState(bill.payee || "");
   const [editAmount, setEditAmount] = useState(bill.amount != null ? String(bill.amount) : "");
   const [editDue, setEditDue] = useState(bill.due_date || "");
@@ -155,6 +156,7 @@ export default function useBillBadgeForm({
   const handleSend = (event) => {
     event.stopPropagation();
     setState("sending");
+    setErrorMessage("");
     const edited = {
       ...bill,
       payee: payees.find((payee) => payee.id === editPayee)?.name || editPayee,
@@ -178,7 +180,10 @@ export default function useBillBadgeForm({
         setSuccessMessage(res?.message || "Added to Actual Budget");
         setState("sent");
       })
-      .catch(() => setState("error"));
+      .catch((err) => {
+        setErrorMessage(err?.message || "Failed to send — check fields and try again.");
+        setState("error");
+      });
   };
 
   const canSend = editAmount.trim() && editDue
@@ -193,6 +198,7 @@ export default function useBillBadgeForm({
     extractState,
     state,
     successMessage,
+    errorMessage,
     editPayee,
     setEditPayee,
     editAmount,
