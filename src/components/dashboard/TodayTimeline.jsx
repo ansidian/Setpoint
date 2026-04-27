@@ -6,7 +6,6 @@ import TimelineHeader from "./timeline/TimelineHeader";
 import {
   buildTimelineGroups,
   formatFullDateForOffset,
-  timelineSettleTransition,
 } from "./timeline/timeline-helpers";
 import TimelineSkeleton from "./timeline/TimelineSkeleton";
 
@@ -24,6 +23,7 @@ export default function TodayTimeline({
   deadlines = [],
   onJump,
   eventLoadingState = "ready",
+  scrollContained = true,
 }) {
   const [filters, setFilters] = useState({ events: true, deadlines: true });
   const [now, setNow] = useState(() => Date.now());
@@ -52,12 +52,22 @@ export default function TodayTimeline({
   const todayLabel = formatFullDateForOffset(0, now);
   const showEventSkeletons = eventLoadingState === "empty_loading";
   const showRefreshStatus = eventLoadingState === "refreshing";
+  const containScroll = !isMobile && scrollContained;
 
   return (
     <div
       data-sect="timeline"
       data-testid={isMobile ? "today-timeline-mobile" : "today-timeline"}
-      style={{ padding: isMobile ? "18px 16px 20px" : density === "compact" ? "22px 24px 24px" : "26px 28px 28px" }}
+      style={{
+        padding: isMobile ? "18px 16px 20px" : density === "compact" ? "22px 24px 24px" : "26px 28px 28px",
+        ...(containScroll ? {
+          height: "100%",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        } : {}),
+      }}
     >
       <TimelineHeader
         accent={accent}
@@ -68,22 +78,34 @@ export default function TodayTimeline({
         todayLabel={todayLabel}
       />
 
-      <div style={{ marginTop: 14 }}>
+      <div
+        style={{
+          marginTop: 14,
+          ...(containScroll ? {
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            paddingRight: 4,
+          } : {}),
+        }}
+      >
         {showEventSkeletons && <TimelineSkeleton isMobile={isMobile} />}
-        <AnimatePresence initial={false} mode="popLayout">
+        <AnimatePresence initial={false}>
           {groups.map(([day, dayItems], gi) => (
             <Motion.div
               key={day}
-              layout="position"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{
-                layout: timelineSettleTransition,
                 opacity: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
                 y: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
               }}
-              style={{ willChange: "transform, opacity" }}
+              style={{
+                contentVisibility: "auto",
+                containIntrinsicSize: "180px",
+              }}
             >
               <TimelineDayGroup
                 day={day}

@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { LANE } from "../../lib/redesign-helpers";
 
-export default function DigestStrip({ accent, counts, liveCount, summary, onJumpLane }) {
+export default function DigestStrip({ accent, counts, liveCount, liveLoading = false, summary, onJumpLane }) {
   const items = [
     { key: "action", count: counts.action, verb: "need you", ...LANE.action },
     { key: "fyi",    count: counts.fyi,    verb: "for your info", ...LANE.fyi },
@@ -34,7 +34,7 @@ export default function DigestStrip({ accent, counts, liveCount, summary, onJump
               color: accent, fontWeight: 700,
             }}
           >
-            Claude briefing
+            Briefing snapshot
           </div>
           {summary && (
             <div
@@ -103,9 +103,9 @@ export default function DigestStrip({ accent, counts, liveCount, summary, onJump
           style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "6px 10px 6px 8px", borderRadius: 8,
-            background: liveCount > 0 ? "rgba(137,180,250,0.08)" : "rgba(255,255,255,0.02)",
-            border: liveCount > 0 ? "1px dashed rgba(137,180,250,0.28)" : "1px dashed rgba(255,255,255,0.08)",
-            opacity: liveCount > 0 ? 1 : 0.52,
+            background: liveCount > 0 || liveLoading ? "rgba(137,180,250,0.08)" : "rgba(255,255,255,0.02)",
+            border: liveCount > 0 || liveLoading ? "1px dashed rgba(137,180,250,0.28)" : "1px dashed rgba(255,255,255,0.08)",
+            opacity: liveCount > 0 || liveLoading ? 1 : 0.52,
             minWidth: 184,
           }}
         >
@@ -119,15 +119,15 @@ export default function DigestStrip({ accent, counts, liveCount, summary, onJump
               <span
                 style={{
                   position: "absolute", inset: 0, borderRadius: 999,
-                  background: liveCount > 0 ? "#89b4fa" : "rgba(205,214,244,0.3)",
+                  background: liveCount > 0 || liveLoading ? "#89b4fa" : "rgba(205,214,244,0.3)",
                   opacity: 0.3,
-                  animation: liveCount > 0 ? "livepulse 2s ease-out infinite" : "none",
+                  animation: liveCount > 0 || liveLoading ? "livepulse 2s ease-out infinite" : "none",
               }}
             />
             <span
               style={{
-                width: 5, height: 5, borderRadius: 999, background: liveCount > 0 ? "#89b4fa" : "rgba(205,214,244,0.45)",
-                boxShadow: liveCount > 0 ? "0 0 6px #89b4fa" : "none",
+                width: 5, height: 5, borderRadius: 999, background: liveCount > 0 || liveLoading ? "#89b4fa" : "rgba(205,214,244,0.45)",
+                boxShadow: liveCount > 0 || liveLoading ? "0 0 6px #89b4fa" : "none",
               }}
             />
           </span>
@@ -135,13 +135,15 @@ export default function DigestStrip({ accent, counts, liveCount, summary, onJump
             <div
               style={{
                 fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase",
-                color: liveCount > 0 ? "#89b4fa" : "rgba(205,214,244,0.55)", fontWeight: 700,
+                color: liveCount > 0 || liveLoading ? "#89b4fa" : "rgba(205,214,244,0.55)", fontWeight: 700,
               }}
             >
-              {liveCount > 0 ? "Live · untriaged" : "Live · quiet"}
+              {liveLoading ? "Live · checking" : liveCount > 0 ? "Live · untriaged" : "Live · quiet"}
             </div>
             <div style={{ fontSize: 11, color: "rgba(205,214,244,0.85)", marginTop: 2 }}>
-              {liveCount > 0 ? (
+              {liveLoading ? (
+                "Retrieving live mail"
+              ) : liveCount > 0 ? (
                 <>
                   <span
                     style={{

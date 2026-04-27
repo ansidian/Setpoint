@@ -54,7 +54,6 @@ function chipStyle({
     textDecorationColor: "rgba(205,214,244,0.24)",
     fontFamily: "inherit",
     textAlign: "left",
-    willChange: "background, border-color",
   };
 }
 
@@ -65,8 +64,6 @@ function MoreButton({
   day,
   active,
   metrics,
-  onMouseEnter,
-  onMouseLeave,
   onPointerEnter,
   onPointerLeave,
   onFocus,
@@ -86,8 +83,6 @@ function MoreButton({
         event.stopPropagation();
         onClick?.(event);
       }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       onFocus={onFocus}
@@ -114,7 +109,6 @@ function MoreButton({
         alignItems: "center",
         alignSelf: "stretch",
         transition: "color 140ms, background 140ms, border-color 140ms",
-        willChange: "color, background, border-color",
       }}
     >
       +{hiddenCount} more
@@ -164,10 +158,6 @@ export default function CalendarCellItemStack({
               event.stopPropagation();
               onSelectItem?.(item.id);
             }}
-            onMouseEnter={() => setActiveChipId(String(item.id))}
-            onMouseLeave={() => setActiveChipId((current) => (
-              current === String(item.id) ? null : current
-            ))}
             onPointerEnter={() => setActiveChipId(String(item.id))}
             onPointerLeave={() => setActiveChipId((current) => (
               current === String(item.id) ? null : current
@@ -226,8 +216,6 @@ export default function CalendarCellItemStack({
           active={moreActive}
           metrics={metrics}
           open={overflowOpen}
-          onMouseEnter={() => setMoreActive(true)}
-          onMouseLeave={() => setMoreActive(false)}
           onPointerEnter={() => setMoreActive(true)}
           onPointerLeave={() => setMoreActive(false)}
           onFocus={() => setMoreActive(true)}

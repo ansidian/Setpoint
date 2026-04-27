@@ -4,7 +4,6 @@ export default function TimelineNowMarker({
   accent,
   isMobile = false,
   now,
-  pillGap,
   spineLeft,
   top,
 }) {
@@ -17,7 +16,6 @@ export default function TimelineNowMarker({
         top,
         pointerEvents: "none",
         zIndex: 5,
-        transition: "top 1s ease",
       }}
     >
       <div
@@ -25,12 +23,12 @@ export default function TimelineNowMarker({
           position: "absolute",
           ...(isMobile
             ? { left: spineLeft + 10 }
-            : { right: `calc(100% - ${spineLeft - 6 - pillGap}px)` }),
+            : { left: 0 }),
           top: 0,
           transform: "translateY(-50%)",
           fontSize: isMobile ? 9 : 9.5,
           fontWeight: 700,
-          letterSpacing: 0.8,
+          letterSpacing: 0.4,
           textTransform: "uppercase",
           color: accent,
           padding: isMobile ? "2px 7px" : "2px 8px",

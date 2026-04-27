@@ -61,7 +61,7 @@ export function collectBriefingEmails(emailAccounts) {
 }
 
 // Build entries for live-polled emails (arrived after last briefing, not yet
-// triaged by Claude). Merges resurfaced metadata when a live uid is also
+// triaged by the latest briefing). Merges resurfaced metadata when a live uid is also
 // present in resurfacedMap — Gmail's `newer_than:Nh` poll re-fetches
 // recently-woken snoozes on its own; without this merge the live entry wins
 // dedup and the Snoozed badge / wake-time sort would be lost.

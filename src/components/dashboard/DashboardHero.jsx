@@ -148,7 +148,7 @@ export default function DashboardHero({
               fontSize: isMobile ? 12 : 13,
               fontWeight: 500,
               cursor: "pointer",
-              transition: "all 0.15s ease",
+              transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "rgba(255,255,255,0.08)";
@@ -173,22 +173,31 @@ export default function DashboardHero({
           style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : `repeat(${theCallouts.length}, 1fr)`,
-            gap: isMobile ? 8 : 18,
-            marginTop: isMobile ? 16 : compact ? 16 : 18,
+            gap: 0,
+            marginTop: isMobile ? 14 : compact ? 16 : 18,
             position: "relative",
-            paddingTop: isMobile ? 0 : 12,
-            borderTop: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
+            paddingTop: isMobile ? 2 : 14,
+            borderTop: "1px solid rgba(255,255,255,0.05)",
             alignItems: "stretch",
           }}
         >
           {theCallouts.map((c, i) => (
-            <HeroCalloutCard
+            <div
               key={i}
-              {...c}
-              accent={accent}
-              isMobile={isMobile}
-              onJump={(anchor) => onJump?.(c, anchor)}
-            />
+              style={{
+                minWidth: 0,
+                padding: isMobile ? "0" : i === 0 ? "0 16px 0 0" : "0 16px",
+                borderLeft: !isMobile && i > 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                borderTop: isMobile && i > 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
+              }}
+            >
+              <HeroCalloutCard
+                {...c}
+                accent={accent}
+                isMobile={isMobile}
+                onJump={(anchor) => onJump?.(c, anchor)}
+              />
+            </div>
           ))}
         </div>
       )}

@@ -90,7 +90,7 @@ function LiveEmailNotice() {
             fontStyle: "italic",
           }}
         >
-          Arrived after your last briefing. Claude hasn't weighed in.
+          Arrived after your last briefing. Not yet triaged.
         </div>
       </div>
     </div>
@@ -104,7 +104,6 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email }) {
         maxWidth: billOpen ? 360 : 0,
         flexShrink: 0,
         overflow: "hidden",
-        transition: "max-width 320ms cubic-bezier(0.16, 1, 0.3, 1)",
       }}
     >
       {billMounted && (
@@ -423,7 +422,7 @@ export default function DesktopReader({
         >
           <Sparkles size={11} color={accent} />
           <span style={{ fontSize: 11, color: "rgba(205,214,244,0.7)", flex: 1 }}>
-            Claude drafted a reply.{" "}
+            Draft reply ready.{" "}
             <span style={{ color: "rgba(205,214,244,0.45)" }}>
               Press <Kbd>R</Kbd> to review.
             </span>

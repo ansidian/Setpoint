@@ -186,7 +186,7 @@ function RailGroupLabel({ label, count, tone = "default" }) {
   );
 }
 
-const AI_GRADIENT = "linear-gradient(120deg, #c88fa0 0%, #c89b85 25%, #8fb8c8 55%, #a89bc4 80%, #c88fa0 100%)";
+const SIGNAL_GRADIENT = "linear-gradient(120deg, #c88fa0 0%, #c89b85 25%, #8fb8c8 55%, #a89bc4 80%, #c88fa0 100%)";
 
 export function InsightsRail({ accent, insights = [], onJump, isMobile = false, maxItems = 5 }) {
   const [, forceTick] = useReducer((x) => x + 1, 0);
@@ -200,8 +200,8 @@ export function InsightsRail({ accent, insights = [], onJump, isMobile = false, 
   return (
     <div data-sect="insights">
       <SectionHeader
-        title="AI noticed"
-        subtitle={isMobile ? "One quick pattern worth surfacing" : "Pattern-level signal across your data"}
+        title="Signals"
+        subtitle={isMobile ? "One quick pattern worth surfacing" : "Patterns across your day"}
         isMobile={isMobile}
       />
       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: isMobile ? 6 : 8 }}>
@@ -225,7 +225,7 @@ export function InsightsRail({ accent, insights = [], onJump, isMobile = false, 
               fontSize: isMobile ? 11 : 11.5, color: "rgba(205,214,244,0.5)", lineHeight: 1.5,
             }}
           >
-            No AI insights yet — run a fresh briefing to see what Claude notices.
+            No signals yet. Run a fresh briefing to surface patterns across your day.
           </div>
         )}
       </div>
@@ -251,7 +251,7 @@ function InsightRow({ insight, accent, onJump, now, featured, isMobile = false }
 
   if (featured) {
     // Wrap the row in a gradient "outline" — padding:1 creates a 1px band from
-    // the same animated gradient used by the "Extract with Haiku" button.
+    // the same animated gradient used by the extraction action.
     // The inner div needs an opaque fill so the gradient only shows in that
     // 1px edge (translucent fills let it bleed through the whole card). We
     // stack an opaque dark base matched to the dashboard's radial backdrop,
@@ -265,9 +265,9 @@ function InsightRow({ insight, accent, onJump, now, featured, isMobile = false }
         {...handlers}
         style={{
           borderRadius: 10,
-          background: AI_GRADIENT,
+          background: SIGNAL_GRADIENT,
           backgroundSize: "240% 100%",
-          animation: "aiGradientShift 7s ease-in-out infinite",
+          animation: hovered ? "aiGradientShift 7s ease-in-out infinite" : "none",
           padding: 1,
           cursor: "pointer", position: "relative",
         }}
@@ -294,7 +294,7 @@ function InsightRow({ insight, accent, onJump, now, featured, isMobile = false }
         background: innerBg,
         border: hovered ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255,255,255,0.05)",
         cursor: "pointer", position: "relative",
-        transition: "all 130ms",
+        transition: "background 130ms, border-color 130ms",
         display: "flex", alignItems: "flex-start", gap: 10,
       }}
     >

@@ -211,7 +211,7 @@ export default function LiveEmailSection({ briefingGeneratedAt, loaded, delay, c
     const emptyMsg = <p className="text-[12px] text-muted-foreground/40 m-0">No new emails since the last fetch.</p>;
     if (embedded) return emptyMsg;
     return (
-      <Section title={sectionTitle} delay={delay} loaded={loaded} className={className}>
+      <Section title={sectionTitle} delay={delay} loaded={loaded} variant="band" className={className}>
         {emptyMsg}
       </Section>
     );
@@ -294,7 +294,7 @@ export default function LiveEmailSection({ briefingGeneratedAt, loaded, delay, c
                 accentBar={
                   pinned ? (
                     <div
-                      className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+                      className="absolute left-0 top-3 bottom-3 w-px rounded-full"
                       style={{
                         background: "#cba6da",
                         opacity: 0.7,
@@ -303,7 +303,7 @@ export default function LiveEmailSection({ briefingGeneratedAt, loaded, delay, c
                     />
                   ) : email.isImportantSender ? (
                     <div
-                      className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+                      className="absolute left-0 top-3 bottom-3 w-px rounded-full"
                       style={{
                         background: "#f97316",
                         opacity: 0.7,
@@ -446,7 +446,7 @@ export default function LiveEmailSection({ briefingGeneratedAt, loaded, delay, c
   if (embedded) return content;
 
   return (
-    <Section title={sectionTitle} delay={delay} loaded={loaded} className={className}>
+    <Section title={sectionTitle} delay={delay} loaded={loaded} variant="band" className={className}>
       {content}
     </Section>
   );

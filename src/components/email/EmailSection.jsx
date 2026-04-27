@@ -214,7 +214,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
     };
   }, [emailAccounts, activeAccount, setActiveAccount, setSelectedEmail]);
 
-  // Build the Claude triage strip from briefing email fields. Only present
+  // Build the briefing triage strip from briefing email fields. Only present
   // when there's actually something to show.
   const readerTriage = useMemo(() => {
     if (!enrichedSelectedEmail) return null;
@@ -408,7 +408,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
                 preview={email.preview}
                 accentBar={
                   <div
-                    className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+                    className="absolute left-0 top-3 bottom-3 w-px rounded-full"
                     style={{
                       background: s.dot,
                       opacity: isCarriedOver ? 0.3 : 0.7,
@@ -527,8 +527,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
           </GhostAction>
           <MotionExpand isOpen={noiseExpanded}>
             <div
-              className="rounded-lg mt-1.5 py-3 px-4"
-              style={{ background: "rgba(36,36,58,0.25)", border: "1px solid rgba(255,255,255,0.04)" }}
+              className="mt-2 border-t border-white/[0.04] pt-3"
             >
               {noiseAccountsMemo.map((acc, i) => (
                 <div key={i} className={i > 0 ? "mt-3 pt-3 border-t border-white/[0.04]" : ""}>
@@ -634,7 +633,7 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
   return (
     <>
       <div ref={emailSectionRef} />
-      <Section title="Email Overview" delay={delay} loaded={loaded} style={style} className={className}>
+      <Section title="Email Overview" delay={delay} loaded={loaded} variant="band" style={style} className={className}>
         {content}
       </Section>
     </>

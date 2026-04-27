@@ -6,12 +6,13 @@ afterEach(() => {
   cleanup();
 });
 
-function renderStrip(liveCount) {
+function renderStrip(liveCount, liveLoading = false) {
   render(
     <DigestStrip
       accent="#cba6da"
       counts={{ action: 2, fyi: 1, noise: 3 }}
       liveCount={liveCount}
+      liveLoading={liveLoading}
       summary="Brief summary"
       onJumpLane={vi.fn()}
     />,
@@ -30,5 +31,12 @@ describe("DigestStrip", () => {
 
     expect(screen.getByTestId("digest-live-slot").textContent).toContain("4");
     expect(screen.getByTestId("digest-live-slot").textContent).toContain("Live");
+  });
+
+  it("shows the live retrieval state while the poll is in flight", () => {
+    renderStrip(0, true);
+
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Live · checking");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Retrieving live mail");
   });
 });

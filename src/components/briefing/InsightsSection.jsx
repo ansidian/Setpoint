@@ -48,6 +48,7 @@ export default function InsightsSection({
       title="Claude's Insights"
       delay={delay}
       loaded={loaded}
+      variant="band"
       style={style}
       className={className}
       summaryBadge={`${insights.length} item${insights.length !== 1 ? "s" : ""}`}
@@ -70,26 +71,12 @@ export default function InsightsSection({
         {insights.map((insight, i) => (
           <MotionItem
             key={i}
-            className="group relative rounded-lg pl-5 pr-4 py-3.5 flex gap-3 items-start"
-            style={{
-              background: isStale ? "rgba(36,36,58,0.25)" : "rgba(36,36,58,0.4)",
-              border: `1px solid rgba(255,255,255,${isStale ? "0.03" : "0.04"})`,
-            }}
+            className="group relative flex items-start gap-3 border-t border-white/[0.04] py-3 first:border-t-0"
           >
-            {/* Quote accent bar */}
-            <div
-              className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
-              style={isStale
-                ? { background: "rgba(205,214,244,0.18)" }
-                : { background: "#cba6da", opacity: 0.7 }
-              }
-            />
-
-            {/* Icon well */}
             <span
-              className="shrink-0 w-7 h-7 flex items-center justify-center rounded-md"
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md"
               style={{
-                background: `rgba(255,255,255,${isStale ? "0.02" : "0.03"})`,
+                background: isStale ? "rgba(255,255,255,0.02)" : "rgba(203,166,218,0.08)",
                 color: isStale ? "rgba(205,214,244,0.45)" : "#cba6da",
               }}
             >

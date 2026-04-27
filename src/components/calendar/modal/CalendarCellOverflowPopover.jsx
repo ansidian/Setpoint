@@ -28,11 +28,8 @@ function resolvePosition(triggerElement) {
 function shellTransition(reducedMotion) {
   if (reducedMotion) return { duration: 0.01 };
   return {
-    type: "spring",
-    stiffness: 420,
-    damping: 34,
-    mass: 0.88,
-    bounce: 0,
+    duration: 0.16,
+    ease: [0.16, 1, 0.3, 1],
   };
 }
 
@@ -74,7 +71,6 @@ function itemButtonStyle({
     fontFamily: "inherit",
     textAlign: "left",
     transition: "border-color 140ms, background 140ms, box-shadow 140ms",
-    willChange: "border-color, background",
   };
 }
 
@@ -88,6 +84,7 @@ export default function CalendarCellOverflowPopover({
   const reducedMotion = useReducedMotion();
   const popoverRef = useRef(null);
   const scrollRef = useRef(null);
+  const positionRafRef = useRef(0);
   const [activeItemId, setActiveItemId] = useState(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 300 });
 
@@ -97,8 +94,26 @@ export default function CalendarCellOverflowPopover({
       return;
     }
 
-    setPos(resolvePosition(popover.triggerElement));
+    setPos((current) => {
+      const next = resolvePosition(popover.triggerElement);
+      if (
+        current.top === next.top
+        && current.left === next.left
+        && current.width === next.width
+      ) {
+        return current;
+      }
+      return next;
+    });
   }, [popover, onClose]);
+
+  const schedulePositionUpdate = useCallback(() => {
+    if (positionRafRef.current) return;
+    positionRafRef.current = window.requestAnimationFrame(() => {
+      positionRafRef.current = 0;
+      updatePosition();
+    });
+  }, [updatePosition]);
 
   useLayoutEffect(() => {
     if (!popover) return;
@@ -108,13 +123,17 @@ export default function CalendarCellOverflowPopover({
 
   useEffect(() => {
     if (!popover) return undefined;
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", schedulePositionUpdate, true);
+    window.addEventListener("resize", schedulePositionUpdate);
     return () => {
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", schedulePositionUpdate, true);
+      window.removeEventListener("resize", schedulePositionUpdate);
+      if (positionRafRef.current) {
+        window.cancelAnimationFrame(positionRafRef.current);
+        positionRafRef.current = 0;
+      }
     };
-  }, [popover, updatePosition]);
+  }, [popover, schedulePositionUpdate]);
 
   useEffect(() => {
     if (!popover) return undefined;
@@ -192,17 +211,11 @@ export default function CalendarCellOverflowPopover({
       className="isolate"
       initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
       animate={{
-        top: pos.top,
-        left: pos.left,
-        width: pos.width,
         opacity: 1,
         scale: 1,
       }}
       exit={reducedMotion ? undefined : { opacity: 0, scale: 0.985 }}
       transition={{
-        top: shellTransition(reducedMotion),
-        left: shellTransition(reducedMotion),
-        width: shellTransition(reducedMotion),
         opacity: fadeTransition(reducedMotion),
         scale: fadeTransition(reducedMotion),
       }}
@@ -223,7 +236,7 @@ export default function CalendarCellOverflowPopover({
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         isolation: "isolate",
         overscrollBehavior: "contain",
-        willChange: "top, left, width, transform, opacity",
+        willChange: "transform, opacity",
       }}
     >
       <AnimatePresence initial={false} mode="popLayout">
@@ -292,10 +305,6 @@ export default function CalendarCellOverflowPopover({
                     onSelectItem?.(item.id);
                     onClose?.();
                   }}
-                  onMouseEnter={() => setActiveItemId(itemId)}
-                  onMouseLeave={() => setActiveItemId((current) => (
-                    current === itemId ? null : current
-                  ))}
                   onPointerEnter={() => setActiveItemId(itemId)}
                   onPointerLeave={() => setActiveItemId((current) => (
                     current === itemId ? null : current

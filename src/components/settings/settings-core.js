@@ -1,7 +1,5 @@
 export const SURFACE_ROW_CLASS =
-  "rounded-lg border border-white/[0.06] bg-white/[0.02] transition-colors hover:border-white/[0.1] hover:bg-white/[0.03]";
-export const SETTINGS_CARD_CLASS =
-  "mb-5 border border-white/[0.06] bg-[rgba(36,36,58,0.28)] shadow-none backdrop-blur-[3px]";
+  "border-t border-white/[0.05] bg-transparent transition-colors first:border-t-0 hover:bg-white/[0.025]";
 export const SETTINGS_PRIMARY_BUTTON_CLASS =
   "border border-primary/20 bg-primary/[0.12] text-primary hover:bg-primary/[0.16] hover:border-primary/28 hover:-translate-y-px active:translate-y-0";
 export const SETTINGS_SECONDARY_BUTTON_CLASS =

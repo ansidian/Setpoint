@@ -6,19 +6,13 @@ export const EDITOR_ENTRANCE_TRANSITION = {
 };
 
 export const EDITOR_POSITION_TRANSITION = {
-  type: "spring",
-  stiffness: 280,
-  damping: 30,
-  mass: 0.96,
-  bounce: 0,
+  duration: 0.2,
+  ease: [0.16, 1, 0.3, 1],
 };
 
 const DETAIL_RAIL_LAYOUT_TRANSITION = {
-  type: "spring",
-  stiffness: 420,
-  damping: 38,
-  mass: 0.82,
-  bounce: 0,
+  duration: 0.18,
+  ease: [0.16, 1, 0.3, 1],
 };
 
 const DETAIL_RAIL_FADE_TRANSITION = {
@@ -27,27 +21,18 @@ const DETAIL_RAIL_FADE_TRANSITION = {
 };
 
 const XL_DETAIL_RAIL_LAYOUT_TRANSITION = {
-  type: "spring",
-  stiffness: 320,
-  damping: 44,
-  mass: 1.05,
-  bounce: 0,
+  duration: 0.14,
+  ease: [0.16, 1, 0.3, 1],
 };
 
 const RAIL_SWAP_POSITION_TRANSITION = {
-  type: "spring",
-  stiffness: 300,
-  damping: 32,
-  mass: 0.95,
-  bounce: 0,
+  duration: 0.18,
+  ease: [0.16, 1, 0.3, 1],
 };
 
 const XL_RAIL_SWAP_POSITION_TRANSITION = {
-  type: "spring",
-  stiffness: 220,
-  damping: 36,
-  mass: 1.08,
-  bounce: 0,
+  duration: 0.14,
+  ease: [0.16, 1, 0.3, 1],
 };
 
 const RAIL_SWAP_FADE_TRANSITION = {
@@ -56,7 +41,7 @@ const RAIL_SWAP_FADE_TRANSITION = {
 };
 
 const XL_RAIL_SWAP_FADE_TRANSITION = {
-  duration: 0.32,
+  duration: 0.18,
   ease: [0.22, 1, 0.36, 1],
 };
 

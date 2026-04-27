@@ -90,6 +90,7 @@ export default function DeadlinesSection({ ctm, todoist, loaded, delay, style, c
       title="Deadlines"
       delay={delay}
       loaded={loaded}
+      variant="band"
       style={style}
       className={className}
       summaryBadge={totalDueToday > 0 ? `${totalDueToday} due today` : `${totalIncomplete} total`}
@@ -114,7 +115,7 @@ export default function DeadlinesSection({ ctm, todoist, loaded, delay, style, c
             display: "flex",
             alignItems: "center",
             gap: 4,
-            transition: "all 0.2s",
+            transition: "background 160ms, border-color 160ms, color 160ms, box-shadow 160ms",
             whiteSpace: "nowrap",
             boxShadow: addBtnHover && !addPanelOpen ? "0 2px 8px rgba(203,166,218,0.2)" : "none",
           }}

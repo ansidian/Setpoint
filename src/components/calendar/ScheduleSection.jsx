@@ -61,7 +61,7 @@ const NowMarker = forwardRef(function NowMarker(
     <div
       ref={ref}
       className="absolute left-5 right-0 flex items-center gap-2 z-10 pointer-events-none"
-      style={{ top, right: flagInset || undefined, transition: "top 1s ease" }}
+      style={{ top, right: flagInset || undefined }}
     >
       <div
         ref={lineRef}
@@ -99,7 +99,7 @@ function TomorrowEventList({ events, showSource, opacity }) {
           style={{ background: event.color, opacity: 0.4 }}
         />
         <div
-          className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+          className="absolute left-0 top-3 bottom-3 w-px rounded-full"
           style={{ background: event.color, opacity: 0.4 }}
         />
         <div className="min-w-[72px] ml-1">
@@ -222,7 +222,7 @@ function EventCard({ event, showSource }) {
     >
       {/* Color accent bar */}
       <div
-        className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+        className="absolute left-0 top-3 bottom-3 w-px rounded-full"
         style={{
           background: event.color,
           opacity: 0.7,
@@ -569,6 +569,7 @@ export default function ScheduleSection({ calendar, tomorrowCalendar, nextWeekCa
       title={titleContent}
       delay={delay}
       loaded={loaded}
+      variant="band"
       style={style}
       className={className}
       tier={2}
@@ -652,7 +653,7 @@ export default function ScheduleSection({ calendar, tomorrowCalendar, nextWeekCa
 
                         {/* Color accent bar */}
                         <div
-                          className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+                          className="absolute left-0 top-3 bottom-3 w-px rounded-full"
                           style={{
                             background: event.color,
                             opacity: event.passed ? 0.3 : 0.7,

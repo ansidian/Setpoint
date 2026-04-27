@@ -131,18 +131,17 @@ export default function CTMCard({ task, expanded, onToggle, onComplete, onStatus
       onContextMenu={onContextMenu}
       role="button"
       tabIndex={0}
-      className={`group relative rounded-lg p-3 px-4 pl-5 cursor-pointer transition-all duration-150${isCompleting ? " ctm-card-completing" : ""}${isComplete && !isCompleting ? " ctm-card-complete" : ""}`}
+      className={`group relative p-3 px-2 pl-5 cursor-pointer border-t border-white/[0.04] first:border-t-0 transition-colors duration-150${isCompleting ? " ctm-card-completing" : ""}${isComplete && !isCompleting ? " ctm-card-complete" : ""}`}
       style={{
-        background: showCompletedVisual ? "rgba(75,153,104,0.08)" : "rgba(36,36,58,0.5)",
-        border: `1px solid ${showCompletedVisual ? "rgba(75,153,104,0.25)" : "rgba(255,255,255,0.04)"}`,
+        background: showCompletedVisual ? "rgba(75,153,104,0.06)" : "transparent",
       }}
     >
       {/* Hover bg */}
-      <div className="absolute inset-0 rounded-lg bg-white/0 group-hover:bg-white/[0.03] transition-colors duration-150" />
+      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[0.025] transition-colors duration-150" />
 
       {/* Color accent bar */}
       <div
-        className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full"
+        className="absolute left-0 top-3 bottom-3 w-px rounded-full"
         style={{
           background: task.class_color,
           opacity: 0.7,

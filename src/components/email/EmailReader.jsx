@@ -48,7 +48,7 @@ function stripQuotes(s) {
 // Unified email body viewer used by the search modal/sheet AND the dashboard
 // focus reader overlay. Loads the body lazily (unless email.fullBody is
 // already present), schedules a delayed auto-mark-as-read so quick peeks
-// don't burn the unread state, and optionally renders a pinned Claude triage
+// don't burn the unread state, and optionally renders a pinned briefing triage
 // strip above the body for briefing emails.
 //
 // Props:
@@ -56,7 +56,7 @@ function stripQuotes(s) {
 //    email.email_date) and dashboard shape (email.id + email.date). If
 //    email.fullBody is set, skips the lazy fetch.
 //  - triage: optional object { action, urgency, hasBill, summary }. When
-//    present, renders the Claude triage strip above the body. Omit on live
+//    present, renders the briefing triage strip above the body. Omit on live
 //    view or any context without Claude analysis.
 //  - navigation: optional { position: { index, total }, hasPrev, hasNext,
 //    onPrev, onNext }. Position renders in the header. onPrev/onNext render
@@ -335,7 +335,7 @@ export default function EmailReader({
         )}
       </div>
 
-      {/* Claude triage strip — pinned above the body when present */}
+      {/* Briefing triage strip — pinned above the body when present */}
       {triage && <TriageStrip triage={triage} />}
 
       {/* Body — fills remaining vertical space. The HTML iframe has its
@@ -410,7 +410,7 @@ export default function EmailReader({
   );
 }
 
-// Pinned strip showing Claude's triage signals: action tag, urgency level,
+// Pinned strip showing briefing triage signals: action tag, urgency level,
 // bill flag, and the full summary sentence. Always expanded — the point is
 // that this stays visible while cycling through emails so triage context
 // isn't lost when reading the body.
@@ -423,7 +423,6 @@ function TriageStrip({ triage }) {
       style={{
         background: "rgba(249,115,22,0.05)",
         border: "1px solid rgba(249,115,22,0.18)",
-        borderLeft: "3px solid #f97316",
         borderRadius: 8,
       }}
     >
@@ -450,7 +449,7 @@ function TriageStrip({ triage }) {
             className="text-[9px] font-bold uppercase tracking-wider"
             style={{ color: "#f97316" }}
           >
-            Claude
+            Triage
           </span>
           {action && (
             <span

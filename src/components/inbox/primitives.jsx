@@ -59,8 +59,7 @@ export function StickyHeader({ children, borderColor }) {
         display: "flex", alignItems: "center", gap: 8,
         padding: "12px 16px 8px",
         position: "sticky", top: 0, zIndex: 2,
-        background: "linear-gradient(180deg, rgba(30,30,46,0.98), rgba(30,30,46,0.92))",
-        backdropFilter: "blur(8px)",
+        background: "linear-gradient(180deg, rgba(30,30,46,0.99), rgba(30,30,46,0.96))",
         borderBottom: `1px solid ${borderColor}`,
       }}
     >
@@ -91,7 +90,7 @@ export function IconBtn({ children, onClick, title, tinted, accent = "#cba6da" }
         display: "inline-flex", alignItems: "center", gap: 6,
         padding: "6px 10px", borderRadius: 8,
         fontSize: 11, fontWeight: 500, fontFamily: "inherit",
-        cursor: "pointer", transition: "all 150ms",
+        cursor: "pointer", transition: "background 150ms, border-color 150ms, color 150ms",
         background: bg,
         color,
         border: `1px solid ${border}`,
@@ -232,7 +231,7 @@ export function QuickAction({
         display: "inline-flex", alignItems: "center", gap: 6,
         padding: "7px 11px", borderRadius: 8,
         fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-        cursor: "pointer", transition: "all 120ms",
+        cursor: "pointer", transition: "background 120ms, border-color 120ms, color 120ms",
         background: primary ? `linear-gradient(135deg, ${accent}38, rgba(137,220,235,0.18))`
                  : hover ? "rgba(255,255,255,0.05)"
                  : "rgba(255,255,255,0.02)",
@@ -247,10 +246,12 @@ export function QuickAction({
           aria-hidden
           style={{
             position: "absolute", left: 0, top: 0, bottom: 0,
-            width: `${holdProgress * 100}%`,
+            width: "100%",
             background: `linear-gradient(90deg, ${holdColor}38, ${holdColor}1f)`,
             pointerEvents: "none",
-            transition: "width 40ms linear",
+            transform: `scaleX(${holdProgress})`,
+            transformOrigin: "left center",
+            transition: "transform 40ms linear",
           }}
         />
       )}

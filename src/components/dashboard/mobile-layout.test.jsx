@@ -92,7 +92,7 @@ describe("mobile dashboard layout", () => {
 
     const body = screen.getByTestId("dashboard-body-mobile");
     expect(body.getAttribute("data-layout-mode")).toBe("paper");
-    expect(screen.getByText("AI noticed")).toBeTruthy();
+    expect(screen.getByText("Signals")).toBeTruthy();
     expect(document.querySelector('[data-sect="deadlines"]')).toBeTruthy();
     expect(document.querySelector('[data-sect="bills"]')).toBeTruthy();
     expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
@@ -113,9 +113,20 @@ describe("mobile dashboard layout", () => {
   it("keeps desktop layout selection when not mobile", () => {
     renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
 
-    expect(screen.getByText("AI noticed")).toBeTruthy();
+    expect(screen.getByText("Signals")).toBeTruthy();
     const layoutRoot = document.querySelector('[data-layout-mode="command"]');
     expect(layoutRoot).toBeTruthy();
+  });
+
+  it("uses one shared rail scroller in desktop command layout", () => {
+    renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
+
+    const railGrid = screen.getByTestId("dashboard-command-rails");
+    expect(railGrid.style.gridTemplateColumns).toBe("repeat(auto-fit, minmax(260px, 1fr))");
+    expect(railGrid.parentElement.style.overflowY).toBe("");
+    expect(railGrid.parentElement.parentElement.style.overflowY).toBe("auto");
+    expect(railGrid.parentElement.parentElement.style.scrollbarGutter).toBe("stable");
+    expect(screen.getByTestId("today-timeline").style.height).toBe("");
   });
 
   it("gives the inbox peek open button an interactive hover state", () => {
@@ -310,7 +321,7 @@ describe("CustomizePanel mobile options", () => {
 
     expect(screen.queryByText("Dashboard layout")).toBeNull();
     expect(screen.queryByText("Dashboard density")).toBeNull();
-    expect(screen.getByText("Show AI insights")).toBeTruthy();
+    expect(screen.getByText("Show signals")).toBeTruthy();
   });
 
   it("hides desktop-only inbox controls on mobile", () => {
@@ -344,7 +355,7 @@ describe("CustomizePanel mobile options", () => {
     expect(screen.queryByText("Inbox density")).toBeNull();
     expect(screen.queryByText("Show previews in list")).toBeNull();
     expect(screen.queryByText("Compact sidebar")).toBeNull();
-    expect(screen.getByText("Claude verbosity")).toBeTruthy();
+    expect(screen.getByText("Briefing detail")).toBeTruthy();
   });
 });
 

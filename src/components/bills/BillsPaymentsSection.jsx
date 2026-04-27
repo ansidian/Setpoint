@@ -161,15 +161,17 @@ export default function BillsPaymentsSection({ bills, recentTransactions, allSch
       style={{
         maxHeight: collapsing ? 0 : 1000,
         opacity: collapsing ? 0 : 1,
+        transform: collapsing ? "translateY(-4px)" : "translateY(0)",
         overflow: "hidden",
-        transition: collapsing ? "max-height 400ms ease-in, opacity 300ms ease-out" : "none",
+        transition: collapsing ? "opacity 300ms ease-out, transform 300ms ease-out" : "none",
       }}
-      onTransitionEnd={(e) => { if (collapsing && e.propertyName === "max-height") setGone(true); }}
+      onTransitionEnd={(e) => { if (collapsing && e.propertyName === "opacity") setGone(true); }}
     >
     <Section
       title="Bills & Payments"
       delay={delay}
       loaded={loaded}
+      variant="band"
       className={className}
       tier={2}
       summaryBadge={combinedTotal > 0
@@ -252,7 +254,7 @@ export default function BillsPaymentsSection({ bills, recentTransactions, allSch
                 >
                   <div className="absolute inset-0 rounded-md bg-white/0 group-hover:bg-white/[0.03] transition-colors duration-150" />
                   <div
-                    className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
+                    className="absolute left-0 top-2 bottom-2 w-px rounded-full"
                     style={{
                       background: email.accountColor,
                       opacity: billCarriedOver ? 0.3 : 0.7,
@@ -423,7 +425,7 @@ export default function BillsPaymentsSection({ bills, recentTransactions, allSch
                     }}
                   >
                     <div
-                      className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full"
+                      className="absolute left-0 top-2 bottom-2 w-px rounded-full"
                       style={{ background: accent, opacity: 0.7, boxShadow: `0 0 6px ${accent}30` }}
                     />
                     <div className="flex justify-between items-center gap-3">

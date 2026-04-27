@@ -7,18 +7,69 @@ import { LANE, briefingPhaseLabel } from "../../lib/redesign-helpers";
 import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
 import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /* ======================================================================
  * LIST (swimlane or flat)
  * ====================================================================== */
+function InboxLiveSkeletonRows({ count = 5, compact = false }) {
+  return (
+    <div data-testid="inbox-live-skeleton" style={{ padding: compact ? "6px 0 2px" : "10px 12px 16px" }}>
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          style={{
+            padding: compact ? "10px 0" : "12px 10px",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Skeleton style={{ width: 28, height: 28, borderRadius: 999, background: "rgba(205,214,244,0.10)" }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Skeleton style={{ width: index % 2 ? "58%" : "72%", height: 10, background: "rgba(205,214,244,0.11)" }} />
+              <Skeleton style={{ width: index % 2 ? "78%" : "64%", height: 8, marginTop: 8, background: "rgba(205,214,244,0.07)" }} />
+            </div>
+            <Skeleton style={{ width: 42, height: 8, background: "rgba(205,214,244,0.08)" }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InboxLiveLoadingBlock({ compact = false }) {
+  return (
+    <div
+      data-testid="inbox-live-loading-block"
+      style={{
+        margin: "10px 12px 6px",
+        padding: compact ? "10px 12px 8px" : "10px 12px 12px",
+        borderRadius: 8,
+        border: "1px solid rgba(137,180,250,0.18)",
+        background: "rgba(137,180,250,0.06)",
+        color: "rgba(205,214,244,0.72)",
+        fontSize: 11,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
+        Checking live mail
+      </div>
+      <InboxLiveSkeletonRows count={compact ? 2 : 3} compact />
+    </div>
+  );
+}
+
 export default function InboxList({
   accent, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview, pinnedIds,
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
   totalCount, unreadCount, briefingAgoLabel, briefingGeneratedAt, searchRef,
+  liveEmailsLoading = false,
 }) {
   const [collapsed, setCollapsed] = useState({});
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  const showSkeletonRows = liveEmailsLoading && emails.length === 0;
 
   const grouped = useMemo(() => {
     const g = { pinned: [], live: [], action: [], fyi: [], noise: [] };
@@ -94,7 +145,7 @@ export default function InboxList({
                 e.currentTarget.blur();
               }
             }}
-            placeholder='Search or ask Claude — "bills due this week"'
+            placeholder='Search or ask briefing search, "bills due this week"'
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
               fontSize: 12, color: "#cdd6f4", fontFamily: "inherit",
@@ -176,7 +227,10 @@ export default function InboxList({
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-        {layout === "swimlanes" ? (
+        {liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact />}
+        {showSkeletonRows ? (
+          <InboxLiveLoadingBlock />
+        ) : layout === "swimlanes" ? (
           <>
             {grouped.pinned.length > 0 && (
               <div>
@@ -357,7 +411,7 @@ export default function InboxList({
             {renderRows(emails)}
           </div>
         )}
-        {emails.length === 0 && (
+        {emails.length === 0 && !showSkeletonRows && (
           <div
             style={{
               padding: "20px 20px 0",

@@ -31,7 +31,7 @@ import useBrowserBackDismiss from "../hooks/useBrowserBackDismiss";
 import { focusPressureDate } from "../lib/focus-windows";
 import { getEventSelectionId } from "../lib/redesign-helpers";
 import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
-import { mergeReadState } from "../components/inbox/helpers";
+import { collectBriefingEmails, mergeReadState } from "../components/inbox/helpers";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import {
   DashboardBodyLayout,
@@ -488,28 +488,39 @@ export function RedesignShell({
     });
   }, []);
 
-  // Unread-live count surfaced on the Inbox tab. Drives the little blue pill
-  // next to the tab label so the user notices new untriaged email without
-  // first switching away from the dashboard.
+  // Unread count surfaced on the Inbox tab. This has to include briefing mail
+  // as well as live-polled mail so read/unread actions update the badge
+  // immediately without waiting for a page refresh.
   const liveUnreadCount = useMemo(() => {
     const seen = new Set();
     let unread = 0;
 
+    const addEmail = (email, useReadOverride = false) => {
+      const uid = email?.uid || email?.id;
+      if (!uid || seen.has(uid)) return;
+      seen.add(uid);
+      const read = useReadOverride
+        ? mergeReadState(email.read, uid, liveReadOverrides)
+        : !!email.read;
+      if (!read) unread += 1;
+    };
+
+    for (const email of collectBriefingEmails(briefing?.emails?.accounts || [])) {
+      addEmail(email, false);
+    }
+
     for (const email of liveData.liveEmails || []) {
-      if (!email?.uid || seen.has(email.uid)) continue;
-      seen.add(email.uid);
-      if (!mergeReadState(email.read, email.uid, liveReadOverrides)) unread += 1;
+      addEmail(email, true);
     }
 
     for (const entry of liveData.resurfacedEntries || []) {
-      const uid = entry?.uid;
-      if (!uid || seen.has(uid)) continue;
-      seen.add(uid);
-      if (!mergeReadState(entry.read, uid, liveReadOverrides)) unread += 1;
+      addEmail(entry, true);
     }
 
     return unread;
-  }, [liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
+  }, [briefing?.emails?.accounts, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
+
+  const liveEmailsLoading = liveData.isPolling;
 
   return (
     <div
@@ -552,7 +563,7 @@ export function RedesignShell({
       <div
         style={{
           flex: 1,
-          overflow: "auto",
+          overflow: tab === "dashboard" && !isMobile ? "hidden" : "auto",
           minHeight: 0,
           background:
             "linear-gradient(180deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0) 12%)",
@@ -593,6 +604,7 @@ export function RedesignShell({
             briefingSummary={briefing?.emails?.summary}
             briefingGeneratedAt={liveData.briefingGeneratedAt}
             liveEmails={liveData.liveEmails}
+            liveEmailsLoading={liveEmailsLoading}
             liveReadOverrides={liveReadOverrides}
             onLiveReadOverrideChange={handleLiveReadOverrideChange}
             pinnedIds={liveData.pinnedIds}
@@ -800,11 +812,20 @@ export function DashboardBody({
       deadlines={deadlines}
       onJump={handleRailJump}
       eventLoadingState={eventLoadingState}
+      scrollContained={effectiveLayout === "focus"}
     />
   );
 
   const timelinePanel = (
-    <DashboardSurface isMobile={isMobile} style={{ minHeight: 520 }}>
+    <DashboardSurface
+      isMobile={isMobile}
+      style={{
+        minHeight: isMobile ? 520 : 0,
+        height: !isMobile && effectiveLayout === "focus" ? "100%" : undefined,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {timeline}
     </DashboardSurface>
   );
@@ -959,7 +980,7 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
     const quietLabel = quietRefreshes > 1 ? `Quiet refresh · ${quietRefreshes} cloned updates` : "Quiet refresh";
     return {
       label: "Latest briefing",
-      headline: aiLabel ? `${quietLabel} · Claude source ${aiLabel}` : quietLabel,
+      headline: aiLabel ? `${quietLabel} · source briefing from ${aiLabel}` : quietLabel,
       detail: nextLine,
       sourceLabel: quietRefreshes > 1 ? `Quiet x${quietRefreshes}` : "Quiet",
       ageLabel: aiLabel,
@@ -974,9 +995,9 @@ function buildBriefingStatus({ briefing, nextBriefing, nowMs, noticeActive }) {
 
   return {
     label: "Latest briefing",
-    headline: aiLabel ? `Claude refreshed ${aiLabel}` : "Claude refreshed this briefing",
+    headline: aiLabel ? `Briefing refreshed ${aiLabel}` : "Briefing refreshed",
     detail: nextLine,
-    sourceLabel: "Claude",
+    sourceLabel: "Briefing",
     ageLabel: aiLabel,
     nextLabel: nextBriefing ? `Next ${nextBriefing.timeLabel}` : "No schedule",
     nextDetail: nextBriefing?.label || null,

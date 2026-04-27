@@ -26,7 +26,7 @@ export default function EmailResultCard({ r, acctColor, isActive, isFocused, onM
       style={{ padding: "10px 12px 10px 16px", opacity: r.read && !isActive ? 0.75 : 1 }}
     >
       <div
-        className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-full transition-all duration-150"
+        className="absolute left-0 top-2.5 bottom-2.5 w-px rounded-full transition-all duration-150"
         style={{
           background: acctColor,
           opacity: isActive ? 1 : unread ? 0.9 : 0.45,

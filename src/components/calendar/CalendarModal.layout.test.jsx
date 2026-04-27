@@ -476,7 +476,7 @@ describe("CalendarModal responsive layout", () => {
     expect(within(emptyRail).getByText(/nothing is scheduled here/i)).toBeTruthy();
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
     expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
   });
 
   it("keeps today's empty selection when clicking the selected day again", async () => {
@@ -516,7 +516,7 @@ describe("CalendarModal responsive layout", () => {
       expect(screen.getByText("Monday, April 20")).toBeTruthy();
 
       const todayCell = screen.getByTestId("calendar-cell-20");
-      expect(within(todayCell).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+      expect(within(todayCell).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
 
       const emptyRailFrame = screen.getByTestId("calendar-selected-empty-rail-frame");
       expect(emptyRailFrame.style.overflow).toBe("hidden");
@@ -524,7 +524,7 @@ describe("CalendarModal responsive layout", () => {
 
       fireEvent.click(todayCell);
 
-      expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
       expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
     } finally {
       vi.useRealTimers();
@@ -784,7 +784,7 @@ describe("CalendarModal responsive layout", () => {
     expect(within(emptyRail).getByText(expectedTitle)).toBeTruthy();
     expect(within(emptyRail).getByText(expectedRailCopy)).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-empty-cell-placeholder")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
     expect(screen.getByTestId("calendar-selected-empty-rail-frame").style.overflow).toBe("hidden");
   });
@@ -921,7 +921,8 @@ describe("CalendarModal responsive layout", () => {
       expect(screen.getByTestId("calendar-modal-editor-expanded")).toBeTruthy();
       expect(body.style.gridTemplateColumns).toContain("620px");
       expect(supportBand.getAttribute("data-support-mode")).toBe("editor");
-      expect(supportBand.style.height).toBe("60px");
+      expect(supportBand.style.height).toBe("auto");
+      expect(supportBand.style.minHeight).toBe("60px");
       expect(supportBand.querySelector("[data-calendar-local-scroll='true']")).toBeNull();
       expect(supportBand.textContent).not.toMatch(/draft rhythm/i);
       expect(supportBand.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);

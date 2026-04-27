@@ -208,7 +208,7 @@ export default function CustomizePanel({
               />
             </Row>
           )}
-          <Row label="Show AI insights">
+          <Row label="Show signals">
             <Toggle value={showInsights} onChange={(v) => setKey("showInsights", v)} accent={accent} />
           </Row>
           <Row label="Show inbox peek">
@@ -260,7 +260,7 @@ export default function CustomizePanel({
               />
             </Row>
           )}
-          <Row label="Claude verbosity" hint="how loud">
+          <Row label="Briefing detail" hint="how much">
             <Seg
               value={aiVerbosity}
               onChange={(v) => setKey("aiVerbosity", v)}

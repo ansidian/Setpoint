@@ -7,6 +7,7 @@ import {
 import EmailRow from "../EmailRow";
 import Reader from "../reader/Reader";
 import MobileFilterSheet from "./MobileFilterSheet";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -93,6 +94,53 @@ function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = fa
   );
 }
 
+function MobileLiveSkeletonRows({ count = 4, compact = false }) {
+  return (
+    <div data-testid="inbox-mobile-live-skeleton" style={{ padding: compact ? "6px 0 2px" : "8px 16px 24px" }}>
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          style={{
+            padding: compact ? "10px 0" : "14px 0",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+          }}
+        >
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <Skeleton style={{ width: 30, height: 30, borderRadius: 999, background: "rgba(205,214,244,0.10)" }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Skeleton style={{ width: index % 2 ? "62%" : "74%", height: 10, background: "rgba(205,214,244,0.11)" }} />
+              <Skeleton style={{ width: index % 2 ? "76%" : "58%", height: 8, marginTop: 8, background: "rgba(205,214,244,0.07)" }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileLiveLoadingBlock({ compact = false }) {
+  return (
+    <div
+      data-testid="inbox-mobile-live-loading-block"
+      style={{
+        margin: "8px 16px 2px",
+        padding: compact ? "10px 12px 8px" : "10px 12px 12px",
+        borderRadius: 10,
+        border: "1px solid rgba(137,180,250,0.18)",
+        background: "rgba(137,180,250,0.06)",
+        color: "rgba(205,214,244,0.72)",
+        fontSize: 11,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
+        Checking live mail
+      </div>
+      <MobileLiveSkeletonRows count={compact ? 2 : 3} compact />
+    </div>
+  );
+}
+
 export default function MobileInboxView({
   accent,
   briefingSummary,
@@ -130,6 +178,7 @@ export default function MobileInboxView({
   density,
   briefingAgoLabel,
   scopedAccount,
+  liveEmailsLoading = false,
 }) {
   return (
     <div
@@ -322,7 +371,10 @@ export default function MobileInboxView({
           </div>
 
           <div style={{ padding: "6px 0 20px" }}>
-            {visibleEmails.length > 0 ? (
+            {liveEmailsLoading && visibleEmails.length > 0 && <MobileLiveLoadingBlock compact />}
+            {liveEmailsLoading && visibleEmails.length === 0 ? (
+              <MobileLiveLoadingBlock />
+            ) : visibleEmails.length > 0 ? (
               visibleEmails.map((email) => (
                 <EmailRow
                   key={email.id || email.uid}

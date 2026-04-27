@@ -21,7 +21,7 @@ export function DashboardLayoutFrame({ layoutMode, maxWidth, style, children, te
         y: { ...dashboardFadeTransition, delay: dashboardStageDelays.hero },
         scale: { ...dashboardFadeTransition, delay: dashboardStageDelays.hero },
       }}
-      style={{ maxWidth, margin: "0 auto", ...style }}
+      style={{ maxWidth, margin: "0 auto", width: "100%", boxSizing: "border-box", ...style }}
     >
       {children}
     </Motion.div>
@@ -41,13 +41,13 @@ export function DashboardSceneRegion({
       initial={initial}
       animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
       transition={{
-        ...(layout ? { layout: dashboardSectionTransition } : {}),
         opacity: { ...dashboardFadeTransition, delay },
         y: { ...dashboardFadeTransition, delay },
         x: { ...dashboardFadeTransition, delay },
         scale: { ...dashboardFadeTransition, delay },
+        ...(layout ? { layout: dashboardSectionTransition } : {}),
       }}
-      style={{ willChange: "transform, opacity", ...style }}
+      style={style}
     >
       {children}
     </Motion.div>
@@ -63,11 +63,35 @@ export function DashboardSurface({ children, isMobile = false, style }) {
         background: dashboardSurfaceBackground,
         overflow: "hidden",
         isolation: "isolate",
+        contain: "layout paint",
         ...style,
       }}
     >
       {children}
     </div>
+  );
+}
+
+export function DashboardSectionBand({ children, isMobile = false, first = false, compact = false, style }) {
+  const padding = isMobile
+    ? (compact ? "14px 0" : "16px 0")
+    : (compact ? "16px 0" : "18px 0");
+
+  return (
+    <section
+      data-dashboard-section-band=""
+      style={{
+        padding,
+        borderTop: first ? "1px solid rgba(255,255,255,0.05)" : dashboardSurfaceBorder,
+        background: "transparent",
+        minWidth: 0,
+        contentVisibility: "auto",
+        containIntrinsicSize: "160px",
+        ...style,
+      }}
+    >
+      {children}
+    </section>
   );
 }
 
@@ -90,6 +114,8 @@ export function DashboardRailStack({ sections, compact = false, style }) {
           style={{
             padding: compact ? "16px 0" : "18px 0",
             borderTop: index === 0 ? "none" : dashboardSurfaceBorder,
+            contentVisibility: "auto",
+            containIntrinsicSize: "160px",
           }}
         >
           {section}
@@ -121,23 +147,19 @@ export function DashboardBodyLayout({
         <DashboardSceneRegion
           delay={dashboardStageDelays.primary}
           initial={{ opacity: 0, y: 14, scale: 0.994 }}
-          style={{ padding: "20px 16px 0", display: "flex", flexDirection: "column", gap: 16 }}
+          style={{ padding: "18px 16px 0", display: "flex", flexDirection: "column", gap: 0 }}
         >
           {mobileSections.filter(Boolean).map((section, index) => (
             <Motion.div
               key={index}
-              layout="position"
-              transition={{ layout: dashboardSectionTransition }}
-              style={{ willChange: "transform" }}
             >
-              <DashboardSurface isMobile style={{ padding: 16 }}>
+              <DashboardSectionBand isMobile first={index === 0}>
                 {section}
-              </DashboardSurface>
+              </DashboardSectionBand>
             </Motion.div>
           ))}
         </DashboardSceneRegion>
         <DashboardSceneRegion
-          layout="position"
           delay={dashboardStageDelays.secondary}
           initial={{ opacity: 0, y: 12, scale: 0.996 }}
           style={{ padding: "16px 16px 0" }}
@@ -150,13 +172,32 @@ export function DashboardBodyLayout({
 
   if (layoutMode === "paper") {
     return (
-      <DashboardLayoutFrame layoutMode={layoutMode} maxWidth={960} style={{ padding: "0 20px 80px" }}>
+      <DashboardLayoutFrame
+        layoutMode={layoutMode}
+        maxWidth={960}
+        style={{
+          padding: "0 20px 20px",
+          height: "100%",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
         {hero}
         <DashboardSceneRegion
-          layout="position"
           delay={dashboardStageDelays.primary}
           initial={{ opacity: 0, y: 16, scale: 0.994 }}
-          style={{ padding: "20px 0 0", display: "flex", flexDirection: "column", gap: 18 }}
+          style={{
+            padding: "20px 0 0",
+            display: "flex",
+            flexDirection: "column",
+            gap: 18,
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+          }}
         >
           {timelinePanel}
           <DashboardRailStack sections={primaryRailSections} style={{ marginTop: 2 }} />
@@ -167,40 +208,67 @@ export function DashboardBodyLayout({
 
   if (layoutMode === "command") {
     return (
-      <DashboardLayoutFrame layoutMode={layoutMode} maxWidth={1560} style={{ padding: "0 20px 80px" }}>
+      <DashboardLayoutFrame
+        layoutMode={layoutMode}
+        maxWidth={1560}
+        style={{
+          padding: "0 20px 20px",
+          height: "100%",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
         {hero}
         <DashboardSceneRegion
           delay={dashboardStageDelays.primary}
           initial={{ opacity: 0, y: 16, scale: 0.994 }}
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1.24fr) minmax(300px, 0.92fr) 300px",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(420px, 0.72fr)",
             gap: 28,
             paddingTop: 18,
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            scrollbarGutter: "stable",
+            alignItems: "start",
+            paddingRight: 2,
           }}
         >
           <DashboardSceneRegion
-            layout="position"
             delay={dashboardStageDelays.primary}
             initial={{ opacity: 0, x: -18, y: 8, scale: 0.996 }}
+            style={{ minHeight: 0, height: "100%" }}
           >
             {timelinePanel}
           </DashboardSceneRegion>
           <DashboardSceneRegion
-            layout="position"
             delay={dashboardStageDelays.secondary}
             initial={{ opacity: 0, y: 12, scale: 0.996 }}
-            style={{ display: "flex", flexDirection: "column" }}
+            style={{
+              minHeight: 0,
+              paddingRight: 2,
+              borderLeft: "1px solid rgba(255,255,255,0.06)",
+            }}
           >
-            <DashboardRailStack sections={commandPrimaryRailSections} compact />
-          </DashboardSceneRegion>
-          <DashboardSceneRegion
-            layout="position"
-            delay={dashboardStageDelays.tertiary}
-            initial={{ opacity: 0, x: 18, y: 8, scale: 0.996 }}
-            style={{ display: "flex", flexDirection: "column" }}
-          >
-            <DashboardRailStack sections={commandSecondaryRailSections} compact />
+            <div
+              data-testid="dashboard-command-rails"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 18,
+                alignItems: "start",
+                paddingLeft: 18,
+                minHeight: 0,
+              }}
+            >
+              <DashboardRailStack sections={commandPrimaryRailSections} compact style={{ paddingLeft: 0, borderLeft: "none" }} />
+              <DashboardRailStack sections={commandSecondaryRailSections} compact style={{ paddingLeft: 0, borderLeft: "none" }} />
+            </div>
           </DashboardSceneRegion>
         </DashboardSceneRegion>
       </DashboardLayoutFrame>
@@ -208,7 +276,18 @@ export function DashboardBodyLayout({
   }
 
   return (
-    <DashboardLayoutFrame layoutMode={layoutMode} maxWidth={1480} style={{ padding: "0 20px 80px" }}>
+    <DashboardLayoutFrame
+      layoutMode={layoutMode}
+      maxWidth={1480}
+      style={{
+        padding: "0 20px 20px",
+        height: "100%",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       {hero}
       <DashboardSceneRegion
         delay={dashboardStageDelays.primary}
@@ -218,21 +297,23 @@ export function DashboardBodyLayout({
           gridTemplateColumns: "minmax(0, 1fr) 360px",
           gap: 28,
           paddingTop: 18,
-          alignItems: "start",
+          alignItems: "stretch",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
         }}
       >
         <DashboardSceneRegion
-          layout="position"
           delay={dashboardStageDelays.primary}
           initial={{ opacity: 0, x: -12, y: 8, scale: 0.996 }}
+          style={{ minHeight: 0, height: "100%" }}
         >
           {timelinePanel}
         </DashboardSceneRegion>
         <DashboardSceneRegion
-          layout="position"
           delay={dashboardStageDelays.secondary}
           initial={{ opacity: 0, x: 14, y: 10, scale: 0.996 }}
-          style={{ display: "flex", flexDirection: "column" }}
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", scrollbarGutter: "stable" }}
         >
           <DashboardRailStack sections={primaryRailSections} />
         </DashboardSceneRegion>

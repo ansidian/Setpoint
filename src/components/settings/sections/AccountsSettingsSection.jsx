@@ -222,7 +222,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
           </div>
 
           {icloudForm.show ? (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="border-t border-white/[0.05] pt-4">
               <div className="mb-3 flex items-center gap-2">
                 <StatusPill tone="neutral">iCloud IMAP</StatusPill>
                 <span className="text-[11px] text-muted-foreground/60">

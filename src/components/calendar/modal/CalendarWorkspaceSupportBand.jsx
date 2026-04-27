@@ -23,9 +23,9 @@ export default function CalendarWorkspaceSupportBand({
       data-support-mode={mode}
       style={{
         position: "relative",
-        height: !layout.stacked && layout.tier !== "md" ? minHeight : "auto",
-        minHeight: !layout.stacked && layout.tier !== "md" ? undefined : minHeight,
-        overflow: "hidden",
+        height: !compact && !layout.stacked && layout.tier !== "md" ? minHeight : "auto",
+        minHeight: compact || layout.stacked || layout.tier === "md" ? minHeight : undefined,
+        overflow: compact ? "visible" : "hidden",
         borderRadius: 16,
         border: compact
           ? "1px solid rgba(255,255,255,0.05)"

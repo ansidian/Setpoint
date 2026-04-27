@@ -6,8 +6,8 @@ export default function CTMSection({ ctm, expandedTask, setExpandedTask, ctmSect
 
   return (
     <div ref={ctmSectionRef}>
-      <Section title="Assignments & Deadlines" delay={delay} loaded={loaded}>
-        <div className="bg-surface border border-border rounded-lg p-4 px-5 mb-3">
+      <Section title="Assignments & Deadlines" delay={delay} loaded={loaded} variant="band">
+        <div className="border-b border-white/[0.05] pb-3 mb-3">
           <div className="flex gap-4 items-baseline flex-wrap">
             <div>
               <span className="text-[24px] font-semibold text-foreground">

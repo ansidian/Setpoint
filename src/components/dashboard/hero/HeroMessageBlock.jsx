@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Activity } from "lucide-react";
 import { pacificClock, pacificDate } from "../../../lib/redesign-helpers";
 
 export default function HeroMessageBlock({
@@ -10,6 +10,8 @@ export default function HeroMessageBlock({
   now,
   stateOfDay,
 }) {
+  const greetingText = /[.!?]$/.test(greet.text) ? greet.text : `${greet.text}.`;
+
   return (
     <div style={{ minWidth: 0, maxWidth: isMobile ? "100%" : 700 }}>
       <div
@@ -52,15 +54,17 @@ export default function HeroMessageBlock({
           maxWidth: isMobile ? "100%" : 480,
         }}
       >
-        <span style={{ display: "block" }}>{greet.text}.</span>
+        <span style={{ display: "block" }}>{greetingText}</span>
       </h1>
 
       {!isMobile && stateOfDay.headline && (
         <div
           style={{
             maxWidth: isMobile ? "100%" : 660,
-            padding: isMobile ? "0 0 0 14px" : "0 0 0 18px",
-            borderLeft: `2px solid ${accent}55`,
+            padding: isMobile ? "10px 12px" : "12px 14px",
+            border: `1px solid ${accent}24`,
+            borderRadius: 12,
+            background: `${accent}0a`,
             marginBottom: isMobile ? 12 : 12,
           }}
         >
@@ -106,8 +110,8 @@ export default function HeroMessageBlock({
           color: "rgba(205,214,244,0.4)",
         }}
       >
-        <Sparkles size={9} color={accent} />
-        {briefing?.model || "Claude"} · {(briefing?.aiInsights || []).length} insights
+        <Activity size={9} color={accent} />
+        Briefing · {(briefing?.aiInsights || []).length} signals
       </div>
     </div>
   );

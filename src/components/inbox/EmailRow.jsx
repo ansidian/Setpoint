@@ -31,8 +31,8 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
         padding: `${vPad}px ${hPad}px ${vPad}px ${hPad + 4}px`,
         cursor: "pointer",
         background: selected ? `${accent}14` : hover ? "rgba(255,255,255,0.025)" : "transparent",
-        borderLeft: selected ? `2px solid ${accent}` : "2px solid transparent",
-        transition: "background 120ms, border-color 120ms",
+        boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
+        transition: "background 120ms, box-shadow 120ms",
         opacity: dimmed && !hover ? 0.55 : 1,
       }}
     >

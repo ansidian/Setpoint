@@ -7,6 +7,7 @@ export default function InboxDesktopPane({
   accent,
   briefingSummary,
   briefingGeneratedAt,
+  liveEmailsLoading = false,
   emailAccounts,
   onOpenDashboard,
   onRefresh,
@@ -60,6 +61,7 @@ export default function InboxDesktopPane({
         accent={accent}
         counts={laneCounts}
         liveCount={liveCount}
+        liveLoading={liveEmailsLoading}
         summary={briefingSummary}
         onJumpLane={(key) => setLane(key)}
       />
@@ -117,6 +119,7 @@ export default function InboxDesktopPane({
               onSearchChange={setSearch}
               onMarkAllRead={markAllVisibleRead}
               onRefresh={onRefresh}
+              liveEmailsLoading={liveEmailsLoading}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
               briefingAgoLabel={briefingAgoLabel}

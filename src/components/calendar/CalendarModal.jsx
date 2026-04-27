@@ -88,6 +88,7 @@ export default function CalendarModal({
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const navigateMonthRef = useRef(null);
+  const resizeRafRef = useRef(0);
   const [prevOpen, setPrevOpen] = useState(open);
   const [prevView, setPrevView] = useState(view);
   const [prevOpenRequestId, setPrevOpenRequestId] = useState(openRequestId);
@@ -311,10 +312,22 @@ export default function CalendarModal({
 
   useEffect(() => {
     function handleResize() {
-      setViewportWidth(window.innerWidth);
+      if (resizeRafRef.current) return;
+      resizeRafRef.current = window.requestAnimationFrame(() => {
+        resizeRafRef.current = 0;
+        setViewportWidth((current) => (
+          current === window.innerWidth ? current : window.innerWidth
+        ));
+      });
     }
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (resizeRafRef.current) {
+        window.cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = 0;
+      }
+    };
   }, []);
 
   useEffect(() => {

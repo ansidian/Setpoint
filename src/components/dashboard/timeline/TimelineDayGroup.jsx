@@ -8,7 +8,6 @@ import {
   GUTTER,
   MOBILE_GUTTER,
   MOBILE_SPINE_LEFT,
-  PILL_SPINE_GAP,
   SPINE_LEFT,
 } from "./timeline-helpers";
 
@@ -172,7 +171,6 @@ export default function TimelineDayGroup({
             now={now}
             top={markerTop}
             spineLeft={spineLeft}
-            pillGap={PILL_SPINE_GAP}
           />
         )}
       </div>

@@ -9,7 +9,7 @@ export default function OtherDeadlinesSection({
   if (!deadlines?.length) return null;
 
   return (
-    <Section title="Other Deadlines" delay={delay} loaded={loaded}>
+    <Section title="Other Deadlines" delay={delay} loaded={loaded} variant="band">
       <div className="flex flex-col gap-1.5">
         {deadlines.map((dl, i) => {
           const dateStr = dl.due_date || dl.due;

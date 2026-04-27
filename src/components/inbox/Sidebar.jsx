@@ -175,7 +175,6 @@ export default function Sidebar({
         padding: "14px 10px", display: "flex", flexDirection: "column", gap: 18,
         borderRight: "1px solid rgba(255,255,255,0.04)",
         background: "rgba(24,24,37,0.35)",
-        transition: "width 200ms cubic-bezier(0.16,1,0.3,1)",
         overflow: "hidden",
       }}
     >

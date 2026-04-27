@@ -86,7 +86,7 @@ export function ShellTabs({ isMobile, tab, onTab, liveUnreadCount }) {
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              transition: "all 150ms",
+              transition: "background 150ms, color 150ms",
               minWidth: 0,
             }}
           >
@@ -95,7 +95,7 @@ export function ShellTabs({ isMobile, tab, onTab, liveUnreadCount }) {
               : <Inbox size={isMobile ? 11 : 12} />}
             {showUnread && (
               <span
-                title={`${liveUnreadCount} untriaged`}
+                title={`${liveUnreadCount} unread`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -531,7 +531,7 @@ export function RefreshButton({
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
       }}
-      title={isMobile ? "Tap to refresh · Hold for full AI briefing" : "Tap to refresh · Hold for full AI briefing · R"}
+      title={isMobile ? "Tap to refresh · Hold for full briefing" : "Tap to refresh · Hold for full briefing · R"}
     >
       {holdPct > 0 && (
         <div
@@ -648,7 +648,7 @@ export function ConfirmGenerateToast({ accent, confirming, onFullGenerate, onCan
       }}
     >
       <Sparkles size={13} color={accent} />
-      Generate a fresh AI briefing?
+      Generate a fresh briefing?
       <ConfirmGenerateButton accent={accent} onClick={onFullGenerate} />
       <ConfirmCancelButton onClick={onCancel} />
     </div>

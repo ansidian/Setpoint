@@ -22,6 +22,15 @@ const tierStyles = {
     titleClass: "text-[11px] max-sm:text-xs tracking-[2.5px] uppercase font-semibold",
     titleStyle: { color: "rgba(255,255,255,0.20)" },
   },
+  band: {
+    wrapper: "rounded-none",
+    wrapperStyle: {
+      background: "transparent",
+      borderTop: "1px solid rgba(255,255,255,0.05)",
+    },
+    padding: { desktop: "16px 0", mobile: "14px 0" },
+    titleClass: "text-[11px] max-sm:text-xs tracking-[2.2px] uppercase text-text-muted font-semibold",
+  },
 };
 
 export default function Section({
@@ -32,13 +41,14 @@ export default function Section({
   style,
   className,
   tier = 1,
+  variant = "card",
   summaryBadge,
   defaultExpanded = true,
   headerAction,
 }) {
   const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const t = tierStyles[tier] || tierStyles[1];
+  const t = variant === "band" ? tierStyles.band : (tierStyles[tier] || tierStyles[1]);
   const collapsible = isMobile && summaryBadge !== undefined;
   const isExpanded = !collapsible || expanded;
 

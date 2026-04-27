@@ -1,13 +1,7 @@
 import { Link } from "react-router-dom";
 import { ChevronLeft, Check, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-} from "@/components/ui/card";
-import { SETTINGS_CARD_CLASS, TABS } from "@/components/settings/settings-core";
+import { TABS } from "@/components/settings/settings-core";
 
 const FIELD_LABEL_CLASS =
   "mb-1.5 block text-[11px] tracking-[1.5px] uppercase text-muted-foreground font-medium";
@@ -79,45 +73,53 @@ export function FieldHint({ children, className }) {
   );
 }
 
-export function SettingsCard({ title, icon, description, children, headerAction }) {
+export function SettingsCard({ title, icon, description, children, headerAction, className }) {
   return (
-    <Card className={SETTINGS_CARD_CLASS}>
-      <CardHeader className="gap-2 border-b border-white/[0.04] pb-4">
-        <div className="flex items-start gap-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-primary">
-            {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
-                  {title}
-                </div>
-                {description ? (
-                  <CardDescription className="mt-1 text-[12px] leading-relaxed text-muted-foreground/65">
-                    {description}
-                  </CardDescription>
-                ) : null}
+    <section
+      data-settings-section=""
+      className={cn(
+        "border-t border-white/[0.06] py-5 first:border-t-0 first:pt-0",
+        className,
+      )}
+    >
+      <div className="mb-4 flex items-start gap-3">
+        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-primary/80">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
+                {title}
               </div>
-              {headerAction}
+              {description ? (
+                <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-muted-foreground/65">
+                  {description}
+                </p>
+              ) : null}
             </div>
+            {headerAction}
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="pt-4">
+      </div>
+      <div className="pl-0 sm:pl-8">
         {children}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
 export function SkeletonCard({ lines = 2 }) {
   return (
-    <Card className={cn(SETTINGS_CARD_CLASS, "animate-pulse")}>
-      <CardHeader className="border-b border-white/[0.04] pb-4">
-        <div className="h-3 w-36 rounded bg-white/[0.06]" />
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2 pt-4">
+    <section className="animate-pulse border-t border-white/[0.06] py-5 first:border-t-0 first:pt-0">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="mt-0.5 size-5 rounded bg-white/[0.06]" />
+        <div className="min-w-0 flex-1">
+          <div className="h-3 w-36 rounded bg-white/[0.06]" />
+          <div className="mt-2 h-2 w-64 max-w-full rounded bg-white/[0.04]" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 sm:pl-8">
         {Array.from({ length: lines }).map((_, index) => (
           <div
             key={index}
@@ -125,8 +127,8 @@ export function SkeletonCard({ lines = 2 }) {
             style={{ width: `${70 + (index % 3) * 10}%` }}
           />
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -168,7 +170,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
 
         <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
           <nav className="md:sticky md:top-6 md:self-start">
-            <div className="rounded-xl border border-white/[0.06] bg-[rgba(36,36,58,0.24)] p-2 ring-1 ring-white/[0.03] backdrop-blur-[3px]">
+            <div className="border-t border-white/[0.06] pt-3 md:border-t-0 md:border-l md:pl-3 md:pt-0">
               <div className="px-2 pb-2 text-[11px] tracking-[2.5px] uppercase text-muted-foreground font-semibold">
                 Sections
               </div>

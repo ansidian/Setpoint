@@ -77,6 +77,7 @@ export default function EmailTabSection({
         title="Email"
         delay={delay}
         loaded={loaded}
+        variant="band"
         className={className}
         summaryBadge={liveCount > 0 ? `${liveCount} email${liveCount !== 1 ? "s" : ""}` : "no new emails"}
         defaultExpanded={false}

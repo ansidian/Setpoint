@@ -2,9 +2,9 @@ import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
-const entranceSpring = { type: "spring" as const, stiffness: 300, damping: 24 };
-const exitTween = { type: "tween" as const, duration: 0.2, ease: "easeOut" as const };
-const hoverSpring = { type: "spring" as const, stiffness: 400, damping: 25 };
+const entranceSpring = { type: "tween" as const, duration: 0.18, ease: [0.16, 1, 0.3, 1] as const };
+const exitTween = { type: "tween" as const, duration: 0.16, ease: [0.22, 1, 0.36, 1] as const };
+const hoverSpring = { type: "tween" as const, duration: 0.14, ease: [0.22, 1, 0.36, 1] as const };
 
 // Section-level container with stagger
 export function MotionSection({
@@ -55,7 +55,7 @@ export function MotionCard({
       className={className}
       onClick={onClick}
       layout={layout}
-      whileHover={interactive ? { scale: 1.012, transition: { ...hoverSpring, duration: 0.2 } } : undefined}
+      whileHover={interactive ? { scale: 1.012, transition: hoverSpring } : undefined}
       whileTap={interactive ? { scale: 0.985 } : undefined}
       {...props}
     >

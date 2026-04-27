@@ -29,7 +29,7 @@ export default function DraftReply({ email, accent, onSend, onDiscard }) {
             textTransform: "uppercase", color: accent,
           }}
         >
-          Drafted by Claude
+          Drafted reply
         </span>
         <span style={{ fontSize: 10, color: "rgba(205,214,244,0.5)", marginLeft: 4 }}>
           · Replying to {email.from}

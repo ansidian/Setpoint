@@ -330,7 +330,7 @@ export default function MobileReader({
                   color: accent,
                 }}
               >
-                Claude triage
+                Briefing triage
               </div>
               <div
                 className="ea-display"

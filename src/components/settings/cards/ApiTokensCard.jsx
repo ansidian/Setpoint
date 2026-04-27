@@ -128,7 +128,7 @@ export default function ApiTokensCard() {
               <div className="mb-2 text-[11px] text-muted-foreground/70">
                 Expires {formatDate(newToken.expiresAt)}
               </div>
-              <div className="mb-3 rounded-lg border border-black/10 bg-black/30 px-3 py-2 font-mono text-xs break-all select-all">
+              <div className="mb-3 rounded-lg border border-foreground/10 bg-[#16161e]/70 px-3 py-2 font-mono text-xs break-all select-all">
                 {newToken.token}
               </div>
               <div className="flex flex-wrap items-center gap-2">

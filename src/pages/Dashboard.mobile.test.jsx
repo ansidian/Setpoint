@@ -183,10 +183,10 @@ describe("RedesignShell mobile behavior", () => {
 
     expect(screen.getByTestId("shell-header-desktop")).toBeTruthy();
     expect(screen.getByTestId("calendar-modal").textContent).toBe("closed");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Claude");
+    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Briefing");
     expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
     expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
-    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Claude refreshed");
+    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Briefing refreshed");
 
     fireEvent.keyDown(window, { key: "c" });
     expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
@@ -249,7 +249,7 @@ describe("RedesignShell mobile behavior", () => {
     expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
   });
 
-  it("keeps the AI headline visible when a refresh notice becomes active", async () => {
+  it("keeps the briefing headline visible when a refresh notice becomes active", async () => {
     mockIsMobile = false;
     const props = makeProps();
     const view = render(
@@ -277,10 +277,10 @@ describe("RedesignShell mobile behavior", () => {
 
     await waitFor(() => {
       const text = screen.getByTestId("shell-header-briefing-status").textContent;
-      expect(text).toContain("Claude");
+      expect(text).toContain("Briefing");
       expect(text).toContain("Updated");
       expect(text).not.toContain("Briefing updated just now");
-      expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Claude refreshed");
+      expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Briefing refreshed");
     });
   });
 

@@ -1,9 +1,6 @@
 export const dashboardSectionTransition = {
-  type: "spring",
-  stiffness: 290,
-  damping: 32,
-  mass: 0.98,
-  bounce: 0,
+  duration: 0.2,
+  ease: [0.16, 1, 0.3, 1],
 };
 
 export const dashboardFadeTransition = {

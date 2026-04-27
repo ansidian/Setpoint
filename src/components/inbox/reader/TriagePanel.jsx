@@ -37,7 +37,7 @@ export default function TriagePanel({ email, accent }) {
             textTransform: "uppercase", color: accent,
           }}
         >
-          Claude triage
+          Briefing triage
         </span>
         <span style={{ flex: 1 }} />
         {L && (

@@ -99,20 +99,16 @@ export default function EmailRow({
       onClick={handleClick}
       onContextMenu={onContextMenu}
       className={cn(
-        "group relative rounded-lg cursor-pointer transition-all duration-150 py-3.5 px-4",
+        "group relative cursor-pointer transition-all duration-150 py-3.5 px-2 border-t border-white/[0.04] first:border-t-0",
         accentBar && "pl-5",
         dimmed && "opacity-50",
         cls,
       )}
-      style={{
-        background: "rgba(36,36,58,0.4)",
-        border: "1px solid rgba(255,255,255,0.04)",
-      }}
     >
       {accentBar}
 
       {/* Hover bg */}
-      <div className="absolute inset-0 rounded-lg bg-white/0 group-hover:bg-white/[0.03] transition-colors duration-150" />
+      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[0.025] transition-colors duration-150" />
 
       <div
         data-email-header
