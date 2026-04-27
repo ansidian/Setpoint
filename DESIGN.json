@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-27T14:02:05-07:00",
+  "title": "Design System: EA Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "accent-primary": {
+        "role": "primary",
+        "displayName": "Lavender Control",
+        "canonical": "#cba6da",
+        "purpose": "User-customizable primary accent for active controls, selected states, and focus emphasis."
+      },
+      "accent-secondary": {
+        "role": "secondary",
+        "displayName": "Warning Orange",
+        "canonical": "#f97316",
+        "purpose": "Secondary-only accent for snooze, time warnings, notifications, and suspended-service indicators."
+      },
+      "floating-panel": {
+        "role": "neutral",
+        "displayName": "Floating Panel Solid",
+        "canonical": "#16161e",
+        "purpose": "Opaque portal surface that prevents transparency bleed-through."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Assistant Voice",
+        "purpose": "Hero greeting, briefing summary, Claude triage summary, and email reader subjects."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Dense repeated UI, cards, controls, labels, and summaries."
+      }
+    },
+    "shadows": [
+      {
+        "name": "modal-dropdown",
+        "value": "0 20px 60px rgba(0,0,0,0.7)",
+        "purpose": "Portaled modals, dropdowns, popovers, and menu panels."
+      },
+      {
+        "name": "accent-glow",
+        "value": "0 0 6px {color}30 to 0 0 8px {color}60",
+        "purpose": "Small active indicators, focus glows, and timeline status dots."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms ease-out",
+        "purpose": "Default hover and simple state changes."
+      },
+      {
+        "name": "dashboard-fade",
+        "value": "240ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Dashboard section fade and orientation motion."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Applied under prefers-reduced-motion to suppress nonessential animation."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "max-width dependent via useIsMobile",
+        "purpose": "Mobile tab and inbox behavior."
+      }
+    ],
+    "rules": [
+      "Use createPortal, fixed positioning, opaque #16161e, isolation, and scroll containment for floating panels.",
+      "Keep dense UI text inside stable dimensions so updates do not resize controls.",
+      "Use lucide icons for tool buttons when an icon exists.",
+      "Do not add side-stripe borders, gradient text, decorative glass, or hero metric templates."
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Compact primary action with lavender fill or accent border, used only for meaningful state changes.",
+      "html": "<button class=\"ds-button-primary\">Generate</button>",
+      "css": ".ds-button-primary { background: #cba6da; color: #0b0b13; border: 1px solid rgba(203,166,218,0.15); border-radius: 12px; padding: 8px 12px; font: 600 12px/1.2 Montserrat, sans-serif; transition: background-color 150ms ease-out, border-color 150ms ease-out, box-shadow 150ms ease-out; } .ds-button-primary:focus-visible { outline: 1px solid rgba(203,166,218,0.6); outline-offset: 2px; box-shadow: 0 0 8px rgba(203,166,218,0.45); }"
+    },
+    {
+      "name": "Dense Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "Inline content container with tonal depth and border-first separation.",
+      "html": "<section class=\"ds-card\"><h3>Upcoming</h3><p>Two deadlines need attention today.</p></section>",
+      "css": ".ds-card { background: rgba(36,36,58,0.4); color: #cdd6f4; border: 1px solid rgba(255,255,255,0.04); border-radius: 12px; padding: 16px; box-shadow: none; } .ds-card h3 { margin: 0 0 6px; font: 500 13px/1.35 Montserrat, sans-serif; } .ds-card p { margin: 0; color: rgba(205,214,244,0.5); font: 400 12px/1.5 Montserrat, sans-serif; }"
+    },
+    {
+      "name": "Floating Panel",
+      "kind": "custom",
+      "refersTo": "floating-panel",
+      "description": "Portaled overlay for dropdowns, pickers, command-like panels, history, and search.",
+      "html": "<div class=\"ds-floating-panel\" role=\"dialog\">Panel content</div>",
+      "css": ".ds-floating-panel { position: fixed; isolation: isolate; overscroll-behavior: contain; background: #16161e; color: #cdd6f4; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); }"
+    }
+  ]
+}
