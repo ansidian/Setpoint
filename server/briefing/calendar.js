@@ -163,6 +163,10 @@ async function googleCalendarFetch(auth, path, { method = "GET", query, body, he
   return res;
 }
 
+function ifMatchHeaders(etag) {
+  return etag ? { "If-Match": etag } : {};
+}
+
 function buildSyntheticPrimaryCalendar(account, writable) {
   return {
     id: "primary",
@@ -369,6 +373,11 @@ function serializeRecurrenceRule(parts) {
     .join(";")}`;
 }
 
+function getRecurrenceRuleLine(recurrence) {
+  if (!Array.isArray(recurrence)) return null;
+  return recurrence.find((line) => String(line).startsWith("RRULE:")) || null;
+}
+
 function parseRecurrenceEnds(parts) {
   if (parts.COUNT) {
     return {
@@ -404,9 +413,8 @@ function parseRecurrenceEnds(parts) {
 
 export function extractStructuredRecurrence(recurrence) {
   if (!Array.isArray(recurrence) || !recurrence.length) return null;
-  if (recurrence.some((line) => !String(line).startsWith("RRULE:"))) return null;
 
-  const parts = parseRecurrenceRule(recurrence[0]);
+  const parts = parseRecurrenceRule(getRecurrenceRuleLine(recurrence));
   if (!parts?.FREQ || !RECURRENCE_FREQ.has(parts.FREQ)) return null;
 
   return {
@@ -810,6 +818,20 @@ function getTargetOriginalStart(event) {
   return event?.originalStartTime?.dateTime || event?.originalStartTime?.date || event?.start?.dateTime || event?.start?.date || null;
 }
 
+function isSameRecurringStart(left, right) {
+  if (!left || !right) return false;
+  const leftHasTime = String(left).includes("T");
+  const rightHasTime = String(right).includes("T");
+
+  if (leftHasTime && rightHasTime) {
+    const leftMs = Date.parse(left);
+    const rightMs = Date.parse(right);
+    if (Number.isFinite(leftMs) && Number.isFinite(rightMs)) return leftMs === rightMs;
+  }
+
+  return String(left).slice(0, 10) === String(right).slice(0, 10);
+}
+
 function stripRecurringEnds(ruleParts) {
   const next = { ...ruleParts };
   delete next.UNTIL;
@@ -819,10 +841,11 @@ function stripRecurringEnds(ruleParts) {
 
 function assertSimpleSeriesRecurrence(event, { allowCount = false } = {}) {
   const rules = event?.recurrence || [];
-  if (!rules.length || rules.some((line) => !String(line).startsWith("RRULE:"))) {
+  const ruleLine = getRecurrenceRuleLine(rules);
+  if (!ruleLine) {
     throwCalendarError(400, "calendar_recurring_unsupported", "Only simple RRULE recurring events are supported in the dashboard.");
   }
-  const parts = parseRecurrenceRule(rules[0]);
+  const parts = parseRecurrenceRule(ruleLine);
   if (!parts?.FREQ) {
     throwCalendarError(400, "calendar_recurring_unsupported", "Recurring rule could not be parsed.");
   }
@@ -896,7 +919,7 @@ export async function updateCalendarEvent(account, eventId, input) {
     const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(eventId)}`, {
       method: "PATCH",
       body: payload,
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(event.etag || input.etag),
     });
     return normalizeGoogleEvent({ account, calendar, event: await res.json() });
   }
@@ -914,7 +937,7 @@ export async function updateCalendarEvent(account, eventId, input) {
     const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(eventId)}`, {
       method: "PATCH",
       body: payload,
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(event.etag || input.etag),
     });
     return normalizeGoogleEvent({ account, calendar, event: await res.json() });
   }
@@ -936,7 +959,7 @@ export async function updateCalendarEvent(account, eventId, input) {
     const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
       method: "PATCH",
       body: payload,
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
     });
     return normalizeGoogleEvent({ account, calendar, event: await res.json() });
   }
@@ -946,7 +969,7 @@ export async function updateCalendarEvent(account, eventId, input) {
   }
 
   const parentStart = getTargetOriginalStart(recurring.parentEvent);
-  if (parentStart === recurring.targetOriginalStart) {
+  if (isSameRecurringStart(parentStart, recurring.targetOriginalStart)) {
     const payload = toCalendarMutationPayload({
       ...parentDraft,
       ...input,
@@ -955,7 +978,7 @@ export async function updateCalendarEvent(account, eventId, input) {
     const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
       method: "PATCH",
       body: payload,
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
     });
     return normalizeGoogleEvent({ account, calendar, event: await res.json() });
   }
@@ -964,6 +987,7 @@ export async function updateCalendarEvent(account, eventId, input) {
   await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
     method: "PATCH",
     body: { recurrence: trimmedRecurrence },
+    headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
   });
 
   const followingRecurrence = buildFollowingSeriesRecurrence(recurring.parentEvent, {
@@ -999,7 +1023,7 @@ export async function deleteCalendarEvent(account, eventId, input) {
   if (!isRecurringEventResource(event)) {
     await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(eventId)}`, {
       method: "DELETE",
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(event.etag || input.etag),
     });
     return;
   }
@@ -1012,7 +1036,7 @@ export async function deleteCalendarEvent(account, eventId, input) {
     await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(eventId)}`, {
       method: "PATCH",
       body: { status: "cancelled" },
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(event.etag || input.etag),
     });
     return;
   }
@@ -1021,7 +1045,7 @@ export async function deleteCalendarEvent(account, eventId, input) {
   if (scope === "all") {
     await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
       method: "DELETE",
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
     });
     return;
   }
@@ -1031,10 +1055,10 @@ export async function deleteCalendarEvent(account, eventId, input) {
   }
 
   const parentStart = getTargetOriginalStart(recurring.parentEvent);
-  if (parentStart === recurring.targetOriginalStart) {
+  if (isSameRecurringStart(parentStart, recurring.targetOriginalStart)) {
     await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
       method: "DELETE",
-      headers: input.etag ? { "If-Match": input.etag } : {},
+      headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
     });
     return;
   }
@@ -1043,6 +1067,7 @@ export async function deleteCalendarEvent(account, eventId, input) {
   await googleCalendarFetch(auth, `calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(recurring.parentEventId)}`, {
     method: "PATCH",
     body: { recurrence: trimmedRecurrence },
+    headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
   });
 }
 
