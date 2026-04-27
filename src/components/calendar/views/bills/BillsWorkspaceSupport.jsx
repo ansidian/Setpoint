@@ -211,13 +211,13 @@ function EmptySupport({ layout, model, itemsByDay, selectedDay, viewYear, viewMo
           <div style={compactDetailStyle()}>
             {nearestBusy
               ? `${nearestBusy.count} bill${nearestBusy.count === 1 ? "" : "s"} sitting ${nearestBusy.direction} on the grid.`
-              : "Use arrows, click any day, or press C to create something new."}
+              : "Use arrows or click another day to review billing rhythm."}
           </div>
         </div>
         <div style={compactPanelStyle()}>
-          <div style={compactEyebrowStyle()}>Create from here</div>
-          <div style={compactValueStyle("#a6e3a1", 18)}>Press C</div>
-          <div style={compactDetailStyle()}>Seed a new bill on this date without leaving the month workspace.</div>
+          <div style={compactEyebrowStyle()}>Action model</div>
+          <div style={compactValueStyle("#a6e3a1", 18)}>Review only</div>
+          <div style={compactDetailStyle()}>Open Actual from selected bill details when a schedule exists.</div>
         </div>
       </div>
     );

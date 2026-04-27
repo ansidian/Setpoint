@@ -196,6 +196,18 @@ afterEach(() => {
 });
 
 describe("CalendarGrid overflow motion coverage", () => {
+  it("exposes day cells as labelled keyboard-selectable grid cells", () => {
+    const setSelectedDay = vi.fn();
+    renderGrid({}, { setSelectedDay });
+
+    const dayCell = screen.getByTestId("calendar-cell-20");
+    expect(dayCell.getAttribute("role")).toBe("gridcell");
+    expect(dayCell.getAttribute("aria-label")).toMatch(/Monday, April 20, No events/i);
+
+    fireEvent.keyDown(dayCell, { key: "Enter" });
+    expect(setSelectedDay).toHaveBeenCalledWith(20);
+  });
+
   it("uses vertical wheel momentum on the month grid to navigate one month", () => {
     const navigateMonth = vi.fn();
     renderGrid({}, { navigateMonth });

@@ -16,11 +16,48 @@ function normalizeWheelDeltaY(event, fallbackPagePx) {
   return event.deltaY;
 }
 
+function formatCellDate(viewYear, viewMonth, day) {
+  return new Date(viewYear, viewMonth, day).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function buildCellAriaLabel({
+  viewLabel,
+  viewYear,
+  viewMonth,
+  day,
+  itemCount,
+  isSelected,
+  isToday,
+}) {
+  const noun = {
+    events: "event",
+    bills: "bill",
+    deadlines: "deadline",
+  }[String(viewLabel || "item").toLowerCase()] || "item";
+  const countLabel = itemCount === 0
+    ? `No ${noun}s`
+    : `${itemCount} ${noun}${itemCount === 1 ? "" : "s"}`;
+  return [
+    formatCellDate(viewYear, viewMonth, day),
+    countLabel,
+    isToday ? "today" : null,
+    isSelected ? "selected" : null,
+  ].filter(Boolean).join(", ");
+}
+
 function CalendarCell({
   view,
+  viewYear,
+  viewMonth,
+  viewLabel,
   day,
   items,
   selectedItemId,
+  itemCount,
   hasItems,
   isToday,
   isSelected,
@@ -102,11 +139,31 @@ function CalendarCell({
     onSelectItem,
     onOpenOverflow,
   });
+  const ariaLabel = buildCellAriaLabel({
+    viewLabel,
+    viewYear,
+    viewMonth,
+    day,
+    itemCount,
+    isSelected,
+    isToday,
+  });
 
   return (
     <div
       onClick={() => onSelectDay?.()}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onSelectDay?.();
+      }}
+      role="gridcell"
+      aria-roledescription="calendar day"
+      tabIndex={0}
+      aria-label={ariaLabel}
       aria-current={isToday ? "date" : undefined}
+      aria-selected={isSelected}
+      data-calendar-focus-ring="true"
       data-testid={`calendar-cell-${day}`}
       data-past-tone={pastTone || "none"}
       style={{
@@ -139,6 +196,7 @@ function CalendarCell({
       )}
       {accentBar && (
         <span
+          aria-hidden
           style={{
             position: "absolute",
             left: 0,
@@ -387,6 +445,7 @@ export default function CalendarGrid({
         {DAYS.map((day) => (
           <div
             key={day}
+            role="columnheader"
             style={{
               textAlign: "center",
               fontSize: 10,
@@ -405,6 +464,11 @@ export default function CalendarGrid({
       <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
         <div
           data-testid="calendar-grid-month"
+          role="grid"
+          aria-label={`${activeView.label || view} calendar for ${new Date(viewYear, viewMonth).toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+          })}`}
           key={`${view}-${viewYear}-${viewMonth}`}
           style={{
             height: "100%",
@@ -416,7 +480,7 @@ export default function CalendarGrid({
             gap: layout.gridGap,
           }}
         >
-          {Array.from({ length: firstDay }, (_, index) => <div key={`empty-${index}`} />)}
+          {Array.from({ length: firstDay }, (_, index) => <div key={`empty-${index}`} role="presentation" />)}
 
           {Array.from({ length: daysInMonth }, (_, index) => {
             const day = index + 1;
@@ -440,9 +504,13 @@ export default function CalendarGrid({
               <CalendarCell
                 key={day}
                 view={view}
+                viewYear={viewYear}
+                viewMonth={viewMonth}
+                viewLabel={activeView.label || view}
                 day={day}
                 items={cellItems}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
+                itemCount={dayState.totalCount}
                 hasItems={hasItems}
                 isToday={isToday}
                 isSelected={isSelected}
@@ -486,7 +554,7 @@ export default function CalendarGrid({
             );
           })}
 
-          {Array.from({ length: resolvedTrailingEmpty }, (_, index) => <div key={`trail-${index}`} />)}
+          {Array.from({ length: resolvedTrailingEmpty }, (_, index) => <div key={`trail-${index}`} role="presentation" />)}
         </div>
 
         {showGridSkeleton && (

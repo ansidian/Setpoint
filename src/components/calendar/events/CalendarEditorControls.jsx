@@ -59,6 +59,7 @@ export function ActionButton({
     <button
       data-testid={dataTestId}
       type="button"
+      data-calendar-focus-ring="true"
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
@@ -120,6 +121,7 @@ export function PickerFieldButton(props) {
     <button
       ref={anchorRef}
       data-testid={dataTestId}
+      data-calendar-focus-ring="true"
       aria-label={ariaLabel}
       type="button"
       onClick={onClick}

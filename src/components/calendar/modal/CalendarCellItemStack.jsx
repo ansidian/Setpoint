@@ -79,6 +79,7 @@ function MoreButton({
       data-testid={`calendar-cell-overflow-trigger-${day}`}
       data-calendar-overflow-trigger="true"
       data-active={active ? "true" : "false"}
+      data-calendar-focus-ring="true"
       onClick={(event) => {
         event.stopPropagation();
         onClick?.(event);
@@ -154,6 +155,7 @@ export default function CalendarCellItemStack({
             data-testid="calendar-cell-item-chip"
             data-item-id={String(item.id)}
             data-hovered={active ? "true" : "false"}
+            data-calendar-focus-ring="true"
             onClick={(event) => {
               event.stopPropagation();
               onSelectItem?.(item.id);

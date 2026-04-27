@@ -37,6 +37,11 @@ function parseFocusDate(focusDate) {
   return date;
 }
 
+function ymdFromView({ viewYear, viewMonth, selectedDay }) {
+  if (!selectedDay) return null;
+  return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+}
+
 function buildFallbackDayState(rawItems) {
   const items = Array.isArray(rawItems) ? rawItems : [];
   return {
@@ -299,6 +304,14 @@ export default function CalendarModal({
 
   useEffect(() => {
     if (!open) return undefined;
+    const id = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     function handleClick(event) {
       if (suppressOutsideClickRef.current?.(event.target)) return;
       if (event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]')) return;
@@ -452,7 +465,10 @@ export default function CalendarModal({
           if (view === "events" && eventEditor.editable) {
             eventEditor.openCreate();
           } else if (view === "deadlines") {
-            setDeadlineEditor({ mode: "create", seedDate: null });
+            setDeadlineEditor({
+              mode: "create",
+              seedDate: ymdFromView({ viewYear, viewMonth, selectedDay }),
+            });
           }
           event.preventDefault();
           event.stopPropagation();
@@ -481,7 +497,7 @@ export default function CalendarModal({
     }
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, onViewChange, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, activeView, itemsByDay, setDeadlineEditor]);
+  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, onViewChange, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, activeView, itemsByDay, setDeadlineEditor]);
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
@@ -500,7 +516,7 @@ export default function CalendarModal({
   const monthName = new Date(viewYear, viewMonth).toLocaleDateString("en-US", { month: "long" });
   const monthYear = String(viewYear);
   const layout = getCalendarLayoutMetrics(viewportWidth);
-  const panelWidth = `calc(100vw - ${layout.viewportMargin * 2}px)`;
+  const panelWidth = layout.panelWidth || `calc(100vw - ${layout.viewportMargin * 2}px)`;
   const showEventsLoading = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
   const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
   const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;

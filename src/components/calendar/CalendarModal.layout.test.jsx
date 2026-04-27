@@ -126,6 +126,35 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
+  it("uses an unclamped uhd workspace on 4K-class viewports", () => {
+    window.innerWidth = 3840;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = screen.getByTestId("calendar-modal-panel");
+    const body = screen.getByTestId("calendar-modal-body");
+    const supportBand = screen.getByTestId("calendar-modal-support-band");
+
+    expect(panel.getAttribute("role")).toBe("dialog");
+    expect(panel.getAttribute("aria-modal")).toBe("true");
+    expect(panel.style.width).toBe("calc(100vw - 64px)");
+    expect(panel.style.maxWidth).toBe("");
+    expect(panel.style.height).toBe("calc(100vh - 64px)");
+    expect(panel.style.maxHeight).toBe("");
+    expect(body.style.gridTemplateColumns).toContain("380px");
+    expect(supportBand.style.height).toBe("112px");
+  });
+
   it("shows skeleton loaders while the events month is loading", () => {
     window.innerWidth = 1900;
 
@@ -463,7 +492,7 @@ describe("CalendarModal responsive layout", () => {
         view="events"
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        eventsData={{ getEvents: () => [] }}
+        eventsData={{ editable: true, getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{}}
       />,
@@ -477,6 +506,7 @@ describe("CalendarModal responsive layout", () => {
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
     expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
+    expect(screen.getByRole("button", { name: /create on apr 20/i })).toBeTruthy();
   });
 
   it("keeps today's empty selection when clicking the selected day again", async () => {
@@ -1036,7 +1066,7 @@ describe("CalendarModal responsive layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getByText("Pick a due date and time")).toBeTruthy();
+    expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
     expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
   });
@@ -1137,7 +1167,7 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.keyDown(document, { key: "c" });
 
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getByText("Pick a due date and time")).toBeTruthy();
+    expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
   });
 
   it("opens the inline Todoist editor from the selected deadline detail", async () => {

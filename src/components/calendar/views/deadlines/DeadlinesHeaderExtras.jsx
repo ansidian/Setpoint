@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 
-export default function DeadlinesHeaderExtras({ onCreateTask }) {
+export default function DeadlinesHeaderExtras({ onCreateTask, selectedDate, selectedDateLabel }) {
   const [hovered, setHovered] = useState(false);
+  const label = selectedDateLabel
+    ? `New Todoist task due ${selectedDateLabel}`
+    : "New Todoist task";
 
   return (
     <button
       type="button"
-      onClick={() => onCreateTask?.()}
+      onClick={() => onCreateTask?.(selectedDate || null)}
+      aria-label={label}
+      data-calendar-focus-ring="true"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -29,7 +34,7 @@ export default function DeadlinesHeaderExtras({ onCreateTask }) {
       }}
     >
       <Plus size={12} />
-      <span>New Todoist</span>
+      <span>New task</span>
     </button>
   );
 }

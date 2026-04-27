@@ -6,11 +6,6 @@ import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 import CalendarWorkspaceSupportBand from "./CalendarWorkspaceSupportBand.jsx";
 
-function getPanelEntryClassName(tier) {
-  if (tier === "xl") return "animate-in fade-in duration-150";
-  return "animate-in fade-in slide-in-from-top-1 duration-150";
-}
-
 function buildContextContent({
   layout,
   view,
@@ -34,6 +29,8 @@ function buildContextContent({
   setSelectedItemId,
   setDeadlineEditor,
   focusDeadlineTask,
+  onCreateEvent,
+  onCreateTask,
 }) {
   if (view === "events" && eventEditor.isEditorOpen) {
     return (
@@ -93,9 +90,12 @@ function buildContextContent({
         computed={computed}
         data={viewData}
         activeView={activeView}
+        eventEditor={eventEditor}
         setSelectedDay={setSelectedDay}
         setSelectedItemId={setSelectedItemId}
         setDeadlineEditor={setDeadlineEditor}
+        onCreateEvent={onCreateEvent}
+        onCreateTask={onCreateTask}
       />
     );
   }
@@ -202,6 +202,13 @@ export default function CalendarModalShell({
     setSelectedDay,
     setSelectedItemId,
     setDeadlineEditor,
+    onCreateEvent: () => eventEditor.openCreate?.(),
+    onCreateTask: (seedDate) => {
+      setDeadlineEditor({
+        mode: "create",
+        seedDate: seedDate || null,
+      });
+    },
   };
 
   const contextContent = buildContextContent({
@@ -227,11 +234,12 @@ export default function CalendarModalShell({
     setSelectedItemId,
     setDeadlineEditor,
     focusDeadlineTask,
+    onCreateEvent: supportProps.onCreateEvent,
+    onCreateTask: supportProps.onCreateTask,
   });
 
   return createPortal(
     <div
-      className="animate-in fade-in duration-150"
       style={{
         position: "fixed",
         inset: 0,
@@ -240,21 +248,42 @@ export default function CalendarModalShell({
         alignItems: "center",
         justifyContent: "center",
         padding: layout.viewportMargin,
-        background: [
-          "radial-gradient(circle at top, rgba(203,166,218,0.10), transparent 28%)",
-          "radial-gradient(circle at 100% 0%, rgba(137,180,250,0.07), transparent 22%)",
-          "rgba(4,6,10,0.72)",
-        ].join(", "),
+        isolation: "isolate",
+        contain: "layout paint style",
+        overflow: "hidden",
       }}
     >
       <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          background: [
+            "radial-gradient(circle at top, rgba(203,166,218,0.10), transparent 28%)",
+            "radial-gradient(circle at 100% 0%, rgba(137,180,250,0.07), transparent 22%)",
+            "rgba(4,6,10,0.72)",
+          ].join(", "),
+          animation: "calendarBackdropIn 120ms cubic-bezier(0.16, 1, 0.3, 1)",
+          pointerEvents: "none",
+          willChange: "opacity",
+        }}
+      />
+      <div
         ref={panelRef}
         data-testid="calendar-modal-panel"
-        className={`isolate flex flex-col ${getPanelEntryClassName(layout.tier)}`}
+        className="isolate flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="calendar-modal-title"
+        tabIndex={-1}
         style={{
           position: "relative",
+          zIndex: 1,
           width: panelWidth,
+          maxWidth: layout.panelMaxWidth || undefined,
           height: layout.shellHeight,
+          maxHeight: layout.shellMaxHeight || undefined,
           overflow: "hidden",
           backgroundColor: "#16161e",
           backgroundImage: [
@@ -265,6 +294,13 @@ export default function CalendarModalShell({
           borderRadius: 16,
           border: "1px solid rgba(255,255,255,0.06)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+          contain: "layout paint",
+          backfaceVisibility: "hidden",
+          transform: "translate3d(0, 0, 0)",
+          animation: layout.tier === "xl"
+            ? "calendarPanelSettle 120ms cubic-bezier(0.16, 1, 0.3, 1)"
+            : "calendarPanelEnter 140ms cubic-bezier(0.16, 1, 0.3, 1)",
+          willChange: "transform",
         }}
       >
         <div

@@ -19,7 +19,7 @@ const MD_EVENT_CHIP_METRICS = {
 
 function resolveEventChipMetrics(layout) {
   const tier = layout?.tier;
-  const base = tier === "xl" || tier === "lg" ? LG_EVENT_CHIP_METRICS : MD_EVENT_CHIP_METRICS;
+  const base = tier === "uhd" || tier === "xl" || tier === "lg" ? LG_EVENT_CHIP_METRICS : MD_EVENT_CHIP_METRICS;
   return {
     ...base,
     ...getCalendarCellCapacity(layout),

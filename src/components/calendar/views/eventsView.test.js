@@ -87,4 +87,9 @@ describe("eventsView.getVisibleEventCount", () => {
     expect(eventsView.getVisibleEventCount(4, { tier: "xl" })).toBe(4);
     expect(eventsView.getVisibleEventCount(5, { tier: "xl" })).toBe(3);
   });
+
+  it("uses the 4K uhd tier for high-density event cells", () => {
+    expect(eventsView.getVisibleEventCount(8, { tier: "uhd" })).toBe(8);
+    expect(eventsView.getVisibleEventCount(9, { tier: "uhd" })).toBe(7);
+  });
 });

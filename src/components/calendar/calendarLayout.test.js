@@ -4,6 +4,7 @@ import { BREAKPOINTS, getCalendarLayoutMetrics } from "./calendarLayout.js";
 describe("BREAKPOINTS", () => {
   it("exposes the calendar responsive breakpoints", () => {
     expect(BREAKPOINTS).toEqual({
+      uhd: 2560,
       xl: 1800,
       lg: 1400,
       md: 1240,
@@ -13,6 +14,8 @@ describe("BREAKPOINTS", () => {
 
 describe("getCalendarLayoutMetrics", () => {
   it("selects tiers at and just below each breakpoint", () => {
+    expect(getCalendarLayoutMetrics(2560).tier).toBe("uhd");
+    expect(getCalendarLayoutMetrics(2559).tier).toBe("xl");
     expect(getCalendarLayoutMetrics(1800).tier).toBe("xl");
     expect(getCalendarLayoutMetrics(1799).tier).toBe("lg");
     expect(getCalendarLayoutMetrics(1400).tier).toBe("lg");
@@ -21,11 +24,40 @@ describe("getCalendarLayoutMetrics", () => {
     expect(getCalendarLayoutMetrics(1239).tier).toBe("sm");
   });
 
+  it("returns uhd metrics for 4K-class desktop viewports", () => {
+    expect(getCalendarLayoutMetrics(3840)).toEqual({
+      tier: "uhd",
+      viewportMargin: 32,
+      panelWidth: "calc(100vw - 64px)",
+      panelMaxWidth: null,
+      shellHeight: "calc(100vh - 64px)",
+      shellMaxHeight: null,
+      shellPadding: 16,
+      contentGap: 14,
+      gridGap: 8,
+      weekHeaderGap: 6,
+      contextWidth: 380,
+      editorWidth: 680,
+      supportBandMinHeight: 112,
+      supportBandQuietHeight: 92,
+      supportBandCollapsedHeight: 60,
+      cellHeight: 150,
+      railHeightOffset: 92,
+      stacked: false,
+      stickyRail: true,
+      headerWrap: false,
+      headerStacked: false,
+    });
+  });
+
   it("returns xl metrics for very wide desktop viewports", () => {
     expect(getCalendarLayoutMetrics(1900)).toEqual({
       tier: "xl",
       viewportMargin: 16,
+      panelWidth: null,
+      panelMaxWidth: null,
       shellHeight: "calc(100vh - 32px)",
+      shellMaxHeight: null,
       shellPadding: 16,
       contentGap: 12,
       gridGap: 8,
@@ -33,6 +65,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 320,
       editorWidth: 620,
       supportBandMinHeight: 126,
+      supportBandQuietHeight: 96,
       supportBandCollapsedHeight: 60,
       cellHeight: 140,
       railHeightOffset: 92,
@@ -47,7 +80,10 @@ describe("getCalendarLayoutMetrics", () => {
     expect(getCalendarLayoutMetrics(1512)).toEqual({
       tier: "lg",
       viewportMargin: 20,
+      panelWidth: null,
+      panelMaxWidth: null,
       shellHeight: "calc(100vh - 40px)",
+      shellMaxHeight: null,
       shellPadding: 14,
       contentGap: 12,
       gridGap: 6,
@@ -55,6 +91,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 296,
       editorWidth: 560,
       supportBandMinHeight: 116,
+      supportBandQuietHeight: 92,
       supportBandCollapsedHeight: 56,
       cellHeight: 124,
       railHeightOffset: 82,
@@ -69,7 +106,10 @@ describe("getCalendarLayoutMetrics", () => {
     expect(getCalendarLayoutMetrics(1240)).toEqual({
       tier: "md",
       viewportMargin: 24,
+      panelWidth: null,
+      panelMaxWidth: null,
       shellHeight: "calc(100vh - 48px)",
+      shellMaxHeight: null,
       shellPadding: 14,
       contentGap: 12,
       gridGap: 5,
@@ -77,6 +117,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 272,
       editorWidth: 480,
       supportBandMinHeight: 106,
+      supportBandQuietHeight: 88,
       supportBandCollapsedHeight: 52,
       cellHeight: 108,
       railHeightOffset: 72,
@@ -91,7 +132,10 @@ describe("getCalendarLayoutMetrics", () => {
     expect(getCalendarLayoutMetrics(900)).toEqual({
       tier: "sm",
       viewportMargin: 16,
+      panelWidth: null,
+      panelMaxWidth: null,
       shellHeight: "calc(100vh - 32px)",
+      shellMaxHeight: null,
       shellPadding: 16,
       contentGap: 16,
       gridGap: 4,
@@ -99,6 +143,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 0,
       editorWidth: 0,
       supportBandMinHeight: 180,
+      supportBandQuietHeight: 140,
       supportBandCollapsedHeight: 104,
       cellHeight: 76,
       railHeightOffset: 48,

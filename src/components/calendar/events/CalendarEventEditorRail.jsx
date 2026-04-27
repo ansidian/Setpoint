@@ -118,6 +118,8 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
       data-testid="calendar-event-editor-rail"
       data-editor-layout={useDesktopStage ? "desktop-staged" : expandedDesktop ? "desktop-collapsed" : "stacked"}
       data-calendar-local-scroll="true"
+      role="region"
+      aria-labelledby="calendar-event-editor-title"
       style={{
         padding: expandedDesktop ? "18px 22px 20px" : "16px 20px",
         overflow: "auto",
@@ -131,7 +133,9 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div>
           <div style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
-            {isEditing ? "Edit event" : isBatchMode ? "New batch" : "New event"}
+            <span id="calendar-event-editor-title">
+              {isEditing ? "Edit event" : isBatchMode ? "New batch" : "New event"}
+            </span>
           </div>
           <div style={{ marginTop: 3, fontSize: 11, color: "rgba(205,214,244,0.42)", lineHeight: 1.45 }}>
             {isEditing
@@ -156,6 +160,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
             ref={titleRef}
             data-testid="calendar-event-title"
             type="text"
+            aria-label="Event title"
             value={titleInput}
             onKeyDown={onTitleKeyDown}
             onChange={onTitleChange}
@@ -491,6 +496,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
                                 ref={locationRef}
                                 data-testid="calendar-event-location"
                                 type="text"
+                                aria-label="Event location"
                                 value={draft.location}
                                 onFocus={() => {
                                   if (!disabled) setOpenPicker("location");
@@ -527,6 +533,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
                               <FieldLabel>Notes</FieldLabel>
                               <textarea
                                 data-testid="calendar-event-description"
+                                aria-label="Event notes"
                                 value={draft.description}
                                 onKeyDown={(event) => event.stopPropagation()}
                                 onChange={(event) => updateField("description", event.target.value)}
@@ -662,6 +669,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
                               ref={locationRef}
                               data-testid="calendar-event-location"
                               type="text"
+                              aria-label="Event location"
                               value={draft.location}
                               onFocus={() => {
                                 if (!disabled) setOpenPicker("location");
@@ -698,6 +706,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
                             <FieldLabel>Notes</FieldLabel>
                             <textarea
                               data-testid="calendar-event-description"
+                              aria-label="Event notes"
                               value={draft.description}
                               onKeyDown={(event) => event.stopPropagation()}
                               onChange={(event) => updateField("description", event.target.value)}

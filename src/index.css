@@ -164,6 +164,12 @@ body {
   font-family: var(--serif-choice, "Instrument Serif"), Georgia, serif;
 }
 
+[data-calendar-focus-ring="true"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ea-accent) 72%, transparent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ea-accent) 14%, transparent);
+}
+
 .mouse-spotlight-canvas {
   position: fixed;
   left: 0;
@@ -187,6 +193,9 @@ body {
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes calendarBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes calendarPanelEnter { from { transform: translate3d(0, -4px, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes calendarPanelSettle { from { transform: translate3d(0, -2px, 0); } to { transform: translate3d(0, 0, 0); } }
 @keyframes shimmerSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(260%); } }
 @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 8px rgba(166,227,161,0.1); } 50% { box-shadow: 0 0 16px rgba(166,227,161,0.25); } }
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }

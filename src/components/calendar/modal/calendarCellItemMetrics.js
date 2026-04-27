@@ -1,4 +1,8 @@
 const CELL_CAPACITY_BY_TIER = {
+  uhd: {
+    fullVisibleCount: 8,
+    overflowVisibleCount: 7,
+  },
   xl: {
     fullVisibleCount: 4,
     overflowVisibleCount: 3,

@@ -71,6 +71,9 @@ export default function AddTaskPanelView({
       ref={panelRef}
       data-testid={isInline ? "todoist-inline-editor" : "todoist-floating-editor"}
       data-suspend-calendar-hotkeys="true"
+      role={isInline ? "region" : "dialog"}
+      aria-modal={!isInline ? "true" : undefined}
+      aria-labelledby="todoist-editor-title"
       style={isInline
         ? buildInlineContainerStyle({ active })
         : buildContainerStyle({ isMobile, pos, host, active, keyboardOffset })}
@@ -86,7 +89,7 @@ export default function AddTaskPanelView({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
+            <div id="todoist-editor-title" style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
               {isEdit ? "Edit Todoist task" : "New Todoist task"}
             </div>
           </div>
@@ -146,6 +149,7 @@ export default function AddTaskPanelView({
               type="text"
               inputMode="text"
               enterKeyHint="done"
+              aria-label="Task title"
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -203,6 +207,7 @@ export default function AddTaskPanelView({
             <FieldLabel>Description</FieldLabel>
             <textarea
               value={description}
+              aria-label="Task description"
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Optional"
               rows={2}

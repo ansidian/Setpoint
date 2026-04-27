@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCalendarViewMeta } from "./calendarEmptyStateMeta.js";
 
@@ -225,6 +226,88 @@ function railContentStyle({ compact = false } = {}) {
     gap: compact ? 12 : 14,
     minHeight: "100%",
   };
+}
+
+function selectedDateYmd(viewYear, viewMonth, selectedDay) {
+  if (!selectedDay) return null;
+  return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+}
+
+function formatShortDate(viewYear, viewMonth, selectedDay) {
+  if (!selectedDay) return null;
+  return new Date(viewYear, viewMonth, selectedDay).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function emptyDayPrimaryAction(props) {
+  const dateLabel = formatShortDate(props.viewYear, props.viewMonth, props.selectedDay);
+  const seedDate = selectedDateYmd(props.viewYear, props.viewMonth, props.selectedDay);
+
+  if (props.view === "events" && props.eventEditor?.editable && props.onCreateEvent) {
+    return {
+      label: dateLabel ? `Create on ${dateLabel}` : "Create event",
+      detail: "Create directly on the selected date.",
+      onClick: props.onCreateEvent,
+    };
+  }
+
+  if (props.view === "deadlines" && props.onCreateTask) {
+    return {
+      label: dateLabel ? `Create task due ${dateLabel}` : "Create task",
+      detail: "Seed Todoist with this due date.",
+      onClick: () => props.onCreateTask(seedDate),
+    };
+  }
+
+  return null;
+}
+
+function EmptyDayPrimaryAction({ action }) {
+  const [hovered, setHovered] = useState(false);
+  if (!action) return null;
+
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: "1px solid rgba(203,166,218,0.16)",
+        background: "rgba(203,166,218,0.055)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
+      <button
+        type="button"
+        onClick={action.onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        data-calendar-focus-ring="true"
+        style={{
+          alignSelf: "flex-start",
+          padding: "8px 12px",
+          borderRadius: 8,
+          border: hovered ? "1px solid rgba(203,166,218,0.38)" : "1px solid rgba(203,166,218,0.24)",
+          background: hovered ? "rgba(203,166,218,0.18)" : "rgba(203,166,218,0.12)",
+          color: "#cba6da",
+          fontSize: 11,
+          fontWeight: 700,
+          fontFamily: "inherit",
+          cursor: "pointer",
+          transform: hovered ? "translateY(-1px)" : "translateY(0)",
+          transition: "background 140ms, border-color 140ms, transform 140ms",
+        }}
+      >
+        {action.label}
+      </button>
+      <div style={{ fontSize: 11, lineHeight: 1.45, color: "rgba(205,214,244,0.56)" }}>
+        {action.detail}
+      </div>
+    </div>
+  );
 }
 
 function heroCardStyle(accent) {
@@ -854,6 +937,7 @@ export function CalendarOverviewRail(props) {
 }
 
 export function CalendarSelectedDayEmptyRail(props) {
+  const primaryAction = emptyDayPrimaryAction(props);
   const handleSelectDay = (day) => {
     props.setDeadlineEditor?.(null);
     props.setSelectedItemId?.(null);
@@ -903,6 +987,7 @@ export function CalendarSelectedDayEmptyRail(props) {
             viewMonth={props.viewMonth}
             onSelectDay={handleSelectDay}
           />
+          <EmptyDayPrimaryAction action={primaryAction} />
         </div>
       </div>
     </div>

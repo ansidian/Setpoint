@@ -314,6 +314,7 @@ export function RailAction({
         rel="noopener noreferrer"
         aria-label={label}
         title={label}
+        data-calendar-focus-ring="true"
         {...sharedProps}
       >
         {content}
@@ -326,6 +327,7 @@ export function RailAction({
       type="button"
       disabled={disabled}
       aria-label={label}
+      data-calendar-focus-ring="true"
       {...sharedProps}
     >
       {content}

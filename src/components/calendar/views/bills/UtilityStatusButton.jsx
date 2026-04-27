@@ -96,7 +96,12 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
       <Tooltip text="Utility statement status">
         <button
           ref={btnRef}
+          type="button"
           onClick={() => setOpen((value) => !value)}
+          aria-label="Utility statement status"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          data-calendar-focus-ring="true"
           style={{
             position: "relative",
             color: open ? "#cba6da" : "rgba(205,214,244,0.75)",
@@ -110,7 +115,7 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
             background: open ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.03)",
             border: `1px solid ${open ? "rgba(203,166,218,0.32)" : "rgba(255,255,255,0.06)"}`,
             fontFamily: "inherit",
-            transition: "all 120ms",
+            transition: "background 120ms, border-color 120ms, color 120ms",
           }}
         >
           <Zap size={15} strokeWidth={1.8} />

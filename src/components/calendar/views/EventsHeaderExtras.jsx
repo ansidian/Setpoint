@@ -1,14 +1,17 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-export default function EventsHeaderExtras({ editor }) {
+export default function EventsHeaderExtras({ editor, selectedDateLabel }) {
   const [hover, setHover] = useState(false);
 
   if (!editor?.editable) return null;
+  const label = selectedDateLabel ? `New event on ${selectedDateLabel}` : "New event";
   return (
     <button
       type="button"
       onClick={editor.openCreate}
+      aria-label={label}
+      data-calendar-focus-ring="true"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{

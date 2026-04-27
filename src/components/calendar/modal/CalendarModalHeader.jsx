@@ -6,6 +6,19 @@ const VIEW_OPTIONS = [
   { key: "deadlines", label: "Deadlines", Icon: ListChecks, hint: "3" },
 ];
 
+function formatSelectedDate(viewYear, viewMonth, selectedDay) {
+  if (!selectedDay) return null;
+  return new Date(viewYear, viewMonth, selectedDay).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function selectedDateYmd(viewYear, viewMonth, selectedDay) {
+  if (!selectedDay) return null;
+  return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+}
+
 function headerButtonBaseStyle() {
   return {
     width: 40,
@@ -97,7 +110,9 @@ export default function CalendarModalHeader({
   onClose,
   viewLabel,
 }) {
-  const titleSize = layout.tier === "xl" ? 40 : layout.tier === "lg" ? 36 : layout.tier === "md" ? 32 : 28;
+  const titleSize = layout.tier === "uhd" ? 40 : layout.tier === "xl" ? 40 : layout.tier === "lg" ? 36 : layout.tier === "md" ? 32 : 28;
+  const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay);
+  const selectedDate = selectedDateYmd(viewYear, viewMonth, selectedDay);
 
   return (
     <div
@@ -134,10 +149,14 @@ export default function CalendarModalHeader({
         >
           <div style={{ display: "flex", gap: 8, alignSelf: "start" }}>
             <button
+              type="button"
               onClick={() => canGoPrev && navigateMonth(-1)}
               aria-label="Previous month"
+              aria-disabled={!canGoPrev}
+              disabled={!canGoPrev}
               onMouseEnter={(event) => handleHeaderButtonHover(event, canGoPrev)}
               onMouseLeave={resetHeaderButtonHover}
+              data-calendar-focus-ring="true"
               style={{
                 ...headerButtonBaseStyle(),
                 color: canGoPrev ? "rgba(205,214,244,0.7)" : "rgba(205,214,244,0.18)",
@@ -148,10 +167,12 @@ export default function CalendarModalHeader({
               <ChevronLeft size={17} />
             </button>
             <button
+              type="button"
               onClick={() => navigateMonth(1)}
               aria-label="Next month"
               onMouseEnter={(event) => handleHeaderButtonHover(event, true)}
               onMouseLeave={resetHeaderButtonHover}
+              data-calendar-focus-ring="true"
               style={{
                 ...headerButtonBaseStyle(),
                 color: "rgba(205,214,244,0.7)",
@@ -175,6 +196,7 @@ export default function CalendarModalHeader({
               Calendar Workspace · {viewLabel || "Bills"}
             </div>
             <div
+              id="calendar-modal-title"
               className="ea-display"
               data-testid="calendar-month-title"
               style={{
@@ -193,6 +215,8 @@ export default function CalendarModalHeader({
         </div>
 
         <div
+          role="group"
+          aria-label="Calendar view"
           style={{
             gridArea: "views",
             display: "grid",
@@ -212,8 +236,12 @@ export default function CalendarModalHeader({
             const { Icon } = option;
             return (
               <button
+                type="button"
                 key={option.key}
                 onClick={() => !active && onViewChange?.(option.key)}
+                aria-pressed={active}
+                aria-label={`${option.label} view${active ? ", selected" : ""}`}
+                data-calendar-focus-ring="true"
                 onMouseEnter={(event) => {
                   if (active) return;
                   event.currentTarget.style.background = "rgba(255,255,255,0.06)";
@@ -258,6 +286,8 @@ export default function CalendarModalHeader({
                 suppressOutsideClick={suppressOutsideClick}
                 editor={eventEditor}
                 selectedDay={selectedDay}
+                selectedDate={selectedDate}
+                selectedDateLabel={selectedDateLabel}
                 viewYear={viewYear}
                 viewMonth={viewMonth}
                 onCreateTask={(seedDate) => {
@@ -270,10 +300,12 @@ export default function CalendarModalHeader({
             ) : null}
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
             onMouseEnter={(event) => handleHeaderButtonHover(event, true)}
             onMouseLeave={resetHeaderButtonHover}
+            data-calendar-focus-ring="true"
             style={{
               ...headerButtonBaseStyle(),
               color: "rgba(205,214,244,0.7)",
