@@ -58,4 +58,12 @@ describe("Todoist task parsing", () => {
       recurrenceDraft: expect.objectContaining({ frequency: "weekly", weekdays: ["TU", "TH", "FR"] }),
     });
   });
+
+  it("consumes at before a bare time", () => {
+    const parsed = parseTokens("Submit assignment at 5pm", [], []);
+
+    expect(parsed.stripped).toBe("Submit assignment");
+    expect(parsed.datePhrase).toBe("at 5pm");
+    expect(parsed.dateFormatted).toContain("5 PM");
+  });
 });

@@ -38,7 +38,7 @@ const DATE_TIME_PATTERNS = [
   { re: /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\s+((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}(?:\s*,?\s*\d{4})?)\b/i, type: "time_month_day" },
   { re: /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2}(?:\s*,?\s*\d{4})?)\b/i, type: "month_day" },
   { re: /\b(\d{4}-\d{2}-\d{2})\b/, type: "iso" },
-  { re: /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i, type: "bare_time" },
+  { re: /\b(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i, type: "bare_time" },
 ];
 
 function parseTime(timeStr) {
