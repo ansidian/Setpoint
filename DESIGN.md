@@ -117,7 +117,7 @@ components:
 
 EA Dashboard is a private product surface, not a brand page. The physical scene is a single user checking the day from a laptop in a quiet room before moving into meetings, schoolwork, errands, or finance admin. The interface chooses a restrained dark theme because it is used repeatedly, often around calendar transitions or early in the day, when low glare and stable hierarchy matter more than spectacle.
 
-The visual system is compact, border-led, and data-first. Purple is the default primary accent, but it should appear as a control signal, not a wash over the product. The shell can support a scoped V3 light mode, but new work must respect the existing token system in `.interface-design/system.md`, which remains the implementation source of truth.
+The visual system is compact, border-led, and data-first. Purple is the default primary accent, but it should appear as a control signal, not a wash over the product. The shell can support a scoped V3 light mode, but new work must respect the token system in this file and `DESIGN.json`, which remain the implementation source of truth.
 
 **Key Characteristics:**
 - Dense operational surfaces with stable scan paths.
@@ -197,7 +197,7 @@ Depth is border-first. Inline cards and list items should rely on 1px borders, t
 
 - **Shape:** 8px to 12px radius, with icon buttons using stable square dimensions.
 - **Primary:** Lavender fill or lavender-tinted border when the action truly changes state. Keep text compact and direct.
-- **Hover / Focus:** 150ms to 240ms transitions, border or background tint changes, and visible focus rings. Avoid layout-shifting hover states.
+- **Hover / Focus:** Every enabled button and icon button needs a deliberate hover animation and visible focus state. Use 150ms to 240ms transitions, border or background tint changes, subtle foreground/icon shifts, or a restrained transform such as `translateY(-1px)` when it does not disturb dense layouts. Avoid layout-shifting hover states, heavy bounces, and motion that ignores `prefers-reduced-motion`.
 - **Secondary / Ghost:** Use low-opacity white fills, muted borders, and foreground text. Ghost buttons should remain legible but subordinate.
 
 ### Chips
@@ -237,7 +237,8 @@ Timeline rows, rail cards, and briefing sections should emphasize time, urgency,
 
 ### Do:
 
-- **Do** use `.interface-design/system.md` as the implementation source of truth for tokens.
+- **Do** use this file and `DESIGN.json` as the implementation source of truth for tokens.
+- **Do** give every enabled button a hover animation plus keyboard-visible focus treatment. Static buttons should be rare and intentional.
 - **Do** keep new spacing on the 4px grid: 2, 4, 6, 8, 12, 14, 16, 20, 24, 32.
 - **Do** use 1px borders and tonal fills for product depth.
 - **Do** reserve `#f97316` for warnings, snooze, notifications, and suspended-service states.

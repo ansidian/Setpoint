@@ -32,7 +32,7 @@ The dashboard fetches data from multiple sources, sends it through Claude for an
 |-------|------|
 | Frontend | React 19, Vite 8, React Router 7, Tailwind CSS 4 |
 | UI | shadcn/ui, Radix, Framer Motion |
-| Backend | Express.js (Node.js 18+) |
+| Backend | Express.js (Node.js 24.x) |
 | Database | Turso (LibSQL) |
 | AI | Claude API (Sonnet/Haiku, configurable) |
 | Search | OpenAI embeddings (text-embedding-3-small) |

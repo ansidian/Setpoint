@@ -164,8 +164,7 @@ ea-dashboard/
 │       ├── email-links.js          # Parse/transform email links for safe rendering
 │       ├── icons.js / icons.jsx    # Icon registry shared across components
 │       └── insight-resolver.js     # Typed date slot renderer for Claude insights
-└── docs/
-    └── superpowers/                # Feature plans and design specs
+└── docs/                           # Local gitignored working docs, plans, references, generated snapshots
 ```
 
 ## Frontend Architecture
@@ -662,7 +661,7 @@ All dropdowns, popovers, and panels use:
 4. `isolation: isolate` + opaque background (`#16161e`)
 5. Click-outside via `pointerdown` on `document`
 
-Reference implementations: `BriefingHistoryPanel.jsx`, `BriefingSearch.jsx`.
+Reference implementations: `BriefingHistoryPanel.jsx`, `src/components/shared/pickers/AnchoredFloatingPanel.jsx`.
 
 ### Scheduler
 
