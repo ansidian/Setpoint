@@ -378,6 +378,7 @@ export default function useCalendarEventEditor({
   view,
   editable = true,
   selectedDay,
+  selectedDate: selectedDateOverride,
   viewYear,
   viewMonth,
   refreshRange,
@@ -420,7 +421,7 @@ export default function useCalendarEventEditor({
   const sourcesRequestRef = useRef(null);
   const editorRequestIdRef = useRef(0);
 
-  const selectedDate = ymdFromView({ viewYear, viewMonth, selectedDay });
+  const selectedDate = selectedDateOverride || ymdFromView({ viewYear, viewMonth, selectedDay });
   const writableCalendars = useMemo(
     () => flattenWritableCalendars(sourceGroups),
     [sourceGroups],

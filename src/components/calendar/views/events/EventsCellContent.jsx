@@ -65,6 +65,9 @@ function eventDetail(ev) {
 function toEventDescriptor(ev) {
   return {
     id: getEventSelectionId(ev),
+    sourceEvent: ev,
+    writable: !!ev?.writable,
+    recurring: !!ev?.isRecurring,
     title: sanitizeEventDisplayTitle(ev?.title),
     detail: eventDetail(ev),
     leadingLabel: ev?.allDay ? "All day" : pacificTime(ev?.startMs),
@@ -83,19 +86,23 @@ export function renderEventsCellContents({
   selectedItemId,
   onSelectItem,
   onOpenOverflow,
+  quickActions,
   overflowOpen,
   layout,
   day,
+  dateKey,
 }) {
   if (!items?.length) return null;
 
   return (
     <CalendarCellItemStack
       day={day}
+      dateKey={dateKey}
       items={items.map(toEventDescriptor)}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}
+      quickActions={quickActions}
       pastTone={pastTone}
       metrics={resolveEventChipMetrics(layout)}
       overflowOpen={overflowOpen}

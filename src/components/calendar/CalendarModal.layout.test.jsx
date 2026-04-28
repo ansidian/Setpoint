@@ -212,6 +212,49 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getAllByText("Design review").length).toBeGreaterThan(0);
   });
 
+  it("renders adjacent-month event cells and keeps create seeded to the actual selected date", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-may-1",
+              title: "May planning",
+              startMs: new Date("2026-05-01T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-01T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const mayCell = screen.getByTestId("calendar-cell-2026-05-01");
+    expect(mayCell.getAttribute("data-current-month")).toBe("false");
+    expect(mayCell.getAttribute("data-boundary-side")).toBe("left");
+    expect(within(mayCell).getByText("May planning")).toBeTruthy();
+
+    fireEvent.click(mayCell);
+    fireEvent.click(screen.getByRole("button", { name: /new event on may 1/i }));
+
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/may 1, 2026/i);
+    });
+  });
+
   it("keeps the selected event when clicking its selected day cell again", () => {
     window.innerWidth = 1900;
 

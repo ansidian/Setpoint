@@ -16,6 +16,7 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 ## Process
 
 - Do not automatically run Playwright tests or browser automation unless explicitly requested.
+- In Plan mode, do not treat the clarifying-question UI's three-question batch limit as a product requirement. If more than three clarifying questions are necessary to align on scope, ask the most blocking questions first, then continue with additional concise follow-up questions or another clarification round before finalizing the plan.
 - For frontend-facing work, use the global `impeccable` skill and treat this as a dense product UI, not a marketing surface.
 - For UI work, add deliberate hover/focus motion to buttons and icon buttons unless the control is disabled or reduced-motion handling requires a static state.
 - Prefer repo patterns over new abstractions. Add abstractions only when they remove real complexity or match established structure.

@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "../CalendarRailStates.jsx";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
+import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
@@ -13,6 +14,7 @@ function buildContextContent({
   eventEditor,
   deadlineEditor,
   selectedDay,
+  selectedDateKey,
   itemsByDay,
   viewYear,
   viewMonth,
@@ -48,6 +50,7 @@ function buildContextContent({
   if (showDetail) {
     return activeView.renderDetail?.({
       selectedDay,
+      selectedDateKey,
       viewYear,
       viewMonth,
       items: selectedItems,
@@ -81,6 +84,7 @@ function buildContextContent({
       <CalendarSelectedDayEmptyRail
         view={view}
         selectedDay={selectedDay}
+        selectedDateKey={selectedDateKey}
         viewYear={viewYear}
         viewMonth={viewMonth}
         currentYear={currentYear}
@@ -126,6 +130,7 @@ export default function CalendarModalShell({
   monthYear,
   canGoPrev,
   navigateMonth,
+  monthMotionDirection,
   onViewChange,
   HeaderExtras,
   viewData,
@@ -133,6 +138,7 @@ export default function CalendarModalShell({
   suppressOutsideClick,
   eventEditor,
   selectedDay,
+  selectedDateKey,
   viewYear,
   viewMonth,
   setDeadlineEditor,
@@ -145,11 +151,14 @@ export default function CalendarModalShell({
   daysInMonth,
   trailingEmpty,
   itemsByDay,
+  itemsByDate,
   showGridSkeleton,
   buildFallbackDayState,
   closeEventEditor,
   setSelectedDay,
+  setSelectedDateKey,
   setSelectedItemId,
+  eventQuickActions,
   showDetail,
   showEmptySelection,
   effectiveSelectedItemId,
@@ -194,12 +203,14 @@ export default function CalendarModalShell({
     viewMonth,
     itemsByDay,
     selectedDay,
+    selectedDateKey,
     selectedItemId: effectiveSelectedItemId,
     selectedItems,
     selectedDayState,
     eventEditor,
     deadlineEditor,
     setSelectedDay,
+    setSelectedDateKey,
     setSelectedItemId,
     setDeadlineEditor,
     onCreateEvent: () => eventEditor.openCreate?.(),
@@ -218,6 +229,7 @@ export default function CalendarModalShell({
     eventEditor,
     deadlineEditor,
     selectedDay,
+    selectedDateKey,
     itemsByDay,
     viewYear,
     viewMonth,
@@ -343,6 +355,7 @@ export default function CalendarModalShell({
             suppressOutsideClick={suppressOutsideClick}
             eventEditor={eventEditor}
             selectedDay={selectedDay}
+            selectedDateKey={selectedDateKey}
             viewYear={viewYear}
             viewMonth={viewMonth}
             setDeadlineEditor={setDeadlineEditor}
@@ -386,7 +399,9 @@ export default function CalendarModalShell({
                   daysInMonth={daysInMonth}
                   trailingEmpty={trailingEmpty}
                   itemsByDay={itemsByDay}
+                  itemsByDate={itemsByDate}
                   selectedDay={selectedDay}
+                  selectedDateKey={selectedDateKey}
                   selectedItemId={effectiveSelectedItemId}
                   viewData={viewData}
                   activeView={activeView}
@@ -396,11 +411,17 @@ export default function CalendarModalShell({
                   buildFallbackDayState={buildFallbackDayState}
                   closeEventEditor={closeEventEditor}
                   setSelectedDay={setSelectedDay}
+                  setSelectedDateKey={setSelectedDateKey}
                   setSelectedItemId={setSelectedItemId}
+                  eventQuickActions={eventQuickActions}
                   setDeadlineEditor={setDeadlineEditor}
                   canGoPrev={canGoPrev}
                   navigateMonth={navigateMonth}
+                  monthMotionDirection={monthMotionDirection}
                 />
+                {view === "events" ? (
+                  <CalendarQuickActionLayer quickActions={eventQuickActions} />
+                ) : null}
               </div>
 
               <CalendarWorkspaceSupportBand
