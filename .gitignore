@@ -15,7 +15,6 @@ morning-briefing.jsx
 .claude/
 .planning/
 .worktrees/
-CLAUDE.md
 .playwright-mcp
 .playwright-cli
 playwright/.auth/
@@ -39,6 +38,5 @@ dist-ssr
 .superpowers/
 .agents/
 .continue/
-AGENTS.md
 skills-lock.json
 docs/
