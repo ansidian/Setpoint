@@ -1,8 +1,22 @@
 import { useCallback, useRef, useState } from "react";
 import { getCalendarRange } from "../api";
 
+const PREFETCH_MONTH_RADIUS = 1;
+const MAX_MONTHS_PER_FETCH = 2;
+
 function monthKey(year, month) {
   return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+function monthIndex(key) {
+  const [year, month] = key.split("-").map(Number);
+  return year * 12 + (month - 1);
+}
+
+function keyFromMonthIndex(index) {
+  const year = Math.floor(index / 12);
+  const month = index % 12;
+  return monthKey(year, month);
 }
 
 // Given an inclusive date range, return the set of month keys it touches.
@@ -16,6 +30,39 @@ function monthsInRange(start, end) {
     cur.setUTCMonth(cur.getUTCMonth() + 1);
   }
   return result;
+}
+
+function expandMonthKeys(keys, radius = PREFETCH_MONTH_RADIUS) {
+  const indexes = keys.map(monthIndex).filter(Number.isFinite);
+  if (!indexes.length) return [];
+  const first = Math.min(...indexes) - radius;
+  const last = Math.max(...indexes) + radius;
+  const result = [];
+  for (let index = first; index <= last; index += 1) {
+    result.push(keyFromMonthIndex(index));
+  }
+  return result;
+}
+
+function groupMonthKeys(keys) {
+  const sorted = [...new Set(keys)]
+    .sort((a, b) => monthIndex(a) - monthIndex(b));
+  const groups = [];
+  let current = [];
+
+  for (const key of sorted) {
+    const previous = current[current.length - 1];
+    const isContiguous = previous && monthIndex(key) === monthIndex(previous) + 1;
+    if (!current.length || (isContiguous && current.length < MAX_MONTHS_PER_FETCH)) {
+      current.push(key);
+      continue;
+    }
+    groups.push(current);
+    current = [key];
+  }
+
+  if (current.length) groups.push(current);
+  return groups;
 }
 
 function monthBounds(key) {
@@ -62,20 +109,34 @@ export default function useCalendarRange({ disabled = false } = {}) {
     return cacheRef.current.get(monthKey(year, month)) || [];
   }, []);
 
-  const fetchMonth = useCallback(async (key) => {
-    const existing = inFlightRef.current.get(key);
-    if (existing) return existing;
+  const fetchMonthGroup = useCallback((keys) => {
+    const uncachedKeys = keys.filter((key) => !cacheRef.current.has(key));
+    if (!uncachedKeys.length) return Promise.resolve();
 
-    const { start, end } = monthBounds(key);
+    const { start } = monthBounds(uncachedKeys[0]);
+    const { end } = monthBounds(uncachedKeys[uncachedKeys.length - 1]);
     const promise = (async () => {
       try {
         const { events } = await getCalendarRange(start, end);
-        cacheRef.current.set(key, events || []);
+        const buckets = new Map(uncachedKeys.map((key) => [key, []]));
+        for (const event of events || []) {
+          const key = monthKeyFromEpochMs(event?.startMs);
+          if (buckets.has(key)) buckets.get(key).push(event);
+        }
+        for (const key of uncachedKeys) {
+          cacheRef.current.set(key, buckets.get(key) || []);
+        }
       } finally {
-        inFlightRef.current.delete(key);
+        for (const key of uncachedKeys) {
+          if (inFlightRef.current.get(key) === promise) {
+            inFlightRef.current.delete(key);
+          }
+        }
       }
     })();
-    inFlightRef.current.set(key, promise);
+    for (const key of uncachedKeys) {
+      inFlightRef.current.set(key, promise);
+    }
     return promise;
   }, []);
 
@@ -83,13 +144,24 @@ export default function useCalendarRange({ disabled = false } = {}) {
     if (disabled) return [];
 
     const keys = monthsInRange(start, end);
-    const missing = keys.filter((k) => !cacheRef.current.has(k));
+    const fetchKeys = expandMonthKeys(keys);
+    const pending = [...new Set(
+      fetchKeys
+        .map((key) => inFlightRef.current.get(key))
+        .filter(Boolean),
+    )];
+    const missing = fetchKeys.filter((k) => !cacheRef.current.has(k) && !inFlightRef.current.has(k));
 
-    if (missing.length > 0) {
+    if (pending.length > 0 || missing.length > 0) {
       setLoading(true);
       setError(null);
       try {
-        await Promise.all(missing.map(fetchMonth));
+        const results = await Promise.allSettled([
+          ...pending,
+          ...groupMonthKeys(missing).map(fetchMonthGroup),
+        ]);
+        const failed = results.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
       } catch (err) {
         setError(err);
       } finally {
@@ -108,11 +180,11 @@ export default function useCalendarRange({ disabled = false } = {}) {
       }
     }
     return all;
-  }, [disabled, fetchMonth]);
+  }, [disabled, fetchMonthGroup]);
 
   const refreshRange = useCallback(async (start, end) => {
     if (disabled) return [];
-    const keys = monthsInRange(start, end);
+    const keys = expandMonthKeys(monthsInRange(start, end));
     for (const key of keys) {
       cacheRef.current.delete(key);
       inFlightRef.current.delete(key);
