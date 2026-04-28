@@ -242,8 +242,24 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     const mayCell = screen.getByTestId("calendar-cell-2026-05-01");
+    const marchCell = screen.getByTestId("calendar-cell-2026-03-31");
     expect(mayCell.getAttribute("data-current-month")).toBe("false");
-    expect(mayCell.getAttribute("data-boundary-side")).toBe("left");
+    expect(mayCell.getAttribute("data-boundary-side")).toContain("left");
+    expect(mayCell.getAttribute("data-boundary-side")).toContain("top");
+    expect(within(marchCell).queryByText("Mar 31")).toBeNull();
+    expect(within(marchCell).getByText("31")).toBeTruthy();
+    expect(within(mayCell).getByText("May 1")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-2026-05-02")).queryByText("May 2")).toBeNull();
+    expect(within(screen.getByTestId("calendar-cell-2026-05-02")).getByText("2")).toBeTruthy();
+    const mayBoundary = within(mayCell).getByTestId("calendar-month-boundary-2026-05-01");
+    expect(mayBoundary.getAttribute("data-boundary-sides")).toContain("left");
+    expect(mayBoundary.getAttribute("data-boundary-sides")).toContain("top");
+    expect(mayBoundary.style.borderTopLeftRadius).toBe("8px");
+    expect(mayBoundary.style.borderTop).toBe("2px solid rgb(0, 149, 255)");
+    expect(mayBoundary.style.right).toBe("-6px");
+    const maySecondBoundary = within(screen.getByTestId("calendar-cell-2026-05-02")).getByTestId("calendar-month-boundary-2026-05-02");
+    expect(maySecondBoundary.getAttribute("data-boundary-sides")).toBe("top");
+    expect(maySecondBoundary.style.left).toBe("-6px");
     expect(within(mayCell).getByText("May planning")).toBeTruthy();
 
     fireEvent.click(mayCell);

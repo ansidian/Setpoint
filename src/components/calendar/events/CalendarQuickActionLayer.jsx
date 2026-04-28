@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const SCOPE_OPTIONS = [
   { value: "one", label: "Just this one" },
@@ -25,34 +25,117 @@ function menuStyle(menu) {
   return { left, top, width };
 }
 
+function actionButtonColors(tone, active) {
+  if (tone === "danger") {
+    return {
+      border: active ? "1px solid rgba(243,139,168,0.52)" : "1px solid rgba(243,139,168,0.34)",
+      background: active ? "rgba(243,139,168,0.20)" : "rgba(243,139,168,0.14)",
+      color: "#f38ba8",
+    };
+  }
+  if (tone === "primary") {
+    return {
+      border: active ? "1px solid rgba(203,166,218,0.42)" : "1px solid rgba(255,255,255,0.08)",
+      background: active ? "rgba(203,166,218,0.22)" : "rgba(203,166,218,0.16)",
+      color: "#cba6da",
+    };
+  }
+  return {
+    border: active ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(255,255,255,0.08)",
+    background: active ? "rgba(255,255,255,0.075)" : "rgba(255,255,255,0.04)",
+    color: "#cdd6f4",
+  };
+}
+
 function ActionButton({ children, tone = "default", disabled, onClick, testId }) {
+  const [active, setActive] = useState(false);
+  const colors = actionButtonColors(tone, active && !disabled);
+
   return (
     <button
       type="button"
       data-testid={testId}
+      data-calendar-focus-ring="true"
       disabled={disabled}
       onClick={onClick}
+      onPointerEnter={() => {
+        if (!disabled) setActive(true);
+      }}
+      onPointerLeave={() => setActive(false)}
+      onFocus={() => {
+        if (!disabled) setActive(true);
+      }}
+      onBlur={() => setActive(false)}
       style={{
         height: 32,
         padding: "0 10px",
         borderRadius: 8,
-        border: tone === "danger"
-          ? "1px solid rgba(243,139,168,0.34)"
-          : "1px solid rgba(255,255,255,0.08)",
-        background: tone === "danger"
-          ? "rgba(243,139,168,0.14)"
-          : tone === "primary"
-            ? "rgba(203,166,218,0.16)"
-            : "rgba(255,255,255,0.04)",
-        color: tone === "danger" ? "#f38ba8" : tone === "primary" ? "#cba6da" : "#cdd6f4",
+        border: colors.border,
+        background: colors.background,
+        color: colors.color,
         fontSize: 11,
         fontWeight: 700,
         fontFamily: "inherit",
         cursor: disabled ? "not-allowed" : "pointer",
+        transform: active && !disabled ? "translateY(-1px)" : "translateY(0)",
+        opacity: disabled ? 0.62 : 1,
         transition: "background 150ms, border-color 150ms, transform 150ms",
       }}
     >
       {children}
+    </button>
+  );
+}
+
+function ScopeButton({ option, selected, disabled, onClick }) {
+  const [active, setActive] = useState(false);
+  const interactive = active && !disabled;
+
+  return (
+    <button
+      type="button"
+      data-testid={`calendar-quick-action-scope-${option.value}`}
+      data-calendar-focus-ring="true"
+      disabled={disabled}
+      onClick={onClick}
+      onPointerEnter={() => {
+        if (!disabled) setActive(true);
+      }}
+      onPointerLeave={() => setActive(false)}
+      onFocus={() => {
+        if (!disabled) setActive(true);
+      }}
+      onBlur={() => setActive(false)}
+      style={{
+        minHeight: 36,
+        padding: "7px 8px",
+        borderRadius: 8,
+        border: selected
+          ? interactive
+            ? "1px solid rgba(203,166,218,0.50)"
+            : "1px solid rgba(203,166,218,0.38)"
+          : interactive
+            ? "1px solid rgba(255,255,255,0.15)"
+            : "1px solid rgba(255,255,255,0.08)",
+        background: selected
+          ? interactive
+            ? "rgba(203,166,218,0.22)"
+            : "rgba(203,166,218,0.15)"
+          : interactive
+            ? "rgba(255,255,255,0.07)"
+            : "rgba(255,255,255,0.035)",
+        color: selected ? "#cba6da" : "#cdd6f4",
+        fontSize: 10.5,
+        lineHeight: 1.2,
+        fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: "inherit",
+        transform: interactive ? "translateY(-1px)" : "translateY(0)",
+        opacity: disabled ? 0.62 : 1,
+        transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms, opacity 150ms",
+      }}
+    >
+      {option.label}
     </button>
   );
 }
@@ -140,14 +223,22 @@ function ScopePrompt({ quickActions }) {
 
   useEffect(() => {
     if (!prompt) return undefined;
+    function handlePointerDown(event) {
+      if (ref.current?.contains(event.target)) return;
+      quickActions.cancelPrompt();
+    }
     function handleKeyDown(event) {
       if (event.key !== "Escape") return;
       quickActions.cancelPrompt();
       event.preventDefault();
       event.stopPropagation();
     }
+    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown, true);
-    return () => document.removeEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
   }, [prompt, quickActions]);
 
   if (!prompt) return null;
@@ -187,30 +278,13 @@ function ScopePrompt({ quickActions }) {
         {SCOPE_OPTIONS.map((option) => {
           const selected = prompt.selectedScope === option.value;
           return (
-            <button
+            <ScopeButton
               key={option.value}
-              type="button"
-              data-testid={`calendar-quick-action-scope-${option.value}`}
+              option={option}
+              selected={selected}
               disabled={prompt.confirming}
               onClick={() => quickActions.setPromptScope(option.value)}
-              style={{
-                minHeight: 36,
-                padding: "7px 8px",
-                borderRadius: 8,
-                border: selected
-                  ? "1px solid rgba(203,166,218,0.38)"
-                  : "1px solid rgba(255,255,255,0.08)",
-                background: selected ? "rgba(203,166,218,0.15)" : "rgba(255,255,255,0.035)",
-                color: selected ? "#cba6da" : "#cdd6f4",
-                fontSize: 10.5,
-                lineHeight: 1.2,
-                fontWeight: 700,
-                cursor: prompt.confirming ? "not-allowed" : "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {option.label}
-            </button>
+            />
           );
         })}
       </div>
