@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
+import { parseYmd, ymdFromParts } from "../calendarDateUtils.js";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const GRID_ROWS = 6;
@@ -24,11 +25,22 @@ function formatCellDate(viewYear, viewMonth, day) {
   });
 }
 
+function formatCellDateKey(dateKey) {
+  const parsed = parseYmd(dateKey);
+  if (!parsed) return "";
+  return new Date(parsed.year, parsed.month, parsed.day).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 function buildCellAriaLabel({
   viewLabel,
   viewYear,
   viewMonth,
   day,
+  dateKey,
   itemCount,
   isSelected,
   isToday,
@@ -42,7 +54,7 @@ function buildCellAriaLabel({
     ? `No ${noun}s`
     : `${itemCount} ${noun}${itemCount === 1 ? "" : "s"}`;
   return [
-    formatCellDate(viewYear, viewMonth, day),
+    dateKey ? formatCellDateKey(dateKey) : formatCellDate(viewYear, viewMonth, day),
     countLabel,
     isToday ? "today" : null,
     isSelected ? "selected" : null,
@@ -55,6 +67,10 @@ function CalendarCell({
   viewMonth,
   viewLabel,
   day,
+  dateKey,
+  dateLabel,
+  inCurrentMonth = true,
+  boundarySide = null,
   items,
   selectedItemId,
   itemCount,
@@ -69,7 +85,9 @@ function CalendarCell({
   onSelectItem,
   onOpenOverflow,
   renderCellContents,
+  quickActions,
 }) {
+  const [hovered, setHovered] = useState(false);
   const todayAccent = "var(--ea-accent)";
   let cellBg = "rgba(255,255,255,0.015)";
   let cellBorder = "1px solid rgba(255,255,255,0.04)";
@@ -81,6 +99,12 @@ function CalendarCell({
   let dateBadgeBg = "transparent";
   let dateBadgeBorder = "1px solid transparent";
   let dateBadgeShadow = "none";
+
+  if (!inCurrentMonth) {
+    cellBg = "rgba(255,255,255,0.008)";
+    cellBorder = "1px solid rgba(255,255,255,0.022)";
+    dateColor = "rgba(205,214,244,0.34)";
+  }
 
   if (isSelected) {
     cellBg = "rgba(203,166,218,0.06)";
@@ -106,6 +130,18 @@ function CalendarCell({
       : "1px solid rgba(255,255,255,0.022)";
     dateColor = pastTone === "items" ? "rgba(205,214,244,0.48)" : "rgba(205,214,244,0.33)";
     if (!hasItems) dateWeight = 400;
+  }
+
+  if (!isSelected && hovered) {
+    cellBg = inCurrentMonth ? "rgba(255,255,255,0.035)" : "rgba(255,255,255,0.018)";
+    cellBorder = "1px solid rgba(255,255,255,0.085)";
+  }
+
+  const isDropTarget = quickActions?.dropTargetDate === dateKey;
+  if (isDropTarget) {
+    cellBg = "rgba(203,166,218,0.10)";
+    cellBorder = "1px solid rgba(203,166,218,0.58)";
+    cellShadow = "0 0 0 1px rgba(203,166,218,0.20), inset 0 0 0 1px rgba(203,166,218,0.08)";
   }
 
   if (isToday) {
@@ -138,12 +174,15 @@ function CalendarCell({
     onSelectDay: () => onSelectDay?.(),
     onSelectItem,
     onOpenOverflow,
+    quickActions,
+    dateKey,
   });
   const ariaLabel = buildCellAriaLabel({
     viewLabel,
     viewYear,
     viewMonth,
     day,
+    dateKey,
     itemCount,
     isSelected,
     isToday,
@@ -164,8 +203,41 @@ function CalendarCell({
       aria-current={isToday ? "date" : undefined}
       aria-selected={isSelected}
       data-calendar-focus-ring="true"
-      data-testid={`calendar-cell-${day}`}
+      data-testid={inCurrentMonth ? `calendar-cell-${day}` : `calendar-cell-${dateKey}`}
+      data-date-key={dateKey || undefined}
+      data-current-month={inCurrentMonth ? "true" : "false"}
+      data-boundary-side={boundarySide || "none"}
       data-past-tone={pastTone || "none"}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => {
+        setHovered(false);
+        quickActions?.leaveDropTarget?.(dateKey);
+      }}
+      onDragEnter={(event) => {
+        if (!quickActions?.draggingEventId || !dateKey) return;
+        event.preventDefault();
+        quickActions.enterDropTarget(dateKey);
+      }}
+      onDragOver={(event) => {
+        if (!quickActions?.draggingEventId || !dateKey) return;
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!quickActions?.draggingEventId || !dateKey) return;
+        event.preventDefault();
+        const payload = event.dataTransfer?.getData("application/x-ea-calendar-event");
+        let droppedEvent = null;
+        try {
+          droppedEvent = payload ? JSON.parse(payload) : null;
+        } catch {
+          droppedEvent = null;
+        }
+        quickActions.dropEvent({
+          event: droppedEvent,
+          targetDate: dateKey,
+          anchorRect: event.currentTarget.getBoundingClientRect(),
+        });
+      }}
       style={{
         position: "relative",
         minWidth: 0,
@@ -176,12 +248,27 @@ function CalendarCell({
         border: cellBorder,
         boxShadow: cellShadow,
         cursor: "pointer",
-        transition: "box-shadow 150ms, border-color 150ms, background 150ms",
+        opacity: inCurrentMonth ? 1 : 0.68,
+        transition: "box-shadow 150ms, border-color 150ms, background 150ms, opacity 150ms",
         display: "flex",
         flexDirection: "column",
         gap: 2,
       }}
     >
+      {boundarySide ? (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 8,
+            bottom: 8,
+            [boundarySide]: -5,
+            width: 1,
+            background: "rgba(203,166,218,0.26)",
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
       {todayWash && (
         <span
           aria-hidden
@@ -239,7 +326,7 @@ function CalendarCell({
             transition: "background 150ms, border-color 150ms, box-shadow 150ms",
           }}
         >
-          {day}
+          {dateLabel || day}
         </span>
       </div>
       <div
@@ -333,7 +420,9 @@ export default function CalendarGrid({
   daysInMonth,
   trailingEmpty,
   itemsByDay,
+  itemsByDate,
   selectedDay,
+  selectedDateKey,
   selectedItemId,
   viewData,
   activeView,
@@ -343,14 +432,16 @@ export default function CalendarGrid({
   buildFallbackDayState,
   closeEventEditor,
   setSelectedDay,
+  setSelectedDateKey,
   setSelectedItemId,
   setDeadlineEditor,
+  eventQuickActions,
   canGoPrev = true,
   navigateMonth,
+  monthMotionDirection = 0,
 }) {
   const gridShellRef = useRef(null);
   const monthWheelRef = useRef({ accumulatedY: 0, lastNavigateAt: -Infinity });
-  const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
   const fillGridHeight = !layout.stacked;
   const gridRowCount = fillGridHeight
     ? Math.max(1, Math.ceil((firstDay + daysInMonth) / 7))
@@ -365,8 +456,50 @@ export default function CalendarGrid({
     && overflowPopover.viewMonth === viewMonth
       ? overflowPopover
       : null;
+  const eventDateCells = view === "events";
+  const selectedCellKey = eventDateCells ? selectedDateKey : null;
 
-  function handleSelectDay(day, isSelected) {
+  const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
+  const monthCells = eventDateCells
+    ? Array.from({ length: eventCellCount }, (_, index) => {
+        const date = new Date(Date.UTC(viewYear, viewMonth, 1, 12));
+        date.setUTCDate(date.getUTCDate() - firstDay + index);
+        const dateKey = date.toISOString().slice(0, 10);
+        const parsed = parseYmd(dateKey);
+        const inCurrentMonth = parsed?.year === viewYear && parsed?.month === viewMonth;
+        const previousInMonth = index > 0
+          ? (() => {
+              const previous = new Date(Date.UTC(viewYear, viewMonth, 1, 12));
+              previous.setUTCDate(previous.getUTCDate() - firstDay + index - 1);
+              const prevParsed = parseYmd(previous.toISOString().slice(0, 10));
+              return prevParsed?.year === viewYear && prevParsed?.month === viewMonth;
+            })()
+          : false;
+        const nextInMonth = index < eventCellCount - 1
+          ? (() => {
+              const next = new Date(Date.UTC(viewYear, viewMonth, 1, 12));
+              next.setUTCDate(next.getUTCDate() - firstDay + index + 1);
+              const nextParsed = parseYmd(next.toISOString().slice(0, 10));
+              return nextParsed?.year === viewYear && nextParsed?.month === viewMonth;
+            })()
+          : false;
+        const monthLabel = new Date(parsed.year, parsed.month, parsed.day).toLocaleDateString("en-US", { month: "short" });
+        const boundarySide = !inCurrentMonth && nextInMonth
+          ? "right"
+          : !inCurrentMonth && previousInMonth
+            ? "left"
+            : null;
+        return {
+          day: parsed.day,
+          dateKey,
+          dateLabel: boundarySide ? `${monthLabel} ${parsed.day}` : String(parsed.day),
+          inCurrentMonth,
+          boundarySide,
+        };
+      })
+    : null;
+
+  function handleSelectDay(day, isSelected, dateKey = null) {
     if (isSelected) return;
 
     closeEventEditor();
@@ -375,15 +508,17 @@ export default function CalendarGrid({
     }
 
     setSelectedDay(day);
+    if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(null);
   }
 
-  function handleSelectItem(day, itemId) {
+  function handleSelectItem(day, itemId, dateKey = null) {
     closeEventEditor();
     if (view === "deadlines") {
       setDeadlineEditor(null);
     }
     setSelectedDay(day);
+    if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(itemId != null ? String(itemId) : null);
     setOverflowPopover(null);
   }
@@ -470,6 +605,7 @@ export default function CalendarGrid({
             year: "numeric",
           })}`}
           key={`${view}-${viewYear}-${viewMonth}`}
+          data-month-motion={monthMotionDirection > 0 ? "next" : monthMotionDirection < 0 ? "prev" : "none"}
           style={{
             height: "100%",
             display: "grid",
@@ -478,39 +614,61 @@ export default function CalendarGrid({
               ? `repeat(${gridRowCount}, minmax(0, 1fr))`
               : `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
             gap: layout.gridGap,
+            animation: monthMotionDirection > 0
+              ? "calendarMonthSlideNext 170ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : monthMotionDirection < 0
+                ? "calendarMonthSlidePrev 170ms cubic-bezier(0.16, 1, 0.3, 1)"
+                : "none",
+            willChange: monthMotionDirection ? "transform, opacity" : "auto",
           }}
         >
-          {Array.from({ length: firstDay }, (_, index) => <div key={`empty-${index}`} role="presentation" />)}
+          {!eventDateCells ? Array.from({ length: firstDay }, (_, index) => <div key={`empty-${index}`} role="presentation" />) : null}
 
-          {Array.from({ length: daysInMonth }, (_, index) => {
-            const day = index + 1;
-            const rawItems = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
+          {(eventDateCells ? monthCells : Array.from({ length: daysInMonth }, (_, index) => ({
+            day: index + 1,
+            dateKey: ymdFromParts(viewYear, viewMonth, index + 1),
+            dateLabel: String(index + 1),
+            inCurrentMonth: true,
+            boundarySide: null,
+          }))).map((cell) => {
+            const day = cell.day;
+            const rawItems = eventDateCells
+              ? (itemsByDate?.[cell.dateKey] || (cell.inCurrentMonth && Array.isArray(itemsByDay[day]) ? itemsByDay[day] : []))
+              : Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
             const dayState = activeView.getDayState?.(itemsByDay[day]) ?? buildFallbackDayState(itemsByDay[day]);
-            const cellItems = activeView.getDayState ? dayState : rawItems;
+            const resolvedDayState = eventDateCells ? buildFallbackDayState(rawItems) : dayState;
+            const cellItems = activeView.getDayState ? resolvedDayState : rawItems;
             const selectionPool = Array.isArray(dayState.items) ? dayState.items : rawItems;
-            const hasItems = dayState.totalCount > 0;
-            const isToday = isCurrentMonth && day === todayDate;
-            const isSelected = selectedDay === day;
-            const hasOverdue = activeView.hasOverdue?.(dayState) || false;
-            const allComplete = activeView.allComplete?.(dayState) || false;
+            const resolvedSelectionPool = eventDateCells ? rawItems : selectionPool;
+            const hasItems = resolvedDayState.totalCount > 0;
+            const isToday = cell.dateKey === ymdFromParts(currentYear, currentMonth, todayDate);
+            const isSelected = eventDateCells ? selectedCellKey === cell.dateKey : selectedDay === day;
+            const hasOverdue = activeView.hasOverdue?.(resolvedDayState) || false;
+            const allComplete = activeView.allComplete?.(resolvedDayState) || false;
             const isPastDay = view === "events"
-              && new Date(viewYear, viewMonth, day) < new Date(currentYear, currentMonth, todayDate);
+              && new Date(`${cell.dateKey}T00:00:00`) < new Date(currentYear, currentMonth, todayDate);
             const pastTone = isPastDay ? (hasItems ? "items" : "empty") : null;
             const resolveItemId = activeView.getItemId || ((item) => item?.id);
-            const dayHasSelectedItem = isSelected && selectionPool.some((item) => String(resolveItemId(item)) === String(selectedItemId));
-            const overflowOpen = resolvedPopover?.day === day;
+            const dayHasSelectedItem = isSelected && resolvedSelectionPool.some((item) => String(resolveItemId(item)) === String(selectedItemId));
+            const overflowOpen = resolvedPopover?.dateKey
+              ? resolvedPopover.dateKey === cell.dateKey
+              : resolvedPopover?.day === day;
 
             return (
               <CalendarCell
-                key={day}
+                key={cell.dateKey || day}
                 view={view}
                 viewYear={viewYear}
                 viewMonth={viewMonth}
                 viewLabel={activeView.label || view}
                 day={day}
+                dateKey={cell.dateKey}
+                dateLabel={cell.dateLabel}
+                inCurrentMonth={cell.inCurrentMonth}
+                boundarySide={cell.boundarySide}
                 items={cellItems}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
-                itemCount={dayState.totalCount}
+                itemCount={resolvedDayState.totalCount}
                 hasItems={hasItems}
                 isToday={isToday}
                 isSelected={isSelected}
@@ -518,10 +676,10 @@ export default function CalendarGrid({
                 hasOverdue={hasOverdue}
                 allComplete={allComplete}
                 loading={viewData?.isLoading}
-                onSelectDay={() => handleSelectDay(day, isSelected)}
-                onSelectItem={(itemId) => handleSelectItem(day, itemId)}
+                onSelectDay={() => handleSelectDay(day, isSelected, cell.dateKey)}
+                onSelectItem={(itemId) => handleSelectItem(day, itemId, cell.dateKey)}
                 onOpenOverflow={({ triggerElement, hiddenItems, totalCount, visibleCount }) => {
-                  const anchorKey = `${view}-${viewYear}-${viewMonth}-${day}`;
+                  const anchorKey = `${view}-${cell.dateKey || `${viewYear}-${viewMonth}-${day}`}`;
                   setOverflowPopover((current) => {
                     if (current?.anchorKey === anchorKey) {
                       return null;
@@ -531,13 +689,14 @@ export default function CalendarGrid({
                       items: hiddenItems,
                       totalCount,
                       visibleCount,
-                      label: new Date(viewYear, viewMonth, day).toLocaleDateString("en-US", {
+                      label: new Date(`${cell.dateKey}T00:00:00`).toLocaleDateString("en-US", {
                         weekday: "long",
                         month: "long",
                         day: "numeric",
                       }),
                       viewLabel: activeView.label || (view[0].toUpperCase() + view.slice(1)),
                       day,
+                      dateKey: cell.dateKey,
                       view,
                       viewYear,
                       viewMonth,
@@ -550,11 +709,12 @@ export default function CalendarGrid({
                   overflowOpen,
                   layout,
                 })}
+                quickActions={eventDateCells ? eventQuickActions : null}
               />
             );
           })}
 
-          {Array.from({ length: resolvedTrailingEmpty }, (_, index) => <div key={`trail-${index}`} role="presentation" />)}
+          {!eventDateCells ? Array.from({ length: resolvedTrailingEmpty }, (_, index) => <div key={`trail-${index}`} role="presentation" />) : null}
         </div>
 
         {showGridSkeleton && (
@@ -575,10 +735,11 @@ export default function CalendarGrid({
         selectedItemId={selectedItemId}
         onSelectItem={(itemId) => {
           if (resolvedPopover?.day == null) return;
-          handleSelectItem(resolvedPopover.day, itemId);
+          handleSelectItem(resolvedPopover.day, itemId, resolvedPopover.dateKey || null);
         }}
         onClose={() => setOverflowPopover(null)}
         suppressOutsideClick={suppressOutsideClick}
+        quickActions={eventDateCells ? eventQuickActions : null}
       />
     </div>
   );

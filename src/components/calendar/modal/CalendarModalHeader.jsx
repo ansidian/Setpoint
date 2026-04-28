@@ -6,15 +6,27 @@ const VIEW_OPTIONS = [
   { key: "deadlines", label: "Deadlines", Icon: ListChecks, hint: "3" },
 ];
 
-function formatSelectedDate(viewYear, viewMonth, selectedDay) {
-  if (!selectedDay) return null;
-  return new Date(viewYear, viewMonth, selectedDay).toLocaleDateString("en-US", {
+function parseDateKey(dateKey) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]) - 1,
+    day: Number(match[3]),
+  };
+}
+
+function formatSelectedDate(viewYear, viewMonth, selectedDay, selectedDateKey) {
+  const parsed = parseDateKey(selectedDateKey);
+  if (!selectedDay && !parsed) return null;
+  return new Date(parsed?.year ?? viewYear, parsed?.month ?? viewMonth, parsed?.day ?? selectedDay).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 }
 
-function selectedDateYmd(viewYear, viewMonth, selectedDay) {
+function selectedDateYmd(viewYear, viewMonth, selectedDay, selectedDateKey) {
+  if (selectedDateKey) return selectedDateKey;
   if (!selectedDay) return null;
   return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
 }
@@ -104,6 +116,7 @@ export default function CalendarModalHeader({
   suppressOutsideClick,
   eventEditor,
   selectedDay,
+  selectedDateKey,
   viewYear,
   viewMonth,
   setDeadlineEditor,
@@ -111,8 +124,8 @@ export default function CalendarModalHeader({
   viewLabel,
 }) {
   const titleSize = layout.tier === "uhd" ? 40 : layout.tier === "xl" ? 40 : layout.tier === "lg" ? 36 : layout.tier === "md" ? 32 : 28;
-  const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay);
-  const selectedDate = selectedDateYmd(viewYear, viewMonth, selectedDay);
+  const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay, selectedDateKey);
+  const selectedDate = selectedDateYmd(viewYear, viewMonth, selectedDay, selectedDateKey);
 
   return (
     <div

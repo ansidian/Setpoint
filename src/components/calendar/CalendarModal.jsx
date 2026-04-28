@@ -4,19 +4,20 @@ import deadlinesView from "./views/deadlinesView.jsx";
 import eventsView from "./views/eventsView.jsx";
 import { getCalendarLayoutMetrics } from "./calendarLayout.js";
 import useCalendarEventEditor from "./events/useCalendarEventEditor.js";
+import useCalendarQuickActions from "./events/useCalendarQuickActions.js";
 import CalendarModalShell from "./modal/CalendarModalShell.jsx";
+import {
+  getMonthData,
+  getVisibleGridRange,
+  parseYmd,
+  ymdFromParts,
+} from "./calendarDateUtils.js";
 
 const VIEWS = {
   events: eventsView,
   bills: billsView,
   deadlines: deadlinesView,
 };
-
-function getMonthData(year, month) {
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  return { firstDay, daysInMonth };
-}
 
 function isEditableTarget(target) {
   if (!(target instanceof HTMLElement)) return false;
@@ -40,6 +41,28 @@ function parseFocusDate(focusDate) {
 function ymdFromView({ viewYear, viewMonth, selectedDay }) {
   if (!selectedDay) return null;
   return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+}
+
+function addMonthOffset(year, month, offset) {
+  const date = new Date(year, month + offset, 1);
+  return { year: date.getFullYear(), month: date.getMonth() };
+}
+
+function eventCacheKey(event) {
+  if (!event?.id) return null;
+  return event.originalStartTime ? `${event.id}::${event.originalStartTime}` : String(event.id);
+}
+
+function dedupeEvents(events) {
+  const seen = new Set();
+  const result = [];
+  for (const event of events) {
+    const key = eventCacheKey(event);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    result.push(event);
+  }
+  return result;
 }
 
 function buildFallbackDayState(rawItems) {
@@ -81,6 +104,7 @@ export default function CalendarModal({
       : { month: currentMonth, year: currentYear }
   ));
   const [selectedDay, setSelectedDay] = useState(() => (initialFocus ? initialFocus.getDate() : null));
+  const [selectedDateKey, setSelectedDateKey] = useState(() => (initialFocus ? ymdFromParts(initialFocus.getFullYear(), initialFocus.getMonth(), initialFocus.getDate()) : null));
   const [selectedItemId, setSelectedItemId] = useState(() => (open && focusItemId ? String(focusItemId) : null));
   const [deadlineEditor, setDeadlineEditor] = useState(() => (
     open && view === "deadlines" && focusItemId === "new"
@@ -97,6 +121,7 @@ export default function CalendarModal({
   const [prevOpen, setPrevOpen] = useState(open);
   const [prevView, setPrevView] = useState(view);
   const [prevOpenRequestId, setPrevOpenRequestId] = useState(openRequestId);
+  const [monthMotionDirection, setMonthMotionDirection] = useState(0);
 
   const syncSnapshot = useMemo(() => {
     const didOpen = !prevOpen && open;
@@ -107,6 +132,7 @@ export default function CalendarModal({
 
     let nextViewDate = viewDate;
     let nextSelectedDay = selectedDay;
+    let nextSelectedDateKey = selectedDateKey;
     let nextSelectedItemId = selectedItemId;
     let nextPendingFocusDate = pendingFocusDate;
     let nextPendingFocusItemId = pendingFocusItemId;
@@ -120,11 +146,13 @@ export default function CalendarModal({
       if (openingFocus) {
         nextViewDate = { month: openingFocus.getMonth(), year: openingFocus.getFullYear() };
         nextSelectedDay = openingFocus.getDate();
+        nextSelectedDateKey = ymdFromParts(openingFocus.getFullYear(), openingFocus.getMonth(), openingFocus.getDate());
         nextSelectedItemId = focusItemId ? String(focusItemId) : null;
       } else {
         const today = new Date();
         nextViewDate = { month: today.getMonth(), year: today.getFullYear() };
         nextSelectedDay = today.getDate();
+        nextSelectedDateKey = ymdFromParts(today.getFullYear(), today.getMonth(), today.getDate());
         nextSelectedItemId = null;
       }
     }
@@ -136,6 +164,7 @@ export default function CalendarModal({
       if (requestFocus) {
         nextViewDate = { month: requestFocus.getMonth(), year: requestFocus.getFullYear() };
         nextSelectedDay = requestFocus.getDate();
+        nextSelectedDateKey = ymdFromParts(requestFocus.getFullYear(), requestFocus.getMonth(), requestFocus.getDate());
         nextSelectedItemId = focusItemId ? String(focusItemId) : null;
       } else if (focusItemId) {
         nextSelectedItemId = String(focusItemId);
@@ -153,6 +182,7 @@ export default function CalendarModal({
       if (pendingFocus) {
         nextViewDate = { month: pendingFocus.getMonth(), year: pendingFocus.getFullYear() };
         nextSelectedDay = pendingFocus.getDate();
+        nextSelectedDateKey = ymdFromParts(pendingFocus.getFullYear(), pendingFocus.getMonth(), pendingFocus.getDate());
         nextSelectedItemId = nextFocusedItemId;
         nextPendingFocusDate = null;
         nextPendingFocusItemId = null;
@@ -164,15 +194,17 @@ export default function CalendarModal({
       resetDeadlineEditor: didOpen || didViewChange,
       nextViewDate,
       nextSelectedDay,
+      nextSelectedDateKey,
       nextSelectedItemId,
       nextPendingFocusDate,
       nextPendingFocusItemId,
       openCreate: (didOpen || didOpenRequest) && focusItemId === "new",
     };
-  }, [open, view, prevOpen, prevView, prevOpenRequestId, openRequestId, focusDate, focusItemId, viewDate, selectedDay, selectedItemId, pendingFocusDate, pendingFocusItemId]);
+  }, [open, view, prevOpen, prevView, prevOpenRequestId, openRequestId, focusDate, focusItemId, viewDate, selectedDay, selectedDateKey, selectedItemId, pendingFocusDate, pendingFocusItemId]);
 
   const activeViewDate = syncSnapshot?.nextViewDate || viewDate;
   const activeSelectedDay = syncSnapshot ? syncSnapshot.nextSelectedDay : selectedDay;
+  const activeSelectedDateKey = syncSnapshot ? syncSnapshot.nextSelectedDateKey : selectedDateKey;
   const activeSelectedItemId = syncSnapshot ? syncSnapshot.nextSelectedItemId : selectedItemId;
 
   const viewMonth = activeViewDate.month;
@@ -181,9 +213,18 @@ export default function CalendarModal({
 
   const viewData = useMemo(() => {
     if (view === "events") {
+      const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
+      const nextMonth = addMonthOffset(viewYear, viewMonth, 1);
       return {
-        events: eventsData?.getEvents?.(viewYear, viewMonth) || [],
-        isLoading: eventsData?.isMonthLoading?.(viewYear, viewMonth) || false,
+        events: dedupeEvents([
+          ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
+          ...(eventsData?.getEvents?.(viewYear, viewMonth) || []),
+          ...(eventsData?.getEvents?.(nextMonth.year, nextMonth.month) || []),
+        ]),
+        isLoading: eventsData?.isMonthLoading?.(prevMonth.year, prevMonth.month)
+          || eventsData?.isMonthLoading?.(viewYear, viewMonth)
+          || eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month)
+          || false,
         hasMonth: eventsData?.hasMonth?.(viewYear, viewMonth) || false,
       };
     }
@@ -196,6 +237,7 @@ export default function CalendarModal({
     if (!focus) return;
     setViewDate({ month: focus.getMonth(), year: focus.getFullYear() });
     setSelectedDay(focus.getDate());
+    setSelectedDateKey(ymdFromParts(focus.getFullYear(), focus.getMonth(), focus.getDate()));
   }
 
   const eventEditor = useCalendarEventEditor({
@@ -203,6 +245,7 @@ export default function CalendarModal({
     view,
     editable: !!eventsData?.editable,
     selectedDay: activeSelectedDay,
+    selectedDate: view === "events" ? activeSelectedDateKey : null,
     viewYear,
     viewMonth,
     refreshRange: eventsData?.refreshRange,
@@ -225,10 +268,27 @@ export default function CalendarModal({
   }, [open, view, eventEditor.editable, prefetchEventSources]);
 
   const closeEventEditor = eventEditor.closeEditor;
+  const eventQuickActions = useCalendarQuickActions({
+    editable: !!eventsData?.editable,
+    layout: getCalendarLayoutMetrics(viewportWidth),
+    refreshRange: eventsData?.refreshRange,
+    upsertEvents: eventsData?.upsertEvents,
+    removeEvent: eventsData?.removeEvent,
+    onSelectEvent: (itemId, dateKey) => {
+      const parsed = parseYmd(dateKey);
+      if (parsed) {
+        setSelectedDateKey(dateKey);
+        setSelectedDay(parsed.day);
+      }
+      setSelectedItemId(itemId != null ? String(itemId) : null);
+    },
+  });
 
   function navigateMonth(dir) {
     closeEventEditor();
+    setMonthMotionDirection(dir > 0 ? 1 : -1);
     setSelectedDay(null);
+    setSelectedDateKey(null);
     setSelectedItemId(null);
     setDeadlineEditor(null);
     setViewDate((prev) => {
@@ -247,6 +307,7 @@ export default function CalendarModal({
     if (focus) {
       setViewDate({ month: focus.getMonth(), year: focus.getFullYear() });
       setSelectedDay(focus.getDate());
+      setSelectedDateKey(ymdFromParts(focus.getFullYear(), focus.getMonth(), focus.getDate()));
     }
     setSelectedItemId(task?.id != null ? String(task.id) : null);
     setDeadlineEditor(null);
@@ -266,6 +327,9 @@ export default function CalendarModal({
     }
     if (snapshot && selectedDay !== snapshot.nextSelectedDay) {
       setSelectedDay(snapshot.nextSelectedDay);
+    }
+    if (snapshot && selectedDateKey !== snapshot.nextSelectedDateKey) {
+      setSelectedDateKey(snapshot.nextSelectedDateKey);
     }
     if (snapshot && selectedItemId !== snapshot.nextSelectedItemId) {
       setSelectedItemId(snapshot.nextSelectedItemId);
@@ -437,6 +501,7 @@ export default function CalendarModal({
           closeEventEditor();
           setViewDate({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
+          setSelectedDateKey(ymdFromParts(currentYear, currentMonth, todayDate));
           event.preventDefault();
           event.stopPropagation();
           break;
@@ -444,7 +509,7 @@ export default function CalendarModal({
         case "E":
           if (selectedItemId != null) {
             if (view === "events" && eventEditor.editable) {
-              const dayItems = itemsByDay[selectedDay] || [];
+              const dayItems = computed.itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay] || [];
               const resolveId = activeView.getItemId;
               const ev = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
               if (ev) eventEditor.openEdit(ev);
@@ -497,13 +562,11 @@ export default function CalendarModal({
     }
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, onViewChange, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, activeView, itemsByDay, setDeadlineEditor]);
+  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, onViewChange, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, computed.itemsByDate, setDeadlineEditor]);
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
-    const start = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-01`;
-    const last = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
-    const end = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+    const { start, end } = getVisibleGridRange(viewYear, viewMonth);
     if (eventEditor.isEditorOpen) {
       const id = window.setTimeout(() => eventsData.ensureRange(start, end), 260);
       return () => window.clearTimeout(id);
@@ -522,7 +585,7 @@ export default function CalendarModal({
   const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
 
   const selectedDayState = activeSelectedDay != null
-    ? (activeView.getDayState?.(itemsByDay[activeSelectedDay]) ?? buildFallbackDayState(itemsByDay[activeSelectedDay]))
+    ? (activeView.getDayState?.(view === "events" ? computed.itemsByDate?.[activeSelectedDateKey] : itemsByDay[activeSelectedDay]) ?? buildFallbackDayState(view === "events" ? computed.itemsByDate?.[activeSelectedDateKey] : itemsByDay[activeSelectedDay]))
     : buildFallbackDayState([]);
   const selectedItems = activeView.getDayState ? selectedDayState : selectedDayState.items;
   const effectiveSelectedItemId = (() => {
@@ -559,6 +622,7 @@ export default function CalendarModal({
       monthYear={monthYear}
       canGoPrev={canGoPrev}
       navigateMonth={navigateMonth}
+      monthMotionDirection={monthMotionDirection}
       onViewChange={onViewChange}
       HeaderExtras={activeView.HeaderExtras}
       viewData={viewData}
@@ -566,6 +630,7 @@ export default function CalendarModal({
       suppressOutsideClick={suppressOutsideClick}
       eventEditor={eventEditor}
       selectedDay={activeSelectedDay}
+      selectedDateKey={view === "events" ? activeSelectedDateKey : null}
       viewYear={viewYear}
       viewMonth={viewMonth}
       setDeadlineEditor={setDeadlineEditor}
@@ -578,11 +643,14 @@ export default function CalendarModal({
       daysInMonth={daysInMonth}
       trailingEmpty={trailingEmpty}
       itemsByDay={itemsByDay}
+      itemsByDate={computed.itemsByDate || {}}
       showGridSkeleton={showGridSkeleton}
       buildFallbackDayState={buildFallbackDayState}
       closeEventEditor={closeEventEditor}
       setSelectedDay={setSelectedDay}
+      setSelectedDateKey={setSelectedDateKey}
       setSelectedItemId={setSelectedItemId}
+      eventQuickActions={eventQuickActions}
       showDetail={showDetail}
       showEmptySelection={showEmptySelection}
       effectiveSelectedItemId={effectiveSelectedItemId}

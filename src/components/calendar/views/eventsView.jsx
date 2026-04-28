@@ -12,17 +12,11 @@ import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/cal
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
 import { renderEventsWorkspaceSupport } from "./events/EventsWorkspaceSupport.jsx";
+import { pacificYMD, parseYmd } from "../calendarDateUtils.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
-const PACIFIC_TIME_ZONE = "America/Los_Angeles";
-const PACIFIC_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: PACIFIC_TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
 const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: PACIFIC_TIME_ZONE,
+  timeZone: "America/Los_Angeles",
   hour: "numeric",
   minute: "2-digit",
   hour12: true,
@@ -32,10 +26,6 @@ const FULL_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "long",
   day: "numeric",
 });
-
-function pacificYMD(ms) {
-  return PACIFIC_YMD_FORMATTER.format(new Date(ms));
-}
 
 function pacificTime(ms) {
   return PACIFIC_TIME_FORMATTER.format(new Date(ms));
@@ -86,15 +76,18 @@ function compactEventTimeRange(ev) {
 function compute({ data, viewYear, viewMonth }) {
   const events = data?.events || [];
   if (!events.length)
-    return { itemsByDay: {}, totalEvents: 0, allDayEvents: 0 };
+    return { itemsByDay: {}, itemsByDate: {}, totalEvents: 0, allDayEvents: 0 };
 
   const itemsByDay = {};
+  const itemsByDate = {};
   let totalEvents = 0;
   let allDayEvents = 0;
   for (const ev of events) {
     if (!ev.startMs) continue;
     const ymd = pacificYMD(ev.startMs); // e.g. "2026-04-20"
     const [y, m, d] = ymd.split("-").map(Number);
+    if (!itemsByDate[ymd]) itemsByDate[ymd] = [];
+    itemsByDate[ymd].push(ev);
     if (y !== viewYear || m !== viewMonth + 1) continue;
     if (!itemsByDay[d]) itemsByDay[d] = [];
     itemsByDay[d].push(ev);
@@ -105,14 +98,19 @@ function compute({ data, viewYear, viewMonth }) {
   for (const d of Object.keys(itemsByDay)) {
     itemsByDay[d].sort((a, b) => a.startMs - b.startMs);
   }
-  return { itemsByDay, totalEvents, allDayEvents };
+  for (const dateKey of Object.keys(itemsByDate)) {
+    itemsByDate[dateKey].sort((a, b) => a.startMs - b.startMs);
+  }
+  return { itemsByDay, itemsByDate, totalEvents, allDayEvents };
 }
 
 function canNavigateBack() {
   return true;
 }
 
-function formatFullDate(year, month, day) {
+function formatFullDate(year, month, day, selectedDateKey) {
+  const parsed = parseYmd(selectedDateKey);
+  if (parsed) return FULL_DATE_FORMATTER.format(new Date(parsed.year, parsed.month, parsed.day));
   return FULL_DATE_FORMATTER.format(new Date(year, month, day));
 }
 
@@ -314,6 +312,7 @@ function toRailItem(ev, onSelectItem, selectedItemId) {
 
 function renderDetail({
   selectedDay,
+  selectedDateKey,
   viewYear,
   viewMonth,
   items,
@@ -343,7 +342,7 @@ function renderDetail({
   return (
     <TimelineDetailRail
       eyebrow="Events ledger"
-      title={formatFullDate(viewYear, viewMonth, selectedDay)}
+      title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
       accent="#89b4fa"
       supportBandActive={supportBandActive}

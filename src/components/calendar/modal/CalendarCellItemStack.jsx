@@ -119,10 +119,12 @@ function MoreButton({
 
 export default function CalendarCellItemStack({
   day,
+  dateKey,
   items,
   selectedItemId,
   onSelectItem,
   onOpenOverflow,
+  quickActions,
   pastTone,
   metrics,
   overflowOpen = false,
@@ -148,6 +150,7 @@ export default function CalendarCellItemStack({
       {visibleItems.map((item) => {
         const selected = String(item.id) === String(selectedItemId);
         const active = String(item.id) === String(activeChipId);
+        const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
         return (
           <button
             key={item.id}
@@ -155,11 +158,33 @@ export default function CalendarCellItemStack({
             data-testid="calendar-cell-item-chip"
             data-item-id={String(item.id)}
             data-hovered={active ? "true" : "false"}
+            draggable={dragAllowed}
             data-calendar-focus-ring="true"
             onClick={(event) => {
               event.stopPropagation();
               onSelectItem?.(item.id);
             }}
+            onContextMenu={(event) => {
+              if (!item.sourceEvent?.writable) return;
+              event.preventDefault();
+              event.stopPropagation();
+              quickActions?.openDeleteMenu?.({
+                event: item.sourceEvent,
+                x: event.clientX,
+                y: event.clientY,
+              });
+            }}
+            onDragStart={(event) => {
+              if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
+                event.preventDefault();
+                return;
+              }
+              event.stopPropagation();
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
+              event.dataTransfer.setData("text/plain", String(item.title || ""));
+            }}
+            onDragEnd={() => quickActions?.endDrag?.()}
             onPointerEnter={() => setActiveChipId(String(item.id))}
             onPointerLeave={() => setActiveChipId((current) => (
               current === String(item.id) ? null : current
@@ -228,6 +253,7 @@ export default function CalendarCellItemStack({
               hiddenItems,
               totalCount: items.length,
               visibleCount,
+              dateKey,
             });
           }}
         />

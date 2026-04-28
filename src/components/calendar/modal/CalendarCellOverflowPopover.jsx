@@ -80,6 +80,7 @@ export default function CalendarCellOverflowPopover({
   onSelectItem,
   onClose,
   suppressOutsideClick,
+  quickActions,
 }) {
   const reducedMotion = useReducedMotion();
   const popoverRef = useRef(null);
@@ -293,6 +294,7 @@ export default function CalendarCellOverflowPopover({
               const selected = itemId === String(selectedItemId);
               const active = itemId === String(activeItemId);
               const accent = item.accent || "var(--ea-accent)";
+              const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
 
               return (
                 <button
@@ -301,10 +303,33 @@ export default function CalendarCellOverflowPopover({
                   data-testid="calendar-cell-overflow-item"
                   data-item-id={itemId}
                   data-hovered={active ? "true" : "false"}
+                  draggable={dragAllowed}
                   onClick={() => {
                     onSelectItem?.(item.id);
                     onClose?.();
                   }}
+                  onContextMenu={(event) => {
+                    if (!item.sourceEvent?.writable) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    quickActions?.openDeleteMenu?.({
+                      event: item.sourceEvent,
+                      x: event.clientX,
+                      y: event.clientY,
+                    });
+                  }}
+                  onDragStart={(event) => {
+                    if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.stopPropagation();
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
+                    event.dataTransfer.setData("text/plain", String(item.title || ""));
+                    onClose?.();
+                  }}
+                  onDragEnd={() => quickActions?.endDrag?.()}
                   onPointerEnter={() => setActiveItemId(itemId)}
                   onPointerLeave={() => setActiveItemId((current) => (
                     current === itemId ? null : current

@@ -87,6 +87,16 @@ function renderModal({
   return { ...utils, refreshRange, upsertEvents, removeEvent };
 }
 
+function createDataTransfer() {
+  const store = new Map();
+  return {
+    effectAllowed: "all",
+    dropEffect: "move",
+    setData: vi.fn((type, value) => store.set(type, value)),
+    getData: vi.fn((type) => store.get(type) || ""),
+  };
+}
+
 describe("Calendar event editor rail", () => {
   it("opens the create editor before calendar sources finish loading", async () => {
     let resolveSources;
@@ -166,6 +176,82 @@ describe("Calendar event editor rail", () => {
     });
     expect(removeEvent).toHaveBeenCalledWith("event-1");
     expect(refreshRange).not.toHaveBeenCalled();
+  });
+
+  it("reschedules a writable event by drag-drop with an optimistic cache update", async () => {
+    const event = {
+      id: "event-drag-1",
+      etag: '"etag-drag-1"',
+      title: "Move me",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+    };
+    mockUpdateCalendarEvent.mockResolvedValue({
+      event: {
+        ...event,
+        startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-21T17:30:00.000Z").getTime(),
+      },
+    });
+    const { upsertEvents } = renderModal({ events: [event] });
+    const dataTransfer = createDataTransfer();
+
+    fireEvent.dragStart(screen.getByTestId("calendar-cell-item-chip"), { dataTransfer });
+    fireEvent.drop(screen.getByTestId("calendar-cell-21"), { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-drag-1", expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startDate: "2026-04-21",
+        endDate: "2026-04-21",
+        startTime: "09:00",
+        endTime: "10:30",
+        etag: '"etag-drag-1"',
+      }));
+    });
+    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
+      id: "event-drag-1",
+      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+    }));
+  });
+
+  it("uses the quick-action context menu to delete a writable event", async () => {
+    const event = {
+      id: "event-context-delete",
+      etag: '"etag-context-delete"',
+      title: "Delete me",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+    };
+    mockDeleteCalendarEvent.mockResolvedValue(undefined);
+    const { removeEvent } = renderModal({ events: [event] });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-context-delete"));
+    fireEvent.click(screen.getByTestId("calendar-event-context-confirm-delete"));
+
+    await waitFor(() => {
+      expect(mockDeleteCalendarEvent).toHaveBeenCalledWith("event-context-delete", {
+        accountId: "gmail-main",
+        calendarId: "primary",
+        etag: '"etag-context-delete"',
+      });
+    });
+    expect(removeEvent).toHaveBeenCalledWith("event-context-delete");
   });
 
   it("blocks save and shows inline validation for invalid end times", async () => {
