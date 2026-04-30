@@ -1,5 +1,6 @@
 import { parseDueDate } from "../../../../lib/dashboard-helpers";
 import { dueDateToMs } from "../../../../lib/redesign-helpers";
+import { parseYmd } from "../../calendarDateUtils.js";
 
 export const MAX_PILLS = 2;
 
@@ -36,7 +37,12 @@ export function openInNewTab(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export function formatFullDate(year, month, day) {
+export function formatFullDate(year, month, day, selectedDateKey) {
+  const parsed = parseYmd(selectedDateKey);
+  if (parsed) {
+    const d = new Date(parsed.year, parsed.month, parsed.day);
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
   if (day == null) return "Selected deadline";
   const d = new Date(year, month, day);
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -94,6 +100,7 @@ export function compute({ data, viewYear, viewMonth }) {
   today.setHours(0, 0, 0, 0);
 
   const itemsByDay = {};
+  const itemsByDate = {};
   let earliestOverdue = null;
   for (const task of all) {
     if (!task.due_date) continue;
@@ -104,8 +111,10 @@ export function compute({ data, viewYear, viewMonth }) {
       if (!earliestOverdue || dueDate < earliestOverdue) earliestOverdue = dueDate;
     }
 
-    if (dueDate.getFullYear() !== viewYear || dueDate.getMonth() !== viewMonth) continue;
     const day = dueDate.getDate();
+    if (!itemsByDate[task.due_date]) itemsByDate[task.due_date] = [];
+    itemsByDate[task.due_date].push(task);
+    if (dueDate.getFullYear() !== viewYear || dueDate.getMonth() !== viewMonth) continue;
     if (!itemsByDay[day]) itemsByDay[day] = [];
     itemsByDay[day].push(task);
   }
@@ -113,8 +122,11 @@ export function compute({ data, viewYear, viewMonth }) {
   for (const day of Object.keys(itemsByDay)) {
     itemsByDay[day] = groupDeadlines(itemsByDay[day]);
   }
+  for (const dateKey of Object.keys(itemsByDate)) {
+    itemsByDate[dateKey] = groupDeadlines(itemsByDate[dateKey]);
+  }
 
-  return { itemsByDay, earliestOverdue };
+  return { itemsByDay, itemsByDate, earliestOverdue };
 }
 
 export function canNavigateBack({ viewYear, viewMonth, currentYear, currentMonth, computed }) {

@@ -514,7 +514,7 @@ export default function CalendarModal({
               const ev = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
               if (ev) eventEditor.openEdit(ev);
             } else if (view === "deadlines") {
-              const dayState = itemsByDay[selectedDay];
+              const dayState = computed.itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay];
               const pool = dayState?.items || dayState || [];
               const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
               if (task?.source === "todoist") {
@@ -532,7 +532,7 @@ export default function CalendarModal({
           } else if (view === "deadlines") {
             setDeadlineEditor({
               mode: "create",
-              seedDate: ymdFromView({ viewYear, viewMonth, selectedDay }),
+              seedDate: selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }),
             });
           }
           event.preventDefault();
@@ -584,8 +584,11 @@ export default function CalendarModal({
   const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
   const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
 
+  const selectedDayRawItems = activeSelectedDay != null
+    ? (computed.itemsByDate?.[activeSelectedDateKey] ?? itemsByDay[activeSelectedDay])
+    : [];
   const selectedDayState = activeSelectedDay != null
-    ? (activeView.getDayState?.(view === "events" ? computed.itemsByDate?.[activeSelectedDateKey] : itemsByDay[activeSelectedDay]) ?? buildFallbackDayState(view === "events" ? computed.itemsByDate?.[activeSelectedDateKey] : itemsByDay[activeSelectedDay]))
+    ? (activeView.getDayState?.(selectedDayRawItems) ?? buildFallbackDayState(selectedDayRawItems))
     : buildFallbackDayState([]);
   const selectedItems = activeView.getDayState ? selectedDayState : selectedDayState.items;
   const effectiveSelectedItemId = (() => {
@@ -630,7 +633,7 @@ export default function CalendarModal({
       suppressOutsideClick={suppressOutsideClick}
       eventEditor={eventEditor}
       selectedDay={activeSelectedDay}
-      selectedDateKey={view === "events" ? activeSelectedDateKey : null}
+      selectedDateKey={activeSelectedDateKey}
       viewYear={viewYear}
       viewMonth={viewMonth}
       setDeadlineEditor={setDeadlineEditor}

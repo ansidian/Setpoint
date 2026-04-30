@@ -1,4 +1,5 @@
 import { daysUntil } from "../../../../lib/bill-utils";
+import { parseYmd } from "../../calendarDateUtils.js";
 
 export const MAX_PILLS = 2;
 
@@ -25,7 +26,12 @@ export function relativeDateLabel(days) {
   return `in ${days} days`;
 }
 
-export function formatFullDate(year, month, day) {
+export function formatFullDate(year, month, day, selectedDateKey) {
+  const parsed = parseYmd(selectedDateKey);
+  if (parsed) {
+    const d = new Date(parsed.year, parsed.month, parsed.day);
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
   const d = new Date(year, month, day);
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
@@ -87,17 +93,21 @@ export function compute({ data, viewYear, viewMonth }) {
   const payeeMap = data?.payeeMap || {};
 
   const itemsByDay = {};
+  const itemsByDate = {};
   const seen = new Set();
 
   if (schedules.length) {
     for (const schedule of schedules) {
       if (!schedule.next_date || schedule.type === "income") continue;
       const date = new Date(`${schedule.next_date}T00:00:00`);
-      if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
       const day = date.getDate();
+      const bill = scheduleToBill(schedule, payeeMap);
+      if (!itemsByDate[schedule.next_date]) itemsByDate[schedule.next_date] = [];
+      itemsByDate[schedule.next_date].push(bill);
+      seen.add(`${schedule.id}:${schedule.next_date}`);
+      if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
       if (!itemsByDay[day]) itemsByDay[day] = [];
-      itemsByDay[day].push(scheduleToBill(schedule, payeeMap));
-      seen.add(`${schedule.id}:${day}`);
+      itemsByDay[day].push(bill);
     }
   }
 
@@ -108,18 +118,21 @@ export function compute({ data, viewYear, viewMonth }) {
       const schedule = scheduleById.get(transaction.scheduleId);
       if (!schedule || schedule.type === "income") continue;
       const date = new Date(`${transaction.date}T00:00:00`);
-      if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
       const day = date.getDate();
-      const key = `${transaction.scheduleId}:${day}`;
+      const key = `${transaction.scheduleId}:${transaction.date}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      if (!itemsByDay[day]) itemsByDay[day] = [];
-      itemsByDay[day].push({
+      const bill = {
         ...scheduleToBill(schedule, payeeMap),
         next_date: transaction.date,
         amount: transaction.amount,
         paid: true,
-      });
+      };
+      if (!itemsByDate[transaction.date]) itemsByDate[transaction.date] = [];
+      itemsByDate[transaction.date].push(bill);
+      if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
+      if (!itemsByDay[day]) itemsByDay[day] = [];
+      itemsByDay[day].push(bill);
     }
   }
 
@@ -131,8 +144,11 @@ export function compute({ data, viewYear, viewMonth }) {
   for (const day of Object.keys(itemsByDay)) {
     itemsByDay[day] = groupBills(itemsByDay[day]);
   }
+  for (const dateKey of Object.keys(itemsByDate)) {
+    itemsByDate[dateKey] = groupBills(itemsByDate[dateKey]);
+  }
 
-  return { itemsByDay, monthTotal };
+  return { itemsByDay, itemsByDate, monthTotal };
 }
 
 export function hasOverdue(items) {
