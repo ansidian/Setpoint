@@ -10,6 +10,8 @@ const CELL_HEADER_HEIGHT = 24;
 const MONTH_WHEEL_THRESHOLD_PX = 180;
 const MONTH_WHEEL_COOLDOWN_MS = 420;
 const WHEEL_LINE_PX = 32;
+const CURRENT_MONTH_BOUNDARY_COLOR = "#0095FF";
+const OTHER_MONTH_BOUNDARY_COLOR = "rgba(137,180,250,0.32)";
 
 function normalizeWheelDeltaY(event, fallbackPagePx) {
   if (event.deltaMode === 1) return event.deltaY * WHEEL_LINE_PX;
@@ -72,6 +74,7 @@ function CalendarCell({
   inCurrentMonth = true,
   boundarySides = [],
   boundaryGap = 0,
+  boundaryColor = OTHER_MONTH_BOUNDARY_COLOR,
   items,
   selectedItemId,
   itemCount,
@@ -91,7 +94,7 @@ function CalendarCell({
   const [hovered, setHovered] = useState(false);
   const todayAccent = "var(--ea-accent)";
   const boundaryStrokeWidth = 2;
-  const boundaryBridge = boundaryGap / 2 + boundaryStrokeWidth;
+  const boundaryBridge = boundaryGap / 3 + boundaryStrokeWidth;
   let cellBg = "rgba(255,255,255,0.015)";
   let cellBorder = "1px solid rgba(255,255,255,0.04)";
   let cellShadow = "none";
@@ -288,16 +291,16 @@ function CalendarCell({
             bottom: boundarySides.includes("bottom") ? 0 : -boundaryBridge,
             left: boundarySides.includes("left") ? 0 : -boundaryBridge,
             borderTop: boundarySides.includes("top")
-              ? `${boundaryStrokeWidth}px solid #0095FF`
+              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
               : "0 solid transparent",
             borderRight: boundarySides.includes("right")
-              ? `${boundaryStrokeWidth}px solid #0095FF`
+              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
               : "0 solid transparent",
             borderBottom: boundarySides.includes("bottom")
-              ? `${boundaryStrokeWidth}px solid #0095FF`
+              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
               : "0 solid transparent",
             borderLeft: boundarySides.includes("left")
-              ? `${boundaryStrokeWidth}px solid #0095FF`
+              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
               : "0 solid transparent",
             borderTopLeftRadius:
               boundarySides.includes("top") && boundarySides.includes("left")
@@ -510,11 +513,12 @@ export default function CalendarGrid({
       ? overflowPopover
       : null;
   const eventDateCells = view === "events";
-  const selectedCellKey = eventDateCells ? selectedDateKey : null;
+  const selectedCellKey = selectedDateKey;
+  const viewedMonthIsActualCurrentMonth =
+    viewYear === currentYear && viewMonth === currentMonth;
 
   const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
-  const monthCells = eventDateCells
-    ? Array.from({ length: eventCellCount }, (_, index) => {
+  const monthCells = Array.from({ length: eventCellCount }, (_, index) => {
         const date = new Date(Date.UTC(viewYear, viewMonth, 1, 12));
         date.setUTCDate(date.getUTCDate() - firstDay + index);
         const dateKey = date.toISOString().slice(0, 10);
@@ -531,6 +535,8 @@ export default function CalendarGrid({
           dateKey,
           dateLabel: String(parsed.day),
           inCurrentMonth,
+          inActualCurrentMonth:
+            parsed?.year === currentYear && parsed?.month === currentMonth,
           boundarySides: [],
           monthLabel,
           adjacentPosition: inCurrentMonth
@@ -556,9 +562,12 @@ export default function CalendarGrid({
             ? `${cell.monthLabel} ${cell.day}`
             : cell.dateLabel,
           boundarySides: sides,
+          boundaryColor:
+            viewedMonthIsActualCurrentMonth || cell.inActualCurrentMonth
+              ? CURRENT_MONTH_BOUNDARY_COLOR
+              : OTHER_MONTH_BOUNDARY_COLOR,
         };
-      })
-    : null;
+      });
 
   function handleSelectDay(day, isSelected, dateKey = null) {
     if (isSelected) return;
@@ -701,53 +710,30 @@ export default function CalendarGrid({
             willChange: monthMotionDirection ? "transform, opacity" : "auto",
           }}
         >
-          {!eventDateCells
-            ? Array.from({ length: firstDay }, (_, index) => (
-                <div key={`empty-${index}`} role="presentation" />
-              ))
-            : null}
-
-          {(eventDateCells
-            ? monthCells
-            : Array.from({ length: daysInMonth }, (_, index) => ({
-                day: index + 1,
-                dateKey: ymdFromParts(viewYear, viewMonth, index + 1),
-                dateLabel: String(index + 1),
-                inCurrentMonth: true,
-                boundarySides: [],
-              }))
-          ).map((cell) => {
+          {monthCells.map((cell) => {
             const day = cell.day;
-            const rawItems = eventDateCells
-              ? itemsByDate?.[cell.dateKey] ||
-                (cell.inCurrentMonth && Array.isArray(itemsByDay[day])
-                  ? itemsByDay[day]
-                  : [])
-              : Array.isArray(itemsByDay[day])
-                ? itemsByDay[day]
-                : [];
+            const rawItems =
+              itemsByDate?.[cell.dateKey] ??
+              (cell.inCurrentMonth ? itemsByDay[day] : null) ??
+              [];
             const dayState =
-              activeView.getDayState?.(itemsByDay[day]) ??
-              buildFallbackDayState(itemsByDay[day]);
-            const resolvedDayState = eventDateCells
-              ? buildFallbackDayState(rawItems)
-              : dayState;
+              activeView.getDayState?.(rawItems) ??
+              buildFallbackDayState(rawItems);
+            const resolvedDayState = dayState;
             const cellItems = activeView.getDayState
               ? resolvedDayState
               : rawItems;
             const selectionPool = Array.isArray(dayState.items)
               ? dayState.items
               : rawItems;
-            const resolvedSelectionPool = eventDateCells
-              ? rawItems
-              : selectionPool;
+            const resolvedSelectionPool = selectionPool;
             const hasItems = resolvedDayState.totalCount > 0;
             const isToday =
               cell.dateKey ===
               ymdFromParts(currentYear, currentMonth, todayDate);
-            const isSelected = eventDateCells
+            const isSelected = selectedCellKey
               ? selectedCellKey === cell.dateKey
-              : selectedDay === day;
+              : selectedDay === day && cell.inCurrentMonth;
             const hasOverdue =
               activeView.hasOverdue?.(resolvedDayState) || false;
             const allComplete =
@@ -781,6 +767,7 @@ export default function CalendarGrid({
                 inCurrentMonth={cell.inCurrentMonth}
                 boundarySides={cell.boundarySides}
                 boundaryGap={layout.gridGap}
+                boundaryColor={cell.boundaryColor}
                 items={cellItems}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
                 itemCount={resolvedDayState.totalCount}
@@ -844,11 +831,6 @@ export default function CalendarGrid({
             );
           })}
 
-          {!eventDateCells
-            ? Array.from({ length: resolvedTrailingEmpty }, (_, index) => (
-                <div key={`trail-${index}`} role="presentation" />
-              ))
-            : null}
         </div>
 
         {showGridSkeleton && (

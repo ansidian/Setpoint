@@ -542,6 +542,7 @@ function DetailCard({
 
 function DeadlinesDetail({
   selectedDay,
+  selectedDateKey,
   viewYear,
   viewMonth,
   items,
@@ -611,7 +612,7 @@ function DeadlinesDetail({
   return (
     <TimelineDetailRail
       eyebrow="Deadline ledger"
-      title={formatFullDate(viewYear, viewMonth, selectedDay)}
+      title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={summary}
       accent={accent}
       supportBandActive={supportBandActive}

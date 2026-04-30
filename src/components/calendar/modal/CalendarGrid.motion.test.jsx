@@ -13,6 +13,27 @@ const activeView = {
   renderCellContents: renderEventsCellContents,
 };
 
+const groupedDayView = {
+  label: "Bills",
+  getDayState(rawItems) {
+    if (rawItems?.items) return rawItems;
+    const items = Array.isArray(rawItems) ? rawItems : [];
+    return {
+      items,
+      activeItems: items,
+      completedItems: [],
+      activeCount: items.length,
+      completedCount: 0,
+      totalCount: items.length,
+    };
+  },
+  renderCellContents({ items }) {
+    return items.items.map((item) => (
+      <span key={item.id}>{item.title}</span>
+    ));
+  },
+};
+
 function buildFallbackDayState(items) {
   const resolvedItems = Array.isArray(items) ? items : [];
   return {
@@ -246,6 +267,62 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
 
     expect(navigateMonth).not.toHaveBeenCalled();
+  });
+
+  it("uses the primary boundary color when an adjacent cell belongs to the actual current month", () => {
+    renderGrid({}, {
+      viewMonth: 4,
+      currentMonth: 3,
+      firstDay: 5,
+      daysInMonth: 31,
+      trailingEmpty: 6,
+    });
+
+    const boundary = within(screen.getByTestId("calendar-cell-2026-04-30"))
+      .getByTestId("calendar-month-boundary-2026-04-30");
+
+    expect(boundary.getAttribute("data-boundary-sides")).toContain("right");
+    expect(boundary.style.borderRight).toBe("2px solid rgb(0, 149, 255)");
+  });
+
+  it("mutes boundaries that do not wrap the actual current month", () => {
+    renderGrid({}, {
+      viewMonth: 5,
+      currentMonth: 3,
+      firstDay: 1,
+      daysInMonth: 30,
+      trailingEmpty: 4,
+    });
+
+    const boundary = within(screen.getByTestId("calendar-cell-2026-05-31"))
+      .getByTestId("calendar-month-boundary-2026-05-31");
+
+    expect(boundary.getAttribute("data-boundary-sides")).toContain("right");
+    expect(boundary.style.borderRight).toBe("2px solid rgba(137, 180, 250, 0.32)");
+  });
+
+  it("renders date-keyed adjacent day items for non-event views", () => {
+    renderGrid({}, {
+      view: "bills",
+      activeView: groupedDayView,
+      viewMonth: 4,
+      currentMonth: 3,
+      firstDay: 5,
+      daysInMonth: 31,
+      trailingEmpty: 6,
+      itemsByDate: {
+        "2026-04-30": groupedDayView.getDayState([
+          { id: "bill-apr-30", title: "April utility" },
+        ]),
+      },
+    });
+
+    const adjacentCell = screen.getByTestId("calendar-cell-2026-04-30");
+    const boundary = within(adjacentCell)
+      .getByTestId("calendar-month-boundary-2026-04-30");
+
+    expect(within(adjacentCell).getByText("April utility")).toBeTruthy();
+    expect(boundary.style.borderRight).toBe("2px solid rgb(0, 149, 255)");
   });
 
   it("shows same visible chip count for today and non-today cells with matching event counts", async () => {

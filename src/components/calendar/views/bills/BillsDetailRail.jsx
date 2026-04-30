@@ -160,6 +160,7 @@ function toBillRailItem(bill, selectedBillId, onSelectItem) {
 
 function BillsDetail({
   selectedDay,
+  selectedDateKey,
   viewYear,
   viewMonth,
   items,
@@ -184,7 +185,7 @@ function BillsDetail({
   return (
     <TimelineDetailRail
       eyebrow="Billing ledger"
-      title={formatFullDate(viewYear, viewMonth, selectedDay)}
+      title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={summary}
       accent="#a6e3a1"
       supportBandActive={supportBandActive}
