@@ -45,6 +45,7 @@ function itemButtonStyle({
   accent,
   selected,
   active,
+  ghost,
 }) {
   return {
     display: "grid",
@@ -53,7 +54,9 @@ function itemButtonStyle({
     gap: 10,
     padding: "11px 12px",
     borderRadius: 10,
-    border: selected
+    border: ghost
+      ? `1px dotted color-mix(in srgb, ${accent} 54%, transparent)`
+      : selected
       ? `1px solid color-mix(in srgb, ${accent} 42%, rgba(255,255,255,0.08))`
       : active
         ? "1px solid rgba(255,255,255,0.12)"
@@ -67,7 +70,8 @@ function itemButtonStyle({
       ? "inset 0 1px 0 rgba(255,255,255,0.04)"
       : "none",
     color: "#eef2ff",
-    cursor: "pointer",
+    cursor: ghost ? "default" : "pointer",
+    pointerEvents: ghost ? "none" : "auto",
     fontFamily: "inherit",
     textAlign: "left",
     transition: "border-color 140ms, background 140ms, box-shadow 140ms",
@@ -292,15 +296,17 @@ export default function CalendarCellOverflowPopover({
             {popover.items.map((item) => {
               const itemId = String(item.id);
               const selected = itemId === String(selectedItemId);
-              const active = itemId === String(activeItemId);
+              const ghost = !!item.isGhost;
+              const active = !ghost && itemId === String(activeItemId);
               const accent = item.accent || "var(--ea-accent)";
-              const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+              const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+              const Shell = ghost ? "div" : "button";
 
               return (
-                <button
+                <Shell
                   key={item.id}
-                  type="button"
-                  data-testid="calendar-cell-overflow-item"
+                  type={ghost ? undefined : "button"}
+                  data-testid={ghost ? "calendar-ghost-chip" : "calendar-cell-overflow-item"}
                   data-item-id={itemId}
                   data-hovered={active ? "true" : "false"}
                   draggable={dragAllowed}
@@ -343,6 +349,7 @@ export default function CalendarCellOverflowPopover({
                       accent,
                       selected,
                       active,
+                      ghost,
                     }),
                     gridTemplateColumns: item.leadingLabel ? "auto minmax(0, 1fr)" : "minmax(0, 1fr)",
                     textDecoration: item.complete ? "line-through" : "none",
@@ -391,7 +398,7 @@ export default function CalendarCellOverflowPopover({
                       </span>
                     ) : null}
                   </span>
-                </button>
+                </Shell>
               );
             })}
           </div>

@@ -10,6 +10,7 @@ import useIsMobile from "../../../hooks/useIsMobile";
 import { epochFromLa } from "../../inbox/helpers";
 import { formatResolvedDate, parseTokens } from "./parsing";
 import { buildManualDue, getInitialDueEpoch } from "./due";
+import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.js";
 
 function buildSeededDue(initialDueDate) {
   if (!initialDueDate) return null;
@@ -27,6 +28,7 @@ export default function useAddTaskPanelController({
   onTaskDeleted,
   host = "anchored",
   initialDueDate = null,
+  onDraftPreviewChange,
 }) {
   const isInline = host === "inline";
   const isEdit = !!editingTask;
@@ -192,6 +194,32 @@ export default function useAddTaskPanelController({
   const dueDisplay = manualDue?.display || parsed.dateFormatted || seededDueDisplay || "";
   const recurrenceSummary = !overrides.due ? parsed.recurrenceSummary : null;
   const pickerDueEpoch = manualDue?.epochMs ?? seededDueEpoch;
+  const draftPreview = useMemo(() => {
+    const manualPreview = manualDue?.epochMs != null ? deadlinePreviewFromEpoch(manualDue.epochMs) : null;
+    const parsedPreview = !overrides.due ? parsed.duePreview : null;
+    const seededPreview = seededDueEpoch != null ? deadlinePreviewFromEpoch(seededDueEpoch) : null;
+    const due = manualPreview || parsedPreview || seededPreview;
+    if (!due?.dueDate) return null;
+    const dueMinutes = due.dueMinutes ?? minutesFromDisplayTime(due.dueTime);
+    const originalMinutes = minutesFromDisplayTime(editingTask?.due_time);
+    const placementChanged = !isEdit
+      || due.dueDate !== editingTask?.due_date
+      || (dueMinutes ?? null) !== (originalMinutes ?? null);
+    return {
+      kind: "deadline",
+      title: parsed.stripped || input.trim() || editingTask?.title || "",
+      dueDate: due.dueDate,
+      dueTime: due.dueTime || null,
+      priority: resolvedPriority,
+      source: "todoist",
+      isEditing: isEdit,
+      placementChanged,
+    };
+  }, [editingTask?.due_date, editingTask?.due_time, editingTask?.title, input, isEdit, manualDue?.epochMs, overrides.due, parsed.duePreview, parsed.stripped, resolvedPriority, seededDueEpoch]);
+
+  useEffect(() => {
+    onDraftPreviewChange?.(draftPreview);
+  }, [draftPreview, onDraftPreviewChange]);
 
   const openDuePicker = useCallback(() => {
     setDuePickerOpen((prev) => {
@@ -489,6 +517,7 @@ export default function useAddTaskPanelController({
     resolvedLabels,
     resolvedDue,
     dueDisplay,
+    draftPreview,
     duePickerOpen,
     duePickerNow,
     openDuePicker,

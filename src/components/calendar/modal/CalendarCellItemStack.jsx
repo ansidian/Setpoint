@@ -9,6 +9,7 @@ function chipStyle({
   metrics,
 }) {
   const accent = item.accent || "var(--ea-accent)";
+  const ghost = !!item.isGhost;
   const isPast = pastTone === "items";
   const quiet = item.complete || item.quiet;
   const itemHeight = metrics?.itemHeight ?? 24;
@@ -27,7 +28,9 @@ function chipStyle({
     padding: item.leadingLabel ? `0 ${horizontalPadding}px 0 ${leadingPadding}px` : `0 ${horizontalPadding}px`,
     height: itemHeight,
     borderRadius: radius,
-    border: selected
+    border: ghost
+      ? `1px dotted color-mix(in srgb, ${accent} 54%, transparent)`
+      : selected
       ? `1px solid color-mix(in srgb, ${accent} 48%, rgba(255,255,255,0.08))`
       : active
         ? "1px solid rgba(255,255,255,0.12)"
@@ -47,13 +50,41 @@ function chipStyle({
         ? "inset 0 1px 0 rgba(255,255,255,0.04)"
         : "none",
     color: selected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
-    cursor: "pointer",
+    cursor: ghost ? "default" : "pointer",
+    pointerEvents: ghost ? "none" : "auto",
     opacity: isPast ? (selected ? 0.92 : 0.82) : quiet ? 0.88 : 1,
     transition: "background 140ms, border-color 140ms, opacity 140ms, box-shadow 140ms, color 140ms",
     textDecoration: item.complete ? "line-through" : "none",
     textDecorationColor: "rgba(205,214,244,0.24)",
     fontFamily: "inherit",
     textAlign: "left",
+  };
+}
+
+function splitVisibleItems(items, visibleCount) {
+  let count = Math.min(Math.max(0, visibleCount), items.length);
+  if (count === 0 && items.some((item) => item.isGhost)) {
+    count = 1;
+  }
+  if (count >= items.length) return { visibleItems: items, hiddenItems: [] };
+
+  const visibleItems = items.slice(0, count);
+  const visibleIds = new Set(visibleItems.map((item) => String(item.id)));
+
+  for (const ghost of items.slice(count).filter((item) => item.isGhost)) {
+    const replaceIndex = [...visibleItems]
+      .reverse()
+      .findIndex((item) => !item.isGhost);
+    if (replaceIndex < 0) break;
+    const index = visibleItems.length - 1 - replaceIndex;
+    visibleIds.delete(String(visibleItems[index].id));
+    visibleItems[index] = ghost;
+    visibleIds.add(String(ghost.id));
+  }
+
+  return {
+    visibleItems,
+    hiddenItems: items.filter((item) => !visibleIds.has(String(item.id))),
   };
 }
 
@@ -134,9 +165,8 @@ export default function CalendarCellItemStack({
 
   if (!items?.length) return null;
   const visibleCount = getVisibleCellItemCount(items.length, metrics);
-  const hiddenCount = Math.max(0, items.length - visibleCount);
-  const visibleItems = items.slice(0, visibleCount);
-  const hiddenItems = items.slice(visibleCount);
+  const { visibleItems, hiddenItems } = splitVisibleItems(items, visibleCount);
+  const hiddenCount = hiddenItems.length;
 
   return (
     <div
@@ -149,8 +179,57 @@ export default function CalendarCellItemStack({
     >
       {visibleItems.map((item) => {
         const selected = String(item.id) === String(selectedItemId);
-        const active = String(item.id) === String(activeChipId);
-        const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+        const ghost = !!item.isGhost;
+        const active = !ghost && String(item.id) === String(activeChipId);
+        const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+        if (ghost) {
+          return (
+            <div
+              key={item.id}
+              data-testid="calendar-ghost-chip"
+              data-ghost-kind={item.ghostKind || item.kind || "item"}
+              data-ghost-start={item.ghostStart || item.startDate || undefined}
+              data-ghost-end={item.ghostEnd || item.endDate || undefined}
+              aria-hidden="true"
+              style={chipStyle({
+                item,
+                selected: false,
+                pastTone,
+                active: false,
+                metrics,
+              })}
+            >
+              {item.leadingLabel ? (
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
+                    fontWeight: 700,
+                    letterSpacing: 0.2,
+                    color: item.leadingColor || item.accent || "var(--ea-accent)",
+                    whiteSpace: "nowrap",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {item.leadingLabel}
+                </span>
+              ) : null}
+              <span
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
+                  fontWeight: 500,
+                  lineHeight: 1.2,
+                }}
+              >
+                {item.title}
+              </span>
+            </div>
+          );
+        }
         return (
           <button
             key={item.id}

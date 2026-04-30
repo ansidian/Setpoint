@@ -61,6 +61,15 @@ function formatTime(time) {
   return time.minute ? `${hour}:${String(time.minute).padStart(2, "0")} ${ampm}` : `${hour} ${ampm}`;
 }
 
+function ymdFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function time24FromTime(time) {
+  if (!time) return null;
+  return `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
+}
+
 function formatDraftTime(value) {
   const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
   if (!match) return "";
@@ -280,6 +289,7 @@ export function parseTokens(input, projects, labels) {
     labels: [],
     datePhrase: null,
     dateFormatted: null,
+    duePreview: null,
     recurrenceDraft: null,
     recurrenceSummary: null,
     recurringDueString: null,
@@ -318,6 +328,13 @@ export function parseTokens(input, projects, labels) {
     result.recurringDueString = recurring.dueString;
     result.recurrenceDraft = recurring.recurrenceDraft;
     result.recurrenceSummary = recurring.recurrenceSummary;
+    result.duePreview = recurring.recurrenceDraft?.startDate
+      ? {
+          dueDate: recurring.recurrenceDraft.startDate,
+          dueTime: recurring.recurrenceDraft.startTime ? formatDraftTime(recurring.recurrenceDraft.startTime) : null,
+          dueTime24: recurring.recurrenceDraft.startTime || null,
+        }
+      : null;
     result.dateFormatted = recurring.recurrenceSummary;
     result.stripped = recurring.cleanTitle || result.stripped.replace(recurring.dueString, "");
     result.stripped = result.stripped.replace(/\s{2,}/g, " ").trim();
@@ -328,6 +345,11 @@ export function parseTokens(input, projects, labels) {
   if (resolved) {
     result.datePhrase = resolved.phrase;
     result.dateFormatted = formatResolvedDate(resolved);
+    result.duePreview = {
+      dueDate: ymdFromDate(resolved.date),
+      dueTime: resolved.time ? formatTime(resolved.time) : null,
+      dueTime24: time24FromTime(resolved.time),
+    };
     result.stripped = result.stripped.replace(resolved.phrase, "");
   }
 

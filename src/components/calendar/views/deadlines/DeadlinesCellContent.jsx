@@ -1,5 +1,6 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
+import { minutesFromDisplayTime } from "../../ghostPreview.js";
 import { getDayState, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
 
 const LG_DEADLINE_CHIP_METRICS = {
@@ -39,7 +40,35 @@ function toDeadlineDescriptor(task) {
     leadingColor: accent,
     complete: task.status === "complete",
     quiet: task.status === "complete",
+    sortMinutes: task.due_time ? minutesFromDisplayTime(task.due_time) : Number.POSITIVE_INFINITY,
+    completeSort: task.status === "complete" ? 1 : 0,
   };
+}
+
+function toDeadlineGhostDescriptor(ghost) {
+  const source = ghost.source || "todoist";
+  const accent = SOURCE_COLORS[source] || ghost.color || "#89b4fa";
+  return {
+    id: ghost.id,
+    isGhost: true,
+    ghostKind: "deadline",
+    ghostStart: ghost.startDate,
+    ghostEnd: ghost.endDate,
+    title: ghost.title || "Untitled",
+    leadingLabel: ghost.dueTime || sourceLabelFor({ source }),
+    accent,
+    leadingColor: accent,
+    sortMinutes: Number.isFinite(ghost.dueMinutes) ? ghost.dueMinutes : Number.POSITIVE_INFINITY,
+    completeSort: 0,
+  };
+}
+
+function orderDeadlineDescriptors(items) {
+  return [...items].sort((a, b) => {
+    if (a.completeSort !== b.completeSort) return a.completeSort - b.completeSort;
+    if (a.sortMinutes !== b.sortMinutes) return a.sortMinutes - b.sortMinutes;
+    return String(a.title || "").localeCompare(String(b.title || ""));
+  });
 }
 
 export function renderDeadlinesCellContents({
@@ -51,15 +80,24 @@ export function renderDeadlinesCellContents({
   overflowOpen,
   layout,
   day,
+  dateKey,
+  ghosts = [],
 }) {
   const state = getDayState(items);
-  const descriptors = state.items.map(toDeadlineDescriptor);
+  const singleDayGhosts = ghosts.filter((ghost) => (
+    ghost?.kind === "deadline" && ghost.startDate === dateKey
+  ));
+  const descriptors = orderDeadlineDescriptors([
+    ...state.items.map(toDeadlineDescriptor),
+    ...singleDayGhosts.map(toDeadlineGhostDescriptor),
+  ]);
 
   if (!descriptors.length) return null;
 
   return (
     <CalendarCellItemStack
       day={day}
+      dateKey={dateKey}
       items={descriptors}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}

@@ -5,6 +5,7 @@ import eventsView from "./views/eventsView.jsx";
 import { getCalendarLayoutMetrics } from "./calendarLayout.js";
 import useCalendarEventEditor from "./events/useCalendarEventEditor.js";
 import useCalendarQuickActions from "./events/useCalendarQuickActions.js";
+import useCalendarGhostPreview from "./useCalendarGhostPreview.js";
 import CalendarModalShell from "./modal/CalendarModalShell.jsx";
 import {
   getMonthData,
@@ -114,6 +115,7 @@ export default function CalendarModal({
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [pendingFocusDate, setPendingFocusDate] = useState(null);
   const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
+  const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const navigateMonthRef = useRef(null);
@@ -286,6 +288,7 @@ export default function CalendarModal({
 
   function navigateMonth(dir) {
     closeEventEditor();
+    setDeadlineDraftPreview(null);
     setMonthMotionDirection(dir > 0 ? 1 : -1);
     setSelectedDay(null);
     setSelectedDateKey(null);
@@ -311,16 +314,19 @@ export default function CalendarModal({
     }
     setSelectedItemId(task?.id != null ? String(task.id) : null);
     setDeadlineEditor(null);
+    setDeadlineDraftPreview(null);
   }
 
   const commitSyncSnapshot = useEffectEvent((snapshot) => {
     if (snapshot?.didViewChange) {
       closeEventEditor();
+      setDeadlineDraftPreview(null);
     }
     if (snapshot?.openCreate && view === "deadlines") {
       setDeadlineEditor({ mode: "create", seedDate: focusDate || null });
     } else if (snapshot?.resetDeadlineEditor) {
       setDeadlineEditor(null);
+      setDeadlineDraftPreview(null);
     }
     if (snapshot && !isSameViewDate(viewDate, snapshot.nextViewDate)) {
       setViewDate(snapshot.nextViewDate);
@@ -442,6 +448,22 @@ export default function CalendarModal({
     [activeView, viewData, viewYear, viewMonth],
   );
   const itemsByDay = useMemo(() => computed.itemsByDay || {}, [computed.itemsByDay]);
+  const ghostPreview = useCalendarGhostPreview({
+    open,
+    view,
+    viewData,
+    computed,
+    eventEditor,
+    deadlineEditor,
+    deadlineDraftPreview,
+    viewYear,
+    viewMonth,
+    setMonthMotionDirection,
+    setViewDate,
+    setSelectedDay,
+    setSelectedDateKey,
+    setSelectedItemId,
+  });
 
   const { firstDay, daysInMonth } = getMonthData(viewYear, viewMonth);
   const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
@@ -463,6 +485,7 @@ export default function CalendarModal({
 
       if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
         setDeadlineEditor(null);
+        setDeadlineDraftPreview(null);
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -519,6 +542,7 @@ export default function CalendarModal({
               const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
               if (task?.source === "todoist") {
                 setDeadlineEditor({ mode: "edit", taskId: String(selectedItemId) });
+                setDeadlineDraftPreview(null);
               }
             }
           }
@@ -534,6 +558,7 @@ export default function CalendarModal({
               mode: "create",
               seedDate: selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }),
             });
+            setDeadlineDraftPreview(null);
           }
           event.preventDefault();
           event.stopPropagation();
@@ -661,6 +686,8 @@ export default function CalendarModal({
       selectedItems={selectedItems}
       deadlineEditor={deadlineEditor}
       focusDeadlineTask={focusDeadlineTask}
+      ghostPreview={ghostPreview}
+      onDeadlineDraftPreviewChange={setDeadlineDraftPreview}
     />
   );
 }

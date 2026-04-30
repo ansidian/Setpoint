@@ -8,6 +8,7 @@ import { FieldLabel, ActionButton, PickerFieldButton } from "./CalendarEditorCon
 import CalendarEventEditorActionBar from "./CalendarEventEditorActionBar";
 import DetailSummaryRow from "./CalendarEventDetailSummary";
 import CalendarEventEditorPanels from "./CalendarEventEditorPanels";
+import CalendarDraftPreviewPanel from "./CalendarDraftPreviewPanel";
 import useCalendarEditorPickers from "./useCalendarEditorPickers";
 import { EDITOR_ENTRANCE_TRANSITION, EDITOR_POSITION_TRANSITION } from "../detailRailMotion";
 import {
@@ -43,7 +44,7 @@ function sectionIntroStyle() {
   };
 }
 
-export default function CalendarEventEditorRail({ editor, expandedDesktop = false }) {
+export default function CalendarEventEditorRail({ editor, expandedDesktop = false, ghostPreview = null }) {
   const {
     draft,
     titleInput,
@@ -242,6 +243,8 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
                   {validationMessage}
                 </div>
               ) : null}
+
+              <CalendarDraftPreviewPanel ghostPreview={ghostPreview} />
 
               {showTitleAssist ? (
                 <div

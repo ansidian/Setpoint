@@ -1,0 +1,61 @@
+import { useEffect, useMemo, useRef } from "react";
+import {
+  buildDeadlineGhostPreview,
+  buildEventGhostPreview,
+  dateOutsideMonth,
+  monthFromYmd,
+} from "./ghostPreview.js";
+
+export default function useCalendarGhostPreview({
+  open,
+  view,
+  viewData,
+  computed,
+  eventEditor,
+  deadlineEditor,
+  deadlineDraftPreview,
+  viewYear,
+  viewMonth,
+  setMonthMotionDirection,
+  setViewDate,
+  setSelectedDay,
+  setSelectedDateKey,
+  setSelectedItemId,
+}) {
+  const autoNavRef = useRef({ lastNavigateAt: 0, lastTargetDate: "" });
+  const eventGhostPreview = useMemo(() => (
+    view === "events"
+      ? buildEventGhostPreview({ editor: eventEditor, events: viewData?.events || [] })
+      : null
+  ), [eventEditor, view, viewData?.events]);
+  const deadlineGhostPreview = useMemo(() => {
+    if (view !== "deadlines" || !deadlineEditor?.mode || !deadlineDraftPreview) return null;
+    return buildDeadlineGhostPreview({
+      draft: deadlineDraftPreview,
+      dateItems: computed.itemsByDate?.[deadlineDraftPreview.dueDate],
+    });
+  }, [computed.itemsByDate, deadlineDraftPreview, deadlineEditor?.mode, view]);
+  const ghostPreview = view === "events" ? eventGhostPreview : deadlineGhostPreview;
+
+  useEffect(() => {
+    if (!open || !ghostPreview?.targetDate || !dateOutsideMonth(ghostPreview.targetDate, viewYear, viewMonth)) return undefined;
+    const target = ghostPreview.targetDate;
+    const timeout = window.setTimeout(() => {
+      const nowMs = Date.now();
+      const last = autoNavRef.current;
+      if (last.lastTargetDate === target && nowMs - last.lastNavigateAt < 1000) return;
+      const parsed = monthFromYmd(target);
+      if (!parsed) return;
+      setMonthMotionDirection((parsed.year * 12 + parsed.month) > (viewYear * 12 + viewMonth) ? 1 : -1);
+      setViewDate({ year: parsed.year, month: parsed.month });
+      setSelectedDay(parsed.day);
+      setSelectedDateKey(target);
+      setSelectedItemId(null);
+      last.lastNavigateAt = nowMs;
+      last.lastTargetDate = target;
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [ghostPreview?.targetDate, open, setMonthMotionDirection, setSelectedDateKey, setSelectedDay, setSelectedItemId, setViewDate, viewMonth, viewYear]);
+
+  return ghostPreview;
+}

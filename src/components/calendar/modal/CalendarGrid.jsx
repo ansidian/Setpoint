@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
+import CalendarGhostOverlay from "./CalendarGhostOverlay.jsx";
 import { parseYmd, ymdFromParts } from "../calendarDateUtils.js";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -63,6 +64,191 @@ function buildCellAriaLabel({
   ].filter(Boolean).join(", ");
 }
 
+function getCellGhosts(ghostPreview, dateKey) {
+  if (!dateKey || !ghostPreview?.ghosts?.length) return [];
+  return ghostPreview.ghosts.filter((ghost) => {
+    if (ghost.kind === "deadline") return ghost.startDate === dateKey;
+    return ghost.kind === "event" && ghost.startDate === dateKey && ghost.startDate === ghost.endDate;
+  });
+}
+
+function cellBoundaryMeta(cell, index) {
+  return {
+    ...cell,
+    index,
+    row: Math.floor(index / 7) + 1,
+    column: (index % 7) + 1,
+  };
+}
+
+function pushHorizontalBoundarySegments({ segments, cells, side }) {
+  const byRow = new Map();
+  cells.forEach((cell) => {
+    if (!cell.boundarySides.includes(side)) return;
+    const key = `${cell.row}:${cell.boundaryColor}`;
+    const rowCells = byRow.get(key) || [];
+    rowCells.push(cell);
+    byRow.set(key, rowCells);
+  });
+
+  byRow.forEach((rowCells) => {
+    const ordered = rowCells.sort((a, b) => a.column - b.column);
+    let run = [];
+    function flushRun() {
+      if (!run.length) return;
+      const first = run[0];
+      const last = run[run.length - 1];
+      segments.push({
+        id: `${side}-${first.dateKey}-${last.dateKey}`,
+        side,
+        color: first.boundaryColor,
+        row: first.row,
+        columnStart: first.column,
+        columnEnd: last.column + 1,
+        startCap: first.boundarySides.includes("left"),
+        endCap: last.boundarySides.includes("right"),
+      });
+      run = [];
+    }
+
+    ordered.forEach((cell) => {
+      const prev = run[run.length - 1];
+      if (!prev || cell.column === prev.column + 1) {
+        run.push(cell);
+        return;
+      }
+      flushRun();
+      run.push(cell);
+    });
+    flushRun();
+  });
+}
+
+function pushVerticalBoundarySegments({ segments, cells, side }) {
+  const byColumn = new Map();
+  cells.forEach((cell) => {
+    if (!cell.boundarySides.includes(side)) return;
+    const key = `${cell.column}:${cell.boundaryColor}`;
+    const columnCells = byColumn.get(key) || [];
+    columnCells.push(cell);
+    byColumn.set(key, columnCells);
+  });
+
+  byColumn.forEach((columnCells) => {
+    const ordered = columnCells.sort((a, b) => a.row - b.row);
+    let run = [];
+    function flushRun() {
+      if (!run.length) return;
+      const first = run[0];
+      const last = run[run.length - 1];
+      segments.push({
+        id: `${side}-${first.dateKey}-${last.dateKey}`,
+        side,
+        color: first.boundaryColor,
+        column: first.column,
+        rowStart: first.row,
+        rowEnd: last.row + 1,
+        startCap: first.boundarySides.includes("top"),
+        endCap: last.boundarySides.includes("bottom"),
+      });
+      run = [];
+    }
+
+    ordered.forEach((cell) => {
+      const prev = run[run.length - 1];
+      if (!prev || cell.row === prev.row + 1) {
+        run.push(cell);
+        return;
+      }
+      flushRun();
+      run.push(cell);
+    });
+    flushRun();
+  });
+}
+
+function buildBoundarySegments(monthCells) {
+  const cells = monthCells.map(cellBoundaryMeta).filter((cell) => cell.boundarySides.length);
+  const segments = [];
+  pushHorizontalBoundarySegments({ segments, cells, side: "top" });
+  pushHorizontalBoundarySegments({ segments, cells, side: "bottom" });
+  pushVerticalBoundarySegments({ segments, cells, side: "left" });
+  pushVerticalBoundarySegments({ segments, cells, side: "right" });
+  return segments;
+}
+
+function CalendarMonthBoundaryOverlay({
+  monthCells,
+  layout,
+  gridRowCount,
+  fillGridHeight,
+}) {
+  const boundaryStrokeWidth = 2;
+  const segments = buildBoundarySegments(monthCells);
+  if (!segments.length) return null;
+
+  return (
+    <div
+      data-testid="calendar-month-boundary-overlay"
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+        gridTemplateRows: fillGridHeight
+          ? `repeat(${gridRowCount}, minmax(0, 1fr))`
+          : `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
+        gap: layout.gridGap,
+        pointerEvents: "none",
+        zIndex: 4,
+      }}
+    >
+      {segments.map((segment) => {
+        if (segment.side === "top" || segment.side === "bottom") {
+          return (
+            <span
+              key={segment.id}
+              data-testid={`calendar-month-boundary-${segment.id}`}
+              data-boundary-side={segment.side}
+              style={{
+                gridColumn: `${segment.columnStart} / ${segment.columnEnd}`,
+                gridRow: segment.row,
+                alignSelf: segment.side === "top" ? "start" : "end",
+                height: boundaryStrokeWidth,
+                background: segment.color,
+                borderTopLeftRadius: segment.side === "top" && segment.startCap ? 8 : 0,
+                borderTopRightRadius: segment.side === "top" && segment.endCap ? 8 : 0,
+                borderBottomLeftRadius: segment.side === "bottom" && segment.startCap ? 8 : 0,
+                borderBottomRightRadius: segment.side === "bottom" && segment.endCap ? 8 : 0,
+              }}
+            />
+          );
+        }
+
+        return (
+          <span
+            key={segment.id}
+            data-testid={`calendar-month-boundary-${segment.id}`}
+            data-boundary-side={segment.side}
+            style={{
+              gridColumn: segment.column,
+              gridRow: `${segment.rowStart} / ${segment.rowEnd}`,
+              justifySelf: segment.side === "left" ? "start" : "end",
+              width: boundaryStrokeWidth,
+              background: segment.color,
+              borderTopLeftRadius: segment.side === "left" && segment.startCap ? 8 : 0,
+              borderTopRightRadius: segment.side === "right" && segment.startCap ? 8 : 0,
+              borderBottomLeftRadius: segment.side === "left" && segment.endCap ? 8 : 0,
+              borderBottomRightRadius: segment.side === "right" && segment.endCap ? 8 : 0,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function CalendarCell({
   view,
   viewYear,
@@ -73,9 +259,8 @@ function CalendarCell({
   dateLabel,
   inCurrentMonth = true,
   boundarySides = [],
-  boundaryGap = 0,
-  boundaryColor = OTHER_MONTH_BOUNDARY_COLOR,
   items,
+  ghosts,
   selectedItemId,
   itemCount,
   hasItems,
@@ -93,8 +278,6 @@ function CalendarCell({
 }) {
   const [hovered, setHovered] = useState(false);
   const todayAccent = "var(--ea-accent)";
-  const boundaryStrokeWidth = 2;
-  const boundaryBridge = boundaryGap / 3 + boundaryStrokeWidth;
   let cellBg = "rgba(255,255,255,0.015)";
   let cellBorder = "1px solid rgba(255,255,255,0.04)";
   let cellShadow = "none";
@@ -180,6 +363,7 @@ function CalendarCell({
 
   const renderedCellContents = renderCellContents?.({
     items,
+    ghosts,
     hasOverdue,
     isToday,
     loading,
@@ -279,51 +463,6 @@ function CalendarCell({
         gap: 2,
       }}
     >
-      {boundarySides.length ? (
-        <span
-          aria-hidden
-          data-testid={`calendar-month-boundary-${dateKey}`}
-          data-boundary-sides={boundarySides.join(" ")}
-          style={{
-            position: "absolute",
-            top: boundarySides.includes("top") ? 0 : -boundaryBridge,
-            right: boundarySides.includes("right") ? 0 : -boundaryBridge,
-            bottom: boundarySides.includes("bottom") ? 0 : -boundaryBridge,
-            left: boundarySides.includes("left") ? 0 : -boundaryBridge,
-            borderTop: boundarySides.includes("top")
-              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
-              : "0 solid transparent",
-            borderRight: boundarySides.includes("right")
-              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
-              : "0 solid transparent",
-            borderBottom: boundarySides.includes("bottom")
-              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
-              : "0 solid transparent",
-            borderLeft: boundarySides.includes("left")
-              ? `${boundaryStrokeWidth}px solid ${boundaryColor}`
-              : "0 solid transparent",
-            borderTopLeftRadius:
-              boundarySides.includes("top") && boundarySides.includes("left")
-                ? 8
-                : 0,
-            borderTopRightRadius:
-              boundarySides.includes("top") && boundarySides.includes("right")
-                ? 8
-                : 0,
-            borderBottomRightRadius:
-              boundarySides.includes("bottom") &&
-              boundarySides.includes("right")
-                ? 8
-                : 0,
-            borderBottomLeftRadius:
-              boundarySides.includes("bottom") && boundarySides.includes("left")
-                ? 8
-                : 0,
-            pointerEvents: "none",
-            zIndex: 2,
-          }}
-        />
-      ) : null}
       {todayWash && (
         <span
           aria-hidden
@@ -492,6 +631,7 @@ export default function CalendarGrid({
   setSelectedItemId,
   setDeadlineEditor,
   eventQuickActions,
+  ghostPreview,
   canGoPrev = true,
   navigateMonth,
   monthMotionDirection = 0,
@@ -719,6 +859,7 @@ export default function CalendarGrid({
             const dayState =
               activeView.getDayState?.(rawItems) ??
               buildFallbackDayState(rawItems);
+            const cellGhosts = getCellGhosts(ghostPreview, cell.dateKey);
             const resolvedDayState = dayState;
             const cellItems = activeView.getDayState
               ? resolvedDayState
@@ -727,7 +868,7 @@ export default function CalendarGrid({
               ? dayState.items
               : rawItems;
             const resolvedSelectionPool = selectionPool;
-            const hasItems = resolvedDayState.totalCount > 0;
+            const hasItems = resolvedDayState.totalCount > 0 || cellGhosts.length > 0;
             const isToday =
               cell.dateKey ===
               ymdFromParts(currentYear, currentMonth, todayDate);
@@ -766,11 +907,10 @@ export default function CalendarGrid({
                 dateLabel={cell.dateLabel}
                 inCurrentMonth={cell.inCurrentMonth}
                 boundarySides={cell.boundarySides}
-                boundaryGap={layout.gridGap}
-                boundaryColor={cell.boundaryColor}
                 items={cellItems}
+                ghosts={cellGhosts}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
-                itemCount={resolvedDayState.totalCount}
+                itemCount={resolvedDayState.totalCount + cellGhosts.length}
                 hasItems={hasItems}
                 isToday={isToday}
                 isSelected={isSelected}
@@ -832,6 +972,19 @@ export default function CalendarGrid({
           })}
 
         </div>
+        <CalendarMonthBoundaryOverlay
+          monthCells={monthCells}
+          layout={layout}
+          gridRowCount={gridRowCount}
+          fillGridHeight={fillGridHeight}
+        />
+        <CalendarGhostOverlay
+          ghostPreview={ghostPreview}
+          monthCells={monthCells}
+          layout={layout}
+          gridRowCount={gridRowCount}
+          fillGridHeight={fillGridHeight}
+        />
 
         {showGridSkeleton && (
           <CalendarGridSkeleton
