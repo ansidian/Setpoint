@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarCellItemStack from "./CalendarCellItemStack.jsx";
 
@@ -15,6 +15,44 @@ afterEach(() => {
 });
 
 describe("CalendarCellItemStack ghost visibility", () => {
+  it("uses the measured cell height to fit extra chips before showing overflow", async () => {
+    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return this.getAttribute?.("data-testid") === "measured-cell-host" ? 130 : 0;
+      },
+    });
+
+    try {
+      render(
+        <div data-testid="measured-cell-host">
+          <CalendarCellItemStack
+            day={20}
+            items={[
+              { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+              { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+              { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+              { id: "real-4", leadingLabel: "12:00 PM", title: "Fourth hold" },
+            ]}
+            metrics={metrics}
+          />
+        </div>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(3);
+        expect(screen.getByText("+1 more")).toBeTruthy();
+      });
+    } finally {
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
+      } else {
+        delete HTMLElement.prototype.clientHeight;
+      }
+    }
+  });
+
   it("promotes a hidden ghost into the visible stack and overflows displaced real items", () => {
     const onOpenOverflow = vi.fn();
     render(

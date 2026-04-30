@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useState, useRef } from "react";
 import { getVisibleCellItemCount } from "./calendarCellItemMetrics.js";
 
 function chipStyle({
@@ -88,6 +88,50 @@ function splitVisibleItems(items, visibleCount) {
   };
 }
 
+function stackHeight({ visibleCount, hasOverflow, metrics }) {
+  const itemHeight = metrics?.itemHeight ?? 24;
+  const moreHeight = metrics?.moreHeight ?? 22;
+  const gap = metrics?.gap ?? 4;
+  const childCount = visibleCount + (hasOverflow ? 1 : 0);
+
+  if (childCount <= 0) return 0;
+  return (visibleCount * itemHeight)
+    + (hasOverflow ? moreHeight : 0)
+    + ((childCount - 1) * gap);
+}
+
+function measuredVisibleCount(items, availableHeight, metrics) {
+  const itemCount = items.length;
+  if (itemCount <= 0) return 0;
+  if (!Number.isFinite(availableHeight) || availableHeight <= 0) {
+    return getVisibleCellItemCount(itemCount, metrics);
+  }
+
+  if (stackHeight({ visibleCount: itemCount, hasOverflow: false, metrics }) <= availableHeight) {
+    return itemCount;
+  }
+
+  const minimumVisible = items.some((item) => item.isGhost) ? 1 : 0;
+  for (let count = itemCount - 1; count >= minimumVisible; count -= 1) {
+    if (stackHeight({ visibleCount: count, hasOverflow: true, metrics }) <= availableHeight) {
+      return count;
+    }
+  }
+
+  return minimumVisible;
+}
+
+function nearestMeasuredHeight(node) {
+  let current = node?.parentElement || null;
+  while (current) {
+    const height = current.clientHeight;
+    if (height > 0) return height;
+    if (current.getAttribute?.("data-testid")?.startsWith("calendar-cell-")) return 0;
+    current = current.parentElement;
+  }
+  return 0;
+}
+
 function MoreButton({
   hiddenCount,
   onClick,
@@ -162,14 +206,44 @@ export default function CalendarCellItemStack({
 }) {
   const [activeChipId, setActiveChipId] = useState(null);
   const [moreActive, setMoreActive] = useState(false);
+  const stackRef = useRef(null);
+  const [measuredCount, setMeasuredCount] = useState(() => (
+    getVisibleCellItemCount(items?.length || 0, metrics)
+  ));
+
+  const calculateVisibleCount = useCallback(() => {
+    if (!items?.length) {
+      setMeasuredCount(0);
+      return;
+    }
+
+    const availableHeight = nearestMeasuredHeight(stackRef.current);
+    const nextCount = measuredVisibleCount(items, availableHeight, metrics);
+    setMeasuredCount((current) => (current === nextCount ? current : nextCount));
+  }, [items, metrics]);
+
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => calculateVisibleCount());
+    return () => cancelAnimationFrame(frame);
+  }, [calculateVisibleCount]);
+
+  useLayoutEffect(() => {
+    const target = stackRef.current?.parentElement;
+    if (!target || typeof ResizeObserver === "undefined") return undefined;
+
+    const observer = new ResizeObserver(() => calculateVisibleCount());
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [calculateVisibleCount]);
 
   if (!items?.length) return null;
-  const visibleCount = getVisibleCellItemCount(items.length, metrics);
+  const visibleCount = measuredCount;
   const { visibleItems, hiddenItems } = splitVisibleItems(items, visibleCount);
   const hiddenCount = hiddenItems.length;
 
   return (
     <div
+      ref={stackRef}
       style={{
         display: "flex",
         flexDirection: "column",
