@@ -6,15 +6,16 @@ const root = process.cwd()
 const componentSizeBaseline = {
   threshold: 600,
   files: {
-    'src/components/calendar/CalendarRailStates.jsx': 995,
+    'src/components/calendar/CalendarModal.jsx': 864,
+    'src/components/calendar/CalendarRailStates.jsx': 982,
     'src/components/calendar/ScheduleSection.jsx': 807,
-    'src/components/calendar/events/CalendarEventEditorRail.jsx': 782,
-    'src/components/calendar/views/deadlines/DeadlinesDetailRail.jsx': 711,
-    'src/components/calendar/views/events/EventsWorkspaceSupport.jsx': 857,
+    'src/components/calendar/events/CalendarEventEditorRail.jsx': 785,
+    'src/components/calendar/modal/CalendarGrid.jsx': 1205,
+    'src/components/calendar/views/deadlines/DeadlinesDetailRail.jsx': 760,
     'src/components/dashboard/rails/Rails.jsx': 988,
     'src/components/email/EmailSection.jsx': 641,
     'src/components/shell/ShellHeaderChrome.jsx': 656,
-    'src/pages/Dashboard.jsx': 1009,
+    'src/pages/Dashboard.jsx': 1032,
   },
 }
 

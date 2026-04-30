@@ -42,6 +42,7 @@ function toBillDescriptor(bill) {
 
   return {
     id: String(bill.id),
+    sourceItem: bill,
     title: bill.name,
     detail: bill.paid
       ? "Cleared"
@@ -70,8 +71,10 @@ export function renderBillsCellContents({
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onBeforeItemAction,
   layout,
   day,
+  dateKey,
 }) {
   const state = getDayState(items);
   const descriptors = state.items.map(toBillDescriptor);
@@ -81,6 +84,7 @@ export function renderBillsCellContents({
   return (
     <CalendarCellItemStack
       day={day}
+      dateKey={dateKey}
       items={descriptors}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
@@ -93,6 +97,7 @@ export function renderBillsCellContents({
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
+      onBeforeItemAction={onBeforeItemAction}
     />
   );
 }

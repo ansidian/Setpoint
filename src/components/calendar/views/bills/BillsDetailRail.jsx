@@ -242,7 +242,41 @@ function BillsDetail({
   );
 }
 
+function BillsFloatingDetail({
+  items,
+  data,
+  selectedItemId,
+}) {
+  const actualBudgetUrl = data?.actualBudgetUrl;
+  const state = getDayState(items);
+  const allItems = [...state.activeItems, ...state.completedItems];
+  const selectedBill = allItems.find((bill) => String(bill.id) === String(selectedItemId)) || null;
+  const compactDetail = state.totalCount >= 4;
+  const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
+
+  if (!selectedBill) return null;
+
+  return (
+    <BillSelectedCard
+      bill={selectedBill}
+      compact={compactDetail}
+      actions={selectedScheduleUrl ? (
+        <BillSelectedActions
+          bill={selectedBill}
+          actualBudgetUrl={actualBudgetUrl}
+          compact={compactDetail}
+        />
+      ) : null}
+    />
+  );
+}
+
 export function renderBillsDetail(props) {
   const state = getDayState(props.items);
   return <BillsDetail key={`${props.selectedDay}-${state.activeCount}-${state.completedCount}`} {...props} />;
+}
+
+export function renderBillsFloatingDetail(props) {
+  const state = getDayState(props.items);
+  return <BillsFloatingDetail key={`${props.selectedItemId}-${state.activeCount}-${state.completedCount}`} {...props} />;
 }

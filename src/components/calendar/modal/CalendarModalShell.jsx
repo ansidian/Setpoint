@@ -1,8 +1,10 @@
+import { useRef } from "react";
 import { createPortal } from "react-dom";
 import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "../CalendarRailStates.jsx";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
+import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 
@@ -34,6 +36,7 @@ function buildContextContent({
   onCreateTask,
   ghostPreview,
   onDeadlineDraftPreviewChange,
+  onCloseFloatingDetail,
 }) {
   if (view === "events" && eventEditor.isEditorOpen) {
     return (
@@ -63,9 +66,13 @@ function buildContextContent({
         setSelectedItemId(String(itemId));
         setDeadlineEditor(null);
       },
-      onEditEvent: eventEditor.openEdit,
+      onEditEvent: (item) => {
+        onCloseFloatingDetail?.();
+        eventEditor.openEdit?.(item);
+      },
       editorState: deadlineEditor,
       onStartEdit: (task) => {
+        onCloseFloatingDetail?.();
         setSelectedItemId(String(task.id));
         setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
         onDeadlineDraftPreviewChange?.(null);
@@ -176,7 +183,15 @@ export default function CalendarModalShell({
   focusDeadlineTask,
   ghostPreview,
   onDeadlineDraftPreviewChange,
+  floatingDetail,
+  floatingDetailLabel,
+  onOpenFloatingDetail,
+  onCloseFloatingDetail,
+  onParkFloatingDetail,
+  onFloatingDetailDragged,
+  onReanchorFloatingDetail,
 }) {
+  const railRef = useRef(null);
   const workspaceMode = view === "events" && eventEditor.isEditorOpen
     ? "editor"
     : view === "deadlines" && deadlineEditor?.mode
@@ -199,7 +214,17 @@ export default function CalendarModalShell({
           : `summary-${view}-${viewYear}-${viewMonth}`;
 
   const contextWidth = workspaceMode === "editor" ? layout.editorWidth : layout.contextWidth;
+  const headerEventEditor = view === "events"
+    ? {
+        ...eventEditor,
+        openCreate: () => {
+          onCloseFloatingDetail?.();
+          eventEditor.openCreate?.();
+        },
+      }
+    : eventEditor;
   const onCreateTask = (seedDate) => {
+    onCloseFloatingDetail?.();
     setDeadlineEditor({
       mode: "create",
       seedDate: seedDate || null,
@@ -231,11 +256,70 @@ export default function CalendarModalShell({
     setSelectedItemId,
     setDeadlineEditor,
     focusDeadlineTask,
-    onCreateEvent: () => eventEditor.openCreate?.(),
+    onCreateEvent: () => {
+      onCloseFloatingDetail?.();
+      eventEditor.openCreate?.();
+    },
     onCreateTask,
     ghostPreview,
     onDeadlineDraftPreviewChange,
+    onCloseFloatingDetail,
   });
+
+  const selectedItemPool = activeView.getDayState
+    ? [
+        ...(selectedDayState.activeItems || []),
+        ...(selectedDayState.completedItems || []),
+      ]
+    : Array.isArray(selectedItems)
+      ? selectedItems
+      : selectedDayState.items || [];
+  const selectedItemResolves = floatingDetail?.itemId && activeView.getItemId
+    ? selectedItemPool.some((item) => String(activeView.getItemId(item)) === String(floatingDetail.itemId))
+    : !!floatingDetail?.itemId;
+  const floatingDetailItems = floatingDetail?.parked
+    && !selectedItemResolves
+    && Array.isArray(floatingDetail.itemsSnapshot)
+      ? floatingDetail.itemsSnapshot
+      : selectedItems;
+  const floatingDetailContent = !layout.stacked && floatingDetail?.open
+    ? activeView.renderFloatingDetail?.({
+        selectedDay,
+        selectedDateKey,
+        viewYear,
+        viewMonth,
+        items: floatingDetailItems,
+        data: viewData,
+        computed,
+        selectedItemId: floatingDetail.itemId,
+        onEditEvent: (item) => {
+          onCloseFloatingDetail?.();
+          eventEditor.openEdit?.(item);
+        },
+        editorState: null,
+        onStartEdit: (task) => {
+          onCloseFloatingDetail?.();
+          setSelectedItemId(String(task.id));
+          setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
+          onDeadlineDraftPreviewChange?.(null);
+        },
+        onCloseEditor: () => {
+          setDeadlineEditor(null);
+          onDeadlineDraftPreviewChange?.(null);
+        },
+        onTaskSaved: focusDeadlineTask,
+        onTaskDeleted: (taskId) => {
+          setDeadlineEditor(null);
+          onDeadlineDraftPreviewChange?.(null);
+          if (String(effectiveSelectedItemId) === String(taskId)) {
+            setSelectedItemId(null);
+            onCloseFloatingDetail?.();
+          }
+        },
+        onDraftPreviewChange: onDeadlineDraftPreviewChange,
+        ghostPreview,
+      })
+    : null;
 
   return createPortal(
     <div
@@ -340,12 +424,15 @@ export default function CalendarModalShell({
             viewData={viewData}
             computed={computed}
             suppressOutsideClick={suppressOutsideClick}
-            eventEditor={eventEditor}
+            eventEditor={headerEventEditor}
             selectedDay={selectedDay}
             selectedDateKey={selectedDateKey}
             viewYear={viewYear}
             viewMonth={viewMonth}
-            setDeadlineEditor={setDeadlineEditor}
+            setDeadlineEditor={(next) => {
+              onCloseFloatingDetail?.();
+              setDeadlineEditor(next);
+            }}
             onClose={onClose}
             viewLabel={activeView.label}
           />
@@ -404,6 +491,11 @@ export default function CalendarModalShell({
                   navigateMonth={navigateMonth}
                   monthMotionDirection={monthMotionDirection}
                   ghostPreview={ghostPreview}
+                  onOpenFloatingDetail={onOpenFloatingDetail}
+                  onCloseFloatingDetail={onCloseFloatingDetail}
+                  onReanchorFloatingDetail={onReanchorFloatingDetail}
+                  floatingDetailOpen={!!floatingDetail?.open}
+                  floatingDetailParked={!!floatingDetail?.parked}
                 />
                 {view === "events" ? (
                   <CalendarQuickActionLayer quickActions={eventQuickActions} />
@@ -412,6 +504,7 @@ export default function CalendarModalShell({
             </div>
 
             <aside
+              ref={railRef}
               data-testid="calendar-modal-rail"
               data-context-mode={workspaceMode}
               style={{
@@ -445,6 +538,18 @@ export default function CalendarModalShell({
               </AnimatedRailContent>
             </aside>
           </div>
+          <CalendarFloatingDetailPanel
+            detail={floatingDetail}
+            label={floatingDetailLabel}
+            calendarPanelRef={panelRef}
+            railRef={railRef}
+            suppressOutsideClick={suppressOutsideClick}
+            onClose={onCloseFloatingDetail}
+            onPark={onParkFloatingDetail}
+            onUserDraggedChange={onFloatingDetailDragged}
+          >
+            {floatingDetailContent}
+          </CalendarFloatingDetailPanel>
         </div>
       </div>
     </div>,

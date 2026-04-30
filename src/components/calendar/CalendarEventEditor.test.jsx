@@ -87,6 +87,11 @@ function renderModal({
   return { ...utils, refreshRange, upsertEvents, removeEvent };
 }
 
+function getLatestRailContent() {
+  const railContent = screen.getAllByTestId("calendar-rail-content");
+  return railContent[railContent.length - 1];
+}
+
 function createDataTransfer() {
   const store = new Map();
   return {
@@ -154,7 +159,7 @@ describe("Calendar event editor rail", () => {
     fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
     expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
@@ -331,7 +336,7 @@ describe("Calendar event editor rail", () => {
     renderModal({ events: [original, conflict] });
 
     fireEvent.click(screen.getAllByTestId("calendar-cell-item-chip")[0]);
-    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
     expect(screen.queryByTestId("calendar-ghost-overlay")).toBeNull();
 
@@ -593,7 +598,7 @@ describe("Calendar event editor rail", () => {
     });
 
     fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
-    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
@@ -689,7 +694,7 @@ describe("Calendar event editor rail", () => {
     });
 
     fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
-    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("calendar-event-source-trigger"));

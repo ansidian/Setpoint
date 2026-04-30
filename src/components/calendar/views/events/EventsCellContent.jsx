@@ -66,6 +66,7 @@ function eventDetail(ev) {
 function toEventDescriptor(ev) {
   return {
     id: getEventSelectionId(ev),
+    sourceItem: ev,
     sourceEvent: ev,
     writable: !!ev?.writable,
     recurring: !!ev?.isRecurring,
@@ -121,6 +122,7 @@ export function renderEventsCellContents({
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onBeforeItemAction,
   layout,
   day,
   dateKey,
@@ -152,6 +154,7 @@ export function renderEventsCellContents({
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
+      onBeforeItemAction={onBeforeItemAction}
     />
   );
 }

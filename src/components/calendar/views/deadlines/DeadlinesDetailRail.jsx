@@ -706,10 +706,55 @@ function DeadlinesDetail({
   );
 }
 
+function DeadlinesFloatingDetail({
+  items,
+  selectedItemId,
+  onStartEdit,
+  accent = "var(--ea-accent)",
+}) {
+  const {
+    handleCompleteTask,
+    handleUpdateTaskStatus,
+  } = useDashboard();
+
+  const state = getDayState(items);
+  const allItems = [...state.activeItems, ...state.completedItems];
+  const selectedTask = allItems.find((task) => String(task.id) === String(selectedItemId)) || null;
+  const compressedSelectedCard = state.totalCount >= 2 || shouldCompressDeadlineCard(selectedTask);
+  const compactDetail = state.totalCount >= 2;
+  const effectiveCompactDetail = compactDetail || compressedSelectedCard;
+
+  if (!selectedTask) return null;
+
+  return (
+    <DetailCard
+      task={selectedTask}
+      accent={accent}
+      compact={effectiveCompactDetail}
+      ultraCompact={compressedSelectedCard}
+      actions={
+        <DeadlineSelectedActions
+          task={selectedTask}
+          accent={accent}
+          onEdit={onStartEdit}
+          onComplete={handleCompleteTask}
+          onStatusChange={handleUpdateTaskStatus}
+          compact={effectiveCompactDetail}
+        />
+      }
+    />
+  );
+}
+
 export function renderDeadlinesDetail(props) {
   const state = getDayState(props.items);
   const editorKey = props.editorState?.mode
     ? `editor-${props.editorState.mode}-${props.editorState.taskId || props.editorState.seedDate || "new"}`
     : null;
   return <DeadlinesDetail key={editorKey || `${props.selectedDay}-${state.activeCount}-${state.completedCount}`} {...props} />;
+}
+
+export function renderDeadlinesFloatingDetail(props) {
+  const state = getDayState(props.items);
+  return <DeadlinesFloatingDetail key={`${props.selectedItemId}-${state.activeCount}-${state.completedCount}`} {...props} />;
 }

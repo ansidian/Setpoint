@@ -386,6 +386,32 @@ function renderDetail({
   );
 }
 
+function renderFloatingDetail({
+  items,
+  selectedItemId,
+  onEditEvent,
+}) {
+  const ordered = orderDetailEvents(items);
+  const selectedEvent = ordered.find((item) => (
+    String(getEventSelectionId(item)) === String(selectedItemId)
+  ));
+
+  if (!selectedEvent) return null;
+
+  return (
+    <EventSelectedCard
+      ev={selectedEvent}
+      actions={hasEventActions(selectedEvent) ? (
+        <EventSelectedActions
+          ev={selectedEvent}
+          onEditEvent={onEditEvent}
+          compact
+        />
+      ) : null}
+    />
+  );
+}
+
 function renderFooter({ computed }) {
   const totalEvents = computed?.totalEvents || 0;
   const allDayEvents = computed?.allDayEvents || 0;
@@ -463,6 +489,7 @@ const eventsView = {
   getVisibleEventCount,
   renderCellContents: renderEventsCellContents,
   renderDetail,
+  renderFloatingDetail,
   renderFooter,
   HeaderExtras: EventsHeaderExtras,
   icon: CalendarIcon,

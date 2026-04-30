@@ -43,6 +43,11 @@ function isCalendarGridCellTarget(target) {
     && !!target.closest("[role='gridcell']");
 }
 
+function isCalendarFloatingDetailTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-calendar-floating-detail='true']");
+}
+
 function canUseInlineOverflow({ triggerElement, hiddenStackHeight, layout }) {
   if (layout?.stacked || !triggerElement?.isConnected) return false;
   if (!Number.isFinite(hiddenStackHeight) || hiddenStackHeight <= 0) return false;
@@ -680,6 +685,11 @@ export default function CalendarGrid({
   canGoPrev = true,
   navigateMonth,
   monthMotionDirection = 0,
+  onOpenFloatingDetail,
+  onCloseFloatingDetail,
+  onReanchorFloatingDetail,
+  floatingDetailOpen = false,
+  floatingDetailParked = false,
 }) {
   const gridShellRef = useRef(null);
   const monthWheelRef = useRef({ accumulatedY: 0, lastNavigateAt: -Infinity });
@@ -779,6 +789,7 @@ export default function CalendarGrid({
     if (isSelected) return;
 
     closeEventEditor();
+    onCloseFloatingDetail?.();
     if (view === "deadlines") {
       setDeadlineEditor(null);
     }
@@ -788,7 +799,7 @@ export default function CalendarGrid({
     setSelectedItemId(null);
   }
 
-  function handleSelectItem(day, itemId, dateKey = null, { keepOverflowOpen = false } = {}) {
+  function handleSelectItem(day, itemId, dateKey = null, { keepOverflowOpen = false, anchorMeta = null } = {}) {
     closeEventEditor();
     if (view === "deadlines") {
       setDeadlineEditor(null);
@@ -801,25 +812,40 @@ export default function CalendarGrid({
     } else {
       setOverflowState(null);
     }
+    if (!layout.stacked && anchorMeta?.triggerElement) {
+      onOpenFloatingDetail?.({
+        view,
+        itemId: itemId != null ? String(itemId) : null,
+        dateKey: anchorMeta.dateKey || dateKey || null,
+        day,
+        anchorElement: anchorMeta.triggerElement,
+        sourceCellElement: anchorMeta.sourceCellElement || anchorMeta.triggerElement.closest?.("[role='gridcell']") || null,
+        exclusionElement: anchorMeta.exclusionElement || null,
+        anchorKind: anchorMeta.anchorKind || "chip",
+        itemsSnapshot: anchorMeta.itemsSnapshot || null,
+      });
+    }
   }
 
   useEffect(() => {
     if (!resolvedOverflow) return undefined;
     function handleKeyDown(event) {
       if (event.key !== "Escape") return;
+      if (floatingDetailOpen) return;
       closeOverflow({ restoreFocus: true });
       event.preventDefault();
       event.stopPropagation();
     }
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [closeOverflow, resolvedOverflow]);
+  }, [closeOverflow, floatingDetailOpen, resolvedOverflow]);
 
   useEffect(() => {
     if (resolvedOverflow?.mode !== "inline") return undefined;
     function handlePointerDown(event) {
       if (resolvedOverflow.sourceCellElement?.contains(event.target)) return;
       if (resolvedOverflow.triggerElement?.contains(event.target)) return;
+      if (isCalendarFloatingDetailTarget(event.target)) return;
       if (isCalendarRailTarget(event.target)) return;
       if (gridShellRef.current?.contains(event.target) && isCalendarGridCellTarget(event.target)) return;
       setOverflowState(null);
@@ -827,6 +853,25 @@ export default function CalendarGrid({
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [resolvedOverflow]);
+
+  useEffect(() => {
+    if (!floatingDetailParked || !selectedItemId || !selectedDateKey) return;
+    const chips = [...(gridShellRef.current?.querySelectorAll("[data-testid='calendar-cell-item-chip']") || [])];
+    const anchor = chips.find((element) => element.getAttribute("data-item-id") === String(selectedItemId));
+    if (!anchor) return;
+    const sourceCellElement = anchor.closest("[role='gridcell']");
+    if (sourceCellElement?.getAttribute("data-date-key") !== selectedDateKey) return;
+    onReanchorFloatingDetail?.({
+      view,
+      itemId: String(selectedItemId),
+      dateKey: selectedDateKey,
+      day: Number(sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) || selectedDay,
+      anchorElement: anchor,
+      sourceCellElement,
+      exclusionElement: null,
+      anchorKind: "chip",
+    });
+  }, [floatingDetailParked, onReanchorFloatingDetail, selectedDateKey, selectedDay, selectedItemId, view, viewMonth, viewYear]);
 
   useEffect(() => {
     const scrollContainer = getModalScrollContainer(gridShellRef.current);
@@ -1039,9 +1084,10 @@ export default function CalendarGrid({
                 onSelectDay={() =>
                   handleSelectDay(day, isSelected, cell.dateKey)
                 }
-                onSelectItem={(itemId) =>
+                onSelectItem={(itemId, anchorMeta) =>
                   handleSelectItem(day, itemId, cell.dateKey, {
                     keepOverflowOpen: overflowOpen,
+                    anchorMeta,
                   })
                 }
                 onOpenOverflow={({
@@ -1098,6 +1144,7 @@ export default function CalendarGrid({
                       : null,
                     onInlineOverflowInteraction: markOverflowInteraction,
                     onCloseInlineOverflow: closeOverflowWithoutFocus,
+                    onBeforeItemAction: onCloseFloatingDetail,
                     layout,
                   })
                 }
@@ -1137,19 +1184,21 @@ export default function CalendarGrid({
       <CalendarCellOverflowPopover
         popover={resolvedPopover}
         selectedItemId={selectedItemId}
-        onSelectItem={(itemId) => {
+        onSelectItem={(itemId, anchorMeta) => {
           if (resolvedPopover?.day == null) return;
           handleSelectItem(
             resolvedPopover.day,
             itemId,
             resolvedPopover.dateKey || null,
-            { keepOverflowOpen: true },
+            { keepOverflowOpen: true, anchorMeta },
           );
         }}
         onClose={() => setOverflowState(null)}
         onOverflowInteraction={markOverflowInteraction}
         suppressOutsideClick={suppressOutsideClick}
         quickActions={eventDateCells ? eventQuickActions : null}
+        onBeforeItemAction={onCloseFloatingDetail}
+        floatingDetailOpen={floatingDetailOpen}
       />
     </div>
   );

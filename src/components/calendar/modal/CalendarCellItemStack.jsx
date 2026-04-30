@@ -205,7 +205,10 @@ function ItemChip({
   onSetActive,
   onClearActive,
   onBeforeDragStart,
+  onBeforeDeleteMenu,
   inlineOverflowItem = false,
+  stackRef,
+  dateKey,
 }) {
   const ghost = !!item.isGhost;
   const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
@@ -271,12 +274,19 @@ function ItemChip({
       data-calendar-focus-ring="true"
       onClick={(event) => {
         event.stopPropagation();
-        onSelectItem?.(item.id);
+        onSelectItem?.(item.id, {
+          triggerElement: event.currentTarget,
+          sourceCellElement: stackRef?.current?.closest?.("[role='gridcell']") || null,
+          dateKey,
+          anchorKind: inlineOverflowItem ? "overflow-row" : "chip",
+          itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
+        });
       }}
       onContextMenu={(event) => {
         if (!item.sourceEvent?.writable) return;
         event.preventDefault();
         event.stopPropagation();
+        onBeforeDeleteMenu?.();
         quickActions?.openDeleteMenu?.({
           event: item.sourceEvent,
           x: event.clientX,
@@ -357,6 +367,7 @@ export default function CalendarCellItemStack({
   inlineOverflowVisibleCount = null,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onBeforeItemAction,
 }) {
   const stackItems = useMemo(() => items || [], [items]);
   const [activeChipId, setActiveChipId] = useState(null);
@@ -453,6 +464,10 @@ export default function CalendarCellItemStack({
             onSelectItem={onSelectItem}
             onSetActive={setActiveChipId}
             onClearActive={clearActiveChip}
+            onBeforeDragStart={onBeforeItemAction}
+            onBeforeDeleteMenu={onBeforeItemAction}
+            stackRef={stackRef}
+            dateKey={dateKey}
           />
         );
       })}
@@ -497,8 +512,17 @@ export default function CalendarCellItemStack({
                 onSelectItem={onSelectItem}
                 onSetActive={setActiveChipId}
                 onClearActive={clearActiveChip}
-                onBeforeDragStart={onCloseInlineOverflow}
+                onBeforeDragStart={() => {
+                  onCloseInlineOverflow?.();
+                  onBeforeItemAction?.();
+                }}
+                onBeforeDeleteMenu={() => {
+                  onCloseInlineOverflow?.();
+                  onBeforeItemAction?.();
+                }}
                 inlineOverflowItem
+                stackRef={stackRef}
+                dateKey={dateKey}
               />
             );
           })}

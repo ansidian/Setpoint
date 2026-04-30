@@ -33,6 +33,7 @@ function toDeadlineDescriptor(task) {
 
   return {
     id: String(task.id),
+    sourceItem: task,
     title: task.title || task.name || "Untitled",
     detail: [task.class_name || task.project_name, statusLabel(task.status)].filter(Boolean).join(" · "),
     leadingLabel: timeLabel,
@@ -83,6 +84,7 @@ export function renderDeadlinesCellContents({
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onBeforeItemAction,
   layout,
   day,
   dateKey,
@@ -115,6 +117,7 @@ export function renderDeadlinesCellContents({
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
+      onBeforeItemAction={onBeforeItemAction}
     />
   );
 }
