@@ -288,7 +288,9 @@ router.patch("/events/:eventId", async (req, res) => {
   const { eventId } = req.params;
   const {
     accountId,
+    sourceAccountId,
     calendarId,
+    sourceCalendarId,
     etag,
     title,
     allDay,
@@ -304,9 +306,16 @@ router.patch("/events/:eventId", async (req, res) => {
     originalStartTime,
   } = req.body || {};
   try {
+    if (sourceAccountId && sourceAccountId !== accountId) {
+      return res.status(400).json({
+        code: "calendar_cross_account_move_unsupported",
+        message: "Move events between calendars on the same Google account.",
+      });
+    }
     const account = await loadCalendarAccount(accountId);
     const event = await updateCalendarEvent(account, eventId, {
       calendarId,
+      sourceCalendarId,
       etag,
       title,
       allDay,

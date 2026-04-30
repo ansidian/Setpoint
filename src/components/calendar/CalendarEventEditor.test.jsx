@@ -536,6 +536,94 @@ describe("Calendar event editor rail", () => {
     });
   });
 
+  it("sends the original calendar when moving an edited event to another calendar", async () => {
+    mockGetCalendarSources.mockResolvedValue({
+      accounts: [
+        {
+          accountId: "gmail-main",
+          accountLabel: "Google",
+          accountEmail: "me@example.com",
+          calendars: [
+            {
+              id: "primary",
+              summary: "Personal",
+              accessRole: "owner",
+              primary: true,
+              writable: true,
+            },
+            {
+              id: "school",
+              summary: "School",
+              accessRole: "owner",
+              writable: true,
+            },
+          ],
+        },
+        {
+          accountId: "gmail-alt",
+          accountLabel: "Alt Google",
+          accountEmail: "alt@example.com",
+          calendars: [
+            {
+              id: "work",
+              summary: "Work",
+              accessRole: "owner",
+              writable: true,
+            },
+          ],
+        },
+      ],
+    });
+    mockUpdateCalendarEvent.mockResolvedValue({
+      event: {
+        id: "event-move",
+        title: "Planning",
+        accountId: "gmail-main",
+        calendarId: "school",
+        startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-21T16:30:00.000Z").getTime(),
+        writable: true,
+        allDay: false,
+      },
+    });
+
+    renderModal({
+      events: [
+        {
+          id: "event-move",
+          etag: '"etag-move"',
+          title: "Planning",
+          accountId: "gmail-main",
+          calendarId: "primary",
+          startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-21T16:30:00.000Z").getTime(),
+          writable: true,
+          allDay: false,
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
+    fireEvent.click(screen.getByRole("button", { name: /edit details/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("calendar-event-source-trigger"));
+    expect(await screen.findByRole("dialog", { name: /calendar source picker/i })).toBeTruthy();
+    expect(screen.queryByText("Work")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /School/i }));
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-move", expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "school",
+        sourceAccountId: "gmail-main",
+        sourceCalendarId: "primary",
+        etag: '"etag-move"',
+      }));
+    });
+  });
+
   it("does not flash the title validation error on the first typed character", async () => {
     renderModal();
 
