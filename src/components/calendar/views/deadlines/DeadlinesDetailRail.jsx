@@ -555,7 +555,6 @@ function DeadlinesDetail({
   onTaskDeleted,
   onDraftPreviewChange,
   accent = "var(--ea-accent)",
-  supportBandActive = false,
 }) {
   const {
     handleCompleteTask,
@@ -617,7 +616,6 @@ function DeadlinesDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={summary}
       accent={accent}
-      supportBandActive={supportBandActive}
       headerContent={
         selectedTask ? (
           <DetailCard
@@ -632,7 +630,7 @@ function DeadlinesDetail({
                 onEdit={onStartEdit}
                 onComplete={handleCompleteTask}
                 onStatusChange={handleUpdateTaskStatus}
-                compact={effectiveCompactDetail || supportBandActive}
+                compact={effectiveCompactDetail}
               />
             }
           />

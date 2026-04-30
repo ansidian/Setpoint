@@ -5,7 +5,6 @@ import { motion as Motion } from "motion/react";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
   RailAction,
-  RailActionDock,
   RailActionGroup,
   RailFactTile,
   RailHeroCard,
@@ -190,7 +189,6 @@ function BillsDetail({
   data,
   selectedItemId,
   onSelectItem,
-  supportBandActive = false,
 }) {
   const actualBudgetUrl = data?.actualBudgetUrl;
   const state = getDayState(items);
@@ -211,17 +209,7 @@ function BillsDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={summary}
       accent="#a6e3a1"
-      supportBandActive={supportBandActive}
-      actionContent={supportBandActive && selectedBill && selectedScheduleUrl ? (
-        <RailActionDock accent="#a6e3a1" compact>
-          <BillSelectedActions
-            bill={selectedBill}
-            actualBudgetUrl={actualBudgetUrl}
-            compact
-          />
-        </RailActionDock>
-      ) : null}
-      headerContent={supportBandActive ? null : selectedBill ? (
+      headerContent={selectedBill ? (
         <BillSelectedCard
           bill={selectedBill}
           compact={compactDetail}
