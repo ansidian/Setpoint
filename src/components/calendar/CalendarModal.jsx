@@ -7,6 +7,7 @@ import useCalendarEventEditor from "./events/useCalendarEventEditor.js";
 import useCalendarQuickActions from "./events/useCalendarQuickActions.js";
 import useCalendarGhostPreview from "./useCalendarGhostPreview.js";
 import CalendarModalShell from "./modal/CalendarModalShell.jsx";
+import { resolveFloatingDetailPlacement } from "./modal/calendarFloatingDetailPlacement.js";
 import {
   getMonthData,
   getVisibleGridRange,
@@ -82,6 +83,35 @@ function isSameViewDate(a, b) {
   return a?.month === b?.month && a?.year === b?.year;
 }
 
+function isFloatingDetailTriggerTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item']");
+}
+
+function floatingDetailTypeLabel(view) {
+  if (view === "events") return "Event";
+  if (view === "bills") return "Bill";
+  if (view === "deadlines") return "Deadline";
+  return "Item";
+}
+
+function formatFloatingDetailLabel(view, dateKey, viewYear, viewMonth, selectedDay) {
+  const parsed = parseYmd(dateKey);
+  const date = parsed
+    ? new Date(parsed.year, parsed.month, parsed.day)
+    : selectedDay
+      ? new Date(viewYear, viewMonth, selectedDay)
+      : null;
+  const dateLabel = date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    : "Selected";
+  return `${floatingDetailTypeLabel(view)} · ${dateLabel}`;
+}
+
+function elementRect(element) {
+  return element?.isConnected ? element.getBoundingClientRect() : null;
+}
+
 export default function CalendarModal({
   open,
   onClose,
@@ -107,6 +137,7 @@ export default function CalendarModal({
   const [selectedDay, setSelectedDay] = useState(() => (initialFocus ? initialFocus.getDate() : null));
   const [selectedDateKey, setSelectedDateKey] = useState(() => (initialFocus ? ymdFromParts(initialFocus.getFullYear(), initialFocus.getMonth(), initialFocus.getDate()) : null));
   const [selectedItemId, setSelectedItemId] = useState(() => (open && focusItemId ? String(focusItemId) : null));
+  const [floatingDetail, setFloatingDetail] = useState(null);
   const [deadlineEditor, setDeadlineEditor] = useState(() => (
     open && view === "deadlines" && focusItemId === "new"
       ? { mode: "create", seedDate: focusDate || null }
@@ -286,13 +317,102 @@ export default function CalendarModal({
     },
   });
 
+  function closeFloatingDetail() {
+    setFloatingDetail(null);
+  }
+
+  function openFloatingDetail(nextDetail) {
+    if (!nextDetail?.itemId || !nextDetail?.anchorElement) return;
+    const initialPlacement = resolveFloatingDetailPlacement({
+      anchorRect: elementRect(nextDetail.anchorElement),
+      sourceRect: elementRect(nextDetail.sourceCellElement),
+      exclusionRect: elementRect(nextDetail.exclusionElement),
+      calendarRect: elementRect(panelRef.current),
+      panelHeight: 300,
+      parked: false,
+    });
+    setFloatingDetail((current) => {
+      const nextView = nextDetail.view || view;
+      const nextItemId = String(nextDetail.itemId);
+      const nextDateKey = nextDetail.dateKey || null;
+      const canReuseSnapshot = current?.open
+        && String(current.itemId) === nextItemId
+        && current.view === nextView
+        && current.dateKey === nextDateKey
+        && Array.isArray(current.itemsSnapshot);
+      return {
+        open: true,
+        placementKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        view: nextView,
+        itemId: nextItemId,
+        dateKey: nextDateKey,
+        day: nextDetail.day ?? null,
+        anchorElement: nextDetail.anchorElement,
+        sourceCellElement: nextDetail.sourceCellElement || null,
+        exclusionElement: nextDetail.exclusionElement || null,
+        anchorKind: nextDetail.anchorKind || "chip",
+        parked: false,
+        userDragged: false,
+        initialPlacement,
+        itemsSnapshot: Array.isArray(nextDetail.itemsSnapshot)
+          ? nextDetail.itemsSnapshot
+          : canReuseSnapshot
+            ? current.itemsSnapshot
+            : null,
+      };
+    });
+  }
+
+  function parkFloatingDetail() {
+    setFloatingDetail((current) => (
+      current?.open
+        ? {
+            ...current,
+            anchorElement: null,
+            sourceCellElement: null,
+            exclusionElement: null,
+            anchorKind: "parked",
+            parked: true,
+            userDragged: false,
+          }
+        : current
+    ));
+  }
+
+  function setFloatingDetailDragged(userDragged, placementKey = null) {
+    setFloatingDetail((current) => (
+      current?.open && (!userDragged || !placementKey || current.placementKey === placementKey)
+        ? {
+            ...current,
+            userDragged: !!userDragged,
+          }
+        : current
+    ));
+  }
+
+  function handleViewChange(nextView) {
+    if (nextView && nextView !== view) {
+      setFloatingDetail(null);
+    }
+    onViewChange?.(nextView);
+  }
+
+  function closeCalendarModal() {
+    setFloatingDetail(null);
+    onClose();
+  }
+
   function navigateMonth(dir) {
     closeEventEditor();
     setDeadlineDraftPreview(null);
     setMonthMotionDirection(dir > 0 ? 1 : -1);
-    setSelectedDay(null);
-    setSelectedDateKey(null);
-    setSelectedItemId(null);
+    if (floatingDetail?.open) {
+      parkFloatingDetail();
+    } else {
+      setSelectedDay(null);
+      setSelectedDateKey(null);
+      setSelectedItemId(null);
+    }
     setDeadlineEditor(null);
     setViewDate((prev) => {
       const next = prev.month + dir;
@@ -321,6 +441,10 @@ export default function CalendarModal({
     if (snapshot?.didViewChange) {
       closeEventEditor();
       setDeadlineDraftPreview(null);
+      setFloatingDetail(null);
+    }
+    if (snapshot?.resetDeadlineEditor) {
+      setFloatingDetail(null);
     }
     if (snapshot?.openCreate && view === "deadlines") {
       setDeadlineEditor({ mode: "create", seedDate: focusDate || null });
@@ -367,9 +491,13 @@ export default function CalendarModal({
     }
   }, [syncSnapshot?.openCreate, view, eventEditor.editable, openEventCreate]);
 
-  const suppressOutsideClickRef = useRef(null);
-  function suppressOutsideClick(test) {
-    suppressOutsideClickRef.current = test;
+  const suppressOutsideClickRef = useRef(new Map());
+  function suppressOutsideClick(test, key = "default") {
+    if (test) {
+      suppressOutsideClickRef.current.set(key, test);
+    } else {
+      suppressOutsideClickRef.current.delete(key);
+    }
   }
 
   useEffect(() => {
@@ -381,17 +509,31 @@ export default function CalendarModal({
   }, [open]);
 
   useEffect(() => {
+    if (open) return;
+    suppressOutsideClickRef.current.clear();
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return undefined;
     function handleClick(event) {
-      if (suppressOutsideClickRef.current?.(event.target)) return;
-      if (event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]')) return;
+      const suppressors = [...suppressOutsideClickRef.current.values()];
+      if (suppressors.some((test) => test?.(event.target))) return;
+      const roleLayer = event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]');
+      if (roleLayer && !panelRef.current?.contains(roleLayer)) return;
+      if (floatingDetail?.open) {
+        if (!isFloatingDetailTriggerTarget(event.target)) {
+          setFloatingDetail(null);
+          return;
+        }
+        return;
+      }
       if (panelRef.current && !panelRef.current.contains(event.target)) {
-        onClose();
+        closeCalendarModal();
       }
     }
     document.addEventListener("pointerdown", handleClick);
     return () => document.removeEventListener("pointerdown", handleClick);
-  }, [open, onClose]);
+  }, [floatingDetail?.open, open, onClose]);
 
   useEffect(() => {
     function handleResize() {
@@ -483,6 +625,13 @@ export default function CalendarModal({
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
+      if (event.key === "Escape" && floatingDetail?.open) {
+        setFloatingDetail(null);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
         setDeadlineEditor(null);
         setDeadlineDraftPreview(null);
@@ -495,7 +644,7 @@ export default function CalendarModal({
 
       if (isEditableTarget(event.target)) {
         if (event.key === "Escape") {
-          onClose();
+          closeCalendarModal();
           event.preventDefault();
           event.stopPropagation();
         }
@@ -504,7 +653,7 @@ export default function CalendarModal({
 
       switch (event.key) {
         case "Escape":
-          onClose();
+          closeCalendarModal();
           event.stopPropagation();
           break;
         case "ArrowLeft":
@@ -535,12 +684,16 @@ export default function CalendarModal({
               const dayItems = computed.itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay] || [];
               const resolveId = activeView.getItemId;
               const ev = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
-              if (ev) eventEditor.openEdit(ev);
+              if (ev) {
+                setFloatingDetail(null);
+                eventEditor.openEdit(ev);
+              }
             } else if (view === "deadlines") {
               const dayState = computed.itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay];
               const pool = dayState?.items || dayState || [];
               const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
               if (task?.source === "todoist") {
+                setFloatingDetail(null);
                 setDeadlineEditor({ mode: "edit", taskId: String(selectedItemId) });
                 setDeadlineDraftPreview(null);
               }
@@ -552,8 +705,10 @@ export default function CalendarModal({
         case "c":
         case "C":
           if (view === "events" && eventEditor.editable) {
+            setFloatingDetail(null);
             eventEditor.openCreate();
           } else if (view === "deadlines") {
+            setFloatingDetail(null);
             setDeadlineEditor({
               mode: "create",
               seedDate: selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }),
@@ -564,17 +719,17 @@ export default function CalendarModal({
           event.stopPropagation();
           break;
         case "1":
-          if (view !== "events") onViewChange?.("events");
+          if (view !== "events") handleViewChange("events");
           event.preventDefault();
           event.stopPropagation();
           break;
         case "2":
-          if (view !== "bills") onViewChange?.("bills");
+          if (view !== "bills") handleViewChange("bills");
           event.preventDefault();
           event.stopPropagation();
           break;
         case "3":
-          if (view !== "deadlines") onViewChange?.("deadlines");
+          if (view !== "deadlines") handleViewChange("deadlines");
           event.preventDefault();
           event.stopPropagation();
           break;
@@ -587,7 +742,7 @@ export default function CalendarModal({
     }
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, onViewChange, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, computed.itemsByDate, setDeadlineEditor]);
+  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, computed.itemsByDate, setDeadlineEditor, floatingDetail?.open, handleViewChange]);
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
@@ -638,6 +793,15 @@ export default function CalendarModal({
   const showEmptySelection = view === "deadlines"
     ? hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor && !showDeadlinesLoadingState
     : hasSelectedDay && selectedDayState.totalCount === 0;
+  const floatingDetailLabel = floatingDetail?.open
+    ? formatFloatingDetailLabel(
+        floatingDetail.view || view,
+        floatingDetail.dateKey || activeSelectedDateKey,
+        viewYear,
+        viewMonth,
+        floatingDetail.day || activeSelectedDay,
+      )
+    : "";
 
   return (
     <CalendarModalShell
@@ -651,7 +815,7 @@ export default function CalendarModal({
       canGoPrev={canGoPrev}
       navigateMonth={navigateMonth}
       monthMotionDirection={monthMotionDirection}
-      onViewChange={onViewChange}
+      onViewChange={handleViewChange}
       HeaderExtras={activeView.HeaderExtras}
       viewData={viewData}
       computed={computed}
@@ -662,7 +826,7 @@ export default function CalendarModal({
       viewYear={viewYear}
       viewMonth={viewMonth}
       setDeadlineEditor={setDeadlineEditor}
-      onClose={onClose}
+      onClose={closeCalendarModal}
       activeView={activeView}
       currentYear={currentYear}
       currentMonth={currentMonth}
@@ -688,6 +852,13 @@ export default function CalendarModal({
       focusDeadlineTask={focusDeadlineTask}
       ghostPreview={ghostPreview}
       onDeadlineDraftPreviewChange={setDeadlineDraftPreview}
+      floatingDetail={floatingDetail}
+      floatingDetailLabel={floatingDetailLabel}
+      onOpenFloatingDetail={openFloatingDetail}
+      onCloseFloatingDetail={closeFloatingDetail}
+      onParkFloatingDetail={parkFloatingDetail}
+      onFloatingDetailDragged={setFloatingDetailDragged}
+      onReanchorFloatingDetail={openFloatingDetail}
     />
   );
 }

@@ -21,6 +21,11 @@ function isCalendarGridCellTarget(target) {
     && !!target.closest("[data-testid='calendar-grid-shell'] [role='gridcell']");
 }
 
+function isCalendarFloatingDetailTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-calendar-floating-detail='true']");
+}
+
 function resolvePosition(triggerElement) {
   const viewportPadding = 16;
   const width = Math.min(320, window.innerWidth - viewportPadding * 2);
@@ -96,6 +101,8 @@ export default function CalendarCellOverflowPopover({
   onOverflowInteraction,
   suppressOutsideClick,
   quickActions,
+  onBeforeItemAction,
+  floatingDetailOpen = false,
 }) {
   const reducedMotion = useReducedMotion();
   const popoverRef = useRef(null);
@@ -157,6 +164,7 @@ export default function CalendarCellOverflowPopover({
       if (isOverflowTriggerTarget(event.target)) return;
       if (popover.triggerElement?.contains(event.target)) return;
       if (popoverRef.current?.contains(event.target)) return;
+      if (isCalendarFloatingDetailTarget(event.target)) return;
       if (isCalendarRailTarget(event.target)) return;
       if (isCalendarGridCellTarget(event.target)) return;
       onClose?.();
@@ -169,13 +177,14 @@ export default function CalendarCellOverflowPopover({
     if (!popover) return undefined;
     function handleKeyDown(event) {
       if (event.key !== "Escape") return;
+      if (floatingDetailOpen) return;
       onClose?.();
       event.preventDefault();
       event.stopPropagation();
     }
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [popover, onClose]);
+  }, [floatingDetailOpen, popover, onClose]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -210,6 +219,7 @@ export default function CalendarCellOverflowPopover({
         popoverRef.current?.contains(target)
         || popover.triggerElement?.contains(target)
         || isOverflowTriggerTarget(target)
+        || isCalendarFloatingDetailTarget(target)
         || isCalendarRailTarget(target)
       ));
     } else {
@@ -327,12 +337,20 @@ export default function CalendarCellOverflowPopover({
                   draggable={dragAllowed}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onSelectItem?.(item.id);
+                    onSelectItem?.(item.id, {
+                      triggerElement: event.currentTarget,
+                      sourceCellElement: popover.sourceCellElement || null,
+                      exclusionElement: popoverRef.current,
+                      dateKey: popover.dateKey || null,
+                      anchorKind: "overflow-row",
+                      itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
+                    });
                   }}
                   onContextMenu={(event) => {
                     if (!item.sourceEvent?.writable) return;
                     event.preventDefault();
                     event.stopPropagation();
+                    onBeforeItemAction?.();
                     quickActions?.openDeleteMenu?.({
                       event: item.sourceEvent,
                       x: event.clientX,
@@ -344,6 +362,7 @@ export default function CalendarCellOverflowPopover({
                       event.preventDefault();
                       return;
                     }
+                    onBeforeItemAction?.();
                     onClose?.();
                     event.stopPropagation();
                     event.dataTransfer.effectAllowed = "move";

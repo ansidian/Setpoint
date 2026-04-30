@@ -75,7 +75,10 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
     fireEvent.click(screen.getByText("Third hold"));
 
-    expect(onSelectItem).toHaveBeenCalledWith("real-3");
+    expect(onSelectItem).toHaveBeenCalledWith("real-3", expect.objectContaining({
+      anchorKind: "overflow-row",
+      triggerElement: expect.any(HTMLElement),
+    }));
     expect(onCloseInlineOverflow).not.toHaveBeenCalled();
   });
 
