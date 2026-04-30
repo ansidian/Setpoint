@@ -68,8 +68,8 @@ export default function DashboardHero({
   const compact = density === "compact";
   const stacked = stack || isMobile;
   const outerPadding = isMobile
-    ? "20px 16px 18px"
-    : compact ? "22px 22px 18px" : "26px 24px 20px";
+    ? "16px 14px 14px"
+    : compact ? "18px 20px 14px" : "20px 22px 16px";
   const WeatherIcon = (weather?.icon && WEATHER_ICONS[weather.icon]) || WEATHER_ICONS.Sun;
 
   return (
@@ -79,8 +79,8 @@ export default function DashboardHero({
         padding: outerPadding,
         position: "relative",
         overflow: "hidden",
-        margin: isMobile ? "0" : "16px 0 0",
-        borderRadius: isMobile ? 0 : 24,
+        margin: isMobile ? "0" : "12px 0 0",
+        borderRadius: isMobile ? 0 : 20,
         border: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
         background: isMobile
           ? "transparent"
@@ -91,7 +91,7 @@ export default function DashboardHero({
         style={{
           display: "grid",
           gridTemplateColumns: stacked ? "1fr" : "minmax(0, 1fr) 276px",
-          gap: stacked ? (isMobile ? 14 : 20) : 32,
+          gap: stacked ? (isMobile ? 12 : 16) : 24,
           alignItems: "start",
           position: "relative",
         }}
@@ -123,7 +123,7 @@ export default function DashboardHero({
         style={{
           display: "flex",
           gap: isMobile ? 8 : 10,
-          marginTop: isMobile ? 16 : 24,
+          marginTop: isMobile ? 12 : 16,
           flexWrap: "wrap",
           position: "relative",
           zIndex: 10,
@@ -140,7 +140,7 @@ export default function DashboardHero({
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              padding: isMobile ? "8px 14px" : "8px 16px",
+              padding: isMobile ? "7px 12px" : "7px 14px",
               borderRadius: 999,
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(255,255,255,0.1)",
@@ -174,9 +174,9 @@ export default function DashboardHero({
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : `repeat(${theCallouts.length}, 1fr)`,
             gap: 0,
-            marginTop: isMobile ? 14 : compact ? 16 : 18,
+            marginTop: isMobile ? 10 : compact ? 12 : 14,
             position: "relative",
-            paddingTop: isMobile ? 2 : 14,
+            paddingTop: isMobile ? 2 : 10,
             borderTop: "1px solid rgba(255,255,255,0.05)",
             alignItems: "stretch",
           }}

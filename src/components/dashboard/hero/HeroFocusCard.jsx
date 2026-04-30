@@ -220,7 +220,7 @@ export default function HeroFocusCard({
       data-testid="focus-window-card"
       style={{
         flex: "unset",
-        padding: isMobile ? "12px 14px" : "14px 0 0",
+        padding: isMobile ? "10px 12px" : "10px 0 0",
         borderRadius: 0,
         background: "transparent",
         borderTop: isMobile ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(255,255,255,0.06)",
@@ -232,7 +232,7 @@ export default function HeroFocusCard({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 10,
-          marginBottom: 8,
+          marginBottom: 6,
         }}
       >
         <div
@@ -291,10 +291,10 @@ export default function HeroFocusCard({
       ) : primary && isOpenDay ? (
         <OpenDayBlock summary={openDaySummary} accent={accent} isMobile={isMobile} />
       ) : primary ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div
             style={{
-              padding: "10px 12px",
+              padding: "8px 10px",
               borderRadius: 10,
               background: `${accent}0d`,
               border: `1px solid ${accent}22`,
@@ -321,14 +321,14 @@ export default function HeroFocusCard({
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-              <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 600, color: "#cdd6f4", letterSpacing: -0.2 }}>
+              <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 600, color: "#cdd6f4", letterSpacing: 0 }}>
                 {primary.timeRangeLabel}
               </div>
               <div style={{ fontSize: 10.5, color: "rgba(205,214,244,0.52)" }}>
                 {primary.durationLabel}
               </div>
             </div>
-            <div style={{ marginTop: 6, fontSize: isMobile ? 10.5 : 11, color: "rgba(205,214,244,0.68)", lineHeight: 1.45 }}>
+            <div style={{ marginTop: 5, fontSize: isMobile ? 10.5 : 11, color: "rgba(205,214,244,0.68)", lineHeight: 1.4 }}>
               {primary.explanation}
             </div>
           </div>

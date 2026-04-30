@@ -21,7 +21,7 @@ export default function HeroMessageBlock({
           letterSpacing: isMobile ? 2 : 2.6,
           textTransform: "uppercase",
           color: "rgba(205,214,244,0.55)",
-          marginBottom: isMobile ? 8 : 10,
+          marginBottom: isMobile ? 6 : 8,
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
@@ -44,11 +44,11 @@ export default function HeroMessageBlock({
       <h1
         className="ea-display"
         style={{
-          margin: "0 0 12px",
-          fontSize: isMobile ? 24 : compact ? 35 : 41,
+          margin: "0 0 8px",
+          fontSize: isMobile ? 22 : compact ? 32 : 36,
           fontWeight: 300,
-          letterSpacing: isMobile ? -0.4 : -0.95,
-          lineHeight: isMobile ? 1.08 : 0.98,
+          letterSpacing: 0,
+          lineHeight: isMobile ? 1.08 : 1.02,
           color: "#cdd6f4",
           textWrap: "balance",
           maxWidth: isMobile ? "100%" : 480,
@@ -61,19 +61,19 @@ export default function HeroMessageBlock({
         <div
           style={{
             maxWidth: isMobile ? "100%" : 660,
-            padding: isMobile ? "10px 12px" : "12px 14px",
+            padding: isMobile ? "9px 11px" : "10px 12px",
             border: `1px solid ${accent}24`,
             borderRadius: 12,
             background: `${accent}0a`,
-            marginBottom: isMobile ? 12 : 12,
+            marginBottom: isMobile ? 10 : 8,
           }}
         >
           <div
             className="ea-display"
             style={{
-              fontSize: isMobile ? 18 : compact ? 23 : 26,
+              fontSize: isMobile ? 17 : compact ? 21 : 23,
               lineHeight: isMobile ? 1.16 : 1.12,
-              letterSpacing: isMobile ? -0.2 : -0.35,
+              letterSpacing: 0,
               color: "rgba(221,226,247,0.78)",
               fontStyle: "italic",
               textWrap: "pretty",
@@ -87,10 +87,10 @@ export default function HeroMessageBlock({
       {stateOfDay.summary && (
         <p
           style={{
-            margin: "0 0 6px",
+            margin: "0 0 4px",
             maxWidth: isMobile ? "100%" : 560,
-            fontSize: isMobile ? 13 : compact ? 14 : 14.5,
-            lineHeight: isMobile ? 1.55 : 1.58,
+            fontSize: isMobile ? 12.5 : compact ? 13.5 : 14,
+            lineHeight: isMobile ? 1.48 : 1.5,
             color: "rgba(205,214,244,0.72)",
             textWrap: "pretty",
           }}
@@ -104,7 +104,7 @@ export default function HeroMessageBlock({
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
-          marginTop: isMobile ? 4 : 8,
+          marginTop: isMobile ? 2 : 4,
           fontSize: isMobile ? 9 : 10,
           letterSpacing: 0.3,
           color: "rgba(205,214,244,0.4)",
