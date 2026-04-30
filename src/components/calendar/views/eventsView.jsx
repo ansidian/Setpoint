@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Calendar as CalendarIcon, ExternalLink, Pencil, Video } from "lucide-react";
+import { motion as Motion } from "motion/react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
 import {
   RailAction,
@@ -7,6 +8,7 @@ import {
   RailHeroCard,
   RailMetaChip,
 } from "../DetailRailPrimitives.jsx";
+import { useDetailRailMotion } from "../detailRailMotion.js";
 import { formatEventDuration, getEventSelectionId } from "../../../lib/redesign-helpers";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
@@ -144,6 +146,7 @@ export function getDefaultSelectedItemId(items = []) {
 }
 
 function EventSelectedCard({ ev, actions }) {
+  const motion = useDetailRailMotion();
   const editable = isEditableEvent(ev);
   const displayTitle = sanitizeEventDisplayTitle(ev.title);
   const location = ev.location ? getLocationDisplayLabel(ev.location) : null;
@@ -154,9 +157,17 @@ function EventSelectedCard({ ev, actions }) {
   const accessoryLabel = location || attendeeSummary || null;
 
   return (
-    <div data-testid="calendar-selected-event-card" data-density="compressed" style={{ flexShrink: 0 }}>
+    <Motion.div
+      layout
+      transition={motion.layout}
+      data-testid="calendar-selected-event-card"
+      data-density="compressed"
+      style={{ flexShrink: 0 }}
+    >
       <RailHeroCard accent="#89b4fa" compact actions={actions}>
-        <div
+        <Motion.div
+          layout
+          transition={motion.layout}
           style={{
             fontSize: 10,
             fontWeight: 700,
@@ -167,10 +178,12 @@ function EventSelectedCard({ ev, actions }) {
           }}
         >
           Selected event
-        </div>
+        </Motion.div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-          <div
+        <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+          <Motion.div
+            layout="position"
+            transition={motion.layout}
             data-testid="calendar-selected-event-title"
             style={{
               fontSize: 17,
@@ -185,8 +198,10 @@ function EventSelectedCard({ ev, actions }) {
             }}
           >
             {displayTitle}
-          </div>
-          <div
+          </Motion.div>
+          <Motion.div
+            layout
+            transition={motion.layout}
             style={{
               display: "flex",
               flexWrap: "wrap",
@@ -221,19 +236,19 @@ function EventSelectedCard({ ev, actions }) {
                 {accessoryLabel}
               </span>
             ) : null}
-          </div>
-        </div>
+          </Motion.div>
+        </Motion.div>
 
         {(durationLabel || ev.allDay || ev.isRecurring || !editable) ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
+          <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
             {durationLabel ? <RailMetaChip tone="quiet" compact>{durationLabel}</RailMetaChip> : null}
             {ev.allDay ? <RailMetaChip tone="quiet" compact>All day</RailMetaChip> : null}
             {ev.isRecurring ? <RailMetaChip tone="quiet" compact>Recurring</RailMetaChip> : null}
             {!editable ? <RailMetaChip tone="quiet" compact>Read-only</RailMetaChip> : null}
-          </div>
+          </Motion.div>
         ) : null}
       </RailHeroCard>
-    </div>
+    </Motion.div>
   );
 }
 
