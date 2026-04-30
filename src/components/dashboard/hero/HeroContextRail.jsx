@@ -18,16 +18,16 @@ export default function HeroContextRail({
       style={{
         display: "flex",
         flexDirection: stacked && !isMobile ? "row" : "column",
-        gap: isMobile ? 8 : 14,
+        gap: isMobile ? 8 : 10,
         minWidth: 0,
-        paddingLeft: isMobile ? 0 : 22,
+        paddingLeft: isMobile ? 0 : 18,
         borderLeft: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
       }}
     >
       <div
         style={{
           flex: stacked && !isMobile ? 1 : "unset",
-          padding: isMobile ? "12px 14px" : "0 0 12px",
+          padding: isMobile ? "10px 12px" : "0 0 8px",
           borderRadius: 0,
           background: "transparent",
           border: "none",
@@ -39,8 +39,8 @@ export default function HeroContextRail({
       >
         <div
           style={{
-            width: isMobile ? 38 : 42,
-            height: isMobile ? 38 : 42,
+            width: isMobile ? 36 : 38,
+            height: isMobile ? 36 : 38,
             borderRadius: 10,
             background: isMobile ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.025)",
             display: "grid",
@@ -52,7 +52,7 @@ export default function HeroContextRail({
         <div>
           <div
             style={{
-              fontSize: isMobile ? 16 : 20,
+              fontSize: isMobile ? 15 : 18,
               fontWeight: 500,
               color: "#cdd6f4",
               lineHeight: 1,
