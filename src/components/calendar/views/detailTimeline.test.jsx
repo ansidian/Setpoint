@@ -172,14 +172,13 @@ describe("calendar detail timeline", () => {
     expect(screen.getByTestId("calendar-selected-event-title").textContent).toBe("CS4662-01: ADV MACHINE & DEEP LEARNING");
   });
 
-  it("keeps selected event details in the rail when workspace support is active", () => {
+  it("keeps selected event details in the rail", () => {
     render(
       eventsView.renderDetail({
         selectedDay: 16,
         viewYear: 2026,
         viewMonth: 3,
         selectedItemId: "event-2",
-        supportBandActive: true,
         items: [
           {
             id: "event-1",
@@ -203,7 +202,6 @@ describe("calendar detail timeline", () => {
       }),
     );
 
-    expect(screen.getByTestId("timeline-detail-rail").getAttribute("data-support-band-active")).toBe("true");
     expect(screen.getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
     expect(screen.getByRole("button", { name: /edit details/i })).toBeTruthy();
   });
@@ -463,7 +461,7 @@ describe("calendar detail timeline", () => {
     expect(onSelect).toHaveBeenCalledWith("todo-3");
   });
 
-  it("keeps selected deadline details in the rail when workspace support is active", () => {
+  it("keeps selected deadline details in the rail", () => {
     const briefing = {
       emails: { accounts: [] },
       ctm: { upcoming: [] },
@@ -500,13 +498,11 @@ describe("calendar detail timeline", () => {
           viewMonth: 3,
           items: briefing.todoist.upcoming,
           selectedItemId: "todo-1",
-          supportBandActive: true,
           onSelectItem: () => {},
         })}
       </DashboardProvider>,
     );
 
-    expect(screen.getByTestId("timeline-detail-rail").getAttribute("data-support-band-active")).toBe("true");
     expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Ship report");
     expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
   });

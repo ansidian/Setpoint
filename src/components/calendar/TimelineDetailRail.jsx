@@ -320,14 +320,13 @@ export default function TimelineDetailRail({
   actionContent = null,
   headerContent = null,
   sections = [],
-  supportBandActive = false,
 }) {
   const motion = useDetailRailMotion();
   const visibleSections = sections.filter((section) => {
     if (section.collapsible) return (section.itemCount || section.items?.length || 0) > 0;
     return section.items?.length;
   });
-  const compactMasthead = supportBandActive || !!headerContent;
+  const compactMasthead = !!headerContent;
   const totalItemCount = visibleSections.reduce(
     (count, section) => count + (section.itemCount || section.items?.length || 0),
     0,
@@ -338,7 +337,6 @@ export default function TimelineDetailRail({
     <div
       data-testid="timeline-detail-rail"
       data-density={compactRows ? "compact" : "default"}
-      data-support-band-active={supportBandActive ? "true" : "false"}
       style={{
         padding: "12px",
         overflow: "hidden",
@@ -363,7 +361,7 @@ export default function TimelineDetailRail({
             alignItems: compactMasthead ? "center" : "stretch",
             justifyContent: compactMasthead ? "space-between" : "flex-start",
             gap: compactMasthead ? 6 : 8,
-            padding: supportBandActive ? "6px 8px" : compactMasthead ? "8px 9px" : "10px",
+            padding: compactMasthead ? "8px 9px" : "10px",
             borderRadius: 16,
             border: `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.05))`,
             background: `radial-gradient(circle at top left, color-mix(in srgb, ${accent} 14%, transparent), transparent 42%), linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))`,
@@ -374,7 +372,7 @@ export default function TimelineDetailRail({
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: supportBandActive ? 9.5 : compactMasthead ? 10 : 11,
+                  fontSize: compactMasthead ? 10 : 11,
                   fontWeight: 700,
                   letterSpacing: 1.8,
                   textTransform: "uppercase",
@@ -387,9 +385,9 @@ export default function TimelineDetailRail({
                 className="ea-display"
                 style={{
                   marginTop: compactMasthead ? 2 : 6,
-                  fontSize: supportBandActive ? 15.5 : compactMasthead ? 17 : 22,
+                  fontSize: compactMasthead ? 17 : 22,
                   lineHeight: 1.04,
-                  letterSpacing: supportBandActive ? -0.32 : -0.42,
+                  letterSpacing: -0.42,
                   color: "#f6f7fb",
                   whiteSpace: compactMasthead ? "nowrap" : "normal",
                   overflow: compactMasthead ? "hidden" : "visible",
@@ -409,7 +407,7 @@ export default function TimelineDetailRail({
                 borderRadius: 999,
                 border: `1px solid color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.06))`,
                 background: `color-mix(in srgb, ${accent} 8%, rgba(255,255,255,0.03))`,
-                fontSize: supportBandActive ? 9.5 : compactMasthead ? 10 : 11,
+                fontSize: compactMasthead ? 10 : 11,
                 fontWeight: 600,
                 letterSpacing: 0.15,
                 color: "rgba(238,242,255,0.74)",

@@ -905,7 +905,7 @@ export function CalendarOverviewRail(props) {
               {model.title}
             </div>
             <div style={{ fontSize: 12, lineHeight: 1.5, color: "rgba(205,214,244,0.58)" }}>
-              Browse the month from here while the support band below the grid carries the heavier summary and planning context.
+              Browse the month from here while the right rail follows the selected day.
             </div>
           </div>
 
@@ -946,6 +946,7 @@ export function CalendarOverviewRail(props) {
 
 export function CalendarSelectedDayEmptyRail(props) {
   const primaryAction = emptyDayPrimaryAction(props);
+  const model = getCalendarViewMeta(props.view);
   const handleSelectDay = (day) => {
     props.setDeadlineEditor?.(null);
     props.setSelectedItemId?.(null);
@@ -956,38 +957,16 @@ export function CalendarSelectedDayEmptyRail(props) {
     <div data-testid="calendar-selected-empty-rail-frame" style={railStaticStyle()}>
       <div style={{ ...railContentStyle({ compact: true }), justifyContent: "space-between" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
-          <div
-            style={{
-              padding: "14px 16px",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.05)",
-              background: "rgba(255,255,255,0.018)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 2,
-                textTransform: "uppercase",
-                color: "rgba(205,214,244,0.46)",
-              }}
-            >
-              Clear day navigator
-            </div>
-            <div className="ea-display" style={{ fontSize: 18, lineHeight: 1.02, letterSpacing: -0.3, color: "#f5f7ff" }}>
-              Nothing is scheduled here
-            </div>
-            <div style={{ fontSize: 11.5, lineHeight: 1.5, color: "rgba(205,214,244,0.56)" }}>
-              The support band below the grid carries the selected-day context. Use nearby activity here to move without losing the current month framing.
-            </div>
-          </div>
+          <EmptyDayCard
+            model={model}
+            viewYear={props.viewYear}
+            viewMonth={props.viewMonth}
+            selectedDay={props.selectedDay}
+            compact
+          />
 
           <NearbyActivityCard
-            model={getCalendarViewMeta(props.view)}
+            model={model}
             activeView={props.activeView}
             itemsByDay={props.itemsByDay}
             selectedDay={props.selectedDay}

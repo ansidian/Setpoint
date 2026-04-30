@@ -76,7 +76,6 @@ describe("CalendarModal responsive layout", () => {
     const panel = screen.getByTestId("calendar-modal-panel");
     const body = screen.getByTestId("calendar-modal-body");
     const rail = screen.getByTestId("calendar-modal-rail");
-    const supportBand = screen.getByTestId("calendar-modal-support-band");
     const workspaceColumn = body.firstElementChild;
     const monthGrid = screen.getByTestId("calendar-grid-month");
 
@@ -84,13 +83,8 @@ describe("CalendarModal responsive layout", () => {
     expect(panel.style.height).toBe("calc(100vh - 32px)");
     expect(body.style.gridTemplateColumns).toContain("320px");
     expect(rail.style.position).toBe("sticky");
-    expect(supportBand.getAttribute("data-support-mode")).toBe("overview");
-    expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr) auto");
-    expect(workspaceColumn?.style.gap).toBe("0px");
+    expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr)");
     expect(monthGrid.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
-    expect(supportBand.style.height).toBe("126px");
-    expect(supportBand.querySelector("[data-calendar-local-scroll='true']")).toBeNull();
-    expect(body.firstElementChild?.contains(supportBand)).toBe(true);
     expect(body.lastElementChild).toBe(rail);
 
     await act(async () => {
@@ -104,9 +98,7 @@ describe("CalendarModal responsive layout", () => {
       expect(panel.style.height).toBe("calc(100vh - 48px)");
       expect(body.style.gridTemplateColumns).toContain("272px");
       expect(rail.style.position).toBe("sticky");
-      expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr) auto");
-      expect(supportBand.style.height).toBe("auto");
-      expect(supportBand.style.minHeight).toBe("106px");
+      expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr)");
     });
 
     await act(async () => {
@@ -120,8 +112,7 @@ describe("CalendarModal responsive layout", () => {
       expect(panel.style.height).toBe("calc(100vh - 32px)");
       expect(body.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
       expect(rail.style.position).toBe("relative");
-      expect(workspaceColumn?.style.gridTemplateRows).toBe("auto auto");
-      expect(body.firstElementChild?.contains(supportBand)).toBe(true);
+      expect(workspaceColumn?.style.gridTemplateRows).toBe("auto");
       expect(body.lastElementChild).toBe(rail);
     });
   });
@@ -143,7 +134,6 @@ describe("CalendarModal responsive layout", () => {
 
     const panel = screen.getByTestId("calendar-modal-panel");
     const body = screen.getByTestId("calendar-modal-body");
-    const supportBand = screen.getByTestId("calendar-modal-support-band");
 
     expect(panel.getAttribute("role")).toBe("dialog");
     expect(panel.getAttribute("aria-modal")).toBe("true");
@@ -152,7 +142,6 @@ describe("CalendarModal responsive layout", () => {
     expect(panel.style.height).toBe("calc(100vh - 64px)");
     expect(panel.style.maxHeight).toBe("");
     expect(body.style.gridTemplateColumns).toContain("380px");
-    expect(supportBand.style.height).toBe("112px");
   });
 
   it("shows skeleton loaders while the events month is loading", () => {
@@ -431,7 +420,7 @@ describe("CalendarModal responsive layout", () => {
 
     expect(screen.getByText("Monday, April 20")).toBeTruthy();
     expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /^complete$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /mark complete/i }).length).toBeGreaterThan(0);
     expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Incomplete");
   });
 
@@ -848,7 +837,7 @@ describe("CalendarModal responsive layout", () => {
       billsData: {},
       deadlinesData: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
     },
-  ])("renders the compact selected-empty-day treatment for $view", async ({
+  ])("renders the selected-empty-day treatment for $view", async ({
     view,
     expectedTitle,
     expectedRailCopy,
@@ -975,7 +964,7 @@ describe("CalendarModal responsive layout", () => {
     }
   });
 
-  it("widens the context stage and collapses the support band when entering editor mode", async () => {
+  it("widens the context stage when entering editor mode", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
 
@@ -999,7 +988,6 @@ describe("CalendarModal responsive layout", () => {
       ));
 
       const body = screen.getByTestId("calendar-modal-body");
-      const supportBand = screen.getByTestId("calendar-modal-support-band");
 
       fireEvent.keyDown(document, { key: "c" });
       await act(async () => {
@@ -1011,14 +999,6 @@ describe("CalendarModal responsive layout", () => {
       expect(screen.getByTestId("calendar-event-editor-detail-layout").getAttribute("data-layout-mode")).toBe("desktop-staged");
       expect(screen.getByTestId("calendar-modal-editor-expanded")).toBeTruthy();
       expect(body.style.gridTemplateColumns).toContain("620px");
-      expect(supportBand.getAttribute("data-support-mode")).toBe("editor");
-      expect(supportBand.style.height).toBe("auto");
-      expect(supportBand.style.minHeight).toBe("60px");
-      expect(supportBand.querySelector("[data-calendar-local-scroll='true']")).toBeNull();
-      expect(supportBand.textContent).not.toMatch(/draft rhythm/i);
-      expect(supportBand.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-      expect(supportBand.textContent).not.toMatch(/choose a calendar/i);
-      expect(supportBand.textContent).not.toMatch(/ready for details/i);
       expect(screen.getByTestId("calendar-cell-23")).toBeTruthy();
     } finally {
       vi.useRealTimers();

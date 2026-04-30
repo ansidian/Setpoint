@@ -5,7 +5,6 @@ import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
-import CalendarWorkspaceSupportBand from "./CalendarWorkspaceSupportBand.jsx";
 
 function buildContextContent({
   layout,
@@ -60,7 +59,6 @@ function buildContextContent({
       data: viewData,
       computed,
       selectedItemId: effectiveSelectedItemId,
-      supportBandActive: true,
       onSelectItem: (itemId) => {
         setSelectedItemId(String(itemId));
         setDeadlineEditor(null);
@@ -201,38 +199,12 @@ export default function CalendarModalShell({
           : `summary-${view}-${viewYear}-${viewMonth}`;
 
   const contextWidth = workspaceMode === "editor" ? layout.editorWidth : layout.contextWidth;
-  const leftColumnGap = layout.stacked ? layout.contentGap : 0;
-
-  const supportProps = {
-    activeView,
-    view,
-    data: viewData,
-    computed,
-    currentYear,
-    currentMonth,
-    todayDate,
-    viewYear,
-    viewMonth,
-    itemsByDay,
-    selectedDay,
-    selectedDateKey,
-    selectedItemId: effectiveSelectedItemId,
-    selectedItems,
-    selectedDayState,
-    eventEditor,
-    deadlineEditor,
-    setSelectedDay,
-    setSelectedDateKey,
-    setSelectedItemId,
-    setDeadlineEditor,
-    onCreateEvent: () => eventEditor.openCreate?.(),
-    onCreateTask: (seedDate) => {
-      setDeadlineEditor({
-        mode: "create",
-        seedDate: seedDate || null,
-      });
-      onDeadlineDraftPreviewChange?.(null);
-    },
+  const onCreateTask = (seedDate) => {
+    setDeadlineEditor({
+      mode: "create",
+      seedDate: seedDate || null,
+    });
+    onDeadlineDraftPreviewChange?.(null);
   };
 
   const contextContent = buildContextContent({
@@ -259,8 +231,8 @@ export default function CalendarModalShell({
     setSelectedItemId,
     setDeadlineEditor,
     focusDeadlineTask,
-    onCreateEvent: supportProps.onCreateEvent,
-    onCreateTask: supportProps.onCreateTask,
+    onCreateEvent: () => eventEditor.openCreate?.(),
+    onCreateTask,
     ghostPreview,
     onDeadlineDraftPreviewChange,
   });
@@ -395,10 +367,7 @@ export default function CalendarModalShell({
                 minWidth: 0,
                 minHeight: 0,
                 display: "grid",
-                gridTemplateRows: layout.stacked
-                  ? "auto auto"
-                  : "minmax(0, 1fr) auto",
-                gap: leftColumnGap,
+                gridTemplateRows: layout.stacked ? "auto" : "minmax(0, 1fr)",
                 overflow: layout.stacked ? "visible" : "hidden",
               }}
             >
@@ -439,13 +408,6 @@ export default function CalendarModalShell({
                   <CalendarQuickActionLayer quickActions={eventQuickActions} />
                 ) : null}
               </div>
-
-              <CalendarWorkspaceSupportBand
-                layout={layout}
-                mode={workspaceMode}
-                activeView={activeView}
-                supportProps={supportProps}
-              />
             </div>
 
             <aside

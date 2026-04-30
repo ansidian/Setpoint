@@ -13,7 +13,6 @@ import { formatEventDuration, getEventSelectionId } from "../../../lib/redesign-
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
-import { renderEventsWorkspaceSupport } from "./events/EventsWorkspaceSupport.jsx";
 import { pacificYMD, parseYmd } from "../calendarDateUtils.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
@@ -334,7 +333,6 @@ function renderDetail({
   selectedItemId,
   onSelectItem,
   onEditEvent,
-  supportBandActive = false,
 }) {
   const ordered = orderDetailEvents(items);
   const allDayItems = [];
@@ -360,7 +358,6 @@ function renderDetail({
       title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
       accent="#89b4fa"
-      supportBandActive={supportBandActive}
       headerContent={selectedEvent ? (
         <EventSelectedCard
           ev={selectedEvent}
@@ -467,7 +464,6 @@ const eventsView = {
   renderCellContents: renderEventsCellContents,
   renderDetail,
   renderFooter,
-  renderWorkspaceSupport: renderEventsWorkspaceSupport,
   HeaderExtras: EventsHeaderExtras,
   icon: CalendarIcon,
   getDefaultSelectedItemId,
