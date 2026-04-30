@@ -65,6 +65,11 @@ export function renderBillsCellContents({
   onSelectItem,
   onOpenOverflow,
   overflowOpen,
+  overflowAnchorKey,
+  inlineOverflowOpen,
+  inlineOverflowVisibleCount,
+  onInlineOverflowInteraction,
+  onCloseInlineOverflow,
   layout,
   day,
 }) {
@@ -83,6 +88,11 @@ export function renderBillsCellContents({
       pastTone={pastTone}
       metrics={resolveBillChipMetrics(layout)}
       overflowOpen={overflowOpen}
+      overflowAnchorKey={overflowAnchorKey}
+      inlineOverflowOpen={inlineOverflowOpen}
+      inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      onInlineOverflowInteraction={onInlineOverflowInteraction}
+      onCloseInlineOverflow={onCloseInlineOverflow}
     />
   );
 }

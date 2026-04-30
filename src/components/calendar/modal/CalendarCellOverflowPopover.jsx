@@ -11,6 +11,16 @@ function isOverflowTriggerTarget(target) {
     && !!target.closest("[data-calendar-overflow-trigger='true']");
 }
 
+function isCalendarRailTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-testid='calendar-modal-rail']");
+}
+
+function isCalendarGridCellTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-testid='calendar-grid-shell'] [role='gridcell']");
+}
+
 function resolvePosition(triggerElement) {
   const viewportPadding = 16;
   const width = Math.min(320, window.innerWidth - viewportPadding * 2);
@@ -83,6 +93,7 @@ export default function CalendarCellOverflowPopover({
   selectedItemId,
   onSelectItem,
   onClose,
+  onOverflowInteraction,
   suppressOutsideClick,
   quickActions,
 }) {
@@ -146,6 +157,8 @@ export default function CalendarCellOverflowPopover({
       if (isOverflowTriggerTarget(event.target)) return;
       if (popover.triggerElement?.contains(event.target)) return;
       if (popoverRef.current?.contains(event.target)) return;
+      if (isCalendarRailTarget(event.target)) return;
+      if (isCalendarGridCellTarget(event.target)) return;
       onClose?.();
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -197,6 +210,7 @@ export default function CalendarCellOverflowPopover({
         popoverRef.current?.contains(target)
         || popover.triggerElement?.contains(target)
         || isOverflowTriggerTarget(target)
+        || isCalendarRailTarget(target)
       ));
     } else {
       suppressOutsideClick(null);
@@ -214,6 +228,7 @@ export default function CalendarCellOverflowPopover({
       data-testid="calendar-cell-overflow-popover"
       data-overflow-day={String(popover.day)}
       className="isolate"
+      onPointerDown={() => onOverflowInteraction?.()}
       initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
       animate={{
         opacity: 1,
@@ -310,9 +325,9 @@ export default function CalendarCellOverflowPopover({
                   data-item-id={itemId}
                   data-hovered={active ? "true" : "false"}
                   draggable={dragAllowed}
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation();
                     onSelectItem?.(item.id);
-                    onClose?.();
                   }}
                   onContextMenu={(event) => {
                     if (!item.sourceEvent?.writable) return;
@@ -329,11 +344,11 @@ export default function CalendarCellOverflowPopover({
                       event.preventDefault();
                       return;
                     }
+                    onClose?.();
                     event.stopPropagation();
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
                     event.dataTransfer.setData("text/plain", String(item.title || ""));
-                    onClose?.();
                   }}
                   onDragEnd={() => quickActions?.endDrag?.()}
                   onPointerEnter={() => setActiveItemId(itemId)}

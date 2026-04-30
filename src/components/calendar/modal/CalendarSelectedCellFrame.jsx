@@ -1,5 +1,6 @@
 export default function CalendarSelectedCellFrame({
   children,
+  selected = true,
   isEmpty = false,
   pastTone,
 }) {
@@ -7,7 +8,7 @@ export default function CalendarSelectedCellFrame({
 
   return (
     <div
-      data-testid="calendar-selected-cell-frame"
+      data-testid={selected ? "calendar-selected-cell-frame" : undefined}
       style={{
         position: "relative",
         minHeight: isEmpty ? 0 : "100%",

@@ -15,6 +15,106 @@ afterEach(() => {
 });
 
 describe("CalendarCellItemStack ghost visibility", () => {
+  it("renders the collapsed overflow trigger when hidden chips exist", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+          { id: "real-4", leadingLabel: "12:00 PM", title: "Fourth hold" },
+        ]}
+        metrics={metrics}
+      />,
+    );
+
+    expect(screen.getByText("+2 more")).toBeTruthy();
+  });
+
+  it("replaces the overflow trigger with inline hidden chips when inline overflow is open", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+          { id: "real-4", leadingLabel: "12:00 PM", title: "Fourth hold" },
+        ]}
+        metrics={metrics}
+        inlineOverflowOpen
+      />,
+    );
+
+    expect(screen.queryByText("+2 more")).toBeNull();
+    expect(screen.getByTestId("calendar-cell-inline-overflow")).toBeTruthy();
+    expect(screen.getByText("Third hold").closest("[data-testid='calendar-cell-item-chip']")).toBeTruthy();
+    expect(screen.getByText("Fourth hold").closest("[data-testid='calendar-cell-item-chip']")).toBeTruthy();
+  });
+
+  it("selects inline hidden chips without closing overflow", () => {
+    const onSelectItem = vi.fn();
+    const onCloseInlineOverflow = vi.fn();
+
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+        ]}
+        metrics={metrics}
+        onSelectItem={onSelectItem}
+        inlineOverflowOpen
+        inlineOverflowVisibleCount={2}
+        onCloseInlineOverflow={onCloseInlineOverflow}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Third hold"));
+
+    expect(onSelectItem).toHaveBeenCalledWith("real-3");
+    expect(onCloseInlineOverflow).not.toHaveBeenCalled();
+  });
+
+  it("closes inline overflow when dragging a hidden chip", () => {
+    const onCloseInlineOverflow = vi.fn();
+    const beginDrag = vi.fn(() => true);
+    const dataTransfer = {
+      effectAllowed: "",
+      setData: vi.fn(),
+    };
+
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+          {
+            id: "real-3",
+            leadingLabel: "11:00 AM",
+            title: "Third hold",
+            writable: true,
+            sourceEvent: { id: "event-3", title: "Third hold" },
+          },
+        ]}
+        metrics={metrics}
+        quickActions={{ dragEnabled: true, beginDrag }}
+        inlineOverflowOpen
+        inlineOverflowVisibleCount={2}
+        onCloseInlineOverflow={onCloseInlineOverflow}
+      />,
+    );
+
+    fireEvent.dragStart(screen.getByText("Third hold"), { dataTransfer });
+
+    expect(beginDrag).toHaveBeenCalledWith(expect.objectContaining({ id: "event-3" }));
+    expect(onCloseInlineOverflow).toHaveBeenCalled();
+  });
+
   it("uses the measured cell height to fit extra chips before showing overflow", async () => {
     const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
     Object.defineProperty(HTMLElement.prototype, "clientHeight", {

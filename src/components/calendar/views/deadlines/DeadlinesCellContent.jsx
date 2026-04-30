@@ -78,6 +78,11 @@ export function renderDeadlinesCellContents({
   onSelectItem,
   onOpenOverflow,
   overflowOpen,
+  overflowAnchorKey,
+  inlineOverflowOpen,
+  inlineOverflowVisibleCount,
+  onInlineOverflowInteraction,
+  onCloseInlineOverflow,
   layout,
   day,
   dateKey,
@@ -105,6 +110,11 @@ export function renderDeadlinesCellContents({
       pastTone={pastTone}
       metrics={resolveDeadlineChipMetrics(layout)}
       overflowOpen={overflowOpen}
+      overflowAnchorKey={overflowAnchorKey}
+      inlineOverflowOpen={inlineOverflowOpen}
+      inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      onInlineOverflowInteraction={onInlineOverflowInteraction}
+      onCloseInlineOverflow={onCloseInlineOverflow}
     />
   );
 }

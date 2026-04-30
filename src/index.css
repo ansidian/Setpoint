@@ -198,10 +198,18 @@ body {
 @keyframes calendarPanelSettle { from { transform: translate3d(0, -2px, 0); } to { transform: translate3d(0, 0, 0); } }
 @keyframes calendarMonthSlideNext { from { opacity: 0; transform: translate3d(8px, 0, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
 @keyframes calendarMonthSlidePrev { from { opacity: 0; transform: translate3d(-8px, 0, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@keyframes calendarInlineOverflowIn { from { opacity: 0; transform: translate3d(0, -3px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
 @keyframes shimmerSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(260%); } }
 @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 8px rgba(166,227,161,0.1); } 50% { box-shadow: 0 0 16px rgba(166,227,161,0.25); } }
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-testid="calendar-cell-inline-overflow"] {
+    animation: none !important;
+  }
+}
+
 /* Clickable summary badges */
 .badge-clickable:hover {
   border-color: color-mix(in srgb, var(--badge-color) 25%, transparent) !important;
