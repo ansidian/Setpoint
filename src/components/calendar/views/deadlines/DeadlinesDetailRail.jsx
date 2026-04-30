@@ -553,6 +553,7 @@ function DeadlinesDetail({
   onCloseEditor,
   onTaskSaved,
   onTaskDeleted,
+  onDraftPreviewChange,
   accent = "var(--ea-accent)",
   supportBandActive = false,
 }) {
@@ -592,6 +593,7 @@ function DeadlinesDetail({
         host="inline"
         editingTask={editingTask || undefined}
         initialDueDate={seedDate}
+        onDraftPreviewChange={onDraftPreviewChange}
         onClose={onCloseEditor}
         onTaskAdded={(task) => {
           handleAddTask(task);
@@ -708,5 +710,8 @@ function DeadlinesDetail({
 
 export function renderDeadlinesDetail(props) {
   const state = getDayState(props.items);
-  return <DeadlinesDetail key={`${props.selectedDay}-${state.activeCount}-${state.completedCount}`} {...props} />;
+  const editorKey = props.editorState?.mode
+    ? `editor-${props.editorState.mode}-${props.editorState.taskId || props.editorState.seedDate || "new"}`
+    : null;
+  return <DeadlinesDetail key={editorKey || `${props.selectedDay}-${state.activeCount}-${state.completedCount}`} {...props} />;
 }

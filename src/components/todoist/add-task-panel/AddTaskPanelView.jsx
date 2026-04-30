@@ -44,6 +44,7 @@ export default function AddTaskPanelView({
     resolvedPriority,
     resolvedLabels,
     dueDisplay,
+    draftPreview,
     duePickerOpen,
     duePickerNow,
     openDuePicker,
@@ -129,6 +130,28 @@ export default function AddTaskPanelView({
             {error}
           </div>
         )}
+
+        {draftPreview?.dueDate && (!draftPreview.isEditing || draftPreview.placementChanged) ? (
+          <div
+            data-testid="todoist-draft-preview-summary"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(232,119,106,0.2)",
+              background: "rgba(232,119,106,0.07)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.6, textTransform: "uppercase", color: "#e8776a" }}>
+              Draft preview
+            </div>
+            <div style={{ fontSize: 11.5, lineHeight: 1.45, color: "rgba(205,214,244,0.78)" }}>
+              {[draftPreview.dueDate, draftPreview.dueTime || "End of day"].join(" · ")}
+            </div>
+          </div>
+        ) : null}
 
         <div
           style={{

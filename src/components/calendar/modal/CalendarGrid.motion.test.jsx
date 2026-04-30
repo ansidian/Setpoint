@@ -278,11 +278,13 @@ describe("CalendarGrid overflow motion coverage", () => {
       trailingEmpty: 6,
     });
 
-    const boundary = within(screen.getByTestId("calendar-cell-2026-04-30"))
-      .getByTestId("calendar-month-boundary-2026-04-30");
+    const boundary = screen.getByTestId("calendar-month-boundary-overlay");
+    const rightStroke = within(boundary)
+      .getByTestId("calendar-month-boundary-right-2026-04-30-2026-04-30");
 
-    expect(boundary.getAttribute("data-boundary-sides")).toContain("right");
-    expect(boundary.style.borderRight).toBe("2px solid rgb(0, 149, 255)");
+    expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
+    expect(rightStroke.style.background).toBe("rgb(0, 149, 255)");
+    expect(rightStroke.style.width).toBe("2px");
   });
 
   it("mutes boundaries that do not wrap the actual current month", () => {
@@ -294,11 +296,13 @@ describe("CalendarGrid overflow motion coverage", () => {
       trailingEmpty: 4,
     });
 
-    const boundary = within(screen.getByTestId("calendar-cell-2026-05-31"))
-      .getByTestId("calendar-month-boundary-2026-05-31");
+    const boundary = screen.getByTestId("calendar-month-boundary-overlay");
+    const rightStroke = within(boundary)
+      .getByTestId("calendar-month-boundary-right-2026-05-31-2026-05-31");
 
-    expect(boundary.getAttribute("data-boundary-sides")).toContain("right");
-    expect(boundary.style.borderRight).toBe("2px solid rgba(137, 180, 250, 0.32)");
+    expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
+    expect(rightStroke.style.background).toBe("rgba(137, 180, 250, 0.32)");
+    expect(rightStroke.style.width).toBe("2px");
   });
 
   it("renders date-keyed adjacent day items for non-event views", () => {
@@ -318,11 +322,14 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
 
     const adjacentCell = screen.getByTestId("calendar-cell-2026-04-30");
-    const boundary = within(adjacentCell)
-      .getByTestId("calendar-month-boundary-2026-04-30");
+    const boundary = screen.getByTestId("calendar-month-boundary-overlay");
+    const rightStroke = within(boundary)
+      .getByTestId("calendar-month-boundary-right-2026-04-30-2026-04-30");
 
     expect(within(adjacentCell).getByText("April utility")).toBeTruthy();
-    expect(boundary.style.borderRight).toBe("2px solid rgb(0, 149, 255)");
+    expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
+    expect(rightStroke.style.background).toBe("rgb(0, 149, 255)");
+    expect(rightStroke.style.width).toBe("2px");
   });
 
   it("shows same visible chip count for today and non-today cells with matching event counts", async () => {

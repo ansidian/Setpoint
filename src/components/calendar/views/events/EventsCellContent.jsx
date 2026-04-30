@@ -2,6 +2,7 @@ import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { getEventSelectionId } from "../../../../lib/redesign-helpers";
+import { formatTime12FromTime24 } from "../../ghostPreview.js";
 
 const LG_EVENT_CHIP_METRICS = {
   itemHeight: 30,
@@ -73,7 +74,34 @@ function toEventDescriptor(ev) {
     leadingLabel: ev?.allDay ? "All day" : pacificTime(ev?.startMs),
     accent: ev?.color || ev?.sourceColor || "#4285f4",
     leadingColor: ev?.allDay ? "rgba(205,214,244,0.7)" : ev?.color || ev?.sourceColor || "#89b4fa",
+    allDay: !!ev?.allDay,
+    sortMs: ev?.startMs || 0,
   };
+}
+
+function toEventGhostDescriptor(ghost) {
+  const accent = ghost.color || "#89b4fa";
+  return {
+    id: ghost.id,
+    isGhost: true,
+    ghostKind: "event",
+    ghostStart: ghost.startDate,
+    ghostEnd: ghost.endDate,
+    title: sanitizeEventDisplayTitle(ghost.title),
+    leadingLabel: ghost.allDay ? "All day" : formatTime12FromTime24(ghost.startTime),
+    accent,
+    leadingColor: ghost.allDay ? "rgba(205,214,244,0.7)" : accent,
+    allDay: !!ghost.allDay,
+    sortMs: ghost.startMs || 0,
+  };
+}
+
+function orderEventDescriptors(items) {
+  return [...items].sort((a, b) => {
+    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    if ((a.sortMs || 0) !== (b.sortMs || 0)) return (a.sortMs || 0) - (b.sortMs || 0);
+    return String(a.title || "").localeCompare(String(b.title || ""));
+  });
 }
 
 export function getVisibleEventCount(itemCount, layout) {
@@ -91,14 +119,22 @@ export function renderEventsCellContents({
   layout,
   day,
   dateKey,
+  ghosts = [],
 }) {
-  if (!items?.length) return null;
+  const singleDayGhosts = ghosts.filter((ghost) => (
+    ghost?.kind === "event" && ghost.startDate === dateKey && ghost.startDate === ghost.endDate
+  ));
+  if (!items?.length && !singleDayGhosts.length) return null;
+  const descriptors = orderEventDescriptors([
+    ...(items || []).map(toEventDescriptor),
+    ...singleDayGhosts.map(toEventGhostDescriptor),
+  ]);
 
   return (
     <CalendarCellItemStack
       day={day}
       dateKey={dateKey}
-      items={items.map(toEventDescriptor)}
+      items={descriptors}
       selectedItemId={selectedItemId}
       onSelectItem={onSelectItem}
       onOpenOverflow={onOpenOverflow}

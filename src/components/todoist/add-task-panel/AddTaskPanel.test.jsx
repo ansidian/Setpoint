@@ -159,6 +159,7 @@ describe("AddTaskPanel due picker", () => {
   });
 
   it("supports the inline host and seeds a selected calendar day for new tasks", async () => {
+    const onDraftPreviewChange = vi.fn();
     render(
       <AddTaskPanel
         host="inline"
@@ -167,9 +168,16 @@ describe("AddTaskPanel due picker", () => {
         onTaskAdded={() => {}}
         onTaskUpdated={() => {}}
         onTaskDeleted={() => {}}
+        onDraftPreviewChange={onDraftPreviewChange}
       />,
     );
     vi.runOnlyPendingTimers();
+
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toMatch(/2026-04-22/);
+    expect(onDraftPreviewChange).toHaveBeenCalledWith(expect.objectContaining({
+      dueDate: "2026-04-22",
+      placementChanged: true,
+    }));
 
     fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
       target: { value: "Plan sprint" },
@@ -183,6 +191,49 @@ describe("AddTaskPanel due picker", () => {
         due_string: "2026-04-22 at 9:00 AM",
       }),
     );
+  });
+
+  it("suppresses unchanged edit previews until the due placement changes", () => {
+    const onDraftPreviewChange = vi.fn();
+
+    render(
+      <AddTaskPanel
+        host="inline"
+        editingTask={{
+          id: "todo-1",
+          title: "Follow up",
+          description: "",
+          class_name: "Inbox",
+          priority: 4,
+          labels: [],
+          due_date: "2026-04-21",
+          due_time: "2:30 PM",
+        }}
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+        onDraftPreviewChange={onDraftPreviewChange}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
+    expect(onDraftPreviewChange).toHaveBeenCalledWith(expect.objectContaining({
+      dueDate: "2026-04-21",
+      placementChanged: false,
+    }));
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Follow up tomorrow at 9am" },
+    });
+
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toMatch(/2026-04-20/);
+    expect(onDraftPreviewChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      dueDate: "2026-04-20",
+      dueTime: "9 AM",
+      placementChanged: true,
+    }));
   });
 
   it("uses inline cancel actions instead of the floating close chrome", () => {

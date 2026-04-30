@@ -33,12 +33,15 @@ function buildContextContent({
   focusDeadlineTask,
   onCreateEvent,
   onCreateTask,
+  ghostPreview,
+  onDeadlineDraftPreviewChange,
 }) {
   if (view === "events" && eventEditor.isEditorOpen) {
     return (
       <CalendarEventEditorRail
         editor={eventEditor}
         expandedDesktop={!layout.stacked}
+        ghostPreview={ghostPreview}
       />
     );
   }
@@ -67,15 +70,22 @@ function buildContextContent({
       onStartEdit: (task) => {
         setSelectedItemId(String(task.id));
         setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
+        onDeadlineDraftPreviewChange?.(null);
       },
-      onCloseEditor: () => setDeadlineEditor(null),
+      onCloseEditor: () => {
+        setDeadlineEditor(null);
+        onDeadlineDraftPreviewChange?.(null);
+      },
       onTaskSaved: focusDeadlineTask,
       onTaskDeleted: (taskId) => {
         setDeadlineEditor(null);
+        onDeadlineDraftPreviewChange?.(null);
         if (String(effectiveSelectedItemId) === String(taskId)) {
           setSelectedItemId(null);
         }
       },
+      onDraftPreviewChange: onDeadlineDraftPreviewChange,
+      ghostPreview,
     });
   }
 
@@ -166,6 +176,8 @@ export default function CalendarModalShell({
   selectedItems,
   deadlineEditor,
   focusDeadlineTask,
+  ghostPreview,
+  onDeadlineDraftPreviewChange,
 }) {
   const workspaceMode = view === "events" && eventEditor.isEditorOpen
     ? "editor"
@@ -219,6 +231,7 @@ export default function CalendarModalShell({
         mode: "create",
         seedDate: seedDate || null,
       });
+      onDeadlineDraftPreviewChange?.(null);
     },
   };
 
@@ -248,6 +261,8 @@ export default function CalendarModalShell({
     focusDeadlineTask,
     onCreateEvent: supportProps.onCreateEvent,
     onCreateTask: supportProps.onCreateTask,
+    ghostPreview,
+    onDeadlineDraftPreviewChange,
   });
 
   return createPortal(
@@ -418,6 +433,7 @@ export default function CalendarModalShell({
                   canGoPrev={canGoPrev}
                   navigateMonth={navigateMonth}
                   monthMotionDirection={monthMotionDirection}
+                  ghostPreview={ghostPreview}
                 />
                 {view === "events" ? (
                   <CalendarQuickActionLayer quickActions={eventQuickActions} />

@@ -251,15 +251,17 @@ describe("CalendarModal responsive layout", () => {
     expect(within(mayCell).getByText("May 1")).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-2026-05-02")).queryByText("May 2")).toBeNull();
     expect(within(screen.getByTestId("calendar-cell-2026-05-02")).getByText("2")).toBeTruthy();
-    const mayBoundary = within(mayCell).getByTestId("calendar-month-boundary-2026-05-01");
-    expect(mayBoundary.getAttribute("data-boundary-sides")).toContain("left");
-    expect(mayBoundary.getAttribute("data-boundary-sides")).toContain("top");
-    expect(mayBoundary.style.borderTopLeftRadius).toBe("8px");
-    expect(mayBoundary.style.borderTop).toBe("2px solid rgb(0, 149, 255)");
-    expect(mayBoundary.style.right).toBe("-6px");
-    const maySecondBoundary = within(screen.getByTestId("calendar-cell-2026-05-02")).getByTestId("calendar-month-boundary-2026-05-02");
-    expect(maySecondBoundary.getAttribute("data-boundary-sides")).toBe("top");
-    expect(maySecondBoundary.style.left).toBe("-6px");
+    const boundaryOverlay = screen.getByTestId("calendar-month-boundary-overlay");
+    const mayTopBoundary = within(boundaryOverlay).getByTestId("calendar-month-boundary-top-2026-05-01-2026-05-02");
+    expect(mayTopBoundary.style.borderTopLeftRadius).toBe("8px");
+    expect(mayTopBoundary.style.background).toBe("rgb(0, 149, 255)");
+    expect(mayTopBoundary.style.height).toBe("2px");
+    expect(mayTopBoundary.style.gridColumn).toBe("6 / 8");
+    expect(mayTopBoundary.style.gridRow).toBe("5");
+    const mayLeftBoundary = within(boundaryOverlay).getByTestId("calendar-month-boundary-left-2026-05-01-2026-05-01");
+    expect(mayLeftBoundary.style.borderTopLeftRadius).toBe("8px");
+    expect(mayLeftBoundary.style.background).toBe("rgb(0, 149, 255)");
+    expect(mayLeftBoundary.style.width).toBe("2px");
     expect(within(mayCell).getByText("May planning")).toBeTruthy();
 
     fireEvent.click(mayCell);
@@ -1149,6 +1151,44 @@ describe("CalendarModal responsive layout", () => {
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
     expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
+  });
+
+  it("keeps a future-date deadline draft active after ghost navigation", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-30"
+        focusItemId="new"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    const input = await screen.findByPlaceholderText(/Buy groceries tomorrow/i);
+    fireEvent.change(input, {
+      target: { value: "Plan sprint May 2 at 9am" },
+    });
+
+    expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("2026-05-02");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
+    }, { timeout: 1500 });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 850));
+    });
+
+    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
+    expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(screen.getByDisplayValue("Plan sprint May 2 at 9am")).toBeTruthy();
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("2026-05-02");
   });
 
   it("opens event create after closing a Todoist create focus request", async () => {
