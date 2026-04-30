@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Receipt, Zap } from "lucide-react";
+import { motion as Motion } from "motion/react";
 import {
   EmptyDayCard,
   getOverviewModel,
@@ -9,6 +10,7 @@ import {
   SpotlightCard,
 } from "../../CalendarRailStates.jsx";
 import { RailFactTile, RailMetaChip } from "../../DetailRailPrimitives.jsx";
+import { useDetailRailMotion } from "../../detailRailMotion.js";
 import { daysUntil, formatAmount, urgencyColor } from "../../../../lib/bill-utils";
 import { TRACKED_UTILITIES } from "./billsModel.js";
 import {
@@ -250,6 +252,7 @@ function EmptySupport({ layout, model, itemsByDay, selectedDay, viewYear, viewMo
 }
 
 function DetailSupport({ layout, selectedBill, selectedDayState, selectedDay, viewYear, viewMonth }) {
+  const motion = useDetailRailMotion();
   const compactBand = !layout.stacked;
 
   if (compactBand) {
@@ -258,16 +261,35 @@ function DetailSupport({ layout, selectedBill, selectedDayState, selectedDay, vi
     const statusLabel = selectedBill?.paid ? "Paid" : days === 0 ? "Due today" : days < 0 ? "Overdue" : `In ${days}d`;
     return (
       <div style={bandGridStyle(layout)}>
-        <div data-testid="calendar-selected-bill-card" style={compactPanelStyle("#a6e3a1", true)}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <div style={compactEyebrowStyle()}>Selected bill</div>
-            <RailMetaChip tone="accent" color={selectedBill?.paid ? "#a6e3a1" : urgency.accent} compact>{statusLabel}</RailMetaChip>
-          </div>
-          <div style={{ ...compactValueStyle("#fff", 18), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <Motion.div
+          layout
+          transition={motion.layout}
+          data-testid="calendar-selected-bill-card"
+          style={compactPanelStyle("#a6e3a1", true)}
+        >
+          <Motion.div
+            layout
+            transition={motion.layout}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+          >
+            <Motion.div layout="position" transition={motion.layout} style={compactEyebrowStyle()}>
+              Selected bill
+            </Motion.div>
+            <RailMetaChip tone="accent" color={selectedBill?.paid ? "#a6e3a1" : urgency.accent} compact>
+              {statusLabel}
+            </RailMetaChip>
+          </Motion.div>
+          <Motion.div
+            layout="position"
+            transition={motion.layout}
+            style={{ ...compactValueStyle("#fff", 18), overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
             {selectedBill?.name || "Unnamed bill"}
-          </div>
-          <div style={compactDetailStyle()}>{formatAmount(selectedBill?.amount || 0)} · {statusLabel}</div>
-        </div>
+          </Motion.div>
+          <Motion.div layout="position" transition={motion.layout} style={compactDetailStyle()}>
+            {formatAmount(selectedBill?.amount || 0)} · {statusLabel}
+          </Motion.div>
+        </Motion.div>
         <div style={compactPanelStyle()}>
           <div style={compactEyebrowStyle()}>Selected day</div>
           <div style={compactValueStyle("#a6e3a1", 18)}>{formatShortDate(viewYear, viewMonth, selectedDay)}</div>
