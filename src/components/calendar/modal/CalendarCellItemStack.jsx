@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useState, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { getVisibleCellItemCount } from "./calendarCellItemMetrics.js";
 
 function chipStyle({
@@ -144,6 +144,7 @@ function MoreButton({
   onFocus,
   onBlur,
   open,
+  anchorKey,
 }) {
   const buttonHeight = metrics?.moreHeight ?? 22;
   const compact = buttonHeight >= 24;
@@ -153,6 +154,7 @@ function MoreButton({
       type="button"
       data-testid={`calendar-cell-overflow-trigger-${day}`}
       data-calendar-overflow-trigger="true"
+      data-calendar-overflow-anchor-key={anchorKey || undefined}
       data-active={active ? "true" : "false"}
       data-calendar-focus-ring="true"
       onClick={(event) => {
@@ -192,6 +194,153 @@ function MoreButton({
   );
 }
 
+function ItemChip({
+  item,
+  selected,
+  active,
+  pastTone,
+  metrics,
+  quickActions,
+  onSelectItem,
+  onSetActive,
+  onClearActive,
+  onBeforeDragStart,
+  inlineOverflowItem = false,
+}) {
+  const ghost = !!item.isGhost;
+  const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+
+  if (ghost) {
+    return (
+      <div
+        key={item.id}
+        data-testid="calendar-ghost-chip"
+        data-ghost-kind={item.ghostKind || item.kind || "item"}
+        data-ghost-start={item.ghostStart || item.startDate || undefined}
+        data-ghost-end={item.ghostEnd || item.endDate || undefined}
+        aria-hidden="true"
+        style={chipStyle({
+          item,
+          selected: false,
+          pastTone,
+          active: false,
+          metrics,
+        })}
+      >
+        {item.leadingLabel ? (
+          <span
+            style={{
+              flexShrink: 0,
+              fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
+              fontWeight: 700,
+              letterSpacing: 0.2,
+              color: item.leadingColor || item.accent || "var(--ea-accent)",
+              whiteSpace: "nowrap",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {item.leadingLabel}
+          </span>
+        ) : null}
+        <span
+          style={{
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
+            fontWeight: 500,
+            lineHeight: 1.2,
+          }}
+        >
+          {item.title}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      key={item.id}
+      type="button"
+      data-testid="calendar-cell-item-chip"
+      data-inline-overflow-item={inlineOverflowItem ? "true" : undefined}
+      data-item-id={String(item.id)}
+      data-hovered={active ? "true" : "false"}
+      draggable={dragAllowed}
+      data-calendar-focus-ring="true"
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelectItem?.(item.id);
+      }}
+      onContextMenu={(event) => {
+        if (!item.sourceEvent?.writable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        quickActions?.openDeleteMenu?.({
+          event: item.sourceEvent,
+          x: event.clientX,
+          y: event.clientY,
+        });
+      }}
+      onDragStart={(event) => {
+        if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
+          event.preventDefault();
+          return;
+        }
+        onBeforeDragStart?.();
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
+        event.dataTransfer.setData("text/plain", String(item.title || ""));
+      }}
+      onDragEnd={() => quickActions?.endDrag?.()}
+      onPointerEnter={() => onSetActive(String(item.id))}
+      onPointerLeave={() => onClearActive(String(item.id))}
+      onFocus={() => onSetActive(String(item.id))}
+      onBlur={() => onClearActive(String(item.id))}
+      style={chipStyle({
+        item,
+        selected,
+        pastTone,
+        active,
+        metrics,
+      })}
+    >
+      {item.leadingLabel ? (
+        <span
+          style={{
+            flexShrink: 0,
+            fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
+            fontWeight: 700,
+            letterSpacing: 0.2,
+            color: selected
+              ? item.leadingColor || item.accent || "var(--ea-accent)"
+              : item.leadingColor || "rgba(205,214,244,0.62)",
+            whiteSpace: "nowrap",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {item.leadingLabel}
+        </span>
+      ) : null}
+      <span
+        style={{
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
+          fontWeight: selected ? 600 : 500,
+          lineHeight: 1.2,
+        }}
+      >
+        {item.title}
+      </span>
+    </button>
+  );
+}
+
 export default function CalendarCellItemStack({
   day,
   dateKey,
@@ -203,24 +352,40 @@ export default function CalendarCellItemStack({
   pastTone,
   metrics,
   overflowOpen = false,
+  overflowAnchorKey,
+  inlineOverflowOpen = false,
+  inlineOverflowVisibleCount = null,
+  onInlineOverflowInteraction,
+  onCloseInlineOverflow,
 }) {
+  const stackItems = useMemo(() => items || [], [items]);
   const [activeChipId, setActiveChipId] = useState(null);
   const [moreActive, setMoreActive] = useState(false);
   const stackRef = useRef(null);
+  const inlineOverflowRef = useRef(null);
   const [measuredCount, setMeasuredCount] = useState(() => (
-    getVisibleCellItemCount(items?.length || 0, metrics)
+    getVisibleCellItemCount(stackItems.length, metrics)
   ));
 
   const calculateVisibleCount = useCallback(() => {
-    if (!items?.length) {
+    if (inlineOverflowOpen) {
+      if (Number.isFinite(inlineOverflowVisibleCount)) {
+        setMeasuredCount((current) => (
+          current === inlineOverflowVisibleCount ? current : inlineOverflowVisibleCount
+        ));
+      }
+      return;
+    }
+
+    if (!stackItems.length) {
       setMeasuredCount(0);
       return;
     }
 
     const availableHeight = nearestMeasuredHeight(stackRef.current);
-    const nextCount = measuredVisibleCount(items, availableHeight, metrics);
+    const nextCount = measuredVisibleCount(stackItems, availableHeight, metrics);
     setMeasuredCount((current) => (current === nextCount ? current : nextCount));
-  }, [items, metrics]);
+  }, [inlineOverflowOpen, inlineOverflowVisibleCount, stackItems, metrics]);
 
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(() => calculateVisibleCount());
@@ -236,10 +401,33 @@ export default function CalendarCellItemStack({
     return () => observer.disconnect();
   }, [calculateVisibleCount]);
 
-  if (!items?.length) return null;
-  const visibleCount = measuredCount;
-  const { visibleItems, hiddenItems } = splitVisibleItems(items, visibleCount);
+  const visibleCount = inlineOverflowOpen && Number.isFinite(inlineOverflowVisibleCount)
+    ? inlineOverflowVisibleCount
+    : measuredCount;
+  const { visibleItems, hiddenItems } = splitVisibleItems(stackItems, visibleCount);
   const hiddenCount = hiddenItems.length;
+  const hiddenStackHeight = hiddenCount > 0
+    ? (hiddenCount * (metrics?.itemHeight ?? 24)) + ((hiddenCount - 1) * (metrics?.gap ?? 4))
+    : 0;
+  const clearActiveChip = useCallback((itemId) => {
+    setActiveChipId((current) => (
+      current === itemId ? null : current
+    ));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!inlineOverflowOpen) return;
+    if (hiddenCount <= 0) {
+      onCloseInlineOverflow?.();
+      return;
+    }
+    const firstChip = inlineOverflowRef.current?.querySelector(
+      "button[data-testid='calendar-cell-item-chip']",
+    );
+    firstChip?.focus?.();
+  }, [hiddenCount, inlineOverflowOpen, onCloseInlineOverflow]);
+
+  if (!stackItems.length) return null;
 
   return (
     <div
@@ -253,142 +441,69 @@ export default function CalendarCellItemStack({
     >
       {visibleItems.map((item) => {
         const selected = String(item.id) === String(selectedItemId);
-        const ghost = !!item.isGhost;
-        const active = !ghost && String(item.id) === String(activeChipId);
-        const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
-        if (ghost) {
-          return (
-            <div
-              key={item.id}
-              data-testid="calendar-ghost-chip"
-              data-ghost-kind={item.ghostKind || item.kind || "item"}
-              data-ghost-start={item.ghostStart || item.startDate || undefined}
-              data-ghost-end={item.ghostEnd || item.endDate || undefined}
-              aria-hidden="true"
-              style={chipStyle({
-                item,
-                selected: false,
-                pastTone,
-                active: false,
-                metrics,
-              })}
-            >
-              {item.leadingLabel ? (
-                <span
-                  style={{
-                    flexShrink: 0,
-                    fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
-                    fontWeight: 700,
-                    letterSpacing: 0.2,
-                    color: item.leadingColor || item.accent || "var(--ea-accent)",
-                    whiteSpace: "nowrap",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {item.leadingLabel}
-                </span>
-              ) : null}
-              <span
-                style={{
-                  minWidth: 0,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
-                  fontWeight: 500,
-                  lineHeight: 1.2,
-                }}
-              >
-                {item.title}
-              </span>
-            </div>
-          );
-        }
         return (
-          <button
+          <ItemChip
             key={item.id}
-            type="button"
-            data-testid="calendar-cell-item-chip"
-            data-item-id={String(item.id)}
-            data-hovered={active ? "true" : "false"}
-            draggable={dragAllowed}
-            data-calendar-focus-ring="true"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelectItem?.(item.id);
-            }}
-            onContextMenu={(event) => {
-              if (!item.sourceEvent?.writable) return;
-              event.preventDefault();
-              event.stopPropagation();
-              quickActions?.openDeleteMenu?.({
-                event: item.sourceEvent,
-                x: event.clientX,
-                y: event.clientY,
-              });
-            }}
-            onDragStart={(event) => {
-              if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
-                event.preventDefault();
-                return;
-              }
-              event.stopPropagation();
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
-              event.dataTransfer.setData("text/plain", String(item.title || ""));
-            }}
-            onDragEnd={() => quickActions?.endDrag?.()}
-            onPointerEnter={() => setActiveChipId(String(item.id))}
-            onPointerLeave={() => setActiveChipId((current) => (
-              current === String(item.id) ? null : current
-            ))}
-            onFocus={() => setActiveChipId(String(item.id))}
-            onBlur={() => setActiveChipId((current) => (
-              current === String(item.id) ? null : current
-            ))}
-            style={chipStyle({
-              item,
-              selected,
-              pastTone,
-              active,
-              metrics,
-            })}
-          >
-            {item.leadingLabel ? (
-              <span
-                style={{
-                  flexShrink: 0,
-                  fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
-                  fontWeight: 700,
-                  letterSpacing: 0.2,
-                  color: selected
-                    ? item.leadingColor || item.accent || "var(--ea-accent)"
-                    : item.leadingColor || "rgba(205,214,244,0.62)",
-                  whiteSpace: "nowrap",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {item.leadingLabel}
-              </span>
-            ) : null}
-            <span
-              style={{
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
-                fontWeight: selected ? 600 : 500,
-                lineHeight: 1.2,
-              }}
-            >
-              {item.title}
-            </span>
-          </button>
+            item={item}
+            selected={selected}
+            active={!item.isGhost && String(item.id) === String(activeChipId)}
+            pastTone={pastTone}
+            metrics={metrics}
+            quickActions={quickActions}
+            onSelectItem={onSelectItem}
+            onSetActive={setActiveChipId}
+            onClearActive={clearActiveChip}
+          />
         );
       })}
 
-      {hiddenCount > 0 ? (
+      {hiddenCount > 0 && inlineOverflowOpen ? (
+        <div
+          ref={inlineOverflowRef}
+          data-testid="calendar-cell-inline-overflow"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            onInlineOverflowInteraction?.();
+            event.stopPropagation();
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: metrics?.gap ?? 4,
+            minWidth: 0,
+            padding: "4px",
+            marginInline: -4,
+            borderRadius: "0 0 10px 10px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderTop: 0,
+            background: "#16161e",
+            boxShadow: "0 18px 42px rgba(0,0,0,0.45)",
+            pointerEvents: "auto",
+            animation: "calendarInlineOverflowIn 150ms cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          {hiddenItems.map((item) => {
+            const selected = String(item.id) === String(selectedItemId);
+            return (
+              <ItemChip
+                key={item.id}
+                item={item}
+                selected={selected}
+                active={!item.isGhost && String(item.id) === String(activeChipId)}
+                pastTone={pastTone}
+                metrics={metrics}
+                quickActions={quickActions}
+                onSelectItem={onSelectItem}
+                onSetActive={setActiveChipId}
+                onClearActive={clearActiveChip}
+                onBeforeDragStart={onCloseInlineOverflow}
+                inlineOverflowItem
+              />
+            );
+          })}
+        </div>
+      ) : hiddenCount > 0 ? (
         <MoreButton
           day={day}
           hiddenCount={hiddenCount}
@@ -396,6 +511,7 @@ export default function CalendarCellItemStack({
           active={moreActive}
           metrics={metrics}
           open={overflowOpen}
+          anchorKey={overflowAnchorKey}
           onPointerEnter={() => setMoreActive(true)}
           onPointerLeave={() => setMoreActive(false)}
           onFocus={() => setMoreActive(true)}
@@ -404,9 +520,10 @@ export default function CalendarCellItemStack({
             onOpenOverflow?.({
               triggerElement: event.currentTarget,
               hiddenItems,
-              totalCount: items.length,
+              totalCount: stackItems.length,
               visibleCount,
               dateKey,
+              hiddenStackHeight,
             });
           }}
         />

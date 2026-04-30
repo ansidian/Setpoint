@@ -81,14 +81,6 @@ function buildOverflowFixture() {
   };
 }
 
-function longDateLabel(year, month, day) {
-  return new Date(year, month, day).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 async function openCalendar(page) {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto("/");
@@ -143,14 +135,16 @@ async function expectHoverStyleDifference(page, locator, label) {
     .toBe(true);
 }
 
-test("keeps overflow popover visible while switching between +n more triggers", async ({ page }) => {
+test("keeps one inline overflow visible while switching between +n more triggers", async ({ page }) => {
   const fixture = buildOverflowFixture();
   await installDashboardShellFixtures(page, { initialEvents: fixture.events });
   await openCalendar(page);
 
+  const firstCell = page.getByTestId(`calendar-cell-${fixture.firstDay}`);
+  const secondCell = page.getByTestId(`calendar-cell-${fixture.secondDay}`);
   const firstTrigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
   const secondTrigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.secondDay}`);
-  const popover = page.getByTestId("calendar-cell-overflow-popover");
+  const inlineOverflow = page.getByTestId("calendar-cell-inline-overflow");
   const firstHiddenTitle = eventTitle(fixture.firstPrefix, 4);
   const secondHiddenTitle = eventTitle(fixture.secondPrefix, 4);
 
@@ -159,35 +153,35 @@ test("keeps overflow popover visible while switching between +n more triggers", 
 
   await firstTrigger.click();
 
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText(longDateLabel(fixture.year, fixture.month, fixture.firstDay));
-  await expect(popover).toContainText(firstHiddenTitle);
-  await expect(popover).toHaveCount(1);
+  await expect(firstCell.getByTestId("calendar-cell-inline-overflow")).toBeVisible();
+  await expect(inlineOverflow).toContainText(firstHiddenTitle);
+  await expect(inlineOverflow).toHaveCount(1);
+  await expect(page.getByTestId("calendar-cell-overflow-popover")).toHaveCount(0);
 
   await secondTrigger.click();
 
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText(longDateLabel(fixture.year, fixture.month, fixture.secondDay));
-  await expect(popover).toContainText(secondHiddenTitle);
-  await expect(popover).not.toContainText(firstHiddenTitle);
-  await expect(popover).toHaveCount(1);
+  await expect(secondCell.getByTestId("calendar-cell-inline-overflow")).toBeVisible();
+  await expect(inlineOverflow).toContainText(secondHiddenTitle);
+  await expect(inlineOverflow).not.toContainText(firstHiddenTitle);
+  await expect(inlineOverflow).toHaveCount(1);
 });
 
-test("closes overflow popover when clicking same +n more trigger again", async ({ page }) => {
+test("closes inline overflow on Escape before closing the modal", async ({ page }) => {
   const fixture = buildOverflowFixture();
   await installDashboardShellFixtures(page, { initialEvents: fixture.events });
   await openCalendar(page);
 
   const trigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
-  const popover = page.getByTestId("calendar-cell-overflow-popover");
+  const inlineOverflow = page.getByTestId("calendar-cell-inline-overflow");
 
   await expect(trigger).toBeVisible();
 
   await trigger.click();
-  await expect(popover).toBeVisible();
+  await expect(inlineOverflow).toBeVisible();
 
-  await trigger.click();
-  await expect(popover).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(inlineOverflow).toHaveCount(0);
+  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
 });
 
 test("shows hover style deltas for visible event chips", async ({ page }) => {
@@ -244,18 +238,38 @@ test("keeps the xl dense-day chip count stable when selecting from the cell head
   await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+3 more");
 });
 
-test("shows hover style deltas for overflow rows", async ({ page }) => {
+test("shows hover style deltas for inline overflow chips", async ({ page }) => {
   const fixture = buildOverflowFixture();
   await installDashboardShellFixtures(page, { initialEvents: fixture.events });
   await openCalendar(page);
 
   const overflowTrigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
-  const popover = page.getByTestId("calendar-cell-overflow-popover");
+  const inlineOverflow = page.getByTestId("calendar-cell-inline-overflow");
 
   await overflowTrigger.click();
-  await expect(popover).toBeVisible();
+  await expect(inlineOverflow).toBeVisible();
 
-  const overflowRow = popover.getByTestId("calendar-cell-overflow-item").first();
-  await expect(overflowRow).toBeVisible();
-  await expectHoverStyleDifference(page, overflowRow, "overflow row");
+  const overflowChip = inlineOverflow.getByTestId("calendar-cell-item-chip").first();
+  await expect(overflowChip).toBeVisible();
+  await expectHoverStyleDifference(page, overflowChip, "inline overflow chip");
+});
+
+test("keeps inline overflow open when selecting a hidden chip", async ({ page }) => {
+  const fixture = buildOverflowFixture();
+  await installDashboardShellFixtures(page, { initialEvents: fixture.events });
+  await openCalendar(page);
+
+  const firstCell = page.getByTestId(`calendar-cell-${fixture.firstDay}`);
+  const overflowTrigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
+  const inlineOverflow = firstCell.getByTestId("calendar-cell-inline-overflow");
+  const hiddenTitle = eventTitle(fixture.firstPrefix, 4);
+
+  await overflowTrigger.click();
+  await expect(inlineOverflow).toBeVisible();
+
+  const hiddenChip = inlineOverflow.getByText(hiddenTitle);
+  await hiddenChip.click();
+
+  await expect(inlineOverflow).toBeVisible();
+  await expect(firstCell.getByTestId("calendar-cell-item-chip").filter({ hasText: hiddenTitle })).toBeVisible();
 });

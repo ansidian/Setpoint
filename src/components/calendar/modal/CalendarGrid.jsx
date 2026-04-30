@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
@@ -13,11 +13,46 @@ const MONTH_WHEEL_COOLDOWN_MS = 420;
 const WHEEL_LINE_PX = 32;
 const CURRENT_MONTH_BOUNDARY_COLOR = "#0095FF";
 const OTHER_MONTH_BOUNDARY_COLOR = "rgba(137,180,250,0.32)";
+const INLINE_OVERFLOW_PANEL_PADDING = 12;
 
 function normalizeWheelDeltaY(event, fallbackPagePx) {
   if (event.deltaMode === 1) return event.deltaY * WHEEL_LINE_PX;
   if (event.deltaMode === 2) return event.deltaY * fallbackPagePx;
   return event.deltaY;
+}
+
+function sameOverflowDate(overflow, dateKey, day) {
+  if (!overflow) return false;
+  if (overflow.dateKey && dateKey) return overflow.dateKey === dateKey;
+  return overflow.day === day;
+}
+
+function getModalScrollContainer(element) {
+  const panel = element?.closest?.("[data-testid='calendar-modal-panel']");
+  const body = panel?.querySelector?.("[data-testid='calendar-modal-body']");
+  return body?.parentElement || null;
+}
+
+function isCalendarRailTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-testid='calendar-modal-rail']");
+}
+
+function isCalendarGridCellTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[role='gridcell']");
+}
+
+function canUseInlineOverflow({ triggerElement, hiddenStackHeight, layout }) {
+  if (layout?.stacked || !triggerElement?.isConnected) return false;
+  if (!Number.isFinite(hiddenStackHeight) || hiddenStackHeight <= 0) return false;
+
+  const panel = triggerElement.closest("[data-testid='calendar-modal-panel']");
+  const panelRect = panel?.getBoundingClientRect?.();
+  const triggerRect = triggerElement.getBoundingClientRect();
+  if (!panelRect) return false;
+
+  return triggerRect.top + hiddenStackHeight <= panelRect.bottom - INLINE_OVERFLOW_PANEL_PADDING;
 }
 
 function formatCellDate(viewYear, viewMonth, day) {
@@ -270,6 +305,8 @@ function CalendarCell({
   hasOverdue,
   allComplete,
   loading,
+  overflowOpen = false,
+  overflowMode = null,
   onSelectDay,
   onSelectItem,
   onOpenOverflow,
@@ -278,6 +315,7 @@ function CalendarCell({
 }) {
   const [hovered, setHovered] = useState(false);
   const todayAccent = "var(--ea-accent)";
+  const inlineOverflowOpen = overflowOpen && overflowMode === "inline";
   let cellBg = "rgba(255,255,255,0.015)";
   let cellBorder = "1px solid rgba(255,255,255,0.04)";
   let cellShadow = "none";
@@ -336,6 +374,12 @@ function CalendarCell({
     cellBorder = "1px solid rgba(255,255,255,0.085)";
   }
 
+  if (inlineOverflowOpen) {
+    cellBg = "rgba(22,22,30,0.98)";
+    cellBorder = "1px solid rgba(255,255,255,0.12)";
+    cellShadow = "0 16px 36px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05)";
+  }
+
   const isDropTarget = quickActions?.dropTargetDate === dateKey;
   if (isDropTarget) {
     cellBg = "rgba(203,166,218,0.10)";
@@ -371,7 +415,8 @@ function CalendarCell({
     isSelected,
     day,
     selectedItemId,
-    overflowOpen: false,
+    overflowOpen,
+    overflowMode,
     onSelectDay: () => onSelectDay?.(),
     onSelectItem,
     onOpenOverflow,
@@ -413,6 +458,8 @@ function CalendarCell({
         boundarySides.length ? boundarySides.join(" ") : "none"
       }
       data-past-tone={pastTone || "none"}
+      data-overflow-open={overflowOpen ? "true" : "false"}
+      data-overflow-mode={overflowMode || "none"}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => {
         setHovered(false);
@@ -449,6 +496,7 @@ function CalendarCell({
         position: "relative",
         minWidth: 0,
         overflow: "visible",
+        zIndex: inlineOverflowOpen ? 12 : undefined,
         borderRadius: 8,
         padding: "6px 8px",
         background: cellBg,
@@ -529,21 +577,18 @@ function CalendarCell({
           position: "relative",
           minHeight: 0,
           flex: 1,
-          overflow: "hidden",
+          overflow: inlineOverflowOpen ? "visible" : "hidden",
         }}
       >
-        {isSelected ? (
-          <CalendarSelectedCellFrame
-            view={view}
-            isEmpty={!hasItems}
-            pastTone={pastTone}
-            isToday={isToday}
-          >
-            {renderedCellContents}
-          </CalendarSelectedCellFrame>
-        ) : (
-          renderedCellContents
-        )}
+        <CalendarSelectedCellFrame
+          view={view}
+          selected={isSelected}
+          isEmpty={!hasItems}
+          pastTone={pastTone}
+          isToday={isToday}
+        >
+          {renderedCellContents}
+        </CalendarSelectedCellFrame>
       </div>
     </div>
   );
@@ -638,6 +683,7 @@ export default function CalendarGrid({
 }) {
   const gridShellRef = useRef(null);
   const monthWheelRef = useRef({ accumulatedY: 0, lastNavigateAt: -Infinity });
+  const ignoreOverflowScrollUntilRef = useRef(0);
   const fillGridHeight = !layout.stacked;
   const gridRowCount = fillGridHeight
     ? Math.max(1, Math.ceil((firstDay + daysInMonth) / 7))
@@ -645,13 +691,14 @@ export default function CalendarGrid({
   const resolvedTrailingEmpty = fillGridHeight
     ? Math.max(0, gridRowCount * 7 - firstDay - daysInMonth)
     : trailingEmpty;
-  const [overflowPopover, setOverflowPopover] = useState(null);
-  const resolvedPopover = overflowPopover
-    && overflowPopover.view === view
-    && overflowPopover.viewYear === viewYear
-    && overflowPopover.viewMonth === viewMonth
-      ? overflowPopover
+  const [overflowState, setOverflowState] = useState(null);
+  const resolvedOverflow = overflowState
+    && overflowState.view === view
+    && overflowState.viewYear === viewYear
+    && overflowState.viewMonth === viewMonth
+      ? overflowState
       : null;
+  const resolvedPopover = resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
   const eventDateCells = view === "events";
   const selectedCellKey = selectedDateKey;
   const viewedMonthIsActualCurrentMonth =
@@ -709,7 +756,26 @@ export default function CalendarGrid({
         };
       });
 
+  const closeOverflow = useCallback(({ restoreFocus = false } = {}) => {
+    const anchorKey = overflowState?.anchorKey;
+    setOverflowState(null);
+    if (!restoreFocus || !anchorKey) return;
+    window.requestAnimationFrame(() => {
+      const trigger = [...(gridShellRef.current?.querySelectorAll("[data-calendar-overflow-anchor-key]") || [])]
+        .find((element) => element.getAttribute("data-calendar-overflow-anchor-key") === anchorKey);
+      trigger?.focus?.();
+    });
+  }, [overflowState?.anchorKey]);
+  const closeOverflowWithoutFocus = useCallback(() => {
+    setOverflowState(null);
+  }, []);
+  const markOverflowInteraction = useCallback(() => {
+    ignoreOverflowScrollUntilRef.current = performance.now() + 220;
+  }, []);
+
   function handleSelectDay(day, isSelected, dateKey = null) {
+    const isOverflowSourceDay = sameOverflowDate(resolvedOverflow, dateKey, day);
+    if (!isOverflowSourceDay) setOverflowState(null);
     if (isSelected) return;
 
     closeEventEditor();
@@ -722,7 +788,7 @@ export default function CalendarGrid({
     setSelectedItemId(null);
   }
 
-  function handleSelectItem(day, itemId, dateKey = null) {
+  function handleSelectItem(day, itemId, dateKey = null, { keepOverflowOpen = false } = {}) {
     closeEventEditor();
     if (view === "deadlines") {
       setDeadlineEditor(null);
@@ -730,8 +796,58 @@ export default function CalendarGrid({
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(itemId != null ? String(itemId) : null);
-    setOverflowPopover(null);
+    if (keepOverflowOpen) {
+      markOverflowInteraction();
+    } else {
+      setOverflowState(null);
+    }
   }
+
+  useEffect(() => {
+    if (!resolvedOverflow) return undefined;
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") return;
+      closeOverflow({ restoreFocus: true });
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [closeOverflow, resolvedOverflow]);
+
+  useEffect(() => {
+    if (resolvedOverflow?.mode !== "inline") return undefined;
+    function handlePointerDown(event) {
+      if (resolvedOverflow.sourceCellElement?.contains(event.target)) return;
+      if (resolvedOverflow.triggerElement?.contains(event.target)) return;
+      if (isCalendarRailTarget(event.target)) return;
+      if (gridShellRef.current?.contains(event.target) && isCalendarGridCellTarget(event.target)) return;
+      setOverflowState(null);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [resolvedOverflow]);
+
+  useEffect(() => {
+    const scrollContainer = getModalScrollContainer(gridShellRef.current);
+    if (!resolvedOverflow || !scrollContainer) return undefined;
+    function handleScroll() {
+      if (performance.now() < ignoreOverflowScrollUntilRef.current) return;
+      setOverflowState(null);
+    }
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener("scroll", handleScroll);
+  }, [resolvedOverflow]);
+
+  useEffect(() => {
+    if (!suppressOutsideClick || resolvedOverflow?.mode !== "inline") return undefined;
+    suppressOutsideClick((target) => (
+      resolvedOverflow.sourceCellElement?.contains(target)
+      || resolvedOverflow.triggerElement?.contains(target)
+      || isCalendarRailTarget(target)
+    ));
+    return () => suppressOutsideClick(null);
+  }, [resolvedOverflow, suppressOutsideClick]);
 
   useEffect(() => {
     const element = gridShellRef.current;
@@ -891,9 +1007,9 @@ export default function CalendarGrid({
                 (item) =>
                   String(resolveItemId(item)) === String(selectedItemId),
               );
-            const overflowOpen = resolvedPopover?.dateKey
-              ? resolvedPopover.dateKey === cell.dateKey
-              : resolvedPopover?.day === day;
+            const anchorKey = `${view}-${cell.dateKey || `${viewYear}-${viewMonth}-${day}`}`;
+            const overflowOpen = sameOverflowDate(resolvedOverflow, cell.dateKey, day);
+            const inlineOverflowOpen = overflowOpen && resolvedOverflow?.mode === "inline";
 
             return (
               <CalendarCell
@@ -918,25 +1034,37 @@ export default function CalendarGrid({
                 hasOverdue={hasOverdue}
                 allComplete={allComplete}
                 loading={viewData?.isLoading}
+                overflowOpen={overflowOpen}
+                overflowMode={overflowOpen ? resolvedOverflow?.mode : null}
                 onSelectDay={() =>
                   handleSelectDay(day, isSelected, cell.dateKey)
                 }
                 onSelectItem={(itemId) =>
-                  handleSelectItem(day, itemId, cell.dateKey)
+                  handleSelectItem(day, itemId, cell.dateKey, {
+                    keepOverflowOpen: overflowOpen,
+                  })
                 }
                 onOpenOverflow={({
                   triggerElement,
                   hiddenItems,
                   totalCount,
                   visibleCount,
+                  hiddenStackHeight,
                 }) => {
-                  const anchorKey = `${view}-${cell.dateKey || `${viewYear}-${viewMonth}-${day}`}`;
-                  setOverflowPopover((current) => {
+                  const sourceCellElement = triggerElement?.closest?.("[role='gridcell']");
+                  setOverflowState((current) => {
                     if (current?.anchorKey === anchorKey) {
                       return null;
                     }
-                    return {
+                    const mode = canUseInlineOverflow({
                       triggerElement,
+                      hiddenStackHeight,
+                      layout,
+                    }) ? "inline" : "fallback";
+                    return {
+                      mode,
+                      triggerElement,
+                      sourceCellElement,
                       items: hiddenItems,
                       totalCount,
                       visibleCount,
@@ -963,6 +1091,13 @@ export default function CalendarGrid({
                   activeView.renderCellContents?.({
                     ...args,
                     overflowOpen,
+                    overflowAnchorKey: anchorKey,
+                    inlineOverflowOpen,
+                    inlineOverflowVisibleCount: inlineOverflowOpen
+                      ? resolvedOverflow?.visibleCount
+                      : null,
+                    onInlineOverflowInteraction: markOverflowInteraction,
+                    onCloseInlineOverflow: closeOverflowWithoutFocus,
                     layout,
                   })
                 }
@@ -1008,9 +1143,11 @@ export default function CalendarGrid({
             resolvedPopover.day,
             itemId,
             resolvedPopover.dateKey || null,
+            { keepOverflowOpen: true },
           );
         }}
-        onClose={() => setOverflowPopover(null)}
+        onClose={() => setOverflowState(null)}
+        onOverflowInteraction={markOverflowInteraction}
         suppressOutsideClick={suppressOutsideClick}
         quickActions={eventDateCells ? eventQuickActions : null}
       />

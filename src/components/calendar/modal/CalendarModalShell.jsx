@@ -373,6 +373,7 @@ export default function CalendarModalShell({
             >
               <div style={{ minWidth: 0, minHeight: 0, display: "flex", flex: 1 }}>
                 <CalendarGrid
+                  key={`${view}-${viewYear}-${viewMonth}`}
                   view={view}
                   viewYear={viewYear}
                   viewMonth={viewMonth}

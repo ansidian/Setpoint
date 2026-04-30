@@ -116,6 +116,11 @@ export function renderEventsCellContents({
   onOpenOverflow,
   quickActions,
   overflowOpen,
+  overflowAnchorKey,
+  inlineOverflowOpen,
+  inlineOverflowVisibleCount,
+  onInlineOverflowInteraction,
+  onCloseInlineOverflow,
   layout,
   day,
   dateKey,
@@ -142,6 +147,11 @@ export function renderEventsCellContents({
       pastTone={pastTone}
       metrics={resolveEventChipMetrics(layout)}
       overflowOpen={overflowOpen}
+      overflowAnchorKey={overflowAnchorKey}
+      inlineOverflowOpen={inlineOverflowOpen}
+      inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      onInlineOverflowInteraction={onInlineOverflowInteraction}
+      onCloseInlineOverflow={onCloseInlineOverflow}
     />
   );
 }
