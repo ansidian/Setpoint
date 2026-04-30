@@ -177,40 +177,44 @@ function renderShell() {
 }
 
 describe("RedesignShell mobile behavior", () => {
-  it("keeps calendar available on desktop and opens it from the hotkey", () => {
+  it("keeps calendar available on desktop and opens it from the hotkey", async () => {
     mockIsMobile = false;
     renderShell();
 
     expect(screen.getByTestId("shell-header-desktop")).toBeTruthy();
-    expect(screen.getByTestId("calendar-modal").textContent).toBe("closed");
+    expect(screen.queryByTestId("calendar-modal")).toBeNull();
     expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Briefing");
     expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
     expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
     expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Briefing refreshed");
 
     fireEvent.keyDown(window, { key: "c" });
-    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+    expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
   });
 
-  it("opens create surfaces from dashboard action chords", () => {
+  it("opens create surfaces from dashboard action chords", async () => {
     mockIsMobile = false;
     renderShell();
 
     fireEvent.keyDown(window, { key: "g" });
     fireEvent.keyDown(window, { key: "t" });
     expect(screen.queryByTestId("add-task-panel")).toBeNull();
-    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
-    expect(screen.getByTestId("calendar-modal").getAttribute("data-view")).toBe("deadlines");
-    expect(screen.getByTestId("calendar-modal").getAttribute("data-focus-item-id")).toBe("new");
+    const taskCalendar = await screen.findByTestId("calendar-modal");
+    expect(taskCalendar.textContent).toBe("open");
+    expect(taskCalendar.getAttribute("data-view")).toBe("deadlines");
+    expect(taskCalendar.getAttribute("data-focus-item-id")).toBe("new");
 
     fireEvent.keyDown(window, { key: "g" });
     fireEvent.keyDown(window, { key: "c" });
-    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
-    expect(screen.getByTestId("calendar-modal").getAttribute("data-view")).toBe("events");
-    expect(screen.getByTestId("calendar-modal").getAttribute("data-focus-item-id")).toBe("new");
+    await waitFor(() => {
+      const eventCalendar = screen.getByTestId("calendar-modal");
+      expect(eventCalendar.textContent).toBe("open");
+      expect(eventCalendar.getAttribute("data-view")).toBe("events");
+      expect(eventCalendar.getAttribute("data-focus-item-id")).toBe("new");
+    });
   });
 
-  it("keeps single-key calendar open and ignores chords while typing", () => {
+  it("keeps single-key calendar open and ignores chords while typing", async () => {
     mockIsMobile = false;
     renderShell();
 
@@ -223,7 +227,7 @@ describe("RedesignShell mobile behavior", () => {
     input.remove();
 
     fireEvent.keyDown(window, { key: "c" });
-    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+    expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
   });
 
   it("describes clone-path briefings in the shell status surface", () => {

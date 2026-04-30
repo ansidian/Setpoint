@@ -3,22 +3,16 @@ import { getCalendarDeadlines, deleteBriefing } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
 import RefreshBanner from "../components/layout/RefreshBanner";
-import CalendarModal from "../components/calendar/CalendarModal";
-import BriefingHistoryPanel from "../components/briefing/BriefingHistoryPanel";
 import ShellHeader from "../components/shell/ShellHeader";
-import CommandPalette from "../components/shell/CommandPalette";
-import CustomizePanel from "../components/shell/CustomizePanel";
 import DashboardHero from "../components/dashboard/DashboardHero";
 import TodayTimeline from "../components/dashboard/TodayTimeline";
-import AddTaskPanel from "../components/todoist/AddTaskPanel";
 import { InsightsRail, DeadlinesRail, BillsRail, InboxPeek } from "../components/dashboard/rails/Rails";
 import NotesRail from "../components/notes/NotesRail";
-import DeadlineDetailPopover from "../components/dashboard/DeadlineDetailPopover";
-import InboxView from "../components/inbox/InboxView";
 import { Sun } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DashboardProvider, useDashboard } from "../context/DashboardContext";
 import { Button } from "@/components/ui/button";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import useLiveData from "../hooks/useLiveData";
 import useHoldGesture from "../hooks/useHoldGesture";
 import useBriefingData from "../hooks/useBriefingData";
@@ -38,7 +32,14 @@ import {
   DashboardSurface,
 } from "../components/dashboard/layout/DashboardScenePrimitives";
 
+const AddTaskPanel = lazy(() => import("../components/todoist/AddTaskPanel"));
+const BriefingHistoryPanel = lazy(() => import("../components/briefing/BriefingHistoryPanel"));
+const CalendarModal = lazy(() => import("../components/calendar/CalendarModal"));
+const CommandPalette = lazy(() => import("../components/shell/CommandPalette"));
+const CustomizePanel = lazy(() => import("../components/shell/CustomizePanel"));
+const DeadlineDetailPopover = lazy(() => import("../components/dashboard/DeadlineDetailPopover"));
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
+const InboxView = lazy(() => import("../components/inbox/InboxView"));
 
 export default function Dashboard() {
   const [isMock, setIsMock] = useState(() =>
@@ -162,32 +163,34 @@ export default function Dashboard() {
   }
 
   return (
-    <DashboardProvider
-      briefing={bd.briefing}
-      setBriefing={bd.setBriefing}
-      setCalendarDeadlines={setCalendarDeadlines}
-    >
-      <RedesignShell
-        bd={bd}
-        liveData={liveData}
-        calendarRange={calendarRange}
-        isMock={isMock}
-        refreshHold={refreshHold}
-        handleFullGeneration={handleFullGeneration}
-        onQuickRefresh={handleCalendarAwareQuickRefresh}
-        historyOpen={historyOpen}
-        setHistoryOpen={setHistoryOpen}
-        historyTriggerRef={historyTriggerRef}
-        calendarDeadlines={calendarDeadlines}
-        calendarDeadlinesLoading={calendarDeadlinesLoading}
-        loadCalendarDeadlines={loadCalendarDeadlines}
-      />
-      {DevPanel && (
-        <Suspense fallback={null}>
-          <DevPanel />
-        </Suspense>
-      )}
-    </DashboardProvider>
+    <TooltipProvider>
+      <DashboardProvider
+        briefing={bd.briefing}
+        setBriefing={bd.setBriefing}
+        setCalendarDeadlines={setCalendarDeadlines}
+      >
+        <RedesignShell
+          bd={bd}
+          liveData={liveData}
+          calendarRange={calendarRange}
+          isMock={isMock}
+          refreshHold={refreshHold}
+          handleFullGeneration={handleFullGeneration}
+          onQuickRefresh={handleCalendarAwareQuickRefresh}
+          historyOpen={historyOpen}
+          setHistoryOpen={setHistoryOpen}
+          historyTriggerRef={historyTriggerRef}
+          calendarDeadlines={calendarDeadlines}
+          calendarDeadlinesLoading={calendarDeadlinesLoading}
+          loadCalendarDeadlines={loadCalendarDeadlines}
+        />
+        {DevPanel && (
+          <Suspense fallback={null}>
+            <DevPanel />
+          </Suspense>
+        )}
+      </DashboardProvider>
+    </TooltipProvider>
   );
 }
 
@@ -243,6 +246,7 @@ export function RedesignShell({
   });
 
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMounted, setCalendarMounted] = useState(false);
   const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
   const [calendarView, setCalendarView] = useState(() => {
     try {
@@ -270,6 +274,7 @@ export function RedesignShell({
     setCalendarFocus(focusDate || null);
     setCalendarFocusItemId(focusItemId ? String(focusItemId) : null);
     setCalendarOpenRequestId((value) => value + 1);
+    setCalendarMounted(true);
     setCalendarOpen(true);
     if (resolved === "deadlines") loadCalendarDeadlines();
   };
@@ -597,96 +602,114 @@ export function RedesignShell({
             setAddTaskOpen={setAddTaskOpen}
           />
         ) : (
-          <InboxView
-            accent={accent}
-            customize={customize}
-            emailAccounts={briefing?.emails?.accounts || []}
-            briefingSummary={briefing?.emails?.summary}
-            briefingGeneratedAt={liveData.briefingGeneratedAt}
-            liveEmails={liveData.liveEmails}
-            liveEmailsLoading={liveEmailsLoading}
-            liveReadOverrides={liveReadOverrides}
-            onLiveReadOverrideChange={handleLiveReadOverrideChange}
-            pinnedIds={liveData.pinnedIds}
-            pinnedSnapshots={liveData.pinnedSnapshots}
-            snoozedEntries={liveData.snoozedEntries}
-            resurfacedEntries={liveData.resurfacedEntries}
-            onOpenDashboard={() => setShellTab("dashboard")}
-            onRefresh={onQuickRefresh}
-            sessionState={inboxSession}
-            onSessionStateChange={setInboxSession}
-            isMobile={isMobile}
-          />
+          <Suspense fallback={null}>
+            <InboxView
+              accent={accent}
+              customize={customize}
+              emailAccounts={briefing?.emails?.accounts || []}
+              briefingSummary={briefing?.emails?.summary}
+              briefingGeneratedAt={liveData.briefingGeneratedAt}
+              liveEmails={liveData.liveEmails}
+              liveEmailsLoading={liveEmailsLoading}
+              liveReadOverrides={liveReadOverrides}
+              onLiveReadOverrideChange={handleLiveReadOverrideChange}
+              pinnedIds={liveData.pinnedIds}
+              pinnedSnapshots={liveData.pinnedSnapshots}
+              snoozedEntries={liveData.snoozedEntries}
+              resurfacedEntries={liveData.resurfacedEntries}
+              onOpenDashboard={() => setShellTab("dashboard")}
+              onRefresh={onQuickRefresh}
+              sessionState={inboxSession}
+              onSessionStateChange={setInboxSession}
+              isMobile={isMobile}
+            />
+          </Suspense>
         )}
       </div>
 
       {isMobile && deadlinePopover && (
-        <DeadlineDetailPopover
-          task={deadlinePopover.task}
-          anchor={deadlinePopover.anchor}
-          accent={accent}
-          onClose={() => setDeadlinePopover(null)}
-        />
+        <Suspense fallback={null}>
+          <DeadlineDetailPopover
+            task={deadlinePopover.task}
+            anchor={deadlinePopover.anchor}
+            accent={accent}
+            onClose={() => setDeadlinePopover(null)}
+          />
+        </Suspense>
       )}
 
       {isMobile && addTaskOpen && (
-        <AddTaskPanel
-          host="anchored"
-          onClose={() => setAddTaskOpen(false)}
-          onTaskAdded={(task) => {
-            handleAddTask(task);
-            setAddTaskOpen(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <AddTaskPanel
+            host="anchored"
+            onClose={() => setAddTaskOpen(false)}
+            onTaskAdded={(task) => {
+              handleAddTask(task);
+              setAddTaskOpen(false);
+            }}
+          />
+        </Suspense>
       )}
 
-      <CommandPalette
-        open={paletteOpen}
-        accent={accent}
-        onClose={() => setPaletteOpen(false)}
-        onAction={handlePaletteAction}
-      />
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            open={paletteOpen}
+            accent={accent}
+            onClose={() => setPaletteOpen(false)}
+            onAction={handlePaletteAction}
+          />
+        </Suspense>
+      )}
 
-      <CustomizePanel
-        open={customizeOpen}
-        onClose={() => setCustomizeOpen(false)}
-        customize={customize}
-        tab={tab}
-        isMobile={isMobile}
-      />
+      {customizeOpen && (
+        <Suspense fallback={null}>
+          <CustomizePanel
+            open={customizeOpen}
+            onClose={() => setCustomizeOpen(false)}
+            customize={customize}
+            tab={tab}
+            isMobile={isMobile}
+          />
+        </Suspense>
+      )}
 
       {historyOpen && (
-        <BriefingHistoryPanel
-          activeId={bd.viewingPast?.id ?? bd.latestId}
-          triggerRef={historyTriggerRef}
-          onSelect={(briefingData, meta) => { bd.selectHistory(briefingData, meta); setHistoryOpen(false); }}
-          onClose={() => setHistoryOpen(false)}
-          onDelete={deleteBriefing}
-        />
+        <Suspense fallback={null}>
+          <BriefingHistoryPanel
+            activeId={bd.viewingPast?.id ?? bd.latestId}
+            triggerRef={historyTriggerRef}
+            onSelect={(briefingData, meta) => { bd.selectHistory(briefingData, meta); setHistoryOpen(false); }}
+            onClose={() => setHistoryOpen(false)}
+            onDelete={deleteBriefing}
+          />
+        </Suspense>
       )}
 
-      {!isMobile && (
-        <CalendarModal
-          open={calendarOpen}
-          openRequestId={calendarOpenRequestId}
-          onClose={dismissCalendar}
-          view={calendarView}
-          onViewChange={changeCalendarView}
-          focusDate={calendarFocus}
-          focusItemId={calendarFocusItemId}
-          eventsData={eventsData}
-          billsData={{
-            schedules: liveData.allSchedules,
-            recentTransactions: liveData.recentTransactions,
-            payeeMap: liveData.payeeMap,
-            actualBudgetUrl: liveData.actualBudgetUrl,
-          }}
-          deadlinesData={{
-            ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
-            todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
-            isLoading: calendarDeadlinesLoading && !calendarDeadlines,
-          }}
-        />
+      {!isMobile && calendarMounted && (
+        <Suspense fallback={null}>
+          <CalendarModal
+            open={calendarOpen}
+            openRequestId={calendarOpenRequestId}
+            onClose={dismissCalendar}
+            view={calendarView}
+            onViewChange={changeCalendarView}
+            focusDate={calendarFocus}
+            focusItemId={calendarFocusItemId}
+            eventsData={eventsData}
+            billsData={{
+              schedules: liveData.allSchedules,
+              recentTransactions: liveData.recentTransactions,
+              payeeMap: liveData.payeeMap,
+              actualBudgetUrl: liveData.actualBudgetUrl,
+            }}
+            deadlinesData={{
+              ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
+              todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
+              isLoading: calendarDeadlinesLoading && !calendarDeadlines,
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
