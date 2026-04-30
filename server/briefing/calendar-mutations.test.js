@@ -34,6 +34,11 @@ const calendarList = {
       accessRole: "owner",
       primary: true,
     },
+    {
+      id: "school",
+      summary: "School",
+      accessRole: "owner",
+    },
   ],
 };
 
@@ -126,6 +131,68 @@ describe("calendar recurring mutations", () => {
 
     const [, init] = findFetchCall("PATCH", "series-1");
     expect(init.headers["If-Match"]).toBe('"parent-current"');
+  });
+
+  it("moves a single event from its source calendar before patching the target calendar", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      if (method === "GET" && path === "calendars/primary/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"source-current"',
+          summary: "Planning",
+          start: { dateTime: "2026-04-27T09:00:00-07:00" },
+          end: { dateTime: "2026-04-27T09:30:00-07:00" },
+        });
+      }
+      if (method === "POST" && path === "calendars/primary/events/event-1/move") {
+        expect(parsed.searchParams.get("destination")).toBe("school");
+        return jsonResponse({
+          id: "event-1",
+          etag: '"moved-current"',
+          summary: "Planning",
+          start: { dateTime: "2026-04-27T09:00:00-07:00" },
+          end: { dateTime: "2026-04-27T09:30:00-07:00" },
+        });
+      }
+      if (method === "PATCH" && path === "calendars/school/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"patched-current"',
+          ...JSON.parse(init.body || "{}"),
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    const updated = await updateCalendarEvent(account, "event-1", {
+      sourceCalendarId: "primary",
+      calendarId: "school",
+      etag: '"stale-source"',
+      title: "Planning moved",
+      allDay: false,
+      startDate: "2026-04-27",
+      endDate: "2026-04-27",
+      startTime: "10:00",
+      endTime: "10:30",
+    });
+
+    expect(updated.calendarId).toBe("school");
+    expect(updated.calendarName).toBe("School");
+    const moveCall = fetch.mock.calls.find(([url, init = {}]) => {
+      return (init.method || "GET") === "POST" && String(url).includes("/events/event-1/move");
+    });
+    expect(moveCall[1].headers["If-Match"]).toBe('"source-current"');
+    const patchCall = fetch.mock.calls.find(([url, init = {}]) => {
+      return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
+    });
+    expect(patchCall[1].headers["If-Match"]).toBe('"moved-current"');
   });
 
   it("trims a recurring series with exception dates when deleting following events", async () => {

@@ -423,8 +423,12 @@ export default function useCalendarEventEditor({
 
   const selectedDate = selectedDateOverride || ymdFromView({ viewYear, viewMonth, selectedDay });
   const writableCalendars = useMemo(
-    () => flattenWritableCalendars(sourceGroups),
-    [sourceGroups],
+    () => {
+      const writable = flattenWritableCalendars(sourceGroups);
+      if (!editingEvent?.accountId) return writable;
+      return writable.filter((entry) => entry.accountId === editingEvent.accountId);
+    },
+    [editingEvent?.accountId, sourceGroups],
   );
   const isEditing = !!editingEvent;
   const isEditingRecurring = !!(editingEvent?.isRecurring);
@@ -993,6 +997,8 @@ export default function useCalendarEventEditor({
       } else if (editingEvent) {
         const result = await updateCalendarEvent(editingEvent.id, {
           ...payload,
+          sourceAccountId: editingEvent.accountId,
+          sourceCalendarId: editingEvent.calendarId,
           etag: editingEvent.etag,
           scope: isEditingRecurring ? recurringEditScope : undefined,
           recurringEventId: isEditingRecurring ? editingEvent.recurringEventId : undefined,

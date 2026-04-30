@@ -210,7 +210,9 @@ describe("calendar event routes", () => {
       .patch("/api/calendar/events/event-1")
       .send({
         accountId: "gmail-main",
+        sourceAccountId: "gmail-main",
         calendarId: "primary",
+        sourceCalendarId: "work",
         etag: '"etag-1"',
         title: "Updated",
         allDay: true,
@@ -222,8 +224,27 @@ describe("calendar event routes", () => {
     expect(updateCalendarEvent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "gmail-main" }),
       "event-1",
-      expect.objectContaining({ etag: '"etag-1"', title: "Updated" }),
+      expect.objectContaining({ sourceCalendarId: "work", etag: '"etag-1"', title: "Updated" }),
     );
+  });
+
+  it("rejects moving calendar events across connected accounts", async () => {
+    const res = await request(makeApp())
+      .patch("/api/calendar/events/event-1")
+      .send({
+        accountId: "gmail-main",
+        sourceAccountId: "gmail-alt",
+        calendarId: "primary",
+        sourceCalendarId: "primary",
+        title: "Updated",
+        allDay: true,
+        startDate: "2026-04-20",
+        endDate: "2026-04-21",
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("calendar_cross_account_move_unsupported");
+    expect(updateCalendarEvent).not.toHaveBeenCalled();
   });
 
   it("passes recurring edit scope through to the calendar service", async () => {

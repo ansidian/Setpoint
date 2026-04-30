@@ -795,6 +795,15 @@ async function getMutableEventContext(account, calendarId, eventId) {
   return { auth, calendar, event };
 }
 
+async function moveCalendarEvent(auth, sourceCalendarId, eventId, destinationCalendarId, etag) {
+  const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(sourceCalendarId)}/events/${encodeURIComponent(eventId)}/move`, {
+    method: "POST",
+    query: { destination: destinationCalendarId },
+    headers: ifMatchHeaders(etag),
+  });
+  return res.json();
+}
+
 function toDraftFromGoogleEvent(event, fallback = {}) {
   const allDay = !event.start?.dateTime && !!event.start?.date;
   const startValue = event.start?.dateTime || event.start?.date;
@@ -912,16 +921,40 @@ export async function createCalendarEvent(account, input) {
 
 export async function updateCalendarEvent(account, eventId, input) {
   const scope = input.scope || null;
-  const { auth, calendar, event } = await getMutableEventContext(account, input.calendarId, eventId);
+  const sourceCalendarId = input.sourceCalendarId || input.calendarId;
+  const targetCalendarId = input.calendarId;
+  const calendarChanged = sourceCalendarId !== targetCalendarId;
+  const { auth, calendar, event } = await getMutableEventContext(account, sourceCalendarId, eventId);
 
   if (!isRecurringEventResource(event)) {
+    let targetCalendar = calendar;
+    let targetEvent = event;
+    let targetEventId = eventId;
+
+    if (calendarChanged) {
+      const targetContext = await getWritableCalendarContext(account, targetCalendarId);
+      targetCalendar = targetContext.calendar;
+      targetEvent = await moveCalendarEvent(
+        auth,
+        sourceCalendarId,
+        eventId,
+        targetCalendarId,
+        event.etag || input.etag,
+      );
+      targetEventId = targetEvent.id || eventId;
+    }
+
     const payload = toCalendarMutationPayload(input);
-    const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(eventId)}`, {
+    const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(targetCalendar.id)}/events/${encodeURIComponent(targetEventId)}`, {
       method: "PATCH",
       body: payload,
-      headers: ifMatchHeaders(event.etag || input.etag),
+      headers: ifMatchHeaders(targetEvent.etag || event.etag || input.etag),
     });
-    return normalizeGoogleEvent({ account, calendar, event: await res.json() });
+    return normalizeGoogleEvent({ account, calendar: targetCalendar, event: await res.json() });
+  }
+
+  if (calendarChanged) {
+    throwCalendarError(400, "calendar_recurring_move_unsupported", "Move recurring events from Google Calendar for now.");
   }
 
   if (!scope) {
@@ -942,7 +975,7 @@ export async function updateCalendarEvent(account, eventId, input) {
     return normalizeGoogleEvent({ account, calendar, event: await res.json() });
   }
 
-  const recurring = await getRecurringMutationContext(account, input.calendarId, eventId, input);
+  const recurring = await getRecurringMutationContext(account, sourceCalendarId, eventId, input);
   if (!recurring.targetOriginalStart) {
     throwCalendarError(400, "calendar_recurring_unsupported", "Could not determine the target recurring instance.");
   }
