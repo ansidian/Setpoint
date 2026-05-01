@@ -785,6 +785,8 @@ export default function CalendarGrid({
   onReanchorFloatingDetail,
   floatingDetailOpen = false,
   floatingDetailParked = false,
+  floatingEditorDirty = false,
+  onShakeFloatingEditor,
 }) {
   const gridShellRef = useRef(null);
   const gridBodyRef = useRef(null);
@@ -914,6 +916,10 @@ export default function CalendarGrid({
   }, []);
 
   function handleSelectDay(day, isSelected, dateKey = null) {
+    if (floatingEditorDirty) {
+      onShakeFloatingEditor?.();
+      return;
+    }
     const isOverflowSourceDay = sameOverflowDate(
       resolvedOverflow,
       dateKey,
@@ -939,6 +945,10 @@ export default function CalendarGrid({
     dateKey = null,
     { keepOverflowOpen = false, anchorMeta = null } = {},
   ) {
+    if (floatingEditorDirty) {
+      onShakeFloatingEditor?.();
+      return;
+    }
     closeEventEditor();
     if (view === "deadlines") {
       setDeadlineEditor(null);

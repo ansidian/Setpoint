@@ -48,6 +48,7 @@ export default function CalendarFloatingDetailPanel({
   calendarPanelRef,
   railRef,
   suppressOutsideClick,
+  suppressFocusRing = false,
   onClose,
   onPark,
   onUserDraggedChange,
@@ -63,9 +64,12 @@ export default function CalendarFloatingDetailPanel({
   const [placementState, setPlacementState] = useState({ key: null, placement: null });
   const [manualPosition, setManualPosition] = useState(null);
   const [dragging, setDragging] = useState(false);
+  const [feedbackActive, setFeedbackActive] = useState(false);
 
   const open = !!detail?.open && !!children;
-  const contentKey = `${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
+  const mode = detail?.mode || "detail";
+  const editorMode = mode === "edit" || mode === "create";
+  const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
   const placementKey = detail?.placementKey;
   const placement = placementState.key === detail?.placementKey
     ? placementState.placement
@@ -73,7 +77,7 @@ export default function CalendarFloatingDetailPanel({
   const manualDragActive = !!detail?.userDragged;
   const manualPlacementActive = !detail?.parked && manualPosition?.placementKey === placementKey;
 
-  const computePlacement = useCallback(() => {
+  const computePlacement = useCallback(({ allowPark = true } = {}) => {
     if (!detail || typeof window === "undefined") return null;
 
     const calendarRect = rectFromElement(calendarPanelRef?.current);
@@ -83,6 +87,7 @@ export default function CalendarFloatingDetailPanel({
     const exclusionRect = rectFromElement(detail.exclusionElement);
 
     if (!detail.parked && (!anchorRect || (calendarRect && !isRectInside(anchorRect, calendarRect)))) {
+      if (!allowPark) return null;
       onPark?.();
       return null;
     }
@@ -94,13 +99,14 @@ export default function CalendarFloatingDetailPanel({
       calendarRect,
       railRect,
       panelHeight: measuredSize.height,
+      mode,
       parked: !!detail.parked,
     });
-  }, [calendarPanelRef, detail, measuredSize.height, onPark, railRef]);
+  }, [calendarPanelRef, detail, measuredSize.height, mode, onPark, railRef]);
 
-  const updatePlacement = useCallback(() => {
+  const updatePlacement = useCallback(({ allowPark = true } = {}) => {
     if (!open || detail?.userDragged || draggingRef.current || manualPlacementActive) return;
-    const next = computePlacement();
+    const next = computePlacement({ allowPark });
     if (!next) return;
     setMeasuredSize((current) => (
       current.width === next.width && current.maxHeight === next.maxHeight
@@ -122,9 +128,11 @@ export default function CalendarFloatingDetailPanel({
     });
   }, [updatePlacement]);
 
-  useEffect(() => {
-    schedulePlacement();
-  }, [schedulePlacement]);
+  useLayoutEffect(() => {
+    // Pre-paint DOM measurement prevents the panel from animating through the rail before it flips.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    updatePlacement({ allowPark: false });
+  }, [updatePlacement]);
 
   useLayoutEffect(() => {
     const element = panelRef.current;
@@ -178,6 +186,37 @@ export default function CalendarFloatingDetailPanel({
     ), "floating-detail");
     return () => suppressOutsideClick(null, "floating-detail");
   }, [open, suppressOutsideClick]);
+
+  useEffect(() => {
+    if (!open || !editorMode) return undefined;
+    const id = window.requestAnimationFrame(() => {
+      const element = panelRef.current?.querySelector?.(
+        [
+          "[data-calendar-editor-primary='true']:not([disabled])",
+          "input[data-testid='calendar-event-title']:not([disabled])",
+          "input[aria-label='Task title']:not([disabled])",
+          "input:not([type='hidden']):not([disabled])",
+          "textarea:not([disabled])",
+          "button:not([disabled])",
+        ].join(", "),
+      );
+      element?.focus?.({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [contentKey, editorMode, open]);
+
+  useEffect(() => {
+    if (!open || !editorMode || !detail?.shakeKey) return undefined;
+    let timer = 0;
+    const raf = window.requestAnimationFrame(() => {
+      setFeedbackActive(true);
+      timer = window.setTimeout(() => setFeedbackActive(false), reducedMotion ? 180 : 260);
+    });
+    return () => {
+      window.cancelAnimationFrame(raf);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [detail?.shakeKey, editorMode, open, reducedMotion]);
 
   const applyManualPosition = useCallback((clientX, clientY) => {
     const session = dragSessionRef.current;
@@ -293,7 +332,9 @@ export default function CalendarFloatingDetailPanel({
       <Motion.div
         ref={panelRef}
         data-calendar-floating-detail="true"
+        data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
         data-testid="calendar-floating-detail-panel"
+        data-floating-mode={mode}
         className="isolate"
         style={{
           position: "fixed",
@@ -305,12 +346,9 @@ export default function CalendarFloatingDetailPanel({
           display: "flex",
           flexDirection: "column",
           borderRadius: 16,
-          border: "1px solid rgba(255,255,255,0.09)",
-          background: "#16161e",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+          background: "transparent",
           isolation: "isolate",
-          overflow: "hidden",
-          overscrollBehavior: "contain",
+          overflow: "visible",
           willChange: reducedMotion ? "auto" : "transform, opacity",
         }}
         initial={reducedMotion ? false : { opacity: 0, scale: 0.985 }}
@@ -326,6 +364,7 @@ export default function CalendarFloatingDetailPanel({
         {!detail.parked && !manualPlacementActive && resolvedPlacement.caretSide ? (
           <span
             aria-hidden="true"
+            data-testid="calendar-floating-detail-caret"
             style={{
               position: "absolute",
               top: resolvedPlacement.caretTop,
@@ -333,15 +372,41 @@ export default function CalendarFloatingDetailPanel({
               width: 12,
               height: 12,
               transform: "rotate(45deg)",
-              background: "#16161e",
-              borderLeft: resolvedPlacement.caretSide === "left" ? "1px solid rgba(255,255,255,0.09)" : 0,
-              borderBottom: resolvedPlacement.caretSide === "left" ? "1px solid rgba(255,255,255,0.09)" : 0,
-              borderRight: resolvedPlacement.caretSide === "right" ? "1px solid rgba(255,255,255,0.09)" : 0,
-              borderTop: resolvedPlacement.caretSide === "right" ? "1px solid rgba(255,255,255,0.09)" : 0,
+              background: "#1b1b27",
+              borderLeft: resolvedPlacement.caretSide === "left" ? "1px solid rgba(203,166,218,0.22)" : 0,
+              borderBottom: resolvedPlacement.caretSide === "left" ? "1px solid rgba(203,166,218,0.22)" : 0,
+              borderRight: resolvedPlacement.caretSide === "right" ? "1px solid rgba(203,166,218,0.22)" : 0,
+              borderTop: resolvedPlacement.caretSide === "right" ? "1px solid rgba(203,166,218,0.22)" : 0,
+              boxShadow: "0 0 10px rgba(203,166,218,0.10)",
               zIndex: 0,
+              pointerEvents: "none",
             }}
           />
         ) : null}
+        <div
+          data-calendar-floating-editor-feedback={feedbackActive ? "active" : undefined}
+          style={{
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            maxHeight: resolvedPlacement.maxHeight,
+            width: "100%",
+            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.09)",
+            background: "#16161e",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+            isolation: "isolate",
+            overflow: "hidden",
+            overscrollBehavior: "contain",
+            zIndex: 1,
+            animation: feedbackActive
+              ? reducedMotion
+                ? "calendarFloatingEditorPulse 170ms cubic-bezier(0.16, 1, 0.3, 1)"
+                : "calendarFloatingEditorShake 230ms cubic-bezier(0.16, 1, 0.3, 1)"
+              : "none",
+          }}
+        >
         <div
           onPointerDown={handleDragPointerDown}
           onPointerMove={handleDragPointerMove}
@@ -380,7 +445,7 @@ export default function CalendarFloatingDetailPanel({
           </div>
           <button
             type="button"
-            aria-label="Close floating detail"
+            aria-label={editorMode ? "Cancel editor" : "Close floating detail"}
             data-calendar-focus-ring="true"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -433,6 +498,7 @@ export default function CalendarFloatingDetailPanel({
           <div key={contentKey}>
             {children}
           </div>
+        </div>
         </div>
       </Motion.div>
     </AnimatePresence>,

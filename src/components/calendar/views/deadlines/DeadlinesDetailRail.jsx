@@ -554,6 +554,7 @@ function DeadlinesDetail({
   onTaskSaved,
   onTaskDeleted,
   onDraftPreviewChange,
+  onEditorDirtyChange,
   accent = "var(--ea-accent)",
 }) {
   const {
@@ -593,6 +594,7 @@ function DeadlinesDetail({
         editingTask={editingTask || undefined}
         initialDueDate={seedDate}
         onDraftPreviewChange={onDraftPreviewChange}
+        onDirtyChange={onEditorDirtyChange}
         onClose={onCloseEditor}
         onTaskAdded={(task) => {
           handleAddTask(task);

@@ -4,9 +4,13 @@ const PARKING_INSET = 12;
 const DEFAULT_PANEL_WIDTH = 380;
 const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 400;
+const DEFAULT_EDITOR_WIDTH = 640;
+const MIN_EDITOR_WIDTH = 460;
+const MAX_EDITOR_WIDTH = 760;
 const DEFAULT_PANEL_HEIGHT = 300;
 const MIN_PANEL_HEIGHT = 180;
 const MAX_PANEL_HEIGHT = 560;
+const MAX_EDITOR_HEIGHT = 720;
 
 function clamp(value, min, max) {
   if (max < min) return min;
@@ -73,20 +77,28 @@ export function resolveFloatingDetailPlacement({
   calendarRect,
   railRect,
   panelHeight,
+  mode = "detail",
   parked = false,
 }) {
   const bounds = normalizedBounds(calendarRect);
-  const width = clamp(DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, bounds.width));
-  const maxHeight = clamp(Math.min(MAX_PANEL_HEIGHT, bounds.height), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT);
-  const height = clamp(panelHeight || DEFAULT_PANEL_HEIGHT, MIN_PANEL_HEIGHT, maxHeight);
+  const isEditor = mode === "edit" || mode === "create";
+  const width = isEditor
+    ? clamp(DEFAULT_EDITOR_WIDTH, Math.min(MIN_EDITOR_WIDTH, bounds.width), Math.min(MAX_EDITOR_WIDTH, bounds.width))
+    : clamp(DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, bounds.width));
+  const maxHeight = isEditor
+    ? clamp(Math.min(MAX_EDITOR_HEIGHT, bounds.height), Math.min(420, bounds.height), MAX_EDITOR_HEIGHT)
+    : clamp(Math.min(MAX_PANEL_HEIGHT, bounds.height), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT);
+  const height = clamp(panelHeight || (isEditor ? 560 : DEFAULT_PANEL_HEIGHT), MIN_PANEL_HEIGHT, maxHeight);
 
   if (parked) {
     const parkingRect = railRect || calendarRect || bounds;
-    const parkingWidth = clamp(
-      DEFAULT_PANEL_WIDTH,
-      MIN_PANEL_WIDTH,
-      Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, (parkingRect.width || width) - PARKING_INSET * 2)),
-    );
+    const parkingWidth = isEditor
+      ? clamp(width, Math.min(MIN_EDITOR_WIDTH, bounds.width), Math.min(MAX_EDITOR_WIDTH, bounds.width))
+      : clamp(
+          DEFAULT_PANEL_WIDTH,
+          MIN_PANEL_WIDTH,
+          Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, (parkingRect.width || width) - PARKING_INSET * 2)),
+        );
     const left = clamp(
       (parkingRect.left ?? bounds.right - parkingWidth - PARKING_INSET) + PARKING_INSET,
       bounds.left,
@@ -123,7 +135,7 @@ export function resolveFloatingDetailPlacement({
 
   const idealTop = caretRect.top + caretRect.height / 2 - height / 2;
   const top = clamp(idealTop, bounds.top, bounds.bottom - height);
-  const exclusions = [sourceRect, exclusionRect].filter(Boolean);
+  const exclusions = [sourceRect, exclusionRect, railRect].filter(Boolean);
   const rightCandidate = {
     side: "right",
     top,

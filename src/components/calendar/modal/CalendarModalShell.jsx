@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "../CalendarRailStates.jsx";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
@@ -190,6 +190,16 @@ export default function CalendarModalShell({
   onParkFloatingDetail,
   onFloatingDetailDragged,
   onReanchorFloatingDetail,
+  onOpenFloatingEventCreate,
+  onOpenFloatingEventEdit,
+  onOpenFloatingDeadlineCreate,
+  onOpenFloatingDeadlineEdit,
+  onCancelFloatingEditor,
+  onFloatingEditorDirtyChange,
+  onFloatingEditorSaveRequest,
+  onShakeFloatingEditor,
+  onFloatingDeadlineSaved,
+  onFloatingDeadlineDeleted,
   suppressFocusRing = false,
 }) {
   const railRef = useRef(null);
@@ -199,9 +209,16 @@ export default function CalendarModalShell({
     lastWheelAt: -Infinity,
     lastWheelDelta: 0,
   });
-  const workspaceMode = view === "events" && eventEditor.isEditorOpen
+  const floatingEditorOpen = !layout.stacked
+    && !!floatingDetail?.open
+    && (floatingDetail.mode === "edit" || floatingDetail.mode === "create");
+  const railEventEditor = floatingEditorOpen && view === "events"
+    ? { ...eventEditor, isEditorOpen: false, mode: "detail" }
+    : eventEditor;
+  const railDeadlineEditor = floatingEditorOpen && view === "deadlines" ? null : deadlineEditor;
+  const workspaceMode = view === "events" && railEventEditor.isEditorOpen
     ? "editor"
-    : view === "deadlines" && deadlineEditor?.mode
+    : view === "deadlines" && railDeadlineEditor?.mode
       ? "editor"
       : showDetail
         ? "detail"
@@ -210,9 +227,14 @@ export default function CalendarModalShell({
           : "overview";
   const contentKind = workspaceMode === "overview" ? "summary" : workspaceMode;
 
-  const contentKey = view === "events" && eventEditor.isEditorOpen
+  useEffect(() => {
+    if (!floatingEditorOpen || floatingDetail?.view !== "events") return;
+    onFloatingEditorDirtyChange?.(!!eventEditor.isDirty);
+  }, [eventEditor.isDirty, floatingDetail?.view, floatingEditorOpen, onFloatingEditorDirtyChange]);
+
+  const contentKey = view === "events" && railEventEditor.isEditorOpen
     ? `editor-${eventEditor.isEditing ? eventEditor.editingEvent?.id || "edit" : "new"}`
-    : view === "deadlines" && deadlineEditor?.mode
+    : view === "deadlines" && railDeadlineEditor?.mode
       ? `deadline-editor-${deadlineEditor.mode}-${deadlineEditor.taskId || deadlineEditor.seedDate || "new"}`
       : showDetail
         ? `detail-${view}-${viewYear}-${viewMonth}-${selectedDay}-${selectedDayState.totalCount}`
@@ -225,26 +247,34 @@ export default function CalendarModalShell({
     ? {
         ...eventEditor,
         openCreate: () => {
-          onCloseFloatingDetail?.();
-          eventEditor.openCreate?.();
+          if (!layout.stacked) {
+            onOpenFloatingEventCreate?.(selectedDateKey);
+          } else {
+            onCloseFloatingDetail?.();
+            eventEditor.openCreate?.();
+          }
         },
       }
     : eventEditor;
   const onCreateTask = (seedDate) => {
-    onCloseFloatingDetail?.();
-    setDeadlineEditor({
-      mode: "create",
-      seedDate: seedDate || null,
-    });
-    onDeadlineDraftPreviewChange?.(null);
+    if (!layout.stacked) {
+      onOpenFloatingDeadlineCreate?.(seedDate || selectedDateKey || null);
+    } else {
+      onCloseFloatingDetail?.();
+      setDeadlineEditor({
+        mode: "create",
+        seedDate: seedDate || null,
+      });
+      onDeadlineDraftPreviewChange?.(null);
+    }
   };
 
   const contextContent = buildContextContent({
     layout,
     view,
     activeView,
-    eventEditor,
-    deadlineEditor,
+    eventEditor: railEventEditor,
+    deadlineEditor: railDeadlineEditor,
     selectedDay,
     selectedDateKey,
     itemsByDay,
@@ -264,8 +294,12 @@ export default function CalendarModalShell({
     setDeadlineEditor,
     focusDeadlineTask,
     onCreateEvent: () => {
-      onCloseFloatingDetail?.();
-      eventEditor.openCreate?.();
+      if (!layout.stacked) {
+        onOpenFloatingEventCreate?.(selectedDateKey);
+      } else {
+        onCloseFloatingDetail?.();
+        eventEditor.openCreate?.();
+      }
     },
     onCreateTask,
     ghostPreview,
@@ -290,7 +324,53 @@ export default function CalendarModalShell({
       ? floatingDetail.itemsSnapshot
       : selectedItems;
   const floatingDetailContent = !layout.stacked && floatingDetail?.open
-    ? activeView.renderFloatingDetail?.({
+    ? floatingEditorOpen && floatingDetail.view === "events"
+      ? (
+          <CalendarEventEditorRail
+            editor={{
+              ...eventEditor,
+              closeEditor: onCancelFloatingEditor,
+              save: () => {
+                const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                onFloatingEditorSaveRequest?.(requestId);
+                return eventEditor.save?.();
+              },
+            }}
+            expandedDesktop
+            host="floating"
+            ghostPreview={ghostPreview}
+          />
+        )
+      : floatingEditorOpen && floatingDetail.view === "deadlines"
+        ? activeView.renderDetail?.({
+            selectedDay,
+            selectedDateKey,
+            viewYear,
+            viewMonth,
+            items: floatingDetailItems,
+            data: viewData,
+            computed,
+            selectedItemId: floatingDetail.itemId,
+            onSelectItem: (itemId) => {
+              setSelectedItemId(String(itemId));
+            },
+            editorState: deadlineEditor,
+            onStartEdit: (task) => {
+              onOpenFloatingDeadlineEdit?.(task, { dateKey: selectedDateKey });
+            },
+            onCloseEditor: onCancelFloatingEditor,
+            onTaskSaved: (task) => {
+              focusDeadlineTask?.(task);
+              onFloatingDeadlineSaved?.(task);
+            },
+            onTaskDeleted: (taskId) => {
+              onFloatingDeadlineDeleted?.(taskId);
+            },
+            onDraftPreviewChange: onDeadlineDraftPreviewChange,
+            onEditorDirtyChange: onFloatingEditorDirtyChange,
+            ghostPreview,
+          })
+        : activeView.renderFloatingDetail?.({
         selectedDay,
         selectedDateKey,
         viewYear,
@@ -300,15 +380,35 @@ export default function CalendarModalShell({
         computed,
         selectedItemId: floatingDetail.itemId,
         onEditEvent: (item) => {
-          onCloseFloatingDetail?.();
-          eventEditor.openEdit?.(item);
+          if (!layout.stacked) {
+            onOpenFloatingEventEdit?.(item, {
+              dateKey: floatingDetail.dateKey || selectedDateKey,
+              anchorElement: floatingDetail.anchorElement,
+              sourceCellElement: floatingDetail.sourceCellElement,
+              exclusionElement: floatingDetail.exclusionElement,
+              anchorKind: floatingDetail.anchorKind,
+            });
+          } else {
+            onCloseFloatingDetail?.();
+            eventEditor.openEdit?.(item);
+          }
         },
         editorState: null,
         onStartEdit: (task) => {
-          onCloseFloatingDetail?.();
-          setSelectedItemId(String(task.id));
-          setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
-          onDeadlineDraftPreviewChange?.(null);
+          if (!layout.stacked) {
+            onOpenFloatingDeadlineEdit?.(task, {
+              dateKey: floatingDetail.dateKey || selectedDateKey,
+              anchorElement: floatingDetail.anchorElement,
+              sourceCellElement: floatingDetail.sourceCellElement,
+              exclusionElement: floatingDetail.exclusionElement,
+              anchorKind: floatingDetail.anchorKind,
+            });
+          } else {
+            onCloseFloatingDetail?.();
+            setSelectedItemId(String(task.id));
+            setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
+            onDeadlineDraftPreviewChange?.(null);
+          }
         },
         onCloseEditor: () => {
           setDeadlineEditor(null);
@@ -439,8 +539,12 @@ export default function CalendarModalShell({
             viewYear={viewYear}
             viewMonth={viewMonth}
             setDeadlineEditor={(next) => {
-              onCloseFloatingDetail?.();
-              setDeadlineEditor(next);
+              if (!layout.stacked && next?.mode === "create") {
+                onOpenFloatingDeadlineCreate?.(next.seedDate || selectedDateKey || null);
+              } else {
+                onCloseFloatingDetail?.();
+                setDeadlineEditor(next);
+              }
             }}
             onClose={onClose}
             viewLabel={activeView.label}
@@ -506,6 +610,8 @@ export default function CalendarModalShell({
                   onReanchorFloatingDetail={onReanchorFloatingDetail}
                   floatingDetailOpen={!!floatingDetail?.open}
                   floatingDetailParked={!!floatingDetail?.parked}
+                  floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+                  onShakeFloatingEditor={onShakeFloatingEditor}
                 />
                 {view === "events" ? (
                   <CalendarQuickActionLayer quickActions={eventQuickActions} />
@@ -554,7 +660,8 @@ export default function CalendarModalShell({
             calendarPanelRef={panelRef}
             railRef={railRef}
             suppressOutsideClick={suppressOutsideClick}
-            onClose={onCloseFloatingDetail}
+            suppressFocusRing={suppressFocusRing}
+            onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
             onPark={onParkFloatingDetail}
             onUserDraggedChange={onFloatingDetailDragged}
           >

@@ -44,7 +44,12 @@ function sectionIntroStyle() {
   };
 }
 
-export default function CalendarEventEditorRail({ editor, expandedDesktop = false, ghostPreview = null }) {
+export default function CalendarEventEditorRail({
+  editor,
+  expandedDesktop = false,
+  ghostPreview = null,
+  host = "rail",
+}) {
   const {
     draft,
     titleInput,
@@ -104,6 +109,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
   );
   const isCompactMode = isBatchMode || isRecurringMode;
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const floatingHost = host === "floating";
   const showDetailFields = !isCompactMode || detailsExpanded;
   const useDesktopStage = expandedDesktop && showDetailFields;
   const editorModeKey = isEditing
@@ -122,8 +128,8 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
       role="region"
       aria-labelledby="calendar-event-editor-title"
       style={{
-        padding: expandedDesktop ? "18px 22px 20px" : "16px 20px",
-        overflow: "auto",
+        padding: floatingHost ? 0 : expandedDesktop ? "18px 22px 20px" : "16px 20px",
+        overflow: floatingHost ? "visible" : "auto",
         overscrollBehavior: "contain",
         flex: 1,
         display: "flex",
@@ -160,6 +166,7 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
           <input
             ref={titleRef}
             data-testid="calendar-event-title"
+            data-calendar-editor-primary="true"
             type="text"
             aria-label="Event title"
             value={titleInput}
@@ -764,7 +771,18 @@ export default function CalendarEventEditorRail({ editor, expandedDesktop = fals
                   />
                 ) : null}
 
-                <div style={{ marginTop: "auto", paddingTop: expandedDesktop ? 6 : 0 }}>
+                <div
+                  style={{
+                    marginTop: "auto",
+                    paddingTop: expandedDesktop ? 6 : 0,
+                    position: floatingHost ? "sticky" : "static",
+                    bottom: floatingHost ? -12 : "auto",
+                    zIndex: floatingHost ? 2 : "auto",
+                    background: floatingHost
+                      ? "linear-gradient(180deg, rgba(22,22,30,0), #16161e 18%)"
+                      : "transparent",
+                  }}
+                >
                   <CalendarEventEditorActionBar
                     editor={editor}
                     disabled={disabled}

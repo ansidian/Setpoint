@@ -170,6 +170,7 @@ export default function AddTaskPanelView({
             <input
               ref={inputRef}
               type="text"
+              data-calendar-editor-primary="true"
               inputMode="text"
               enterKeyHint="done"
               aria-label="Task title"
