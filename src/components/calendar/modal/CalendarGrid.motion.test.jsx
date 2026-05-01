@@ -143,7 +143,10 @@ function renderGrid(itemsByDay, overrides = {}) {
     ...overrides,
   };
 
-  return render(<CalendarGrid {...props} />);
+  return {
+    ...render(<CalendarGrid {...props} />),
+    props,
+  };
 }
 
 let originalResizeObserver;
@@ -229,16 +232,53 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(setSelectedDay).toHaveBeenCalledWith(20);
   });
 
-  it("uses vertical wheel momentum on the month grid to navigate one month", () => {
+  it("uses one coarse mouse-wheel notch on the month grid to navigate one month", () => {
     const navigateMonth = vi.fn();
     renderGrid({}, { navigateMonth });
 
     const gridShell = screen.getByTestId("calendar-grid-shell");
     fireEvent.wheel(gridShell, { deltaY: 100, deltaMode: 0, cancelable: true });
-    expect(navigateMonth).not.toHaveBeenCalled();
-
-    fireEvent.wheel(gridShell, { deltaY: 90, deltaMode: 0, cancelable: true });
     expect(navigateMonth).toHaveBeenCalledWith(1);
+    expect(navigateMonth).toHaveBeenCalledTimes(1);
+  });
+
+  it("collapses a tapering wheel stream into one month navigation", () => {
+    const navigateMonth = vi.fn();
+    renderGrid({}, { navigateMonth });
+
+    const gridShell = screen.getByTestId("calendar-grid-shell");
+    fireEvent.wheel(gridShell, { deltaY: 24, deltaMode: 0, cancelable: true });
+    fireEvent.wheel(gridShell, { deltaY: 19, deltaMode: 0, cancelable: true });
+    fireEvent.wheel(gridShell, { deltaY: 13, deltaMode: 0, cancelable: true });
+
+    expect(navigateMonth).toHaveBeenCalledWith(1);
+    expect(navigateMonth).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the month wheel lock through grid remounts", () => {
+    const navigateMonth = vi.fn();
+    const monthWheelStateRef = {
+      current: {
+        lastNavigateAt: -Infinity,
+        ignoreUntil: -Infinity,
+        lastWheelAt: -Infinity,
+        lastWheelDelta: 0,
+      },
+    };
+    const { props, rerender } = renderGrid({}, { navigateMonth, monthWheelStateRef });
+
+    const gridShell = screen.getByTestId("calendar-grid-shell");
+    fireEvent.wheel(gridShell, { deltaY: 100, deltaMode: 0, cancelable: true });
+    expect(navigateMonth).toHaveBeenCalledTimes(1);
+
+    rerender(<CalendarGrid key="next-month" {...props} viewMonth={VIEW_MONTH + 1} />);
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
     expect(navigateMonth).toHaveBeenCalledTimes(1);
   });
 

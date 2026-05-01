@@ -15,17 +15,50 @@ import { getEventSelectionId } from "../../../lib/redesign-helpers";
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const GRID_ROWS = 6;
 const CELL_HEADER_HEIGHT = 24;
-const MONTH_WHEEL_THRESHOLD_PX = 180;
-const MONTH_WHEEL_COOLDOWN_MS = 420;
+const MONTH_WHEEL_NOTCH_MIN_PX = 1;
+const MONTH_WHEEL_COOLDOWN_MS = 180;
+const MONTH_WHEEL_INTENT_INTERVAL_MS = 100;
 const WHEEL_LINE_PX = 32;
 const CURRENT_MONTH_BOUNDARY_COLOR = "#0095FF";
 const OTHER_MONTH_BOUNDARY_COLOR = "rgba(137,180,250,0.32)";
 const INLINE_OVERFLOW_PANEL_PADDING = 12;
 
+function createMonthWheelState() {
+  return {
+    lastNavigateAt: -Infinity,
+    ignoreUntil: -Infinity,
+    lastWheelAt: -Infinity,
+    lastWheelDelta: 0,
+  };
+}
+
 function normalizeWheelDeltaY(event, fallbackPagePx) {
   if (event.deltaMode === 1) return event.deltaY * WHEEL_LINE_PX;
   if (event.deltaMode === 2) return event.deltaY * fallbackPagePx;
   return event.deltaY;
+}
+
+function isCoarseMonthWheel(event, normalizedY) {
+  if (!Number.isFinite(normalizedY)) return false;
+  if (Math.abs(normalizedY) < MONTH_WHEEL_NOTCH_MIN_PX) return false;
+
+  if (event.deltaMode !== 0) return true;
+
+  if (event.deltaMode === 0 && !Number.isInteger(event.deltaY)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isIntentionalMonthWheel({ normalizedY, now, wheelState }) {
+  const lastDelta = wheelState.lastWheelDelta || 0;
+  const rapidSuccession =
+    now - wheelState.lastWheelAt < MONTH_WHEEL_INTENT_INTERVAL_MS;
+  const sameDirection = Math.sign(lastDelta) === Math.sign(normalizedY);
+  const tapering = Math.abs(normalizedY) <= Math.abs(lastDelta);
+
+  return !rapidSuccession || !sameDirection || !tapering;
 }
 
 function sameOverflowDate(overflow, dateKey, day) {
@@ -745,6 +778,7 @@ export default function CalendarGrid({
   ghostPreview,
   canGoPrev = true,
   navigateMonth,
+  monthWheelStateRef,
   monthMotionDirection = 0,
   onOpenFloatingDetail,
   onCloseFloatingDetail,
@@ -754,7 +788,9 @@ export default function CalendarGrid({
 }) {
   const gridShellRef = useRef(null);
   const gridBodyRef = useRef(null);
-  const monthWheelRef = useRef({ accumulatedY: 0, lastNavigateAt: -Infinity });
+  const fallbackMonthWheelStateRef = useRef(createMonthWheelState());
+  const activeMonthWheelStateRef =
+    monthWheelStateRef || fallbackMonthWheelStateRef;
   const ignoreOverflowScrollUntilRef = useRef(0);
   const [activeSpanSegmentId, setActiveSpanSegmentId] = useState(null);
   const fillGridHeight = !layout.stacked;
@@ -765,13 +801,15 @@ export default function CalendarGrid({
     ? Math.max(0, gridRowCount * 7 - firstDay - daysInMonth)
     : trailingEmpty;
   const [overflowState, setOverflowState] = useState(null);
-  const resolvedOverflow = overflowState
-    && overflowState.view === view
-    && overflowState.viewYear === viewYear
-    && overflowState.viewMonth === viewMonth
+  const resolvedOverflow =
+    overflowState &&
+    overflowState.view === view &&
+    overflowState.viewYear === viewYear &&
+    overflowState.viewMonth === viewMonth
       ? overflowState
       : null;
-  const resolvedPopover = resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
+  const resolvedPopover =
+    resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
   const eventDateCells = view === "events";
   const selectedCellKey = selectedDateKey;
   const viewedMonthIsActualCurrentMonth =
@@ -779,55 +817,56 @@ export default function CalendarGrid({
 
   const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
   const monthCells = Array.from({ length: eventCellCount }, (_, index) => {
-        const date = new Date(Date.UTC(viewYear, viewMonth, 1, 12));
-        date.setUTCDate(date.getUTCDate() - firstDay + index);
-        const dateKey = date.toISOString().slice(0, 10);
-        const parsed = parseYmd(dateKey);
-        const inCurrentMonth =
-          parsed?.year === viewYear && parsed?.month === viewMonth;
-        const monthLabel = new Date(
-          parsed.year,
-          parsed.month,
-          parsed.day,
-        ).toLocaleDateString("en-US", { month: "short" });
-        return {
-          day: parsed.day,
-          dateKey,
-          dateLabel: String(parsed.day),
-          inCurrentMonth,
-          inActualCurrentMonth:
-            parsed?.year === currentYear && parsed?.month === currentMonth,
-          boundarySides: [],
-          monthLabel,
-          adjacentPosition: inCurrentMonth
-            ? "current"
-            : dateKey < ymdFromParts(viewYear, viewMonth, 1)
-              ? "leading"
-              : "trailing",
-        };
-      }).map((cell, index, cells) => {
-        if (cell.inCurrentMonth) return cell;
-        const sides = [];
-        const left = index % 7 === 0 ? null : cells[index - 1];
-        const right = index % 7 === 6 ? null : cells[index + 1];
-        const top = index < 7 ? null : cells[index - 7];
-        const bottom = index >= cells.length - 7 ? null : cells[index + 7];
-        if (left?.inCurrentMonth) sides.push("left");
-        if (right?.inCurrentMonth) sides.push("right");
-        if (top?.inCurrentMonth) sides.push("top");
-        if (bottom?.inCurrentMonth) sides.push("bottom");
-        return {
-          ...cell,
-          dateLabel: cell.adjacentPosition === "trailing" && cell.day === 1
-            ? `${cell.monthLabel} ${cell.day}`
-            : cell.dateLabel,
-          boundarySides: sides,
-          boundaryColor:
-            viewedMonthIsActualCurrentMonth || cell.inActualCurrentMonth
-              ? CURRENT_MONTH_BOUNDARY_COLOR
-              : OTHER_MONTH_BOUNDARY_COLOR,
-        };
-      });
+    const date = new Date(Date.UTC(viewYear, viewMonth, 1, 12));
+    date.setUTCDate(date.getUTCDate() - firstDay + index);
+    const dateKey = date.toISOString().slice(0, 10);
+    const parsed = parseYmd(dateKey);
+    const inCurrentMonth =
+      parsed?.year === viewYear && parsed?.month === viewMonth;
+    const monthLabel = new Date(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+    ).toLocaleDateString("en-US", { month: "short" });
+    return {
+      day: parsed.day,
+      dateKey,
+      dateLabel: String(parsed.day),
+      inCurrentMonth,
+      inActualCurrentMonth:
+        parsed?.year === currentYear && parsed?.month === currentMonth,
+      boundarySides: [],
+      monthLabel,
+      adjacentPosition: inCurrentMonth
+        ? "current"
+        : dateKey < ymdFromParts(viewYear, viewMonth, 1)
+          ? "leading"
+          : "trailing",
+    };
+  }).map((cell, index, cells) => {
+    if (cell.inCurrentMonth) return cell;
+    const sides = [];
+    const left = index % 7 === 0 ? null : cells[index - 1];
+    const right = index % 7 === 6 ? null : cells[index + 1];
+    const top = index < 7 ? null : cells[index - 7];
+    const bottom = index >= cells.length - 7 ? null : cells[index + 7];
+    if (left?.inCurrentMonth) sides.push("left");
+    if (right?.inCurrentMonth) sides.push("right");
+    if (top?.inCurrentMonth) sides.push("top");
+    if (bottom?.inCurrentMonth) sides.push("bottom");
+    return {
+      ...cell,
+      dateLabel:
+        cell.adjacentPosition === "trailing" && cell.day === 1
+          ? `${cell.monthLabel} ${cell.day}`
+          : cell.dateLabel,
+      boundarySides: sides,
+      boundaryColor:
+        viewedMonthIsActualCurrentMonth || cell.inActualCurrentMonth
+          ? CURRENT_MONTH_BOUNDARY_COLOR
+          : OTHER_MONTH_BOUNDARY_COLOR,
+    };
+  });
 
   const spanLayout = useMemo(() => {
     if (view !== "events") {
@@ -847,16 +886,26 @@ export default function CalendarGrid({
     });
   }, [ghostPreview?.ghosts, layout, monthCells, view, viewData?.events]);
 
-  const closeOverflow = useCallback(({ restoreFocus = false } = {}) => {
-    const anchorKey = overflowState?.anchorKey;
-    setOverflowState(null);
-    if (!restoreFocus || !anchorKey) return;
-    window.requestAnimationFrame(() => {
-      const trigger = [...(gridShellRef.current?.querySelectorAll("[data-calendar-overflow-anchor-key]") || [])]
-        .find((element) => element.getAttribute("data-calendar-overflow-anchor-key") === anchorKey);
-      trigger?.focus?.();
-    });
-  }, [overflowState?.anchorKey, setOverflowState]);
+  const closeOverflow = useCallback(
+    ({ restoreFocus = false } = {}) => {
+      const anchorKey = overflowState?.anchorKey;
+      setOverflowState(null);
+      if (!restoreFocus || !anchorKey) return;
+      window.requestAnimationFrame(() => {
+        const trigger = [
+          ...(gridShellRef.current?.querySelectorAll(
+            "[data-calendar-overflow-anchor-key]",
+          ) || []),
+        ].find(
+          (element) =>
+            element.getAttribute("data-calendar-overflow-anchor-key") ===
+            anchorKey,
+        );
+        trigger?.focus?.();
+      });
+    },
+    [overflowState?.anchorKey, setOverflowState],
+  );
   const closeOverflowWithoutFocus = useCallback(() => {
     setOverflowState(null);
   }, [setOverflowState]);
@@ -865,7 +914,11 @@ export default function CalendarGrid({
   }, []);
 
   function handleSelectDay(day, isSelected, dateKey = null) {
-    const isOverflowSourceDay = sameOverflowDate(resolvedOverflow, dateKey, day);
+    const isOverflowSourceDay = sameOverflowDate(
+      resolvedOverflow,
+      dateKey,
+      day,
+    );
     if (!isOverflowSourceDay) setOverflowState(null);
     if (isSelected) return;
 
@@ -880,7 +933,12 @@ export default function CalendarGrid({
     setSelectedItemId(null);
   }
 
-  function handleSelectItem(day, itemId, dateKey = null, { keepOverflowOpen = false, anchorMeta = null } = {}) {
+  function handleSelectItem(
+    day,
+    itemId,
+    dateKey = null,
+    { keepOverflowOpen = false, anchorMeta = null } = {},
+  ) {
     closeEventEditor();
     if (view === "deadlines") {
       setDeadlineEditor(null);
@@ -900,7 +958,10 @@ export default function CalendarGrid({
         dateKey: anchorMeta.dateKey || dateKey || null,
         day,
         anchorElement: anchorMeta.triggerElement,
-        sourceCellElement: anchorMeta.sourceCellElement || anchorMeta.triggerElement.closest?.("[role='gridcell']") || null,
+        sourceCellElement:
+          anchorMeta.sourceCellElement ||
+          anchorMeta.triggerElement.closest?.("[role='gridcell']") ||
+          null,
         exclusionElement: anchorMeta.exclusionElement || null,
         anchorKind: anchorMeta.anchorKind || "chip",
         itemsSnapshot: anchorMeta.itemsSnapshot || null,
@@ -915,7 +976,9 @@ export default function CalendarGrid({
     const nextDay = parsed?.day || selectedDay;
     const nextDateKey = parsed ? requestedDateKey : segment.segmentStart;
     const sourceCellElement = nextDateKey
-      ? gridShellRef.current?.querySelector?.(`[role='gridcell'][data-date-key='${nextDateKey}']`) || null
+      ? gridShellRef.current?.querySelector?.(
+          `[role='gridcell'][data-date-key='${nextDateKey}']`,
+        ) || null
       : null;
     handleSelectItem(nextDay, getEventSelectionId(segment.item), nextDateKey, {
       anchorMeta: {
@@ -948,7 +1011,11 @@ export default function CalendarGrid({
       if (isCalendarInlineOverflowTarget(event.target)) return;
       if (isCalendarFloatingDetailTarget(event.target)) return;
       if (isCalendarRailTarget(event.target)) return;
-      if (gridShellRef.current?.contains(event.target) && isCalendarGridCellTarget(event.target)) return;
+      if (
+        gridShellRef.current?.contains(event.target) &&
+        isCalendarGridCellTarget(event.target)
+      )
+        return;
       setOverflowState(null);
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -957,22 +1024,41 @@ export default function CalendarGrid({
 
   useEffect(() => {
     if (!floatingDetailParked || !selectedItemId || !selectedDateKey) return;
-    const chips = [...(gridShellRef.current?.querySelectorAll("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-event-span-segment']") || [])];
-    const anchor = chips.find((element) => element.getAttribute("data-item-id") === String(selectedItemId));
+    const chips = [
+      ...(gridShellRef.current?.querySelectorAll(
+        "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-event-span-segment']",
+      ) || []),
+    ];
+    const anchor = chips.find(
+      (element) =>
+        element.getAttribute("data-item-id") === String(selectedItemId),
+    );
     if (!anchor) return;
     const sourceCellElement = anchor.closest("[role='gridcell']");
-    if (sourceCellElement?.getAttribute("data-date-key") !== selectedDateKey) return;
+    if (sourceCellElement?.getAttribute("data-date-key") !== selectedDateKey)
+      return;
     onReanchorFloatingDetail?.({
       view,
       itemId: String(selectedItemId),
       dateKey: selectedDateKey,
-      day: Number(sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) || selectedDay,
+      day:
+        Number(sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) ||
+        selectedDay,
       anchorElement: anchor,
       sourceCellElement,
       exclusionElement: null,
       anchorKind: "chip",
     });
-  }, [floatingDetailParked, onReanchorFloatingDetail, selectedDateKey, selectedDay, selectedItemId, view, viewMonth, viewYear]);
+  }, [
+    floatingDetailParked,
+    onReanchorFloatingDetail,
+    selectedDateKey,
+    selectedDay,
+    selectedItemId,
+    view,
+    viewMonth,
+    viewYear,
+  ]);
 
   useEffect(() => {
     const scrollContainer = getModalScrollContainer(gridShellRef.current);
@@ -986,13 +1072,15 @@ export default function CalendarGrid({
   }, [resolvedOverflow]);
 
   useEffect(() => {
-    if (!suppressOutsideClick || resolvedOverflow?.mode !== "inline") return undefined;
-    suppressOutsideClick((target) => (
-      resolvedOverflow.sourceCellElement?.contains(target)
-      || resolvedOverflow.triggerElement?.contains(target)
-      || isCalendarInlineOverflowTarget(target)
-      || isCalendarRailTarget(target)
-    ));
+    if (!suppressOutsideClick || resolvedOverflow?.mode !== "inline")
+      return undefined;
+    suppressOutsideClick(
+      (target) =>
+        resolvedOverflow.sourceCellElement?.contains(target) ||
+        resolvedOverflow.triggerElement?.contains(target) ||
+        isCalendarInlineOverflowTarget(target) ||
+        isCalendarRailTarget(target),
+    );
     return () => suppressOutsideClick(null);
   }, [resolvedOverflow, suppressOutsideClick]);
 
@@ -1002,37 +1090,58 @@ export default function CalendarGrid({
 
     function handleMonthWheel(event) {
       if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
+      if (isCalendarInlineOverflowTarget(event.target)) return;
 
       const absX = Math.abs(event.deltaX || 0);
       const absY = Math.abs(event.deltaY || 0);
       if (absY === 0 || absX > absY) return;
 
-      const normalizedY = normalizeWheelDeltaY(event, element.clientHeight || window.innerHeight || 800);
+      const normalizedY = normalizeWheelDeltaY(
+        event,
+        element.clientHeight || window.innerHeight || 800,
+      );
+      if (!isCoarseMonthWheel(event, normalizedY)) return;
+
       const direction = normalizedY > 0 ? 1 : -1;
       if (direction < 0 && !canGoPrev) {
-        monthWheelRef.current.accumulatedY = 0;
+        if (event.cancelable) event.preventDefault();
         return;
       }
 
       if (event.cancelable) event.preventDefault();
 
-      const now = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
-      if (now - monthWheelRef.current.lastNavigateAt < MONTH_WHEEL_COOLDOWN_MS) return;
+      const now = Number.isFinite(event.timeStamp)
+        ? event.timeStamp
+        : performance.now();
+      const wheelState =
+        activeMonthWheelStateRef.current || createMonthWheelState();
+      activeMonthWheelStateRef.current = wheelState;
+      const intentionalWheel = isIntentionalMonthWheel({
+        normalizedY,
+        now,
+        wheelState,
+      });
 
-      monthWheelRef.current.accumulatedY += normalizedY;
-      if (Math.abs(monthWheelRef.current.accumulatedY) < MONTH_WHEEL_THRESHOLD_PX) return;
+      wheelState.lastWheelAt = now;
+      wheelState.lastWheelDelta = normalizedY;
 
-      const monthDirection = monthWheelRef.current.accumulatedY > 0 ? 1 : -1;
-      if (monthDirection > 0 || canGoPrev) {
-        navigateMonth(monthDirection);
-        monthWheelRef.current.lastNavigateAt = now;
+      if (!intentionalWheel) return;
+
+      if (
+        now < wheelState.ignoreUntil ||
+        now - wheelState.lastNavigateAt < MONTH_WHEEL_COOLDOWN_MS
+      ) {
+        return;
       }
-      monthWheelRef.current.accumulatedY = 0;
+
+      navigateMonth(direction);
+      wheelState.lastNavigateAt = now;
+      wheelState.ignoreUntil = now + MONTH_WHEEL_COOLDOWN_MS;
     }
 
     element.addEventListener("wheel", handleMonthWheel, { passive: false });
     return () => element.removeEventListener("wheel", handleMonthWheel);
-  }, [canGoPrev, layout.stacked, navigateMonth]);
+  }, [activeMonthWheelStateRef, canGoPrev, layout.stacked, navigateMonth]);
 
   return (
     <div
@@ -1077,7 +1186,10 @@ export default function CalendarGrid({
         ))}
       </div>
 
-      <div ref={gridBodyRef} style={{ position: "relative", flex: 1, minHeight: 0 }}>
+      <div
+        ref={gridBodyRef}
+        style={{ position: "relative", flex: 1, minHeight: 0 }}
+      >
         <div
           data-testid="calendar-grid-month"
           role="grid"
@@ -1138,7 +1250,10 @@ export default function CalendarGrid({
               ? dayState.items
               : rawItems;
             const resolvedSelectionPool = selectionPool;
-            const hasItems = resolvedDayState.totalCount > 0 || cellGhosts.length > 0 || reservedLaneCount > 0;
+            const hasItems =
+              resolvedDayState.totalCount > 0 ||
+              cellGhosts.length > 0 ||
+              reservedLaneCount > 0;
             const isToday =
               cell.dateKey ===
               ymdFromParts(currentYear, currentMonth, todayDate);
@@ -1162,8 +1277,13 @@ export default function CalendarGrid({
                   String(resolveItemId(item)) === String(selectedItemId),
               );
             const anchorKey = `${view}-${cell.dateKey || `${viewYear}-${viewMonth}-${day}`}`;
-            const overflowOpen = sameOverflowDate(resolvedOverflow, cell.dateKey, day);
-            const inlineOverflowOpen = overflowOpen && resolvedOverflow?.mode === "inline";
+            const overflowOpen = sameOverflowDate(
+              resolvedOverflow,
+              cell.dateKey,
+              day,
+            );
+            const inlineOverflowOpen =
+              overflowOpen && resolvedOverflow?.mode === "inline";
 
             return (
               <CalendarCell
@@ -1180,7 +1300,11 @@ export default function CalendarGrid({
                 items={cellItems}
                 ghosts={cellGhosts}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
-                itemCount={resolvedDayState.totalCount + cellGhosts.length + pinnedGhostCount}
+                itemCount={
+                  resolvedDayState.totalCount +
+                  cellGhosts.length +
+                  pinnedGhostCount
+                }
                 hasItems={hasItems}
                 isToday={isToday}
                 isSelected={isSelected}
@@ -1206,7 +1330,8 @@ export default function CalendarGrid({
                   visibleCount,
                   hiddenStackHeight,
                 }) => {
-                  const sourceCellElement = triggerElement?.closest?.("[role='gridcell']");
+                  const sourceCellElement =
+                    triggerElement?.closest?.("[role='gridcell']");
                   setOverflowState((current) => {
                     if (current?.anchorKey === anchorKey) {
                       return null;
@@ -1215,10 +1340,16 @@ export default function CalendarGrid({
                       triggerElement,
                       hiddenStackHeight,
                       layout,
-                    }) ? "inline" : "fallback";
-                    const inlineAnchor = mode === "inline"
-                      ? resolveInlineOverflowAnchor(triggerElement, gridBodyRef.current)
-                      : null;
+                    })
+                      ? "inline"
+                      : "fallback";
+                    const inlineAnchor =
+                      mode === "inline"
+                        ? resolveInlineOverflowAnchor(
+                            triggerElement,
+                            gridBodyRef.current,
+                          )
+                        : null;
                     return {
                       mode,
                       triggerElement,
@@ -1270,16 +1401,18 @@ export default function CalendarGrid({
               />
             );
           })}
-
         </div>
         <CalendarMonthBoundaryOverlay
           monthCells={monthCells}
           layout={layout}
           gridRowCount={gridRowCount}
           fillGridHeight={fillGridHeight}
-          suppressedBoundary={resolvedOverflow?.mode === "inline" && resolvedOverflow.boundarySides?.includes?.("bottom")
-            ? { dateKey: resolvedOverflow.dateKey, sides: ["bottom"] }
-            : null}
+          suppressedBoundary={
+            resolvedOverflow?.mode === "inline" &&
+            resolvedOverflow.boundarySides?.includes?.("bottom")
+              ? { dateKey: resolvedOverflow.dateKey, sides: ["bottom"] }
+              : null
+          }
         />
         <CalendarEventSpanOverlay
           segments={spanLayout.spanSegments}
@@ -1290,7 +1423,9 @@ export default function CalendarGrid({
           activeSegmentId={activeSpanSegmentId}
           onSetActive={setActiveSpanSegmentId}
           onClearActive={(segmentId) => {
-            setActiveSpanSegmentId((current) => (current === segmentId ? null : current));
+            setActiveSpanSegmentId((current) =>
+              current === segmentId ? null : current,
+            );
           }}
           onSelectSegment={handleSelectSpanSegment}
           quickActions={eventDateCells ? eventQuickActions : null}
