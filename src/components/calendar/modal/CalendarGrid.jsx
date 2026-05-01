@@ -279,6 +279,22 @@ function CalendarInlineOverflowLayer({
               });
             }}
             onContextMenu={(event) => {
+              if (quickActions?.openContextMenu?.({
+                item,
+                task: item.sourceItem,
+                x: event.clientX,
+                y: event.clientY,
+                anchorElement: event.currentTarget,
+                sourceCellElement: overflow.sourceCellElement || null,
+                exclusionElement: layerRef.current,
+                dateKey: overflow.dateKey || null,
+                anchorKind: "overflow-row",
+              })) {
+                event.preventDefault();
+                event.stopPropagation();
+                onBeforeItemAction?.();
+                return;
+              }
               if (!item.sourceEvent?.writable) return;
               event.preventDefault();
               event.stopPropagation();
@@ -806,6 +822,7 @@ export default function CalendarGrid({
   setSelectedItemId,
   setDeadlineEditor,
   eventQuickActions,
+  deadlineQuickActions,
   ghostPreview,
   canGoPrev = true,
   navigateMonth,
@@ -846,6 +863,11 @@ export default function CalendarGrid({
   const resolvedPopover =
     resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
   const eventDateCells = view === "events";
+  const itemQuickActions = eventDateCells
+    ? eventQuickActions
+    : view === "deadlines"
+      ? deadlineQuickActions
+      : null;
   const selectedCellKey = selectedDateKey;
   const viewedMonthIsActualCurrentMonth =
     viewYear === currentYear && viewMonth === currentMonth;
@@ -975,7 +997,7 @@ export default function CalendarGrid({
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(null);
-    if (directDateAction && view === "events" && dateKey) onDirectDateAction?.(dateKey);
+    if (directDateAction && dateKey) onDirectDateAction?.(dateKey);
   }
 
   function handleSelectItem(
@@ -998,7 +1020,7 @@ export default function CalendarGrid({
     if (keepOverflowOpen) {
       markOverflowInteraction();
     }
-    if (view === "events" && dateKey) onDirectItemAction?.(itemId, dateKey);
+    if (dateKey) onDirectItemAction?.(itemId, dateKey);
     if (!keepOverflowOpen) {
       setOverflowState(null);
     }
@@ -1166,9 +1188,7 @@ export default function CalendarGrid({
 
       if (event.cancelable) event.preventDefault();
 
-      const now = Number.isFinite(event.timeStamp)
-        ? event.timeStamp
-        : performance.now();
+      const now = performance.now();
       const wheelState =
         activeMonthWheelStateRef.current || createMonthWheelState();
       activeMonthWheelStateRef.current = wheelState;
@@ -1459,7 +1479,7 @@ export default function CalendarGrid({
                     layout,
                   })
                 }
-                quickActions={eventDateCells ? eventQuickActions : null}
+                quickActions={itemQuickActions}
               />
             );
           })}
@@ -1507,7 +1527,7 @@ export default function CalendarGrid({
               );
             }}
             onInteraction={markOverflowInteraction}
-            quickActions={eventDateCells ? eventQuickActions : null}
+            quickActions={itemQuickActions}
             onBeforeItemAction={onCloseFloatingDetail}
           />
         ) : null}
@@ -1540,7 +1560,7 @@ export default function CalendarGrid({
         onClose={() => setOverflowState(null)}
         onOverflowInteraction={markOverflowInteraction}
         suppressOutsideClick={suppressOutsideClick}
-        quickActions={eventDateCells ? eventQuickActions : null}
+        quickActions={itemQuickActions}
         onBeforeItemAction={onCloseFloatingDetail}
         floatingDetailOpen={floatingDetailOpen}
       />

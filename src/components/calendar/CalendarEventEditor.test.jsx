@@ -10,6 +10,7 @@ const mockDeleteCalendarEvent = vi.fn();
 const mockGetGmailAuthUrl = vi.fn();
 const mockGetCalendarPlaceSuggestions = vi.fn();
 const mockGetCalendarPlaceDetails = vi.fn();
+const mockDeleteTodoistTask = vi.fn();
 
 vi.mock("@/api", () => ({
   getCalendarSources: (...args) => mockGetCalendarSources(...args),
@@ -20,6 +21,7 @@ vi.mock("@/api", () => ({
   getGmailAuthUrl: (...args) => mockGetGmailAuthUrl(...args),
   getCalendarPlaceSuggestions: (...args) => mockGetCalendarPlaceSuggestions(...args),
   getCalendarPlaceDetails: (...args) => mockGetCalendarPlaceDetails(...args),
+  deleteTodoistTask: (...args) => mockDeleteTodoistTask(...args),
 }));
 
 afterEach(() => {

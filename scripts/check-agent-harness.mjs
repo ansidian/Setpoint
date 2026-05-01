@@ -8,16 +8,19 @@ const componentSizeBaseline = {
   // Calendar floating editor migration keeps existing rail/mobile fallbacks while moving desktop
   // create/edit orchestration into the floating shell. These remain explicit refactor debt.
   files: {
-    // Events agenda rail adds narrow orchestration callbacks here; the agenda
-    // model and rail UI stay extracted under views/events.
-    'src/components/calendar/CalendarModal.jsx': 1378,
+    // Bills/deadlines agenda rail port adds shared agenda selection and
+    // floating-detail routing here; further modal decomposition is still debt.
+    'src/components/calendar/CalendarModal.jsx': 1394,
     'src/components/calendar/CalendarRailStates.jsx': 982,
     'src/components/calendar/ScheduleSection.jsx': 807,
     'src/components/calendar/events/CalendarEventEditorRail.jsx': 803,
     'src/components/calendar/modal/CalendarCellItemStack.jsx': 636,
-    'src/components/calendar/modal/CalendarGrid.jsx': 1501,
-    'src/components/calendar/modal/CalendarModalShell.jsx': 714,
-    'src/components/calendar/views/events/EventsAgendaRail.jsx': 632,
+    // Grid emits agenda scroll commands for all desktop agenda views and keeps
+    // month-wheel state stable through remounts.
+    'src/components/calendar/modal/CalendarGrid.jsx': 1547,
+    // Shell now selects desktop agenda rails for events, bills, and deadlines
+    // while retaining stacked detail fallback paths.
+    'src/components/calendar/modal/CalendarModalShell.jsx': 751,
     'src/components/calendar/views/deadlines/DeadlinesDetailRail.jsx': 762,
     'src/components/dashboard/rails/Rails.jsx': 988,
     'src/components/email/EmailSection.jsx': 641,

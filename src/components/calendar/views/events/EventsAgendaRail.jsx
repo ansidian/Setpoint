@@ -1,7 +1,8 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useMemo, useRef, useState } from "react";
 import { ChevronDown, Video } from "lucide-react";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links.js";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
+import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
 import { AgendaSkeleton, WeatherHeader } from "./EventsAgendaRailParts.jsx";
 import { colorWithAlpha, contrastText } from "./eventsAgendaColor.js";
 import { buildEventsAgendaGroups } from "./eventsAgendaModel.js";
@@ -312,13 +313,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   onEventAction,
 }, ref) {
   const todayKey = ymdFromParts(currentYear, currentMonth, todayDate);
-  const scrollerRef = useRef(null);
-  const headerRefs = useRef(new Map());
-  const rowRefs = useRef(new Map());
   const dragEventRef = useRef(null);
-  const suppressPassiveUntilRef = useRef(0);
-  const scrollRafRef = useRef(0);
-  const handledScrollCommandIdRef = useRef(null);
   const [expandedDays, setExpandedDays] = useState(() => new Set());
   const agenda = useMemo(() => buildEventsAgendaGroups({
     events,
@@ -329,137 +324,11 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
     forceVisibleDateKey: selectedDateKey,
   }), [events, selectedDateKey, todayKey, viewMonth, viewYear, weatherData]);
 
-  const registerHeader = (dateKey, node) => {
-    if (node) headerRefs.current.set(dateKey, node);
-    else headerRefs.current.delete(dateKey);
-  };
-  const registerRow = (key, node) => {
-    if (node) rowRefs.current.set(key, node);
-    else rowRefs.current.delete(key);
-  };
-
   const dirtyBlocked = () => {
     if (!floatingEditorDirty) return false;
     onDirtyBlocked?.();
     return true;
   };
-
-  const scrollElementIntoView = (element, { block = "start", offsetTop = 0 } = {}) => {
-    if (!element || !scrollerRef.current) return false;
-    const scroller = scrollerRef.current;
-    suppressPassiveUntilRef.current = performance.now() + 420;
-    const scrollerRect = scroller.getBoundingClientRect();
-    const rect = element.getBoundingClientRect();
-    const upperEdge = scrollerRect.top + offsetTop;
-    const lowerEdge = scrollerRect.bottom - 10;
-    let nextScrollTop = scroller.scrollTop + rect.top - scrollerRect.top - offsetTop;
-    if (block === "nearest") {
-      if (rect.top >= upperEdge && rect.bottom <= lowerEdge) {
-        window.setTimeout(() => {
-          suppressPassiveUntilRef.current = 0;
-        }, 80);
-        return true;
-      }
-      nextScrollTop = rect.top < upperEdge
-        ? scroller.scrollTop + rect.top - upperEdge
-        : scroller.scrollTop + rect.bottom - lowerEdge;
-    }
-    nextScrollTop = Math.max(0, nextScrollTop);
-    const distance = Math.abs(nextScrollTop - scroller.scrollTop);
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    const behavior = reduceMotion || distance > scrollerRect.height * 1.7 ? "auto" : "smooth";
-    if (typeof scroller.scrollTo === "function") {
-      scroller.scrollTo({ top: nextScrollTop, behavior });
-    } else {
-      scroller.scrollTop = nextScrollTop;
-    }
-    window.setTimeout(() => {
-      suppressPassiveUntilRef.current = 0;
-    }, behavior === "smooth" ? 430 : 80);
-    return true;
-  };
-
-  useImperativeHandle(ref, () => ({
-    scrollToDate(dateKey) {
-      return scrollElementIntoView(headerRefs.current.get(dateKey), { block: "start" });
-    },
-    scrollToEvent(itemId, dateKey) {
-      const keyPrefix = `${itemId}-${dateKey}`;
-      const row = [...rowRefs.current.entries()].find(([key]) => key.startsWith(keyPrefix))?.[1];
-      return scrollElementIntoView(row || headerRefs.current.get(dateKey), {
-        block: row ? "nearest" : "start",
-        offsetTop: row ? EVENT_SCROLL_TOP_OFFSET : 0,
-      });
-    },
-    scrollToToday() {
-      return scrollElementIntoView(headerRefs.current.get(todayKey), { block: "start" });
-    },
-    scrollToFirst() {
-      return scrollElementIntoView(headerRefs.current.get(agenda.firstVisibleDateKey), { block: "start" });
-    },
-  }), [agenda.firstVisibleDateKey, todayKey]);
-
-  useEffect(() => {
-    if (!scrollCommand || isLoading) return undefined;
-    if (scrollCommand.id && handledScrollCommandIdRef.current === scrollCommand.id) return undefined;
-    const id = window.requestAnimationFrame(() => {
-      let handled = false;
-      if (scrollCommand.type === "today") {
-        handled = scrollElementIntoView(headerRefs.current.get(todayKey), { block: "start" });
-      } else if (scrollCommand.type === "date") {
-        handled = scrollElementIntoView(headerRefs.current.get(scrollCommand.dateKey), { block: "start" });
-      } else if (scrollCommand.type === "event") {
-        const keyPrefix = `${scrollCommand.itemId}-${scrollCommand.dateKey}`;
-        const row = [...rowRefs.current.entries()].find(([key]) => key.startsWith(keyPrefix))?.[1];
-        handled = scrollElementIntoView(row || headerRefs.current.get(scrollCommand.dateKey), {
-          block: row ? "nearest" : "start",
-          offsetTop: row ? EVENT_SCROLL_TOP_OFFSET : 0,
-        });
-      }
-      if (handled && scrollCommand.id) {
-        handledScrollCommandIdRef.current = scrollCommand.id;
-      }
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [agenda, isLoading, scrollCommand, todayKey]);
-
-  useEffect(() => {
-    if (isLoading) return undefined;
-    const targetDate = selectedDateKey || (todayKey.startsWith(`${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`) ? todayKey : agenda.firstVisibleDateKey);
-    const id = window.requestAnimationFrame(() => {
-      scrollElementIntoView(headerRefs.current.get(targetDate) || headerRefs.current.get(agenda.firstVisibleDateKey), { block: "start" });
-      if (targetDate && targetDate !== selectedDateKey) {
-        onPassiveDateChange?.(targetDate);
-      }
-    });
-    return () => window.cancelAnimationFrame(id);
-    // Entry scroll is keyed to the visible month, not every selection update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, viewMonth, viewYear]);
-
-  function handleScroll() {
-    if (isLoading || scrollRafRef.current) return;
-    scrollRafRef.current = window.requestAnimationFrame(() => {
-      scrollRafRef.current = 0;
-      if (performance.now() < suppressPassiveUntilRef.current) return;
-      const scroller = scrollerRef.current;
-      if (!scroller) return;
-      const top = scroller.getBoundingClientRect().top + 4;
-      let active = null;
-      for (const group of agenda.visibleGroups) {
-        const header = headerRefs.current.get(group.dateKey);
-        if (!header) continue;
-        if (header.getBoundingClientRect().top <= top + 4) active = group.dateKey;
-      }
-      active ||= agenda.visibleGroups[0]?.dateKey || null;
-      if (!active || active === selectedDateKey) return;
-      if (floatingEditorDirty) {
-        onDirtyBlocked?.();
-        return;
-      }
-      onPassiveDateChange?.(active);
-    });
-  }
 
   function handleDateAction(dateKey) {
     if (dirtyBlocked()) return;
@@ -482,74 +351,56 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   }
 
   return (
-    <div
-      ref={scrollerRef}
-      data-testid="events-agenda-rail"
-      data-calendar-local-scroll="true"
-      onScroll={handleScroll}
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        overscrollBehavior: "contain",
-        padding: "0 10px 10px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        background: "#1f1f24",
-        isolation: "isolate",
-      }}
-    >
-      <style>
-        {`
-          [data-testid="events-agenda-rail"] button:focus-visible {
-            outline: 2px solid color-mix(in srgb, var(--ea-accent, #cba6da) 72%, transparent);
-            outline-offset: 2px;
-          }
-          @media (prefers-reduced-motion: reduce) {
-            [data-testid="events-agenda-rail"] button {
-              transition: none !important;
-              transform: none !important;
-            }
-          }
-        `}
-      </style>
-      {agenda.visibleGroups.map((group) => {
+    <AgendaRailShell
+      ref={ref}
+      testId="events-agenda-rail"
+      groups={agenda.visibleGroups}
+      firstVisibleDateKey={agenda.firstVisibleDateKey}
+      todayKey={todayKey}
+      selectedDateKey={selectedDateKey}
+      scrollCommand={scrollCommand}
+      isLoading={isLoading}
+      floatingEditorDirty={floatingEditorDirty}
+      itemScrollTopOffset={EVENT_SCROLL_TOP_OFFSET}
+      onPassiveDateChange={onPassiveDateChange}
+      onDirtyBlocked={onDirtyBlocked}
+      skeleton={<AgendaSkeleton />}
+      showSkeleton={isLoading && !agenda.visibleGroups.some((group) => group.hasEvents)}
+      getSectionProps={(group) => ({
+        onDragEnter: () => eventQuickActions?.enterDropTarget?.(group.dateKey),
+        onDragOver: (event) => {
+          if (!eventQuickActions?.draggingEventId) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        },
+        onDragLeave: () => eventQuickActions?.leaveDropTarget?.(group.dateKey),
+        onDrop: (dropEvent) => {
+          if (!eventQuickActions?.draggingEventId) return;
+          dropEvent.preventDefault();
+          eventQuickActions.dropEvent?.({
+            event: dragEventRef.current,
+            targetDate: group.dateKey,
+            anchorRect: dropEvent.currentTarget.getBoundingClientRect(),
+          });
+        },
+      })}
+      renderHeader={({ group, registerHeader }) => (
+        <AgendaHeader
+          group={group}
+          todayKey={todayKey}
+          registerHeader={registerHeader}
+          onActivate={handleDateAction}
+          dropActive={eventQuickActions?.dropTargetDate === group.dateKey}
+          quickActions={eventQuickActions}
+        />
+      )}
+      renderGroup={({ group, registerRow }) => {
         const expanded = expandedDays.has(group.dateKey);
         const visibleAllDay = expanded ? group.allDay : group.allDay.slice(0, 2);
         const hiddenAllDayCount = group.allDay.length - visibleAllDay.length;
-        const dropActive = eventQuickActions?.dropTargetDate === group.dateKey;
         const showNoEvents = !group.hasEvents && (group.isFallback || selectedDateKey === group.dateKey);
         return (
-          <section
-            key={group.dateKey}
-            data-date-key={group.dateKey}
-            onDragEnter={() => eventQuickActions?.enterDropTarget?.(group.dateKey)}
-            onDragOver={(event) => {
-              if (!eventQuickActions?.draggingEventId) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-            }}
-            onDragLeave={() => eventQuickActions?.leaveDropTarget?.(group.dateKey)}
-            onDrop={(dropEvent) => {
-              if (!eventQuickActions?.draggingEventId) return;
-              dropEvent.preventDefault();
-              eventQuickActions.dropEvent?.({
-                event: dragEventRef.current,
-                targetDate: group.dateKey,
-                anchorRect: dropEvent.currentTarget.getBoundingClientRect(),
-              });
-            }}
-            style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, paddingBottom: 14 }}
-          >
-            <AgendaHeader
-              group={group}
-              todayKey={todayKey}
-              registerHeader={registerHeader}
-              onActivate={handleDateAction}
-              dropActive={dropActive}
-              quickActions={eventQuickActions}
-            />
+          <>
             {group.allDay.length ? (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, minWidth: 0 }}>
                 {visibleAllDay.map((event) => (
@@ -635,10 +486,10 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
                 <div style={{ fontWeight: 650, color: "rgba(205,214,244,0.82)" }}>No Events</div>
               </div>
             ) : null}
-          </section>
+          </>
         );
-      })}
-    </div>
+      }}
+    />
   );
 });
 
