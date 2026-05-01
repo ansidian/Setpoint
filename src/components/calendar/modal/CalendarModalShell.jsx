@@ -7,6 +7,7 @@ import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
+import EventsAgendaRail from "../views/events/EventsAgendaRail.jsx";
 
 function buildContextContent({
   layout,
@@ -149,6 +150,7 @@ export default function CalendarModalShell({
   onViewChange,
   HeaderExtras,
   viewData,
+  weatherData,
   computed,
   suppressOutsideClick,
   eventEditor,
@@ -174,6 +176,14 @@ export default function CalendarModalShell({
   setSelectedDateKey,
   setSelectedItemId,
   eventQuickActions,
+  agendaRailRef,
+  agendaScrollCommand,
+  onAgendaPassiveDateChange,
+  onAgendaDateAction,
+  onAgendaEventAction,
+  onAgendaDirtyBlocked,
+  onGridDateAction,
+  onGridEventAction,
   showDetail,
   showEmptySelection,
   effectiveSelectedItemId,
@@ -216,7 +226,10 @@ export default function CalendarModalShell({
     ? { ...eventEditor, isEditorOpen: false, mode: "detail" }
     : eventEditor;
   const railDeadlineEditor = floatingEditorOpen && view === "deadlines" ? null : deadlineEditor;
-  const workspaceMode = view === "events" && railEventEditor.isEditorOpen
+  const useEventsAgendaRail = view === "events" && !layout.stacked;
+  const workspaceMode = useEventsAgendaRail
+    ? "agenda"
+    : view === "events" && railEventEditor.isEditorOpen
     ? "editor"
     : view === "deadlines" && railDeadlineEditor?.mode
       ? "editor"
@@ -232,7 +245,9 @@ export default function CalendarModalShell({
     onFloatingEditorDirtyChange?.(!!eventEditor.isDirty);
   }, [eventEditor.isDirty, floatingDetail?.view, floatingEditorOpen, onFloatingEditorDirtyChange]);
 
-  const contentKey = view === "events" && railEventEditor.isEditorOpen
+  const contentKey = useEventsAgendaRail
+    ? `agenda-${viewYear}-${viewMonth}`
+    : view === "events" && railEventEditor.isEditorOpen
     ? `editor-${eventEditor.isEditing ? eventEditor.editingEvent?.id || "edit" : "new"}`
     : view === "deadlines" && railDeadlineEditor?.mode
       ? `deadline-editor-${deadlineEditor.mode}-${deadlineEditor.taskId || deadlineEditor.seedDate || "new"}`
@@ -269,7 +284,28 @@ export default function CalendarModalShell({
     }
   };
 
-  const contextContent = buildContextContent({
+  const contextContent = useEventsAgendaRail ? (
+    <EventsAgendaRail
+      ref={agendaRailRef}
+      viewYear={viewYear}
+      viewMonth={viewMonth}
+      events={viewData?.events || []}
+      weatherData={weatherData}
+      isLoading={!!viewData?.isLoading}
+      selectedDateKey={selectedDateKey}
+      selectedItemId={effectiveSelectedItemId}
+      scrollCommand={agendaScrollCommand}
+      currentYear={currentYear}
+      currentMonth={currentMonth}
+      todayDate={todayDate}
+      eventQuickActions={eventQuickActions}
+      floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+      onDirtyBlocked={onAgendaDirtyBlocked}
+      onPassiveDateChange={onAgendaPassiveDateChange}
+      onDateAction={onAgendaDateAction}
+      onEventAction={onAgendaEventAction}
+    />
+  ) : buildContextContent({
     layout,
     view,
     activeView,
@@ -612,6 +648,8 @@ export default function CalendarModalShell({
                   floatingDetailParked={!!floatingDetail?.parked}
                   floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
                   onShakeFloatingEditor={onShakeFloatingEditor}
+                  onDirectDateAction={onGridDateAction}
+                  onDirectItemAction={onGridEventAction}
                 />
                 {view === "events" ? (
                   <CalendarQuickActionLayer quickActions={eventQuickActions} />

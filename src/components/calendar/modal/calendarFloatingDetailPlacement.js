@@ -79,6 +79,7 @@ export function resolveFloatingDetailPlacement({
   panelHeight,
   mode = "detail",
   parked = false,
+  preferredSide = null,
 }) {
   const bounds = normalizedBounds(calendarRect);
   const isEditor = mode === "edit" || mode === "create";
@@ -156,13 +157,17 @@ export function resolveFloatingDetailPlacement({
     && !exclusions.some((rect) => rectIntersects(panelRect(rightCandidate), rect));
   const leftClear = leftCandidate.left + width <= referenceRect.left - PANEL_GAP + 1
     && !exclusions.some((rect) => rectIntersects(panelRect(leftCandidate), rect));
-  const selected = rightClear
-    ? rightCandidate
-    : leftClear
-      ? leftCandidate
-      : candidateScore(rightCandidate, exclusions) <= candidateScore(leftCandidate, exclusions)
+  const selected = preferredSide === "left" && leftClear
+    ? leftCandidate
+    : preferredSide === "right" && rightClear
+      ? rightCandidate
+      : rightClear
         ? rightCandidate
-        : leftCandidate;
+        : leftClear
+          ? leftCandidate
+          : candidateScore(rightCandidate, exclusions) <= candidateScore(leftCandidate, exclusions)
+            ? rightCandidate
+            : leftCandidate;
 
   return {
     top: selected.top,

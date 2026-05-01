@@ -1,7 +1,7 @@
 import {
   Mail, Apple, Briefcase, School, GraduationCap, Home, DollarSign, ShoppingCart,
   Bell, Gamepad2, Music, Smartphone, Monitor, Wrench, Star, Rocket,
-  Sun, Moon, Cloud, CloudRain, CloudLightning, CloudFog, CloudSun, CloudSnow,
+  Sun, Moon, Cloud, CloudMoon, CloudRain, CloudLightning, CloudFog, CloudSun, CloudSnow,
   Snowflake, Wind, Tornado,
   Lightbulb, Calendar, Clock, ClipboardList, CreditCard, AlertTriangle, Lock,
   Film, Plane, Target, PartyPopper, Pin, Link as LinkIcon, BarChart3, Sparkles,
@@ -13,7 +13,7 @@ import {
 export const ICON_BY_NAME = {
   Mail, Apple, Briefcase, School, GraduationCap, Home, DollarSign, ShoppingCart,
   Bell, Gamepad2, Music, Smartphone, Monitor, Wrench, Star, Rocket,
-  Sun, Moon, Cloud, CloudRain, CloudLightning, CloudFog, CloudSun, CloudSnow,
+  Sun, Moon, Cloud, CloudMoon, CloudRain, CloudLightning, CloudFog, CloudSun, CloudSnow,
   Snowflake, Wind, Tornado,
   Lightbulb, Calendar, Clock, ClipboardList, CreditCard, AlertTriangle, Lock,
   Film, Plane, Target, PartyPopper, Pin, Link: LinkIcon, BarChart3, Sparkles,
@@ -93,7 +93,7 @@ export const WEATHER_ICON_NAMES = {
   "fog": "CloudFog",
   "cloudy": "Cloud",
   "partly-cloudy-day": "CloudSun",
-  "partly-cloudy-night": "Cloud",
+  "partly-cloudy-night": "CloudMoon",
   "hail": "CloudSnow",
   "thunderstorm": "CloudLightning",
   "tornado": "Tornado",

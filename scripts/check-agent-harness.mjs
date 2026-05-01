@@ -8,18 +8,21 @@ const componentSizeBaseline = {
   // Calendar floating editor migration keeps existing rail/mobile fallbacks while moving desktop
   // create/edit orchestration into the floating shell. These remain explicit refactor debt.
   files: {
-    'src/components/calendar/CalendarModal.jsx': 1270,
+    // Events agenda rail adds narrow orchestration callbacks here; the agenda
+    // model and rail UI stay extracted under views/events.
+    'src/components/calendar/CalendarModal.jsx': 1378,
     'src/components/calendar/CalendarRailStates.jsx': 982,
     'src/components/calendar/ScheduleSection.jsx': 807,
     'src/components/calendar/events/CalendarEventEditorRail.jsx': 803,
     'src/components/calendar/modal/CalendarCellItemStack.jsx': 636,
-    'src/components/calendar/modal/CalendarGrid.jsx': 1497,
-    'src/components/calendar/modal/CalendarModalShell.jsx': 675,
+    'src/components/calendar/modal/CalendarGrid.jsx': 1501,
+    'src/components/calendar/modal/CalendarModalShell.jsx': 714,
+    'src/components/calendar/views/events/EventsAgendaRail.jsx': 632,
     'src/components/calendar/views/deadlines/DeadlinesDetailRail.jsx': 762,
     'src/components/dashboard/rails/Rails.jsx': 988,
     'src/components/email/EmailSection.jsx': 641,
     'src/components/shell/ShellHeaderChrome.jsx': 656,
-    'src/pages/Dashboard.jsx': 1032,
+    'src/pages/Dashboard.jsx': 1033,
   },
 }
 

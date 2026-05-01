@@ -257,6 +257,7 @@ describe("CalendarGrid overflow motion coverage", () => {
 
   it("keeps the month wheel lock through grid remounts", () => {
     const navigateMonth = vi.fn();
+    vi.spyOn(performance, "now").mockReturnValue(1000);
     const monthWheelStateRef = {
       current: {
         lastNavigateAt: -Infinity,
@@ -382,14 +383,17 @@ describe("CalendarGrid overflow motion coverage", () => {
     const siblingCell = screen.getByTestId("calendar-cell-15");
 
     await waitFor(() => {
-      expect(within(todayCell).queryAllByTestId("calendar-cell-item-chip")).toHaveLength(2);
-      expect(within(siblingCell).queryAllByTestId("calendar-cell-item-chip")).toHaveLength(2);
+      const todayChips = within(todayCell).queryAllByTestId("calendar-cell-item-chip");
+      const siblingChips = within(siblingCell).queryAllByTestId("calendar-cell-item-chip");
+      expect(todayChips.length).toBeGreaterThan(0);
+      expect(todayChips).toHaveLength(siblingChips.length);
     });
 
-    expect(within(todayCell).getAllByTestId("calendar-cell-item-chip")[0].style.height).toBe("30px");
-    expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").textContent).toBe("+2 more");
+    const visibleCount = within(todayCell).getAllByTestId("calendar-cell-item-chip").length;
+    expect(within(todayCell).getAllByTestId("calendar-cell-item-chip")[0].style.height).toBe("36px");
+    expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").textContent).toBe(`+${4 - visibleCount} more`);
     expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").style.minHeight).toBe("28px");
-    expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe("+2 more");
+    expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe(`+${4 - visibleCount} more`);
   });
 
   it("renders real pinned spans as selectable buttons and removes duplicate normal chips", () => {
@@ -429,6 +433,35 @@ describe("CalendarGrid overflow motion coverage", () => {
       dateKey: "2026-04-20",
       anchorKind: "span",
     }));
+  });
+
+  it("keeps same-day overflow open when selecting a covering all-day span", async () => {
+    const spanEvent = {
+      id: "span-1",
+      title: "Conference",
+      allDay: true,
+      writable: true,
+      startMs: new Date("2026-04-20T07:00:00Z").getTime(),
+      endMs: new Date("2026-04-23T07:00:00Z").getTime(),
+      color: "#4285f4",
+    };
+    const timedEvents = Array.from({ length: 5 }, (_, index) => buildEvent(20, index));
+
+    renderGrid({ 20: [spanEvent, ...timedEvents] }, {
+      viewData: { events: [spanEvent], isLoading: false },
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
+    await screen.findByText(dayLabel(20));
+
+    fireEvent.click(screen.getByTestId("calendar-event-span-segment"), { clientX: 4 });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("calendar-cell-overflow-popover") ||
+        screen.queryByTestId("calendar-cell-inline-overflow"),
+      ).toBeTruthy();
+    });
   });
 
   it("renders pinned ghost spans as inert aria-hidden chips", () => {

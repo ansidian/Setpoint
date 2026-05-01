@@ -103,6 +103,7 @@ export default function useCalendarQuickActions({
   removeEvent,
   refreshRange,
   onSelectEvent,
+  onEventDeleted,
 }) {
   const [draggingEventId, setDraggingEventId] = useState(null);
   const [dropTargetDate, setDropTargetDate] = useState(null);
@@ -150,6 +151,7 @@ export default function useCalendarQuickActions({
       if (event.isRecurring && bounds) {
         await refreshRange?.(bounds.start, bounds.end);
       }
+      onEventDeleted?.(eventSelectionId(event), event);
       setStatus({ tone: "success", message: "Event deleted." });
       window.setTimeout(() => setStatus(null), 1800);
     } catch (err) {
@@ -157,7 +159,7 @@ export default function useCalendarQuickActions({
       setStatus({ tone: "error", message: err.message || "Failed to delete event." });
       throw err;
     }
-  }, [refreshRange, removeEvent, upsertEvents]);
+  }, [onEventDeleted, refreshRange, removeEvent, upsertEvents]);
 
   const beginDrag = useCallback((event) => {
     if (!dragEnabled || !event?.writable) return false;

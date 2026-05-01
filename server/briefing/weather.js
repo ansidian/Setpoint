@@ -12,7 +12,7 @@ const ICON_MAP = {
   "fog": "CloudFog",
   "cloudy": "Cloud",
   "partly-cloudy-day": "CloudSun",
-  "partly-cloudy-night": "Cloud",
+  "partly-cloudy-night": "CloudMoon",
   "hail": "CloudSnow",
   "thunderstorm": "CloudLightning",
   "tornado": "Tornado",
@@ -29,6 +29,71 @@ function formatHour(unixTime, timezone) {
   if (h < 12) return `${h}a`;
   if (h === 12) return "12p";
   return `${h - 12}p`;
+}
+
+function dateKeyForUnixTime(unixTime, timezone = "America/Los_Angeles") {
+  if (!Number.isFinite(unixTime)) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(unixTime * 1000));
+}
+
+export function normalizeWeatherPayload(data) {
+  const current = data?.currently;
+  if (!current) throw new Error("Pirate Weather response missing current conditions");
+
+  const timezone = data.timezone || "America/Los_Angeles";
+  const today = data.daily?.data?.[0];
+  const dailyForecast = (data.daily?.data || [])
+    .map((day) => {
+      const dateKey = dateKeyForUnixTime(day.time, timezone);
+      if (!dateKey) return null;
+      const high = Number.isFinite(day.temperatureHigh) ? Math.round(day.temperatureHigh) : null;
+      const low = Number.isFinite(day.temperatureLow) ? Math.round(day.temperatureLow) : null;
+      return {
+        dateKey,
+        high,
+        low,
+        icon: getIcon(day.icon),
+        summary: day.summary || "",
+      };
+    })
+    .filter(Boolean);
+
+  // Build hourly, every 2 hours starting from the next future hour.
+  const nowUnix = current.time;
+  const hourly = [];
+  const hours = data.hourly?.data || [];
+  const startIdx = hours.findIndex((h) => h.time > nowUnix);
+  for (let i = startIdx; i >= 0 && i < hours.length && hourly.length < 8; i += 2) {
+    const h = hours[i];
+    hourly.push({
+      time: formatHour(h.time, timezone),
+      temp: Math.round(h.temperature),
+      icon: getIcon(h.icon),
+    });
+  }
+
+  const high = today && Number.isFinite(today.temperatureHigh)
+    ? Math.round(today.temperatureHigh)
+    : Math.round(current.temperature);
+  const low = today && Number.isFinite(today.temperatureLow)
+    ? Math.round(today.temperatureLow)
+    : Math.round(current.temperature);
+
+  return {
+    temp: Math.round(current.temperature),
+    high,
+    low,
+    icon: getIcon(current.icon),
+    timezone,
+    summary: `${current.summary || ""}. High of ${high}°F, low of ${low}°F.`,
+    hourly,
+    dailyForecast,
+  };
 }
 
 // Cache weather for 30 minutes
@@ -56,31 +121,7 @@ export async function fetchWeather(lat, lng) {
   }
 
   const data = await res.json();
-  const current = data.currently;
-  const today = data.daily?.data?.[0];
-  const timezone = data.timezone;
-
-  // Build hourly — every 2 hours starting from the next future hour
-  const nowUnix = current.time;
-  const hourly = [];
-  const hours = data.hourly?.data || [];
-  const startIdx = hours.findIndex((h) => h.time > nowUnix);
-  for (let i = startIdx; i >= 0 && i < hours.length && hourly.length < 8; i += 2) {
-    const h = hours[i];
-    hourly.push({
-      time: formatHour(h.time, timezone),
-      temp: Math.round(h.temperature),
-      icon: getIcon(h.icon),
-    });
-  }
-
-  const result = {
-    temp: Math.round(current.temperature),
-    high: today ? Math.round(today.temperatureHigh) : Math.round(current.temperature),
-    low: today ? Math.round(today.temperatureLow) : Math.round(current.temperature),
-    summary: `${current.summary || ""}. High of ${today ? Math.round(today.temperatureHigh) : Math.round(current.temperature)}°F, low of ${today ? Math.round(today.temperatureLow) : Math.round(current.temperature)}°F.`,
-    hourly,
-  };
+  const result = normalizeWeatherPayload(data);
 
   weatherCache = { data: result, ts: Date.now(), key: cacheKey };
   return result;

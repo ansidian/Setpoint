@@ -697,6 +697,7 @@ export function RedesignShell({
             focusDate={calendarFocus}
             focusItemId={calendarFocusItemId}
             eventsData={eventsData}
+            weatherData={liveData.liveWeather || briefing?.weather || null}
             billsData={{
               schedules: liveData.allSchedules,
               recentTransactions: liveData.recentTransactions,
