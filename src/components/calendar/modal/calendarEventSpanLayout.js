@@ -209,6 +209,7 @@ export function spanSegmentDisplay(segment) {
   return {
     title: eventTitle(segment?.item),
     leadingLabel: itemLeadingLabel(segment),
+    recurring: !!segment?.item?.isRecurring || !!segment?.item?.recurring,
     color: segment?.item?.color || segment?.item?.sourceColor || "#89b4fa",
   };
 }

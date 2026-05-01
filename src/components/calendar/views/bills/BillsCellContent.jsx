@@ -4,14 +4,14 @@ import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-util
 import { getDayState, relativeDateLabel } from "./billsModel.js";
 
 const LG_BILL_CHIP_METRICS = {
-  itemHeight: 30,
+  itemHeight: 36,
   moreHeight: 28,
   gap: 4,
   fallback: 2,
 };
 
 const MD_BILL_CHIP_METRICS = {
-  itemHeight: 28,
+  itemHeight: 36,
   moreHeight: 26,
   gap: 4,
   fallback: 2,

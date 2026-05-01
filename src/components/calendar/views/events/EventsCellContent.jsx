@@ -6,14 +6,14 @@ import { formatTime12FromTime24 } from "../../ghostPreview.js";
 import { isPinnedCalendarGhost } from "../../modal/calendarEventSpanLayout.js";
 
 const LG_EVENT_CHIP_METRICS = {
-  itemHeight: 30,
+  itemHeight: 36,
   moreHeight: 28,
   gap: 4,
   fallback: 2,
 };
 
 const MD_EVENT_CHIP_METRICS = {
-  itemHeight: 28,
+  itemHeight: 36,
   moreHeight: 26,
   gap: 4,
   fallback: 2,
@@ -91,6 +91,7 @@ function toEventGhostDescriptor(ghost) {
     ghostEnd: ghost.endDate,
     title: sanitizeEventDisplayTitle(ghost.title),
     leadingLabel: ghost.allDay ? "All day" : formatTime12FromTime24(ghost.startTime),
+    recurring: !!ghost.recurring,
     accent,
     leadingColor: ghost.allDay ? "rgba(205,214,244,0.7)" : accent,
     allDay: !!ghost.allDay,

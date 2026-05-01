@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useState, useRef } from "react";
+import { Repeat } from "lucide-react";
 import { getVisibleCellItemCount } from "./calendarCellItemMetrics.js";
 
 function chipStyle({
@@ -12,20 +13,25 @@ function chipStyle({
   const ghost = !!item.isGhost;
   const isPast = pastTone === "items";
   const quiet = item.complete || item.quiet;
+  const hasMetadata = !!(item.leadingLabel || item.recurring);
   const itemHeight = metrics?.itemHeight ?? 24;
   const isLarge = itemHeight >= 28;
   const isMedium = itemHeight >= 26;
-  const horizontalPadding = isLarge ? 11 : isMedium ? 10 : 9;
-  const leadingPadding = isLarge ? 10 : isMedium ? 9 : 8;
+  const horizontalPadding = itemHeight >= 36 ? 10 : isLarge ? 9 : isMedium ? 8 : 7;
+  const verticalPadding = hasMetadata ? (itemHeight >= 36 ? 4 : itemHeight >= 32 ? 3 : 2) : 0;
   const radius = isLarge ? 10 : isMedium ? 9 : 8;
 
   return {
-    display: "grid",
-    gridTemplateColumns: item.leadingLabel ? "auto minmax(0, 1fr)" : "minmax(0, 1fr)",
-    alignItems: "center",
-    gap: 7,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "center",
+    gap: hasMetadata ? 1 : 0,
     minWidth: 0,
-    padding: item.leadingLabel ? `0 ${horizontalPadding}px 0 ${leadingPadding}px` : `0 ${horizontalPadding}px`,
+    boxSizing: "border-box",
+    padding: hasMetadata
+      ? `${verticalPadding}px ${horizontalPadding}px`
+      : `0 ${horizontalPadding}px`,
     height: itemHeight,
     borderRadius: radius,
     border: ghost
@@ -54,11 +60,102 @@ function chipStyle({
     pointerEvents: ghost ? "none" : "auto",
     opacity: isPast ? (selected ? 0.92 : 0.82) : quiet ? 0.88 : 1,
     transition: "background 140ms, border-color 140ms, opacity 140ms, box-shadow 140ms, color 140ms",
-    textDecoration: item.complete ? "line-through" : "none",
-    textDecorationColor: "rgba(205,214,244,0.24)",
     fontFamily: "inherit",
     textAlign: "left",
   };
+}
+
+function metadataFontSize(metrics) {
+  const itemHeight = metrics?.itemHeight ?? 24;
+  if (itemHeight >= 36) return 10;
+  if (itemHeight >= 32) return 9.5;
+  if (itemHeight >= 28) return 9.25;
+  return 9;
+}
+
+function titleFontSize(metrics) {
+  const itemHeight = metrics?.itemHeight ?? 24;
+  if (itemHeight >= 36) return 11.75;
+  if (itemHeight >= 32) return 10.75;
+  if (itemHeight >= 28) return 10.5;
+  if (itemHeight >= 26) return 10.25;
+  return 10;
+}
+
+function metadataColor(item, selected) {
+  if (selected) return item.leadingColor || item.accent || "var(--ea-accent)";
+  return item.leadingColor || "rgba(205,214,244,0.62)";
+}
+
+function ChipMetadata({ item, selected, metrics }) {
+  if (!item.leadingLabel && !item.recurring) return null;
+  const color = metadataColor(item, selected);
+
+  return (
+    <span
+      data-calendar-chip-meta="true"
+      style={{
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: (metrics?.itemHeight ?? 24) >= 36 ? 5 : 4,
+        overflow: "hidden",
+        fontSize: metadataFontSize(metrics),
+        fontWeight: 700,
+        letterSpacing: 0.15,
+        lineHeight: 1.05,
+        color,
+        whiteSpace: "nowrap",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {item.leadingLabel ? (
+        <span
+          style={{
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {item.leadingLabel}
+        </span>
+      ) : null}
+      {item.recurring ? (
+        <Repeat
+          data-calendar-chip-recurring="true"
+          aria-hidden="true"
+          size={(metrics?.itemHeight ?? 24) >= 36 ? 10 : 9}
+          strokeWidth={2.4}
+          style={{
+            flexShrink: 0,
+            color,
+            opacity: selected ? 0.86 : 0.7,
+          }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+function ChipTitle({ item, selected, metrics }) {
+  return (
+    <span
+      data-calendar-chip-title="true"
+      style={{
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        fontSize: titleFontSize(metrics),
+        fontWeight: selected ? 600 : 500,
+        lineHeight: 1.1,
+        textDecoration: item.complete ? "line-through" : "none",
+        textDecorationColor: "rgba(205,214,244,0.28)",
+      }}
+    >
+      {item.title}
+    </span>
+  );
 }
 
 function splitVisibleItems(items, visibleCount) {
@@ -100,6 +197,22 @@ function stackHeight({ visibleCount, hasOverflow, metrics }) {
     + ((childCount - 1) * gap);
 }
 
+function reservedLaneHeight(count, metrics) {
+  if (count <= 0) return 0;
+  const itemHeight = metrics?.spanLaneHeight ?? metrics?.itemHeight ?? 28;
+  const gap = metrics?.spanLaneGap ?? metrics?.gap ?? 4;
+  return (count * itemHeight) + ((count - 1) * gap);
+}
+
+function isClippingAncestor(node) {
+  if (!(node instanceof HTMLElement)) return false;
+  const style = window.getComputedStyle(node);
+  return ["overflow", "overflowY"].some((property) => {
+    const value = style[property];
+    return value && value !== "visible";
+  });
+}
+
 function measuredVisibleCount(items, availableHeight, metrics) {
   const itemCount = items.length;
   if (itemCount <= 0) return 0;
@@ -127,13 +240,17 @@ function measuredVisibleCount(items, availableHeight, metrics) {
 
 function nearestMeasuredHeight(node) {
   let current = node?.parentElement || null;
+  let fallback = 0;
   while (current) {
     const height = current.clientHeight;
-    if (height > 0) return height;
-    if (current.getAttribute?.("data-testid")?.startsWith("calendar-cell-")) return 0;
+    if (height > 0) {
+      if (isClippingAncestor(current)) return height;
+      if (!fallback) fallback = height;
+    }
+    if (current.getAttribute?.("data-testid")?.startsWith("calendar-cell-")) return fallback;
     current = current.parentElement;
   }
-  return 0;
+  return fallback;
 }
 
 function MoreButton({
@@ -234,34 +351,8 @@ function ItemChip({
           metrics,
         })}
       >
-        {item.leadingLabel ? (
-          <span
-            style={{
-              flexShrink: 0,
-              fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
-              fontWeight: 700,
-              letterSpacing: 0.2,
-              color: item.leadingColor || item.accent || "var(--ea-accent)",
-              whiteSpace: "nowrap",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {item.leadingLabel}
-          </span>
-        ) : null}
-        <span
-          style={{
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
-            fontWeight: 500,
-            lineHeight: 1.2,
-          }}
-        >
-          {item.title}
-        </span>
+        <ChipMetadata item={item} selected={false} metrics={metrics} />
+        <ChipTitle item={item} selected={false} metrics={metrics} />
       </div>
     );
   }
@@ -321,36 +412,8 @@ function ItemChip({
         metrics,
       })}
     >
-      {item.leadingLabel ? (
-        <span
-          style={{
-            flexShrink: 0,
-            fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 10.5 : (metrics?.itemHeight ?? 24) >= 26 ? 10 : 9.5,
-            fontWeight: 700,
-            letterSpacing: 0.2,
-            color: selected
-              ? item.leadingColor || item.accent || "var(--ea-accent)"
-              : item.leadingColor || "rgba(205,214,244,0.62)",
-            whiteSpace: "nowrap",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {item.leadingLabel}
-        </span>
-      ) : null}
-      <span
-        style={{
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontSize: (metrics?.itemHeight ?? 24) >= 28 ? 11.5 : (metrics?.itemHeight ?? 24) >= 26 ? 11 : 10.5,
-          fontWeight: selected ? 600 : 500,
-          lineHeight: 1.2,
-        }}
-      >
-        {item.title}
-      </span>
+      <ChipMetadata item={item} selected={selected} metrics={metrics} />
+      <ChipTitle item={item} selected={selected} metrics={metrics} />
     </button>
   );
 }
@@ -370,6 +433,7 @@ export default function CalendarCellItemStack({
   overflowAnchorKey,
   inlineOverflowOpen = false,
   inlineOverflowVisibleCount = null,
+  inlineOverflowExternal = false,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onBeforeItemAction,
@@ -379,8 +443,7 @@ export default function CalendarCellItemStack({
   const [moreActive, setMoreActive] = useState(false);
   const stackRef = useRef(null);
   const inlineOverflowRef = useRef(null);
-  const reservedHeight = Math.max(0, reservedLaneCount)
-    * ((metrics?.spanLaneHeight ?? metrics?.itemHeight ?? 28) + (metrics?.spanLaneGap ?? metrics?.gap ?? 4));
+  const reservedHeight = reservedLaneHeight(Math.max(0, reservedLaneCount), metrics);
   const measuredMetrics = useMemo(() => ({
     ...metrics,
     reservedHeight,
@@ -455,6 +518,7 @@ export default function CalendarCellItemStack({
     <div
       ref={stackRef}
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         gap: metrics?.gap ?? 4,
@@ -484,7 +548,7 @@ export default function CalendarCellItemStack({
         );
       })}
 
-      {hiddenCount > 0 && inlineOverflowOpen ? (
+      {hiddenCount > 0 && inlineOverflowOpen && inlineOverflowExternal ? null : hiddenCount > 0 && inlineOverflowOpen ? (
         <div
           ref={inlineOverflowRef}
           data-testid="calendar-cell-inline-overflow"
@@ -495,6 +559,9 @@ export default function CalendarCellItemStack({
           }}
           onKeyDown={(event) => event.stopPropagation()}
           style={{
+            position: "relative",
+            zIndex: 3,
+            isolation: "isolate",
             display: "flex",
             flexDirection: "column",
             gap: metrics?.gap ?? 4,

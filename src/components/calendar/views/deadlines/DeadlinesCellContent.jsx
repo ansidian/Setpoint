@@ -4,14 +4,14 @@ import { minutesFromDisplayTime } from "../../ghostPreview.js";
 import { getDayState, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
 
 const LG_DEADLINE_CHIP_METRICS = {
-  itemHeight: 30,
+  itemHeight: 36,
   moreHeight: 28,
   gap: 4,
   fallback: 2,
 };
 
 const MD_DEADLINE_CHIP_METRICS = {
-  itemHeight: 28,
+  itemHeight: 36,
   moreHeight: 26,
   gap: 4,
   fallback: 2,
@@ -37,6 +37,7 @@ function toDeadlineDescriptor(task) {
     title: task.title || task.name || "Untitled",
     detail: [task.class_name || task.project_name, statusLabel(task.status)].filter(Boolean).join(" · "),
     leadingLabel: timeLabel,
+    recurring: source === "todoist" && !!task.is_recurring,
     accent,
     leadingColor: accent,
     complete: task.status === "complete",
@@ -57,6 +58,7 @@ function toDeadlineGhostDescriptor(ghost) {
     ghostEnd: ghost.endDate,
     title: ghost.title || "Untitled",
     leadingLabel: ghost.dueTime || sourceLabelFor({ source }),
+    recurring: source === "todoist" && !!(ghost.recurring || ghost.is_recurring),
     accent,
     leadingColor: accent,
     sortMinutes: Number.isFinite(ghost.dueMinutes) ? ghost.dueMinutes : Number.POSITIVE_INFINITY,
