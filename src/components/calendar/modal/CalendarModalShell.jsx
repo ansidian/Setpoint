@@ -193,6 +193,12 @@ export default function CalendarModalShell({
   suppressFocusRing = false,
 }) {
   const railRef = useRef(null);
+  const monthWheelStateRef = useRef({
+    lastNavigateAt: -Infinity,
+    ignoreUntil: -Infinity,
+    lastWheelAt: -Infinity,
+    lastWheelDelta: 0,
+  });
   const workspaceMode = view === "events" && eventEditor.isEditorOpen
     ? "editor"
     : view === "deadlines" && deadlineEditor?.mode
@@ -492,6 +498,7 @@ export default function CalendarModalShell({
                   setDeadlineEditor={setDeadlineEditor}
                   canGoPrev={canGoPrev}
                   navigateMonth={navigateMonth}
+                  monthWheelStateRef={monthWheelStateRef}
                   monthMotionDirection={monthMotionDirection}
                   ghostPreview={ghostPreview}
                   onOpenFloatingDetail={onOpenFloatingDetail}
