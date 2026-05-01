@@ -85,7 +85,7 @@ function isSameViewDate(a, b) {
 
 function isFloatingDetailTriggerTarget(target) {
   return target instanceof HTMLElement
-    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment']");
+    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip']");
 }
 
 function floatingDetailTypeLabel(view) {
@@ -145,6 +145,7 @@ export default function CalendarModal({
   eventsData,
   billsData,
   deadlinesData,
+  weatherData,
   focusDate,
   focusItemId,
   openRequestId = 0,
@@ -173,9 +174,12 @@ export default function CalendarModal({
   const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
+  const [agendaScrollCommand, setAgendaScrollCommand] = useState(null);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const floatingDetailRef = useRef(null);
+  const agendaRailRef = useRef(null);
+  const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const navigateMonthRef = useRef(null);
   const resizeRafRef = useRef(0);
   const [prevOpen, setPrevOpen] = useState(open);
@@ -384,6 +388,13 @@ export default function CalendarModal({
   }, [open, view, eventEditor.editable, prefetchEventSources]);
 
   const closeEventEditor = eventEditor.closeEditor;
+  function suppressAgendaPassiveSync(durationMs = 900) {
+    agendaPassiveSyncSuppressedUntilRef.current = Math.max(
+      agendaPassiveSyncSuppressedUntilRef.current,
+      performance.now() + durationMs,
+    );
+  }
+
   const eventQuickActions = useCalendarQuickActions({
     editable: !!eventsData?.editable,
     layout: getCalendarLayoutMetrics(viewportWidth),
@@ -397,10 +408,23 @@ export default function CalendarModal({
         setSelectedDay(parsed.day);
       }
       setSelectedItemId(itemId != null ? String(itemId) : null);
+      window.requestAnimationFrame(() => {
+        agendaRailRef.current?.scrollToEvent?.(itemId, dateKey);
+      });
+    },
+    onEventDeleted: (itemId) => {
+      const current = floatingDetailRef.current;
+      if (itemId != null && current?.open && current.view === "events" && String(current.itemId) === String(itemId)) {
+        setFloatingDetail(null);
+      }
+      if (itemId != null && String(selectedItemId) === String(itemId)) {
+        setSelectedItemId(null);
+      }
     },
   });
 
   function openFloatingEventCreate(seedDate = null) {
+    suppressAgendaPassiveSync();
     const dateKey = seedDate || activeSelectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay });
     const parsed = parseYmd(dateKey);
     if (parsed) {
@@ -423,6 +447,7 @@ export default function CalendarModal({
 
   function openFloatingEventEdit(item, options = {}) {
     if (!item?.writable) return;
+    suppressAgendaPassiveSync();
     const itemId = activeView.getItemId ? activeView.getItemId(item) : item.id;
     const dateKey = options.dateKey || pacificDateKeyFromMs(item.startMs) || activeSelectedDateKey;
     const fallbackCell = findDateCell(dateKey);
@@ -619,6 +644,8 @@ export default function CalendarModal({
     const anchorElement = suppliedAnchor || inferredDayCell;
     const parked = !!nextDetail.parked || !anchorElement;
     if (mode === "detail" && (!nextDetail.itemId || !anchorElement)) return;
+    const preferredSide = nextDetail.preferredSide
+      || (String(nextDetail.anchorKind || "").startsWith("agenda") ? "left" : null);
     const initialPlacement = resolveFloatingDetailPlacement({
       anchorRect: elementRect(anchorElement),
       sourceRect: elementRect(nextDetail.sourceCellElement || inferredDayCell),
@@ -627,6 +654,7 @@ export default function CalendarModal({
       panelHeight: mode === "detail" ? 300 : 560,
       mode,
       parked,
+      preferredSide,
     });
     setFloatingDetail((current) => {
       const nextItemId = nextDetail.itemId != null ? String(nextDetail.itemId) : null;
@@ -652,6 +680,7 @@ export default function CalendarModal({
         sourceCellElement: nextDetail.sourceCellElement || inferredDayCell || null,
         exclusionElement: nextDetail.exclusionElement || null,
         anchorKind: parked ? "parked" : nextDetail.anchorKind || (inferredDayCell ? "day-cell" : "chip"),
+        preferredSide,
         parked,
         userDragged: false,
         initialPlacement,
@@ -756,6 +785,75 @@ export default function CalendarModal({
     setSelectedItemId(task?.id != null ? String(task.id) : null);
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
+  }
+
+  function selectAgendaDate(dateKey, { passive = false } = {}) {
+    if (passive && performance.now() < agendaPassiveSyncSuppressedUntilRef.current) return;
+    const parsed = parseYmd(dateKey);
+    if (!parsed) return;
+    const current = floatingDetailRef.current;
+    if (current?.open && (current.mode === "edit" || current.mode === "create")) {
+      if (current.dirty) {
+        shakeFloatingEditor();
+        return;
+      }
+      if (current.view === "events") eventEditor.closeEditor?.();
+      if (current.view === "deadlines") {
+        setDeadlineEditor(null);
+        setDeadlineDraftPreview(null);
+      }
+    } else if (!passive) {
+      closeEventEditor();
+    }
+    setFloatingDetail(null);
+    setSelectedDay(parsed.day);
+    setSelectedDateKey(dateKey);
+    setSelectedItemId(null);
+    if (view === "deadlines") setDeadlineEditor(null);
+  }
+
+  function selectAgendaEvent({ event, dateKey, anchorElement, sourceCellElement, anchorKind }) {
+    if (!event) return;
+    suppressAgendaPassiveSync();
+    const parsed = parseYmd(dateKey);
+    if (!parsed) return;
+    const current = floatingDetailRef.current;
+    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
+      shakeFloatingEditor();
+      return;
+    }
+    closeEventEditor();
+    setSelectedDay(parsed.day);
+    setSelectedDateKey(dateKey);
+    const itemId = activeView.getItemId ? activeView.getItemId(event) : event.id;
+    setSelectedItemId(itemId != null ? String(itemId) : null);
+    openFloatingDetail({
+      mode: "detail",
+      view: "events",
+      itemId,
+      dateKey,
+      day: parsed.day,
+      anchorElement,
+      sourceCellElement,
+      anchorKind: anchorKind || "agenda-row",
+      itemsSnapshot: [event],
+    });
+  }
+
+  function requestAgendaScroll(command) {
+    if (!command || view !== "events") return;
+    setAgendaScrollCommand({
+      ...command,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    });
+  }
+
+  function scrollAgendaToDate(dateKey) {
+    requestAgendaScroll({ type: "date", dateKey });
+  }
+
+  function scrollAgendaToEvent(itemId, dateKey) {
+    requestAgendaScroll({ type: "event", itemId, dateKey });
   }
 
   const commitSyncSnapshot = useEffectEvent((snapshot) => {
@@ -1026,6 +1124,7 @@ export default function CalendarModal({
           setViewDate({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
           setSelectedDateKey(ymdFromParts(currentYear, currentMonth, todayDate));
+          requestAgendaScroll({ type: "today" });
           consumeCalendarKey();
           break;
         case "e":
@@ -1213,6 +1312,7 @@ export default function CalendarModal({
       onViewChange={handleViewChange}
       HeaderExtras={activeView.HeaderExtras}
       viewData={viewData}
+      weatherData={weatherData}
       computed={computed}
       suppressOutsideClick={suppressOutsideClick}
       eventEditor={eventEditor}
@@ -1238,6 +1338,14 @@ export default function CalendarModal({
       setSelectedDateKey={setSelectedDateKey}
       setSelectedItemId={setSelectedItemId}
       eventQuickActions={eventQuickActions}
+      agendaRailRef={agendaRailRef}
+      agendaScrollCommand={agendaScrollCommand}
+      onAgendaPassiveDateChange={(dateKey) => selectAgendaDate(dateKey, { passive: true })}
+      onAgendaDateAction={(dateKey) => selectAgendaDate(dateKey)}
+      onAgendaEventAction={selectAgendaEvent}
+      onAgendaDirtyBlocked={shakeFloatingEditor}
+      onGridDateAction={scrollAgendaToDate}
+      onGridEventAction={scrollAgendaToEvent}
       showDetail={showDetail}
       showEmptySelection={showEmptySelection}
       effectiveSelectedItemId={effectiveSelectedItemId}

@@ -726,7 +726,7 @@ describe("calendar detail timeline", () => {
 
     expect(screen.getByText("Open early")).toBeTruthy();
     expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByText("Complete early").closest("button")?.style.textDecoration).toContain("line-through");
+    expect(screen.getByText("Complete early").style.textDecoration).toContain("line-through");
   });
 
   it("keeps completed-only deadline month cells visually quiet", () => {
@@ -741,7 +741,7 @@ describe("calendar detail timeline", () => {
     );
 
     expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByText("Complete early").closest("button")?.style.textDecoration).toContain("line-through");
+    expect(screen.getByText("Complete early").style.textDecoration).toContain("line-through");
   });
 
   it("shows unpaid bills first and hides paid bills behind a collapsed section", () => {

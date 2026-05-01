@@ -57,9 +57,17 @@ function getLatestRailContent() {
   return railContent[railContent.length - 1];
 }
 
+function getCurrentMonthGridRows() {
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return Math.ceil((firstDay + daysInMonth) / 7);
+}
+
 describe("CalendarModal responsive layout", () => {
   it("fills the viewport as a workspace and only stacks at the narrow fallback", async () => {
     window.innerWidth = 1900;
+    const expectedRows = getCurrentMonthGridRows();
 
     render(wrapWithDashboard(
       <CalendarModal
@@ -84,7 +92,7 @@ describe("CalendarModal responsive layout", () => {
     expect(body.style.gridTemplateColumns).toContain("320px");
     expect(rail.style.position).toBe("sticky");
     expect(workspaceColumn?.style.gridTemplateRows).toBe("minmax(0, 1fr)");
-    expect(monthGrid.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
+    expect(monthGrid.style.gridTemplateRows).toBe(`repeat(${expectedRows}, minmax(0, 1fr))`);
     expect(body.lastElementChild).toBe(rail);
 
     await act(async () => {
@@ -146,6 +154,7 @@ describe("CalendarModal responsive layout", () => {
 
   it("shows skeleton loaders while the events month is loading", () => {
     window.innerWidth = 1900;
+    const expectedRows = getCurrentMonthGridRows();
 
     render(wrapWithDashboard(
       <CalendarModal
@@ -165,8 +174,8 @@ describe("CalendarModal responsive layout", () => {
     const monthGrid = screen.getByTestId("calendar-grid-month");
     const skeleton = screen.getByTestId("calendar-grid-skeleton");
 
-    expect(monthGrid.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
-    expect(skeleton.style.gridTemplateRows).toBe("repeat(5, minmax(0, 1fr))");
+    expect(monthGrid.style.gridTemplateRows).toBe(`repeat(${expectedRows}, minmax(0, 1fr))`);
+    expect(skeleton.style.gridTemplateRows).toBe(`repeat(${expectedRows}, minmax(0, 1fr))`);
     expect(skeleton).toBeTruthy();
     expect(screen.getByTestId("calendar-events-rail-skeleton")).toBeTruthy();
   });
@@ -262,7 +271,7 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
-  it("keeps the selected event when clicking its selected day cell again", () => {
+  it("keeps the selected event when clicking its selected day cell again", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -292,12 +301,12 @@ describe("CalendarModal responsive layout", () => {
 
     const dayCell = screen.getByTestId("calendar-cell-20");
     fireEvent.click(within(dayCell).getByTestId("calendar-cell-item-chip"));
-    expect(within(getLatestRailContent()).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
+    expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
 
     fireEvent.click(dayCell);
 
-    expect(within(getLatestRailContent()).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
+    expect(within(screen.getByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
   });
 
   it("opens a floating selected-event detail from chips and reuses the shell for another chip", async () => {
@@ -572,7 +581,7 @@ describe("CalendarModal responsive layout", () => {
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
     });
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
   });
 
   it("dims past event days more than future days without dimming today", () => {
@@ -908,15 +917,14 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(await screen.findByText("Monday, April 20")).toBeTruthy();
-    const emptyRail = screen.getByTestId("calendar-selected-empty-rail");
-    expect(emptyRail).toBeTruthy();
-    expect(within(emptyRail).getByText("Open day")).toBeTruthy();
-    expect(within(emptyRail).getByText(/nothing is scheduled here/i)).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+    expect(await screen.findByTestId("calendar-cell-date-header-2026-04-20")).toBeTruthy();
+    const agendaRail = screen.getByTestId("events-agenda-rail");
+    expect(agendaRail).toBeTruthy();
+    expect(within(agendaRail).getByText("No Events")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
-    expect(screen.getByRole("button", { name: /create on apr 20/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /create on apr 20/i })).toBeNull();
   });
 
   it("keeps today's empty selection when clicking the selected day again", async () => {
@@ -953,19 +961,20 @@ describe("CalendarModal responsive layout", () => {
         await Promise.resolve();
       });
 
-      expect(screen.getByText("Monday, April 20")).toBeTruthy();
+      expect(screen.getByTestId("calendar-cell-date-header-2026-04-20")).toBeTruthy();
 
       const todayCell = screen.getByTestId("calendar-cell-20");
       expect(within(todayCell).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
 
-      const emptyRailFrame = screen.getByTestId("calendar-selected-empty-rail-frame");
-      expect(emptyRailFrame.style.overflow).toBe("hidden");
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+      const agendaRail = screen.getByTestId("events-agenda-rail");
+      expect(agendaRail.style.overflowY).toBe("auto");
+      expect(within(agendaRail).getByText("No Events")).toBeTruthy();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
 
       fireEvent.click(todayCell);
 
       expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     } finally {
       vi.useRealTimers();
     }
@@ -986,8 +995,8 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("summary");
-    expect(screen.getByTestId("calendar-overview-rail-frame").style.overflow).toBe("hidden");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(screen.getByTestId("events-agenda-rail").style.overflowY).toBe("auto");
   });
 
   it.each([
@@ -1068,6 +1077,15 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
+    if (view === "events") {
+      const agendaRail = await screen.findByTestId("events-agenda-rail");
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+      expect(within(agendaRail).getAllByText(expectedText).length).toBeGreaterThan(0);
+      expect(agendaRail.getAttribute("data-calendar-local-scroll")).toBe("true");
+      expect(agendaRail.style.overflowY).toBe("auto");
+      return;
+    }
+
     const detailRail = await screen.findByTestId("timeline-detail-rail");
     const detailSections = await screen.findByTestId("timeline-detail-sections");
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
@@ -1129,20 +1147,93 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    const detailSections = await screen.findByTestId("timeline-detail-sections");
+    const agendaRail = await screen.findByTestId("events-agenda-rail");
     const initialRailContent = getLatestRailContent();
-    const rows = within(detailSections).getAllByTestId("timeline-detail-row");
+    const rows = within(agendaRail).getAllByTestId("calendar-agenda-event-row");
 
-    detailSections.scrollTop = 180;
+    agendaRail.scrollTop = 180;
     fireEvent.click(rows[3]);
 
     await waitFor(() => {
       expect(within(screen.getByTestId("calendar-modal-rail")).getAllByText("Late workshop").length).toBeGreaterThan(0);
       expect(getLatestRailContent()).toBe(initialRailContent);
-      expect(detailSections.scrollTop).toBe(180);
+      expect(agendaRail.scrollTop).toBe(180);
     });
   });
 
+
+  it("selects the grid date header without scrolling the agenda rail", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-22"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Work",
+              startMs: new Date("2026-04-22T11:15:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T15:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#cba6da",
+              writable: true,
+            },
+            {
+              id: "event-2",
+              title: "Poster deadline",
+              startMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#f9e2af",
+            },
+            {
+              id: "event-3",
+              title: "Assignment block",
+              startMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T20:30:00.000Z").getTime(),
+              allDay: false,
+              color: "#f38ba8",
+            },
+            {
+              id: "event-4",
+              title: "Late workshop",
+              startMs: new Date("2026-04-22T23:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-23T00:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#89b4fa",
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    const initialRailContent = getLatestRailContent();
+    const rows = within(agendaRail).getAllByTestId("calendar-agenda-event-row");
+
+    fireEvent.click(rows[3]);
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel")).toBeTruthy();
+      expect(within(screen.getByTestId("calendar-modal-rail")).getAllByText("Late workshop").length).toBeGreaterThan(0);
+    });
+
+    agendaRail.scrollTop = 180;
+    fireEvent.click(screen.getByTestId("calendar-cell-date-header-2026-04-22"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+      expect(screen.getByTestId("calendar-cell-22").getAttribute("aria-selected")).toBe("true");
+      expect(getLatestRailContent()).toBe(initialRailContent);
+      expect(agendaRail.scrollTop).toBe(180);
+    });
+  });
   it("updates between empty-day selections without remounting the empty rail", async () => {
     window.innerWidth = 1900;
 
@@ -1170,14 +1261,17 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(await screen.findByText("Monday, April 20")).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    const initialRailContent = getLatestRailContent();
+    expect(within(agendaRail).getByText("No Events")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
 
     fireEvent.click(screen.getByTestId("calendar-cell-22"));
 
     await waitFor(() => {
-      expect(screen.getByText("Wednesday, April 22")).toBeTruthy();
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
+      expect(screen.getByTestId("calendar-cell-date-header-2026-04-22")).toBeTruthy();
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+      expect(getLatestRailContent()).toBe(initialRailContent);
       expect(screen.getAllByTestId("calendar-rail-content")).toHaveLength(1);
     });
   });
@@ -1283,7 +1377,8 @@ describe("CalendarModal responsive layout", () => {
 
       fireEvent.keyDown(document, { key: "t" });
 
-      expect(screen.getByText("Monday, April 20")).toBeTruthy();
+      expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+      expect(screen.getByTestId("calendar-cell-date-header-2026-04-20")).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }

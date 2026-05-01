@@ -67,6 +67,14 @@ function sameOverflowDate(overflow, dateKey, day) {
   return overflow.day === day;
 }
 
+function spanCoversOverflowDate(overflow, segment) {
+  if (!overflow || !segment) return false;
+  if (overflow.dateKey && segment.segmentStart && segment.segmentEnd) {
+    return segment.segmentStart <= overflow.dateKey && overflow.dateKey <= segment.segmentEnd;
+  }
+  return false;
+}
+
 function getModalScrollContainer(element) {
   const panel = element?.closest?.("[data-testid='calendar-modal-panel']");
   const body = panel?.querySelector?.("[data-testid='calendar-modal-body']");
@@ -91,6 +99,13 @@ function isCalendarFloatingDetailTarget(target) {
 function isCalendarInlineOverflowTarget(target) {
   return target instanceof HTMLElement
     && !!target.closest("[data-calendar-inline-overflow-layer='true']");
+}
+
+function isCalendarEventSpanTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest(
+      "[data-testid='calendar-event-span-segment'], [data-testid='calendar-event-span-overlay']",
+    );
 }
 
 function canUseInlineOverflow({ triggerElement, hiddenStackHeight, layout }) {
@@ -408,6 +423,7 @@ function CalendarCell({
   overflowOpen = false,
   overflowMode = null,
   onSelectDay,
+  onSelectDateHeader,
   onSelectItem,
   onOpenOverflow,
   renderCellContents,
@@ -647,7 +663,18 @@ function CalendarCell({
           flexShrink: 0,
         }}
       >
-        <span
+        <button
+          type="button"
+          data-testid={`calendar-cell-date-header-${dateKey || day}`}
+          data-calendar-focus-ring="true"
+          aria-label={`Select ${dateKey ? formatCellDateKey(dateKey) : formatCellDate(viewYear, viewMonth, day)}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectDateHeader?.();
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -655,21 +682,25 @@ function CalendarCell({
             minWidth: isToday ? 24 : undefined,
             height: isToday ? 24 : undefined,
             padding: isToday ? "0 8px" : 0,
+            margin: 0,
             borderRadius: 999,
             fontSize: 12.5,
             lineHeight: 1,
             color: dateColor,
             fontWeight: dateWeight,
             fontVariantNumeric: "tabular-nums",
+            appearance: "none",
             background: dateBadgeBg,
             border: dateBadgeBorder,
             boxShadow: dateBadgeShadow,
+            fontFamily: "inherit",
+            cursor: "pointer",
             transition:
               "background 150ms, border-color 150ms, box-shadow 150ms",
           }}
         >
           {dateLabel || day}
-        </span>
+        </button>
       </div>
       <div
         style={{
@@ -787,6 +818,8 @@ export default function CalendarGrid({
   floatingDetailParked = false,
   floatingEditorDirty = false,
   onShakeFloatingEditor,
+  onDirectDateAction,
+  onDirectItemAction,
 }) {
   const gridShellRef = useRef(null);
   const gridBodyRef = useRef(null);
@@ -915,7 +948,12 @@ export default function CalendarGrid({
     ignoreOverflowScrollUntilRef.current = performance.now() + 220;
   }, []);
 
-  function handleSelectDay(day, isSelected, dateKey = null) {
+  function handleSelectDay(
+    day,
+    isSelected,
+    dateKey = null,
+    { clearItemSelection = false, directDateAction = true } = {},
+  ) {
     if (floatingEditorDirty) {
       onShakeFloatingEditor?.();
       return;
@@ -926,7 +964,7 @@ export default function CalendarGrid({
       day,
     );
     if (!isOverflowSourceDay) setOverflowState(null);
-    if (isSelected) return;
+    if (isSelected && (!clearItemSelection || selectedItemId == null)) return;
 
     closeEventEditor();
     onCloseFloatingDetail?.();
@@ -937,6 +975,7 @@ export default function CalendarGrid({
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(null);
+    if (directDateAction && view === "events" && dateKey) onDirectDateAction?.(dateKey);
   }
 
   function handleSelectItem(
@@ -958,7 +997,9 @@ export default function CalendarGrid({
     setSelectedItemId(itemId != null ? String(itemId) : null);
     if (keepOverflowOpen) {
       markOverflowInteraction();
-    } else {
+    }
+    if (view === "events" && dateKey) onDirectItemAction?.(itemId, dateKey);
+    if (!keepOverflowOpen) {
       setOverflowState(null);
     }
     if (!layout.stacked && anchorMeta?.triggerElement) {
@@ -991,6 +1032,9 @@ export default function CalendarGrid({
         ) || null
       : null;
     handleSelectItem(nextDay, getEventSelectionId(segment.item), nextDateKey, {
+      keepOverflowOpen:
+        sameOverflowDate(resolvedOverflow, nextDateKey, nextDay) ||
+        spanCoversOverflowDate(resolvedOverflow, segment),
       anchorMeta: {
         triggerElement,
         sourceCellElement,
@@ -1019,6 +1063,7 @@ export default function CalendarGrid({
       if (resolvedOverflow.sourceCellElement?.contains(event.target)) return;
       if (resolvedOverflow.triggerElement?.contains(event.target)) return;
       if (isCalendarInlineOverflowTarget(event.target)) return;
+      if (isCalendarEventSpanTarget(event.target)) return;
       if (isCalendarFloatingDetailTarget(event.target)) return;
       if (isCalendarRailTarget(event.target)) return;
       if (
@@ -1089,6 +1134,7 @@ export default function CalendarGrid({
         resolvedOverflow.sourceCellElement?.contains(target) ||
         resolvedOverflow.triggerElement?.contains(target) ||
         isCalendarInlineOverflowTarget(target) ||
+        isCalendarEventSpanTarget(target) ||
         isCalendarRailTarget(target),
     );
     return () => suppressOutsideClick(null);
@@ -1326,6 +1372,12 @@ export default function CalendarGrid({
                 overflowMode={overflowOpen ? resolvedOverflow?.mode : null}
                 onSelectDay={() =>
                   handleSelectDay(day, isSelected, cell.dateKey)
+                }
+                onSelectDateHeader={() =>
+                  handleSelectDay(day, isSelected, cell.dateKey, {
+                    clearItemSelection: true,
+                    directDateAction: false,
+                  })
                 }
                 onSelectItem={(itemId, anchorMeta) =>
                   handleSelectItem(day, itemId, cell.dateKey, {

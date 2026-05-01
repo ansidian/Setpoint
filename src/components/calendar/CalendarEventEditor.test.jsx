@@ -87,9 +87,21 @@ function renderModal({
   return { ...utils, refreshRange, upsertEvents, removeEvent };
 }
 
-function getLatestRailContent() {
-  const railContent = screen.getAllByTestId("calendar-rail-content");
-  return railContent[railContent.length - 1];
+async function openFloatingEventEditorFromSelectedChip() {
+  fireEvent.click(screen.getAllByTestId("calendar-cell-item-chip")[0]);
+  const panel = await screen.findByTestId("calendar-floating-detail-panel");
+  fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+  return screen.findByTestId("calendar-event-editor-rail");
+}
+
+function getActiveEventSourceTrigger() {
+  return screen.getAllByTestId("calendar-event-source-trigger")
+    .find((element) => !element.disabled);
+}
+
+function getActiveEventSaveButton() {
+  return screen.getAllByTestId("calendar-event-save")
+    .find((element) => !element.disabled);
 }
 
 function createDataTransfer() {
@@ -156,10 +168,10 @@ describe("Calendar event editor rail", () => {
     };
     const { refreshRange, removeEvent } = renderModal({ events: [event] });
 
-    fireEvent.click((await screen.findAllByTestId("timeline-detail-row"))[0]);
+    fireEvent.click((await screen.findAllByTestId("calendar-agenda-event-row"))[0]);
     expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
 
-    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
+    fireEvent.click(within(await screen.findByTestId("calendar-floating-detail-panel")).getByRole("button", { name: /edit details/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     await waitFor(() => {
@@ -335,9 +347,7 @@ describe("Calendar event editor rail", () => {
     };
     renderModal({ events: [original, conflict] });
 
-    fireEvent.click(screen.getAllByTestId("calendar-cell-item-chip")[0]);
-    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    await openFloatingEventEditorFromSelectedChip();
     expect(screen.queryByTestId("calendar-ghost-overlay")).toBeNull();
 
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
@@ -440,7 +450,7 @@ describe("Calendar event editor rail", () => {
       expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create 2 events/i);
     });
 
-    fireEvent.click(screen.getByTestId("calendar-event-save"));
+    fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
       expect(mockCreateCalendarEventsBatch).toHaveBeenCalledWith([
@@ -510,7 +520,7 @@ describe("Calendar event editor rail", () => {
       expect(screen.getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 24, 2026/i);
     });
 
-    fireEvent.click(screen.getByTestId("calendar-event-save"));
+    fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -597,9 +607,7 @@ describe("Calendar event editor rail", () => {
       },
     });
 
-    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
-    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    await openFloatingEventEditorFromSelectedChip();
 
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
       target: { value: "Dinner on Apr 21 at 5pm" },
@@ -693,15 +701,13 @@ describe("Calendar event editor rail", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
-    fireEvent.click(within(getLatestRailContent()).getByRole("button", { name: /edit details/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    await openFloatingEventEditorFromSelectedChip();
 
-    fireEvent.click(screen.getByTestId("calendar-event-source-trigger"));
+    fireEvent.click(getActiveEventSourceTrigger());
     expect(await screen.findByRole("dialog", { name: /calendar source picker/i })).toBeTruthy();
     expect(screen.queryByText("Work")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /School/i }));
-    fireEvent.click(screen.getByTestId("calendar-event-save"));
+    fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
       expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-move", expect.objectContaining({

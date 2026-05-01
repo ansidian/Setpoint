@@ -101,6 +101,7 @@ export default function CalendarFloatingDetailPanel({
       panelHeight: measuredSize.height,
       mode,
       parked: !!detail.parked,
+      preferredSide: detail.preferredSide || null,
     });
   }, [calendarPanelRef, detail, measuredSize.height, mode, onPark, railRef]);
 
