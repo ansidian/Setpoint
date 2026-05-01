@@ -3,10 +3,13 @@ import { createPortal } from "react-dom";
 import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "../CalendarRailStates.jsx";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
+import DeadlineQuickActionLayer from "../views/deadlines/DeadlineQuickActionLayer.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
+import BillsAgendaRail from "../views/bills/BillsAgendaRail.jsx";
+import DeadlinesAgendaRail from "../views/deadlines/DeadlinesAgendaRail.jsx";
 import EventsAgendaRail from "../views/events/EventsAgendaRail.jsx";
 
 function buildContextContent({
@@ -176,6 +179,7 @@ export default function CalendarModalShell({
   setSelectedDateKey,
   setSelectedItemId,
   eventQuickActions,
+  deadlineQuickActions,
   agendaRailRef,
   agendaScrollCommand,
   onAgendaPassiveDateChange,
@@ -226,8 +230,8 @@ export default function CalendarModalShell({
     ? { ...eventEditor, isEditorOpen: false, mode: "detail" }
     : eventEditor;
   const railDeadlineEditor = floatingEditorOpen && view === "deadlines" ? null : deadlineEditor;
-  const useEventsAgendaRail = view === "events" && !layout.stacked;
-  const workspaceMode = useEventsAgendaRail
+  const useAgendaRail = !layout.stacked && (view === "events" || view === "bills" || view === "deadlines");
+  const workspaceMode = useAgendaRail
     ? "agenda"
     : view === "events" && railEventEditor.isEditorOpen
     ? "editor"
@@ -245,7 +249,7 @@ export default function CalendarModalShell({
     onFloatingEditorDirtyChange?.(!!eventEditor.isDirty);
   }, [eventEditor.isDirty, floatingDetail?.view, floatingEditorOpen, onFloatingEditorDirtyChange]);
 
-  const contentKey = useEventsAgendaRail
+  const contentKey = useAgendaRail
     ? `agenda-${viewYear}-${viewMonth}`
     : view === "events" && railEventEditor.isEditorOpen
     ? `editor-${eventEditor.isEditing ? eventEditor.editingEvent?.id || "edit" : "new"}`
@@ -284,27 +288,64 @@ export default function CalendarModalShell({
     }
   };
 
-  const contextContent = useEventsAgendaRail ? (
-    <EventsAgendaRail
-      ref={agendaRailRef}
-      viewYear={viewYear}
-      viewMonth={viewMonth}
-      events={viewData?.events || []}
-      weatherData={weatherData}
-      isLoading={!!viewData?.isLoading}
-      selectedDateKey={selectedDateKey}
-      selectedItemId={effectiveSelectedItemId}
-      scrollCommand={agendaScrollCommand}
-      currentYear={currentYear}
-      currentMonth={currentMonth}
-      todayDate={todayDate}
-      eventQuickActions={eventQuickActions}
-      floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
-      onDirtyBlocked={onAgendaDirtyBlocked}
-      onPassiveDateChange={onAgendaPassiveDateChange}
-      onDateAction={onAgendaDateAction}
-      onEventAction={onAgendaEventAction}
-    />
+  const contextContent = useAgendaRail ? (
+    view === "events" ? (
+      <EventsAgendaRail
+        ref={agendaRailRef}
+        viewYear={viewYear}
+        viewMonth={viewMonth}
+        events={viewData?.events || []}
+        weatherData={weatherData}
+        isLoading={!!viewData?.isLoading}
+        selectedDateKey={selectedDateKey}
+        selectedItemId={effectiveSelectedItemId}
+        scrollCommand={agendaScrollCommand}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        todayDate={todayDate}
+        eventQuickActions={eventQuickActions}
+        floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+        onDirtyBlocked={onAgendaDirtyBlocked}
+        onPassiveDateChange={onAgendaPassiveDateChange}
+        onDateAction={onAgendaDateAction}
+        onEventAction={onAgendaEventAction}
+      />
+    ) : view === "bills" ? (
+      <BillsAgendaRail
+        ref={agendaRailRef}
+        viewYear={viewYear}
+        viewMonth={viewMonth}
+        computed={computed}
+        selectedDateKey={selectedDateKey}
+        selectedItemId={effectiveSelectedItemId}
+        scrollCommand={agendaScrollCommand}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        todayDate={todayDate}
+        onPassiveDateChange={onAgendaPassiveDateChange}
+        onDateAction={onAgendaDateAction}
+        onBillAction={onAgendaEventAction}
+      />
+    ) : (
+      <DeadlinesAgendaRail
+        ref={agendaRailRef}
+        viewYear={viewYear}
+        viewMonth={viewMonth}
+        computed={computed}
+        selectedDateKey={selectedDateKey}
+        selectedItemId={effectiveSelectedItemId}
+        scrollCommand={agendaScrollCommand}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        todayDate={todayDate}
+        floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+        onDirtyBlocked={onAgendaDirtyBlocked}
+        onPassiveDateChange={onAgendaPassiveDateChange}
+        onDateAction={onAgendaDateAction}
+        onDeadlineAction={onAgendaEventAction}
+        deadlineQuickActions={deadlineQuickActions}
+      />
+    )
   ) : buildContextContent({
     layout,
     view,
@@ -635,6 +676,7 @@ export default function CalendarModalShell({
                   setSelectedDateKey={setSelectedDateKey}
                   setSelectedItemId={setSelectedItemId}
                   eventQuickActions={eventQuickActions}
+                  deadlineQuickActions={deadlineQuickActions}
                   setDeadlineEditor={setDeadlineEditor}
                   canGoPrev={canGoPrev}
                   navigateMonth={navigateMonth}
@@ -653,6 +695,8 @@ export default function CalendarModalShell({
                 />
                 {view === "events" ? (
                   <CalendarQuickActionLayer quickActions={eventQuickActions} />
+                ) : view === "deadlines" ? (
+                  <DeadlineQuickActionLayer quickActions={deadlineQuickActions} />
                 ) : null}
               </div>
             </div>

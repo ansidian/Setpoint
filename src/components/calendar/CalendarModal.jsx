@@ -5,6 +5,7 @@ import eventsView from "./views/eventsView.jsx";
 import { getCalendarLayoutMetrics } from "./calendarLayout.js";
 import useCalendarEventEditor from "./events/useCalendarEventEditor.js";
 import useCalendarQuickActions from "./events/useCalendarQuickActions.js";
+import useDeadlineQuickActions from "./views/deadlines/useDeadlineQuickActions.js";
 import useCalendarGhostPreview from "./useCalendarGhostPreview.js";
 import CalendarModalShell from "./modal/CalendarModalShell.jsx";
 import { resolveFloatingDetailPlacement } from "./modal/calendarFloatingDetailPlacement.js";
@@ -85,7 +86,7 @@ function isSameViewDate(a, b) {
 
 function isFloatingDetailTriggerTarget(target) {
   return target instanceof HTMLElement
-    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip']");
+    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip'], [data-testid='calendar-agenda-bill-row'], [data-testid='calendar-agenda-deadline-row']");
 }
 
 function floatingDetailTypeLabel(view) {
@@ -149,6 +150,7 @@ export default function CalendarModal({
   focusDate,
   focusItemId,
   openRequestId = 0,
+  deadlineActions = {},
 }) {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -180,6 +182,7 @@ export default function CalendarModal({
   const floatingDetailRef = useRef(null);
   const agendaRailRef = useRef(null);
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
+  const handledInitialDeadlineCreateRef = useRef(null);
   const navigateMonthRef = useRef(null);
   const resizeRafRef = useRef(0);
   const [prevOpen, setPrevOpen] = useState(open);
@@ -420,6 +423,30 @@ export default function CalendarModal({
       if (itemId != null && String(selectedItemId) === String(itemId)) {
         setSelectedItemId(null);
       }
+    },
+  });
+
+  const deadlineQuickActions = useDeadlineQuickActions({
+    enabled: open && view === "deadlines",
+    actions: deadlineActions,
+    onEditTask: (task, options = {}) => {
+      if (activeLayout.stacked) {
+        const dateKey = options.dateKey || task.due_date || activeSelectedDateKey;
+        const parsed = parseYmd(dateKey);
+        if (parsed) {
+          setSelectedDay(parsed.day);
+          setSelectedDateKey(dateKey);
+        }
+        setSelectedItemId(String(task.id));
+        setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
+        setDeadlineDraftPreview(null);
+        setFloatingDetail(null);
+        return;
+      }
+      openFloatingDeadlineEdit(task, options);
+    },
+    onDeleted: (taskId) => {
+      handleFloatingDeadlineDeleted(taskId);
     },
   });
 
@@ -812,8 +839,9 @@ export default function CalendarModal({
     if (view === "deadlines") setDeadlineEditor(null);
   }
 
-  function selectAgendaEvent({ event, dateKey, anchorElement, sourceCellElement, anchorKind }) {
-    if (!event) return;
+  function selectAgendaEvent({ event, item, dateKey, anchorElement, sourceCellElement, anchorKind }) {
+    const selectedItem = item || event;
+    if (!selectedItem) return;
     suppressAgendaPassiveSync();
     const parsed = parseYmd(dateKey);
     if (!parsed) return;
@@ -825,23 +853,23 @@ export default function CalendarModal({
     closeEventEditor();
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);
-    const itemId = activeView.getItemId ? activeView.getItemId(event) : event.id;
+    const itemId = activeView.getItemId ? activeView.getItemId(selectedItem) : selectedItem.id;
     setSelectedItemId(itemId != null ? String(itemId) : null);
     openFloatingDetail({
       mode: "detail",
-      view: "events",
+      view,
       itemId,
       dateKey,
       day: parsed.day,
       anchorElement,
       sourceCellElement,
       anchorKind: anchorKind || "agenda-row",
-      itemsSnapshot: [event],
+      itemsSnapshot: [selectedItem],
     });
   }
 
   function requestAgendaScroll(command) {
-    if (!command || view !== "events") return;
+    if (!command) return;
     setAgendaScrollCommand({
       ...command,
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -855,6 +883,20 @@ export default function CalendarModal({
   function scrollAgendaToEvent(itemId, dateKey) {
     requestAgendaScroll({ type: "event", itemId, dateKey });
   }
+
+  useEffect(() => {
+    if (!open || view !== "deadlines" || focusItemId !== "new" || !usesFloatingEditor) return;
+    const requestKey = `${openRequestId}:${focusDate || ""}`;
+    if (handledInitialDeadlineCreateRef.current === requestKey) return;
+    handledInitialDeadlineCreateRef.current = requestKey;
+    window.requestAnimationFrame(() => {
+      if (!floatingDetailRef.current?.open) {
+        openFloatingDeadlineCreate(focusDate || activeSelectedDateKey || null);
+      }
+    });
+    // Initial create focus is keyed by the explicit open request, not every selection update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, view, focusItemId, openRequestId, focusDate, usesFloatingEditor]);
 
   const commitSyncSnapshot = useEffectEvent((snapshot) => {
     if (snapshot?.didViewChange) {
@@ -1338,6 +1380,7 @@ export default function CalendarModal({
       setSelectedDateKey={setSelectedDateKey}
       setSelectedItemId={setSelectedItemId}
       eventQuickActions={eventQuickActions}
+      deadlineQuickActions={deadlineQuickActions}
       agendaRailRef={agendaRailRef}
       agendaScrollCommand={agendaScrollCommand}
       onAgendaPassiveDateChange={(dateKey) => selectAgendaDate(dateKey, { passive: true })}

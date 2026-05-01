@@ -378,6 +378,21 @@ function ItemChip({
         });
       }}
       onContextMenu={(event) => {
+        if (quickActions?.openContextMenu?.({
+          item,
+          task: item.sourceItem,
+          x: event.clientX,
+          y: event.clientY,
+          anchorElement: event.currentTarget,
+          sourceCellElement: stackRef?.current?.closest?.("[role='gridcell']") || null,
+          dateKey,
+          anchorKind: inlineOverflowItem ? "overflow-row" : "chip",
+        })) {
+          event.preventDefault();
+          event.stopPropagation();
+          onBeforeDeleteMenu?.();
+          return;
+        }
         if (!item.sourceEvent?.writable) return;
         event.preventDefault();
         event.stopPropagation();

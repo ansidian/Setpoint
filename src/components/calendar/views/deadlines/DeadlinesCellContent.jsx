@@ -87,6 +87,7 @@ export function renderDeadlinesCellContents({
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onBeforeItemAction,
+  quickActions,
   layout,
   day,
   dateKey,
@@ -120,6 +121,7 @@ export function renderDeadlinesCellContents({
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
       onBeforeItemAction={onBeforeItemAction}
+      quickActions={quickActions}
     />
   );
 }

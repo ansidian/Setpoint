@@ -392,6 +392,22 @@ export default function CalendarCellOverflowPopover({
                     });
                   }}
                   onContextMenu={(event) => {
+                    if (quickActions?.openContextMenu?.({
+                      item,
+                      task: item.sourceItem,
+                      x: event.clientX,
+                      y: event.clientY,
+                      anchorElement: event.currentTarget,
+                      sourceCellElement: popover.sourceCellElement || null,
+                      exclusionElement: popoverRef.current,
+                      dateKey: popover.dateKey || null,
+                      anchorKind: "overflow-row",
+                    })) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onBeforeItemAction?.();
+                      return;
+                    }
                     if (!item.sourceEvent?.writable) return;
                     event.preventDefault();
                     event.stopPropagation();

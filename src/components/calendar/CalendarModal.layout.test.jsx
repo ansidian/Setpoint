@@ -746,7 +746,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByTestId("calendar-floating-detail-caret")).toBeTruthy();
   });
 
-  it("preserves a focused deadline day and item when the modal opens into deadlines", () => {
+  it("preserves a focused deadline day and item when the modal opens into deadlines", async () => {
     window.innerWidth = 1900;
 
     const { rerender } = render(wrapWithDashboard(
@@ -787,13 +787,19 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(screen.getByText("Monday, April 20")).toBeTruthy();
-    expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
+    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(within(agendaRail).getAllByText("Project due").length).toBeGreaterThan(0);
+    const row = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
+    expect(row.getAttribute("data-item-id")).toBe("deadline-1");
+
+    fireEvent.click(row);
+
+    expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
     expect(screen.getAllByRole("button", { name: /mark complete/i }).length).toBeGreaterThan(0);
-    expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Incomplete");
   });
 
-  it("falls back to a completed deadline when a day has no active items", () => {
+  it("falls back to a completed deadline when a day has no active items", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -816,10 +822,17 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(screen.getAllByText("Project due").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("timeline-detail-section-toggle-completed-deadlines")).toBeTruthy();
+    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    expect(within(agendaRail).getAllByText("Project due").length).toBeGreaterThan(0);
+    const row = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
+    expect(within(row).getByLabelText("Complete")).toBeTruthy();
+
+    fireEvent.click(row);
+
     expect(screen.queryByRole("button", { name: /mark complete/i })).toBeNull();
-    expect(screen.getByTestId("deadline-status-indicator-deadline-1").getAttribute("aria-label")).toBe("Complete");
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+    expect(within(panel).getAllByText("Complete").length).toBeGreaterThan(0);
   });
 
   it("keeps the deadlines rail in summary mode while live deadline data is still loading", () => {
@@ -843,7 +856,8 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("summary");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
   });
 
   it("does not render completed-only deadlines into the month cell preview", () => {
@@ -874,7 +888,7 @@ describe("CalendarModal responsive layout", () => {
     expect(quietChip?.getAttribute("data-item-id")).toBe("deadline-1");
   });
 
-  it("uses the event-style font treatment for the selected deadline title", () => {
+  it("uses the event-style font treatment for the selected deadline title", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -898,7 +912,10 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(screen.getByTestId("calendar-selected-deadline-title").className).not.toContain("ea-display");
+    const row = within(screen.getByTestId("deadlines-agenda-rail")).getByTestId("calendar-agenda-deadline-row");
+    fireEvent.click(row);
+
+    expect((await screen.findByTestId("calendar-selected-deadline-title")).className).not.toContain("ea-display");
   });
 
   it("allows selecting empty days and shows a date-specific empty rail", async () => {
@@ -1055,7 +1072,7 @@ describe("CalendarModal responsive layout", () => {
       },
       expectedText: "Project due",
     },
-  ])("renders a locally scrollable detail rail for $view", async ({
+  ])("renders a locally scrollable agenda rail for $view", async ({
     view,
     eventsData,
     billsData,
@@ -1077,22 +1094,16 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    if (view === "events") {
-      const agendaRail = await screen.findByTestId("events-agenda-rail");
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-      expect(within(agendaRail).getAllByText(expectedText).length).toBeGreaterThan(0);
-      expect(agendaRail.getAttribute("data-calendar-local-scroll")).toBe("true");
-      expect(agendaRail.style.overflowY).toBe("auto");
-      return;
-    }
-
-    const detailRail = await screen.findByTestId("timeline-detail-rail");
-    const detailSections = await screen.findByTestId("timeline-detail-sections");
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
-    expect(within(detailRail).getAllByText(expectedText).length).toBeGreaterThan(0);
-    expect(detailRail.style.overflow).toBe("hidden");
-    expect(detailSections.getAttribute("data-calendar-local-scroll")).toBe("true");
-    expect(detailSections.style.overflowY).toBe("auto");
+    const testId = {
+      events: "events-agenda-rail",
+      bills: "bills-agenda-rail",
+      deadlines: "deadlines-agenda-rail",
+    }[view];
+    const agendaRail = await screen.findByTestId(testId);
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(within(agendaRail).getAllByText(expectedText).length).toBeGreaterThan(0);
+    expect(agendaRail.getAttribute("data-calendar-local-scroll")).toBe("true");
+    expect(agendaRail.style.overflowY).toBe("auto");
   });
 
   it("preserves detail-list scroll position when selecting another event in the same day", async () => {
@@ -1279,22 +1290,22 @@ describe("CalendarModal responsive layout", () => {
   it.each([
     {
       view: "bills",
-      expectedTitle: "Clear billing day",
-      expectedRailCopy: /no bills land on this date/i,
+      expectedRailTestId: "bills-agenda-rail",
+      expectedEmptyText: "No Bills",
       billsData: {},
       deadlinesData: {},
     },
     {
       view: "deadlines",
-      expectedTitle: "Open deadline day",
-      expectedRailCopy: /no deadlines are due on this date/i,
+      expectedRailTestId: "deadlines-agenda-rail",
+      expectedEmptyText: "No Deadlines",
       billsData: {},
       deadlinesData: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
     },
-  ])("renders the selected-empty-day treatment for $view", async ({
+  ])("renders the selected-empty-day agenda treatment for $view", async ({
     view,
-    expectedTitle,
-    expectedRailCopy,
+    expectedRailTestId,
+    expectedEmptyText,
     billsData,
     deadlinesData,
   }) => {
@@ -1313,14 +1324,12 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(await screen.findByText("Monday, April 20")).toBeTruthy();
-    const emptyRail = screen.getByTestId("calendar-selected-empty-rail");
-    expect(within(emptyRail).getByText(expectedTitle)).toBeTruthy();
-    expect(within(emptyRail).getByText(expectedRailCopy)).toBeTruthy();
+    const agendaRail = await screen.findByTestId(expectedRailTestId);
+    expect(within(agendaRail).getByText(expectedEmptyText)).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-selected-cell-frame")).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-20")).queryByTestId("calendar-selected-empty-cell-placeholder")).toBeNull();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("empty");
-    expect(screen.getByTestId("calendar-selected-empty-rail-frame").style.overflow).toBe("hidden");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(screen.queryByTestId("calendar-selected-empty-rail")).toBeNull();
   });
 
   it("blocks modal hotkeys while typing in the editor", async () => {
@@ -1570,7 +1579,7 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
-  it("switches the selected deadline in-place when a different row is clicked", () => {
+  it("switches the selected deadline in-place when a different agenda row is clicked", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -1594,9 +1603,10 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    expect(screen.getAllByText("First task").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getAllByTestId("timeline-detail-row")[1]);
-    expect(screen.getAllByText("Second task").length).toBeGreaterThan(0);
+    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    expect(within(agendaRail).getAllByText("First task").length).toBeGreaterThan(0);
+    fireEvent.click(within(agendaRail).getAllByTestId("calendar-agenda-deadline-row")[1]);
+    expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Second task");
   });
 
   it("opens a blank floating Todoist editor from the deadlines header", async () => {
@@ -1625,7 +1635,98 @@ describe("CalendarModal responsive layout", () => {
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
+  });
+
+  it("opens floating bill detail from a bills agenda row", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{
+          schedules: [
+            {
+              id: "bill-1",
+              name: "Rent",
+              next_date: "2026-04-20",
+              paid: false,
+              type: "bill",
+              conditions: [
+                { field: "amount", value: { num1: 180000 } },
+                { field: "payee", value: "payee-1" },
+              ],
+            },
+          ],
+          payeeMap: { "payee-1": "Landlord" },
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const agendaRail = screen.getByTestId("bills-agenda-rail");
+    fireEvent.click(within(agendaRail).getByTestId("calendar-agenda-bill-row"));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+    expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
+    expect(within(panel).getByText("$1,800.00")).toBeTruthy();
+  });
+
+  it("keeps Bills and Deadlines stacked layouts on the timeline detail rail", async () => {
+    window.innerWidth = 1100;
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{
+          schedules: [
+            {
+              id: "bill-1",
+              name: "Rent",
+              next_date: "2026-04-20",
+              paid: false,
+              type: "bill",
+              conditions: [{ field: "amount", value: { num1: 180000 } }],
+            },
+          ],
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    expect(await screen.findByTestId("timeline-detail-rail")).toBeTruthy();
+    expect(screen.queryByTestId("bills-agenda-rail")).toBeNull();
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: { upcoming: [{ id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" }] },
+          todoist: { upcoming: [] },
+        }}
+      />,
+    ));
+
+    expect(await screen.findByTestId("timeline-detail-rail")).toBeTruthy();
+    expect(screen.queryByTestId("deadlines-agenda-rail")).toBeNull();
   });
 
   it("opens a blank inline Todoist editor from a deadlines create focus request", async () => {
@@ -1645,8 +1746,9 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
-    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("standard");
   });
 
   it("keeps a future-date deadline draft active after ghost navigation", async () => {
@@ -1789,11 +1891,13 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    fireEvent.click(within(screen.getByTestId("deadlines-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /^edit$/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getByDisplayValue("First task")).toBeTruthy();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
-    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("standard");
   });
 
   it("closes the inline Todoist editor from its local exit action without closing the modal", async () => {
@@ -1824,12 +1928,10 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(within(inlineEditor).getByRole("button", { name: /^cancel$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Deadline ledger")).toBeTruthy();
+      expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
     });
-    expect(screen.getAllByTestId("calendar-rail-content").some((content) => (
-      content.getAttribute("data-rail-content-kind") === "detail"
-      && content.textContent.includes("Deadline ledger")
-    ))).toBe(true);
+    expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(onClose).not.toHaveBeenCalled();
   });
 });

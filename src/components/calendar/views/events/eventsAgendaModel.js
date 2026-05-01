@@ -2,10 +2,15 @@ import { getEventSelectionId } from "../../../../lib/redesign-helpers";
 import {
   addDaysYmd,
   pacificYMD,
-  parseYmd,
-  ymdFromParts,
 } from "../../calendarDateUtils.js";
 import { visualEventDateRange } from "../../modal/calendarEventSpanLayout.js";
+import {
+  buildDisplayedMonthGroups,
+  clampRangeToMonth,
+  formatAgendaHeaderLabel,
+  monthBounds,
+  sparseVisibleGroups,
+} from "../agenda/agendaDateModel.js";
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles",
@@ -13,29 +18,6 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
   hour12: true,
 });
-const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-});
-
-function localDate(parsed) {
-  return new Date(parsed.year, parsed.month, parsed.day);
-}
-
-function shortDateLabel(dateKey) {
-  const parsed = parseYmd(dateKey);
-  if (!parsed) return "";
-  const year = String(parsed.year).slice(-2);
-  return `${parsed.month + 1}/${parsed.day}/${year}`;
-}
-
-export function formatAgendaHeaderLabel(dateKey, todayKey = pacificYMD(Date.now())) {
-  if (dateKey === todayKey) return `TODAY ${shortDateLabel(dateKey)}`;
-  if (dateKey === addDaysYmd(todayKey, 1)) return `TOMORROW ${shortDateLabel(dateKey)}`;
-  const parsed = parseYmd(dateKey);
-  const weekday = parsed ? WEEKDAY_FORMATTER.format(localDate(parsed)).toUpperCase() : "DAY";
-  return `${weekday} ${shortDateLabel(dateKey)}`;
-}
-
 export function formatAgendaEventTitle(value) {
   return String(value || "").trim() || "(No title)";
 }
@@ -55,22 +37,6 @@ export function formatAgendaTimeRange(event) {
   const end = formatTime(event?.endMs);
   if (start && end && start !== end) return `${start}-${end}`;
   return start || end || "";
-}
-
-function monthBounds(viewYear, viewMonth) {
-  const start = ymdFromParts(viewYear, viewMonth, 1);
-  const end = ymdFromParts(viewYear, viewMonth, new Date(viewYear, viewMonth + 1, 0).getDate());
-  return { start, end };
-}
-
-function clampRangeToMonth(range, viewYear, viewMonth) {
-  if (!range) return null;
-  const { start, end } = monthBounds(viewYear, viewMonth);
-  if (range.endDate < start || range.startDate > end) return null;
-  return {
-    startDate: range.startDate < start ? start : range.startDate,
-    endDate: range.endDate > end ? end : range.endDate,
-  };
 }
 
 function orderedEvents(events) {
@@ -117,22 +83,17 @@ export function buildEventsAgendaGroups({
   todayKey = pacificYMD(Date.now()),
   forceVisibleDateKey = null,
 } = {}) {
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const monthStartDateKey = ymdFromParts(viewYear, viewMonth, 1);
-  const groups = Array.from({ length: daysInMonth }, (_, index) => {
-    const dateKey = ymdFromParts(viewYear, viewMonth, index + 1);
-    return {
-      dateKey,
-      day: index + 1,
-      headerLabel: formatAgendaHeaderLabel(dateKey, todayKey),
+  const { groups, groupMap, monthStartDateKey } = buildDisplayedMonthGroups({
+    viewYear,
+    viewMonth,
+    todayKey,
+    createGroup: () => ({
       allDay: [],
       timed: [],
       weather: null,
       hasEvents: false,
-      isFallback: false,
-    };
+    }),
   });
-  const groupMap = new Map(groups.map((group) => [group.dateKey, group]));
 
   for (const event of events || []) {
     if (!event?.startMs) continue;
@@ -167,31 +128,19 @@ export function buildEventsAgendaGroups({
     group.weather = weatherMap.get(group.dateKey) || null;
   }
 
-  let visibleGroups = groups.filter((group) => {
-    if (forceVisibleDateKey && group.dateKey === forceVisibleDateKey) return true;
-    if (group.hasEvents) return true;
-    if (group.weather && group.dateKey >= todayKey) return true;
-    return false;
+  const { visibleGroups, firstVisibleDateKey } = sparseVisibleGroups({
+    groups,
+    monthStartDateKey,
+    forceVisibleDateKey,
+    hasVisibleItems: (group) => group.hasEvents || (group.weather && group.dateKey >= todayKey),
   });
-
-  const monthStart = groups[0];
-  if (monthStart && !visibleGroups.some((group) => group.dateKey === monthStart.dateKey)) {
-    if (!visibleGroups.length) monthStart.isFallback = true;
-    visibleGroups = [monthStart, ...visibleGroups];
-  }
-
-  if (!visibleGroups.length) {
-    const first = monthStart;
-    if (first) {
-      first.isFallback = true;
-      visibleGroups = [first];
-    }
-  }
 
   return {
     groups,
     visibleGroups,
-    firstVisibleDateKey: visibleGroups[0]?.dateKey || monthStartDateKey,
+    firstVisibleDateKey,
     monthStartDateKey,
   };
 }
+
+export { formatAgendaHeaderLabel, monthBounds };

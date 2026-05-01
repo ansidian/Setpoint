@@ -205,7 +205,13 @@ export function RedesignShell({
 }) {
   const customize = useCustomize();
   const isMobile = useIsMobile();
-  const { handleAddTask } = useDashboard();
+  const {
+    handleAddTask,
+    handleCompleteTask,
+    handleDeleteTask,
+    handleDismissGhost,
+    handleUpdateTaskStatus,
+  } = useDashboard();
   const [tab, setTab] = useState(() => {
     try {
       const saved = localStorage.getItem("ea:tab");
@@ -708,6 +714,12 @@ export function RedesignShell({
               ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
               todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
               isLoading: calendarDeadlinesLoading && !calendarDeadlines,
+            }}
+            deadlineActions={{
+              onCompleteTask: handleCompleteTask,
+              onUpdateTaskStatus: handleUpdateTaskStatus,
+              onDeleteTask: handleDeleteTask,
+              onDismissGhost: handleDismissGhost,
             }}
           />
         </Suspense>
