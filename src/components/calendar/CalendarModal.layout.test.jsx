@@ -1662,6 +1662,7 @@ describe("CalendarModal responsive layout", () => {
   it("refetches the visible events month when the open modal gets a refreshed eventsData object", async () => {
     window.innerWidth = 1900;
     const ensureRange = vi.fn().mockResolvedValue([]);
+    const onEventsVisibleRangeChange = vi.fn();
 
     const { rerender } = render(wrapWithDashboard(
       <CalendarModal
@@ -1676,6 +1677,7 @@ describe("CalendarModal responsive layout", () => {
           getEvents: () => [],
           revision: 0,
         }}
+        onEventsVisibleRangeChange={onEventsVisibleRangeChange}
         billsData={{}}
         deadlinesData={{}}
       />,
@@ -1684,6 +1686,7 @@ describe("CalendarModal responsive layout", () => {
     await waitFor(() => {
       expect(ensureRange).toHaveBeenCalledTimes(1);
     });
+    expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start: "2026-03-29", end: "2026-05-02" });
 
     rerender(wrapWithDashboard(
       <CalendarModal
@@ -1698,6 +1701,7 @@ describe("CalendarModal responsive layout", () => {
           getEvents: () => [],
           revision: 1,
         }}
+        onEventsVisibleRangeChange={onEventsVisibleRangeChange}
         billsData={{}}
         deadlinesData={{}}
       />,
@@ -1706,6 +1710,32 @@ describe("CalendarModal responsive layout", () => {
     await waitFor(() => {
       expect(ensureRange).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("shows a quiet pending-update indicator for stale event refreshes", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          ensureRange: vi.fn().mockResolvedValue([]),
+          getEvents: () => [],
+          staleRefreshPending: true,
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const indicator = screen.getByTestId("calendar-pending-update");
+    expect(indicator.textContent).toBe("");
+    expect(indicator.getAttribute("aria-label")).toBe("Calendar updates pending");
+    expect(indicator.querySelector(".calendar-pending-update-icon")).toBeTruthy();
   });
 
   it("switches the selected deadline in-place when a different agenda row is clicked", async () => {

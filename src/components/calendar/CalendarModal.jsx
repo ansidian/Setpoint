@@ -149,6 +149,7 @@ export default function CalendarModal({
   view,
   onViewChange,
   eventsData,
+  onEventsVisibleRangeChange,
   billsData,
   deadlinesData,
   weatherData,
@@ -303,6 +304,7 @@ export default function CalendarModal({
           || eventsData?.isMonthLoading?.(viewYear, viewMonth)
           || eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month)
           || false,
+        pendingUpdate: !!eventsData?.staleRefreshPending,
         hasMonth: eventsData?.hasMonth?.(viewYear, viewMonth) || false,
       };
     }
@@ -1259,12 +1261,13 @@ export default function CalendarModal({
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
     const { start, end } = getVisibleGridRange(viewYear, viewMonth);
+    onEventsVisibleRangeChange?.({ start, end });
     if (eventEditor.isEditorOpen) {
       const id = window.setTimeout(() => eventsData.ensureRange(start, end), 260);
       return () => window.clearTimeout(id);
     }
     eventsData.ensureRange(start, end);
-  }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen]);
+  }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange]);
 
   useEffect(() => {
     const current = floatingDetailRef.current;
