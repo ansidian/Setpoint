@@ -336,6 +336,8 @@ export default function CalendarFloatingDetailPanel({
         data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
         data-testid="calendar-floating-detail-panel"
         data-floating-mode={mode}
+        role="dialog"
+        aria-label={label || "Calendar floating detail"}
         className="isolate"
         style={{
           position: "fixed",
