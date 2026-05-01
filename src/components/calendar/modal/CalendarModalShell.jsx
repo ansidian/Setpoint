@@ -190,6 +190,7 @@ export default function CalendarModalShell({
   onParkFloatingDetail,
   onFloatingDetailDragged,
   onReanchorFloatingDetail,
+  suppressFocusRing = false,
 }) {
   const railRef = useRef(null);
   const workspaceMode = view === "events" && eventEditor.isEditorOpen
@@ -355,6 +356,7 @@ export default function CalendarModalShell({
       <div
         ref={panelRef}
         data-testid="calendar-modal-panel"
+        data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
         className="isolate flex flex-col"
         role="dialog"
         aria-modal="true"
@@ -376,6 +378,7 @@ export default function CalendarModalShell({
           ].join(", "),
           borderRadius: 16,
           border: "1px solid rgba(255,255,255,0.06)",
+          outline: "none",
           boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
           contain: "layout paint",
           backfaceVisibility: "hidden",
