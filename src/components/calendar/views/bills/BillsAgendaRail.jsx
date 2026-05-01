@@ -201,12 +201,12 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
           onActivate={onDateAction}
         />
       )}
-      renderGroup={({ group, registerRow }) => (
+      renderGroup={({ group, registerRow, registerContent }) => (
         <>
           {group.items.map((bill) => (
             <span
               key={bill.agendaKey}
-              ref={(node) => registerRow(bill.agendaKey, node)}
+              ref={(node) => registerRow(bill.agendaKey, node, group.dateKey)}
             >
               <BillRow
                 bill={bill}
@@ -222,7 +222,9 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
             </span>
           ))}
           {!group.hasBills && (group.isFallback || selectedDateKey === group.dateKey) ? (
-            <EmptyBillDay fallback={group.isFallback} />
+            <div ref={(node) => registerContent(group.dateKey, node)}>
+              <EmptyBillDay fallback={group.isFallback} />
+            </div>
           ) : null}
         </>
       )}

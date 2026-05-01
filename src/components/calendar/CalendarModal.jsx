@@ -1171,10 +1171,27 @@ export default function CalendarModal({
           break;
         case "t":
         case "T":
+          if (floatingDetailRef.current?.open
+            && (floatingDetailRef.current.mode === "edit" || floatingDetailRef.current.mode === "create")
+            && floatingDetailRef.current.dirty
+          ) {
+            shakeFloatingEditor();
+            consumeCalendarKey();
+            break;
+          }
+          if (eventEditor.isEditorOpen && eventEditor.isDirty) {
+            shakeFloatingEditor();
+            consumeCalendarKey();
+            break;
+          }
           closeEventEditor();
+          setFloatingDetail(null);
+          setDeadlineEditor(null);
+          setDeadlineDraftPreview(null);
           setViewDate({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
           setSelectedDateKey(ymdFromParts(currentYear, currentMonth, todayDate));
+          setSelectedItemId(null);
           requestAgendaScroll({ type: "today" });
           consumeCalendarKey();
           break;
