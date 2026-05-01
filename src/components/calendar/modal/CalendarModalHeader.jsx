@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ListChecks, Receipt, X } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ListChecks, Receipt, RefreshCw, X } from "lucide-react";
 
 const VIEW_OPTIONS = [
   { key: "events", label: "Events", Icon: CalendarIcon, hint: "1" },
@@ -126,6 +126,7 @@ export default function CalendarModalHeader({
   const titleSize = layout.tier === "uhd" ? 40 : layout.tier === "xl" ? 40 : layout.tier === "lg" ? 36 : layout.tier === "md" ? 32 : 28;
   const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay, selectedDateKey);
   const selectedDate = selectedDateYmd(viewYear, viewMonth, selectedDay, selectedDateKey);
+  const showPendingUpdate = view === "events" && !!viewData?.pendingUpdate;
 
   return (
     <div
@@ -292,6 +293,34 @@ export default function CalendarModalHeader({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            {showPendingUpdate ? (
+              <div
+                data-testid="calendar-pending-update"
+                role="status"
+                aria-live="polite"
+                aria-label="Calendar updates pending"
+                title="Calendar updates pending"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  border: "1px solid rgba(137,180,250,0.18)",
+                  background: "rgba(137,180,250,0.08)",
+                  color: "rgba(205,214,244,0.72)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
+                }}
+              >
+                <RefreshCw
+                  className="calendar-pending-update-icon"
+                  size={13}
+                  aria-hidden="true"
+                  strokeWidth={1.8}
+                />
+              </div>
+            ) : null}
             {HeaderExtras ? (
               <HeaderExtras
                 data={viewData}

@@ -40,6 +40,20 @@ const CustomizePanel = lazy(() => import("../components/shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("../components/dashboard/DeadlineDetailPopover"));
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 const InboxView = lazy(() => import("../components/inbox/InboxView"));
+const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
+
+function makeCalendarBillsData(liveData) {
+  return {
+    schedules: liveData.allSchedules || [],
+    recentTransactions: liveData.recentTransactions || [],
+    payeeMap: liveData.payeeMap || {},
+    actualBudgetUrl: liveData.actualBudgetUrl,
+  };
+}
+
+function isCalendarDomainCacheStale(fetchedAt) {
+  return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
+}
 
 export default function Dashboard() {
   const [isMock, setIsMock] = useState(() =>
@@ -56,18 +70,32 @@ export default function Dashboard() {
   const calendarRange = useCalendarRange({ disabled: isMock });
   useNotifications(liveData);
   const bd = useBriefingData({ liveData, isMock });
-  const invalidateCalendarRange = calendarRange.invalidate;
+  const refreshCalendarDomainsRef = useRef(null);
+  const calendarWorkspaceRef = useRef({ open: false, view: "events", eventsRange: null });
+  const calendarBillsRefreshRequestedRef = useRef(false);
+  const markCalendarRangeStale = calendarRange.markStale;
+  const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   const quickRefreshBriefing = bd.handleQuickRefresh;
-  const handleCalendarAwareQuickRefresh = useCallback(() => {
-    invalidateCalendarRange();
+  const handleTimerQuickRefresh = useCallback(() => {
     return quickRefreshBriefing();
-  }, [invalidateCalendarRange, quickRefreshBriefing]);
-  const refreshHold = useHoldGesture({ onShortPress: handleCalendarAwareQuickRefresh });
+  }, [quickRefreshBriefing]);
+  const handleExplicitQuickRefresh = useCallback(() => {
+    const calendarWorkspace = calendarWorkspaceRef.current;
+    if (calendarWorkspace.open && calendarWorkspace.view === "events" && calendarWorkspace.eventsRange) {
+      refreshCalendarRangeInPlace?.(calendarWorkspace.eventsRange.start, calendarWorkspace.eventsRange.end);
+    } else {
+      markCalendarRangeStale?.();
+    }
+    calendarBillsRefreshRequestedRef.current = true;
+    refreshCalendarDomainsRef.current?.({ force: true });
+    return quickRefreshBriefing();
+  }, [markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
+  const refreshHold = useHoldGesture({ onShortPress: handleExplicitQuickRefresh });
 
   useAutoRefresh({
     disabled: isMock,
     lastQuickRefreshAt: bd.lastQuickRefreshAt,
-    onQuickRefresh: handleCalendarAwareQuickRefresh,
+    onQuickRefresh: handleTimerQuickRefresh,
   });
 
   const handleFullGeneration = useCallback(async () => {
@@ -116,24 +144,68 @@ export default function Dashboard() {
 
   const [calendarDeadlines, setCalendarDeadlines] = useState(null);
   const [calendarDeadlinesLoading, setCalendarDeadlinesLoading] = useState(false);
+  const [calendarDeadlinesFetchedAt, setCalendarDeadlinesFetchedAt] = useState(0);
   const calendarDeadlinesLoadingRef = useRef(false);
-  const loadCalendarDeadlines = (opts) => {
-    if (calendarDeadlinesLoadingRef.current && !opts?.force) return;
+  const loadCalendarDeadlines = useCallback((opts) => {
+    const force = !!opts?.force;
+    if (calendarDeadlinesLoadingRef.current && !force) return;
+    if (!force && calendarDeadlines && !isCalendarDomainCacheStale(calendarDeadlinesFetchedAt)) return;
     calendarDeadlinesLoadingRef.current = true;
     setCalendarDeadlinesLoading(true);
     getCalendarDeadlines()
-      .then((data) => setCalendarDeadlines(data))
+      .then((data) => {
+        setCalendarDeadlines(data);
+        setCalendarDeadlinesFetchedAt(Date.now());
+      })
       .catch((err) => console.error("Calendar deadlines fetch failed:", err))
       .finally(() => {
         calendarDeadlinesLoadingRef.current = false;
         setCalendarDeadlinesLoading(false);
       });
-  };
+  }, [calendarDeadlines, calendarDeadlinesFetchedAt]);
+
+  const [calendarBillsData, setCalendarBillsData] = useState(null);
+  const [calendarBillsFetchedAt, setCalendarBillsFetchedAt] = useState(0);
+  const refreshLiveDataNow = liveData.refreshNow;
+  const snapshotCalendarBills = useCallback(() => {
+    setCalendarBillsData({
+      schedules: liveData.allSchedules || [],
+      recentTransactions: liveData.recentTransactions || [],
+      payeeMap: liveData.payeeMap || {},
+      actualBudgetUrl: liveData.actualBudgetUrl,
+    });
+    setCalendarBillsFetchedAt(Date.now());
+  }, [liveData.actualBudgetUrl, liveData.allSchedules, liveData.payeeMap, liveData.recentTransactions]);
+  const loadCalendarBills = useCallback((opts) => {
+    const force = !!opts?.force;
+    const stale = isCalendarDomainCacheStale(calendarBillsFetchedAt);
+    if (!force && calendarBillsData && !stale) return;
+    if (opts?.refreshLive) {
+      calendarBillsRefreshRequestedRef.current = true;
+      refreshLiveDataNow?.();
+    }
+    snapshotCalendarBills();
+  }, [calendarBillsData, calendarBillsFetchedAt, refreshLiveDataNow, snapshotCalendarBills]);
 
   useEffect(() => {
-    if (calendarDeadlines !== null) loadCalendarDeadlines({ force: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bd.lastQuickRefreshAt, bd.latestId]);
+    if (!calendarBillsRefreshRequestedRef.current) return;
+    calendarBillsRefreshRequestedRef.current = false;
+    snapshotCalendarBills();
+  }, [liveData.lastFetched, snapshotCalendarBills]);
+
+  useEffect(() => {
+    refreshCalendarDomainsRef.current = ({ force = false } = {}) => {
+      loadCalendarDeadlines({ force });
+      loadCalendarBills({ force });
+    };
+  }, [loadCalendarBills, loadCalendarDeadlines]);
+
+  const updateCalendarWorkspace = useCallback((snapshot) => {
+    calendarWorkspaceRef.current = {
+      ...calendarWorkspaceRef.current,
+      ...snapshot,
+    };
+  }, []);
 
   if (bd.loading) return <LoadingSkeleton />;
   if (bd.error && !bd.briefing) {
@@ -176,13 +248,16 @@ export default function Dashboard() {
           isMock={isMock}
           refreshHold={refreshHold}
           handleFullGeneration={handleFullGeneration}
-          onQuickRefresh={handleCalendarAwareQuickRefresh}
+          onQuickRefresh={handleExplicitQuickRefresh}
           historyOpen={historyOpen}
           setHistoryOpen={setHistoryOpen}
           historyTriggerRef={historyTriggerRef}
           calendarDeadlines={calendarDeadlines}
           calendarDeadlinesLoading={calendarDeadlinesLoading}
           loadCalendarDeadlines={loadCalendarDeadlines}
+          calendarBillsData={calendarBillsData}
+          loadCalendarBills={loadCalendarBills}
+          onCalendarWorkspaceChange={updateCalendarWorkspace}
         />
         {DevPanel && (
           <Suspense fallback={null}>
@@ -202,6 +277,8 @@ export function RedesignShell({
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
   calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines,
+  calendarBillsData, loadCalendarBills,
+  onCalendarWorkspaceChange,
 }) {
   const customize = useCustomize();
   const isMobile = useIsMobile();
@@ -264,6 +341,7 @@ export function RedesignShell({
   const showBills = !!liveData.actualConfigured;
   const [calendarFocus, setCalendarFocus] = useState(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
+  const calendarEventsRangeRef = useRef(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const actionChordRef = useRef(null);
   const actionChordTimerRef = useRef(null);
@@ -283,6 +361,7 @@ export function RedesignShell({
     setCalendarMounted(true);
     setCalendarOpen(true);
     if (resolved === "deadlines") loadCalendarDeadlines();
+    if (resolved === "bills") loadCalendarBills({ refreshLive: true });
   };
   const openTodoistCreate = useCallback(() => {
     if (isMobile) {
@@ -296,11 +375,29 @@ export function RedesignShell({
     setCalendarView(v);
     try { localStorage.setItem("calendar:lastView", v); } catch { /* ignore */ }
     if (v === "deadlines") loadCalendarDeadlines();
+    if (v === "bills") loadCalendarBills({ refreshLive: true });
   };
 
   useEffect(() => {
     if (isMobile && calendarOpen) setCalendarOpen(false);
   }, [isMobile, calendarOpen]);
+
+  useEffect(() => {
+    onCalendarWorkspaceChange?.({
+      open: calendarOpen,
+      view: calendarView,
+      eventsRange: calendarEventsRangeRef.current,
+    });
+  }, [calendarOpen, calendarView, onCalendarWorkspaceChange]);
+
+  const handleCalendarEventsRangeChange = useCallback((range) => {
+    calendarEventsRangeRef.current = range;
+    onCalendarWorkspaceChange?.({
+      open: calendarOpen,
+      view: calendarView,
+      eventsRange: range,
+    });
+  }, [calendarOpen, calendarView, onCalendarWorkspaceChange]);
 
   useEffect(() => () => {
     if (actionChordTimerRef.current) clearTimeout(actionChordTimerRef.current);
@@ -407,24 +504,28 @@ export function RedesignShell({
   const eventsData = useMemo(() => ({
     ensureRange: calendarRange.ensureRange,
     refreshRange: calendarRange.refreshRange,
+    refreshRangeInPlace: calendarRange.refreshRangeInPlace,
     upsertEvents: calendarRange.upsertEvents,
     removeEvent: calendarRange.removeEvent,
     getEvents: calendarRange.getEvents,
     hasMonth: calendarRange.hasMonth,
     isMonthLoading: calendarRange.isMonthLoading,
     loading: calendarRange.loading,
+    staleRefreshPending: calendarRange.staleRefreshPending,
     error: calendarRange.error,
     revision: calendarRange.revision,
     editable: !isMock,
   }), [
     calendarRange.ensureRange,
     calendarRange.refreshRange,
+    calendarRange.refreshRangeInPlace,
     calendarRange.upsertEvents,
     calendarRange.removeEvent,
     calendarRange.getEvents,
     calendarRange.hasMonth,
     calendarRange.isMonthLoading,
     calendarRange.loading,
+    calendarRange.staleRefreshPending,
     calendarRange.error,
     calendarRange.revision,
     isMock,
@@ -532,6 +633,37 @@ export function RedesignShell({
   }, [briefing?.emails?.accounts, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
 
   const liveEmailsLoading = liveData.isPolling;
+  const queueCalendarDeadlineRefresh = useCallback(() => {
+    window.setTimeout(() => loadCalendarDeadlines({ force: true }), 900);
+  }, [loadCalendarDeadlines]);
+  const calendarDeadlineActions = useMemo(() => ({
+    onCompleteTask: (...args) => {
+      const result = handleCompleteTask(...args);
+      queueCalendarDeadlineRefresh();
+      return result;
+    },
+    onUpdateTaskStatus: (...args) => {
+      const result = handleUpdateTaskStatus(...args);
+      queueCalendarDeadlineRefresh();
+      return result;
+    },
+    onDeleteTask: (...args) => {
+      const result = handleDeleteTask(...args);
+      queueCalendarDeadlineRefresh();
+      return result;
+    },
+    onDismissGhost: (...args) => {
+      const result = handleDismissGhost(...args);
+      queueCalendarDeadlineRefresh();
+      return result;
+    },
+  }), [
+    handleCompleteTask,
+    handleDeleteTask,
+    handleDismissGhost,
+    handleUpdateTaskStatus,
+    queueCalendarDeadlineRefresh,
+  ]);
 
   return (
     <div
@@ -651,6 +783,7 @@ export function RedesignShell({
             onClose={() => setAddTaskOpen(false)}
             onTaskAdded={(task) => {
               handleAddTask(task);
+              queueCalendarDeadlineRefresh();
               setAddTaskOpen(false);
             }}
           />
@@ -703,24 +836,15 @@ export function RedesignShell({
             focusDate={calendarFocus}
             focusItemId={calendarFocusItemId}
             eventsData={eventsData}
+            onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
             weatherData={liveData.liveWeather || briefing?.weather || null}
-            billsData={{
-              schedules: liveData.allSchedules,
-              recentTransactions: liveData.recentTransactions,
-              payeeMap: liveData.payeeMap,
-              actualBudgetUrl: liveData.actualBudgetUrl,
-            }}
+            billsData={calendarBillsData || makeCalendarBillsData(liveData)}
             deadlinesData={{
               ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
               todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
               isLoading: calendarDeadlinesLoading && !calendarDeadlines,
             }}
-            deadlineActions={{
-              onCompleteTask: handleCompleteTask,
-              onUpdateTaskStatus: handleUpdateTaskStatus,
-              onDeleteTask: handleDeleteTask,
-              onDismissGhost: handleDismissGhost,
-            }}
+            deadlineActions={calendarDeadlineActions}
           />
         </Suspense>
       )}
