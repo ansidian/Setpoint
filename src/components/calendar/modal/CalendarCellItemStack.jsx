@@ -103,17 +103,21 @@ function stackHeight({ visibleCount, hasOverflow, metrics }) {
 function measuredVisibleCount(items, availableHeight, metrics) {
   const itemCount = items.length;
   if (itemCount <= 0) return 0;
-  if (!Number.isFinite(availableHeight) || availableHeight <= 0) {
+  const reservedHeight = Math.max(0, metrics?.reservedHeight || 0);
+  const effectiveAvailableHeight = Number.isFinite(availableHeight)
+    ? Math.max(0, availableHeight - reservedHeight)
+    : availableHeight;
+  if (!Number.isFinite(effectiveAvailableHeight) || effectiveAvailableHeight <= 0) {
     return getVisibleCellItemCount(itemCount, metrics);
   }
 
-  if (stackHeight({ visibleCount: itemCount, hasOverflow: false, metrics }) <= availableHeight) {
+  if (stackHeight({ visibleCount: itemCount, hasOverflow: false, metrics }) <= effectiveAvailableHeight) {
     return itemCount;
   }
 
   const minimumVisible = items.some((item) => item.isGhost) ? 1 : 0;
   for (let count = itemCount - 1; count >= minimumVisible; count -= 1) {
-    if (stackHeight({ visibleCount: count, hasOverflow: true, metrics }) <= availableHeight) {
+    if (stackHeight({ visibleCount: count, hasOverflow: true, metrics }) <= effectiveAvailableHeight) {
       return count;
     }
   }
@@ -361,6 +365,7 @@ export default function CalendarCellItemStack({
   quickActions,
   pastTone,
   metrics,
+  reservedLaneCount = 0,
   overflowOpen = false,
   overflowAnchorKey,
   inlineOverflowOpen = false,
@@ -374,8 +379,14 @@ export default function CalendarCellItemStack({
   const [moreActive, setMoreActive] = useState(false);
   const stackRef = useRef(null);
   const inlineOverflowRef = useRef(null);
+  const reservedHeight = Math.max(0, reservedLaneCount)
+    * ((metrics?.spanLaneHeight ?? metrics?.itemHeight ?? 28) + (metrics?.spanLaneGap ?? metrics?.gap ?? 4));
+  const measuredMetrics = useMemo(() => ({
+    ...metrics,
+    reservedHeight,
+  }), [metrics, reservedHeight]);
   const [measuredCount, setMeasuredCount] = useState(() => (
-    getVisibleCellItemCount(stackItems.length, metrics)
+    getVisibleCellItemCount(stackItems.length, measuredMetrics)
   ));
 
   const calculateVisibleCount = useCallback(() => {
@@ -394,9 +405,9 @@ export default function CalendarCellItemStack({
     }
 
     const availableHeight = nearestMeasuredHeight(stackRef.current);
-    const nextCount = measuredVisibleCount(stackItems, availableHeight, metrics);
+    const nextCount = measuredVisibleCount(stackItems, availableHeight, measuredMetrics);
     setMeasuredCount((current) => (current === nextCount ? current : nextCount));
-  }, [inlineOverflowOpen, inlineOverflowVisibleCount, stackItems, metrics]);
+  }, [inlineOverflowOpen, inlineOverflowVisibleCount, stackItems, measuredMetrics]);
 
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(() => calculateVisibleCount());
@@ -448,6 +459,7 @@ export default function CalendarCellItemStack({
         flexDirection: "column",
         gap: metrics?.gap ?? 4,
         minWidth: 0,
+        paddingTop: reservedHeight || undefined,
       }}
     >
       {visibleItems.map((item) => {

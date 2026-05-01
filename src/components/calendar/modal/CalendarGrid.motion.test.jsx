@@ -352,6 +352,67 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe("+2 more");
   });
 
+  it("renders real pinned spans as selectable buttons and removes duplicate normal chips", () => {
+    const setSelectedDay = vi.fn();
+    const setSelectedDateKey = vi.fn();
+    const setSelectedItemId = vi.fn();
+    const onOpenFloatingDetail = vi.fn();
+    const spanEvent = {
+      id: "span-1",
+      title: "Conference",
+      allDay: true,
+      writable: true,
+      startMs: new Date("2026-04-20T07:00:00Z").getTime(),
+      endMs: new Date("2026-04-23T07:00:00Z").getTime(),
+      color: "#4285f4",
+    };
+
+    renderGrid({ 20: [spanEvent] }, {
+      viewData: { events: [spanEvent], isLoading: false },
+      setSelectedDay,
+      setSelectedDateKey,
+      setSelectedItemId,
+      onOpenFloatingDetail,
+    });
+
+    const span = screen.getByTestId("calendar-event-span-segment");
+    expect(span.tagName).toBe("BUTTON");
+    expect(screen.queryByTestId("calendar-cell-item-chip")).toBeNull();
+
+    fireEvent.click(span, { clientX: 4 });
+
+    expect(setSelectedDay).toHaveBeenCalledWith(20);
+    expect(setSelectedDateKey).toHaveBeenCalledWith("2026-04-20");
+    expect(setSelectedItemId).toHaveBeenCalledWith("span-1");
+    expect(onOpenFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
+      itemId: "span-1",
+      dateKey: "2026-04-20",
+      anchorKind: "span",
+    }));
+  });
+
+  it("renders pinned ghost spans as inert aria-hidden chips", () => {
+    renderGrid({}, {
+      ghostPreview: {
+        kind: "event",
+        ghosts: [{
+          id: "ghost-1",
+          kind: "event",
+          title: "Draft hold",
+          startDate: "2026-04-20",
+          endDate: "2026-04-20",
+          allDay: true,
+          color: "#89b4fa",
+        }],
+      },
+    });
+
+    const ghost = screen.getByTestId("calendar-ghost-chip");
+    expect(ghost.tagName).toBe("DIV");
+    expect(ghost.getAttribute("aria-hidden")).toBe("true");
+    expect(ghost.style.pointerEvents).toBe("none");
+  });
+
   it("retargets open overflow popover to second trigger without remounting or closing first", async () => {
     renderGrid({
       15: Array.from({ length: 5 }, (_, index) => buildEvent(15, index)),

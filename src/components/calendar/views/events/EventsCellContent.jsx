@@ -3,6 +3,7 @@ import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/ca
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { getEventSelectionId } from "../../../../lib/redesign-helpers";
 import { formatTime12FromTime24 } from "../../ghostPreview.js";
+import { isPinnedCalendarGhost } from "../../modal/calendarEventSpanLayout.js";
 
 const LG_EVENT_CHIP_METRICS = {
   itemHeight: 30,
@@ -127,15 +128,20 @@ export function renderEventsCellContents({
   day,
   dateKey,
   ghosts = [],
+  pinnedIds = null,
+  reservedLaneCount = 0,
 }) {
   const singleDayGhosts = ghosts.filter((ghost) => (
-    ghost?.kind === "event" && ghost.startDate === dateKey && ghost.startDate === ghost.endDate
+    ghost?.kind === "event" && ghost.startDate === dateKey && ghost.startDate === ghost.endDate && !isPinnedCalendarGhost(ghost)
   ));
   if (!items?.length && !singleDayGhosts.length) return null;
   const descriptors = orderEventDescriptors([
-    ...(items || []).map(toEventDescriptor),
+    ...(items || [])
+      .filter((item) => !pinnedIds?.has?.(String(getEventSelectionId(item))))
+      .map(toEventDescriptor),
     ...singleDayGhosts.map(toEventGhostDescriptor),
   ]);
+  if (!descriptors.length) return null;
 
   return (
     <CalendarCellItemStack
@@ -148,6 +154,7 @@ export function renderEventsCellContents({
       quickActions={quickActions}
       pastTone={pastTone}
       metrics={resolveEventChipMetrics(layout)}
+      reservedLaneCount={reservedLaneCount}
       overflowOpen={overflowOpen}
       overflowAnchorKey={overflowAnchorKey}
       inlineOverflowOpen={inlineOverflowOpen}

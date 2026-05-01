@@ -159,4 +159,55 @@ describe("useCalendarRange", () => {
     expect(result.current.getEvents(2026, 3)).toEqual([]);
     expect(getCalendarRange).toHaveBeenCalledTimes(2);
   });
+
+  it("caches spanning events into every touched month and trims by visual overlap", async () => {
+    const spanning = {
+      id: "span-1",
+      title: "Month bridge",
+      allDay: true,
+      startMs: new Date("2026-04-30T07:00:00Z").getTime(),
+      endMs: new Date("2026-05-03T07:00:00Z").getTime(),
+    };
+    getCalendarRange.mockResolvedValue({ events: [spanning] });
+    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
+
+    const aprilEvents = await act(async () =>
+      result.current.ensureRange("2026-04-01", "2026-04-30"),
+    );
+
+    expect(aprilEvents).toEqual([spanning]);
+    expect(result.current.getEvents(2026, 3)).toEqual([spanning]);
+    expect(result.current.getEvents(2026, 4)).toEqual([spanning]);
+
+    const unrelated = await act(async () =>
+      result.current.ensureRange("2026-04-01", "2026-04-10"),
+    );
+    expect(unrelated).toEqual([]);
+  });
+
+  it("upserts spanning events into all touched cached months", async () => {
+    const original = {
+      id: "span-2",
+      title: "Original bridge",
+      allDay: true,
+      startMs: new Date("2026-04-30T07:00:00Z").getTime(),
+      endMs: new Date("2026-05-02T07:00:00Z").getTime(),
+    };
+    const updated = {
+      ...original,
+      title: "Updated bridge",
+      endMs: new Date("2026-05-03T07:00:00Z").getTime(),
+    };
+    getCalendarRange.mockResolvedValue({ events: [original] });
+    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-01", "2026-04-30");
+    });
+
+    act(() => result.current.upsertEvents(updated));
+
+    expect(result.current.getEvents(2026, 3)).toEqual([updated]);
+    expect(result.current.getEvents(2026, 4)).toEqual([updated]);
+  });
 });

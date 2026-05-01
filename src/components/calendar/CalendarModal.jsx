@@ -85,7 +85,7 @@ function isSameViewDate(a, b) {
 
 function isFloatingDetailTriggerTarget(target) {
   return target instanceof HTMLElement
-    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item']");
+    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment']");
 }
 
 function floatingDetailTypeLabel(view) {

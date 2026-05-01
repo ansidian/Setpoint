@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import { getCalendarRange } from "../api";
+import {
+  calendarEventTouchedMonths,
+  eventVisuallyOverlapsRange,
+} from "../components/calendar/modal/calendarEventSpanLayout.js";
 
 const PREFETCH_MONTH_RADIUS = 1;
 const MAX_MONTHS_PER_FETCH = 2;
@@ -73,20 +77,15 @@ function monthBounds(key) {
   return { start, end };
 }
 
-function monthKeyFromEpochMs(epochMs) {
-  if (!Number.isFinite(epochMs)) return null;
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date(epochMs));
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  return year && month ? `${year}-${month}` : null;
-}
-
 function eventIdentity(event) {
   return event?.id == null ? null : String(event.id);
+}
+
+function addEventToCachedBuckets(buckets, event) {
+  const keys = calendarEventTouchedMonths(event);
+  for (const key of keys) {
+    if (buckets.has(key)) buckets.get(key).push(event);
+  }
 }
 
 export default function useCalendarRange({ disabled = false } = {}) {
@@ -120,8 +119,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
         const { events } = await getCalendarRange(start, end);
         const buckets = new Map(uncachedKeys.map((key) => [key, []]));
         for (const event of events || []) {
-          const key = monthKeyFromEpochMs(event?.startMs);
-          if (buckets.has(key)) buckets.get(key).push(event);
+          addEventToCachedBuckets(buckets, event);
         }
         for (const key of uncachedKeys) {
           cacheRef.current.set(key, buckets.get(key) || []);
@@ -170,13 +168,16 @@ export default function useCalendarRange({ disabled = false } = {}) {
       }
     }
 
-    // Flatten cached months and trim to [start, end]
-    const startMs = new Date(`${start}T00:00:00Z`).getTime();
-    const endMs = new Date(`${end}T23:59:59.999Z`).getTime();
+    // Flatten cached months and trim to visual overlap with [start, end].
     const all = [];
+    const seen = new Set();
     for (const k of keys) {
       for (const ev of cacheRef.current.get(k) || []) {
-        if (ev.startMs >= startMs && ev.startMs <= endMs) all.push(ev);
+        const identity = eventIdentity(ev) || `${ev.startMs || 0}-${ev.endMs || 0}-${ev.title || ""}`;
+        if (seen.has(identity)) continue;
+        if (!eventVisuallyOverlapsRange(ev, start, end)) continue;
+        seen.add(identity);
+        all.push(ev);
       }
     }
     return all;
@@ -215,9 +216,10 @@ export default function useCalendarRange({ disabled = false } = {}) {
         );
       }
 
-      const key = monthKeyFromEpochMs(event.startMs);
-      if (!key || !cacheRef.current.has(key)) continue;
-      cacheRef.current.set(key, [...(cacheRef.current.get(key) || []), event]);
+      for (const key of calendarEventTouchedMonths(event)) {
+        if (!cacheRef.current.has(key)) continue;
+        cacheRef.current.set(key, [...(cacheRef.current.get(key) || []), event]);
+      }
     }
 
     setRevision((value) => value + 1);

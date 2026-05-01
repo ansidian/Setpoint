@@ -253,4 +253,42 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(screen.getByText("+1 more")).toBeTruthy();
     expect(screen.queryByText("Earlier hold")).toBeNull();
   });
+
+  it("reserves top-lane space so normal chips overflow before pinned spans", async () => {
+    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return this.getAttribute?.("data-testid") === "reserved-lane-host" ? 90 : 0;
+      },
+    });
+
+    try {
+      render(
+        <div data-testid="reserved-lane-host">
+          <CalendarCellItemStack
+            day={20}
+            items={[
+              { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+              { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+              { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+            ]}
+            metrics={metrics}
+            reservedLaneCount={1}
+          />
+        </div>,
+      );
+
+      await waitFor(() => {
+        expect(screen.queryAllByTestId("calendar-cell-item-chip")).toHaveLength(0);
+        expect(screen.getByText("+3 more")).toBeTruthy();
+      });
+    } finally {
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
+      } else {
+        delete HTMLElement.prototype.clientHeight;
+      }
+    }
+  });
 });
