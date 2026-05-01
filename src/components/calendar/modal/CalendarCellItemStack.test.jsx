@@ -15,6 +15,46 @@ afterEach(() => {
 });
 
 describe("CalendarCellItemStack ghost visibility", () => {
+  it("stacks metadata above the title and marks recurring items passively", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "Weekly sync", recurring: true },
+        ]}
+        metrics={metrics}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    const meta = chip.querySelector("[data-calendar-chip-meta='true']");
+    const title = chip.querySelector("[data-calendar-chip-title='true']");
+
+    expect(meta?.textContent).toContain("9:00 AM");
+    expect(title?.textContent).toBe("Weekly sync");
+    expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeTruthy();
+    expect([...chip.children].indexOf(meta)).toBeLessThan([...chip.children].indexOf(title));
+  });
+
+  it("only strikes the title for completed items", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "$42", title: "Internet", complete: true },
+        ]}
+        metrics={metrics}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    const meta = chip.querySelector("[data-calendar-chip-meta='true']");
+    const title = chip.querySelector("[data-calendar-chip-title='true']");
+
+    expect(meta?.style.textDecoration).toBe("");
+    expect(title?.style.textDecoration).toBe("line-through");
+  });
+
   it("renders the collapsed overflow trigger when hidden chips exist", () => {
     render(
       <CalendarCellItemStack
@@ -145,6 +185,53 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
       await waitFor(() => {
         expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(3);
+        expect(screen.getByText("+1 more")).toBeTruthy();
+      });
+    } finally {
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
+      } else {
+        delete HTMLElement.prototype.clientHeight;
+      }
+    }
+  });
+
+  it("measures the clipping viewport instead of an expanding frame", async () => {
+    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        if (this.getAttribute?.("data-testid") === "clipping-cell-host") return 100;
+        if (this.getAttribute?.("data-testid") === "expanding-selected-frame") return 104;
+        return 0;
+      },
+    });
+
+    try {
+      render(
+        <div data-testid="clipping-cell-host" style={{ overflow: "hidden" }}>
+          <div data-testid="expanding-selected-frame" style={{ overflow: "visible" }}>
+            <CalendarCellItemStack
+              day={20}
+              items={[
+                { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+                { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+                { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+              ]}
+              metrics={{
+                itemHeight: 32,
+                moreHeight: 28,
+                gap: 4,
+                fullVisibleCount: 3,
+                overflowVisibleCount: 2,
+              }}
+            />
+          </div>
+        </div>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(2);
         expect(screen.getByText("+1 more")).toBeTruthy();
       });
     } finally {

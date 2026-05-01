@@ -1,6 +1,7 @@
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Repeat } from "lucide-react";
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -63,10 +64,10 @@ function itemButtonStyle({
   ghost,
 }) {
   return {
-    display: "grid",
-    gridTemplateColumns: "inherit",
-    alignItems: "start",
-    gap: 10,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 5,
     padding: "11px 12px",
     borderRadius: 10,
     border: ghost
@@ -91,6 +92,50 @@ function itemButtonStyle({
     textAlign: "left",
     transition: "border-color 140ms, background 140ms, box-shadow 140ms",
   };
+}
+
+function OverflowMetadata({ item, selected, accent }) {
+  if (!item.leadingLabel && !item.recurring) return null;
+  const color = selected
+    ? item.leadingColor || accent
+    : item.leadingColor || accent;
+
+  return (
+    <span
+      style={{
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        overflow: "hidden",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.2,
+        lineHeight: 1.05,
+        color,
+        whiteSpace: "nowrap",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {item.leadingLabel ? (
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+          {item.leadingLabel}
+        </span>
+      ) : null}
+      {item.recurring ? (
+        <Repeat
+          aria-hidden="true"
+          size={10}
+          strokeWidth={2.4}
+          style={{
+            flexShrink: 0,
+            color,
+            opacity: selected ? 0.86 : 0.7,
+          }}
+        />
+      ) : null}
+    </span>
+  );
 }
 
 export default function CalendarCellOverflowPopover({
@@ -385,26 +430,9 @@ export default function CalendarCellOverflowPopover({
                       active,
                       ghost,
                     }),
-                    gridTemplateColumns: item.leadingLabel ? "auto minmax(0, 1fr)" : "minmax(0, 1fr)",
-                    textDecoration: item.complete ? "line-through" : "none",
-                    textDecorationColor: "rgba(205,214,244,0.28)",
                   }}
                 >
-                  {item.leadingLabel ? (
-                    <span
-                      style={{
-                        paddingTop: 2,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: 0.2,
-                        color: item.leadingColor || accent,
-                        whiteSpace: "nowrap",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {item.leadingLabel}
-                    </span>
-                  ) : null}
+                  <OverflowMetadata item={item} selected={selected} accent={accent} />
                   <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                     <span
                       style={{
@@ -414,6 +442,8 @@ export default function CalendarCellOverflowPopover({
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
+                        textDecoration: item.complete ? "line-through" : "none",
+                        textDecorationColor: "rgba(205,214,244,0.28)",
                       }}
                     >
                       {item.title}

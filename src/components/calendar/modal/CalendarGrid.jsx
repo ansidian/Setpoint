@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Repeat } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
@@ -54,6 +55,11 @@ function isCalendarFloatingDetailTarget(target) {
     && !!target.closest("[data-calendar-floating-detail='true']");
 }
 
+function isCalendarInlineOverflowTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-calendar-inline-overflow-layer='true']");
+}
+
 function canUseInlineOverflow({ triggerElement, hiddenStackHeight, layout }) {
   if (layout?.stacked || !triggerElement?.isConnected) return false;
   if (!Number.isFinite(hiddenStackHeight) || hiddenStackHeight <= 0) return false;
@@ -64,6 +70,233 @@ function canUseInlineOverflow({ triggerElement, hiddenStackHeight, layout }) {
   if (!panelRect) return false;
 
   return triggerRect.top + hiddenStackHeight <= panelRect.bottom - INLINE_OVERFLOW_PANEL_PADDING;
+}
+
+function resolveInlineOverflowAnchor(triggerElement, containerElement) {
+  const triggerRect = triggerElement?.getBoundingClientRect?.();
+  const containerRect = containerElement?.getBoundingClientRect?.();
+  if (!triggerRect || !containerRect) return null;
+  return {
+    top: triggerRect.top - containerRect.top,
+    left: triggerRect.left - containerRect.left - 4,
+    width: triggerRect.width + 8,
+  };
+}
+
+function inlineOverflowItemStyle({ item, selected, active }) {
+  const accent = item.accent || "var(--ea-accent)";
+  const quiet = item.complete || item.quiet;
+  return {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: 1,
+    height: 36,
+    minWidth: 0,
+    boxSizing: "border-box",
+    padding: "4px 10px",
+    borderRadius: 10,
+    border: selected
+      ? `1px solid color-mix(in srgb, ${accent} 48%, rgba(255,255,255,0.08))`
+      : active
+        ? "1px solid rgba(255,255,255,0.12)"
+        : quiet
+          ? "1px solid rgba(255,255,255,0.035)"
+          : "1px solid rgba(255,255,255,0.045)",
+    background: selected
+      ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 18%, transparent), color-mix(in srgb, ${accent} 8%, transparent))`
+      : active
+        ? "rgba(255,255,255,0.065)"
+        : quiet
+          ? "rgba(255,255,255,0.018)"
+          : "rgba(255,255,255,0.03)",
+    color: selected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "inherit",
+    transition: "background 140ms, border-color 140ms, color 140ms",
+  };
+}
+
+function InlineOverflowMetadata({ item, selected }) {
+  if (!item.leadingLabel && !item.recurring) return null;
+  const color = selected
+    ? item.leadingColor || item.accent || "var(--ea-accent)"
+    : item.leadingColor || "rgba(205,214,244,0.62)";
+  return (
+    <span
+      style={{
+        minWidth: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        overflow: "hidden",
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: 0.15,
+        lineHeight: 1.05,
+        color,
+        whiteSpace: "nowrap",
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {item.leadingLabel ? (
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+          {item.leadingLabel}
+        </span>
+      ) : null}
+      {item.recurring ? (
+        <Repeat
+          aria-hidden="true"
+          size={10}
+          strokeWidth={2.4}
+          style={{ flexShrink: 0, color, opacity: selected ? 0.86 : 0.7 }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
+function CalendarInlineOverflowLayer({
+  overflow,
+  selectedItemId,
+  onSelectItem,
+  onInteraction,
+  quickActions,
+  onBeforeItemAction,
+}) {
+  const [activeItemId, setActiveItemId] = useState(null);
+  const layerRef = useRef(null);
+
+  if (!overflow?.inlineAnchor || !overflow.items?.length) return null;
+  const boundaryColor = overflow.boundaryColor || CURRENT_MONTH_BOUNDARY_COLOR;
+  const drawBottomBoundary = overflow.boundarySides?.includes?.("bottom");
+
+  return (
+    <div
+      ref={layerRef}
+      data-testid="calendar-cell-inline-overflow"
+      data-calendar-inline-overflow-layer="true"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => {
+        onInteraction?.();
+        event.stopPropagation();
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+      style={{
+        position: "absolute",
+        top: overflow.inlineAnchor.top,
+        left: overflow.inlineAnchor.left,
+        width: overflow.inlineAnchor.width,
+        zIndex: 60,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        minWidth: 0,
+        padding: "4px",
+        borderRadius: "0 0 10px 10px",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderTop: 0,
+        background: "#16161e",
+        boxShadow: "0 18px 42px rgba(0,0,0,0.45)",
+        pointerEvents: "auto",
+        isolation: "isolate",
+        animation: "calendarInlineOverflowIn 150ms cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
+    >
+      {overflow.items.map((item) => {
+        const itemId = String(item.id);
+        const selected = itemId === String(selectedItemId);
+        const active = itemId === String(activeItemId);
+        const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            data-testid="calendar-cell-item-chip"
+            data-inline-overflow-item="true"
+            data-item-id={itemId}
+            data-hovered={active ? "true" : "false"}
+            draggable={dragAllowed}
+            data-calendar-focus-ring="true"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectItem?.(item.id, {
+                triggerElement: event.currentTarget,
+                sourceCellElement: overflow.sourceCellElement || null,
+                exclusionElement: layerRef.current,
+                dateKey: overflow.dateKey || null,
+                anchorKind: "overflow-row",
+                itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
+              });
+            }}
+            onContextMenu={(event) => {
+              if (!item.sourceEvent?.writable) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onBeforeItemAction?.();
+              quickActions?.openDeleteMenu?.({
+                event: item.sourceEvent,
+                x: event.clientX,
+                y: event.clientY,
+              });
+            }}
+            onDragStart={(event) => {
+              if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
+                event.preventDefault();
+                return;
+              }
+              onBeforeItemAction?.();
+              event.stopPropagation();
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
+              event.dataTransfer.setData("text/plain", String(item.title || ""));
+            }}
+            onDragEnd={() => quickActions?.endDrag?.()}
+            onPointerEnter={() => setActiveItemId(itemId)}
+            onPointerLeave={() => setActiveItemId((current) => (current === itemId ? null : current))}
+            onFocus={() => setActiveItemId(itemId)}
+            onBlur={() => setActiveItemId((current) => (current === itemId ? null : current))}
+            style={inlineOverflowItemStyle({ item, selected, active })}
+          >
+            <InlineOverflowMetadata item={item} selected={selected} />
+            <span
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontSize: 11.75,
+                fontWeight: selected ? 600 : 500,
+                lineHeight: 1.1,
+                textDecoration: item.complete ? "line-through" : "none",
+                textDecorationColor: "rgba(205,214,244,0.28)",
+              }}
+            >
+              {item.title}
+            </span>
+          </button>
+        );
+      })}
+      {drawBottomBoundary ? (
+        <span
+          aria-hidden="true"
+          data-calendar-inline-overflow-boundary="bottom"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 2,
+            background: boundaryColor,
+            borderBottomLeftRadius: 8,
+            borderBottomRightRadius: 8,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 function formatCellDate(viewYear, viewMonth, day) {
@@ -330,7 +563,6 @@ function CalendarCell({
         position: "relative",
         minWidth: 0,
         overflow: "visible",
-        zIndex: inlineOverflowOpen ? 12 : undefined,
         borderRadius: 8,
         padding: "6px 8px",
         background: cellBg,
@@ -521,6 +753,7 @@ export default function CalendarGrid({
   floatingDetailParked = false,
 }) {
   const gridShellRef = useRef(null);
+  const gridBodyRef = useRef(null);
   const monthWheelRef = useRef({ accumulatedY: 0, lastNavigateAt: -Infinity });
   const ignoreOverflowScrollUntilRef = useRef(0);
   const [activeSpanSegmentId, setActiveSpanSegmentId] = useState(null);
@@ -623,10 +856,10 @@ export default function CalendarGrid({
         .find((element) => element.getAttribute("data-calendar-overflow-anchor-key") === anchorKey);
       trigger?.focus?.();
     });
-  }, [overflowState?.anchorKey]);
+  }, [overflowState?.anchorKey, setOverflowState]);
   const closeOverflowWithoutFocus = useCallback(() => {
     setOverflowState(null);
-  }, []);
+  }, [setOverflowState]);
   const markOverflowInteraction = useCallback(() => {
     ignoreOverflowScrollUntilRef.current = performance.now() + 220;
   }, []);
@@ -712,6 +945,7 @@ export default function CalendarGrid({
     function handlePointerDown(event) {
       if (resolvedOverflow.sourceCellElement?.contains(event.target)) return;
       if (resolvedOverflow.triggerElement?.contains(event.target)) return;
+      if (isCalendarInlineOverflowTarget(event.target)) return;
       if (isCalendarFloatingDetailTarget(event.target)) return;
       if (isCalendarRailTarget(event.target)) return;
       if (gridShellRef.current?.contains(event.target) && isCalendarGridCellTarget(event.target)) return;
@@ -756,6 +990,7 @@ export default function CalendarGrid({
     suppressOutsideClick((target) => (
       resolvedOverflow.sourceCellElement?.contains(target)
       || resolvedOverflow.triggerElement?.contains(target)
+      || isCalendarInlineOverflowTarget(target)
       || isCalendarRailTarget(target)
     ));
     return () => suppressOutsideClick(null);
@@ -842,7 +1077,7 @@ export default function CalendarGrid({
         ))}
       </div>
 
-      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+      <div ref={gridBodyRef} style={{ position: "relative", flex: 1, minHeight: 0 }}>
         <div
           data-testid="calendar-grid-month"
           role="grid"
@@ -862,6 +1097,7 @@ export default function CalendarGrid({
                 : "none"
           }
           style={{
+            position: "relative",
             height: "100%",
             display: "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
@@ -980,10 +1216,16 @@ export default function CalendarGrid({
                       hiddenStackHeight,
                       layout,
                     }) ? "inline" : "fallback";
+                    const inlineAnchor = mode === "inline"
+                      ? resolveInlineOverflowAnchor(triggerElement, gridBodyRef.current)
+                      : null;
                     return {
                       mode,
                       triggerElement,
                       sourceCellElement,
+                      inlineAnchor,
+                      boundarySides: cell.boundarySides,
+                      boundaryColor: cell.boundaryColor,
                       items: hiddenItems,
                       totalCount,
                       visibleCount,
@@ -1015,6 +1257,7 @@ export default function CalendarGrid({
                     inlineOverflowVisibleCount: inlineOverflowOpen
                       ? resolvedOverflow?.visibleCount
                       : null,
+                    inlineOverflowExternal: true,
                     onInlineOverflowInteraction: markOverflowInteraction,
                     onCloseInlineOverflow: closeOverflowWithoutFocus,
                     onBeforeItemAction: onCloseFloatingDetail,
@@ -1034,6 +1277,9 @@ export default function CalendarGrid({
           layout={layout}
           gridRowCount={gridRowCount}
           fillGridHeight={fillGridHeight}
+          suppressedBoundary={resolvedOverflow?.mode === "inline" && resolvedOverflow.boundarySides?.includes?.("bottom")
+            ? { dateKey: resolvedOverflow.dateKey, sides: ["bottom"] }
+            : null}
         />
         <CalendarEventSpanOverlay
           segments={spanLayout.spanSegments}
@@ -1050,6 +1296,24 @@ export default function CalendarGrid({
           quickActions={eventDateCells ? eventQuickActions : null}
           onBeforeAction={onCloseFloatingDetail}
         />
+        {resolvedOverflow?.mode === "inline" ? (
+          <CalendarInlineOverflowLayer
+            overflow={resolvedOverflow}
+            selectedItemId={selectedItemId}
+            onSelectItem={(itemId, anchorMeta) => {
+              if (resolvedOverflow?.day == null) return;
+              handleSelectItem(
+                resolvedOverflow.day,
+                itemId,
+                resolvedOverflow.dateKey || null,
+                { keepOverflowOpen: true, anchorMeta },
+              );
+            }}
+            onInteraction={markOverflowInteraction}
+            quickActions={eventDateCells ? eventQuickActions : null}
+            onBeforeItemAction={onCloseFloatingDetail}
+          />
+        ) : null}
 
         {showGridSkeleton && (
           <CalendarGridSkeleton

@@ -1,8 +1,14 @@
 const GRID_ROWS = 6;
 
-function cellBoundaryMeta(cell, index) {
+function cellBoundaryMeta(cell, index, suppressedBoundary) {
+  const suppressedSides = suppressedBoundary?.dateKey === cell.dateKey
+    ? new Set(suppressedBoundary.sides || [])
+    : null;
   return {
     ...cell,
+    boundarySides: suppressedSides
+      ? cell.boundarySides.filter((side) => !suppressedSides.has(side))
+      : cell.boundarySides,
     index,
     row: Math.floor(index / 7) + 1,
     column: (index % 7) + 1,
@@ -95,8 +101,10 @@ function pushVerticalBoundarySegments({ segments, cells, side }) {
   });
 }
 
-function buildBoundarySegments(monthCells) {
-  const cells = monthCells.map(cellBoundaryMeta).filter((cell) => cell.boundarySides.length);
+function buildBoundarySegments(monthCells, suppressedBoundary) {
+  const cells = monthCells
+    .map((cell, index) => cellBoundaryMeta(cell, index, suppressedBoundary))
+    .filter((cell) => cell.boundarySides.length);
   const segments = [];
   pushHorizontalBoundarySegments({ segments, cells, side: "top" });
   pushHorizontalBoundarySegments({ segments, cells, side: "bottom" });
@@ -110,9 +118,10 @@ export default function CalendarMonthBoundaryOverlay({
   layout,
   gridRowCount,
   fillGridHeight,
+  suppressedBoundary = null,
 }) {
   const boundaryStrokeWidth = 2;
-  const segments = buildBoundarySegments(monthCells);
+  const segments = buildBoundarySegments(monthCells, suppressedBoundary);
   if (!segments.length) return null;
 
   return (

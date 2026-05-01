@@ -1,13 +1,13 @@
+import { Repeat } from "lucide-react";
 import { parseYmd } from "../calendarDateUtils.js";
 import { spanSegmentDisplay } from "./calendarEventSpanLayout.js";
 
 const GRID_ROWS = 6;
 
 function spanLaneMetrics(layout) {
-  const large = layout?.tier === "uhd" || layout?.tier === "xl" || layout?.tier === "lg";
   return {
     rowTop: layout?.tier === "uhd" || layout?.tier === "xl" ? 32 : 30,
-    height: large ? 30 : 28,
+    height: 36,
     gap: 4,
   };
 }
@@ -60,11 +60,13 @@ function spanSegmentStyle(segment, layout, selected, active) {
     boxShadow: selected
       ? `inset 0 1px 0 color-mix(in srgb, ${color} 18%, rgba(255,255,255,0.02))`
       : "none",
-    display: "grid",
-    gridTemplateColumns: "auto minmax(0, 1fr)",
-    alignItems: "center",
-    gap: 6,
-    padding: "0 9px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "center",
+    gap: 1,
+    boxSizing: "border-box",
+    padding: "4px 10px",
     pointerEvents: ghost ? "none" : "auto",
     opacity: ghost ? 0.96 : 1,
     zIndex: 7 + segment.lane,
@@ -124,16 +126,34 @@ export default function CalendarEventSpanOverlay({
             <span
               style={{
                 minWidth: 0,
-                fontSize: 9.5,
-                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                overflow: "hidden",
+                fontSize: 10,
+                lineHeight: 1.05,
                 fontWeight: 800,
-                letterSpacing: 0.3,
+                letterSpacing: 0.15,
                 color: selected ? display.color : display.color || "var(--ea-accent)",
                 whiteSpace: "nowrap",
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              {display.leadingLabel}
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                {display.leadingLabel}
+              </span>
+              {display.recurring ? (
+                <Repeat
+                  aria-hidden="true"
+                  size={10}
+                  strokeWidth={2.4}
+                  style={{
+                    flexShrink: 0,
+                    color: selected ? display.color : display.color || "var(--ea-accent)",
+                    opacity: selected ? 0.86 : 0.7,
+                  }}
+                />
+              ) : null}
             </span>
             <span
               style={{
@@ -141,7 +161,7 @@ export default function CalendarEventSpanOverlay({
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                fontSize: 11,
+                fontSize: 11.75,
                 fontWeight: selected ? 650 : 600,
                 lineHeight: 1.1,
               }}
