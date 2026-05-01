@@ -319,6 +319,40 @@ function buildRecurrencePayload(recurrenceDraft, draft) {
   return payload;
 }
 
+function normalizeDraftForDirty({
+  draft,
+  effectiveTitle,
+  titleInput,
+  intentMode,
+  batchDrafts,
+  recurrenceDraft,
+  recurringEditScope,
+}) {
+  return JSON.stringify({
+    title: String(effectiveTitle || "").trim(),
+    titleInput: String(titleInput || "").trim(),
+    allDay: !!draft?.allDay,
+    startDate: draft?.startDate || "",
+    endDate: draft?.endDate || "",
+    startTime: draft?.startTime || "",
+    endTime: draft?.endTime || "",
+    accountId: draft?.accountId || "",
+    calendarId: draft?.calendarId || "",
+    location: String(draft?.location || "").trim(),
+    description: String(draft?.description || "").trim(),
+    intentMode: intentMode || "single",
+    batchDrafts: (batchDrafts || []).map((item) => ({
+      title: String(item?.title || "").trim(),
+      startDate: item?.startDate || "",
+      endDate: item?.endDate || "",
+      startTime: item?.startTime || "",
+      endTime: item?.endTime || "",
+    })),
+    recurrenceDraft: recurrenceDraft || null,
+    recurringEditScope: recurringEditScope || null,
+  });
+}
+
 function validateSingleDraft({ draft, effectiveTitle }) {
   if (!effectiveTitle) return "Title is required.";
   if (!draft.accountId || !draft.calendarId) return "Choose a writable calendar.";
@@ -385,6 +419,8 @@ export default function useCalendarEventEditor({
   upsertEvents,
   removeEvent,
   onFocusDate,
+  onSaved,
+  onDeleted,
 }) {
   const [mode, setMode] = useState("detail");
   const [sourceGroups, setSourceGroups] = useState([]);
@@ -481,6 +517,7 @@ export default function useCalendarEventEditor({
     return validationMessage;
   }, [saveAttempted, touchedFields.title, validationMessage]);
   const canSave = editable && !saving && !deleting && !validationMessage;
+  const dirtyBaselineRef = useRef(null);
 
   useLayoutEffect(() => {
     sourceGroupsRef.current = sourceGroups;
@@ -703,11 +740,32 @@ export default function useCalendarEventEditor({
     setMode("editor");
     setError(null);
     setErrorCode(null);
+    dirtyBaselineRef.current = normalizeDraftForDirty({
+      draft: nextDraft,
+      effectiveTitle: "",
+      titleInput: "",
+      intentMode: "single",
+      batchDrafts: [],
+      recurrenceDraft: null,
+      recurringEditScope: null,
+    });
 
     const groups = await ensureSources();
     if (editorRequestIdRef.current !== requestId) return;
 
-    setDraft((current) => seedDefaultCalendar(current, groups));
+    setDraft((current) => {
+      const seeded = seedDefaultCalendar(current, groups);
+      dirtyBaselineRef.current = normalizeDraftForDirty({
+        draft: seeded,
+        effectiveTitle: "",
+        titleInput: "",
+        intentMode: "single",
+        batchDrafts: [],
+        recurrenceDraft: null,
+        recurringEditScope: null,
+      });
+      return seeded;
+    });
     setCreateSeedDraft((current) => seedDefaultCalendar(current, groups));
     if (!flattenWritableCalendars(groups).length) {
       const reason = inferNoWritableReason(groups);
@@ -747,6 +805,15 @@ export default function useCalendarEventEditor({
     setMode("editor");
     setError(null);
     setErrorCode(null);
+    dirtyBaselineRef.current = normalizeDraftForDirty({
+      draft: nextDraft,
+      effectiveTitle: nextDraft.title,
+      titleInput: nextDraft.title,
+      intentMode: "single",
+      batchDrafts: [],
+      recurrenceDraft: event?.isRecurring && event?.recurrence ? normalizeRecurrenceDraft(event.recurrence, nextDraft) : null,
+      recurringEditScope: null,
+    });
   }, [editable, ensureSources, seedDefaultCalendar]);
 
   const closeEditor = useCallback(() => {
@@ -985,6 +1052,10 @@ export default function useCalendarEventEditor({
         setEditingEvent(null);
         setConfirmDelete(false);
         setBatchDrafts([]);
+        onSaved?.(createdEvents[0] || null, {
+          kind: "batch-create",
+          createdEvents,
+        });
         return;
       }
 
@@ -1023,13 +1094,16 @@ export default function useCalendarEventEditor({
       setMode("detail");
       setEditingEvent(null);
       setConfirmDelete(false);
+      onSaved?.(savedEvent, {
+        kind: editingEvent ? "update" : "create",
+      });
     } catch (err) {
       setError(err.message || "Failed to save event.");
       setErrorCode(err.code || null);
     } finally {
       setSaving(false);
     }
-  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, intentState.mode, isEditingRecurring, onFocusDate, recurrenceDraft, recurringEditScope, refreshRange, upsertEvents, validationMessage]);
+  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, intentState.mode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, upsertEvents, validationMessage]);
 
   const reconnect = useCallback(async () => {
     try {
@@ -1072,6 +1146,7 @@ export default function useCalendarEventEditor({
       } else {
         removeEvent?.(editingEvent.id);
       }
+      onDeleted?.(editingEvent);
       closeEditor();
     } catch (err) {
       setError(err.message || "Failed to delete event.");
@@ -1079,7 +1154,20 @@ export default function useCalendarEventEditor({
     } finally {
       setDeleting(false);
     }
-  }, [closeEditor, editingEvent, isEditingRecurring, recurringEditScope, refreshRange, removeEvent]);
+  }, [closeEditor, editingEvent, isEditingRecurring, onDeleted, recurringEditScope, refreshRange, removeEvent]);
+
+  const dirtySnapshot = useMemo(() => normalizeDraftForDirty({
+    draft,
+    effectiveTitle,
+    titleInput,
+    intentMode: intentState.mode,
+    batchDrafts,
+    recurrenceDraft,
+    recurringEditScope,
+  }), [batchDrafts, draft, effectiveTitle, intentState.mode, recurrenceDraft, recurringEditScope, titleInput]);
+  const isDirty = mode === "editor"
+    && !!dirtyBaselineRef.current
+    && dirtyBaselineRef.current !== dirtySnapshot;
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -1120,6 +1208,7 @@ export default function useCalendarEventEditor({
     editable,
     mode,
     isEditorOpen: mode === "editor",
+    isDirty,
     isEditing,
     isEditingRecurring,
     editingEvent,

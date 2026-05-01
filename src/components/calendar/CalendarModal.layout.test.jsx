@@ -533,7 +533,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
   });
 
-  it("closes floating detail before opening the event editor", async () => {
+  it("morphs floating detail into the event editor", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -568,9 +568,11 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+      expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
     });
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
   });
 
   it("dims past event days more than future days without dimming today", () => {
@@ -641,13 +643,98 @@ describe("CalendarModal responsive layout", () => {
         await Promise.resolve();
       });
 
-      expect(screen.getByRole("button", { name: /cancel/i })).toBeTruthy();
+      expect(screen.getAllByRole("button", { name: /cancel/i }).length).toBeGreaterThan(0);
       expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
-      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
-      expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(getLatestRailContent().getAttribute("data-rail-content-kind")).not.toBe("editor");
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("blocks calendar close while the floating event editor is dirty", async () => {
+    window.innerWidth = 1900;
+    const onClose = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={onClose}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-23"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.keyDown(document, { key: "c" });
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Planning block" },
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
+    await waitFor(() => {
+      expect(panel.querySelector("[data-calendar-floating-editor-feedback='active']")).toBeTruthy();
+    });
+
+    fireEvent.click(within(panel).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+  });
+
+  it("opens E-key event edits anchored with a visible caret", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+
+    fireEvent.keyDown(document, { key: "e" });
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    const panel = screen.getByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("edit");
+    expect(screen.getByTestId("calendar-floating-detail-caret")).toBeTruthy();
   });
 
   it("preserves a focused deadline day and item when the modal opens into deadlines", () => {
@@ -773,9 +860,9 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
-    const quietChip = screen.getByText("Project due").closest("button");
+    const quietChip = within(screen.getByTestId("calendar-cell-20")).getByText("Project due").closest("button");
     expect(quietChip).toBeTruthy();
-    expect(quietChip?.style.textDecoration).toContain("line-through");
+    expect(quietChip?.getAttribute("data-item-id")).toBe("deadline-1");
   });
 
   it("uses the event-style font treatment for the selected deadline title", () => {
@@ -1297,7 +1384,7 @@ describe("CalendarModal responsive layout", () => {
     }
   });
 
-  it("widens the context stage when entering editor mode", async () => {
+  it("opens a staged floating workspace when entering editor mode", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
 
@@ -1330,8 +1417,9 @@ describe("CalendarModal responsive layout", () => {
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
       expect(screen.getByTestId("calendar-event-editor-rail").getAttribute("data-editor-layout")).toBe("desktop-staged");
       expect(screen.getByTestId("calendar-event-editor-detail-layout").getAttribute("data-layout-mode")).toBe("desktop-staged");
-      expect(screen.getByTestId("calendar-modal-editor-expanded")).toBeTruthy();
-      expect(body.style.gridTemplateColumns).toContain("620px");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.queryByTestId("calendar-modal-editor-expanded")).toBeNull();
+      expect(body.style.gridTemplateColumns).toContain("320px");
       expect(screen.getByTestId("calendar-cell-23")).toBeTruthy();
     } finally {
       vi.useRealTimers();
@@ -1416,7 +1504,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getAllByText("Second task").length).toBeGreaterThan(0);
   });
 
-  it("opens a blank inline Todoist editor from the deadlines header", async () => {
+  it("opens a blank floating Todoist editor from the deadlines header", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -1441,8 +1529,8 @@ describe("CalendarModal responsive layout", () => {
     fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
-    expect(getLatestRailContent().getAttribute("data-rail-motion")).toBe("editor");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("detail");
   });
 
   it("opens a blank inline Todoist editor from a deadlines create focus request", async () => {
@@ -1550,8 +1638,9 @@ describe("CalendarModal responsive layout", () => {
     ));
 
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
     expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("editor");
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).not.toBe("editor");
   });
 
   it("opens a blank inline Todoist editor from c in deadlines view", async () => {

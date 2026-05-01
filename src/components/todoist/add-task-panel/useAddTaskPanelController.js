@@ -29,6 +29,7 @@ export default function useAddTaskPanelController({
   host = "anchored",
   initialDueDate = null,
   onDraftPreviewChange,
+  onDirtyChange,
 }) {
   const isInline = host === "inline";
   const isEdit = !!editingTask;
@@ -183,11 +184,13 @@ export default function useAddTaskPanelController({
 
   const resolvedProject = overrides.project ? manualProject : parsed.project || null;
   const resolvedPriority = overrides.priority ? manualPriority : parsed.priority || null;
-  const resolvedLabels = overrides.labels
-    ? manualLabels
-    : parsed.labels.length
-      ? parsed.labels
-      : [];
+  const resolvedLabels = useMemo(() => (
+    overrides.labels
+      ? manualLabels || []
+      : parsed.labels.length
+        ? parsed.labels
+        : []
+  ), [manualLabels, overrides.labels, parsed.labels]);
   const resolvedDue = overrides.due
     ? manualDue?.dueString || null
     : parsed.recurringDueString || parsed.datePhrase || seededCreateDue?.dueString || null;
@@ -217,9 +220,40 @@ export default function useAddTaskPanelController({
     };
   }, [editingTask?.due_date, editingTask?.due_time, editingTask?.title, input, isEdit, manualDue?.epochMs, overrides.due, parsed.duePreview, parsed.stripped, resolvedPriority, seededDueEpoch]);
 
+  const originalDueValue = useMemo(() => (
+    editingTask
+      ? editingTask.due_string || [editingTask.due_date, editingTask.due_time].filter(Boolean).join(" ") || null
+      : seededCreateDue?.dueString || null
+  ), [editingTask, seededCreateDue?.dueString]);
+
+  const dirtySnapshot = useMemo(() => JSON.stringify({
+    content: String(parsed.stripped || input || "").trim(),
+    description: String(description || "").trim(),
+    project: resolvedProject?.name || resolvedProject?.id || null,
+    priority: resolvedPriority || null,
+    labels: (resolvedLabels || []).map((label) => label.name).sort(),
+    due: isEdit && !overrides.due ? originalDueValue : resolvedDue || null,
+  }), [description, input, isEdit, originalDueValue, overrides.due, parsed.stripped, resolvedDue, resolvedLabels, resolvedPriority, resolvedProject?.id, resolvedProject?.name]);
+
+  const dirtyBaseline = useMemo(() => JSON.stringify({
+    content: String(editingTask?.title || "").trim(),
+    description: String(editingTask?.description || "").trim(),
+    project: editingTask
+      ? editingTask.project_id || editingTask.project_name || editingTask.class_name || null
+      : null,
+    priority: editingTask?.priority || null,
+    labels: (editingTask?.labels || []).map((name) => String(name)).sort(),
+    due: originalDueValue,
+  }), [editingTask, originalDueValue]);
+  const isDirty = dirtySnapshot !== dirtyBaseline;
+
   useEffect(() => {
     onDraftPreviewChange?.(draftPreview);
   }, [draftPreview, onDraftPreviewChange]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const openDuePicker = useCallback(() => {
     setDuePickerOpen((prev) => {
@@ -518,6 +552,7 @@ export default function useAddTaskPanelController({
     resolvedDue,
     dueDisplay,
     draftPreview,
+    isDirty,
     duePickerOpen,
     duePickerNow,
     openDuePicker,
