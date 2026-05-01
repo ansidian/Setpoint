@@ -34,6 +34,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
   const scrollerRef = useRef(null);
   const headerRefs = useRef(new Map());
   const rowRefs = useRef(new Map());
+  const contentRefs = useRef(new Map());
   const suppressPassiveUntilRef = useRef(0);
   const scrollRafRef = useRef(0);
   const handledScrollCommandIdRef = useRef(null);
@@ -42,9 +43,23 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     if (node) headerRefs.current.set(dateKey, node);
     else headerRefs.current.delete(dateKey);
   };
-  const registerRow = (key, node) => {
+  const registerContent = (dateKey, node) => {
+    if (!dateKey) return;
+    const current = contentRefs.current.get(dateKey) || new Set();
+    if (node) {
+      current.add(node);
+      contentRefs.current.set(dateKey, current);
+    } else {
+      current.forEach((element) => {
+        if (!element?.isConnected) current.delete(element);
+      });
+      if (!current.size) contentRefs.current.delete(dateKey);
+    }
+  };
+  const registerRow = (key, node, dateKey) => {
     if (node) rowRefs.current.set(key, node);
     else rowRefs.current.delete(key);
+    registerContent(dateKey, node);
   };
 
   const scrollElementIntoView = useCallback((element, { block = "start", offsetTop = 0 } = {}) => {
@@ -82,6 +97,15 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     return true;
   }, []);
 
+  const scrollToDateContent = useCallback((dateKey, { contentAware = false } = {}) => {
+    const contentCandidates = contentAware ? [...(contentRefs.current.get(dateKey) || [])] : [];
+    const content = contentCandidates.find((element) => element?.isConnected) || null;
+    return scrollElementIntoView(content || headerRefs.current.get(dateKey), {
+      block: content ? "nearest" : "start",
+      offsetTop: content ? itemScrollTopOffset : 0,
+    });
+  }, [itemScrollTopOffset, scrollElementIntoView]);
+
   const scrollToItem = useCallback((itemId, dateKey) => {
     const row = findRow(rowRefs, itemId, dateKey);
     return scrollElementIntoView(row || headerRefs.current.get(dateKey), {
@@ -101,12 +125,12 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       return scrollToItem(itemId, dateKey);
     },
     scrollToToday() {
-      return scrollElementIntoView(headerRefs.current.get(todayKey), { block: "start" });
+      return scrollToDateContent(todayKey, { contentAware: true });
     },
     scrollToFirst() {
       return scrollElementIntoView(headerRefs.current.get(firstVisibleDateKey), { block: "start" });
     },
-  }), [firstVisibleDateKey, scrollElementIntoView, scrollToItem, todayKey]);
+  }), [firstVisibleDateKey, scrollElementIntoView, scrollToDateContent, scrollToItem, todayKey]);
 
   useEffect(() => {
     if (!scrollCommand || isLoading) return undefined;
@@ -114,7 +138,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     const id = window.requestAnimationFrame(() => {
       let handled = false;
       if (scrollCommand.type === "today") {
-        handled = scrollElementIntoView(headerRefs.current.get(todayKey), { block: "start" });
+        handled = scrollToDateContent(todayKey, { contentAware: true });
       } else if (scrollCommand.type === "date") {
         handled = scrollElementIntoView(headerRefs.current.get(scrollCommand.dateKey), { block: "start" });
       } else if (scrollCommand.type === "event" || scrollCommand.type === "item") {
@@ -125,7 +149,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       }
     });
     return () => window.cancelAnimationFrame(id);
-  }, [groups, isLoading, scrollCommand, scrollElementIntoView, scrollToItem, todayKey]);
+  }, [groups, isLoading, scrollCommand, scrollElementIntoView, scrollToDateContent, scrollToItem, todayKey]);
 
   useEffect(() => {
     if (isLoading) return undefined;
@@ -218,7 +242,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
           style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, paddingBottom: 14 }}
         >
           {renderHeader?.({ group, registerHeader })}
-          {renderGroup?.({ group, registerRow })}
+          {renderGroup?.({ group, registerRow, registerContent })}
         </section>
       ))}
     </div>

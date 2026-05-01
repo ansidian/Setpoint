@@ -394,7 +394,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
           quickActions={eventQuickActions}
         />
       )}
-      renderGroup={({ group, registerRow }) => {
+      renderGroup={({ group, registerRow, registerContent }) => {
         const expanded = expandedDays.has(group.dateKey);
         const visibleAllDay = expanded ? group.allDay : group.allDay.slice(0, 2);
         const hiddenAllDayCount = group.allDay.length - visibleAllDay.length;
@@ -406,7 +406,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
                 {visibleAllDay.map((event) => (
                   <span
                     key={keyForEvent(event, group.dateKey)}
-                    ref={(node) => registerRow(keyForEvent(event, group.dateKey), node)}
+                    ref={(node) => registerRow(keyForEvent(event, group.dateKey), node, group.dateKey)}
                     style={{ minWidth: 0, maxWidth: "100%" }}
                     onDragStart={() => {
                       dragEventRef.current = event;
@@ -455,7 +455,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
             {group.timed.map((event) => (
               <span
                 key={keyForEvent(event, group.dateKey)}
-                ref={(node) => registerRow(keyForEvent(event, group.dateKey), node)}
+                ref={(node) => registerRow(keyForEvent(event, group.dateKey), node, group.dateKey)}
                 onDragStart={() => {
                   dragEventRef.current = event;
                 }}
@@ -473,6 +473,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
             ))}
             {showNoEvents ? (
               <div
+                ref={(node) => registerContent(group.dateKey, node)}
                 style={{
                   padding: "12px 10px",
                   borderRadius: 8,

@@ -211,12 +211,12 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
           onActivate={onDateAction}
         />
       )}
-      renderGroup={({ group, registerRow }) => (
+      renderGroup={({ group, registerRow, registerContent }) => (
         <>
           {group.items.map((task) => (
             <span
               key={task.agendaKey}
-              ref={(node) => registerRow(task.agendaKey, node)}
+              ref={(node) => registerRow(task.agendaKey, node, group.dateKey)}
             >
               <DeadlineRow
                 task={task}
@@ -233,7 +233,9 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
             </span>
           ))}
           {!group.hasDeadlines && (group.isFallback || selectedDateKey === group.dateKey) ? (
-            <EmptyDeadlineDay fallback={group.isFallback} />
+            <div ref={(node) => registerContent(group.dateKey, node)}>
+              <EmptyDeadlineDay fallback={group.isFallback} />
+            </div>
           ) : null}
         </>
       )}
