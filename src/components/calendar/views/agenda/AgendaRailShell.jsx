@@ -1,6 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 
 const DEFAULT_ITEM_SCROLL_TOP_OFFSET = 44;
+const ITEM_ACTION_SELECTOR = [
+  "[data-testid='calendar-agenda-event-row']",
+  "[data-testid='calendar-agenda-event-chip']",
+  "[data-testid='calendar-agenda-bill-row']",
+  "[data-testid='calendar-agenda-deadline-row']",
+].join(", ");
 
 function findRow(rowRefs, itemId, dateKey) {
   const keyPrefix = `${itemId}-${dateKey}`;
@@ -159,6 +165,15 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     });
   }
 
+  function suppressItemPointerPassiveSync(event) {
+    if (!(event.target instanceof HTMLElement)) return;
+    if (!event.target.closest(ITEM_ACTION_SELECTOR)) return;
+    suppressPassiveUntilRef.current = Math.max(
+      suppressPassiveUntilRef.current,
+      performance.now() + 900,
+    );
+  }
+
   if (showSkeleton) return skeleton;
 
   return (
@@ -167,6 +182,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       data-testid={testId}
       data-calendar-local-scroll="true"
       onScroll={handleScroll}
+      onPointerDownCapture={suppressItemPointerPassiveSync}
       style={{
         flex: 1,
         minHeight: 0,

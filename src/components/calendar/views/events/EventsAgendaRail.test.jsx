@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EventsAgendaRail from "./EventsAgendaRail.jsx";
 
@@ -73,6 +73,29 @@ describe("EventsAgendaRail", () => {
     expect(onEventAction).not.toHaveBeenCalled();
     expect(scrollTo).not.toHaveBeenCalled();
     expect(rail.scrollTop).toBe(88);
+  });
+
+  it("suppresses passive date sync for pointer-induced item scroll", async () => {
+    const onPassiveDateChange = vi.fn();
+    renderRail({ selectedDateKey: "2026-05-01", onPassiveDateChange });
+    const rail = screen.getByTestId("events-agenda-rail");
+    const may1Header = screen.getByRole("button", { name: /select friday, may 1/i });
+    const may4Header = screen.getByRole("button", { name: /select monday, may 4/i });
+    const row = screen.getByTestId("calendar-agenda-event-row");
+
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    may1Header.getBoundingClientRect = () => ({ top: -48, bottom: -14, left: 0, right: 280, width: 280, height: 34 });
+    may4Header.getBoundingClientRect = () => ({ top: 2, bottom: 36, left: 0, right: 280, width: 280, height: 34 });
+
+    await act(async () => {
+      fireEvent.pointerDown(row);
+      fireEvent.scroll(rail);
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+
+    expect(onPassiveDateChange).not.toHaveBeenCalled();
   });
 
   it("pre-selects the month-start anchor on month entry", async () => {

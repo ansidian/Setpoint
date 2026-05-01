@@ -1172,6 +1172,135 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
+  it("keeps an agenda-anchored floating detail open when the panel receives pointer input", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-22"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Work",
+              startMs: new Date("2026-04-22T11:15:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T15:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#cba6da",
+              writable: true,
+            },
+            {
+              id: "event-2",
+              title: "Late workshop",
+              startMs: new Date("2026-04-22T23:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-23T00:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#89b4fa",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const agendaRail = await screen.findByTestId("events-agenda-rail");
+    agendaRail.scrollTop = 0;
+    const rows = within(agendaRail).getAllByTestId("calendar-agenda-event-row");
+
+    fireEvent.click(rows[1]);
+    const panel = await screen.findByRole("dialog", { name: /event/i });
+    expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Late workshop");
+
+    fireEvent.pointerDown(panel);
+
+    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
+    expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Late workshop");
+  });
+
+  it("keeps a grid-chip floating detail open while the agenda rail scrolls to that item", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-05-01"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Senior Design Expo",
+              startMs: new Date("2026-05-01T16:30:00.000Z").getTime(),
+              endMs: new Date("2026-05-01T19:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#cba6da",
+              writable: true,
+            },
+            {
+              id: "event-5",
+              title: "Cinco de Mayo",
+              startMs: new Date("2026-05-05T07:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-06T07:00:00.000Z").getTime(),
+              allDay: true,
+              color: "#f9e2af",
+              writable: true,
+            },
+            {
+              id: "event-6",
+              title: "Midweek checkpoint",
+              startMs: new Date("2026-05-06T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-06T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#89b4fa",
+              writable: true,
+            },
+            {
+              id: "event-29",
+              title: "Late workshop",
+              startMs: new Date("2026-05-29T20:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-29T21:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#89b4fa",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const may29Cell = screen.getByTestId("calendar-cell-29");
+    fireEvent.click(within(may29Cell).getByTestId("calendar-cell-item-chip"));
+    const panel = await screen.findByRole("dialog", { name: /event/i });
+    expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Late workshop");
+
+    const agendaRail = screen.getByTestId("events-agenda-rail");
+    const may5Header = within(agendaRail).getByRole("button", { name: /select tuesday, may 5/i });
+    const may6Header = within(agendaRail).getByRole("button", { name: /select wednesday, may 6/i });
+    agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    may5Header.getBoundingClientRect = () => ({ top: -48, bottom: -14, left: 0, right: 280, width: 280, height: 34 });
+    may6Header.getBoundingClientRect = () => ({ top: 2, bottom: 36, left: 0, right: 280, width: 280, height: 34 });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      fireEvent.scroll(agendaRail);
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+
+    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
+    expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Late workshop");
+    expect(screen.getByTestId("calendar-cell-29").getAttribute("aria-selected")).toBe("true");
+  });
+
 
   it("selects the grid date header without scrolling the agenda rail", async () => {
     window.innerWidth = 1900;

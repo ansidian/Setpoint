@@ -89,6 +89,11 @@ function isFloatingDetailTriggerTarget(target) {
     && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip'], [data-testid='calendar-agenda-bill-row'], [data-testid='calendar-agenda-deadline-row']");
 }
 
+function isFloatingDetailPanelTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-calendar-floating-detail='true']");
+}
+
 function floatingDetailTypeLabel(view) {
   if (view === "events") return "Event";
   if (view === "bills") return "Bill";
@@ -870,6 +875,7 @@ export default function CalendarModal({
 
   function requestAgendaScroll(command) {
     if (!command) return;
+    suppressAgendaPassiveSync();
     setAgendaScrollCommand({
       ...command,
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -983,6 +989,7 @@ export default function CalendarModal({
     function handleClick(event) {
       const suppressors = [...suppressOutsideClickRef.current.values()];
       if (suppressors.some((test) => test?.(event.target))) return;
+      if (isFloatingDetailPanelTarget(event.target)) return;
       const roleLayer = event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]');
       if (roleLayer && !panelRef.current?.contains(roleLayer)) return;
       if (floatingDetail?.open) {
