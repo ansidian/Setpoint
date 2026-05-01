@@ -1,14 +1,15 @@
 import { describe, it, expect } from "vitest";
 import eventsView from "./eventsView.jsx";
 
-function ev({ iso, title, color = "#4285f4", source = "gmail" }) {
+function ev({ iso, title, color = "#4285f4", source = "gmail", endIso = null, allDay = false, id = title }) {
   return {
+    id,
     startMs: new Date(iso).getTime(),
-    endMs: new Date(iso).getTime() + 30 * 60000,
+    endMs: endIso ? new Date(endIso).getTime() : new Date(iso).getTime() + 30 * 60000,
     title,
     color,
     source,
-    allDay: false,
+    allDay,
   };
 }
 
@@ -59,6 +60,53 @@ describe("eventsView.compute", () => {
       viewMonth: 3,
     });
     expect(itemsByDay).toEqual({});
+  });
+
+  it("expands pinned spanning events onto continuation dates without double-counting totals", () => {
+    const span = ev({
+      id: "span",
+      iso: "2026-04-30T07:00:00Z",
+      endIso: "2026-05-03T07:00:00Z",
+      title: "Conference",
+      allDay: true,
+    });
+    const { itemsByDay, itemsByDate, totalEvents, allDayEvents } = eventsView.compute({
+      data: { events: [span] },
+      viewYear: 2026,
+      viewMonth: 3,
+    });
+
+    expect(itemsByDay[30]).toEqual([span]);
+    expect(itemsByDate["2026-05-01"]).toEqual([span]);
+    expect(totalEvents).toBe(1);
+    expect(allDayEvents).toBe(1);
+  });
+
+  it("sorts detail items with all-day entries before timed entries on continuation dates", () => {
+    const allDay = ev({
+      id: "all-day",
+      iso: "2026-04-20T07:00:00Z",
+      endIso: "2026-04-22T07:00:00Z",
+      title: "All-day hold",
+      allDay: true,
+    });
+    const timed = ev({
+      id: "timed",
+      iso: "2026-04-21T05:00:00Z",
+      endIso: "2026-04-21T08:00:00Z",
+      title: "Late work",
+    });
+
+    const { itemsByDate } = eventsView.compute({
+      data: { events: [timed, allDay] },
+      viewYear: 2026,
+      viewMonth: 3,
+    });
+
+    expect(itemsByDate["2026-04-20"].map((event) => event.title)).toEqual([
+      "All-day hold",
+      "Late work",
+    ]);
   });
 });
 

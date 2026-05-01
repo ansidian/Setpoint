@@ -13,7 +13,8 @@ import { formatEventDuration, getEventSelectionId } from "../../../lib/redesign-
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
-import { pacificYMD, parseYmd } from "../calendarDateUtils.js";
+import { addDaysYmd, pacificYMD, parseYmd, ymdFromParts } from "../calendarDateUtils.js";
+import { isPinnedCalendarEvent, visualEventDateRange } from "../modal/calendarEventSpanLayout.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -83,24 +84,40 @@ function compute({ data, viewYear, viewMonth }) {
   const itemsByDate = {};
   let totalEvents = 0;
   let allDayEvents = 0;
+  const monthStart = ymdFromParts(viewYear, viewMonth, 1);
+  const monthEnd = ymdFromParts(viewYear, viewMonth, new Date(viewYear, viewMonth + 1, 0).getDate());
+
   for (const ev of events) {
     if (!ev.startMs) continue;
-    const ymd = pacificYMD(ev.startMs); // e.g. "2026-04-20"
-    const [y, m, d] = ymd.split("-").map(Number);
-    if (!itemsByDate[ymd]) itemsByDate[ymd] = [];
-    itemsByDate[ymd].push(ev);
-    if (y !== viewYear || m !== viewMonth + 1) continue;
-    if (!itemsByDay[d]) itemsByDay[d] = [];
-    itemsByDay[d].push(ev);
-    totalEvents += 1;
-    if (ev.allDay) allDayEvents += 1;
+    const range = isPinnedCalendarEvent(ev)
+      ? visualEventDateRange(ev)
+      : { startDate: pacificYMD(ev.startMs), endDate: pacificYMD(ev.startMs) };
+    if (!range) continue;
+
+    let cursor = range.startDate;
+    while (cursor <= range.endDate) {
+      if (!itemsByDate[cursor]) itemsByDate[cursor] = [];
+      itemsByDate[cursor].push(ev);
+
+      const parsed = parseYmd(cursor);
+      if (parsed?.year === viewYear && parsed.month === viewMonth) {
+        if (!itemsByDay[parsed.day]) itemsByDay[parsed.day] = [];
+        itemsByDay[parsed.day].push(ev);
+      }
+      cursor = addDaysYmd(cursor, 1);
+    }
+
+    if (range.startDate <= monthEnd && range.endDate >= monthStart) {
+      totalEvents += 1;
+      if (ev.allDay) allDayEvents += 1;
+    }
   }
   // Sort each day's events chronologically
   for (const d of Object.keys(itemsByDay)) {
-    itemsByDay[d].sort((a, b) => a.startMs - b.startMs);
+    itemsByDay[d] = orderDetailEvents(itemsByDay[d]);
   }
   for (const dateKey of Object.keys(itemsByDate)) {
-    itemsByDate[dateKey].sort((a, b) => a.startMs - b.startMs);
+    itemsByDate[dateKey] = orderDetailEvents(itemsByDate[dateKey]);
   }
   return { itemsByDay, itemsByDate, totalEvents, allDayEvents };
 }
