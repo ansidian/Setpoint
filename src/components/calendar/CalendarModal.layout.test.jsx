@@ -1202,6 +1202,66 @@ describe("CalendarModal responsive layout", () => {
     }
   });
 
+  it("consumes modal hotkeys without leaving selected items in focus-ring mode", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = screen.getByTestId("calendar-modal-panel");
+    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    fireEvent.click(chip);
+    chip.focus();
+
+    const spaceEvent = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    act(() => {
+      chip.dispatchEvent(spaceEvent);
+    });
+
+    expect(spaceEvent.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(panel.getAttribute("data-calendar-suppress-focus-ring")).toBe("true");
+    });
+
+    const strayHotkeyEvent = new KeyboardEvent("keydown", { key: "x", bubbles: true, cancelable: true });
+    act(() => {
+      document.dispatchEvent(strayHotkeyEvent);
+    });
+
+    expect(strayHotkeyEvent.defaultPrevented).toBe(true);
+
+    const tabEvent = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    act(() => {
+      document.dispatchEvent(tabEvent);
+    });
+
+    await waitFor(() => {
+      expect(panel.hasAttribute("data-calendar-suppress-focus-ring")).toBe(false);
+    });
+  });
+
   it("opens the create event form from c and preserves the selected day seed", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));

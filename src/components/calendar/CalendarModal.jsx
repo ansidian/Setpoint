@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import billsView from "./views/billsView.jsx";
 import deadlinesView from "./views/deadlinesView.jsx";
 import eventsView from "./views/eventsView.jsx";
@@ -147,6 +147,7 @@ export default function CalendarModal({
   const [pendingFocusDate, setPendingFocusDate] = useState(null);
   const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
+  const [suppressFocusRing, setSuppressFocusRing] = useState(false);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const navigateMonthRef = useRef(null);
@@ -390,17 +391,18 @@ export default function CalendarModal({
     ));
   }
 
-  function handleViewChange(nextView) {
+  const handleViewChange = useCallback((nextView) => {
     if (nextView && nextView !== view) {
       setFloatingDetail(null);
     }
     onViewChange?.(nextView);
-  }
+  }, [onViewChange, setFloatingDetail, view]);
 
-  function closeCalendarModal() {
+  const closeCalendarModal = useCallback(() => {
     setFloatingDetail(null);
+    setSuppressFocusRing(false);
     onClose();
-  }
+  }, [onClose, setFloatingDetail, setSuppressFocusRing]);
 
   function navigateMonth(dir) {
     closeEventEditor();
@@ -533,7 +535,7 @@ export default function CalendarModal({
     }
     document.addEventListener("pointerdown", handleClick);
     return () => document.removeEventListener("pointerdown", handleClick);
-  }, [floatingDetail?.open, open, onClose]);
+  }, [closeCalendarModal, floatingDetail?.open, open]);
 
   useEffect(() => {
     function handleResize() {
@@ -618,9 +620,19 @@ export default function CalendarModal({
   useEffect(() => {
     if (!open) return undefined;
     function handleKey(event) {
-      if ((event.metaKey || event.ctrlKey) && event.key === "f") {
-        event.preventDefault();
+      if (event.key === "Tab") {
+        setSuppressFocusRing(false);
+        return;
+      }
+
+      const consumeCalendarKey = ({ preventDefault = true } = {}) => {
+        setSuppressFocusRing(true);
+        if (preventDefault && event.cancelable) event.preventDefault();
         event.stopPropagation();
+      };
+
+      if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+        consumeCalendarKey();
         return;
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -651,22 +663,29 @@ export default function CalendarModal({
         return;
       }
 
+      if (
+        (event.key === "Enter" || event.key === " ")
+        && event.target instanceof HTMLElement
+        && event.target.closest("button, [role='button'], [role='gridcell']")
+      ) {
+        setSuppressFocusRing(true);
+        return;
+      }
+
       switch (event.key) {
         case "Escape":
           closeCalendarModal();
-          event.stopPropagation();
+          consumeCalendarKey({ preventDefault: false });
           break;
         case "ArrowLeft":
         case "p":
           if (canGoPrev) navigateMonthRef.current?.(-1);
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "ArrowRight":
         case "n":
           navigateMonthRef.current?.(1);
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "t":
         case "T":
@@ -674,8 +693,7 @@ export default function CalendarModal({
           setViewDate({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
           setSelectedDateKey(ymdFromParts(currentYear, currentMonth, todayDate));
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "e":
         case "E":
@@ -699,8 +717,7 @@ export default function CalendarModal({
               }
             }
           }
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "c":
         case "C":
@@ -715,34 +732,30 @@ export default function CalendarModal({
             });
             setDeadlineDraftPreview(null);
           }
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "1":
           if (view !== "events") handleViewChange("events");
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "2":
           if (view !== "bills") handleViewChange("bills");
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         case "3":
           if (view !== "deadlines") handleViewChange("deadlines");
-          event.preventDefault();
-          event.stopPropagation();
+          consumeCalendarKey();
           break;
         default:
-          if (event.key.length === 1 && event.key !== "r" && event.key !== "R") {
-            event.stopPropagation();
+          if (event.key === "Enter" || (event.key.length === 1 && event.key !== "r" && event.key !== "R")) {
+            consumeCalendarKey();
           }
           break;
       }
     }
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, computed.itemsByDate, setDeadlineEditor, floatingDetail?.open, handleViewChange]);
+  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, computed.itemsByDate, setDeadlineEditor, floatingDetail?.open, handleViewChange]);
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
@@ -859,6 +872,7 @@ export default function CalendarModal({
       onParkFloatingDetail={parkFloatingDetail}
       onFloatingDetailDragged={setFloatingDetailDragged}
       onReanchorFloatingDetail={openFloatingDetail}
+      suppressFocusRing={suppressFocusRing}
     />
   );
 }

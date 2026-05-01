@@ -170,6 +170,11 @@ body {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--ea-accent) 14%, transparent);
 }
 
+[data-calendar-suppress-focus-ring="true"] [data-calendar-focus-ring="true"]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .mouse-spotlight-canvas {
   position: fixed;
   left: 0;
