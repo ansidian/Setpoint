@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, forwardRef } fro
 import { cn } from "@/lib/utils";
 import Section from "../layout/Section";
 import useIsMobile from "../../hooks/useIsMobile";
+import { buildWeekDays, derivePassedState } from "./schedule/scheduleModel.js";
 
 function useNowTick() {
   const fmt = () => new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -17,15 +18,6 @@ function useNowTick() {
     return () => clearInterval(id);
   }, []);
   return { time, tick, nowMs };
-}
-
-function derivePassedState(events) {
-  if (!events?.length) return events;
-  const nowMs = Date.now();
-  return events.map(e => ({
-    ...e,
-    passed: e.allDay ? false : (e.endMs || e.startMs) <= nowMs,
-  }));
 }
 
 const NowMarker = forwardRef(function NowMarker(
@@ -166,42 +158,6 @@ function TomorrowDivider() {
       <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
     </div>
   );
-}
-
-function buildWeekDays(events) {
-  // Compute next Sunday from today (same logic as backend getNextWeekRange)
-  const now = new Date();
-  const dow = now.getDay(); // 0=Sun, 6=Sat
-  const daysUntilNextSunday = (7 - dow) % 7 || 7;
-  const nextSunday = new Date(now);
-  nextSunday.setDate(now.getDate() + daysUntilNextSunday);
-  nextSunday.setHours(0, 0, 0, 0);
-
-  // Group events by dayLabel
-  const byDay = {};
-  for (const e of events || []) {
-    const key = e.dayLabel;
-    if (!byDay[key]) byDay[key] = [];
-    byDay[key].push(e);
-  }
-
-  // Generate 7 days (Sun–Sat)
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(nextSunday);
-    d.setDate(nextSunday.getDate() + i);
-    const label = d.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-    days.push({
-      label,
-      events: byDay[label] || [],
-    });
-  }
-
-  return days;
 }
 
 function EventCard({ event, showSource }) {
