@@ -17,11 +17,20 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 
 - Do not automatically run Playwright tests or browser automation unless explicitly requested.
 - In Plan mode, do not treat the clarifying-question UI's three-question batch limit as a product requirement. If more than three clarifying questions are necessary to align on scope, ask the most blocking questions first, then continue with additional concise follow-up questions or another clarification round before finalizing the plan.
+- Default to test-driven development for behavior changes and bug fixes: write or update the focused failing test first, run it to see the red state, make the smallest implementation change, rerun to green, then refactor with tests passing.
+- If TDD is not practical for a change, call that out in the handoff with the reason and the verification used instead. Documentation-only, config-only, exploratory spikes, and urgent production repairs are acceptable exceptions.
 - For frontend-facing work, use the global `impeccable` skill and treat this as a dense product UI, not a marketing surface.
 - For UI work, add deliberate hover/focus motion to buttons and icon buttons unless the control is disabled or reduced-motion handling requires a static state.
 - Prefer repo patterns over new abstractions. Add abstractions only when they remove real complexity or match established structure.
 - When adding a new briefing output field, visible briefing feature, email/bill/deadline shape, or dev-only data path, add/update a scenario under `server/db/scenarios/`.
 - Preserve graceful degradation in the briefing pipeline: each fetcher in `server/briefing/index.js` needs its own `.catch()` fallback so one source does not kill generation.
+
+## TDD Cycle
+
+1. Red: add the smallest unit, integration, or scenario test that captures the missing behavior or regression. Prefer Vitest and existing scenario patterns; keep Playwright opt-in.
+2. Green: run the focused test command and implement only enough code to pass it.
+3. Refactor: clean up names, structure, and duplication while keeping the targeted test green.
+4. Verify: expand to the relevant nearby test file, `npm test`, or the mechanical checks when the blast radius justifies it. Report any skipped step explicitly.
 
 ## Mechanical Checks
 

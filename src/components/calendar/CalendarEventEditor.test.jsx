@@ -154,6 +154,42 @@ describe("Calendar event editor rail", () => {
     });
   });
 
+  it("auto focuses the title when opening the create editor", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+
+    const title = await screen.findByTestId("calendar-event-title");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(title);
+    });
+  });
+
+  it("auto focuses the title when opening the edit editor", async () => {
+    const event = {
+      id: "event-focus-edit",
+      etag: '"etag-focus-edit"',
+      title: "Planning block",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+    };
+    renderModal({ events: [event] });
+
+    await openFloatingEventEditorFromSelectedChip();
+
+    const title = screen.getByTestId("calendar-event-title");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(title);
+    });
+    expect(title.selectionStart).toBe("Planning block".length);
+    expect(title.selectionEnd).toBe("Planning block".length);
+  });
+
   it("deletes a selected single event from the detail action", async () => {
     const event = {
       id: "event-1",

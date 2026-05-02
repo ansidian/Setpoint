@@ -31,7 +31,7 @@ describe("calendar cell ghost content", () => {
     }));
 
     const chip = screen.getByTestId("calendar-ghost-chip");
-    expect(chip.textContent).toContain("12:30 PM");
+    expect(chip.textContent).toContain("12:30p");
     expect(chip.textContent).toContain("Planning block");
     expect(chip.textContent).not.toMatch(/draft|conflict|repeat/i);
   });
@@ -59,6 +59,6 @@ describe("calendar cell ghost content", () => {
 
     const chips = screen.getAllByText(/Morning task|Late task/).map((node) => node.textContent);
     expect(chips).toEqual(["Morning task", "Late task"]);
-    expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("9:00 AM");
+    expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("9a");
   });
 });

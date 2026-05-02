@@ -14,7 +14,9 @@ export default function useCalendarEditorPickers(editor) {
     draft,
     titleInput,
     titleAssist,
+    isEditorOpen,
     isEditing,
+    editingEvent,
     writableCalendars,
     locationSuggestions,
     locationSuggestionsLoading,
@@ -57,10 +59,20 @@ export default function useCalendarEditorPickers(editor) {
   }, [openPicker]);
 
   useEffect(() => {
-    if (isEditing) return;
-    titleRef.current?.focus();
-    titleRef.current?.select();
-  }, [isEditing]);
+    if (!isEditorOpen) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const title = titleRef.current;
+      title?.focus({ preventScroll: true });
+      if (!title) return;
+      if (isEditing) {
+        const cursorPosition = String(title.value || "").length;
+        title.setSelectionRange?.(cursorPosition, cursorPosition);
+      } else {
+        title.select();
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editingEvent?.id, isEditing, isEditorOpen]);
 
   useEffect(() => {
     activeSourceSuggestionRef.current = activeSourceSuggestion;
