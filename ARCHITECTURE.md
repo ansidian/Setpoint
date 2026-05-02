@@ -197,7 +197,6 @@ graph TD
     DashboardProvider --> EmailTabSection
 
     DashboardHeader --> BriefingHistoryPanel
-    DashboardHeader --> BriefingSearch
     DashboardHeader --> WeatherTooltip
 
     EmailTabSection --> EmailSection
@@ -269,7 +268,7 @@ API fetch (apiFetch wrapper)
 | Hold Suspend 1.5s | Suspend Render service |
 | Click email | Expand EmailBody panel (iframe with sanitized HTML) |
 | Click task status dot | Cycle task status (incomplete → in_progress → complete) |
-| Cmd/Ctrl+K, type @query | Email keyword search (FTS5, cross-account) |
+| Type in Inbox search | FTS5 email keyword search across indexed INBOX mail |
 | Ctrl+Shift+D | Dev panel (dev mode only) |
 
 ## Backend Architecture
@@ -434,7 +433,7 @@ Historical briefings use `briefing.aiGeneratedAt` as the resolver's `now`, so th
 
 **Skip AI** — If inbox is clean (no new unread), calendar hasn't changed, and last AI call was <16 hours ago, clone the previous briefing and only update weather/calendar/CTM/Todoist. No Claude API call.
 
-**Email Indexing** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. Runs fire-and-forget alongside the briefing pipeline. On first run (empty index), a 30-day backfill fetch populates historical emails.
+**Email Indexing** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. The 2-hour background indexer remains the freshness path for newly arrived mail. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
 
 **Post-Processing** — Server always overwrites AI-generated calendar, weather, CTM, and Todoist data with fresh server-fetched values. This prevents hallucinations. Email accounts are regrouped by `account_label` to fix potential Claude misclassification. Duplicate bills from payment processors (PayPal, Venmo, etc.) are detected and suppressed.
 
@@ -588,6 +587,24 @@ erDiagram
         datetime indexed_at
     }
 
+    ea_email_backfill_state {
+        text user_id PK
+        text account_id PK
+        text mailbox_scope PK "inbox"
+        text status "queued/running/retry/paused/completed"
+        int target_days
+        text oldest_target_date
+        text oldest_indexed_date
+        text last_scanned_at
+        text cursor_json "current window/page cursor"
+        int indexed_count
+        text last_error
+        int attempts
+        text started_at
+        text completed_at
+        text updated_at
+    }
+
     ea_email_fts {
         text uid "UNINDEXED join key"
         text from_name "FTS5 indexed"
@@ -631,6 +648,10 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 | 23 | `023_snoozed_emails.sql` | `ea_snoozed_emails` + index on `(user_id, until_ts)` |
 | 24 | `024_snoozed_resurfaced.sql` | Track snooze resurface state |
 | 25 | `025_completed_tasks_metadata.sql` | Add `due_date` + `snapshot_json` to `ea_completed_tasks` |
+| 26 | `026_bill_extract_model.sql` | Configurable bill extraction provider/model |
+| 27 | `027_notes.sql` | Local notes table |
+| 28 | `028_csrf_browser_bind.sql` | OAuth browser-binding metadata |
+| 29 | `029_email_backfill_state.sql` | Durable per-account email backfill state |
 
 ## Key Patterns
 
@@ -706,7 +727,39 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/briefing/email-search?q=` | FTS5 keyword search across all indexed emails |
+| GET | `/api/briefing/email-search?q=` | FTS5 keyword search for the Inbox tab across indexed INBOX mail |
+| GET | `/api/briefing/email-index/health` | Production-available index/backfill health by account |
+| POST | `/api/briefing/email-index/backfill` | Queue/resume historical INBOX backfill and wake the worker |
+
+Search contract:
+
+- Email search queries `ea_email_fts` joined to `ea_email_index`; it is not limited to the latest briefing JSON or live polling payload.
+- Current historical completeness target is INBOX mail only. Archived, sent, trash, and provider-wide all-mail history are intentionally out of scope.
+- The default historical backfill target is 365 days. This is minimum desired coverage, not a retention cutoff.
+- Indexed rows are not pruned by default. Older rows can remain searchable.
+- Stale rows can remain searchable if a provider message later leaves INBOX or is deleted. Provider reconciliation/deletion cleanup is not part of the current contract.
+
+Operational runbook:
+
+```bash
+# Check indexed coverage and backfill state by account.
+curl -s https://<app-host>/api/briefing/email-index/health \
+  -H 'Cookie: ea_session=<session>'
+
+# Queue/resume the default 365-day INBOX backfill and wake the worker.
+curl -s -X POST https://<app-host>/api/briefing/email-index/backfill \
+  -H 'Cookie: ea_session=<session>' \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+
+# Optional shorter diagnostic target.
+curl -s -X POST https://<app-host>/api/briefing/email-index/backfill \
+  -H 'Cookie: ea_session=<session>' \
+  -H 'Content-Type: application/json' \
+  -d '{"targetDays":90}'
+```
+
+Health responses intentionally avoid email bodies. Use `indexed_count`, `oldest_indexed_date`, `newest_indexed_date`, `last_indexed_at`, `backfill.status`, `backfill.current_window`, `backfill.attempts`, and `backfill.last_error` to diagnose coverage or stuck accounts. `paused` generally means auth/rate-limit intervention is needed; `retry` means the worker can resume a transient failure.
 
 ### Email Operations
 
