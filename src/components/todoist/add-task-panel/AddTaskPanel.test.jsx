@@ -223,7 +223,7 @@ describe("AddTaskPanel due picker", () => {
     );
     vi.runOnlyPendingTimers();
 
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toMatch(/2026-04-22/);
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 22, 2026 · 9 AM");
     expect(onDraftPreviewChange).toHaveBeenCalledWith(expect.objectContaining({
       dueDate: "2026-04-22",
       placementChanged: true,
@@ -239,6 +239,85 @@ describe("AddTaskPanel due picker", () => {
       expect.objectContaining({
         content: "Plan sprint",
         due_string: "2026-04-22 at 9:00 AM",
+      }),
+    );
+  });
+
+  it("uses the slim event-workspace layout for inline deadline editing", async () => {
+    mockGetTodoistProjects.mockResolvedValue([
+      { id: "inbox", name: "Inbox", isInbox: true },
+      { id: "school", name: "School", color: "#89b4fa" },
+    ]);
+    mockGetTodoistLabels.mockResolvedValue([
+      { id: "urgent", name: "urgent" },
+    ]);
+
+    render(
+      <AddTaskPanel
+        host="inline"
+        initialDueDate="2026-04-22"
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    const editor = screen.getByTestId("todoist-inline-editor");
+    expect(editor.getAttribute("data-editor-layout")).toBe("slim-icon");
+    expect(editor.getAttribute("data-calendar-local-scroll")).toBe("true");
+    expect(screen.getByTestId("todoist-compact-toolbar")).toBeTruthy();
+    expect(screen.getByTestId("todoist-due-trigger")).toBeTruthy();
+    expect(screen.getByTestId("todoist-project-trigger")).toBeTruthy();
+    expect(screen.getByTestId("todoist-priority-trigger")).toBeTruthy();
+    expect(screen.getByTestId("todoist-labels-trigger")).toBeTruthy();
+    expect(screen.getByLabelText("Task description").getAttribute("data-compact-notes")).toBe("true");
+    expect(within(screen.getByTestId("todoist-compact-toolbar")).queryByText(/April 22|Apr 22|2026-04-22/i)).toBeNull();
+    expect(within(editor).queryByText("Description")).toBeNull();
+    expect(within(editor).queryByText("Due")).toBeNull();
+    expect(within(editor).queryByText("Labels")).toBeNull();
+  });
+
+  it("keeps project, priority, and labels editable from compact controls", async () => {
+    mockGetTodoistProjects.mockResolvedValue([
+      { id: "inbox", name: "Inbox", isInbox: true },
+      { id: "school", name: "School", color: "#89b4fa" },
+    ]);
+    mockGetTodoistLabels.mockResolvedValue([
+      { id: "lab", name: "lab" },
+    ]);
+
+    render(
+      <AddTaskPanel
+        host="inline"
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    await vi.runAllTimersAsync();
+    screen.getByTestId("todoist-project-trigger");
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Submit lab notes" },
+    });
+    fireEvent.click(screen.getByTestId("todoist-project-trigger"));
+    fireEvent.click(screen.getByRole("option", { name: "School" }));
+    fireEvent.click(screen.getByTestId("todoist-priority-trigger"));
+    fireEvent.click(screen.getByRole("option", { name: "P2 High" }));
+    fireEvent.click(screen.getByTestId("todoist-labels-trigger"));
+    fireEvent.click(screen.getByRole("option", { name: "lab" }));
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+
+    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "Submit lab notes",
+        project_id: "school",
+        priority: 2,
+        labels: ["lab"],
       }),
     );
   });
@@ -278,12 +357,42 @@ describe("AddTaskPanel due picker", () => {
       target: { value: "Follow up tomorrow at 9am" },
     });
 
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toMatch(/2026-04-20/);
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 20, 2026 · 9 AM");
     expect(onDraftPreviewChange).toHaveBeenLastCalledWith(expect.objectContaining({
       dueDate: "2026-04-20",
       dueTime: "9 AM",
       placementChanged: true,
     }));
+  });
+
+  it("shows existing Todoist metadata as edit-only chips when no draft preview is needed", () => {
+    render(
+      <AddTaskPanel
+        host="inline"
+        editingTask={{
+          id: "todo-1",
+          title: "Follow up",
+          description: "",
+          class_name: "Inbox",
+          priority: 4,
+          labels: ["IHSS"],
+          due_date: "2026-04-21",
+          due_time: "2:30 PM",
+        }}
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
+    const metadata = screen.getByTestId("todoist-edit-metadata");
+    expect(metadata.textContent).toContain("April 21, 2026 · 2:30 PM");
+    expect(metadata.textContent).toContain("Inbox");
+    expect(metadata.textContent).toContain("P4");
+    expect(metadata.textContent).toContain("IHSS");
   });
 
   it("uses inline cancel actions instead of the floating close chrome", () => {

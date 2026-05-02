@@ -2425,7 +2425,7 @@ describe("CalendarModal responsive layout", () => {
       target: { value: "Plan sprint May 2 at 9am" },
     });
 
-    expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("2026-05-02");
+    expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("May 2, 2026 · 9 AM");
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
@@ -2438,7 +2438,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
     expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getByDisplayValue("Plan sprint May 2 at 9am")).toBeTruthy();
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("2026-05-02");
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 2, 2026 · 9 AM");
   });
 
   it("opens event create after closing a Todoist create focus request", async () => {
