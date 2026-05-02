@@ -181,6 +181,129 @@ describe("searchEmails contract", () => {
       query: "tuition receipt",
     });
   });
+
+  it("combines is:unread with full-text search against indexed read state", async () => {
+    mockDb.execute.mockResolvedValueOnce({ rows: [] });
+
+    await emailService.searchEmails("user-1", {
+      q: "is:unread amazon",
+      limit: 5,
+    });
+
+    const query = mockDb.execute.mock.calls[0][0];
+    expect(query.sql).toMatch(/ea_email_fts MATCH \?/);
+    expect(query.sql).toMatch(/idx\.read = \?/);
+    expect(query.args).toEqual([`"amazon"*`, "user-1", 0, 90]);
+  });
+
+  it("supports flag-only unread searches without requiring FTS text", async () => {
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [
+        {
+          uid: "gmail-work-unread-1",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#123456",
+          account_icon: "Mail",
+          from_name: "Sender",
+          from_address: "sender@example.com",
+          subject: "Unread note",
+          body_snippet: "Needs attention",
+          email_date: "2026-05-01T12:00:00Z",
+          read: 0,
+          subject_highlight: null,
+          body_highlight: null,
+          rank: 0,
+        },
+      ],
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "is:unread",
+      limit: 5,
+    });
+
+    const query = mockDb.execute.mock.calls[0][0];
+    expect(query.sql).not.toMatch(/ea_email_fts MATCH/);
+    expect(query.sql).toMatch(/FROM ea_email_index idx/);
+    expect(query.sql).toMatch(/idx\.read = \?/);
+    expect(query.args).toEqual(["user-1", 0, 90]);
+    expect(result.accounts[0].results[0].read).toBe(false);
+  });
+
+  it("supports is:read as an indexed read predicate", async () => {
+    mockDb.execute.mockResolvedValueOnce({ rows: [] });
+
+    await emailService.searchEmails("user-1", {
+      q: "is:read invoice",
+      limit: 5,
+    });
+
+    const query = mockDb.execute.mock.calls[0][0];
+    expect(query.sql).toMatch(/idx\.read = \?/);
+    expect(query.args).toEqual([`"invoice"*`, "user-1", 1, 90]);
+  });
+
+  it("returns indexed search results newest to oldest", async () => {
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [
+        {
+          uid: "older",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#123456",
+          account_icon: "Mail",
+          from_name: "Sender",
+          from_address: "sender@example.com",
+          subject: "Older invoice",
+          body_snippet: "Older indexed result",
+          email_date: "2026-04-01T12:00:00Z",
+          read: 1,
+          subject_highlight: null,
+          body_highlight: null,
+          rank: -20,
+        },
+        {
+          uid: "newer",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#123456",
+          account_icon: "Mail",
+          from_name: "Sender",
+          from_address: "sender@example.com",
+          subject: "Newer invoice",
+          body_snippet: "Newer indexed result",
+          email_date: "2026-05-01T12:00:00Z",
+          read: 1,
+          subject_highlight: null,
+          body_highlight: null,
+          rank: -1,
+        },
+      ],
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "invoice",
+      limit: 5,
+    });
+
+    expect(result.accounts[0].results.map((email) => email.uid)).toEqual(["newer", "older"]);
+  });
+
+  it("rejects unsupported flag-like search tokens", async () => {
+    await expect(emailService.searchEmails("user-1", {
+      q: "is:important amazon",
+      limit: 5,
+    })).rejects.toMatchObject({
+      status: 400,
+      code: "unsupported_email_search_flag",
+      message: "Unsupported email search flag: is:important",
+    });
+    expect(mockDb.execute).not.toHaveBeenCalled();
+  });
 });
 
 describe("markAllRead", () => {
