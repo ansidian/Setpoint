@@ -5,126 +5,17 @@ import { urgencyStyles } from "../../lib/dashboard-helpers";
 import EmailRow from "./EmailRow";
 import EmailReaderOverlay from "./EmailReaderOverlay";
 import useEmailReaderNav from "../../hooks/email/useEmailReaderNav";
-import { MotionExpand, MotionChevron, MotionList, MotionItem } from "../ui/motion-wrappers";
+import { MotionList, MotionItem } from "../ui/motion-wrappers";
 import { useDashboard } from "../../context/DashboardContext";
 import { markAllEmailsAsRead, trashEmail, markEmailAsRead, markEmailAsUnread } from "../../api";
 import { CheckCheck, CreditCard, History } from "lucide-react";
-import { Icon } from "@/lib/icons.jsx";
 import useIsMobile from "../../hooks/useIsMobile";
-import SwipeToReveal from "../ui/SwipeToReveal";
 import ContextMenu from "../ui/ContextMenu";
-
-function MaybeSwipe({ isMobile, onAction, children }) {
-  if (!isMobile) return children;
-  return <SwipeToReveal onAction={onAction}>{children}</SwipeToReveal>;
-}
-
-function buildBriefingEmailMenu(email, { onOpen, onMarkRead, onMarkUnread, onDismiss, onTrash }) {
-  const isRead = !!email.read;
-  return [
-    { label: "Open", onSelect: onOpen },
-    isRead
-      ? { label: "Mark unread", onSelect: onMarkUnread }
-      : { label: "Mark read", onSelect: onMarkRead },
-    { type: "separator" },
-    {
-      label: "Remove",
-      children: [
-        { label: "Dismiss", onSelect: onDismiss },
-        { label: "Trash", danger: true, onSelect: onTrash },
-      ],
-    },
-  ];
-}
-
-// Reusable ghost button — eliminates duplicated inline hover handlers
-function GhostAction({ onClick, disabled, children, className: cls, active }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "text-[10px] max-sm:text-xs font-medium rounded-md px-2.5 py-1.5 cursor-pointer transition-all duration-150 font-[inherit]",
-        active
-          ? "text-primary bg-primary/[0.08] border border-primary/20 hover:bg-primary/[0.15] hover:border-primary/30"
-          : "text-muted-foreground/40 bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] hover:border-white/10",
-        "disabled:opacity-50 disabled:pointer-events-none",
-        cls,
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-// Overlay footer action: two-step Trash confirm. State is owned by the
-// parent so it resets when the user cycles to a new email via ↑/↓.
-function TrashAction({ email, state, setState, onDismiss }) {
-  if (!email) return null;
-  if (state === "trashing") {
-    return <span className="text-[10px] text-muted-foreground/30">Moving to trash…</span>;
-  }
-  if (state === "confirm") {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground/40">Move to trash?</span>
-        <button
-          onClick={async () => {
-            setState("trashing");
-            try {
-              await trashEmail(email.uid || email.id);
-              onDismiss?.(email.id || email.uid);
-            } catch {
-              setState("idle");
-            }
-          }}
-          className="text-[10px] font-semibold rounded-md px-2.5 py-1 cursor-pointer font-[inherit] transition-all duration-150 hover:brightness-125"
-          style={{ color: "#f38ba8", background: "rgba(243,139,168,0.1)", border: "1px solid rgba(243,139,168,0.2)" }}
-        >
-          Trash
-        </button>
-        <button
-          onClick={() => setState("idle")}
-          className="text-[10px] text-muted-foreground/40 bg-transparent border-none cursor-pointer p-0 font-[inherit] transition-colors duration-150 hover:text-muted-foreground/60"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-  return (
-    <button
-      onClick={() => setState("confirm")}
-      className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground/50 bg-transparent border border-white/[0.06] rounded-md px-2.5 py-1 cursor-pointer transition-colors duration-150 hover:text-[#f38ba8] hover:border-[#f38ba8]/30"
-    >
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 6h18" /><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-      </svg>
-      Trash
-    </button>
-  );
-}
-
-// Inline confirm chip — used for dismiss confirmations
-function ConfirmChip({ label, color, onConfirm, onCancel }) {
-  return (
-    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
-      <button
-        className="rounded-md text-[10px] max-sm:text-xs font-semibold px-2.5 py-1 cursor-pointer font-[inherit] transition-all duration-150 hover:brightness-125"
-        style={{ color, background: `${color}12`, border: `1px solid ${color}25` }}
-        onClick={onConfirm}
-      >{label}</button>
-      <button
-        className="bg-transparent border-none text-muted-foreground/30 cursor-pointer p-1 leading-none rounded transition-colors duration-150 hover:text-muted-foreground/60 hover:bg-white/[0.04]"
-        onClick={onCancel}
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
-  );
-}
+import { buildBriefingEmailMenu } from "./briefingEmailMenu";
+import { EmailSectionAccountTabs } from "./EmailSectionAccountTabs";
+import { ConfirmChip, GhostAction, MaybeSwipe } from "./EmailSectionControls";
+import { EmailSectionNoiseList } from "./EmailSectionNoiseList";
+import { TrashAction } from "./EmailSectionReaderActions";
 
 export default function EmailSection({ summary, model: _model, loaded, delay, style, className, embedded, active = true }) {
   const isMobile = useIsMobile();
@@ -323,43 +214,13 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
       <p className="text-[12px] text-muted-foreground/60 m-0 mb-4 leading-relaxed">
         {summary || "No email accounts connected."}
       </p>
-      <div className="flex gap-1.5 mb-4 flex-wrap">
-        {emailAccounts.map((acc, i) => {
-          const isActive = activeAccount === i;
-          return (
-            <button
-              key={i}
-              onClick={() => {
-                setActiveAccount(i);
-                setSelectedEmail(null);
-                setMarkAllReadError("");
-              }}
-              className="rounded-lg px-3 py-2 cursor-pointer flex items-center gap-2 transition-all duration-200"
-              style={{
-                background: isActive ? `${acc.color}12` : "rgba(255,255,255,0.02)",
-                border: isActive ? `1px solid ${acc.color}30` : "1px solid rgba(255,255,255,0.04)",
-              }}
-            >
-              <span className="flex items-center" style={{ color: isActive ? acc.color : "rgba(205,214,244,0.5)" }}><Icon name={acc.icon} size={14} /></span>
-              <span
-                className="text-[11px] max-sm:text-xs font-medium"
-                style={{ color: isActive ? `${acc.color}dd` : "rgba(205,214,244,0.5)" }}
-              >
-                {acc.name}
-              </span>
-              <span
-                className="text-[10px] max-sm:text-xs font-bold px-1.5 py-0.5 rounded-full tabular-nums"
-                style={{
-                  background: `${acc.color}15`,
-                  color: `${acc.color}${isActive ? "cc" : "80"}`,
-                }}
-              >
-                {acc.unread}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <EmailSectionAccountTabs
+        emailAccounts={emailAccounts}
+        activeAccount={activeAccount}
+        setActiveAccount={setActiveAccount}
+        setSelectedEmail={setSelectedEmail}
+        setMarkAllReadError={setMarkAllReadError}
+      />
 
       {/* Batch actions — contextual row above the email list */}
       {currentAccount.important.length > 0 && (
@@ -515,54 +376,14 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
         })}
       </MotionList>
 
-      {/* Noise drawer */}
-      {totalNoiseCount > 0 && (
-        <div className="mt-3">
-          <GhostAction
-            onClick={() => setNoiseExpanded(!noiseExpanded)}
-            className="w-full flex items-center justify-between"
-          >
-            <span>{totalNoiseCount} email{totalNoiseCount !== 1 ? "s" : ""} filtered as noise</span>
-            <MotionChevron isOpen={noiseExpanded} className="text-muted-foreground/25" />
-          </GhostAction>
-          <MotionExpand isOpen={noiseExpanded}>
-            <div
-              className="mt-2 border-t border-white/[0.04] pt-3"
-            >
-              {noiseAccountsMemo.map((acc, i) => (
-                <div key={i} className={i > 0 ? "mt-3 pt-3 border-t border-white/[0.04]" : ""}>
-                  {multiNoiseAccounts && (
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span
-                        className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ background: acc.color, opacity: 0.7 }}
-                      />
-                      <span className="text-[10px] max-sm:text-xs font-medium text-muted-foreground/40">{acc.name}</span>
-                    </div>
-                  )}
-                  <div className="flex flex-col">
-                    {acc.noise.map((noiseEmail, j) => {
-                      const noiseId = noiseEmail.id || `noise-${i}-${j}`;
-                      return (
-                        <div
-                          key={noiseId}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => openNoiseInReader(noiseEmail, acc)}
-                          className="flex items-center gap-2 min-w-0 py-1.5 px-1 rounded cursor-pointer hover:bg-white/[0.04] transition-colors duration-150"
-                        >
-                          <span className="text-[11px] max-sm:text-xs text-muted-foreground/35 shrink-0 min-w-[80px] max-w-[140px] truncate">{noiseEmail.from}</span>
-                          <span className="text-[11px] max-sm:text-xs text-muted-foreground/55 truncate flex-1">{noiseEmail.subject}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </MotionExpand>
-        </div>
-      )}
+      <EmailSectionNoiseList
+        totalNoiseCount={totalNoiseCount}
+        noiseExpanded={noiseExpanded}
+        setNoiseExpanded={setNoiseExpanded}
+        noiseAccounts={noiseAccountsMemo}
+        multiNoiseAccounts={multiNoiseAccounts}
+        openNoiseInReader={openNoiseInReader}
+      />
 
       {/* Focus reader overlay — briefing list */}
       <EmailReaderOverlay
