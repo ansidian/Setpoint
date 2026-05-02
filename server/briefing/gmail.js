@@ -170,6 +170,37 @@ function extractBodyText(payload) {
 // At 500 per page this is 10k messages — far above any realistic briefing window.
 const MAX_LIST_PAGES = 20;
 
+function getHeaderValue(headers, name) {
+  return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
+}
+
+function normalizeMessage(account, msg) {
+  const headers = msg.payload?.headers || [];
+  const snippet = msg.snippet || "";
+  const bodyText = extractBodyText(msg.payload);
+  const amounts = extractAmounts(bodyText);
+
+  return {
+    uid: `gmail-${account.id}-${msg.id}`,
+    account_id: account.id,
+    account_label: account.label,
+    account_email: account.email,
+    account_color: account.color,
+    account_icon: account.icon || "Mail",
+    from: getHeaderValue(headers, "From"),
+    subject: getHeaderValue(headers, "Subject"),
+    body_preview: snippet + amounts,
+    body_text: bodyText,
+    date: getHeaderValue(headers, "Date"),
+    read: !msg.labelIds?.includes("UNREAD"),
+    message_id: getHeaderValue(headers, "Message-ID"),
+  };
+}
+
+function formatGmailSearchDate(value) {
+  return new Date(value).toISOString().slice(0, 10).replaceAll("-", "/");
+}
+
 export async function fetchEmails(account, hoursBack) {
   const token = await getValidToken(account);
 
@@ -207,32 +238,44 @@ export async function fetchEmails(account, hoursBack) {
 
   const messages = await fetchMessages(token, messageIds);
 
-  return messages.map((msg) => {
-    const headers = msg.payload?.headers || [];
-    const getHeader = (name) =>
-      headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ||
-      "";
+  return messages.map((msg) => normalizeMessage(account, msg));
+}
 
-    const snippet = msg.snippet || "";
-    const bodyText = extractBodyText(msg.payload);
-    const amounts = extractAmounts(bodyText);
+export async function fetchEmailsInRange(account, {
+  start,
+  end,
+  pageToken,
+  maxResults = 500,
+} = {}) {
+  if (!start || !end) {
+    throw new Error("Gmail range fetch requires start and end dates");
+  }
 
-    return {
-      uid: `gmail-${account.id}-${msg.id}`,
-      account_id: account.id,
-      account_label: account.label,
-      account_email: account.email,
-      account_color: account.color,
-      account_icon: account.icon || "Mail",
-      from: getHeader("From"),
-      subject: getHeader("Subject"),
-      body_preview: snippet + amounts,
-      body_text: bodyText,
-      date: getHeader("Date"),
-      read: !msg.labelIds?.includes("UNREAD"),
-      message_id: getHeader("Message-ID"),
-    };
+  const token = await getValidToken(account);
+  const listUrl = new URL(
+    "https://www.googleapis.com/gmail/v1/users/me/messages",
+  );
+  listUrl.searchParams.set(
+    "q",
+    `after:${formatGmailSearchDate(start)} before:${formatGmailSearchDate(end)}`,
+  );
+  listUrl.searchParams.set("labelIds", "INBOX");
+  listUrl.searchParams.set("maxResults", String(maxResults));
+  if (pageToken) listUrl.searchParams.set("pageToken", pageToken);
+
+  const listRes = await fetch(listUrl, {
+    headers: { Authorization: `Bearer ${token}` },
   });
+  if (!listRes.ok) throw new Error(`Gmail range list failed: ${listRes.status}`);
+  const listData = await listRes.json();
+  const messageIds = (listData.messages || []).map((message) => message.id);
+  const messages = messageIds.length ? await fetchMessages(token, messageIds) : [];
+
+  return {
+    emails: messages.map((msg) => normalizeMessage(account, msg)),
+    nextPageToken: listData.nextPageToken || null,
+    resultSizeEstimate: listData.resultSizeEstimate || 0,
+  };
 }
 
 export function chunkArray(arr, size) {

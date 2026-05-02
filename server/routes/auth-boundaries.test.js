@@ -57,6 +57,13 @@ vi.mock("../briefing/tasks-service.js", () => ({
 vi.mock("../briefing/dev-service.js", () => ({
   reindexEmails: vi.fn(),
 }));
+vi.mock("../briefing/email-index.js", () => ({
+  getEmailIndexHealth: vi.fn(async () => ({ accounts: [] })),
+  queueEmailIndexBackfill: vi.fn(async () => ({ queued: true, accounts: [] })),
+}));
+vi.mock("../briefing/email-backfill-worker.js", () => ({
+  wakeEmailBackfillWorker: vi.fn(),
+}));
 vi.mock("../db/scenarios/index.js", () => ({
   listScenarios: vi.fn(() => []),
 }));
