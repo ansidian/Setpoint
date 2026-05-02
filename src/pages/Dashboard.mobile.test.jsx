@@ -15,13 +15,20 @@ vi.mock("../hooks/useCustomize", () => ({
 }));
 
 vi.mock("../components/calendar/CalendarModal", () => ({
-  default: function CalendarModalMock({ open, view = "", focusDate = null, focusItemId = null }) {
+  default: function CalendarModalMock({
+    open,
+    view = "",
+    focusDate = null,
+    focusItemId = null,
+    focusOpenDetail = false,
+  }) {
     return (
       <div
         data-testid="calendar-modal"
         data-view={view}
         data-focus-date={focusDate || ""}
         data-focus-item-id={focusItemId || ""}
+        data-focus-open-detail={focusOpenDetail ? "true" : "false"}
       >
         {open ? "open" : "closed"}
       </div>
@@ -162,6 +169,7 @@ function makeProps() {
     historyTriggerRef: { current: null },
     calendarDeadlines: null,
     loadCalendarDeadlines: vi.fn(),
+    loadCalendarBills: vi.fn(),
   };
 }
 
@@ -363,6 +371,41 @@ describe("RedesignShell mobile behavior", () => {
       expect(modal.textContent).toBe("open");
       expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
       expect(modal.getAttribute("data-focus-item-id")).toBe("todo-42");
+      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
+    });
+  });
+
+  it("routes desktop bill clicks into the calendar modal with focused item detail state", async () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    props.liveData.liveBills = [
+      {
+        id: "bill-rent",
+        name: "Rent",
+        payee: "Landlord",
+        amount: 1800,
+        next_date: "2026-04-20",
+        paid: false,
+      },
+    ];
+
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    fireEvent.click(screen.getAllByText("Rent").at(-1));
+
+    await waitFor(() => {
+      const modal = screen.getByTestId("calendar-modal");
+      expect(modal.textContent).toBe("open");
+      expect(modal.getAttribute("data-view")).toBe("bills");
+      expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
+      expect(modal.getAttribute("data-focus-item-id")).toBe("bill-rent");
+      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
     });
   });
 

@@ -49,6 +49,21 @@ function dedupeEvents(events) {
   return result;
 }
 
+function itemsFromDatePool(activeView, pool) {
+  if (!pool) return [];
+  if (Array.isArray(pool)) return pool;
+  if (Array.isArray(pool.items)) return pool.items;
+  const state = activeView?.getDayState?.(pool);
+  if (Array.isArray(state?.items)) return state.items;
+  return [];
+}
+
+function resolvePendingFocusItem({ activeView, computed, dateKey, itemId }) {
+  const candidates = itemsFromDatePool(activeView, computed?.itemsByDate?.[dateKey]);
+  const getItemId = activeView?.getItemId || ((item) => item?.id);
+  return candidates.find((item) => String(getItemId(item)) === String(itemId)) || null;
+}
+
 export default function useCalendarModalController({
   open,
   onClose,
@@ -61,6 +76,7 @@ export default function useCalendarModalController({
   weatherData,
   focusDate,
   focusItemId,
+  focusOpenDetail = false,
   openRequestId = 0,
   deadlineActions = {},
 }) {
@@ -98,6 +114,7 @@ export default function useCalendarModalController({
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
   const [agendaScrollCommand, setAgendaScrollCommand] = useState(null);
+  const [pendingItemDetailFocus, setPendingItemDetailFocus] = useState(null);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const agendaRailRef = useRef(null);
@@ -385,22 +402,22 @@ export default function useCalendarModalController({
     });
   }
 
-  function requestAgendaScroll(command) {
+  const requestAgendaScroll = useCallback((command) => {
     if (!command) return;
     suppressAgendaPassiveSync();
     setAgendaScrollCommand({
       ...command,
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     });
-  }
+  }, [suppressAgendaPassiveSync]);
 
-  function scrollAgendaToDate(dateKey) {
+  const scrollAgendaToDate = useCallback((dateKey) => {
     requestAgendaScroll({ type: "date", dateKey });
-  }
+  }, [requestAgendaScroll]);
 
-  function scrollAgendaToEvent(itemId, dateKey) {
+  const scrollAgendaToEvent = useCallback((itemId, dateKey) => {
     requestAgendaScroll({ type: "event", itemId, dateKey });
-  }
+  }, [requestAgendaScroll]);
 
   useEffect(() => {
     if (!open || view !== "deadlines" || focusItemId !== "new" || !usesFloatingEditor) return;
@@ -483,6 +500,134 @@ export default function useCalendarModalController({
     setSelectedItemId,
   });
   const { canGoPrev, computed, itemsByDay } = viewModel;
+
+  useEffect(() => {
+    if (!open) {
+      setPendingItemDetailFocus(null);
+      return;
+    }
+    if (!focusOpenDetail || !focusItemId || focusItemId === "new" || !usesFloatingEditor) return;
+    const dateKey = focusDate || activeSelectedDateKey;
+    if (!dateKey) return;
+    const itemId = String(focusItemId);
+    setPendingItemDetailFocus((current) => {
+      if (
+        current?.openRequestId === openRequestId
+        && current.view === view
+        && current.dateKey === dateKey
+        && current.itemId === itemId
+      ) {
+        return current;
+      }
+      return {
+        openRequestId,
+        view,
+        dateKey,
+        itemId,
+        attempts: 0,
+      };
+    });
+  }, [activeSelectedDateKey, focusDate, focusItemId, focusOpenDetail, open, openRequestId, usesFloatingEditor, view]);
+
+  useEffect(() => {
+    if (!pendingItemDetailFocus || !open || !usesFloatingEditor) return undefined;
+    if (pendingItemDetailFocus.view !== view) return undefined;
+
+    const current = floatingDetailRef.current;
+    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
+      shakeFloatingEditor();
+      setPendingItemDetailFocus(null);
+      return undefined;
+    }
+
+    const item = resolvePendingFocusItem({
+      activeView,
+      computed,
+      dateKey: pendingItemDetailFocus.dateKey,
+      itemId: pendingItemDetailFocus.itemId,
+    });
+
+    const retryOrDegrade = () => {
+      setPendingItemDetailFocus((latest) => {
+        if (
+          !latest
+          || latest.openRequestId !== pendingItemDetailFocus.openRequestId
+          || latest.view !== pendingItemDetailFocus.view
+          || latest.dateKey !== pendingItemDetailFocus.dateKey
+          || latest.itemId !== pendingItemDetailFocus.itemId
+        ) {
+          return latest;
+        }
+        if ((latest.attempts || 0) >= 20) {
+          requestAgendaScroll({ type: "date", dateKey: latest.dateKey });
+          return null;
+        }
+        return { ...latest, attempts: (latest.attempts || 0) + 1 };
+      });
+    };
+
+    if (!item) {
+      const id = window.setTimeout(retryOrDegrade, 250);
+      return () => window.clearTimeout(id);
+    }
+
+    const parsed = parseYmd(pendingItemDetailFocus.dateKey);
+    if (!parsed) {
+      setPendingItemDetailFocus(null);
+      return undefined;
+    }
+
+    let secondRaf = 0;
+    const firstRaf = window.requestAnimationFrame(() => {
+      suppressAgendaPassiveSync();
+      agendaRailRef.current?.scrollToItem?.(pendingItemDetailFocus.itemId, pendingItemDetailFocus.dateKey);
+      secondRaf = window.requestAnimationFrame(() => {
+        const anchorElement = agendaRailRef.current?.getItemAnchor?.(
+          pendingItemDetailFocus.itemId,
+          pendingItemDetailFocus.dateKey,
+        );
+        if (!anchorElement) {
+          retryOrDegrade();
+          return;
+        }
+        setSelectedDay(parsed.day);
+        setSelectedDateKey(pendingItemDetailFocus.dateKey);
+        setSelectedItemId(pendingItemDetailFocus.itemId);
+        openFloatingDetail({
+          mode: "detail",
+          view,
+          itemId: pendingItemDetailFocus.itemId,
+          dateKey: pendingItemDetailFocus.dateKey,
+          day: parsed.day,
+          anchorElement,
+          sourceCellElement: anchorElement,
+          anchorKind: "agenda-row",
+          itemsSnapshot: [item],
+        });
+        setPendingItemDetailFocus(null);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstRaf);
+      if (secondRaf) window.cancelAnimationFrame(secondRaf);
+    };
+  }, [
+    activeView,
+    computed,
+    floatingDetailRef,
+    open,
+    openFloatingDetail,
+    pendingItemDetailFocus,
+    requestAgendaScroll,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+    shakeFloatingEditor,
+    suppressAgendaPassiveSync,
+    usesFloatingEditor,
+    view,
+  ]);
 
   useCalendarModalHotkeys({
     open,

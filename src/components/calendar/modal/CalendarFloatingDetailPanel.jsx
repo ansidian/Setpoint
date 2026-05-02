@@ -341,6 +341,7 @@ export default function CalendarFloatingDetailPanel({
         data-side-intent={detail?.sideIntent || "auto"}
         data-testid="calendar-floating-detail-panel"
         data-floating-mode={mode}
+        data-anchor-kind={detail?.anchorKind || undefined}
         role="dialog"
         aria-label={label || "Calendar floating detail"}
         className="isolate"

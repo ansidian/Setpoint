@@ -9,8 +9,28 @@ const ITEM_ACTION_SELECTOR = [
 ].join(", ");
 
 function findRow(rowRefs, itemId, dateKey) {
-  const keyPrefix = `${itemId}-${dateKey}`;
-  return [...rowRefs.current.entries()].find(([key]) => key.startsWith(keyPrefix))?.[1] || null;
+  const itemIdText = String(itemId ?? "");
+  const dateKeyText = String(dateKey ?? "");
+  if (!itemIdText || !dateKeyText) return null;
+  const simpleKeyPrefix = `${itemIdText}-${dateKeyText}`;
+  const deadlineKeyNeedle = `:${itemIdText}-${dateKeyText}`;
+  for (const [key, row] of rowRefs.current.entries()) {
+    if (!row?.isConnected) continue;
+    if (key.startsWith(simpleKeyPrefix) || key.includes(deadlineKeyNeedle)) return row;
+    const itemElement = row.querySelector?.("[data-item-id]");
+    if (itemElement && String(itemElement.getAttribute("data-item-id")) === itemIdText && key.endsWith(`-${dateKeyText}`)) {
+      return row;
+    }
+  }
+  return null;
+}
+
+function findRowAnchor(rowRefs, itemId, dateKey) {
+  const row = findRow(rowRefs, itemId, dateKey);
+  if (!row) return null;
+  return row.matches?.(ITEM_ACTION_SELECTOR)
+    ? row
+    : row.querySelector?.(ITEM_ACTION_SELECTOR) || row;
 }
 
 const AgendaRailShell = forwardRef(function AgendaRailShell({
@@ -123,6 +143,9 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     },
     scrollToItem(itemId, dateKey) {
       return scrollToItem(itemId, dateKey);
+    },
+    getItemAnchor(itemId, dateKey) {
+      return findRowAnchor(rowRefs, itemId, dateKey);
     },
     scrollToToday() {
       return scrollToDateContent(todayKey, { contentAware: true });

@@ -78,7 +78,7 @@ export function DashboardBody({
     } else if (payload.kind === "deadline") {
       onOpenDeadline(payload.data || payload, anchor);
     } else if (payload.kind === "bill") {
-      onOpenBillsCalendar(payload.data?.next_date || payload.date || null);
+      onOpenBillsCalendar(payload.data?.next_date || payload.date || null, payload.id || payload.data?.id || null);
     } else if (payload.kind === "event" && payload.data?.startMs) {
       const ymd = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Los_Angeles",
@@ -109,12 +109,19 @@ export function DashboardBody({
       }}
       onJump={(payload, anchor) => {
         if (payload?.kind === "deadline") {
-          // Callout carries { title, sub, ... } but not the full task — find it.
-          const task = deadlines.find((d) => d.title === payload.title);
-          if (task) onOpenDeadline(task, anchor);
+          if (payload.data) {
+            onOpenDeadline(payload.data, anchor);
+          } else if (payload.id && payload.date) {
+            onOpenDeadlinesCalendar?.(payload.date, payload.id);
+          } else {
+            onOpenDeadlinesCalendar?.(payload.date || null);
+          }
+        } else if (payload?.kind === "event") {
+          if (payload.id && payload.date) onOpenEventsCalendar(payload.date, payload.id);
+          else onJumpSection("timeline");
         } else if (payload?.kind === "bill") {
-          const match = bills.find((b) => b.name === payload.title);
-          onOpenBillsCalendar(match?.next_date || payload.date || null);
+          if (payload.id && payload.date) onOpenBillsCalendar(payload.date, payload.id);
+          else onOpenBillsCalendar(payload.date || null);
         } else {
           onJumpSection("timeline");
         }
