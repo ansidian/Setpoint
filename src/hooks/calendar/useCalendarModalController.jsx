@@ -8,15 +8,23 @@ import useCalendarQuickActions from "../../components/calendar/events/useCalenda
 import useDeadlineQuickActions from "../../components/calendar/views/deadlines/useDeadlineQuickActions.js";
 import useCalendarGhostPreview from "../../components/calendar/useCalendarGhostPreview.js";
 import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
-import { resolveFloatingDetailPlacement } from "../../components/calendar/modal/calendarFloatingDetailPlacement.js";
 import {
   getMonthData,
   getVisibleGridRange,
   parseYmd,
   ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.js";
+import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import { ymdFromView } from "./calendarModalSelectionModel.js";
+import {
+  formatFloatingDetailLabel,
+  formatFloatingEditorLabel,
+  isFloatingDetailFlipSuppressedTarget,
+  isFloatingDetailPanelTarget,
+  isFloatingDetailTriggerTarget,
+  isGridOriginFloatingDetail,
+} from "./calendarFloatingDetailModel.js";
 
 const VIEWS = {
   events: eventsView,
@@ -70,110 +78,6 @@ function buildFallbackDayState(rawItems) {
   };
 }
 
-function isFloatingDetailTriggerTarget(target) {
-  return target instanceof HTMLElement
-    && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip'], [data-testid='calendar-agenda-bill-row'], [data-testid='calendar-agenda-deadline-row']");
-}
-
-function isFloatingDetailPanelTarget(target) {
-  return target instanceof HTMLElement
-    && !!target.closest("[data-calendar-floating-detail='true']");
-}
-
-function isFloatingDetailFlipSuppressedTarget(target, detail) {
-  if (!(target instanceof HTMLElement)) return false;
-  const gridOriginTrigger = target.closest(
-    "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment']",
-  );
-  if (gridOriginTrigger && detail?.anchorElement === gridOriginTrigger) return false;
-
-  return !!target.closest([
-      "[data-calendar-floating-detail='true']",
-      "button",
-      "a[href]",
-      "input",
-      "textarea",
-      "select",
-      "[contenteditable='true']",
-      "[role='button']",
-      "[role='link']",
-      "[role='menu']",
-      "[role='menuitem']",
-      "[role='listbox']",
-      "[role='option']",
-      "[data-suspend-calendar-hotkeys='true']",
-    ].join(", "));
-}
-
-function isGridOriginFloatingDetail(detail) {
-  if (!detail?.open || detail.mode !== "detail" || detail.parked || detail.userDragged) return false;
-  return isGridOriginAnchorKind(detail.anchorKind);
-}
-
-function placementSideFromCaret(caretSide) {
-  if (caretSide === "left") return "right";
-  if (caretSide === "right") return "left";
-  return null;
-}
-
-function isGridOriginAnchorKind(anchorKind) {
-  return ["chip", "span", "overflow-row"].includes(String(anchorKind || ""));
-}
-
-function preservedReanchorSide(current, nextDetail, nextView, nextDateKey) {
-  if (!current?.open || current.mode !== "detail" || current.parked || current.userDragged || current.dirty) return null;
-  if (current.view !== nextView || current.dateKey !== nextDateKey) return null;
-  if (!isGridOriginAnchorKind(current.anchorKind) || !isGridOriginAnchorKind(nextDetail.anchorKind)) return null;
-  return current.forcedSide
-    || placementSideFromCaret(current.initialPlacement?.caretSide)
-    || current.preferredSide
-    || null;
-}
-
-function rememberedSessionSide(sessionSideByViewRef, nextDetail, nextView) {
-  if (!isGridOriginAnchorKind(nextDetail.anchorKind)) return null;
-  return sessionSideByViewRef.current[nextView] || null;
-}
-
-function floatingDetailTypeLabel(view) {
-  if (view === "events") return "Event";
-  if (view === "bills") return "Bill";
-  if (view === "deadlines") return "Deadline";
-  return "Item";
-}
-
-function formatFloatingDetailLabel(view, dateKey, viewYear, viewMonth, selectedDay) {
-  const parsed = parseYmd(dateKey);
-  const date = parsed
-    ? new Date(parsed.year, parsed.month, parsed.day)
-    : selectedDay
-      ? new Date(viewYear, viewMonth, selectedDay)
-      : null;
-  const dateLabel = date && !Number.isNaN(date.getTime())
-    ? date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-    : "Selected";
-  return `${floatingDetailTypeLabel(view)} · ${dateLabel}`;
-}
-
-function formatFloatingEditorLabel(mode, view, dateKey, viewYear, viewMonth, selectedDay) {
-  const parsed = parseYmd(dateKey);
-  const date = parsed
-    ? new Date(parsed.year, parsed.month, parsed.day)
-    : selectedDay
-      ? new Date(viewYear, viewMonth, selectedDay)
-      : null;
-  const dateLabel = date && !Number.isNaN(date.getTime())
-    ? date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-    : "Selected";
-  const action = mode === "create" ? "New" : "Edit";
-  const type = floatingDetailTypeLabel(view).toLowerCase();
-  return `${action} ${type} · ${dateLabel}`;
-}
-
-function elementRect(element) {
-  return element?.isConnected ? element.getBoundingClientRect() : null;
-}
-
 function pacificDateKeyFromMs(ms) {
   if (!ms) return null;
   return new Intl.DateTimeFormat("en-CA", {
@@ -224,7 +128,6 @@ export default function useCalendarModalController({
     focusItemId,
     openRequestId,
   });
-  const [floatingDetail, setFloatingDetail] = useState(null);
   const [deadlineEditor, setDeadlineEditor] = useState(() => (
     open && view === "deadlines" && focusItemId === "new"
       ? { mode: "create", seedDate: focusDate || null }
@@ -236,29 +139,32 @@ export default function useCalendarModalController({
   const [agendaScrollCommand, setAgendaScrollCommand] = useState(null);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
-  const floatingDetailRef = useRef(null);
-  const floatingDetailSessionSideByViewRef = useRef({});
   const agendaRailRef = useRef(null);
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
   const navigateMonthRef = useRef(null);
   const resizeRafRef = useRef(0);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
+  const {
+    floatingDetail,
+    setFloatingDetail,
+    floatingDetailRef,
+    findDateCell,
+    openFloatingDetail,
+    closeFloatingDetail,
+    parkFloatingDetail,
+    setFloatingDetailDragged,
+    flipFloatingDetailSide,
+    shakeFloatingEditor,
+    setFloatingEditorDirty,
+    setFloatingEditorSaveRequest,
+  } = useCalendarFloatingDetail({ open, view, panelRef });
 
   const viewMonth = activeViewDate.month;
   const viewYear = activeViewDate.year;
   const activeView = VIEWS[view] || billsView;
   const activeLayout = getCalendarLayoutMetrics(viewportWidth);
   const usesFloatingEditor = !activeLayout.stacked;
-
-  useLayoutEffect(() => {
-    floatingDetailRef.current = floatingDetail;
-  }, [floatingDetail]);
-
-  useEffect(() => {
-    if (open) return;
-    floatingDetailSessionSideByViewRef.current = {};
-  }, [open]);
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -319,7 +225,7 @@ export default function useCalendarModalController({
       activeSaveRequestId: null,
       dirty: false,
     });
-  }, [activeView, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
+  }, [activeView, floatingDetailRef, setFloatingDetail, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
 
   const handleEventEditorDeleted = useCallback((deletedEvent) => {
     const current = floatingDetailRef.current;
@@ -332,7 +238,7 @@ export default function useCalendarModalController({
     if (deletedId != null && String(selectedItemId) === String(deletedId)) {
       setSelectedItemId(null);
     }
-  }, [activeView, selectedItemId, setSelectedItemId]);
+  }, [activeView, floatingDetailRef, selectedItemId, setFloatingDetail, setSelectedItemId]);
 
   const eventEditor = useCalendarEventEditor({
     open,
@@ -596,172 +502,6 @@ export default function useCalendarModalController({
     }
   }
 
-  function closeFloatingDetail() {
-    const current = floatingDetailRef.current;
-    if (current?.open && (current.mode === "edit" || current.mode === "create")) {
-      if (current.dirty) shakeFloatingEditor();
-      return;
-    }
-    setFloatingDetail(null);
-  }
-
-  function shakeFloatingEditor() {
-    setFloatingDetail((current) => (
-      current?.open && (current.mode === "edit" || current.mode === "create")
-        ? { ...current, shakeKey: (current.shakeKey || 0) + 1 }
-        : current
-    ));
-  }
-
-  function setFloatingEditorDirty(dirty) {
-    setFloatingDetail((current) => (
-      current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty !== !!dirty
-        ? { ...current, dirty: !!dirty }
-        : current
-    ));
-  }
-
-  function setFloatingEditorSaveRequest(requestId) {
-    setFloatingDetail((current) => (
-      current?.open && (current.mode === "edit" || current.mode === "create")
-        ? { ...current, saveRequestId: requestId, activeSaveRequestId: requestId }
-        : current
-    ));
-  }
-
-  function findDateCell(dateKey) {
-    if (!dateKey) return null;
-    return panelRef.current?.querySelector?.(`[role='gridcell'][data-date-key='${dateKey}']`) || null;
-  }
-
-  function openFloatingDetail(nextDetail) {
-    if (!nextDetail) return;
-    const mode = nextDetail.mode || "detail";
-    const nextView = nextDetail.view || view;
-    const nextDateKey = nextDetail.dateKey || null;
-    const suppliedAnchor = nextDetail.anchorElement || null;
-    const inferredDayCell = !suppliedAnchor && mode !== "detail" ? findDateCell(nextDateKey) : null;
-    const anchorElement = suppliedAnchor || inferredDayCell;
-    const parked = !!nextDetail.parked || !anchorElement;
-    if (mode === "detail" && (!nextDetail.itemId || !anchorElement)) return;
-    const preferredSide = nextDetail.preferredSide
-      || (String(nextDetail.anchorKind || "").startsWith("agenda") ? "left" : null);
-    setFloatingDetail((current) => {
-      const forcedSide = nextDetail.forcedSide
-        || preservedReanchorSide(current, nextDetail, nextView, nextDateKey)
-        || rememberedSessionSide(floatingDetailSessionSideByViewRef, nextDetail, nextView)
-        || null;
-      const initialPlacement = resolveFloatingDetailPlacement({
-        anchorRect: elementRect(anchorElement),
-        sourceRect: elementRect(nextDetail.sourceCellElement || inferredDayCell),
-        exclusionRect: elementRect(nextDetail.exclusionElement),
-        calendarRect: elementRect(panelRef.current),
-        panelHeight: mode === "detail" ? 300 : 560,
-        mode,
-        parked,
-        preferredSide,
-        forcedSide,
-      });
-      const nextItemId = nextDetail.itemId != null ? String(nextDetail.itemId) : null;
-      const canReuseSnapshot = current?.open
-        && String(current.itemId) === nextItemId
-        && current.view === nextView
-        && current.dateKey === nextDateKey
-        && Array.isArray(current.itemsSnapshot);
-      const isSameSession = current?.open
-        && current.mode === mode
-        && current.view === nextView
-        && String(current.itemId || "") === String(nextItemId || "")
-        && current.dateKey === nextDateKey;
-      return {
-        open: true,
-        mode,
-        placementKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        view: nextView,
-        itemId: nextItemId,
-        dateKey: nextDateKey,
-        day: nextDetail.day ?? null,
-        anchorElement,
-        sourceCellElement: nextDetail.sourceCellElement || inferredDayCell || null,
-        exclusionElement: nextDetail.exclusionElement || null,
-        anchorKind: parked ? "parked" : nextDetail.anchorKind || (inferredDayCell ? "day-cell" : "chip"),
-        preferredSide,
-        forcedSide,
-        parked,
-        userDragged: false,
-        initialPlacement,
-        itemsSnapshot: Array.isArray(nextDetail.itemsSnapshot)
-          ? nextDetail.itemsSnapshot
-          : canReuseSnapshot
-            ? current.itemsSnapshot
-            : null,
-        editorSessionId: mode === "edit" || mode === "create"
-          ? isSameSession
-            ? current.editorSessionId
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-          : null,
-        saveRequestId: null,
-        activeSaveRequestId: null,
-        dirty: false,
-        shakeKey: current?.shakeKey || 0,
-      };
-    });
-  }
-
-  function parkFloatingDetail() {
-    setFloatingDetail((current) => (
-      current?.open
-        ? {
-            ...current,
-            anchorElement: null,
-            sourceCellElement: null,
-            exclusionElement: null,
-            anchorKind: "parked",
-            parked: true,
-            userDragged: false,
-            forcedSide: null,
-          }
-        : current
-    ));
-  }
-
-  function setFloatingDetailDragged(userDragged, placementKey = null) {
-    if (userDragged) {
-      const currentView = floatingDetailRef.current?.view;
-      if (currentView) delete floatingDetailSessionSideByViewRef.current[currentView];
-    }
-    setFloatingDetail((current) => (
-      current?.open && (!userDragged || !placementKey || current.placementKey === placementKey)
-        ? {
-            ...current,
-            userDragged: !!userDragged,
-            forcedSide: userDragged ? null : current.forcedSide || null,
-          }
-        : current
-    ));
-  }
-
-  function flipFloatingDetailSide() {
-    const currentDetail = floatingDetailRef.current;
-    if (!isGridOriginFloatingDetail(currentDetail) || currentDetail.dirty) return;
-    setFloatingDetail((current) => {
-      if (!isGridOriginFloatingDetail(current) || current.dirty) return current;
-      const currentSide = current.forcedSide
-        || placementSideFromCaret(current.initialPlacement?.caretSide)
-        || current.preferredSide
-        || "right";
-      const forcedSide = currentSide === "left" ? "right" : "left";
-      floatingDetailSessionSideByViewRef.current = {
-        ...floatingDetailSessionSideByViewRef.current,
-        [current.view]: forcedSide,
-      };
-      return {
-        ...current,
-        forcedSide,
-      };
-    });
-  }
-
   const handleViewChange = useCallback((nextView) => {
     const current = floatingDetailRef.current;
     if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty && nextView !== view) {
@@ -772,7 +512,7 @@ export default function useCalendarModalController({
       setFloatingDetail(null);
     }
     onViewChange?.(nextView);
-  }, [onViewChange, setFloatingDetail, view]);
+  }, [floatingDetailRef, onViewChange, setFloatingDetail, shakeFloatingEditor, view]);
 
   const closeCalendarModal = useCallback(() => {
     const current = floatingDetailRef.current;
@@ -783,7 +523,7 @@ export default function useCalendarModalController({
     setFloatingDetail(null);
     setSuppressFocusRing(false);
     onClose();
-  }, [onClose, setFloatingDetail, setSuppressFocusRing]);
+  }, [floatingDetailRef, onClose, setFloatingDetail, setSuppressFocusRing, shakeFloatingEditor]);
 
   function navigateMonth(dir) {
     setDeadlineDraftPreview(null);
@@ -981,7 +721,7 @@ export default function useCalendarModalController({
     }
     document.addEventListener("pointerdown", handleClick);
     return () => document.removeEventListener("pointerdown", handleClick);
-  }, [closeCalendarModal, floatingDetail?.dirty, floatingDetail?.mode, floatingDetail?.open, open]);
+  }, [closeCalendarModal, floatingDetail?.dirty, floatingDetail?.mode, floatingDetail?.open, open, setFloatingDetail, shakeFloatingEditor]);
 
   useEffect(() => {
     function handleResize() {
@@ -1285,7 +1025,7 @@ export default function useCalendarModalController({
       });
     });
     return () => window.cancelAnimationFrame(id);
-  }, [eventEditor.isEditorOpen]);
+  }, [eventEditor.isEditorOpen, floatingDetailRef, setFloatingDetail]);
 
   if (!open) return null;
 
