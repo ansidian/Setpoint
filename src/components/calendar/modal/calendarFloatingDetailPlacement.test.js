@@ -53,10 +53,28 @@ describe("resolveFloatingDetailPlacement", () => {
       panelHeight: 300,
       mode: "detail",
       forcedSide: "right",
+      allowRailOverlap: true,
     });
 
     expect(placement.caretSide).toBe("left");
     expect(placement.left + placement.width).toBeLessThanOrEqual(1200 - 16);
     expect(placement.left + placement.width).toBeGreaterThan(railRect.left);
+  });
+
+  it("treats a forced side as a preference unless rail overlap is explicitly allowed", () => {
+    const railRect = rect(900, 60, 280, 620);
+    const placement = resolveFloatingDetailPlacement({
+      anchorRect: rect(640, 200, 32, 28),
+      sourceRect: rect(620, 180, 60, 80),
+      calendarRect: rect(0, 0, 1200, 720),
+      railRect,
+      panelHeight: 300,
+      mode: "detail",
+      forcedSide: "right",
+      allowRailOverlap: false,
+    });
+
+    expect(placement.caretSide).toBe("right");
+    expect(placement.left + placement.width).toBeLessThanOrEqual(railRect.left);
   });
 });

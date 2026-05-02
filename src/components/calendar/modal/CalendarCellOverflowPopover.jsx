@@ -378,6 +378,7 @@ export default function CalendarCellOverflowPopover({
                   type={ghost ? undefined : "button"}
                   data-testid={ghost ? "calendar-ghost-chip" : "calendar-cell-overflow-item"}
                   data-item-id={itemId}
+                  data-date-key={popover.dateKey || undefined}
                   data-hovered={active ? "true" : "false"}
                   draggable={dragAllowed}
                   onClick={(event) => {

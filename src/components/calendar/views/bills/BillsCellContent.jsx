@@ -71,6 +71,7 @@ export function renderBillsCellContents({
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onHiddenItemsChange,
   onBeforeItemAction,
   layout,
   day,
@@ -97,6 +98,7 @@ export function renderBillsCellContents({
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
+      onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
     />
   );

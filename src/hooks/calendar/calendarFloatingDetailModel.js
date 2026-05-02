@@ -10,12 +10,32 @@ export function isFloatingDetailPanelTarget(target) {
     && !!target.closest("[data-calendar-floating-detail='true']");
 }
 
+function gridOriginTriggerMatchesDetail(trigger, detail) {
+  if (!trigger || !detail) return false;
+  if (detail.anchorElement === trigger) return true;
+
+  const triggerItemId = trigger.getAttribute("data-item-id");
+  if (!triggerItemId || detail.itemId == null || String(triggerItemId) !== String(detail.itemId)) {
+    return false;
+  }
+
+  const triggerDateKey = trigger.getAttribute("data-date-key")
+    || trigger.closest("[role='gridcell']")?.getAttribute("data-date-key")
+    || null;
+  const segmentStart = trigger.getAttribute("data-segment-start");
+  const segmentEnd = trigger.getAttribute("data-segment-end");
+  if (detail.dateKey && segmentStart && segmentEnd) {
+    return segmentStart <= detail.dateKey && detail.dateKey <= segmentEnd;
+  }
+  return !triggerDateKey || !detail.dateKey || triggerDateKey === detail.dateKey;
+}
+
 export function isFloatingDetailFlipSuppressedTarget(target, detail) {
   if (!(target instanceof HTMLElement)) return false;
   const gridOriginTrigger = target.closest(
     "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment']",
   );
-  if (gridOriginTrigger && detail?.anchorElement === gridOriginTrigger) return false;
+  if (gridOriginTrigger && gridOriginTriggerMatchesDetail(gridOriginTrigger, detail)) return false;
 
   return !!target.closest([
       "[data-calendar-floating-detail='true']",
@@ -52,6 +72,7 @@ export function placementSideFromCaret(caretSide) {
 
 export function preservedReanchorSide(current, nextDetail, nextView, nextDateKey) {
   if (!current?.open || current.mode !== "detail" || current.parked || current.userDragged || current.dirty) return null;
+  if (current.sideIntent === "user-flip") return null;
   if (current.view !== nextView || current.dateKey !== nextDateKey) return null;
   if (!isGridOriginAnchorKind(current.anchorKind) || !isGridOriginAnchorKind(nextDetail.anchorKind)) return null;
   return current.forcedSide

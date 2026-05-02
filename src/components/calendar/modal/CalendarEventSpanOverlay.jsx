@@ -137,6 +137,8 @@ export default function CalendarEventSpanOverlay({
           "data-testid": segment.kind === "ghost" ? "calendar-ghost-chip" : "calendar-event-span-segment",
           "data-calendar-focus-ring": segment.kind === "event" ? "true" : undefined,
           "data-item-id": segment.eventId || undefined,
+          "data-segment-start": segment.segmentStart || undefined,
+          "data-segment-end": segment.segmentEnd || undefined,
           "data-span-segment-id": segment.id,
           style: spanSegmentStyle(segment, layout, selected, active),
         };

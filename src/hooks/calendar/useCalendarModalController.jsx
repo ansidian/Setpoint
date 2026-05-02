@@ -101,6 +101,7 @@ export default function useCalendarModalController({
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const agendaRailRef = useRef(null);
+  const contextRailRef = useRef(null);
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
   const navigateMonthRef = useRef(null);
@@ -119,7 +120,7 @@ export default function useCalendarModalController({
     shakeFloatingEditor,
     setFloatingEditorDirty,
     setFloatingEditorSaveRequest,
-  } = useCalendarFloatingDetail({ open, view, panelRef });
+  } = useCalendarFloatingDetail({ open, view, panelRef, railRef: contextRailRef });
 
   const viewMonth = activeViewDate.month;
   const viewYear = activeViewDate.year;
@@ -561,7 +562,7 @@ export default function useCalendarModalController({
   if (!open) return null;
 
   const shellProps = buildCalendarModalShellProps({
-    refs: { panelRef, scrollRef, agendaRailRef },
+    refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
     viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, monthMotionDirection, suppressFocusRing },
     data: { activeView, viewData, weatherData },
     viewModel,

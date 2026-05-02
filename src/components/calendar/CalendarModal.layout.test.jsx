@@ -444,6 +444,7 @@ describe("CalendarModal responsive layout", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
     });
+    expect(screen.getByTestId("calendar-modal-panel").getAttribute("data-calendar-suppress-focus-ring")).toBe("true");
     expect(screen.getByTestId("calendar-cell-overflow-popover")).toBe(popover);
 
     fireEvent.keyDown(document, { key: "Escape" });
@@ -1582,7 +1583,7 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
-  it("remembers a manually flipped floating detail side for the modal session", async () => {
+  it("remembers a Space-flipped floating detail side only for same-date grid browsing", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -1653,6 +1654,7 @@ describe("CalendarModal responsive layout", () => {
     expect(flipEvent.defaultPrevented).toBe(true);
     await waitFor(() => {
       expect(floatingPanel.getAttribute("data-forced-side")).toMatch(/^(left|right)$/);
+      expect(floatingPanel.getAttribute("data-side-intent")).toBe("user-flip");
     });
     const rememberedSide = floatingPanel.getAttribute("data-forced-side");
 
@@ -1662,6 +1664,7 @@ describe("CalendarModal responsive layout", () => {
 
     await waitFor(() => {
       expect(floatingPanel.getAttribute("data-forced-side")).toBe(rememberedSide);
+      expect(floatingPanel.getAttribute("data-side-intent")).toBe("user-flip");
     });
 
     act(() => {
@@ -1669,7 +1672,17 @@ describe("CalendarModal responsive layout", () => {
     });
 
     await waitFor(() => {
-      expect(floatingPanel.getAttribute("data-forced-side")).toBe(rememberedSide);
+      expect(floatingPanel.hasAttribute("data-forced-side")).toBe(false);
+      expect(floatingPanel.getAttribute("data-side-intent")).toBe("auto");
+    });
+
+    act(() => {
+      fireEvent.click(fridayChips[0]);
+    });
+
+    await waitFor(() => {
+      expect(floatingPanel.hasAttribute("data-forced-side")).toBe(false);
+      expect(floatingPanel.getAttribute("data-side-intent")).toBe("auto");
     });
   });
 

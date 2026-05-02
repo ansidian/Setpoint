@@ -86,16 +86,14 @@ export default function useCalendarModalHotkeys({
         } else {
           setFloatingDetail(null);
         }
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCalendarKey();
         return;
       }
 
       if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
         setDeadlineEditor(null);
         setDeadlineDraftPreview(null);
-        event.preventDefault();
-        event.stopPropagation();
+        consumeCalendarKey();
         return;
       }
 

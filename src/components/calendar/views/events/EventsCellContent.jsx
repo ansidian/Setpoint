@@ -124,6 +124,7 @@ export function renderEventsCellContents({
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onHiddenItemsChange,
   onBeforeItemAction,
   layout,
   day,
@@ -162,6 +163,7 @@ export function renderEventsCellContents({
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
+      onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
     />
   );

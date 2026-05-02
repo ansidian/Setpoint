@@ -115,6 +115,7 @@ export default function CalendarCellItemStack({
   inlineOverflowExternal = false,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onHiddenItemsChange,
   onBeforeItemAction,
 }) {
   const stackItems = useMemo(() => items || [], [items]);
@@ -173,11 +174,23 @@ export default function CalendarCellItemStack({
   const hiddenStackHeight = hiddenCount > 0
     ? (hiddenCount * (metrics?.itemHeight ?? 24)) + ((hiddenCount - 1) * (metrics?.gap ?? 4))
     : 0;
+  const hiddenSignature = hiddenItems.map((item) => String(item.id)).join("\u001f");
   const clearActiveChip = useCallback((itemId) => {
     setActiveChipId((current) => (
       current === itemId ? null : current
     ));
   }, []);
+
+  useLayoutEffect(() => {
+    onHiddenItemsChange?.({
+      dateKey,
+      day,
+      hiddenItems,
+      hiddenSignature,
+      totalCount: stackItems.length,
+      visibleCount,
+    });
+  }, [dateKey, day, hiddenItems, hiddenSignature, onHiddenItemsChange, stackItems.length, visibleCount]);
 
   useLayoutEffect(() => {
     if (!inlineOverflowOpen) return;

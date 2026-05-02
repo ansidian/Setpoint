@@ -86,6 +86,7 @@ export function renderDeadlinesCellContents({
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
+  onHiddenItemsChange,
   onBeforeItemAction,
   quickActions,
   layout,
@@ -120,6 +121,7 @@ export function renderDeadlinesCellContents({
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
+      onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
       quickActions={quickActions}
     />

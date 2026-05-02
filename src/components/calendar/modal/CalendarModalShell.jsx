@@ -17,6 +17,7 @@ import EventsAgendaRail from "../views/events/EventsAgendaRail.jsx";
 export default function CalendarModalShell({
   panelRef,
   scrollRef,
+  contextRailRef,
   panelWidth,
   layout,
   view,
@@ -91,7 +92,6 @@ export default function CalendarModalShell({
   onFloatingDeadlineDeleted,
   suppressFocusRing = false,
 }) {
-  const railRef = useRef(null);
   const monthWheelStateRef = useRef({ lastNavigateAt: -Infinity, ignoreUntil: -Infinity, lastWheelAt: -Infinity, lastWheelDelta: 0 });
   const floatingEditorOpen = !layout.stacked
     && !!floatingDetail?.open
@@ -540,7 +540,7 @@ export default function CalendarModalShell({
             </div>
 
             <aside
-              ref={railRef}
+              ref={contextRailRef}
               data-testid="calendar-modal-rail"
               data-context-mode={workspaceMode}
               style={{
@@ -578,7 +578,7 @@ export default function CalendarModalShell({
             detail={floatingDetail}
             label={floatingDetailLabel}
             calendarPanelRef={panelRef}
-            railRef={railRef}
+            railRef={contextRailRef}
             suppressOutsideClick={suppressOutsideClick}
             suppressFocusRing={suppressFocusRing}
             onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
