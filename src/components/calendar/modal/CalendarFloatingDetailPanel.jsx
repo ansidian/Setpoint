@@ -102,6 +102,7 @@ export default function CalendarFloatingDetailPanel({
       mode,
       parked: !!detail.parked,
       preferredSide: detail.preferredSide || null,
+      forcedSide: detail.forcedSide || null,
     });
   }, [calendarPanelRef, detail, measuredSize.height, mode, onPark, railRef]);
 
@@ -334,6 +335,7 @@ export default function CalendarFloatingDetailPanel({
         ref={panelRef}
         data-calendar-floating-detail="true"
         data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
+        data-forced-side={detail?.forcedSide || undefined}
         data-testid="calendar-floating-detail-panel"
         data-floating-mode={mode}
         role="dialog"

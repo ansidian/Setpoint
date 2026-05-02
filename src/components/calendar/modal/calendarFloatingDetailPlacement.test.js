@@ -42,4 +42,21 @@ describe("resolveFloatingDetailPlacement", () => {
     expect(placement.left + placement.width).toBeGreaterThan(railRect.left);
     expect(placement.caretSide).toBeNull();
   });
+
+  it("honors a forced side while clamping inside calendar bounds", () => {
+    const railRect = rect(900, 60, 280, 620);
+    const placement = resolveFloatingDetailPlacement({
+      anchorRect: rect(640, 200, 32, 28),
+      sourceRect: rect(620, 180, 60, 80),
+      calendarRect: rect(0, 0, 1200, 720),
+      railRect,
+      panelHeight: 300,
+      mode: "detail",
+      forcedSide: "right",
+    });
+
+    expect(placement.caretSide).toBe("left");
+    expect(placement.left + placement.width).toBeLessThanOrEqual(1200 - 16);
+    expect(placement.left + placement.width).toBeGreaterThan(railRect.left);
+  });
 });

@@ -10,7 +10,7 @@ import {
 } from "../DetailRailPrimitives.jsx";
 import { useDetailRailMotion } from "../detailRailMotion.js";
 import { formatEventDuration, getEventSelectionId } from "../../../lib/redesign-helpers";
-import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
+import { extractNonZoomEventUrl, extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
 import { addDaysYmd, pacificYMD, parseYmd, ymdFromParts } from "../calendarDateUtils.js";
@@ -272,9 +272,10 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
   if (!ev) return null;
   const editable = isEditableEvent(ev);
   const zoomUrl = extractZoomMeetingUrl(ev);
+  const eventUrl = extractNonZoomEventUrl(ev);
   const calendarUrl = ev.openUrl || ev.htmlLink;
   const size = compact ? "compact" : "default";
-  const hasPrimaryActions = zoomUrl || editable;
+  const hasPrimaryActions = zoomUrl || eventUrl || editable;
 
   if (!hasPrimaryActions && !calendarUrl) return null;
 
@@ -287,6 +288,16 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
           href={zoomUrl}
           accent="#89b4fa"
           tone="accent"
+          size={size}
+        />
+      ) : null}
+      {eventUrl ? (
+        <RailAction
+          icon={ExternalLink}
+          label="Open URL"
+          href={eventUrl}
+          accent="#89b4fa"
+          tone={zoomUrl ? "ghost" : "accent"}
           size={size}
         />
       ) : null}
@@ -315,7 +326,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
 
 function hasEventActions(ev) {
   if (!ev) return false;
-  return Boolean(isEditableEvent(ev) || extractZoomMeetingUrl(ev) || ev.openUrl || ev.htmlLink);
+  return Boolean(isEditableEvent(ev) || extractZoomMeetingUrl(ev) || extractNonZoomEventUrl(ev) || ev.openUrl || ev.htmlLink);
 }
 
 function toRailItem(ev, onSelectItem, selectedItemId) {

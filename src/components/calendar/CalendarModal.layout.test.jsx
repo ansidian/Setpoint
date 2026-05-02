@@ -1582,6 +1582,97 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
+  it("remembers a manually flipped floating detail side for the modal session", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-05-01"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-05-01T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-01T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+            {
+              id: "event-2",
+              title: "Budget review",
+              startMs: new Date("2026-05-01T19:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-01T20:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#34a853",
+              writable: true,
+            },
+            {
+              id: "event-3",
+              title: "Monday planning",
+              startMs: new Date("2026-05-04T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-04T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#fbbc04",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const modalPanel = screen.getByTestId("calendar-modal-panel");
+    const rail = screen.getByTestId("calendar-modal-rail");
+    const fridayCell = screen.getByTestId("calendar-cell-1");
+    const mondayCell = screen.getByTestId("calendar-cell-4");
+    const fridayChips = within(fridayCell).getAllByTestId("calendar-cell-item-chip");
+    const mondayChip = within(mondayCell).getByTestId("calendar-cell-item-chip");
+    modalPanel.getBoundingClientRect = () => ({ top: 0, bottom: 720, left: 0, right: 1200, width: 1200, height: 720 });
+    rail.getBoundingClientRect = () => ({ top: 60, bottom: 680, left: 900, right: 1180, width: 280, height: 620 });
+    fridayCell.getBoundingClientRect = () => ({ top: 180, bottom: 300, left: 620, right: 700, width: 80, height: 120 });
+    mondayCell.getBoundingClientRect = () => ({ top: 310, bottom: 390, left: 80, right: 160, width: 80, height: 80 });
+    fridayChips[0].getBoundingClientRect = () => ({ top: 200, bottom: 228, left: 640, right: 672, width: 32, height: 28 });
+    fridayChips[1].getBoundingClientRect = () => ({ top: 232, bottom: 260, left: 640, right: 672, width: 32, height: 28 });
+    mondayChip.getBoundingClientRect = () => ({ top: 330, bottom: 358, left: 100, right: 132, width: 32, height: 28 });
+
+    fireEvent.click(fridayChips[0]);
+    const floatingPanel = await screen.findByTestId("calendar-floating-detail-panel");
+
+    const flipEvent = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    act(() => {
+      fridayChips[0].dispatchEvent(flipEvent);
+    });
+
+    expect(flipEvent.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(floatingPanel.getAttribute("data-forced-side")).toMatch(/^(left|right)$/);
+    });
+    const rememberedSide = floatingPanel.getAttribute("data-forced-side");
+
+    act(() => {
+      fireEvent.click(fridayChips[1]);
+    });
+
+    await waitFor(() => {
+      expect(floatingPanel.getAttribute("data-forced-side")).toBe(rememberedSide);
+    });
+
+    act(() => {
+      fireEvent.click(mondayChip);
+    });
+
+    await waitFor(() => {
+      expect(floatingPanel.getAttribute("data-forced-side")).toBe(rememberedSide);
+    });
+  });
+
   it("opens the create event form from c and preserves the selected day seed", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));

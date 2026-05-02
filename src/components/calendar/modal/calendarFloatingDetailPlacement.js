@@ -80,6 +80,7 @@ export function resolveFloatingDetailPlacement({
   mode = "detail",
   parked = false,
   preferredSide = null,
+  forcedSide = null,
 }) {
   const bounds = normalizedBounds(calendarRect);
   const isEditor = mode === "edit" || mode === "create";
@@ -157,17 +158,24 @@ export function resolveFloatingDetailPlacement({
     && !exclusions.some((rect) => rectIntersects(panelRect(rightCandidate), rect));
   const leftClear = leftCandidate.left + width <= referenceRect.left - PANEL_GAP + 1
     && !exclusions.some((rect) => rectIntersects(panelRect(leftCandidate), rect));
-  const selected = preferredSide === "left" && leftClear
-    ? leftCandidate
-    : preferredSide === "right" && rightClear
+  let selected = null;
+  if (forcedSide === "left") {
+    selected = leftCandidate;
+  } else if (forcedSide === "right") {
+    selected = rightCandidate;
+  } else if (preferredSide === "left" && leftClear) {
+    selected = leftCandidate;
+  } else if (preferredSide === "right" && rightClear) {
+    selected = rightCandidate;
+  } else if (rightClear) {
+    selected = rightCandidate;
+  } else if (leftClear) {
+    selected = leftCandidate;
+  } else {
+    selected = candidateScore(rightCandidate, exclusions) <= candidateScore(leftCandidate, exclusions)
       ? rightCandidate
-      : rightClear
-        ? rightCandidate
-        : leftClear
-          ? leftCandidate
-          : candidateScore(rightCandidate, exclusions) <= candidateScore(leftCandidate, exclusions)
-            ? rightCandidate
-            : leftCandidate;
+      : leftCandidate;
+  }
 
   return {
     top: selected.top,

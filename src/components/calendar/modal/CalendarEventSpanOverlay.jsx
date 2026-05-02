@@ -64,9 +64,9 @@ function spanSegmentStyle(segment, layout, selected, active) {
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "center",
-    gap: 1,
+    gap: 0,
     boxSizing: "border-box",
-    padding: "4px 10px",
+    padding: "2px 10px",
     pointerEvents: ghost ? "none" : "auto",
     opacity: ghost ? 0.96 : 1,
     zIndex: 7 + segment.lane,
@@ -76,6 +76,23 @@ function spanSegmentStyle(segment, layout, selected, active) {
     cursor: ghost ? "default" : "pointer",
     transition: "background 140ms, border-color 140ms, box-shadow 140ms, color 140ms",
   };
+}
+
+function spanTitleFit(title) {
+  const length = String(title || "").trim().length;
+  if (length <= 24) return { fontSize: 11, lineHeight: 1.08, lineClamp: 1 };
+  if (length <= 64) return { fontSize: 10.5, lineHeight: 1.08, lineClamp: 2 };
+  return { fontSize: 10, lineHeight: 1.08, lineClamp: 2 };
+}
+
+function compactLeadingLabel(value) {
+  const label = String(value || "").trim();
+  const timeMatch = label.match(/^(\d{1,2})(?::([0-5]\d))?\s*([ap])\.?m\.?$/i);
+  if (!timeMatch) return label;
+  const hour = timeMatch[1];
+  const minute = timeMatch[2];
+  const suffix = timeMatch[3].toLowerCase();
+  return minute && minute !== "00" ? `${hour}:${minute}${suffix}` : `${hour}${suffix}`;
 }
 
 export default function CalendarEventSpanOverlay({
@@ -111,6 +128,8 @@ export default function CalendarEventSpanOverlay({
     >
       {segments.map((segment) => {
         const display = spanSegmentDisplay(segment);
+        const compactLabel = compactLeadingLabel(display.leadingLabel);
+        const titleFit = spanTitleFit([compactLabel, display.title].filter(Boolean).join(" "));
         const selected = segment.eventId && String(segment.eventId) === String(selectedItemId);
         const active = activeSegmentId === segment.id;
         const commonProps = {
@@ -122,25 +141,43 @@ export default function CalendarEventSpanOverlay({
           style: spanSegmentStyle(segment, layout, selected, active),
         };
         const content = (
-          <>
+          <span
+            data-calendar-span-title-fit={`${titleFit.fontSize}/${titleFit.lineClamp}`}
+            style={{
+              minWidth: 0,
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitLineClamp: titleFit.lineClamp,
+              WebkitBoxOrient: "vertical",
+              overflowWrap: "break-word",
+              wordBreak: "normal",
+              whiteSpace: "normal",
+              fontSize: titleFit.fontSize,
+              fontWeight: selected ? 650 : 600,
+              lineHeight: titleFit.lineHeight,
+            }}
+          >
             <span
+              data-calendar-span-meta="true"
               style={{
                 minWidth: 0,
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
+                maxWidth: "100%",
                 overflow: "hidden",
-                fontSize: 10,
-                lineHeight: 1.05,
+                fontSize: 8.5,
+                lineHeight: 1,
                 fontWeight: 800,
                 letterSpacing: 0.15,
                 color: selected ? display.color : display.color || "var(--ea-accent)",
-                whiteSpace: "nowrap",
                 fontVariantNumeric: "tabular-nums",
+                marginRight: 4,
+                verticalAlign: "baseline",
               }}
             >
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-                {display.leadingLabel}
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {compactLabel}
               </span>
               {display.recurring ? (
                 <Repeat
@@ -155,20 +192,8 @@ export default function CalendarEventSpanOverlay({
                 />
               ) : null}
             </span>
-            <span
-              style={{
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontSize: 11.75,
-                fontWeight: selected ? 650 : 600,
-                lineHeight: 1.1,
-              }}
-            >
-              {display.title}
-            </span>
-          </>
+            <span data-calendar-span-title-text="true">{display.title}</span>
+          </span>
         );
 
         if (segment.kind === "ghost") {

@@ -298,6 +298,95 @@ describe("calendar detail timeline", () => {
     );
   });
 
+  it("shows Open URL for the first non-Zoom event URL", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        selectedItemId: "external-url",
+        items: [
+          {
+            id: "external-url",
+            title: "Portal review",
+            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
+            color: "#4285f4",
+            location: "Join https://example.zoom.us/j/11122233344",
+            description: "Prep doc https://docs.example.com/agenda.",
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/external-url",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: /join zoom/i }).getAttribute("href")).toBe(
+      "https://example.zoom.us/j/11122233344",
+    );
+    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
+      "https://docs.example.com/agenda",
+    );
+    expect(screen.getByRole("link", { name: /open calendar/i })).toBeTruthy();
+  });
+
+  it("shows Open URL for HTML description links instead of Google Calendar source links", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        selectedItemId: "html-url",
+        items: [
+          {
+            id: "html-url",
+            title: "Portal review",
+            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
+            color: "#4285f4",
+            description: '<a href="https://www.google.com/url?q=https%3A%2F%2Fdocs.example.com%2Fagenda%3Fx%3D1%26y%3D2&amp;sa=D">Agenda</a>',
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/html-url",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
+      "https://docs.example.com/agenda?x=1&y=2",
+    );
+    expect(screen.getByRole("link", { name: /open calendar/i }).getAttribute("href")).toBe(
+      "https://calendar.google.com/calendar/u/0/r/eventedit/html-url",
+    );
+  });
+
+  it("shows Open URL for bare URLs in the location field", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        selectedItemId: "bare-location-url",
+        items: [
+          {
+            id: "bare-location-url",
+            title: "Watch party",
+            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T18:30:00.000Z").getTime(),
+            color: "#4285f4",
+            location: "twitch.tv/pathofexile",
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/bare-location-url",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
+      "https://twitch.tv/pathofexile",
+    );
+  });
+
   it("compresses the selected event card for long Zoom events and strips the provider prefix from the displayed title", () => {
     render(
       eventsView.renderDetail({
@@ -336,7 +425,7 @@ describe("calendar detail timeline", () => {
     expect(screen.getByRole("link", { name: /open calendar/i })).toBeTruthy();
   });
 
-  it("does not show a Join Zoom action for non-Zoom links", () => {
+  it("shows Open URL, not Join Zoom, for non-Zoom links", () => {
     render(
       eventsView.renderDetail({
         selectedDay: 19,
@@ -359,6 +448,9 @@ describe("calendar detail timeline", () => {
     );
 
     expect(screen.queryByRole("link", { name: /join zoom meeting/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Open URL" }).getAttribute("href")).toBe(
+      "https://example.com/meeting",
+    );
   });
 
   it("omits the fallback access fact card when the selected event has no location or attendees", () => {
