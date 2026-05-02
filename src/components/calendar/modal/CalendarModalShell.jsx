@@ -1,143 +1,18 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "../CalendarRailStates.jsx";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import DeadlineQuickActionLayer from "../views/deadlines/DeadlineQuickActionLayer.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
+import buildContextContent from "./buildContextContent.jsx";
+import CalendarModalBackdrop from "./CalendarModalBackdrop.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
+import CalendarModalTexture from "./CalendarModalTexture.jsx";
 import BillsAgendaRail from "../views/bills/BillsAgendaRail.jsx";
 import DeadlinesAgendaRail from "../views/deadlines/DeadlinesAgendaRail.jsx";
 import EventsAgendaRail from "../views/events/EventsAgendaRail.jsx";
-
-function buildContextContent({
-  layout,
-  view,
-  activeView,
-  eventEditor,
-  deadlineEditor,
-  selectedDay,
-  selectedDateKey,
-  itemsByDay,
-  viewYear,
-  viewMonth,
-  viewData,
-  computed,
-  currentYear,
-  currentMonth,
-  todayDate,
-  showDetail,
-  showEmptySelection,
-  effectiveSelectedItemId,
-  selectedItems,
-  setSelectedDay,
-  setSelectedItemId,
-  setDeadlineEditor,
-  focusDeadlineTask,
-  onCreateEvent,
-  onCreateTask,
-  ghostPreview,
-  onDeadlineDraftPreviewChange,
-  onCloseFloatingDetail,
-}) {
-  if (view === "events" && eventEditor.isEditorOpen) {
-    return (
-      <CalendarEventEditorRail
-        editor={eventEditor}
-        expandedDesktop={!layout.stacked}
-        ghostPreview={ghostPreview}
-      />
-    );
-  }
-
-  if (activeView.renderSidebar) {
-    return activeView.renderSidebar({ selectedDay, itemsByDay, viewYear, viewMonth, data: viewData });
-  }
-
-  if (showDetail) {
-    return activeView.renderDetail?.({
-      selectedDay,
-      selectedDateKey,
-      viewYear,
-      viewMonth,
-      items: selectedItems,
-      data: viewData,
-      computed,
-      selectedItemId: effectiveSelectedItemId,
-      onSelectItem: (itemId) => {
-        setSelectedItemId(String(itemId));
-        setDeadlineEditor(null);
-      },
-      onEditEvent: (item) => {
-        onCloseFloatingDetail?.();
-        eventEditor.openEdit?.(item);
-      },
-      editorState: deadlineEditor,
-      onStartEdit: (task) => {
-        onCloseFloatingDetail?.();
-        setSelectedItemId(String(task.id));
-        setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
-        onDeadlineDraftPreviewChange?.(null);
-      },
-      onCloseEditor: () => {
-        setDeadlineEditor(null);
-        onDeadlineDraftPreviewChange?.(null);
-      },
-      onTaskSaved: focusDeadlineTask,
-      onTaskDeleted: (taskId) => {
-        setDeadlineEditor(null);
-        onDeadlineDraftPreviewChange?.(null);
-        if (String(effectiveSelectedItemId) === String(taskId)) {
-          setSelectedItemId(null);
-        }
-      },
-      onDraftPreviewChange: onDeadlineDraftPreviewChange,
-      ghostPreview,
-    });
-  }
-
-  if (showEmptySelection) {
-    return (
-      <CalendarSelectedDayEmptyRail
-        view={view}
-        selectedDay={selectedDay}
-        selectedDateKey={selectedDateKey}
-        viewYear={viewYear}
-        viewMonth={viewMonth}
-        currentYear={currentYear}
-        currentMonth={currentMonth}
-        todayDate={todayDate}
-        itemsByDay={itemsByDay}
-        computed={computed}
-        data={viewData}
-        activeView={activeView}
-        eventEditor={eventEditor}
-        setSelectedDay={setSelectedDay}
-        setSelectedItemId={setSelectedItemId}
-        setDeadlineEditor={setDeadlineEditor}
-        onCreateEvent={onCreateEvent}
-        onCreateTask={onCreateTask}
-      />
-    );
-  }
-
-  return (
-    <CalendarOverviewRail
-      view={view}
-      viewYear={viewYear}
-      viewMonth={viewMonth}
-      currentYear={currentYear}
-      currentMonth={currentMonth}
-      todayDate={todayDate}
-      itemsByDay={itemsByDay}
-      computed={computed}
-      data={viewData}
-      activeView={activeView}
-    />
-  );
-}
 
 export default function CalendarModalShell({
   panelRef,
@@ -217,12 +92,7 @@ export default function CalendarModalShell({
   suppressFocusRing = false,
 }) {
   const railRef = useRef(null);
-  const monthWheelStateRef = useRef({
-    lastNavigateAt: -Infinity,
-    ignoreUntil: -Infinity,
-    lastWheelAt: -Infinity,
-    lastWheelDelta: 0,
-  });
+  const monthWheelStateRef = useRef({ lastNavigateAt: -Infinity, ignoreUntil: -Infinity, lastWheelAt: -Infinity, lastWheelDelta: 0 });
   const floatingEditorOpen = !layout.stacked
     && !!floatingDetail?.open
     && (floatingDetail.mode === "edit" || floatingDetail.mode === "create");
@@ -231,17 +101,11 @@ export default function CalendarModalShell({
     : eventEditor;
   const railDeadlineEditor = floatingEditorOpen && view === "deadlines" ? null : deadlineEditor;
   const useAgendaRail = !layout.stacked && (view === "events" || view === "bills" || view === "deadlines");
-  const workspaceMode = useAgendaRail
-    ? "agenda"
-    : view === "events" && railEventEditor.isEditorOpen
-    ? "editor"
-    : view === "deadlines" && railDeadlineEditor?.mode
-      ? "editor"
-      : showDetail
-        ? "detail"
-        : showEmptySelection
-          ? "empty"
-          : "overview";
+  const workspaceMode = useAgendaRail ? "agenda"
+    : view === "events" && railEventEditor.isEditorOpen ? "editor"
+      : view === "deadlines" && railDeadlineEditor?.mode ? "editor"
+        : showDetail ? "detail"
+          : showEmptySelection ? "empty" : "overview";
   const contentKind = workspaceMode === "overview" ? "summary" : workspaceMode;
 
   useEffect(() => {
@@ -520,22 +384,7 @@ export default function CalendarModalShell({
         overflow: "hidden",
       }}
     >
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          zIndex: 0,
-          background: [
-            "radial-gradient(circle at top, rgba(203,166,218,0.10), transparent 28%)",
-            "radial-gradient(circle at 100% 0%, rgba(137,180,250,0.07), transparent 22%)",
-            "rgba(4,6,10,0.72)",
-          ].join(", "),
-          animation: "calendarBackdropIn 120ms cubic-bezier(0.16, 1, 0.3, 1)",
-          pointerEvents: "none",
-          willChange: "opacity",
-        }}
-      />
+      <CalendarModalBackdrop />
       <div
         ref={panelRef}
         data-testid="calendar-modal-panel"
@@ -572,18 +421,7 @@ export default function CalendarModalShell({
           willChange: "transform",
         }}
       >
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            backgroundImage: "radial-gradient(rgba(255,255,255,0.035) 0.8px, transparent 0.8px)",
-            backgroundSize: "22px 22px",
-            opacity: 0.18,
-            maskImage: "linear-gradient(180deg, rgba(0,0,0,0.34), rgba(0,0,0,0) 38%)",
-          }}
-        />
+        <CalendarModalTexture />
         <div
           ref={scrollRef}
           className="overflow-y-auto overscroll-contain flex-1"

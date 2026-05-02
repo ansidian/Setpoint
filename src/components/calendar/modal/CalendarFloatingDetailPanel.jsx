@@ -192,16 +192,17 @@ export default function CalendarFloatingDetailPanel({
   useEffect(() => {
     if (!open || !editorMode) return undefined;
     const id = window.requestAnimationFrame(() => {
-      const element = panelRef.current?.querySelector?.(
-        [
-          "[data-calendar-editor-primary='true']:not([disabled])",
-          "input[data-testid='calendar-event-title']:not([disabled])",
-          "input[aria-label='Task title']:not([disabled])",
-          "input:not([type='hidden']):not([disabled])",
-          "textarea:not([disabled])",
-          "button:not([disabled])",
-        ].join(", "),
-      );
+      const selectors = [
+        "[data-calendar-editor-primary='true']:not([disabled])",
+        "input[data-testid='calendar-event-title']:not([disabled])",
+        "input[aria-label='Task title']:not([disabled])",
+        "input:not([type='hidden']):not([disabled])",
+        "textarea:not([disabled])",
+        "button:not([disabled])",
+      ];
+      const element = selectors
+        .map((selector) => panelRef.current?.querySelector?.(selector))
+        .find(Boolean);
       element?.focus?.({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(id);

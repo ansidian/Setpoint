@@ -355,15 +355,19 @@ describe("CalendarCellItemStack ghost visibility", () => {
             accent: "#4285f4",
           },
         ]}
-        metrics={metrics}
+        metrics={{ ...metrics, itemHeight: 36 }}
       />,
     );
 
     const chip = screen.getByTestId("calendar-ghost-chip");
+    const meta = chip.querySelector("[data-calendar-chip-meta='true']");
+    const title = chip.querySelector("[data-calendar-chip-title='true']");
     expect(chip.tagName).toBe("DIV");
     expect(chip.style.pointerEvents).toBe("none");
     expect(chip.style.cursor).toBe("default");
     expect(chip.style.border).toContain("dotted");
+    expect(meta?.textContent).toContain("9a");
+    expect(title?.getAttribute("data-calendar-chip-title-fit")).toBe("11/1");
     expect(chip.textContent).not.toMatch(/draft|conflict|repeat/i);
   });
 

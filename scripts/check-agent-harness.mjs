@@ -8,24 +8,13 @@ const componentSizeBaseline = {
   // Calendar floating editor migration keeps existing rail/mobile fallbacks while moving desktop
   // create/edit orchestration into the floating shell. These remain explicit refactor debt.
   files: {
-    // Bills/deadlines agenda rail port adds shared agenda selection and
-    // floating-detail routing here; further modal decomposition is still debt.
-    'src/components/calendar/CalendarModal.jsx': 1394,
     'src/components/calendar/CalendarRailStates.jsx': 982,
     'src/components/calendar/ScheduleSection.jsx': 807,
     'src/components/calendar/events/CalendarEventEditorRail.jsx': 803,
-    'src/components/calendar/modal/CalendarCellItemStack.jsx': 636,
-    // Grid emits agenda scroll commands for all desktop agenda views and keeps
-    // month-wheel state stable through remounts.
-    'src/components/calendar/modal/CalendarGrid.jsx': 1547,
-    // Shell now selects desktop agenda rails for events, bills, and deadlines
-    // while retaining stacked detail fallback paths.
-    'src/components/calendar/modal/CalendarModalShell.jsx': 751,
     'src/components/calendar/views/deadlines/DeadlinesDetailRail.jsx': 762,
     'src/components/dashboard/rails/Rails.jsx': 988,
     'src/components/email/EmailSection.jsx': 641,
     'src/components/shell/ShellHeaderChrome.jsx': 656,
-    'src/pages/Dashboard.jsx': 1033,
   },
 }
 
@@ -88,7 +77,7 @@ async function checkAgentsMap() {
     failures.push(`AGENTS.md is ${lines.length} lines; keep it near 100 lines and move details into docs/`)
   }
 
-  for (const pointer of ['ARCHITECTURE.md', 'PRODUCT.md', 'DESIGN.md', 'gitignored for this personal single-user repo', 'npm run check:harness']) {
+  for (const pointer of ['ARCHITECTURE.md', 'PRODUCT.md', 'DESIGN.md', 'gitignored for this personal single-user repo', 'red state', 'TDD Cycle', 'npm run check:harness']) {
     if (!agents.includes(pointer)) {
       failures.push(`AGENTS.md should point to ${pointer}`)
     }
