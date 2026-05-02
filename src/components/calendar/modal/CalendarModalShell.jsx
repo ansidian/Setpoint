@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
@@ -92,6 +92,7 @@ export default function CalendarModalShell({
   onFloatingDeadlineDeleted,
   suppressFocusRing = false,
 }) {
+  const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(true);
   const monthWheelStateRef = useRef({ lastNavigateAt: -Infinity, ignoreUntil: -Infinity, lastWheelAt: -Infinity, lastWheelDelta: 0 });
   const floatingEditorOpen = !layout.stacked
     && !!floatingDetail?.open
@@ -207,6 +208,12 @@ export default function CalendarModalShell({
         onPassiveDateChange={onAgendaPassiveDateChange}
         onDateAction={onAgendaDateAction}
         onDeadlineAction={onAgendaEventAction}
+        onFilteredSelectedDeadlineHidden={() => {
+          setSelectedItemId(null);
+          onCloseFloatingDetail?.();
+        }}
+        showCompleted={showCompletedDeadlines}
+        onShowCompletedChange={setShowCompletedDeadlines}
         deadlineQuickActions={deadlineQuickActions}
       />
     )
@@ -529,6 +536,7 @@ export default function CalendarModalShell({
                   floatingDetailOpen={!!floatingDetail?.open}
                   floatingDetailParked={!!floatingDetail?.parked}
                   floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+                  showCompletedDeadlines={showCompletedDeadlines}
                   onShakeFloatingEditor={onShakeFloatingEditor}
                   onDirectDateAction={onGridDateAction}
                   onDirectItemAction={onGridEventAction}
