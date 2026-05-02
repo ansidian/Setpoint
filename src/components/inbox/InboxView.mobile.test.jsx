@@ -1,7 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
+import { searchEmails } from "../../api";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -17,6 +18,7 @@ vi.mock("../../api", async () => {
     snoozeEmail: vi.fn().mockResolvedValue({}),
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
     dismissEmail: vi.fn().mockResolvedValue({}),
+    searchEmails: vi.fn().mockResolvedValue({ accounts: [] }),
   };
 });
 
@@ -34,6 +36,8 @@ vi.mock("./reader/DraftReply.jsx", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
+  vi.clearAllMocks();
 });
 
 function makeAccounts() {
@@ -166,6 +170,45 @@ function renderInbox({
 }
 
 describe("InboxView mobile", () => {
+  it("uses the persisted FTS email search instead of local inbox filtering", async () => {
+    searchEmails.mockResolvedValueOnce({
+      accounts: [
+        {
+          account_id: "gmail-personal",
+          account_label: "Personal",
+          account_email: "personal@example.com",
+          account_color: "#cba6da",
+          account_icon: "Mail",
+          results: [
+            {
+              uid: "gmail-personal-amazon-1",
+              from_name: "Amazon.com",
+              from_address: "store-news@amazon.com",
+              subject: "Amazon order from last month",
+              body_snippet: "Your historical order is indexed.",
+              email_date: "2026-04-02T12:00:00.000Z",
+              read: true,
+            },
+          ],
+        },
+      ],
+      total: 1,
+      query: "amazon",
+    });
+
+    renderInbox({ isMobile: true });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: "amazon" },
+    });
+
+    await waitFor(() => {
+      expect(searchEmails).toHaveBeenCalledWith("amazon");
+    });
+    expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
+    expect(screen.queryByText("Budget dinner plans")).toBeNull();
+  });
+
   it("respects a seedSelectedId on mobile", () => {
     renderInbox({ isMobile: true, seedSelectedId: "email-action" });
 

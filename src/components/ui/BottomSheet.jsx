@@ -46,7 +46,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
 
   const onTouchStart = useCallback((e) => {
     // Find the actual scroll container at the touch target — the sheet may contain
-    // nested overflow-y:auto wrappers (e.g. BriefingSearch's own scrollRef).
+    // nested overflow-y:auto wrappers from child panels.
     // Drag-to-dismiss should only engage when that container is at scrollTop 0.
     const scrollEl = findScrollableParent(e.target, contentRef.current);
     activeScrollEl.current = scrollEl;

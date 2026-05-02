@@ -163,14 +163,6 @@ export const getModels = () => apiFetch("/api/ea/models");
 export const getBillExtractModels = () => apiFetch("/api/ea/bill-extract-models");
 export const suspendService = () => apiFetch("/api/ea/suspend", { method: "POST" });
 
-// Search
-export const searchBriefings = (query, options = {}) => {
-  const params = new URLSearchParams({ q: query });
-  if (options.types) params.set("types", options.types);
-  if (options.limit) params.set("limit", options.limit);
-  return apiFetch(`/api/search?${params}`);
-};
-export const analyzeSearchResults = (query, results) => apiFetch("/api/search/analyze", { method: "POST", body: JSON.stringify({ query, results }) });
 export const searchEmails = (query, limit) => {
   const params = new URLSearchParams({ q: query });
   if (limit) params.set("limit", limit);
