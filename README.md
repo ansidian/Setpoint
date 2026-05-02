@@ -21,7 +21,7 @@ The dashboard fetches data from multiple sources, sends it through Claude for an
 - **Skip AI** — When inbox is clean and calendar unchanged, clones the previous briefing without an API call
 - **Live data** — 5-minute background polling for new emails, calendar changes, and weather updates between briefings
 - **Scheduled generation** — Cron-based briefing generation at user-defined times and timezones
-- **Briefing search** — Vector similarity search across briefing history with Claude-powered result analysis, plus `@` prefix keyword search across all indexed emails (FTS5) to quickly find which account an email came from
+- **Inbox search** — The Inbox tab searches the persisted email index (FTS5) across indexed INBOX mail for every account, with a resumable 365-day default backfill for historical coverage
 - **Briefing history** — Browse and compare past briefings
 - **Important senders** — Configure priority senders for real-time browser notifications
 - **Multi-account support** — Multiple Gmail (OAuth) and iCloud (app passwords) accounts with custom labels, colors, and icons
@@ -66,7 +66,7 @@ EA_ENCRYPTION_KEY=
 # Claude API
 ANTHROPIC_API_KEY=
 
-# OpenAI (embeddings for briefing search — optional)
+# OpenAI (optional)
 OPENAI_API_KEY=
 
 # Google OAuth (Gmail + Calendar)
