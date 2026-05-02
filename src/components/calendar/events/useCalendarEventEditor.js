@@ -1,30 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { getGmailAuthUrl } from "@/api";
 import {
-  createCalendarEvent,
-  createCalendarEventsBatch,
-  deleteCalendarEvent,
-  getGmailAuthUrl,
-  updateCalendarEvent,
-} from "@/api";
+  deleteCalendarEventAction,
+  saveCalendarEventAction,
+} from "./calendarEventEditorActions";
 import { parseCalendarTitle } from "./parseCalendarTitle";
 import useCalendarLocationSuggestions from "./useCalendarLocationSuggestions";
 import useCalendarSources from "./useCalendarSources";
 import {
-  buildRecurrencePayload,
   coerceEditingTitleAssist,
   createManualOverrides,
   defaultDraft,
-  draftBounds,
   draftFromEvent,
-  eventBounds,
   flattenWritableCalendars,
   inferNoWritableReason,
-  mergeBounds,
   normalizeBatchDrafts,
-  normalizeBatchDraftsWithErrors,
   normalizeDraftForDirty,
   normalizeRecurrenceDraft,
-  pacificYMD,
   parsePositiveInt,
   todayYmd,
   validateBatchDrafts,
@@ -499,59 +491,27 @@ export default function useCalendarEventEditor({
     setError(null);
     setErrorCode(null);
 
-    const payload = {
-      accountId: draft.accountId,
-      calendarId: draft.calendarId,
-      title: effectiveTitle,
-      allDay: draft.allDay,
-      startDate: draft.startDate,
-      endDate: draft.endDate,
-      startTime: draft.startTime,
-      endTime: draft.endTime,
-      location: draft.location,
-      description: draft.description,
-    };
-    const shouldSendRecurrence = !!recurrenceDraft && (
-      editingEvent
-        ? isEditingRecurring
-          ? recurringEditScope !== "one"
-          : intentState.mode === "recurring"
-        : intentState.mode === "recurring"
-    );
-
     try {
-      let savedEvent;
-      if (!editingEvent && intentState.mode === "batch") {
-        const items = batchDrafts.map((item) => ({
-          accountId: draft.accountId,
-          calendarId: draft.calendarId,
-          title: item.title || effectiveTitle,
-          allDay: draft.allDay,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          startTime: draft.allDay ? null : item.startTime,
-          endTime: draft.allDay ? null : item.endTime,
-          location: draft.location,
-          description: draft.description,
-        }));
-        const result = await createCalendarEventsBatch(items);
-        const createdEvents = (result?.created || [])
-          .map((entry) => entry?.event)
-          .filter(Boolean);
-        const failed = result?.failed || [];
-        const bounds = mergeBounds(...createdEvents.map((event) => eventBounds(event)));
-        if (failed.length && bounds) await refreshRange?.(bounds.start, bounds.end);
-        else upsertEvents?.(createdEvents);
-        if (createdEvents[0]?.startMs) onFocusDate?.(pacificYMD(createdEvents[0].startMs));
+      const result = await saveCalendarEventAction({
+        draft,
+        batchDrafts,
+        effectiveTitle,
+        recurrenceDraft,
+        editingEvent,
+        isEditingRecurring,
+        recurringEditScope,
+        intentMode: intentState.mode,
+      });
 
-        if (failed.length) {
-          setBatchDrafts(normalizeBatchDraftsWithErrors(failed));
-          setError(
-            createdEvents.length
-              ? `Created ${createdEvents.length} event${createdEvents.length === 1 ? "" : "s"}, but ${failed.length} still need review.`
-              : failed[0]?.message || "Failed to create batch events.",
-          );
-          setErrorCode(failed[0]?.code || "calendar_batch_partial_failed");
+      if (result.kind === "batch-create") {
+        if (result.shouldRefresh && result.bounds) await refreshRange?.(result.bounds.start, result.bounds.end);
+        else if (result.shouldUpsert) upsertEvents?.(result.createdEvents);
+        if (result.focusDate) onFocusDate?.(result.focusDate);
+
+        if (result.failed.length) {
+          setBatchDrafts(result.failedDrafts);
+          setError(result.errorMessage);
+          setErrorCode(result.errorCode);
           return;
         }
 
@@ -559,50 +519,21 @@ export default function useCalendarEventEditor({
         setEditingEvent(null);
         setConfirmDelete(false);
         setBatchDrafts([]);
-        onSaved?.(createdEvents[0] || null, {
+        onSaved?.(result.createdEvents[0] || null, {
           kind: "batch-create",
-          createdEvents,
+          createdEvents: result.createdEvents,
         });
         return;
       }
 
-      if (!editingEvent && intentState.mode === "recurring") {
-        const result = await createCalendarEvent({
-          ...payload,
-          recurrence: buildRecurrencePayload(recurrenceDraft, draft),
-        });
-        savedEvent = result.event;
-      } else if (editingEvent) {
-        const result = await updateCalendarEvent(editingEvent.id, {
-          ...payload,
-          sourceAccountId: editingEvent.accountId,
-          sourceCalendarId: editingEvent.calendarId,
-          etag: editingEvent.etag,
-          scope: isEditingRecurring ? recurringEditScope : undefined,
-          recurringEventId: isEditingRecurring ? editingEvent.recurringEventId : undefined,
-          originalStartTime: isEditingRecurring ? editingEvent.originalStartTime : undefined,
-          recurrence: shouldSendRecurrence
-            ? buildRecurrencePayload(recurrenceDraft, draft)
-            : undefined,
-        });
-        savedEvent = result.event;
-      } else {
-        const result = await createCalendarEvent(payload);
-        savedEvent = result.event;
-      }
-
-      const bounds = mergeBounds(eventBounds(editingEvent), draftBounds(draft), eventBounds(savedEvent));
-      if ((!editingEvent && intentState.mode === "recurring") || (editingEvent && (isEditingRecurring || shouldSendRecurrence))) {
-        if (bounds) await refreshRange?.(bounds.start, bounds.end);
-      } else {
-        upsertEvents?.(savedEvent);
-      }
-      onFocusDate?.(pacificYMD(savedEvent.startMs));
+      if (result.shouldRefresh && result.bounds) await refreshRange?.(result.bounds.start, result.bounds.end);
+      else if (result.shouldUpsert) upsertEvents?.(result.savedEvent);
+      if (result.focusDate) onFocusDate?.(result.focusDate);
       setMode("detail");
       setEditingEvent(null);
       setConfirmDelete(false);
-      onSaved?.(savedEvent, {
-        kind: editingEvent ? "update" : "create",
+      onSaved?.(result.savedEvent, {
+        kind: result.kind,
       });
     } catch (err) {
       setError(err.message || "Failed to save event.");
@@ -639,18 +570,14 @@ export default function useCalendarEventEditor({
     setError(null);
     setErrorCode(null);
     try {
-      await deleteCalendarEvent(editingEvent.id, {
-        accountId: editingEvent.accountId,
-        calendarId: editingEvent.calendarId,
-        etag: editingEvent.etag,
-        scope: isEditingRecurring ? recurringEditScope : undefined,
-        recurringEventId: isEditingRecurring ? editingEvent.recurringEventId : undefined,
-        originalStartTime: isEditingRecurring ? editingEvent.originalStartTime : undefined,
+      const result = await deleteCalendarEventAction({
+        editingEvent,
+        isEditingRecurring,
+        recurringEditScope,
       });
-      const bounds = eventBounds(editingEvent);
-      if (isEditingRecurring) {
-        if (bounds) await refreshRange?.(bounds.start, bounds.end);
-      } else {
+      if (result.shouldRefresh && result.bounds) {
+        await refreshRange?.(result.bounds.start, result.bounds.end);
+      } else if (result.shouldRemove) {
         removeEvent?.(editingEvent.id);
       }
       onDeleted?.(editingEvent);
