@@ -48,6 +48,7 @@ export default function CalendarModalShell({
   trailingEmpty,
   itemsByDay,
   itemsByDate,
+  cellMetaByDate,
   showGridSkeleton,
   buildFallbackDayState,
   closeEventEditor,
@@ -509,6 +510,7 @@ export default function CalendarModalShell({
                   trailingEmpty={trailingEmpty}
                   itemsByDay={itemsByDay}
                   itemsByDate={itemsByDate}
+                  cellMetaByDate={cellMetaByDate}
                   selectedDay={selectedDay}
                   selectedDateKey={selectedDateKey}
                   selectedItemId={effectiveSelectedItemId}

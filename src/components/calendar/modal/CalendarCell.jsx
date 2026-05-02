@@ -1,6 +1,21 @@
-import { useState } from "react";
+import { createElement, useState } from "react";
 import CalendarSelectedCellFrame from "./CalendarSelectedCellFrame.jsx";
 import { CELL_HEADER_HEIGHT, buildCellAriaLabel, formatCellDate, formatCellDateKey } from "./calendarGridUtils.js";
+import { resolveIcon } from "../../../lib/icons.js";
+
+function formatCellWeather(weather) {
+  if (weather?.high == null && weather?.low == null) return null;
+  return `${weather.high ?? "--"}/${weather.low ?? "--"}`;
+}
+
+function weatherIconColor(icon) {
+  const normalized = String(icon || "").toLowerCase();
+  if (normalized.includes("sun") || normalized.includes("clear")) return "rgba(249,226,175,0.72)";
+  if (normalized.includes("rain") || normalized.includes("drizzle")) return "rgba(137,180,250,0.68)";
+  if (normalized.includes("snow")) return "rgba(205,214,244,0.74)";
+  if (normalized.includes("storm") || normalized.includes("thunder")) return "rgba(249,226,175,0.66)";
+  return "rgba(166,173,200,0.66)";
+}
 
 export default function CalendarCell({
   view,
@@ -14,6 +29,7 @@ export default function CalendarCell({
   boundarySides = [],
   items,
   ghosts,
+  cellMeta,
   selectedItemId,
   itemCount,
   hasItems,
@@ -127,6 +143,7 @@ export default function CalendarCell({
   const renderedCellContents = renderCellContents?.({
     items,
     ghosts,
+    cellMeta,
     hasOverdue,
     isToday,
     loading,
@@ -152,6 +169,9 @@ export default function CalendarCell({
     isSelected,
     isToday,
   });
+  const weatherLabel = formatCellWeather(cellMeta?.weather);
+  const WeatherIcon = weatherLabel ? resolveIcon(cellMeta?.weather?.icon) : null;
+  const resolvedWeatherIconColor = weatherIconColor(cellMeta?.weather?.icon);
 
   return (
     <div
@@ -257,10 +277,12 @@ export default function CalendarCell({
         />
       )}
       <div
+        data-testid="calendar-cell-header"
         style={{
           position: "relative",
           display: "flex",
           alignItems: "center",
+          justifyContent: "space-between",
           gap: 6,
           minHeight: CELL_HEADER_HEIGHT,
           flexShrink: 0,
@@ -304,6 +326,33 @@ export default function CalendarCell({
         >
           {dateLabel || day}
         </button>
+        {weatherLabel ? (
+          <span
+            data-testid="calendar-cell-weather"
+            aria-label={cellMeta?.weather?.summary || "Weather forecast"}
+            title={cellMeta?.weather?.summary || "Weather forecast"}
+            style={{
+              marginLeft: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              color: "rgba(205,214,244,0.48)",
+              fontSize: 10,
+              fontWeight: 600,
+              lineHeight: 1,
+              fontVariantNumeric: "tabular-nums",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {WeatherIcon ? createElement(WeatherIcon, {
+              size: 10,
+              strokeWidth: 2,
+              color: resolvedWeatherIconColor,
+              "aria-hidden": "true",
+            }) : null}
+            {weatherLabel}
+          </span>
+        ) : null}
       </div>
       <div
         style={{

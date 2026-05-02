@@ -44,6 +44,7 @@ export default function buildCalendarModalShellProps({
     trailingEmpty: viewModel.trailingEmpty,
     itemsByDay: viewModel.itemsByDay,
     itemsByDate: viewModel.computed.itemsByDate || {},
+    cellMetaByDate: viewModel.computed.cellMetaByDate || {},
     showGridSkeleton: viewModel.showGridSkeleton,
     buildFallbackDayState: viewModel.buildFallbackDayState,
     closeEventEditor: handlers.closeEventEditor,

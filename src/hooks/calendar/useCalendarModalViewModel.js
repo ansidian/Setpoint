@@ -36,6 +36,7 @@ export default function useCalendarModalViewModel({
   eventEditor,
   deadlineEditor,
   deadlineDraftPreview,
+  weatherData,
   floatingDetail,
   setMonthMotionDirection,
   setViewDate,
@@ -44,8 +45,8 @@ export default function useCalendarModalViewModel({
   setSelectedItemId,
 }) {
   const computed = useMemo(
-    () => activeView.compute({ data: viewData, viewYear, viewMonth }),
-    [activeView, viewData, viewYear, viewMonth],
+    () => activeView.compute({ data: viewData, viewYear, viewMonth, weatherData }),
+    [activeView, viewData, viewYear, viewMonth, weatherData],
   );
   const itemsByDay = useMemo(() => computed.itemsByDay || {}, [computed.itemsByDay]);
   const ghostPreview = useCalendarGhostPreview({

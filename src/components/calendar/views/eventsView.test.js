@@ -141,3 +141,28 @@ describe("eventsView.getVisibleEventCount", () => {
     expect(eventsView.getVisibleEventCount(9, { tier: "uhd" })).toBe(7);
   });
 });
+
+describe("eventsView weather cell metadata", () => {
+  it("maps daily forecast data by date for event calendar cells", () => {
+    const { cellMetaByDate } = eventsView.compute({
+      data: { events: [] },
+      viewYear: 2026,
+      viewMonth: 3,
+      weatherData: {
+        dailyForecast: [
+          { dateKey: "2026-04-20", high: 72, low: 55, icon: "Sun", summary: "Sunny" },
+          { dateKey: "2026-04-21", high: 68, low: 52, icon: "Cloud", summary: "Cloudy" },
+        ],
+      },
+    });
+
+    expect(cellMetaByDate["2026-04-20"].weather).toEqual({
+      dateKey: "2026-04-20",
+      high: 72,
+      low: 55,
+      icon: "Sun",
+      summary: "Sunny",
+    });
+    expect(cellMetaByDate["2026-04-22"]).toBeUndefined();
+  });
+});

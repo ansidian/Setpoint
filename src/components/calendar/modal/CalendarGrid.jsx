@@ -37,6 +37,7 @@ export default function CalendarGrid({
   trailingEmpty,
   itemsByDay,
   itemsByDate,
+  cellMetaByDate,
   selectedDay,
   selectedDateKey,
   selectedItemId,
@@ -367,6 +368,7 @@ export default function CalendarGrid({
                 }
               : dayState;
             const cellGhosts = getCellGhosts(ghostPreview, cell.dateKey);
+            const cellMeta = cellMetaByDate?.[cell.dateKey] || null;
             const resolvedDayState = filteredDeadlineDayState;
             const cellItems = activeView.getDayState
               ? resolvedDayState
@@ -430,6 +432,7 @@ export default function CalendarGrid({
                 boundarySides={cell.boundarySides}
                 items={cellItems}
                 ghosts={cellGhosts}
+                cellMeta={cellMeta}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
                 itemCount={
                   resolvedDayState.totalCount +

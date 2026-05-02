@@ -36,6 +36,21 @@ describe("calendar cell ghost content", () => {
     expect(chip.textContent).not.toMatch(/draft|conflict|repeat/i);
   });
 
+  it("does not render event cell content for weather-only metadata", () => {
+    const { container } = render(renderEventsCellContents({
+      items: [],
+      ghosts: [],
+      layout,
+      day: 22,
+      dateKey: "2026-04-22",
+      cellMeta: {
+        weather: { dateKey: "2026-04-22", high: 72, low: 55, icon: "Sun" },
+      },
+    }));
+
+    expect(container.innerHTML).toBe("");
+  });
+
   it("renders deadline ghosts with deadline source color and due-time ordering", () => {
     render(renderDeadlinesCellContents({
       items: [
