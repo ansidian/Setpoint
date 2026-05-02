@@ -9,7 +9,6 @@ const componentSizeBaseline = {
   // create/edit orchestration into the floating shell. These remain explicit refactor debt.
   files: {
     'src/components/email/EmailSection.jsx': 641,
-    'src/components/shell/ShellHeaderChrome.jsx': 656,
   },
 }
 
