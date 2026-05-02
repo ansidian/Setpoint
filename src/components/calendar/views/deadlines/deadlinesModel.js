@@ -129,12 +129,20 @@ export function compute({ data, viewYear, viewMonth }) {
   return { itemsByDay, itemsByDate, earliestOverdue };
 }
 
-export function canNavigateBack({ viewYear, viewMonth, currentYear, currentMonth, computed }) {
+export function canNavigateBack({ viewYear, viewMonth, currentYear, currentMonth, data, computed }) {
   const currentIdx = currentYear * 12 + currentMonth;
   const viewIdx = viewYear * 12 + viewMonth;
   if (viewIdx > currentIdx) return true;
+  let minIdx = currentIdx - 12;
+  if (data?.minDate) {
+    const min = parseDueDate(data.minDate);
+    if (!Number.isNaN(min.getTime())) {
+      minIdx = min.getFullYear() * 12 + min.getMonth();
+    }
+    return viewIdx > minIdx;
+  }
   const earliest = computed?.earliestOverdue;
-  if (!earliest) return false;
+  if (!earliest) return viewIdx > minIdx;
   const earliestIdx = earliest.getFullYear() * 12 + earliest.getMonth();
   return viewIdx > earliestIdx;
 }

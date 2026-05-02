@@ -110,6 +110,10 @@ export const deleteBriefing = (id) => apiFetch(`/api/briefing/${id}`, { method: 
 
 // Calendar
 export const getCalendarDeadlines = () => apiFetch("/api/calendar/deadlines");
+export const getCalendarDeadlinesRange = (start, end) =>
+  apiFetch(`/api/calendar/deadlines/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+export const getCalendarBillsRange = (start, end) =>
+  apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 // Calendar range fetch — used by useCalendarRange hook
 export const getCalendarRange = (start, end) =>
   apiFetch(`/api/calendar/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);

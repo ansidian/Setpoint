@@ -1,8 +1,9 @@
 import { Router } from "express";
 import db from "../db/connection.js";
 import { requireCookieSession } from "../middleware/auth.js";
-import { fetchCTMDeadlinesAll } from "../briefing/ctm.js";
-import { fetchTodoistTasksAll } from "../briefing/todoist.js";
+import { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } from "../briefing/ctm.js";
+import { fetchTodoistTasksAll, fetchTodoistTasksRange } from "../briefing/todoist.js";
+import { getCalendarBillsRange } from "../briefing/actual.js";
 import {
   loadUserConfig,
   separateDeadlines,
@@ -115,27 +116,67 @@ router.get("/deadlines", async (_req, res) => {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_SPAN_DAYS = 62;
 
-router.get("/range", async (req, res) => {
+function todayPacific() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+}
+
+function addMonthsIso(iso, n) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + n, d));
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
+}
+
+function validateCalendarRange(req, res, { enforceHistoryWindow = false } = {}) {
   const { start, end } = req.query;
 
-  if (!start) return res.status(400).json({ message: "start param required (YYYY-MM-DD)" });
-  if (!end) return res.status(400).json({ message: "end param required (YYYY-MM-DD)" });
+  if (!start) {
+    res.status(400).json({ message: "start param required (YYYY-MM-DD)" });
+    return null;
+  }
+  if (!end) {
+    res.status(400).json({ message: "end param required (YYYY-MM-DD)" });
+    return null;
+  }
   if (!ISO_DATE_RE.test(start) || !ISO_DATE_RE.test(end)) {
-    return res.status(400).json({ message: "start/end must be YYYY-MM-DD" });
+    res.status(400).json({ message: "start/end must be YYYY-MM-DD" });
+    return null;
   }
 
   const startDate = new Date(`${start}T12:00:00Z`);
   const endDate = new Date(`${end}T12:00:00Z`);
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    return res.status(400).json({ message: "invalid date value" });
+    res.status(400).json({ message: "invalid date value" });
+    return null;
   }
   if (endDate < startDate) {
-    return res.status(400).json({ message: "end must be >= start" });
+    res.status(400).json({ message: "end must be >= start" });
+    return null;
   }
   const spanDays = Math.round((endDate - startDate) / 86400000);
   if (spanDays > MAX_SPAN_DAYS) {
-    return res.status(400).json({ message: `span must be <= ${MAX_SPAN_DAYS} days` });
+    res.status(400).json({ message: `span must be <= ${MAX_SPAN_DAYS} days` });
+    return null;
   }
+  if (enforceHistoryWindow) {
+    const minDate = addMonthsIso(todayPacific(), -12);
+    if (end < minDate) {
+      res.status(400).json({ message: "range must overlap the rolling 12-month calendar window" });
+      return null;
+    }
+    return { start, end, startDate, endDate, minDate };
+  }
+
+  return { start, end, startDate, endDate };
+}
+
+function quietSourceError(source, err) {
+  return { source, message: err?.message || `${source} unavailable` };
+}
+
+router.get("/range", async (req, res) => {
+  const range = validateCalendarRange(req, res);
+  if (!range) return undefined;
+  const { startDate, endDate } = range;
 
   try {
     const userId = process.env.EA_USER_ID;
@@ -157,6 +198,84 @@ router.get("/range", async (req, res) => {
     console.error("[Calendar] range fetch failed:", err.message);
     res.status(500).json({ message: "Failed to fetch calendar range" });
   }
+});
+
+router.get("/deadlines/range", async (req, res) => {
+  const range = validateCalendarRange(req, res, { enforceHistoryWindow: true });
+  if (!range) return undefined;
+
+  try {
+    const userId = process.env.EA_USER_ID;
+    const errors = [];
+    const [ctmResult, todoistResult] = await Promise.allSettled([
+      fetchCTMDeadlinesRange({ start: range.start, end: range.end }),
+      fetchTodoistTasksRange(userId, { start: range.start, end: range.end }),
+    ]);
+    const ctmDeadlines = ctmResult.status === "fulfilled" ? ctmResult.value : [];
+    const todoistTasks = todoistResult.status === "fulfilled" ? todoistResult.value : [];
+    if (ctmResult.status === "rejected") errors.push(quietSourceError("ctm", ctmResult.reason));
+    if (todoistResult.status === "rejected") errors.push(quietSourceError("todoist", todoistResult.reason));
+
+    const liveTodoistIds = new Set(
+      todoistTasks
+        .filter((task) => task.status !== "complete")
+        .map((task) => String(task.id)),
+    );
+    const tombstones = await hydrateRecurringTombstones(userId, liveTodoistIds.size ? liveTodoistIds : null, {
+      viewBoundary: "yesterday",
+    }).catch((err) => {
+      errors.push(quietSourceError("todoist", err));
+      return [];
+    });
+    const rangeTombstones = tombstones.filter((task) =>
+      task.due_date && task.due_date >= range.start && task.due_date <= range.end,
+    );
+    const separated = separateDeadlines(ctmDeadlines, [...todoistTasks, ...rangeTombstones], new Set());
+
+    res.json({
+      ctm: {
+        upcoming: separated.ctm,
+        stats: computeDeadlineStats(separated.ctm),
+      },
+      todoist: {
+        upcoming: separated.todoist,
+        stats: computeDeadlineStats(separated.todoist),
+      },
+      minDate: range.minDate,
+      errors,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[Calendar] deadlines range fetch failed:", err);
+    res.status(500).json({ message: "Failed to fetch calendar deadlines range" });
+  }
+  return undefined;
+});
+
+router.get("/bills/range", async (req, res) => {
+  const range = validateCalendarRange(req, res, { enforceHistoryWindow: true });
+  if (!range) return undefined;
+
+  try {
+    const userId = process.env.EA_USER_ID;
+    const errors = [];
+    const data = await getCalendarBillsRange(userId, { start: range.start, end: range.end })
+      .catch((err) => {
+        errors.push(quietSourceError("actual", err));
+        return { schedules: [], recentTransactions: [], payeeMap: {}, actualBudgetUrl: null };
+      });
+
+    res.json({
+      ...data,
+      minDate: range.minDate,
+      errors,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[Calendar] bills range fetch failed:", err);
+    res.status(500).json({ message: "Failed to fetch calendar bills range" });
+  }
+  return undefined;
 });
 
 router.get("/calendars", async (_req, res) => {

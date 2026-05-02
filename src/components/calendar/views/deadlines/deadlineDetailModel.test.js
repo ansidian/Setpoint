@@ -33,6 +33,14 @@ describe("deadline detail model", () => {
     expect(deadlineSecondaryMeta(ctmTask)).toBe("Data Systems");
   });
 
+  it("labels completed historical deadlines as complete instead of overdue", () => {
+    expect(deadlineDueBadgeLabel({
+      title: "Past task",
+      due_date: "2026-04-18",
+      status: "complete",
+    }, -14)).toBe("Complete");
+  });
+
   it("compresses deadline cards only when text density needs it", () => {
     expect(shouldCompressDeadlineCard(null)).toBe(false);
     expect(shouldCompressDeadlineCard({

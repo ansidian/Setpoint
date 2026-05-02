@@ -33,6 +33,27 @@ function withLock(fn) {
 const METADATA_TTL_MS = 5 * 60 * 1000;
 let metadataCache = { data: null, ts: 0 };
 
+function amountConditionCents(condition) {
+  const rawAmt = condition?.value;
+  return typeof rawAmt === "object" && rawAmt !== null
+    ? (rawAmt.num1 ?? 0)
+    : (rawAmt ?? 0);
+}
+
+function classifySchedules(schedules, rawPayees) {
+  const transferPayeeIds = new Set(rawPayees.filter(p => p.transfer_acct).map(p => p.id));
+  return schedules.map(s => {
+    const payeeId = s.conditions?.find(c => c.field === "payee")?.value;
+    const amtCond = s.conditions?.find(c => c.field === "amount");
+    const signedAmt = amountConditionCents(amtCond);
+    let type;
+    if (transferPayeeIds.has(payeeId)) type = "transfer";
+    else if (signedAmt > 0) type = "income";
+    else type = "bill";
+    return { ...s, type };
+  });
+}
+
 export function testConnection(userId, overrides = null) {
   return withLock(async () => {
     let serverURL, password, syncId;
@@ -118,20 +139,7 @@ async function getMetadataInner(userId) {
       // Classify each schedule as bill / transfer / income so the calendar can
       // hide income (paychecks) and style transfers distinctly. Transfer payees
       // (Actual's special per-account payees) carry a non-null transfer_acct.
-      const transferPayeeIds = new Set(rawPayees.filter(p => p.transfer_acct).map(p => p.id));
-      const classifiedSchedules = schedules.map(s => {
-        const payeeId = s.conditions?.find(c => c.field === "payee")?.value;
-        const amtCond = s.conditions?.find(c => c.field === "amount");
-        const rawAmt = amtCond?.value;
-        const signedAmt = typeof rawAmt === "object" && rawAmt !== null
-          ? (rawAmt.num1 ?? 0)
-          : (rawAmt ?? 0);
-        let type;
-        if (transferPayeeIds.has(payeeId)) type = "transfer";
-        else if (signedAmt > 0) type = "income";
-        else type = "bill";
-        return { ...s, type };
-      });
+      const classifiedSchedules = classifySchedules(schedules, rawPayees);
 
       const categories = groups
         .filter(g => g.name !== "Internal")
@@ -388,6 +396,49 @@ function daysBetweenYmd(a, b) {
   return Math.round(ms / 86400000);
 }
 
+function scheduleAmountCents(schedule) {
+  return amountConditionCents(schedule.conditions?.find(c => c.field === "amount"));
+}
+
+function schedulePayeeName(schedule, payeeMap) {
+  const payeeCond = schedule.conditions?.find((c) => c.field === "payee");
+  return payeeCond ? payeeMap[payeeCond.value] : schedule.name;
+}
+
+function baseBillFromSchedule(schedule, payeeMap) {
+  const amountCents = scheduleAmountCents(schedule);
+  const payeeName = schedulePayeeName(schedule, payeeMap);
+  return {
+    scheduleId: schedule.id,
+    name: schedule.name || payeeName || "Unknown",
+    payee: payeeName || schedule.name || "Unknown",
+    amount: Math.abs(amountCents) / 100,
+    type: schedule.type || "bill",
+  };
+}
+
+function isBillLikeSchedule(schedule) {
+  return !schedule?.completed && schedule?.type !== "income";
+}
+
+function isWithinDateRange(date, { start, end }) {
+  return !!date && date >= start && date <= end;
+}
+
+function mapOpenBillInstances(schedules, payeeMap, range) {
+  return schedules
+    .filter(isBillLikeSchedule)
+    .filter((schedule) => isWithinDateRange(schedule.next_date, range))
+    .map((schedule) => ({
+      ...baseBillFromSchedule(schedule, payeeMap),
+      id: `${schedule.id}:${schedule.next_date}`,
+      next_date: schedule.next_date,
+      paid: false,
+      openActionDisabled: false,
+    }))
+    .sort((a, b) => a.next_date.localeCompare(b.next_date));
+}
+
 export function isSchedulePaid(schedule, recentTransactions) {
   if (!schedule.next_date) return false;
   const amtCond = schedule.conditions?.find(c => c.field === "amount");
@@ -433,6 +484,33 @@ export async function getUpcomingBills(userId) {
       };
     })
     .sort((a, b) => a.next_date.localeCompare(b.next_date));
+}
+
+export function getCalendarBillsRange(userId, { start, end }) {
+  return withLock(async () => {
+    const { serverURL, password, syncId } = await getActualConfig(userId);
+    try {
+      await actualApi.init({ serverURL, password });
+      await actualApi.downloadBudget(syncId);
+
+      const [rawPayees, schedules] = await Promise.all([
+        actualApi.getPayees(),
+        getSchedulesWithConditions(),
+      ]);
+
+      const payeeMap = Object.fromEntries(rawPayees.map(p => [p.id, p.name]));
+      const classifiedSchedules = classifySchedules(schedules, rawPayees);
+
+      return {
+        schedules: mapOpenBillInstances(classifiedSchedules, payeeMap, { start, end }),
+        recentTransactions: [],
+        payeeMap,
+        actualBudgetUrl: serverURL,
+      };
+    } finally {
+      await actualApi.shutdown().catch(() => {});
+    }
+  });
 }
 
 export function markBillPaid(scheduleId, userId) {
@@ -573,3 +651,7 @@ export function createQuickTxn(userId, { accountName, amount, payee, type = "pay
     }
   });
 }
+
+export const __testing__ = {
+  mapOpenBillInstances,
+};

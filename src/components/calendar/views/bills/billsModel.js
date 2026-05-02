@@ -37,6 +37,20 @@ export function formatFullDate(year, month, day, selectedDateKey) {
 }
 
 function scheduleToBill(schedule, payeeMap) {
+  if (!schedule?.conditions) {
+    return {
+      id: schedule.id,
+      scheduleId: schedule.scheduleId || schedule.id,
+      transactionId: schedule.transactionId || null,
+      name: schedule.name || schedule.payee || "Unknown",
+      payee: schedule.payee || schedule.name || "Unknown",
+      amount: Number(schedule.amount || 0),
+      next_date: schedule.next_date,
+      paid: !!schedule.paid,
+      type: schedule.type || "bill",
+      openActionDisabled: !!schedule.openActionDisabled,
+    };
+  }
   const amtCond = schedule.conditions?.find((c) => c.field === "amount");
   const payeeCond = schedule.conditions?.find((c) => c.field === "payee");
   const rawAmt = amtCond?.value;
@@ -44,6 +58,7 @@ function scheduleToBill(schedule, payeeMap) {
   const payeeName = payeeCond ? payeeMap[payeeCond.value] : schedule.name;
   return {
     id: schedule.id,
+    scheduleId: schedule.id,
     name: schedule.name || payeeName || "Unknown",
     payee: payeeName || schedule.name || "Unknown",
     amount: Math.abs(amountCents) / 100,
@@ -87,14 +102,18 @@ export function getDefaultSelectedItemId(items = []) {
   return String(fallback?.id || "");
 }
 
+export function billMatchesItemId(bill, itemId) {
+  if (bill == null || itemId == null) return false;
+  const target = String(itemId);
+  return String(bill.id) === target || String(bill.scheduleId || "") === target;
+}
+
 export function compute({ data, viewYear, viewMonth }) {
   const schedules = data?.schedules || [];
-  const recentTransactions = data?.recentTransactions || [];
   const payeeMap = data?.payeeMap || {};
 
   const itemsByDay = {};
   const itemsByDate = {};
-  const seen = new Set();
 
   if (schedules.length) {
     for (const schedule of schedules) {
@@ -104,32 +123,6 @@ export function compute({ data, viewYear, viewMonth }) {
       const bill = scheduleToBill(schedule, payeeMap);
       if (!itemsByDate[schedule.next_date]) itemsByDate[schedule.next_date] = [];
       itemsByDate[schedule.next_date].push(bill);
-      seen.add(`${schedule.id}:${schedule.next_date}`);
-      if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
-      if (!itemsByDay[day]) itemsByDay[day] = [];
-      itemsByDay[day].push(bill);
-    }
-  }
-
-  if (recentTransactions.length && schedules.length) {
-    const scheduleById = new Map(schedules.map((schedule) => [schedule.id, schedule]));
-    for (const transaction of recentTransactions) {
-      if (!transaction.scheduleId || !transaction.date) continue;
-      const schedule = scheduleById.get(transaction.scheduleId);
-      if (!schedule || schedule.type === "income") continue;
-      const date = new Date(`${transaction.date}T00:00:00`);
-      const day = date.getDate();
-      const key = `${transaction.scheduleId}:${transaction.date}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const bill = {
-        ...scheduleToBill(schedule, payeeMap),
-        next_date: transaction.date,
-        amount: transaction.amount,
-        paid: true,
-      };
-      if (!itemsByDate[transaction.date]) itemsByDate[transaction.date] = [];
-      itemsByDate[transaction.date].push(bill);
       if (date.getFullYear() !== viewYear || date.getMonth() !== viewMonth) continue;
       if (!itemsByDay[day]) itemsByDay[day] = [];
       itemsByDay[day].push(bill);

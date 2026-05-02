@@ -1,5 +1,6 @@
 import {
   allComplete,
+  billMatchesItemId,
   compute,
   getDayState,
   getDefaultSelectedItemId,
@@ -22,6 +23,7 @@ const billsView = {
   HeaderExtras: UtilityStatusButton,
   getDefaultSelectedItemId,
   getItemId: (bill) => bill?.id,
+  matchesItemId: billMatchesItemId,
   label: "Bills",
 };
 

@@ -9,13 +9,18 @@ const mocks = vi.hoisted(() => ({
   invalidateCalendarRange: vi.fn(),
   markCalendarRangeStale: vi.fn(),
   refreshCalendarRangeInPlace: vi.fn(),
+  markCalendarDomainRangeStale: vi.fn(),
   handleQuickRefresh: vi.fn(),
   handleFullGeneration: vi.fn(),
   getCalendarDeadlines: vi.fn(),
+  getCalendarDeadlinesRange: vi.fn(),
+  getCalendarBillsRange: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
   getCalendarDeadlines: mocks.getCalendarDeadlines,
+  getCalendarDeadlinesRange: mocks.getCalendarDeadlinesRange,
+  getCalendarBillsRange: mocks.getCalendarBillsRange,
   deleteBriefing: vi.fn(),
 }));
 
@@ -34,6 +39,16 @@ vi.mock("../hooks/useCalendarRange", () => ({
     invalidate: mocks.invalidateCalendarRange,
     markStale: mocks.markCalendarRangeStale,
     refreshRangeInPlace: mocks.refreshCalendarRangeInPlace,
+  }),
+}));
+
+vi.mock("../hooks/useCalendarDomainRange", () => ({
+  default: () => ({
+    data: null,
+    ensureRange: vi.fn(),
+    markStale: mocks.markCalendarDomainRangeStale,
+    loading: false,
+    error: null,
   }),
 }));
 
@@ -86,6 +101,7 @@ describe("Dashboard refresh wiring", () => {
     mocks.invalidateCalendarRange.mockReset();
     mocks.markCalendarRangeStale.mockReset();
     mocks.refreshCalendarRangeInPlace.mockReset();
+    mocks.markCalendarDomainRangeStale.mockReset();
     mocks.handleQuickRefresh.mockReset();
     mocks.handleFullGeneration.mockReset();
     mocks.getCalendarDeadlines.mockReset();
@@ -109,6 +125,7 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
     expect(mocks.markCalendarRangeStale).not.toHaveBeenCalled();
     expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
+    expect(mocks.markCalendarDomainRangeStale).not.toHaveBeenCalled();
 
     mocks.holdGestureArgs.onShortPress();
 
@@ -117,5 +134,6 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.refreshCalendarRangeInPlace).not.toHaveBeenCalled();
     expect(mocks.handleQuickRefresh).toHaveBeenCalledTimes(2);
     expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
+    expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(2);
   });
 });
