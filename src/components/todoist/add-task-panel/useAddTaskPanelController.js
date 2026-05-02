@@ -514,6 +514,7 @@ export default function useAddTaskPanelController({
 
   return {
     isEdit,
+    editingTask,
     input,
     setInput,
     description,
