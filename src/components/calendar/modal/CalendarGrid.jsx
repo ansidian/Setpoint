@@ -67,6 +67,7 @@ export default function CalendarGrid({
   onShakeFloatingEditor,
   onDirectDateAction,
   onDirectItemAction,
+  showCompletedDeadlines = true,
 }) {
   const gridShellRef = useRef(null);
   const gridBodyRef = useRef(null);
@@ -92,6 +93,7 @@ export default function CalendarGrid({
   const resolvedPopover =
     resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
   const eventDateCells = view === "events";
+  const shouldFilterCompletedDeadlines = view === "deadlines" && !showCompletedDeadlines;
   const itemQuickActions = eventDateCells
     ? eventQuickActions
     : view === "deadlines"
@@ -353,8 +355,19 @@ export default function CalendarGrid({
             const dayState =
               activeView.getDayState?.(rawItems) ??
               buildFallbackDayState(rawItems);
+            const filteredDeadlineDayState = shouldFilterCompletedDeadlines
+              ? {
+                  ...dayState,
+                  items: dayState.activeItems || [],
+                  activeItems: dayState.activeItems || [],
+                  completedItems: [],
+                  activeCount: dayState.activeCount || 0,
+                  completedCount: 0,
+                  totalCount: dayState.activeCount || 0,
+                }
+              : dayState;
             const cellGhosts = getCellGhosts(ghostPreview, cell.dateKey);
-            const resolvedDayState = dayState;
+            const resolvedDayState = filteredDeadlineDayState;
             const cellItems = activeView.getDayState
               ? resolvedDayState
               : rawItems;
@@ -364,8 +377,8 @@ export default function CalendarGrid({
             const pinnedGhostCount = eventDateCells
               ? spanLayout.pinnedGhostCountByDate?.[cell.dateKey] || 0
               : 0;
-            const selectionPool = Array.isArray(dayState.items)
-              ? dayState.items
+            const selectionPool = Array.isArray(resolvedDayState.items)
+              ? resolvedDayState.items
               : rawItems;
             const resolvedSelectionPool = selectionPool;
             const hasItems =

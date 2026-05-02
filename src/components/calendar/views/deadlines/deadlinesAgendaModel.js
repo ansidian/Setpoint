@@ -48,6 +48,7 @@ export function buildDeadlinesAgendaGroups({
   viewMonth,
   todayKey,
   forceVisibleDateKey = null,
+  showCompleted = true,
 } = {}) {
   const { groups, groupMap, monthStartDateKey } = buildDisplayedMonthGroups({
     viewYear,
@@ -63,7 +64,9 @@ export function buildDeadlinesAgendaGroups({
     const group = groupMap.get(dateKey);
     if (!group) continue;
     const state = getDayState(rawItems);
-    group.items = state.items.map((task) => toAgendaDeadline(task, dateKey));
+    group.items = state.items
+      .map((task) => toAgendaDeadline(task, dateKey))
+      .filter((task) => showCompleted || !task.agendaComplete);
     group.hasDeadlines = group.items.length > 0;
     group.hasItems = group.hasDeadlines;
   }

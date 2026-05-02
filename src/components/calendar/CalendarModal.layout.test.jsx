@@ -866,6 +866,41 @@ describe("CalendarModal responsive layout", () => {
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
   });
 
+  it("closes a completed deadline floating detail when completed agenda rows are hidden", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide completed deadlines/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+    expect(within(screen.getByTestId("deadlines-agenda-rail")).queryByText("Project due")).toBeNull();
+    expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Project due")).toBeNull();
+  });
+
   it("treats dashboard item focus as a one-shot request after the floating detail closes", async () => {
     window.innerWidth = 1900;
 

@@ -32,6 +32,15 @@ function renderRail(props = {}) {
           status: "open",
           is_recurring: true,
         },
+        {
+          id: "done-1",
+          title: "Completed review",
+          due_date: "2026-05-09",
+          due_time: "10:00 AM",
+          source: "todoist",
+          project_name: "Ops",
+          status: "complete",
+        },
       ],
     },
   };
@@ -62,6 +71,7 @@ describe("DeadlinesAgendaRail", () => {
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
       "todoist:repeat-1-2026-05-05",
       "todoist:repeat-1-2026-05-09",
+      "done-1",
     ]);
     expect(rows[0].style.background).not.toContain("color-mix");
     expect(rows[1].style.background).toContain("color-mix");
@@ -74,5 +84,35 @@ describe("DeadlinesAgendaRail", () => {
         agendaItemId: "todoist:repeat-1-2026-05-09",
       }),
     }));
+  });
+
+  it("toggles completed deadline rows for the mounted rail session", () => {
+    renderRail();
+
+    expect(screen.getByText("Completed review")).toBeTruthy();
+
+    const toggle = screen.getByRole("button", { name: /hide completed deadlines/i });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(toggle);
+    expect(screen.queryByText("Completed review")).toBeNull();
+    expect(screen.getAllByTestId("calendar-agenda-deadline-row")).toHaveLength(2);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(toggle);
+    expect(screen.getByText("Completed review")).toBeTruthy();
+    expect(screen.getAllByTestId("calendar-agenda-deadline-row")).toHaveLength(3);
+  });
+
+  it("notifies when hiding completed deadlines removes the selected row", () => {
+    const onFilteredSelectedDeadlineHidden = vi.fn();
+    renderRail({
+      selectedItemId: "done-1",
+      onFilteredSelectedDeadlineHidden,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /hide completed deadlines/i }));
+
+    expect(onFilteredSelectedDeadlineHidden).toHaveBeenCalledTimes(1);
   });
 });
