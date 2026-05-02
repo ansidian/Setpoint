@@ -1,0 +1,203 @@
+import { useMemo } from "react";
+import { AlertCircle } from "lucide-react";
+import { daysUntil } from "../../../lib/bill-utils";
+import { formatFullDate } from "../../../lib/dashboard-helpers";
+import Tooltip from "../../shared/Tooltip";
+import {
+  CountBadge,
+  DeadlineStatusIcon,
+  EmptyRow,
+  PriorityFlag,
+  RailGroupLabel,
+  SectionHeader,
+  UrgencyPill,
+} from "./railPrimitives.jsx";
+import { PRIORITY_COLOR } from "./railModel.js";
+
+export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false }) {
+  const grouped = useMemo(() => {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const visible = [...deadlines]
+      .filter((d) => !(d.status === "complete" && d.due_date && d.due_date < today))
+      .map((d) => ({ d, days: daysUntil(d.due_date) }))
+      .sort((a, b) => {
+        const aDone = a.d.status === "complete" ? 1 : 0;
+        const bDone = b.d.status === "complete" ? 1 : 0;
+        if (aDone !== bDone) return aDone - bDone;
+        if (a.days == null) return 1;
+        if (b.days == null) return -1;
+        return a.days - b.days;
+      });
+
+    const open = visible.filter(({ d }) => d.status !== "complete").slice(0, 4);
+    const completed = visible.filter(({ d }) => d.status === "complete").slice(0, 2);
+    return { open, completed };
+  }, [deadlines]);
+
+  const openCount = deadlines.filter((d) => d.status !== "complete").length;
+
+  return (
+    <div data-sect="deadlines">
+      <SectionHeader
+        title="Deadlines"
+        isMobile={isMobile}
+        right={<CountBadge n={openCount} />}
+      />
+      <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
+        {grouped.open.length > 0 && (
+          <DeadlineGroup
+            label="Open"
+            items={grouped.open}
+            accent={accent}
+            onJump={onJump}
+            isMobile={isMobile}
+          />
+        )}
+        {grouped.completed.length > 0 && (
+          <div style={{ marginTop: grouped.open.length > 0 ? 12 : 0 }}>
+            <DeadlineGroup
+              label="Completed"
+              items={grouped.completed}
+              accent={accent}
+              onJump={onJump}
+              isMobile={isMobile}
+              tone="success"
+              completed
+            />
+          </div>
+        )}
+        {grouped.open.length === 0 && grouped.completed.length === 0 && (
+          <EmptyRow icon={AlertCircle} label="No deadlines" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeadlineGroup({ label, items, accent, onJump, isMobile, tone, completed = false }) {
+  return (
+    <div>
+      <RailGroupLabel label={label} count={items.length} tone={tone} />
+      {items.map(({ d, days }) => (
+        <DeadlineRow
+          key={d.id}
+          deadline={d}
+          days={days}
+          accent={accent}
+          onJump={onJump}
+          isMobile={isMobile}
+          completed={completed}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed }) {
+  const isTodoist = d.source === "todoist";
+  const showPriority = isTodoist && PRIORITY_COLOR[d.priority];
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={(e) =>
+        onJump?.(
+          { kind: "deadline", id: d.id, data: d },
+          e.currentTarget,
+        )
+      }
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ")
+          onJump?.(
+            { kind: "deadline", id: d.id, data: d },
+            e.currentTarget,
+          );
+      }}
+      style={{
+        display: "grid",
+        gridTemplateColumns: isMobile
+          ? "16px minmax(0, 1fr)"
+          : showPriority
+            ? "16px 1fr auto auto"
+            : "16px 1fr auto",
+        gap: 10,
+        alignItems: isMobile ? "start" : "center",
+        padding: isMobile ? "10px 2px" : "9px 2px",
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        cursor: "pointer",
+        transition: "background 150ms",
+        opacity: completed ? 0.55 : undefined,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      <DeadlineStatusIcon status={d.status} />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: "#cdd6f4",
+            fontWeight: 500,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: isMobile ? "normal" : "nowrap",
+            marginBottom: 2,
+            textDecoration: completed ? "line-through" : undefined,
+            textDecorationColor: completed ? "rgba(205,214,244,0.35)" : undefined,
+          }}
+        >
+          {d.title}
+        </div>
+        <div
+          style={{
+            fontSize: 10.5,
+            color: "rgba(205,214,244,0.45)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: isMobile ? "normal" : "nowrap",
+          }}
+        >
+          {d.class_name || d.source}
+        </div>
+        {isMobile && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              marginTop: 6,
+            }}
+          >
+            {showPriority && <PriorityFlag level={d.priority} />}
+            <Tooltip
+              text={formatFullDate(d.due_date)}
+              sideOffset={12}
+              side="right"
+            >
+              <UrgencyPill days={days} accent={accent} verbose />
+            </Tooltip>
+          </div>
+        )}
+      </div>
+      {!isMobile && showPriority && (
+        <PriorityFlag level={d.priority} />
+      )}
+      {!isMobile && (
+        <Tooltip
+          text={formatFullDate(d.due_date)}
+          side="right"
+          sideOffset={12}
+          collisionAvoidance={{ side: "shift" }}
+        >
+          <UrgencyPill days={days} accent={accent} verbose />
+        </Tooltip>
+      )}
+    </div>
+  );
+}
