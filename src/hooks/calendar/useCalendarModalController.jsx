@@ -6,44 +6,26 @@ import { getCalendarLayoutMetrics } from "../../components/calendar/calendarLayo
 import useCalendarEventEditor from "../../components/calendar/events/useCalendarEventEditor.js";
 import useCalendarQuickActions from "../../components/calendar/events/useCalendarQuickActions.js";
 import useDeadlineQuickActions from "../../components/calendar/views/deadlines/useDeadlineQuickActions.js";
-import useCalendarGhostPreview from "../../components/calendar/useCalendarGhostPreview.js";
 import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
+import buildCalendarModalShellProps from "../../components/calendar/modal/buildCalendarModalShellProps.js";
 import {
-  getMonthData,
   getVisibleGridRange,
   parseYmd,
-  ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
 import useCalendarModalEditorRouting from "./useCalendarModalEditorRouting.js";
+import useCalendarModalHotkeys from "./useCalendarModalHotkeys.js";
+import useCalendarModalOutsideDismiss from "./useCalendarModalOutsideDismiss.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
-import { ymdFromView } from "./calendarModalSelectionModel.js";
-import {
-  formatFloatingDetailLabel,
-  formatFloatingEditorLabel,
-  isFloatingDetailFlipSuppressedTarget,
-  isFloatingDetailPanelTarget,
-  isFloatingDetailTriggerTarget,
-  isGridOriginFloatingDetail,
-} from "./calendarFloatingDetailModel.js";
+import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
+import useCalendarModalWheelContainment from "./useCalendarModalWheelContainment.js";
+import useViewportWidth from "./useViewportWidth.js";
 
 const VIEWS = {
   events: eventsView,
   bills: billsView,
   deadlines: deadlinesView,
 };
-
-function isEditableTarget(target) {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tagName = target.tagName;
-  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
-}
-
-function isSuspendedHotkeyTarget(target) {
-  return target instanceof HTMLElement
-    && !!target.closest("[data-suspend-calendar-hotkeys='true']");
-}
 
 function addMonthOffset(year, month, offset) {
   const date = new Date(year, month + offset, 1);
@@ -65,18 +47,6 @@ function dedupeEvents(events) {
     result.push(event);
   }
   return result;
-}
-
-function buildFallbackDayState(rawItems) {
-  const items = Array.isArray(rawItems) ? rawItems : [];
-  return {
-    items,
-    activeItems: items,
-    completedItems: [],
-    activeCount: items.length,
-    completedCount: 0,
-    totalCount: items.length,
-  };
 }
 
 export default function useCalendarModalController({
@@ -124,7 +94,7 @@ export default function useCalendarModalController({
       ? { mode: "create", seedDate: focusDate || null }
       : null
   ));
-  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const viewportWidth = useViewportWidth();
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
   const [agendaScrollCommand, setAgendaScrollCommand] = useState(null);
@@ -135,7 +105,6 @@ export default function useCalendarModalController({
   const handledInitialDeadlineCreateRef = useRef(null);
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
-  const resizeRafRef = useRef(0);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
   const {
     floatingDetail,
@@ -478,327 +447,83 @@ export default function useCalendarModalController({
     commitSyncSnapshotEffects(syncSnapshot);
   }, [syncSnapshot, open, view, openRequestId]);
 
-  const suppressOutsideClickRef = useRef(new Map());
-  function suppressOutsideClick(test, key = "default") {
-    if (test) {
-      suppressOutsideClickRef.current.set(key, test);
-    } else {
-      suppressOutsideClickRef.current.delete(key);
-    }
-  }
+  const suppressOutsideClick = useCalendarModalOutsideDismiss({
+    open,
+    panelRef,
+    floatingDetail,
+    setFloatingDetail,
+    closeCalendarModal,
+    shakeFloatingEditor,
+  });
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const id = window.requestAnimationFrame(() => {
-      panelRef.current?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [open]);
+  useCalendarModalWheelContainment({ open, scrollRef });
 
-  useEffect(() => {
-    if (open) return;
-    suppressOutsideClickRef.current.clear();
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function handleClick(event) {
-      const suppressors = [...suppressOutsideClickRef.current.values()];
-      if (suppressors.some((test) => test?.(event.target))) return;
-      if (isFloatingDetailPanelTarget(event.target)) return;
-      const roleLayer = event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]');
-      if (roleLayer && !panelRef.current?.contains(roleLayer)) return;
-      if (floatingDetail?.open) {
-        if (floatingDetail.mode === "edit" || floatingDetail.mode === "create") {
-          if (floatingDetail.dirty && !isFloatingDetailTriggerTarget(event.target)) {
-            shakeFloatingEditor();
-          }
-          return;
-        }
-        if (!isFloatingDetailTriggerTarget(event.target)) {
-          setFloatingDetail(null);
-          return;
-        }
-        return;
-      }
-      if (panelRef.current && !panelRef.current.contains(event.target)) {
-        closeCalendarModal();
-      }
-    }
-    document.addEventListener("pointerdown", handleClick);
-    return () => document.removeEventListener("pointerdown", handleClick);
-  }, [closeCalendarModal, floatingDetail?.dirty, floatingDetail?.mode, floatingDetail?.open, open, setFloatingDetail, shakeFloatingEditor]);
-
-  useEffect(() => {
-    function handleResize() {
-      if (resizeRafRef.current) return;
-      resizeRafRef.current = window.requestAnimationFrame(() => {
-        resizeRafRef.current = 0;
-        setViewportWidth((current) => (
-          current === window.innerWidth ? current : window.innerWidth
-        ));
-      });
-    }
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      if (resizeRafRef.current) {
-        window.cancelAnimationFrame(resizeRafRef.current);
-        resizeRafRef.current = 0;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || !open) return undefined;
-    function onWheel(event) {
-      const localScrollElement = event.target instanceof HTMLElement
-        ? event.target.closest("[data-calendar-local-scroll='true']")
-        : null;
-      if (localScrollElement && localScrollElement !== element) {
-        const localMaxScroll = localScrollElement.scrollHeight - localScrollElement.clientHeight;
-        if (localMaxScroll > 0) {
-          const localAtTop = localScrollElement.scrollTop <= 0 && event.deltaY < 0;
-          const localAtBottom = localScrollElement.scrollTop >= localMaxScroll && event.deltaY > 0;
-          if (!localAtTop && !localAtBottom) return;
-        }
-      }
-
-      const { scrollTop, scrollHeight, clientHeight } = element;
-      const maxScroll = scrollHeight - clientHeight;
-      if (maxScroll <= 0) {
-        event.preventDefault();
-        return;
-      }
-      const atTop = scrollTop <= 0 && event.deltaY < 0;
-      const atBottom = scrollTop >= maxScroll && event.deltaY > 0;
-      if (atTop || atBottom) event.preventDefault();
-    }
-    element.addEventListener("wheel", onWheel, { passive: false });
-    return () => element.removeEventListener("wheel", onWheel);
-  }, [open]);
-
-  const computed = useMemo(
-    () => activeView.compute({ data: viewData, viewYear, viewMonth }),
-    [activeView, viewData, viewYear, viewMonth],
-  );
-  const itemsByDay = useMemo(() => computed.itemsByDay || {}, [computed.itemsByDay]);
-  const ghostPreview = useCalendarGhostPreview({
+  const viewModel = useCalendarModalViewModel({
     open,
     view,
     viewData,
-    computed,
+    activeView,
+    activeLayout,
+    currentYear,
+    currentMonth,
+    viewYear,
+    viewMonth,
+    activeSelectedDay,
+    activeSelectedDateKey,
+    activeSelectedItemId,
     eventEditor,
     deadlineEditor,
     deadlineDraftPreview,
-    viewYear,
-    viewMonth,
+    floatingDetail,
     setMonthMotionDirection,
     setViewDate,
     setSelectedDay,
     setSelectedDateKey,
     setSelectedItemId,
   });
+  const { canGoPrev, computed, itemsByDay } = viewModel;
 
-  const { firstDay, daysInMonth } = getMonthData(viewYear, viewMonth);
-  const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
-  const trailingEmpty = 42 - (firstDay + daysInMonth);
-  const canGoPrev = activeView.canNavigateBack
-    ? activeView.canNavigateBack({ viewYear, viewMonth, currentYear, currentMonth, data: viewData, computed })
-    : !isCurrentMonth;
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function handleKey(event) {
-      if (event.key === "Tab") {
-        setSuppressFocusRing(false);
-        return;
-      }
-
-      const consumeCalendarKey = ({ preventDefault = true } = {}) => {
-        setSuppressFocusRing(true);
-        if (preventDefault && event.cancelable) event.preventDefault();
-        event.stopPropagation();
-      };
-
-      if ((event.metaKey || event.ctrlKey) && event.key === "f") {
-        consumeCalendarKey();
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-      if (event.key === "Escape" && floatingDetail?.open) {
-        if (floatingDetail.mode === "edit" || floatingDetail.mode === "create") {
-          cancelFloatingEditor();
-        } else {
-          setFloatingDetail(null);
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
-        setDeadlineEditor(null);
-        setDeadlineDraftPreview(null);
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-
-      if (isSuspendedHotkeyTarget(event.target)) return;
-
-      if (isEditableTarget(event.target)) {
-        if (event.key === "Escape") {
-          closeCalendarModal();
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
-      }
-
-      if (event.key === " ") {
-        const currentDetail = floatingDetailRef.current;
-        if (isGridOriginFloatingDetail(currentDetail)
-          && !currentDetail.dirty
-          && !isFloatingDetailFlipSuppressedTarget(event.target, currentDetail)
-        ) {
-          flipFloatingDetailSide();
-          consumeCalendarKey();
-          return;
-        }
-      }
-
-      if (
-        (event.key === "Enter" || event.key === " ")
-        && event.target instanceof HTMLElement
-        && event.target.closest("button, [role='button'], [role='gridcell']")
-      ) {
-        setSuppressFocusRing(true);
-        return;
-      }
-
-      switch (event.key) {
-        case "Escape":
-          closeCalendarModal();
-          consumeCalendarKey({ preventDefault: false });
-          break;
-        case "ArrowLeft":
-        case "p":
-          if (canGoPrev) navigateMonthRef.current?.(-1);
-          consumeCalendarKey();
-          break;
-        case "ArrowRight":
-        case "n":
-          navigateMonthRef.current?.(1);
-          consumeCalendarKey();
-          break;
-        case "t":
-        case "T":
-          if (floatingDetailRef.current?.open
-            && (floatingDetailRef.current.mode === "edit" || floatingDetailRef.current.mode === "create")
-            && floatingDetailRef.current.dirty
-          ) {
-            shakeFloatingEditor();
-            consumeCalendarKey();
-            break;
-          }
-          if (eventEditor.isEditorOpen && eventEditor.isDirty) {
-            shakeFloatingEditor();
-            consumeCalendarKey();
-            break;
-          }
-          closeEventEditor();
-          setFloatingDetail(null);
-          setDeadlineEditor(null);
-          setDeadlineDraftPreview(null);
-          setViewDate({ month: currentMonth, year: currentYear });
-          setSelectedDay(todayDate);
-          setSelectedDateKey(ymdFromParts(currentYear, currentMonth, todayDate));
-          setSelectedItemId(null);
-          requestAgendaScroll({ type: "today" });
-          consumeCalendarKey();
-          break;
-        case "e":
-        case "E":
-          if (selectedItemId != null) {
-            if (view === "events" && eventEditor.editable) {
-              const dayItems = computed.itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay] || [];
-              const resolveId = activeView.getItemId;
-              const ev = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
-              if (ev) {
-                if (usesFloatingEditor) {
-                  openFloatingEventEdit(ev, { dateKey: selectedDateKey });
-                } else {
-                  setFloatingDetail(null);
-                  eventEditor.openEdit(ev);
-                }
-              }
-            } else if (view === "deadlines") {
-              const dayState = computed.itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay];
-              const pool = dayState?.items || dayState || [];
-              const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
-              if (task?.source === "todoist") {
-                if (usesFloatingEditor) {
-                  openFloatingDeadlineEdit(task, { dateKey: selectedDateKey });
-                } else {
-                  setFloatingDetail(null);
-                  setDeadlineEditor({ mode: "edit", taskId: String(selectedItemId) });
-                  setDeadlineDraftPreview(null);
-                }
-              }
-            }
-          }
-          consumeCalendarKey();
-          break;
-        case "c":
-        case "C":
-          if (view === "events" && eventEditor.editable) {
-            if (usesFloatingEditor) {
-              openFloatingEventCreate(selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }));
-            } else {
-              setFloatingDetail(null);
-              eventEditor.openCreate();
-            }
-          } else if (view === "deadlines") {
-            if (usesFloatingEditor) {
-              openFloatingDeadlineCreate(selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }));
-            } else {
-              setFloatingDetail(null);
-              setDeadlineEditor({
-                mode: "create",
-                seedDate: selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }),
-              });
-              setDeadlineDraftPreview(null);
-            }
-          }
-          consumeCalendarKey();
-          break;
-        case "1":
-          if (view !== "events") handleViewChange("events");
-          consumeCalendarKey();
-          break;
-        case "2":
-          if (view !== "bills") handleViewChange("bills");
-          consumeCalendarKey();
-          break;
-        case "3":
-          if (view !== "deadlines") handleViewChange("deadlines");
-          consumeCalendarKey();
-          break;
-        default:
-          if (event.key === "Enter" || (event.key.length === 1 && event.key !== " " && event.key !== "r" && event.key !== "R")) {
-            consumeCalendarKey();
-          }
-          break;
-      }
-    }
-    document.addEventListener("keydown", handleKey, true);
-    return () => document.removeEventListener("keydown", handleKey, true);
-    // The editor routing helpers intentionally read the latest modal refs inside this document listener.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, computed.itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor]);
+  useCalendarModalHotkeys({
+    open,
+    canGoPrev,
+    currentMonth,
+    currentYear,
+    todayDate,
+    view,
+    viewYear,
+    viewMonth,
+    closeCalendarModal,
+    closeEventEditor,
+    eventEditor,
+    deadlineEditor,
+    setDeadlineEditor,
+    setDeadlineDraftPreview,
+    selectedItemId,
+    selectedDay,
+    selectedDateKey,
+    activeView,
+    itemsByDay,
+    itemsByDate: computed.itemsByDate,
+    setSuppressFocusRing,
+    floatingDetail,
+    floatingDetailRef,
+    setFloatingDetail,
+    handleViewChange,
+    usesFloatingEditor,
+    cancelFloatingEditor,
+    flipFloatingDetailSide,
+    shakeFloatingEditor,
+    setViewDate,
+    setSelectedDay,
+    setSelectedDateKey,
+    setSelectedItemId,
+    requestAgendaScroll,
+    openFloatingEventEdit,
+    openFloatingDeadlineEdit,
+    openFloatingEventCreate,
+    openFloatingDeadlineCreate,
+    navigateMonthRef,
+  });
 
   useEffect(() => {
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
@@ -835,139 +560,32 @@ export default function useCalendarModalController({
 
   if (!open) return null;
 
-  const monthName = new Date(viewYear, viewMonth).toLocaleDateString("en-US", { month: "long" });
-  const monthYear = String(viewYear);
-  const layout = activeLayout;
-  const panelWidth = layout.panelWidth || `calc(100vw - ${layout.viewportMargin * 2}px)`;
-  const showEventsLoading = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
-  const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
-  const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
-
-  const selectedDayRawItems = activeSelectedDay != null
-    ? (computed.itemsByDate?.[activeSelectedDateKey] ?? itemsByDay[activeSelectedDay])
-    : [];
-  const selectedDayState = activeSelectedDay != null
-    ? (activeView.getDayState?.(selectedDayRawItems) ?? buildFallbackDayState(selectedDayRawItems))
-    : buildFallbackDayState([]);
-  const selectedItems = activeView.getDayState ? selectedDayState : selectedDayState.items;
-  const effectiveSelectedItemId = (() => {
-    if (activeSelectedDay == null || selectedDayState.totalCount === 0) return null;
-    if (activeSelectedItemId == null) return null;
-    if (!activeView.getItemId) return activeSelectedItemId;
-
-    const pool = view === "deadlines"
-      ? [...selectedDayState.activeItems, ...selectedDayState.completedItems]
-      : Array.isArray(selectedItems)
-        ? selectedItems
-        : selectedDayState.items || [];
-    const resolveItemId = activeView.getItemId;
-    const hasSelectedItem = pool.some((item) => String(resolveItemId(item)) === String(activeSelectedItemId));
-    return hasSelectedItem ? String(activeSelectedItemId) : null;
-  })();
-  const hasSelectedDay = activeSelectedDay != null;
-  const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
-  const showDetail = view === "deadlines"
-    ? showDeadlineEditor || (!showDeadlinesLoadingState && hasSelectedDay && selectedDayState.totalCount > 0)
-    : hasSelectedDay && selectedDayState.totalCount > 0;
-  const showEmptySelection = view === "deadlines"
-    ? hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor && !showDeadlinesLoadingState
-    : hasSelectedDay && selectedDayState.totalCount === 0;
-  const floatingDetailLabel = floatingDetail?.open
-    ? (floatingDetail.mode === "edit" || floatingDetail.mode === "create"
-        ? formatFloatingEditorLabel(
-            floatingDetail.mode,
-            floatingDetail.view || view,
-            floatingDetail.dateKey || activeSelectedDateKey,
-            viewYear,
-            viewMonth,
-            floatingDetail.day || activeSelectedDay,
-          )
-        : formatFloatingDetailLabel(
-            floatingDetail.view || view,
-            floatingDetail.dateKey || activeSelectedDateKey,
-            viewYear,
-            viewMonth,
-            floatingDetail.day || activeSelectedDay,
-          ))
-    : "";
+  const shellProps = buildCalendarModalShellProps({
+    refs: { panelRef, scrollRef, agendaRailRef },
+    viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, monthMotionDirection, suppressFocusRing },
+    data: { activeView, viewData, weatherData },
+    viewModel,
+    selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId },
+    editors: { eventEditor, deadlineEditor, setDeadlineEditor, setDeadlineDraftPreview },
+    quickActions: { eventQuickActions, deadlineQuickActions },
+    agenda: {
+      agendaScrollCommand,
+      onAgendaPassiveDateChange: (dateKey) => selectAgendaDate(dateKey, { passive: true }),
+      onAgendaDateAction: (dateKey) => selectAgendaDate(dateKey),
+      onAgendaEventAction: selectAgendaEvent,
+      scrollAgendaToDate,
+      scrollAgendaToEvent,
+    },
+    floating: {
+      floatingDetail, openFloatingDetail, closeFloatingDetail, parkFloatingDetail, setFloatingDetailDragged,
+      openFloatingEventCreate, openFloatingEventEdit, openFloatingDeadlineCreate, openFloatingDeadlineEdit,
+      cancelFloatingEditor, setFloatingEditorDirty, setFloatingEditorSaveRequest, shakeFloatingEditor,
+      handleFloatingDeadlineSaved, handleFloatingDeadlineDeleted,
+    },
+    handlers: { navigateMonth, handleViewChange, suppressOutsideClick, closeCalendarModal, closeEventEditor, focusDeadlineTask },
+  });
 
   return (
-    <CalendarModalShell
-      panelRef={panelRef}
-      scrollRef={scrollRef}
-      panelWidth={panelWidth}
-      layout={layout}
-      view={view}
-      monthName={monthName}
-      monthYear={monthYear}
-      canGoPrev={canGoPrev}
-      navigateMonth={navigateMonth}
-      monthMotionDirection={monthMotionDirection}
-      onViewChange={handleViewChange}
-      HeaderExtras={activeView.HeaderExtras}
-      viewData={viewData}
-      weatherData={weatherData}
-      computed={computed}
-      suppressOutsideClick={suppressOutsideClick}
-      eventEditor={eventEditor}
-      selectedDay={activeSelectedDay}
-      selectedDateKey={activeSelectedDateKey}
-      viewYear={viewYear}
-      viewMonth={viewMonth}
-      setDeadlineEditor={setDeadlineEditor}
-      onClose={closeCalendarModal}
-      activeView={activeView}
-      currentYear={currentYear}
-      currentMonth={currentMonth}
-      todayDate={todayDate}
-      firstDay={firstDay}
-      daysInMonth={daysInMonth}
-      trailingEmpty={trailingEmpty}
-      itemsByDay={itemsByDay}
-      itemsByDate={computed.itemsByDate || {}}
-      showGridSkeleton={showGridSkeleton}
-      buildFallbackDayState={buildFallbackDayState}
-      closeEventEditor={closeEventEditor}
-      setSelectedDay={setSelectedDay}
-      setSelectedDateKey={setSelectedDateKey}
-      setSelectedItemId={setSelectedItemId}
-      eventQuickActions={eventQuickActions}
-      deadlineQuickActions={deadlineQuickActions}
-      agendaRailRef={agendaRailRef}
-      agendaScrollCommand={agendaScrollCommand}
-      onAgendaPassiveDateChange={(dateKey) => selectAgendaDate(dateKey, { passive: true })}
-      onAgendaDateAction={(dateKey) => selectAgendaDate(dateKey)}
-      onAgendaEventAction={selectAgendaEvent}
-      onAgendaDirtyBlocked={shakeFloatingEditor}
-      onGridDateAction={scrollAgendaToDate}
-      onGridEventAction={scrollAgendaToEvent}
-      showDetail={showDetail}
-      showEmptySelection={showEmptySelection}
-      effectiveSelectedItemId={effectiveSelectedItemId}
-      selectedDayState={selectedDayState}
-      selectedItems={selectedItems}
-      deadlineEditor={deadlineEditor}
-      focusDeadlineTask={focusDeadlineTask}
-      ghostPreview={ghostPreview}
-      onDeadlineDraftPreviewChange={setDeadlineDraftPreview}
-      floatingDetail={floatingDetail}
-      floatingDetailLabel={floatingDetailLabel}
-      onOpenFloatingDetail={openFloatingDetail}
-      onCloseFloatingDetail={closeFloatingDetail}
-      onParkFloatingDetail={parkFloatingDetail}
-      onFloatingDetailDragged={setFloatingDetailDragged}
-      onReanchorFloatingDetail={openFloatingDetail}
-      onOpenFloatingEventCreate={openFloatingEventCreate}
-      onOpenFloatingEventEdit={openFloatingEventEdit}
-      onOpenFloatingDeadlineCreate={openFloatingDeadlineCreate}
-      onOpenFloatingDeadlineEdit={openFloatingDeadlineEdit}
-      onCancelFloatingEditor={cancelFloatingEditor}
-      onFloatingEditorDirtyChange={setFloatingEditorDirty}
-      onFloatingEditorSaveRequest={setFloatingEditorSaveRequest}
-      onShakeFloatingEditor={shakeFloatingEditor}
-      onFloatingDeadlineSaved={handleFloatingDeadlineSaved}
-      onFloatingDeadlineDeleted={handleFloatingDeadlineDeleted}
-      suppressFocusRing={suppressFocusRing}
-    />
+    <CalendarModalShell {...shellProps} />
   );
 }
