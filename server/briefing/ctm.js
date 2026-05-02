@@ -36,6 +36,19 @@ function todayPacific() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 }
 
+function todoistIdFromUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith("todoist.com")) return null;
+    const taskSegment = parsed.pathname.split("/").filter(Boolean).pop();
+    if (!taskSegment) return null;
+    return taskSegment.includes("-") ? taskSegment.split("-").pop() : taskSegment;
+  } catch {
+    return null;
+  }
+}
+
 async function ctmFetch(path, options = {}) {
   const res = await fetch(`${CTM_API_URL}${path}`, {
     ...options,
@@ -53,6 +66,7 @@ async function ctmFetch(path, options = {}) {
 }
 
 function mapCTMEvent(e) {
+  const todoistId = e.todoist_id || todoistIdFromUrl(e.url);
   return {
     id: e.id,
     title: e.title,
@@ -63,7 +77,7 @@ function mapCTMEvent(e) {
     points_possible: e.points_possible || null,
     status: e.status,
     source: e.canvas_id ? "canvas" : "manual",
-    todoist_id: e.todoist_id || null,
+    todoist_id: todoistId || null,
     description: e.description || "",
     url: e.url || null,
   };
@@ -99,20 +113,58 @@ export async function fetchCTMDeadlines() {
   return events.map(mapCTMEvent);
 }
 
-// Full-horizon fetch for the calendar modal: all incomplete items regardless of date.
+// Full-horizon fetch for the calendar modal: active items regardless of date,
+// plus completed current/future items so completion stays visible until due date.
 export async function fetchCTMDeadlinesAll() {
   if (!CTM_API_URL || !CTM_API_KEY) {
     console.warn("[CTM] No CTM API credentials — skipping deadlines");
     return [];
   }
 
-  const params = new URLSearchParams({
+  const today = todayPacific();
+  const activeParams = new URLSearchParams({
     status: "incomplete,in_progress",
     exclude_source: "todoist",
   });
+  const completedParams = new URLSearchParams({
+    status: "complete",
+    due_after: today,
+    exclude_source: "todoist",
+  });
 
-  const events = await ctmFetch(`/events?${params}`);
+  const [activeEvents, completedEvents] = await Promise.all([
+    ctmFetch(`/events?${activeParams}`),
+    ctmFetch(`/events?${completedParams}`),
+  ]);
+  const events = [...activeEvents, ...completedEvents];
   return events.map(mapCTMEvent);
+}
+
+export async function fetchCTMDeadlinesRange({ start, end }) {
+  if (!CTM_API_URL || !CTM_API_KEY) {
+    console.warn("[CTM] No CTM API credentials — skipping deadlines");
+    return [];
+  }
+
+  const base = {
+    due_after: start,
+    due_before: end,
+    exclude_source: "todoist",
+  };
+  const activeParams = new URLSearchParams({
+    ...base,
+    status: "incomplete,in_progress",
+  });
+  const completedParams = new URLSearchParams({
+    ...base,
+    status: "complete",
+  });
+
+  const [activeEvents, completedEvents] = await Promise.all([
+    ctmFetch(`/events?${activeParams}`),
+    ctmFetch(`/events?${completedParams}`),
+  ]);
+  return [...activeEvents, ...completedEvents].map(mapCTMEvent);
 }
 
 export async function updateCTMEventStatus(eventId, status) {

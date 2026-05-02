@@ -17,16 +17,34 @@ vi.mock("../briefing/calendar.js", () => ({
   fetchCalendar: vi.fn(),
   pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
 }));
-vi.mock("../briefing/ctm.js", () => ({ fetchCTMDeadlinesAll: vi.fn() }));
-vi.mock("../briefing/todoist.js", () => ({ fetchTodoistTasksAll: vi.fn() }));
+vi.mock("../briefing/ctm.js", () => ({
+  fetchCTMDeadlinesAll: vi.fn(),
+  fetchCTMDeadlinesRange: vi.fn(),
+}));
+vi.mock("../briefing/todoist.js", () => ({
+  fetchTodoistTasksAll: vi.fn(),
+  fetchTodoistTasksRange: vi.fn(),
+}));
+vi.mock("../briefing/actual.js", () => ({
+  getCalendarBillsRange: vi.fn(),
+}));
 vi.mock("../briefing/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
 vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
 
-const { loadUserConfig } = await import("../briefing/index.js");
+const {
+  computeDeadlineStats,
+  loadCompletedTaskIds,
+  loadUserConfig,
+  separateDeadlines,
+} = await import("../briefing/index.js");
 const { fetchCalendar } = await import("../briefing/calendar.js");
+const { fetchCTMDeadlinesRange } = await import("../briefing/ctm.js");
+const { fetchTodoistTasksRange } = await import("../briefing/todoist.js");
+const { getCalendarBillsRange } = await import("../briefing/actual.js");
+const { hydrateRecurringTombstones } = await import("../briefing/tombstones.js");
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {
@@ -46,6 +64,13 @@ describe("GET /api/calendar/range", () => {
     fetchCalendar.mockResolvedValue([
       { title: "Test event", startMs: 1, endMs: 2, source: "x@y.com", color: "#abc" },
     ]);
+    fetchCTMDeadlinesRange.mockResolvedValue([]);
+    fetchTodoistTasksRange.mockResolvedValue([]);
+    getCalendarBillsRange.mockResolvedValue({ schedules: [], recentTransactions: [], payeeMap: {} });
+    hydrateRecurringTombstones.mockResolvedValue([]);
+    loadCompletedTaskIds.mockResolvedValue(new Set());
+    separateDeadlines.mockImplementation((ctm, todoist) => ({ ctm, todoist }));
+    computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
   });
 
   afterEach(() => {
@@ -110,5 +135,118 @@ describe("GET /api/calendar/range", () => {
     const passed = fetchCalendar.mock.calls[0][0];
     expect(passed).toHaveLength(1);
     expect(passed[0].email).toBe("on@y.com");
+  });
+});
+
+describe("GET /api/calendar/deadlines/range", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  beforeEach(() => {
+    loadCompletedTaskIds.mockResolvedValue(new Set());
+    hydrateRecurringTombstones.mockResolvedValue([
+      { id: "todo-recurring", title: "Completed today", due_date: "2026-05-02", source: "todoist", status: "complete" },
+    ]);
+    separateDeadlines.mockImplementation((ctm, todoist) => ({
+      ctm: ctm.filter((deadline) => !todoist.some((task) => String(deadline.todoist_id) === String(task.id))),
+      todoist,
+    }));
+    computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
+    fetchCTMDeadlinesRange.mockResolvedValue([
+      { id: "ctm-1", title: "Canvas item", due_date: "2026-05-04", status: "complete", todoist_id: "dupe" },
+    ]);
+    fetchTodoistTasksRange.mockResolvedValue([
+      { id: "dupe", title: "Mirrored item", due_date: "2026-05-04", source: "todoist", status: "complete" },
+      { id: "todo-1", title: "Standalone item", due_date: "2026-05-05", source: "todoist", status: "complete" },
+    ]);
+  });
+
+  it("returns range-backed CTM, Todoist, tombstones, stats, and fetchedAt", async () => {
+    const res = await request(makeApp()).get(
+      "/api/calendar/deadlines/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(fetchCTMDeadlinesRange).toHaveBeenCalledWith({ start: "2026-04-26", end: "2026-06-06" });
+    expect(fetchTodoistTasksRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
+    expect(res.body.ctm.upcoming.map((item) => item.id)).toEqual([]);
+    expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["dupe", "todo-1", "todo-recurring"]);
+    expect(res.body.ctm.stats).toEqual({ total: 0 });
+    expect(res.body.todoist.stats).toEqual({ total: 3 });
+    expect(res.body.errors).toEqual([]);
+    expect(res.body.fetchedAt).toEqual(expect.any(String));
+  });
+
+  it("keeps available deadline source data when another source fails", async () => {
+    fetchCTMDeadlinesRange.mockRejectedValueOnce(new Error("CTM down"));
+
+    const res = await request(makeApp()).get(
+      "/api/calendar/deadlines/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.ctm.upcoming).toEqual([]);
+    expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["dupe", "todo-1", "todo-recurring"]);
+    expect(res.body.errors).toEqual([{ source: "ctm", message: "CTM down" }]);
+  });
+
+  it("rejects calendar-domain ranges older than the rolling 12-month window", async () => {
+    const res = await request(makeApp()).get(
+      "/api/calendar/deadlines/range?start=2025-04-01&end=2025-04-30",
+    );
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/12-month/i);
+  });
+
+  it("allows adjacent-month grid spillover when the visible range overlaps the 12-month window", async () => {
+    const res = await request(makeApp()).get(
+      "/api/calendar/deadlines/range?start=2025-04-27&end=2025-06-07",
+    );
+
+    expect(res.status).toBe(200);
+    expect(fetchCTMDeadlinesRange).toHaveBeenCalledWith({ start: "2025-04-27", end: "2025-06-07" });
+  });
+});
+
+describe("GET /api/calendar/bills/range", () => {
+  beforeEach(() => {
+    getCalendarBillsRange.mockResolvedValue({
+      schedules: [{ id: "sched-1:2026-05-10", name: "Mortgage", next_date: "2026-05-10", paid: false }],
+      recentTransactions: [],
+      payeeMap: { p1: "Mortgage" },
+      actualBudgetUrl: "http://actual.local",
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns range-backed bills payloads", async () => {
+    const res = await request(makeApp()).get(
+      "/api/calendar/bills/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(getCalendarBillsRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
+    expect(res.body.schedules).toHaveLength(1);
+    expect(res.body.recentTransactions).toEqual([]);
+    expect(res.body.errors).toEqual([]);
+    expect(res.body.fetchedAt).toEqual(expect.any(String));
+  });
+
+  it("returns an empty bills payload with source errors when Actual fails", async () => {
+    getCalendarBillsRange.mockRejectedValueOnce(new Error("Actual offline"));
+
+    const res = await request(makeApp()).get(
+      "/api/calendar/bills/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.schedules).toEqual([]);
+    expect(res.body.recentTransactions).toEqual([]);
+    expect(res.body.errors).toEqual([{ source: "actual", message: "Actual offline" }]);
   });
 });

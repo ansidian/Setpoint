@@ -24,7 +24,7 @@ export function RedesignShell({
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
   calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines = () => {},
-  calendarBillsData, loadCalendarBills = () => {},
+  calendarBillsData, calendarBillRange, calendarDeadlineRange, loadCalendarBills = () => {},
   onCalendarWorkspaceChange,
 }) {
   const customize = useCustomize();
@@ -603,11 +603,13 @@ export function RedesignShell({
             onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
             weatherData={liveData.liveWeather || briefing?.weather || null}
             billsData={calendarBillsData || makeCalendarBillsData(liveData)}
+            billsRangeData={calendarBillRange}
             deadlinesData={{
               ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
               todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
               isLoading: calendarDeadlinesLoading && !calendarDeadlines,
             }}
+            deadlinesRangeData={calendarDeadlineRange}
             deadlineActions={calendarDeadlineActions}
           />
         </Suspense>

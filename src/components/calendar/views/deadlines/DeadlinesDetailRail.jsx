@@ -34,6 +34,7 @@ function DeadlinesDetail({
   onDraftPreviewChange,
   onEditorDirtyChange,
   accent = "var(--ea-accent)",
+  data,
 }) {
   const {
     handleCompleteTask,
@@ -59,6 +60,7 @@ function DeadlinesDetail({
   ].filter(Boolean).join(" · ");
 
   const expandedCompleted = showCompleted || normalizeStatus(selectedTask?.status) === "complete";
+  const sourceErrors = Array.isArray(data?.errors) ? data.errors : [];
 
   if (editorState?.mode) {
     const editingTask = editorState.mode === "edit"
@@ -116,6 +118,22 @@ function DeadlinesDetail({
           />
         ) : null
       }
+      actionContent={sourceErrors.length ? (
+        <div
+          data-testid="calendar-deadlines-source-warning"
+          style={{
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "1px solid rgba(249,226,175,0.16)",
+            background: "rgba(249,226,175,0.06)",
+            color: "rgba(249,226,175,0.86)",
+            fontSize: 11,
+            lineHeight: 1.35,
+          }}
+        >
+          Some deadline sources are temporarily unavailable.
+        </div>
+      ) : null}
       sections={[
         {
           id: "active-deadlines",

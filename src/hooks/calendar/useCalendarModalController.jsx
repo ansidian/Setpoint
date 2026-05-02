@@ -61,7 +61,10 @@ function itemsFromDatePool(activeView, pool) {
 function resolvePendingFocusItem({ activeView, computed, dateKey, itemId }) {
   const candidates = itemsFromDatePool(activeView, computed?.itemsByDate?.[dateKey]);
   const getItemId = activeView?.getItemId || ((item) => item?.id);
-  return candidates.find((item) => String(getItemId(item)) === String(itemId)) || null;
+  return candidates.find((item) => (
+    activeView?.matchesItemId?.(item, itemId)
+    || String(getItemId(item)) === String(itemId)
+  )) || null;
 }
 
 export default function useCalendarModalController({
@@ -72,7 +75,9 @@ export default function useCalendarModalController({
   eventsData,
   onEventsVisibleRangeChange,
   billsData,
+  billsRangeData,
   deadlinesData,
+  deadlinesRangeData,
   weatherData,
   focusDate,
   focusItemId,
@@ -121,6 +126,7 @@ export default function useCalendarModalController({
   const contextRailRef = useRef(null);
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
+  const handledDashboardDetailFocusRef = useRef(null);
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
@@ -163,9 +169,38 @@ export default function useCalendarModalController({
         hasMonth: eventsData?.hasMonth?.(viewYear, viewMonth) || false,
       };
     }
-    if (view === "deadlines") return deadlinesData;
-    return billsData;
-  }, [view, eventsData, viewYear, viewMonth, deadlinesData, billsData]);
+    if (view === "deadlines") {
+      const rangeData = deadlinesRangeData?.data;
+      return {
+        ...(rangeData || deadlinesData),
+        isLoading: !!deadlinesRangeData?.loading || deadlinesData?.isLoading,
+        rangeError: deadlinesRangeData?.error || null,
+        ensureRange: deadlinesRangeData?.ensureRange,
+      };
+    }
+    const rangeData = billsRangeData?.data;
+    return {
+      ...(rangeData || billsData),
+      isLoading: !!billsRangeData?.loading || billsData?.isLoading,
+      rangeError: billsRangeData?.error || null,
+      ensureRange: billsRangeData?.ensureRange,
+    };
+  }, [
+    view,
+    eventsData,
+    viewYear,
+    viewMonth,
+    deadlinesData,
+    billsData,
+    deadlinesRangeData?.data,
+    deadlinesRangeData?.loading,
+    deadlinesRangeData?.error,
+    deadlinesRangeData?.ensureRange,
+    billsRangeData?.data,
+    billsRangeData?.loading,
+    billsRangeData?.error,
+    billsRangeData?.ensureRange,
+  ]);
 
   function focusEditorDate(ymd) {
     focusDateKey(ymd);
@@ -504,12 +539,15 @@ export default function useCalendarModalController({
   useEffect(() => {
     if (!open) {
       setPendingItemDetailFocus(null);
+      handledDashboardDetailFocusRef.current = null;
       return;
     }
     if (!focusOpenDetail || !focusItemId || focusItemId === "new" || !usesFloatingEditor) return;
     const dateKey = focusDate || activeSelectedDateKey;
     if (!dateKey) return;
     const itemId = String(focusItemId);
+    const requestKey = `${openRequestId}:${view}:${dateKey}:${itemId}`;
+    if (handledDashboardDetailFocusRef.current === requestKey) return;
     setPendingItemDetailFocus((current) => {
       if (
         current?.openRequestId === openRequestId
@@ -524,6 +562,7 @@ export default function useCalendarModalController({
         view,
         dateKey,
         itemId,
+        requestKey,
         attempts: 0,
       };
     });
@@ -546,6 +585,9 @@ export default function useCalendarModalController({
       dateKey: pendingItemDetailFocus.dateKey,
       itemId: pendingItemDetailFocus.itemId,
     });
+    const resolvedItemId = item
+      ? String(activeView.getItemId ? activeView.getItemId(item) : item.id)
+      : pendingItemDetailFocus.itemId;
 
     const retryOrDegrade = () => {
       setPendingItemDetailFocus((latest) => {
@@ -580,10 +622,10 @@ export default function useCalendarModalController({
     let secondRaf = 0;
     const firstRaf = window.requestAnimationFrame(() => {
       suppressAgendaPassiveSync();
-      agendaRailRef.current?.scrollToItem?.(pendingItemDetailFocus.itemId, pendingItemDetailFocus.dateKey);
+      agendaRailRef.current?.scrollToItem?.(resolvedItemId, pendingItemDetailFocus.dateKey);
       secondRaf = window.requestAnimationFrame(() => {
         const anchorElement = agendaRailRef.current?.getItemAnchor?.(
-          pendingItemDetailFocus.itemId,
+          resolvedItemId,
           pendingItemDetailFocus.dateKey,
         );
         if (!anchorElement) {
@@ -592,11 +634,11 @@ export default function useCalendarModalController({
         }
         setSelectedDay(parsed.day);
         setSelectedDateKey(pendingItemDetailFocus.dateKey);
-        setSelectedItemId(pendingItemDetailFocus.itemId);
+        setSelectedItemId(resolvedItemId);
         openFloatingDetail({
           mode: "detail",
           view,
-          itemId: pendingItemDetailFocus.itemId,
+          itemId: resolvedItemId,
           dateKey: pendingItemDetailFocus.dateKey,
           day: parsed.day,
           anchorElement,
@@ -604,6 +646,7 @@ export default function useCalendarModalController({
           anchorKind: "agenda-row",
           itemsSnapshot: [item],
         });
+        handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
         setPendingItemDetailFocus(null);
       });
     });
@@ -681,6 +724,14 @@ export default function useCalendarModalController({
     }
     eventsData.ensureRange(start, end);
   }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange]);
+
+  useEffect(() => {
+    if (!open || view === "events" || !viewData?.ensureRange) return;
+    const { start, end } = getVisibleGridRange(viewYear, viewMonth);
+    viewData.ensureRange(start, end).catch((err) => {
+      console.error(`[Calendar] ${view} range fetch failed:`, err);
+    });
+  }, [open, view, viewData, viewYear, viewMonth]);
 
   useEffect(() => {
     const current = floatingDetailRef.current;

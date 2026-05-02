@@ -866,6 +866,111 @@ describe("CalendarModal responsive layout", () => {
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
   });
 
+  it("treats dashboard item focus as a one-shot request after the floating detail closes", async () => {
+    window.innerWidth = 1900;
+
+    const deadlineProps = {
+      open: true,
+      openRequestId: 7,
+      onClose: () => {},
+      onViewChange: () => {},
+      focusDate: "2026-04-20",
+      focusItemId: "deadline-1",
+      focusOpenDetail: true,
+      eventsData: { getEvents: () => [] },
+      billsData: {},
+      deadlinesData: {
+        ctm: {
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
+        },
+      },
+    };
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        {...deadlineProps}
+        view="deadlines"
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+
+    fireEvent.click(within(panel).getByRole("button", { name: /close floating detail/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        {...deadlineProps}
+        view="events"
+      />,
+    ));
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        {...deadlineProps}
+        view="deadlines"
+      />,
+    ));
+
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+
+    expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+  });
+
+  it("does not reselect the dashboard-origin detail after clicking another deadline chip", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={8}
+        onClose={() => {}}
+        onViewChange={() => {}}
+        view="deadlines"
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+              { id: "deadline-2", title: "Lab due", due_date: "2026-04-21", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+
+    const secondChip = within(screen.getByTestId("calendar-cell-21"))
+      .getByText("Lab due")
+      .closest("[data-testid='calendar-cell-item-chip']");
+    fireEvent.click(secondChip);
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Lab due");
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+
+    expect(within(screen.getByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Lab due");
+  });
+
   it("falls back to a completed deadline when a day has no active items", async () => {
     window.innerWidth = 1900;
 
@@ -2047,6 +2152,50 @@ describe("CalendarModal responsive layout", () => {
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
   });
+
+  it("opens agenda-anchored floating bill detail when dashboard focus uses schedule id and range uses instance id", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="bill-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={{
+          data: {
+            schedules: [
+              {
+                id: "bill-1:2026-04-20",
+                scheduleId: "bill-1",
+                name: "Rent",
+                next_date: "2026-04-20",
+                amount: 1800,
+                paid: false,
+                type: "bill",
+              },
+            ],
+            payeeMap: {},
+          },
+          loading: false,
+          ensureRange: async () => {},
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
+    expect(within(panel).getByText("$1,800.00")).toBeTruthy();
+  });
+
 
   it("opens dashboard item focus after async deadline data resolves", async () => {
     window.innerWidth = 1900;

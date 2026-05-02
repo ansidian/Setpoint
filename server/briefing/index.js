@@ -165,21 +165,23 @@ export async function loadCompletedTaskIds(userId, todoistTasks) {
   return completedIds;
 }
 
-// Separate CTM and Todoist tasks, deduplicating by todoist_id (CTM wins).
-// CTM is the source of truth for completion (the API now returns complete
-// tasks too), so completedIds only filter Todoist — Todoist's API doesn't
-// return completed tasks, but ea_completed_tasks remembers in-app completions
-// so we can drop a CTM-linked task that was completed via Todoist mirror.
+// Separate CTM and Todoist tasks. Todoist wins when both sources expose the
+// same Todoist-backed task; native CTM/Canvas rows stay in CTM, native Todoist
+// rows stay in Todoist.
 export function separateDeadlines(ctmDeadlines, todoistTasks, completedIds) {
-  // CTM items with a todoist_id suppress the matching Todoist task
-  const ctmTodoistIds = new Set(ctmDeadlines.filter(d => d.todoist_id).map(d => d.todoist_id));
-  const uniqueTodoist = todoistTasks.filter(t => !ctmTodoistIds.has(t.id));
+  const todoistIds = new Set(
+    todoistTasks
+      .filter(t => t.id != null)
+      .map(t => String(t.id)),
+  );
+  const ctm = ctmDeadlines.filter(
+    d => d.todoist_id == null || !todoistIds.has(String(d.todoist_id)),
+  );
 
-  const ctm = ctmDeadlines;
-  let todoist = uniqueTodoist;
+  let todoist = todoistTasks;
 
   if (completedIds?.size) {
-    todoist = todoist.filter(t => !completedIds.has(t.id));
+    todoist = todoist.filter(t => !completedIds.has(t.id) && !completedIds.has(String(t.id)));
   }
 
   return { ctm, todoist };

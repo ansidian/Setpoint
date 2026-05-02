@@ -133,6 +133,66 @@ function mapTodoistTask(t, projects) {
   };
 }
 
+function completedTaskId(t) {
+  return t.task_id || t.id || t.item_id;
+}
+
+function completedDueDate(t) {
+  if (t.due?.date) return extractDate(t.due);
+  const raw = t.due_date || t.date_due || t.dueDate;
+  return raw ? String(raw).split("T")[0] : null;
+}
+
+function completedContent(t) {
+  return t.content || t.task_content || t.title || t.name || "Untitled task";
+}
+
+function mapCompletedTodoistTask(t, projects) {
+  const id = completedTaskId(t);
+  const title = completedContent(t);
+  const projectId = t.project_id || t.projectId;
+  const proj = projects.get(projectId);
+  const dueDate = completedDueDate(t);
+  const due = t.due?.date
+    ? t.due
+    : dueDate
+      ? { date: dueDate, is_recurring: !!(t.is_recurring || t.recurring) }
+      : null;
+  return {
+    id,
+    title,
+    due_date: dueDate,
+    due_time: formatTime12h(due?.date),
+    class_name: proj?.name || t.project_name || "Todoist",
+    class_color: proj ? mapColor(proj.color) : "#cba6da",
+    points_possible: null,
+    status: "complete",
+    source: "todoist",
+    description: t.description || "",
+    url: id ? todoistTaskUrl(title, id) : null,
+    priority: toUiPriority(t.priority),
+    labels: t.labels || [],
+    is_recurring: !!(t.due?.is_recurring || t.is_recurring || t.recurring),
+    completed_at: t.completed_at || t.completed_at_date || t.date_completed || null,
+  };
+}
+
+function isWithinDateRange(date, start, end) {
+  return !!date && date >= start && date <= end;
+}
+
+function dedupeTodoistRangeTasks(tasks) {
+  const seen = new Set();
+  const result = [];
+  for (const task of tasks) {
+    const key = `${task.id}:${task.due_date || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(task);
+  }
+  return result;
+}
+
 async function fetchTodoistFiltered(token, query) {
   const params = new URLSearchParams({ query, limit: "200" });
   const allTasks = [];
@@ -140,6 +200,19 @@ async function fetchTodoistFiltered(token, query) {
   do {
     if (cursor) params.set("cursor", cursor);
     const data = await todoistFetch(token, `/tasks/filter?${params}`);
+    allTasks.push(...(data.results || data.items || []));
+    cursor = data.next_cursor || null;
+  } while (cursor);
+  return allTasks;
+}
+
+async function fetchTodoistCompletedByDueDate(token, { start, end }) {
+  const params = new URLSearchParams({ since: start, until: end, limit: "200" });
+  const allTasks = [];
+  let cursor = null;
+  do {
+    if (cursor) params.set("cursor", cursor);
+    const data = await todoistFetch(token, `/tasks/completed/by_due_date?${params}`);
     allTasks.push(...(data.results || data.items || []));
     cursor = data.next_cursor || null;
   } while (cursor);
@@ -169,6 +242,27 @@ export async function fetchTodoistTasksAll(userId) {
   return tasks
     .filter(t => !t.checked && !t.is_deleted && t.due)
     .map(t => mapTodoistTask(t, projects));
+}
+
+export async function fetchTodoistTasksRange(userId, { start, end }) {
+  const token = await getToken(userId);
+  if (!token) return [];
+
+  const projects = await fetchProjects(token);
+  const [activeTasks, completedTasks] = await Promise.all([
+    fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY),
+    fetchTodoistCompletedByDueDate(token, { start, end }),
+  ]);
+
+  const active = activeTasks
+    .filter(t => !t.checked && !t.is_deleted && t.due)
+    .map(t => mapTodoistTask(t, projects))
+    .filter(t => isWithinDateRange(t.due_date, start, end));
+  const completed = completedTasks
+    .map(t => mapCompletedTodoistTask(t, projects))
+    .filter(t => t.id && isWithinDateRange(t.due_date, start, end));
+
+  return dedupeTodoistRangeTasks([...active, ...completed]);
 }
 
 // Lean full-horizon id probe used by tombstone orphan detection. Returns a
@@ -309,4 +403,9 @@ export async function testConnection(userId) {
 }
 
 // Test-only exports (do not use in production code)
-export const __testing__ = { mapTodoistTask, TODOIST_DUE_TASKS_QUERY };
+export const __testing__ = {
+  dedupeTodoistRangeTasks,
+  mapCompletedTodoistTask,
+  mapTodoistTask,
+  TODOIST_DUE_TASKS_QUERY,
+};

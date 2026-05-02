@@ -13,7 +13,7 @@ vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 const { separateDeadlines } = await import("./index.js");
 
 describe("separateDeadlines", () => {
-  it("keeps CTM tasks regardless of completion status (CTM API is the source of truth)", () => {
+  it("keeps native CTM tasks regardless of completion status", () => {
     const ctm = [
       { id: 1, title: "Active", status: "incomplete", due_date: "2026-04-17" },
       { id: 2, title: "Done in CTM", status: "complete", due_date: "2026-04-17" },
@@ -27,11 +27,7 @@ describe("separateDeadlines", () => {
     expect(out.ctm.find((t) => t.id === 2).status).toBe("complete");
   });
 
-  it("does not drop a CTM task even when its todoist_id is in completedIds", () => {
-    // Dashboard-initiated completions write to ea_completed_tasks, but the
-    // CTM API will already report status=complete on next fetch. We must NOT
-    // double-filter here, or the user loses the strikethrough row before the
-    // day is past.
+  it("keeps a CTM Todoist mirror when Todoist did not return the matching task", () => {
     const ctm = [
       { id: 1, title: "Linked", status: "complete", due_date: "2026-04-17", todoist_id: "td-1" },
     ];
@@ -44,9 +40,10 @@ describe("separateDeadlines", () => {
     expect(out.ctm[0].status).toBe("complete");
   });
 
-  it("still suppresses Todoist tasks whose id matches a CTM todoist_id (de-dup)", () => {
+  it("suppresses CTM Todoist mirrors when Todoist returns the same task", () => {
     const ctm = [
       { id: 1, title: "From CTM", status: "incomplete", due_date: "2026-04-17", todoist_id: "td-1" },
+      { id: 2, title: "Native CTM", status: "incomplete", due_date: "2026-04-17" },
     ];
     const todoist = [
       { id: "td-1", title: "Mirror in Todoist", due_date: "2026-04-17" },
@@ -55,7 +52,23 @@ describe("separateDeadlines", () => {
 
     const out = separateDeadlines(ctm, todoist, new Set());
 
-    expect(out.todoist.map((t) => t.id)).toEqual(["td-2"]);
+    expect(out.ctm.map((t) => t.id)).toEqual([2]);
+    expect(out.todoist.map((t) => t.id)).toEqual(["td-1", "td-2"]);
+  });
+
+  it("normalizes CTM todoist_id and Todoist id before de-duping", () => {
+    const ctm = [
+      { id: 1, title: "From CTM", status: "complete", due_date: "2026-04-17", todoist_id: 12345 },
+    ];
+    const todoist = [
+      { id: "12345", title: "Mirror in Todoist", due_date: "2026-04-17", status: "complete" },
+      { id: "native", title: "Native Todoist", due_date: "2026-04-17", status: "complete" },
+    ];
+
+    const out = separateDeadlines(ctm, todoist, new Set());
+
+    expect(out.ctm).toEqual([]);
+    expect(out.todoist.map((t) => t.id)).toEqual(["12345", "native"]);
   });
 
   it("filters Todoist by completedIds (no API truth available for completed Todoist tasks)", () => {

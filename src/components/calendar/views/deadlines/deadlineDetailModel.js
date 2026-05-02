@@ -9,6 +9,7 @@ export function deadlineContextLabel(task) {
 }
 
 export function deadlineDueBadgeLabel(task, dueDays) {
+  if (task?.status === "complete") return "Complete";
   return task.due_date ? daysLabel(dueDays) : "No due date";
 }
 

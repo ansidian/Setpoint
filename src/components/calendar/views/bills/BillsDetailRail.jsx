@@ -15,8 +15,9 @@ import { formatAmount, formatDate, daysLabel, daysUntil, urgencyColor } from "..
 import { formatFullDate, getDayState } from "./billsModel.js";
 
 function getScheduleUrl(bill, actualBudgetUrl) {
+  const scheduleId = bill?.scheduleId || bill?.id;
   return actualBudgetUrl
-    ? `${actualBudgetUrl.replace(/\/+$/, "")}/schedules?highlight=${bill.id}`
+    ? `${actualBudgetUrl.replace(/\/+$/, "")}/schedules?highlight=${scheduleId}`
     : null;
 }
 
@@ -150,6 +151,26 @@ function BillSelectedActions({ bill, actualBudgetUrl, compact = false }) {
   );
 }
 
+function SourceWarning({ errors = [] }) {
+  if (!errors.length) return null;
+  return (
+    <div
+      data-testid="calendar-bills-source-warning"
+      style={{
+        padding: "8px 10px",
+        borderRadius: 8,
+        border: "1px solid rgba(249,226,175,0.16)",
+        background: "rgba(249,226,175,0.06)",
+        color: "rgba(249,226,175,0.86)",
+        fontSize: 11,
+        lineHeight: 1.35,
+      }}
+    >
+      Actual bills are partially unavailable.
+    </div>
+  );
+}
+
 function toBillRailItem(bill, selectedBillId, onSelectItem) {
   const days = daysUntil(bill.next_date);
   const urgency = urgencyColor(days);
@@ -191,6 +212,7 @@ function BillsDetail({
   onSelectItem,
 }) {
   const actualBudgetUrl = data?.actualBudgetUrl;
+  const sourceErrors = Array.isArray(data?.errors) ? data.errors : [];
   const state = getDayState(items);
   const [showCompleted, setShowCompleted] = useState(state.activeCount === 0 && state.completedCount > 0);
   const allItems = [...state.activeItems, ...state.completedItems];
@@ -222,6 +244,7 @@ function BillsDetail({
           ) : null}
         />
       ) : null}
+      actionContent={<SourceWarning errors={sourceErrors} />}
       sections={[
         {
           id: "active-bills",

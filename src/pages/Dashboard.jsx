@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback } from "react";
-import { getCalendarDeadlines } from "../api";
+import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
 import RefreshBanner from "../components/layout/RefreshBanner";
@@ -13,6 +13,7 @@ import useHoldGesture from "../hooks/useHoldGesture";
 import useBriefingData from "../hooks/useBriefingData";
 import useAutoRefresh from "../hooks/useAutoRefresh";
 import useNotifications from "../hooks/useNotifications";
+import useCalendarDomainRange from "../hooks/useCalendarDomainRange";
 import useCalendarRange from "../hooks/useCalendarRange";
 import { RedesignShell, DashboardBody } from "../components/dashboard/RedesignShell";
 import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
@@ -38,6 +39,16 @@ export default function Dashboard() {
 
   const liveData = useLiveData({ disabled: isMock });
   const calendarRange = useCalendarRange({ disabled: isMock });
+  const calendarDeadlineRange = useCalendarDomainRange({
+    disabled: isMock,
+    fetchRange: getCalendarDeadlinesRange,
+    emptyData: null,
+  });
+  const calendarBillRange = useCalendarDomainRange({
+    disabled: isMock,
+    fetchRange: getCalendarBillsRange,
+    emptyData: null,
+  });
   useNotifications(liveData);
   const bd = useBriefingData({ liveData, isMock });
   const refreshCalendarDomainsRef = useRef(null);
@@ -57,9 +68,11 @@ export default function Dashboard() {
       markCalendarRangeStale?.();
     }
     calendarBillsRefreshRequestedRef.current = true;
+    calendarDeadlineRange.markStale?.();
+    calendarBillRange.markStale?.();
     refreshCalendarDomainsRef.current?.({ force: true });
     return quickRefreshBriefing();
-  }, [markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
+  }, [calendarBillRange, calendarDeadlineRange, markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
   const refreshHold = useHoldGesture({ onShortPress: handleExplicitQuickRefresh });
 
   useAutoRefresh({
@@ -139,13 +152,13 @@ export default function Dashboard() {
   const refreshLiveDataNow = liveData.refreshNow;
   const snapshotCalendarBills = useCallback(() => {
     setCalendarBillsData({
-      schedules: liveData.allSchedules || [],
-      recentTransactions: liveData.recentTransactions || [],
+      schedules: (liveData.allSchedules || []).map((schedule) => ({ ...schedule, paid: false })),
+      recentTransactions: [],
       payeeMap: liveData.payeeMap || {},
       actualBudgetUrl: liveData.actualBudgetUrl,
     });
     setCalendarBillsFetchedAt(Date.now());
-  }, [liveData.actualBudgetUrl, liveData.allSchedules, liveData.payeeMap, liveData.recentTransactions]);
+  }, [liveData.actualBudgetUrl, liveData.allSchedules, liveData.payeeMap]);
   const loadCalendarBills = useCallback((opts) => {
     const force = !!opts?.force;
     const stale = isCalendarDomainCacheStale(calendarBillsFetchedAt);
@@ -226,6 +239,8 @@ export default function Dashboard() {
           calendarDeadlinesLoading={calendarDeadlinesLoading}
           loadCalendarDeadlines={loadCalendarDeadlines}
           calendarBillsData={calendarBillsData}
+          calendarBillRange={calendarBillRange}
+          calendarDeadlineRange={calendarDeadlineRange}
           loadCalendarBills={loadCalendarBills}
           onCalendarWorkspaceChange={updateCalendarWorkspace}
         />

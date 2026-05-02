@@ -38,6 +38,14 @@ function PriorityBadge({ level }) {
   );
 }
 
+function deadlinePillColor({ normalizedStatus, hasDueDate, urgency, accent }) {
+  if (normalizedStatus === "complete") return "#a6e3a1";
+  if (!hasDueDate) return "rgba(205,214,244,0.7)";
+  if (urgency.key === "high") return "#f38ba8";
+  if (urgency.key === "medium") return "#f9e2af";
+  return accent;
+}
+
 export default function DeadlineDetailCard({
   task,
   accent,
@@ -53,13 +61,12 @@ export default function DeadlineDetailCard({
   const normalizedStatus = normalizeStatus(task.status);
   const dueDays = daysUntil(task.due_date);
   const urgency = urgencyForDays(dueDays, accent);
-  const dueColor = task.due_date
-    ? urgency.key === "high"
-      ? "#f38ba8"
-      : urgency.key === "medium"
-        ? "#f9e2af"
-        : accent
-    : "rgba(205,214,244,0.7)";
+  const dueColor = deadlinePillColor({
+    normalizedStatus,
+    hasDueDate: !!task.due_date,
+    urgency,
+    accent,
+  });
   const title = deadlineTitle(task);
   const contextLabel = deadlineContextLabel(task);
   const dueBadgeLabel = deadlineDueBadgeLabel(task, dueDays);

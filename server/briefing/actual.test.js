@@ -296,3 +296,61 @@ describe("actual.js createQuickTxn", () => {
     expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
   });
 });
+
+describe("actual.js calendar bill mapping", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("maps open bill and transfer schedules to composite due-date instances", async () => {
+    const { __testing__ } = await import("./actual.js");
+    const payeeMap = { p1: "SCE", p2: "Visa transfer" };
+    const schedules = [
+      {
+        id: "s1",
+        name: "Electricity",
+        next_date: "2026-05-10",
+        type: "bill",
+        conditions: [
+          { field: "amount", value: -12234 },
+          { field: "payee", value: "p1" },
+        ],
+      },
+      {
+        id: "s2",
+        name: "Credit card",
+        next_date: "2026-05-12",
+        type: "transfer",
+        conditions: [
+          { field: "amount", value: 25000 },
+          { field: "payee", value: "p2" },
+        ],
+      },
+      {
+        id: "s3",
+        name: "Paycheck",
+        next_date: "2026-05-15",
+        type: "income",
+        conditions: [{ field: "amount", value: 100000 }],
+      },
+      {
+        id: "s4",
+        name: "Old transfer",
+        next_date: "2026-05-18",
+        completed: true,
+        type: "transfer",
+        conditions: [
+          { field: "amount", value: 5000 },
+          { field: "payee", value: "p2" },
+        ],
+      },
+    ];
+
+    expect(__testing__.mapOpenBillInstances(schedules, payeeMap, { start: "2026-05-01", end: "2026-05-31" }))
+      .toEqual([
+        expect.objectContaining({ id: "s1:2026-05-10", scheduleId: "s1", payee: "SCE", paid: false, type: "bill" }),
+        expect.objectContaining({ id: "s2:2026-05-12", scheduleId: "s2", payee: "Visa transfer", paid: false, type: "transfer" }),
+      ]);
+  });
+});
