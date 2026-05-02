@@ -226,17 +226,18 @@ function DeadlinesFloatingDetail({
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;
 
   if (!selectedTask) return null;
+  const sourceAccent = SOURCE_COLORS[sourceOf(selectedTask)] || accent;
 
   return (
     <DeadlineDetailCard
       task={selectedTask}
-      accent={accent}
+      accent={sourceAccent}
       compact={effectiveCompactDetail}
       ultraCompact={compressedSelectedCard}
       actions={
         <DeadlineSelectedActions
           task={selectedTask}
-          accent={accent}
+          accent={sourceAccent}
           onEdit={onStartEdit}
           onComplete={handleCompleteTask}
           onStatusChange={handleUpdateTaskStatus}

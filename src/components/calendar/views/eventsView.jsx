@@ -161,7 +161,11 @@ export function getDefaultSelectedItemId(items = []) {
   return ordered[0] ? getEventSelectionId(ordered[0]) : null;
 }
 
-function EventSelectedCard({ ev, actions }) {
+function eventAccent(ev) {
+  return ev?.color || ev?.sourceColor || "#89b4fa";
+}
+
+function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
   const motion = useDetailRailMotion();
   const editable = isEditableEvent(ev);
   const displayTitle = sanitizeEventDisplayTitle(ev.title);
@@ -180,7 +184,7 @@ function EventSelectedCard({ ev, actions }) {
       data-density="compressed"
       style={{ flexShrink: 0 }}
     >
-      <RailHeroCard accent="#89b4fa" compact actions={actions}>
+      <RailHeroCard accent={accent} compact actions={actions}>
         <Motion.div
           layout
           transition={motion.layout}
@@ -229,7 +233,7 @@ function EventSelectedCard({ ev, actions }) {
               style={{
                 fontSize: 12.5,
                 lineHeight: 1.35,
-                color: "#89b4fa",
+                color: accent,
                 fontWeight: 500,
                 whiteSpace: "nowrap",
                 fontVariantNumeric: "tabular-nums",
@@ -268,7 +272,7 @@ function EventSelectedCard({ ev, actions }) {
   );
 }
 
-function EventSelectedActions({ ev, onEditEvent, compact = false }) {
+function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b4fa" }) {
   if (!ev) return null;
   const editable = isEditableEvent(ev);
   const zoomUrl = extractZoomMeetingUrl(ev);
@@ -286,7 +290,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
           icon={Video}
           label={compact ? "Join Zoom" : "Join Zoom meeting"}
           href={zoomUrl}
-          accent="#89b4fa"
+          accent={accent}
           tone="accent"
           size={size}
         />
@@ -296,7 +300,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
           icon={ExternalLink}
           label="Open URL"
           href={eventUrl}
-          accent="#89b4fa"
+          accent={accent}
           tone={zoomUrl ? "ghost" : "accent"}
           size={size}
         />
@@ -306,7 +310,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
           icon={Pencil}
           label="Edit details"
           onClick={() => onEditEvent?.(ev)}
-          accent="#89b4fa"
+          accent={accent}
           size={size}
         />
       ) : null}
@@ -315,7 +319,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false }) {
           icon={ExternalLink}
           label={compact ? "Open Calendar" : "Open in Google Calendar"}
           href={calendarUrl}
-          accent="#89b4fa"
+          accent={accent}
           tone={hasPrimaryActions ? "ghost" : "accent"}
           size={size}
         />
@@ -425,15 +429,18 @@ function renderFloatingDetail({
   ));
 
   if (!selectedEvent) return null;
+  const accent = eventAccent(selectedEvent);
 
   return (
     <EventSelectedCard
       ev={selectedEvent}
+      accent={accent}
       actions={hasEventActions(selectedEvent) ? (
         <EventSelectedActions
           ev={selectedEvent}
           onEditEvent={onEditEvent}
           compact
+          accent={accent}
         />
       ) : null}
     />

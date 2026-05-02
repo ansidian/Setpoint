@@ -206,6 +206,27 @@ describe("calendar detail timeline", () => {
     expect(screen.getByRole("button", { name: /edit details/i })).toBeTruthy();
   });
 
+  it("uses the selected event source color for floating detail gradients", () => {
+    render(
+      eventsView.renderFloatingDetail({
+        selectedItemId: "event-source-color",
+        items: [
+          {
+            id: "event-source-color",
+            title: "Source colored event",
+            startMs: new Date("2026-04-19T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T19:00:00.000Z").getTime(),
+            color: "#f59e0b",
+            allDay: false,
+          },
+        ],
+      }),
+    );
+
+    const hero = screen.getByTestId("calendar-selected-event-card").firstElementChild;
+    expect(hero?.getAttribute("style")).toContain("rgb(245, 158, 11)");
+  });
+
   it("renders selected event CTAs in the selected card footer", () => {
     render(
       eventsView.renderDetail({
@@ -597,6 +618,38 @@ describe("calendar detail timeline", () => {
 
     expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Ship report");
     expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
+  });
+
+  it("uses the selected deadline source color for floating detail gradients", () => {
+    const briefing = {
+      emails: { accounts: [] },
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          {
+            id: "todo-1",
+            title: "Ship report",
+            due_date: "2026-04-22",
+            due_time: "5:00 PM",
+            source: "todoist",
+            class_name: "Inbox",
+            status: "open",
+          },
+        ],
+      },
+    };
+
+    render(
+      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesView.renderFloatingDetail({
+          items: briefing.todoist.upcoming,
+          selectedItemId: "todo-1",
+        })}
+      </DashboardProvider>,
+    );
+
+    const hero = screen.getByTestId("calendar-selected-deadline-card").firstElementChild;
+    expect(hero?.getAttribute("style")).toContain("rgb(232, 119, 106)");
   });
 
   it("shows completed deadlines immediately when a day only has completed items", () => {
