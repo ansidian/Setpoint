@@ -2,26 +2,33 @@
 
 Personal executive-assistant dashboard for one owner. It consolidates email, calendar, weather, Canvas/CTM deadlines, Todoist tasks, and Actual Budget finances into AI-generated briefings. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
 
-Use this file as a map, not the full manual. Top-level tracked docs are the source of truth. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
+Use this file as a map, not the full manual. Top-level tracked docs are the source of truth for standing product and system guidance. Linear issues are the source of truth for active executable work when an issue exists or the user intends Codex execution. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
 
+- Linear issues - source of truth for active executable work when an issue exists or the user intends Codex execution.
 - `README.md` - setup, env vars, and what the product does.
 - `ARCHITECTURE.md` - system shape, data flow, routes, database, briefing pipeline.
 - `PRODUCT.md` - product intent, audience, voice, and non-goals.
 - `DESIGN.md` / `DESIGN.json` - visual language and design tokens.
 - `docs/index.md` - local documentation catalog when present.
-- `docs/exec-plans/active/` - local active multi-step plans.
+- `docs/exec-plans/active/` - optional local scratch/working memory for complex planning, research, or historical context. Do not treat local plans as more authoritative than an explicit Linear issue.
 - `docs/exec-plans/completed/` - local historical plans; useful context, not current requirements.
 - `docs/design-docs/history/` - local historical design specs; defer to `DESIGN.md` for current rules.
 
 ## Process
 
 - Do not automatically run Playwright tests or browser automation unless explicitly requested.
+- When exploring the codebase or reading files for context, prefer using explorer agents for concrete, bounded questions, especially when multiple independent areas can be investigated in parallel. Keep immediate blocking investigation local, and synthesize explorer findings before making edits.
 - In Plan mode, do not treat the clarifying-question UI's three-question batch limit as a product requirement. If more than three clarifying questions are necessary to align on scope, ask the most blocking questions first, then continue with additional concise follow-up questions or another clarification round before finalizing the plan.
 - Default to test-driven development for behavior changes and bug fixes: write or update the focused failing test first, run it to see the red state, make the smallest implementation change, rerun to green, then refactor with tests passing.
 - If TDD is not practical for a change, call that out in the handoff with the reason and the verification used instead. Documentation-only, config-only, exploratory spikes, and urgent production repairs are acceptable exceptions.
 - For frontend-facing work, use the global `impeccable` skill and treat this as a dense product UI, not a marketing surface.
 - For UI work, add deliberate hover/focus motion to buttons and icon buttons unless the control is disabled or reduced-motion handling requires a static state.
 - Prefer repo patterns over new abstractions. Add abstractions only when they remove real complexity or match established structure.
+- When work references a Linear issue directly, through a `docs/` plan with explicit Linear scope, or through issue keys like `PER-11`, treat the Linear issue as the active execution contract. Keep it current as work progresses: update status when appropriate, leave concise implementation/verification notes, and reflect material scope changes or locked decisions in the issue. Use `docs/` only as local working memory or historical context unless the user explicitly asks for a local plan artifact.
+- For Codex-executable work, prefer creating/updating Linear issues over creating standalone markdown execution plans. A good Linear issue should include context, scope, non-goals, acceptance criteria, relevant files, implementation notes, and verification steps.
+- Keep Codex tasks bounded. If a plan spans multiple independent surfaces, split it into a parent/spec issue plus child implementation issues rather than asking Codex to execute one large issue.
+- When converting a plan into Linear for Codex, write issues as execution contracts, not vague backlog notes. Each issue should be small enough for one focused PR and should state what not to change.
+- Do not create new local markdown plans by default when Linear is available and the work is intended for Codex execution. Create local docs only for complex design exploration, rough scratch planning, or durable non-Linear project memory.
 - When adding a new briefing output field, visible briefing feature, email/bill/deadline shape, or dev-only data path, add/update a scenario under `server/db/scenarios/`.
 - Preserve graceful degradation in the briefing pipeline: each fetcher in `server/briefing/index.js` needs its own `.catch()` fallback so one source does not kill generation.
 
