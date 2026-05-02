@@ -15,6 +15,7 @@ import {
 import {
   daysLabel,
   formatDuration,
+  getEventSelectionId,
   urgencyForDays,
 } from "../../../lib/redesign-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
@@ -30,6 +31,15 @@ export const WEATHER_ICONS = {
   Moon,
 };
 
+const PACIFIC_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles",
+});
+
+function dateKeyFromMs(ms) {
+  if (!Number.isFinite(ms)) return null;
+  return PACIFIC_DATE_FORMATTER.format(new Date(ms));
+}
+
 export function buildHeroCallouts({ events, deadlines, bills, now }) {
   const out = [];
   const nextEvent = (events || []).find((e) => e.startMs && e.startMs > now && e.startMs - now < 4 * 3600000);
@@ -37,6 +47,9 @@ export function buildHeroCallouts({ events, deadlines, bills, now }) {
     const mins = Math.round((nextEvent.startMs - now) / 60000);
     out.push({
       kind: "event",
+      id: getEventSelectionId(nextEvent),
+      date: dateKeyFromMs(nextEvent.startMs),
+      data: nextEvent,
       icon: nextEvent.hangoutLink || /zoom/i.test(nextEvent.location || "") ? Video
         : /flight|airport/i.test(nextEvent.title || "") ? Plane
         : Calendar,
@@ -57,6 +70,9 @@ export function buildHeroCallouts({ events, deadlines, bills, now }) {
     const { d, days } = sortedDeadlines[0];
     out.push({
       kind: "deadline",
+      id: d.id != null ? String(d.id) : null,
+      date: d.due_date || null,
+      data: d,
       icon: AlertCircle,
       lead: daysLabel(days),
       title: d.title,
@@ -73,12 +89,14 @@ export function buildHeroCallouts({ events, deadlines, bills, now }) {
     const { b, days } = sortedBills[0];
     out.push({
       kind: "bill",
+      id: b.id != null ? String(b.id) : null,
       icon: CreditCard,
       lead: daysLabel(days),
       title: b.name,
       sub: `$${Number(b.amount || 0).toFixed(2)} · ${b.payee || ""}`,
       urgency: urgencyForDays(days).key,
       date: b.next_date,
+      data: b,
     });
   }
 

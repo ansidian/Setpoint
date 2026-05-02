@@ -23,8 +23,8 @@ export function RedesignShell({
   bd, liveData, calendarRange, isMock = false, refreshHold, handleFullGeneration,
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
-  calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines,
-  calendarBillsData, loadCalendarBills,
+  calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines = () => {},
+  calendarBillsData, loadCalendarBills = () => {},
   onCalendarWorkspaceChange,
 }) {
   const customize = useCustomize();
@@ -88,6 +88,7 @@ export function RedesignShell({
   const showBills = !!liveData.actualConfigured;
   const [calendarFocus, setCalendarFocus] = useState(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
+  const [calendarFocusOpenDetail, setCalendarFocusOpenDetail] = useState(false);
   const calendarEventsRangeRef = useRef(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const actionChordRef = useRef(null);
@@ -97,13 +98,16 @@ export function RedesignShell({
     historyKey: "eaDashboardCalendarModal",
     onDismiss: () => setCalendarOpen(false),
   });
-  const openCalendar = (viewKey, focusDate = null, focusItemId = null) => {
+  const openCalendar = (viewKey, focusDate = null, focusItemId = null, options = {}) => {
     if (isMobile) return;
     const resolved = viewKey === "bills" && !showBills ? "deadlines" : viewKey || calendarView;
+    const nextFocusItemId = focusItemId ? String(focusItemId) : null;
+    const shouldOpenDetail = !!options.openDetail && nextFocusItemId && nextFocusItemId !== "new";
     setCalendarView(resolved);
     try { localStorage.setItem("calendar:lastView", resolved); } catch { /* ignore */ }
     setCalendarFocus(focusDate || null);
-    setCalendarFocusItemId(focusItemId ? String(focusItemId) : null);
+    setCalendarFocusItemId(nextFocusItemId);
+    setCalendarFocusOpenDetail(shouldOpenDetail);
     setCalendarOpenRequestId((value) => value + 1);
     setCalendarMounted(true);
     setCalendarOpen(true);
@@ -471,7 +475,10 @@ export function RedesignShell({
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {
               if (!isMobile) {
-                openCalendar("deadlines", task?.due_date || null, task?.id || null);
+                openCalendar("deadlines", task?.due_date || null, task?.id || null, {
+                  source: "dashboard",
+                  openDetail: !!task?.id,
+                });
                 return;
               }
               setDeadlinePopover((prev) => {
@@ -479,9 +486,18 @@ export function RedesignShell({
                 return { task, anchor };
               });
             }}
-            onOpenBillsCalendar={(date) => openCalendar("bills", date || null)}
-            onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId)}
-            onOpenDeadlinesCalendar={(date) => openCalendar("deadlines", date || null)}
+            onOpenBillsCalendar={(date, itemId) => openCalendar("bills", date || null, itemId || null, {
+              source: "dashboard",
+              openDetail: !!itemId,
+            })}
+            onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId, {
+              source: "dashboard",
+              openDetail: !!itemId && itemId !== "new",
+            })}
+            onOpenDeadlinesCalendar={(date, itemId) => openCalendar("deadlines", date || null, itemId || null, {
+              source: "dashboard",
+              openDetail: !!itemId,
+            })}
             onOpenTodoistCreate={openTodoistCreate}
             onJumpSection={jumpToSection}
             setAddTaskOpen={setAddTaskOpen}
@@ -582,6 +598,7 @@ export function RedesignShell({
             onViewChange={changeCalendarView}
             focusDate={calendarFocus}
             focusItemId={calendarFocusItemId}
+            focusOpenDetail={calendarFocusOpenDetail}
             eventsData={eventsData}
             onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
             weatherData={liveData.liveWeather || briefing?.weather || null}

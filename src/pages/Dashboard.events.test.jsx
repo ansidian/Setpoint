@@ -35,6 +35,7 @@ function makeBriefing(events = []) {
 function renderDashboardBody({
   briefing,
   ensureRange,
+  onOpenBillsCalendar = () => {},
   onOpenDeadlinesCalendar = () => {},
   onOpenEventsCalendar = () => {},
   liveData: liveDataOverrides = {},
@@ -71,7 +72,7 @@ function renderDashboardBody({
         isMobile={false}
         onOpenEmail={() => {}}
         onOpenDeadline={() => {}}
-        onOpenBillsCalendar={() => {}}
+        onOpenBillsCalendar={onOpenBillsCalendar}
         onOpenEventsCalendar={onOpenEventsCalendar}
         onOpenDeadlinesCalendar={onOpenDeadlinesCalendar}
         onJumpSection={() => {}}
@@ -192,6 +193,35 @@ describe("Dashboard event loading", () => {
     fireEvent.click(within(screen.getByTestId("today-timeline")).getByText("Roadmap sync"));
 
     expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1");
+  });
+
+  it("deep links bill rail rows to their schedule id and bill date", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const onOpenBillsCalendar = vi.fn();
+    renderDashboardBody({
+      briefing: makeBriefing([]),
+      ensureRange: vi.fn().mockResolvedValue([]),
+      onOpenBillsCalendar,
+      liveData: {
+        liveBills: [
+          {
+            id: "schedule-rent",
+            name: "Rent",
+            payee: "Landlord",
+            amount: 1800,
+            next_date: "2026-04-20",
+            paid: false,
+          },
+        ],
+      },
+    });
+
+    fireEvent.click(screen.getAllByText("Rent").at(-1));
+
+    expect(onOpenBillsCalendar).toHaveBeenCalledWith("2026-04-20", "schedule-rent");
   });
 
   it("refetches the live event window when calendar revision changes", async () => {

@@ -800,6 +800,72 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getAllByRole("button", { name: /mark complete/i }).length).toBeGreaterThan(0);
   });
 
+  it("opens agenda-anchored floating event detail from dashboard item focus", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="event-1"
+        focusOpenDetail
+        eventsData={{
+          getEvents: () => [
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
+  });
+
+  it("opens agenda-anchored floating deadline detail from dashboard item focus", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+  });
+
   it("falls back to a completed deadline when a day has no active items", async () => {
     window.innerWidth = 1900;
 
@@ -1940,6 +2006,98 @@ describe("CalendarModal responsive layout", () => {
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
     expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
+  });
+
+  it("opens agenda-anchored floating bill detail from dashboard item focus", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="bill-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{
+          schedules: [
+            {
+              id: "bill-1",
+              name: "Rent",
+              next_date: "2026-04-20",
+              paid: false,
+              type: "bill",
+              conditions: [
+                { field: "amount", value: { num1: 180000 } },
+                { field: "payee", value: "payee-1" },
+              ],
+            },
+          ],
+          payeeMap: { "payee-1": "Landlord" },
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
+    expect(within(panel).getByText("$1,800.00")).toBeTruthy();
+  });
+
+  it("opens dashboard item focus after async deadline data resolves", async () => {
+    window.innerWidth = 1900;
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          isLoading: true,
+          ctm: { upcoming: [] },
+          todoist: { upcoming: [] },
+        }}
+      />,
+    ));
+
+    expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+            ],
+          },
+          todoist: { upcoming: [] },
+        }}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
   });
 
   it("keeps Bills and Deadlines stacked layouts on the timeline detail rail", async () => {
