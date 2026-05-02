@@ -106,6 +106,26 @@ function getActiveEventSaveButton() {
     .find((element) => !element.disabled);
 }
 
+function getActiveRepeatTrigger(labelPattern = null) {
+  return screen.getAllByTestId("calendar-event-repeat-trigger")
+    .filter((element) => !element.disabled)
+    .filter((element) => !labelPattern || labelPattern.test(element.getAttribute("aria-label") || ""))
+    .at(-1);
+}
+
+function setCompactSchedulePickerTime(picker, fieldLabel, { hour, minute, period }) {
+  const fieldButton = within(picker).getByRole("button", { name: new RegExp(`^${fieldLabel}:`, "i") });
+  if (fieldButton.getAttribute("aria-pressed") !== "true") {
+    fireEvent.click(fieldButton);
+  }
+  fireEvent.change(within(picker).getByLabelText("hour"), { target: { value: String(hour) } });
+  fireEvent.blur(within(picker).getByLabelText("hour"));
+  fireEvent.change(within(picker).getByLabelText("minute"), { target: { value: String(minute).padStart(2, "0") } });
+  fireEvent.blur(within(picker).getByLabelText("minute"));
+  fireEvent.click(within(picker).getByRole("button", { name: period.toUpperCase() }));
+  fireEvent.click(within(picker).getByRole("button", { name: new RegExp(`set ${fieldLabel}`, "i") }));
+}
+
 function createDataTransfer() {
   const store = new Map();
   return {
@@ -162,6 +182,127 @@ describe("Calendar event editor rail", () => {
     const title = await screen.findByTestId("calendar-event-title");
     await waitFor(() => {
       expect(document.activeElement).toBe(title);
+    });
+  });
+
+  it("opens event create as a compact Todoist-style icon composer", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+
+    const rail = await screen.findByTestId("calendar-event-editor-rail");
+    expect(rail.getAttribute("data-editor-layout")).toBe("slim-icon");
+    const toolbar = screen.getByTestId("calendar-event-compact-toolbar");
+    expect(toolbar).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-description")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-description").getAttribute("data-compact-notes")).toBe("true");
+    expect(screen.queryByTestId("calendar-event-notes-chip")).toBeNull();
+    expect(screen.queryByTestId("calendar-event-editor-detail-layout")).toBeNull();
+
+    [
+      "calendar-event-schedule-trigger",
+      "calendar-event-source-trigger",
+      "calendar-event-location-trigger",
+      "calendar-event-repeat-trigger",
+    ].forEach((testId) => {
+      const button = screen.getByTestId(testId);
+      expect(button.textContent.trim()).toBe("");
+      expect(button.getAttribute("title")).toBeNull();
+      expect(button.getAttribute("aria-label")).toBeTruthy();
+    });
+    expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/apr 20, 2026/i);
+    expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/personal/i);
+    expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/does not repeat/i);
+    expect(screen.getByTestId("calendar-event-save")).toBeTruthy();
+  });
+
+  it("uses the custom time picker inside the compact schedule popover", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("calendar-event-start-time"));
+    const picker = await screen.findByRole("dialog", { name: /compact schedule picker/i });
+    expect(within(picker).queryByLabelText("Start time", { selector: "input" })).toBeNull();
+    expect(within(picker).queryByLabelText("End time", { selector: "input" })).toBeNull();
+
+    setCompactSchedulePickerTime(picker, "start time", { hour: 11, minute: 45, period: "pm" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/11:45 pm/i);
+      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/12:15 am/i);
+      expect(within(picker).getByTestId("calendar-compact-schedule-summary").textContent).toMatch(/11:45 pm to 12:15 am/i);
+      expect(within(picker).queryByLabelText("hour")).toBeNull();
+    });
+  });
+
+  it("opens compact popovers from the icon action row one at a time", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-source-trigger")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId("calendar-event-source-trigger"));
+    expect(await screen.findByRole("dialog", { name: /calendar source picker/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("calendar-event-schedule-trigger"));
+    const schedulePicker = await screen.findByRole("dialog", { name: /compact schedule picker/i });
+    expect(schedulePicker).toBeTruthy();
+    expect(within(schedulePicker).getByTestId("calendar-compact-schedule-summary").textContent).toMatch(/apr 20, 2026/i);
+    expect(within(schedulePicker).getByLabelText("All day").checked).toBe(false);
+    expect(screen.queryByRole("dialog", { name: /calendar source picker/i })).toBeNull();
+
+    fireEvent.click(screen.getByTestId("calendar-event-title"));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /compact schedule picker/i })).toBeNull();
+    });
+  });
+
+  it("uses repeat as a recurrence popover with real recurrence state", async () => {
+    renderModal();
+    mockCreateCalendarEvent.mockResolvedValue({
+      event: {
+        id: "manual-series-1",
+        title: "Planning block",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+        writable: true,
+        allDay: false,
+        isRecurring: true,
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Planning block" },
+    });
+
+    fireEvent.click(getActiveRepeatTrigger());
+    const repeatPicker = await screen.findByRole("dialog", { name: /recurrence picker/i });
+    fireEvent.click(within(repeatPicker).getByRole("option", { name: /weekly/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
+      expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create recurring event/i);
+    });
+
+    fireEvent.click(getActiveEventSaveButton());
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        title: "Planning block",
+        recurrence: expect.objectContaining({
+          frequency: "weekly",
+          interval: 1,
+          weekdays: ["MO"],
+        }),
+      }));
     });
   });
 
@@ -309,7 +450,7 @@ describe("Calendar event editor rail", () => {
     expect(removeEvent).toHaveBeenCalledWith("event-context-delete");
   });
 
-  it("blocks save and shows inline validation for invalid end times", async () => {
+  it("prevents invalid same-day end times by rolling compact schedule edits overnight", async () => {
     renderModal();
 
     fireEvent.click(screen.getByRole("button", { name: /new event/i }));
@@ -324,24 +465,16 @@ describe("Calendar event editor rail", () => {
     });
 
     fireEvent.click(screen.getByTestId("calendar-event-start-time"));
-    fireEvent.click(await screen.findByRole("button", { name: /set start time/i }));
-    fireEvent.click(screen.getByTestId("calendar-event-end-time"));
-    fireEvent.click(await screen.findByRole("button", { name: /set end time/i }));
-
-    fireEvent.click(screen.getByTestId("calendar-event-start-time"));
-    fireEvent.change(screen.getByLabelText("hour"), { target: { value: "9" } });
-    fireEvent.blur(screen.getByLabelText("hour"));
-    fireEvent.click(await screen.findByRole("button", { name: /set start time/i }));
-
-    fireEvent.click(screen.getByTestId("calendar-event-end-time"));
-    fireEvent.change(screen.getByLabelText("hour"), { target: { value: "8" } });
-    fireEvent.blur(screen.getByLabelText("hour"));
-    fireEvent.click(await screen.findByRole("button", { name: /set end time/i }));
+    const picker = await screen.findByRole("dialog", { name: /compact schedule picker/i });
+    setCompactSchedulePickerTime(picker, "start time", { hour: 9, minute: 0, period: "am" });
+    setCompactSchedulePickerTime(picker, "end time", { hour: 8, minute: 0, period: "am" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-validation").textContent).toMatch(/end time/i);
+      expect(screen.queryByTestId("calendar-event-validation")).toBeNull();
+      expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/apr 21, 2026/i);
+      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/8:00 am/i);
     });
-    expect(screen.getByTestId("calendar-event-save").disabled).toBe(true);
+    expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
@@ -355,7 +488,65 @@ describe("Calendar event editor rail", () => {
       expect(screen.getByTestId("calendar-ghost-chip").textContent).toMatch(/untitled/i);
       expect(screen.getByTestId("calendar-ghost-chip").textContent).not.toMatch(/draft|conflict|repeat/i);
       expect(screen.queryByTestId("calendar-ghost-overlay")).toBeNull();
-      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/draft preview/i);
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/apr 20, 2026/i);
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).not.toMatch(/draft preview/i);
+    });
+  });
+
+  it("uses the compact summary as the only persistent parsed schedule verification", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Dinner on Apr 21 at 5pm" },
+    });
+
+    await waitFor(() => {
+      const summary = screen.getByTestId("calendar-draft-preview-summary");
+      expect(summary.textContent).toMatch(/apr 21, 2026/i);
+      expect(summary.textContent).toMatch(/5:00 pm to 5:30 pm/i);
+      expect(screen.queryByTestId("calendar-event-title-preview")).toBeNull();
+      expect(screen.queryByTestId("calendar-event-title-mode-preview")).toBeNull();
+    });
+  });
+
+  it("keeps source and location assist visible without repeating parsed schedule copy", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Dinner @McDonald's tomorrow 5pm cal personal" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-title-location-preview").textContent).toMatch(/mcdonald's/i);
+      expect(screen.getByTestId("calendar-event-title-source-preview").textContent).toMatch(/personal/i);
+      expect(screen.queryByTestId("calendar-event-title-preview")).toBeNull();
+      expect(screen.queryByTestId("calendar-event-title-mode-preview")).toBeNull();
+    });
+  });
+
+  it("adds restrained semantic signaling to compact summary segments", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work at 3am to 8am every monday" },
+    });
+
+    await waitFor(() => {
+      const segments = screen.getAllByTestId("calendar-draft-preview-segment");
+      expect(segments.map((segment) => segment.getAttribute("data-summary-kind"))).toEqual(
+        expect.arrayContaining(["schedule", "source", "location", "repeat"]),
+      );
+      expect(segments.find((segment) => segment.getAttribute("data-summary-kind") === "schedule")?.style.color).toBeTruthy();
+      expect(segments.find((segment) => segment.getAttribute("data-summary-kind") === "repeat")?.textContent).toMatch(/every mon/i);
     });
   });
 
@@ -400,14 +591,20 @@ describe("Calendar event editor rail", () => {
     });
   });
 
-  it("renders a multi-day ghost as a spanning draft chip", async () => {
+  it("renders a multi-day ghost as a spanning draft chip from the compact schedule picker", async () => {
     renderModal();
 
     fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId("calendar-event-end-date"));
-    fireEvent.click(within(await screen.findByLabelText("End date picker")).getByRole("button", { name: "22" }));
+    fireEvent.click(screen.getByTestId("calendar-event-start-date"));
+    const picker = await screen.findByRole("dialog", { name: /compact schedule picker/i });
+    fireEvent.click(within(picker).getByRole("button", { name: /end date/i }));
+    await waitFor(() => {
+      expect(within(picker).getByRole("button", { name: "19" }).disabled).toBe(true);
+    });
+    fireEvent.click(within(picker).getByRole("button", { name: "22" }));
+    fireEvent.click(within(picker).getByRole("button", { name: /done/i }));
 
     await waitFor(() => {
       const chip = screen.getByTestId("calendar-ghost-chip");
@@ -475,9 +672,9 @@ describe("Calendar event editor rail", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 28, 2026/i);
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/3 draft events/i);
       expect(screen.getByTestId("calendar-batch-review")).toBeTruthy();
-      expect(screen.getByTestId("calendar-event-title-mode-preview").textContent).toMatch(/3 one-off events/i);
+      expect(screen.queryByTestId("calendar-event-title-mode-preview")).toBeNull();
       expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
     });
 
@@ -511,6 +708,147 @@ describe("Calendar event editor rail", () => {
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
+  it("edits retained batch row schedules from the compact schedule picker", async () => {
+    renderModal();
+    mockCreateCalendarEventsBatch.mockResolvedValue({
+      created: [
+        {
+          index: 0,
+          event: {
+            id: "batch-1",
+            title: "Work",
+            accountId: "gmail-main",
+            calendarId: "primary",
+            startMs: new Date("2026-04-29T00:00:00.000Z").getTime(),
+            endMs: new Date("2026-04-29T00:30:00.000Z").getTime(),
+            writable: true,
+            allDay: false,
+          },
+        },
+      ],
+      failed: [],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work next tue, wed, thur at 4:15am to 7:30am" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-batch-review").getAttribute("data-density")).toBe("compact");
+      expect(screen.getByTestId("calendar-batch-row-0").getAttribute("data-density")).toBe("compact");
+      expect(screen.getByTestId("calendar-batch-schedule-trigger-0")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-batch-start-date-0")).toBeNull();
+      expect(screen.queryByTestId("calendar-batch-start-time-0")).toBeNull();
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-batch-schedule-trigger-0"));
+    const picker = await screen.findByRole("dialog", { name: /batch event 1 schedule/i });
+
+    expect(within(picker).getByTestId("calendar-compact-schedule-summary").textContent).toMatch(/Apr 28, 2026/i);
+    expect(within(picker).queryByLabelText("Start time")).toBeNull();
+
+    fireEvent.click(within(picker).getByRole("button", { name: /end date/i }));
+    fireEvent.click(within(picker).getAllByRole("button", { name: "29" }).find((button) => !button.disabled));
+    setCompactSchedulePickerTime(picker, "start time", { hour: 5, minute: 0, period: "pm" });
+    fireEvent.click(within(picker).getByRole("button", { name: /done/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-batch-row-0").textContent).toMatch(/Apr 28, 2026 to Apr 29, 2026/i);
+      expect(screen.getByTestId("calendar-batch-row-0").textContent).toMatch(/5:00 PM to 5:30 PM/i);
+    });
+
+    fireEvent.click(getActiveEventSaveButton());
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEventsBatch).toHaveBeenCalledWith([
+        expect.objectContaining({
+          title: "Work",
+          startDate: "2026-04-28",
+          endDate: "2026-04-29",
+          startTime: "17:00",
+          endTime: "17:30",
+        }),
+        expect.objectContaining({
+          title: "Work",
+          startDate: "2026-04-29",
+          endDate: "2026-04-29",
+          startTime: "04:15",
+          endTime: "07:30",
+        }),
+        expect.objectContaining({
+          title: "Work",
+          startDate: "2026-04-30",
+          endDate: "2026-04-30",
+          startTime: "04:15",
+          endTime: "07:30",
+        }),
+      ]);
+    });
+  });
+
+  it("lets the batch icon collapse accidental batch parsing into a single draft", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Dinner 2pm tue thu" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/2 draft events/i);
+      expect(screen.getByTestId("calendar-batch-review")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-event-batch-trigger"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-title").value).toBe("Dinner");
+      expect(screen.queryByTestId("calendar-batch-review")).toBeNull();
+      expect(screen.queryByTestId("calendar-event-batch-trigger")).toBeNull();
+      expect(screen.getByTestId("calendar-event-schedule-trigger")).toBeTruthy();
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/apr 21, 2026/i);
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/2:00 pm to 2:30 pm/i);
+      expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create event/i);
+    });
+  });
+
+  it("keeps the create composer mounted while recurring NLP parsing resolves", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    const composerBody = await screen.findByTestId("calendar-event-editor-mode-create");
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work at 3am to 8am every monday" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
+      expect(screen.getByTestId("calendar-event-editor-mode-create")).toBe(composerBody);
+    });
+  });
+
+  it("keeps the create composer mounted while batch NLP parsing resolves", async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    const composerBody = await screen.findByTestId("calendar-event-editor-mode-create");
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Work next tue, wed, thur at 4:15am to 7:30am" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/3 draft events/i);
+      expect(screen.getByTestId("calendar-event-editor-mode-create")).toBe(composerBody);
+    });
+  });
+
   it("renders recurrence UI for recurring NLP and saves structured recurrence", async () => {
     renderModal();
     mockCreateCalendarEvent.mockResolvedValue({
@@ -535,27 +873,35 @@ describe("Calendar event editor rail", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 20, 2026/i);
-      expect(screen.getByTestId("calendar-recurrence-section")).toBeTruthy();
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/apr 20, 2026/i);
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
+      expect(screen.queryByTestId("calendar-event-title-mode-preview")).toBeNull();
+      expect(screen.queryByTestId("calendar-recurrence-section")).toBeNull();
       expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
       expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create recurring event/i);
     });
 
-    fireEvent.change(screen.getByTestId("calendar-recurrence-frequency"), {
+    fireEvent.click(getActiveRepeatTrigger(/repeat/i));
+    const repeatPicker = await screen.findByRole("dialog", { name: /recurrence picker/i });
+    expect(repeatPicker).toBeTruthy();
+    expect(repeatPicker.style.overflow).not.toBe("hidden");
+    expect(repeatPicker.style.overflowY).toBe("auto");
+    expect(repeatPicker.style.overscrollBehavior).toBe("contain");
+    fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-frequency"), {
       target: { value: "monthly" },
     });
-    fireEvent.change(screen.getByTestId("calendar-recurrence-interval"), {
+    fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-interval"), {
       target: { value: "2" },
     });
-    fireEvent.change(screen.getByTestId("calendar-recurrence-ends-type"), {
+    fireEvent.change(within(repeatPicker).getByTestId("calendar-recurrence-ends-type"), {
       target: { value: "onDate" },
     });
-    fireEvent.click(await screen.findByTestId("calendar-recurrence-until-date"));
+    fireEvent.click(await within(repeatPicker).findByTestId("calendar-recurrence-until-date"));
     fireEvent.click(within(await screen.findByLabelText("Recurrence end date picker")).getByRole("button", { name: "24" }));
 
     await waitFor(() => {
       expect(screen.queryByLabelText("Recurrence end date picker")).toBeNull();
-      expect(screen.getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 24, 2026/i);
+      expect(within(repeatPicker).getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 24, 2026/i);
     });
 
     fireEvent.click(getActiveEventSaveButton());
@@ -590,27 +936,30 @@ describe("Calendar event editor rail", () => {
       target: { value: "Work at 3am to 8am every monday" },
     });
 
-    const recurrenceSection = await screen.findByTestId("calendar-recurrence-section");
+    fireEvent.click(getActiveRepeatTrigger(/repeat/i));
+    const repeatPicker = await screen.findByRole("dialog", { name: /recurrence picker/i });
+    const recurrenceSection = within(repeatPicker).getByTestId("calendar-recurrence-section");
     expect(recurrenceSection).toBeTruthy();
 
     fireEvent.click(within(recurrenceSection).getByRole("button", { name: /^never$/i }));
-    expect(screen.getByRole("listbox", { name: /select option/i })).toBeTruthy();
+    const endsListbox = screen.getByRole("listbox", { name: /select option/i });
+    expect(endsListbox).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("option", { name: /on date/i }));
+    fireEvent.click(within(endsListbox).getByRole("option", { name: /on date/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-      expect(screen.getByTestId("calendar-recurrence-ends-type").value).toBe("onDate");
-      expect(screen.getByTestId("calendar-recurrence-until-date")).toBeTruthy();
+      expect(within(repeatPicker).getByTestId("calendar-recurrence-ends-type").value).toBe("onDate");
+      expect(within(repeatPicker).getByTestId("calendar-recurrence-until-date")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByTestId("calendar-recurrence-until-date"));
+    fireEvent.click(within(repeatPicker).getByTestId("calendar-recurrence-until-date"));
     fireEvent.click(within(await screen.findByLabelText("Recurrence end date picker")).getByRole("button", { name: "25" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
       expect(screen.queryByLabelText("Recurrence end date picker")).toBeNull();
-      expect(screen.getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 25, 2026/i);
+      expect(within(repeatPicker).getByTestId("calendar-recurrence-until-date").textContent).toMatch(/apr 25, 2026/i);
     });
   });
 
@@ -652,7 +1001,7 @@ describe("Calendar event editor rail", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-title-preview").textContent).toMatch(/apr 21, 2026/i);
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/apr 21, 2026/i);
       expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/apr 21, 2026/i);
       expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/apr 21, 2026/i);
       expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/5:00 pm/i);
@@ -792,8 +1141,7 @@ describe("Calendar event editor rail", () => {
       target: { value: "McDonald's" },
     });
 
-    expect(await screen.findByText("McDonald's")).toBeTruthy();
-    fireEvent.click(screen.getByText("McDonald's"));
+    fireEvent.click(await screen.findByRole("button", { name: /^McDonald's 123 Main St/i }));
 
     await waitFor(() => {
       expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-1", expect.any(String));
@@ -856,31 +1204,47 @@ describe("Calendar event editor rail", () => {
     }
   });
 
-  it("auto-advances from start date to end date and from start time to end time", async () => {
+  it("edits date ranges, all-day state, and overnight times from the compact schedule picker", async () => {
     renderModal();
 
     fireEvent.click(screen.getByRole("button", { name: /new event/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("calendar-event-start-date"));
-    fireEvent.click(within(await screen.findByLabelText("Start date picker")).getByRole("button", { name: "22" }));
-    expect(await screen.findByLabelText("End date picker")).toBeTruthy();
-
-    fireEvent.click(within(screen.getByLabelText("End date picker")).getByRole("button", { name: "23" }));
+    await screen.findByRole("dialog", { name: /compact schedule picker/i });
+    fireEvent.click(within(screen.getByRole("dialog", { name: /compact schedule picker/i })).getByRole("button", { name: "22" }));
     await waitFor(() => {
-      expect(screen.queryByLabelText("End date picker")).toBeNull();
+      expect(within(screen.getByRole("dialog", { name: /compact schedule picker/i })).getByRole("button", { name: /end date/i }).getAttribute("aria-pressed")).toBe("true");
+    });
+
+    fireEvent.click(within(screen.getByRole("dialog", { name: /compact schedule picker/i })).getByRole("button", { name: "23" }));
+    await waitFor(() => {
       expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/apr 22, 2026/i);
       expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/apr 23, 2026/i);
     });
 
-    fireEvent.click(screen.getByTestId("calendar-event-start-time"));
-    expect(await screen.findByLabelText("hour")).toBe(document.activeElement);
-    fireEvent.click(await screen.findByRole("button", { name: /set start time/i }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: /compact schedule picker/i })).getByLabelText("All day"));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/all day/i);
+      expect(within(screen.getByRole("dialog", { name: /compact schedule picker/i })).queryByRole("button", { name: /start time/i })).toBeNull();
+    });
+
+    fireEvent.click(within(screen.getByRole("dialog", { name: /compact schedule picker/i })).getByLabelText("All day"));
+    setCompactSchedulePickerTime(
+      screen.getByRole("dialog", { name: /compact schedule picker/i }),
+      "start time",
+      { hour: 11, minute: 45, period: "pm" },
+    );
+    setCompactSchedulePickerTime(
+      screen.getByRole("dialog", { name: /compact schedule picker/i }),
+      "end time",
+      { hour: 12, minute: 15, period: "am" },
+    );
 
     await waitFor(() => {
-      expect(screen.getByLabelText("End time picker")).toBeTruthy();
-      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/9:30 am/i);
-      expect(screen.getByLabelText("hour")).toBe(document.activeElement);
+      expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/11:45 pm/i);
+      expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/12:15 am/i);
+      expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/apr 23, 2026/i);
     });
   });
 
@@ -922,7 +1286,7 @@ describe("Calendar event editor rail", () => {
     await waitFor(() => {
       expect(screen.getByTestId("calendar-event-location").value).toBe("McDonald's");
       expect(mockGetCalendarPlaceSuggestions).toHaveBeenCalledWith("McDonald's", expect.any(String));
-      expect(screen.getByText("McDonald's South El Monte")).toBeTruthy();
+      expect(screen.getByRole("button", { name: /McDonald's South El Monte/i })).toBeTruthy();
     });
 
     fireEvent.keyDown(titleInput, { key: "ArrowDown" });
@@ -987,7 +1351,7 @@ describe("Calendar event editor rail", () => {
     fireEvent.keyDown(titleInput, { key: "Enter" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-source-trigger").textContent).toMatch(/school/i);
+      expect(screen.getByTestId("calendar-event-source-trigger").getAttribute("aria-label")).toMatch(/school/i);
       expect(screen.getByTestId("calendar-event-title").value).toBe("Dinner 2pm ");
       expect(screen.getByTestId("calendar-event-start-time").textContent).toMatch(/2:00 pm/i);
     });
@@ -1060,9 +1424,9 @@ describe("Calendar event editor rail", () => {
     });
 
     fireEvent.click(screen.getByTestId("calendar-event-end-time"));
-    fireEvent.change(screen.getByLabelText("minute"), { target: { value: "00" } });
-    fireEvent.blur(screen.getByLabelText("minute"));
-    fireEvent.click(await screen.findByRole("button", { name: /set end time/i }));
+    const picker = await screen.findByRole("dialog", { name: /compact schedule picker/i });
+    setCompactSchedulePickerTime(picker, "end time", { hour: 9, minute: 0, period: "am" });
+    fireEvent.click(within(picker).getByRole("button", { name: /done/i }));
 
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-event-validation")).toBeNull();

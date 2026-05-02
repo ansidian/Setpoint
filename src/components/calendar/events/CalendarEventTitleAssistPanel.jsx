@@ -1,10 +1,11 @@
 export default function CalendarEventTitleAssistPanel({
   show,
   titleAssist,
-  intentState,
-  batchDrafts,
 }) {
   if (!show) return null;
+  const showLocationAssist = !!titleAssist.locationQuery;
+  const showSourceAssist = !!titleAssist.sourceQuery;
+  if (!showLocationAssist && !showSourceAssist) return null;
 
   return (
     <div
@@ -18,31 +19,7 @@ export default function CalendarEventTitleAssistPanel({
         gap: 6,
       }}
     >
-      {titleAssist.preview ? (
-        <div
-          data-testid="calendar-event-title-preview"
-          style={{ fontSize: 11.5, color: "rgba(205,214,244,0.78)", lineHeight: 1.45 }}
-        >
-          Parsed schedule: <span style={{ color: "#cba6da" }}>{titleAssist.preview}</span>
-        </div>
-      ) : null}
-      {intentState.mode === "batch" ? (
-        <div
-          data-testid="calendar-event-title-mode-preview"
-          style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}
-        >
-          Parsed intent: <span style={{ color: "#89dceb" }}>{batchDrafts.length} one-off events</span>
-        </div>
-      ) : null}
-      {intentState.mode === "recurring" ? (
-        <div
-          data-testid="calendar-event-title-mode-preview"
-          style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}
-        >
-          Parsed intent: <span style={{ color: "#89dceb" }}>recurring event</span>
-        </div>
-      ) : null}
-      {titleAssist.locationQuery ? (
+      {showLocationAssist ? (
         <div
           data-testid="calendar-event-title-location-preview"
           style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}
@@ -50,7 +27,7 @@ export default function CalendarEventTitleAssistPanel({
           Parsed location query: <span style={{ color: "#f5c2e7" }}>{titleAssist.locationQuery}</span>
         </div>
       ) : null}
-      {titleAssist.sourceQuery ? (
+      {showSourceAssist ? (
         <div
           data-testid="calendar-event-title-source-preview"
           style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}

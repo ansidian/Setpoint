@@ -46,6 +46,7 @@ export default function useCalendarEventEditor({
   draftRef.current = draft;
   const [batchDrafts, setBatchDrafts] = useState([]);
   const [recurrenceDraft, setRecurrenceDraft] = useState(null);
+  const [manualRecurrenceOverride, setManualRecurrenceOverride] = useState(false);
   const [recurringEditScope, setRecurringEditScope] = useState(null);
   const [createSeedDraft, setCreateSeedDraft] = useState(() => defaultDraft(null));
   const [titleInput, setTitleInput] = useState("");
@@ -147,7 +148,8 @@ export default function useCalendarEventEditor({
     }
     const baseValidation = validateSingleDraft({ draft, effectiveTitle });
     if (baseValidation) return baseValidation;
-    if (intentState.mode === "recurring" && (!isEditingRecurring || recurringEditScope !== "one")) {
+    const hasActiveRecurrence = !!recurrenceDraft && (!isEditingRecurring || recurringEditScope !== "one");
+    if ((intentState.mode === "recurring" || hasActiveRecurrence) && (!isEditingRecurring || recurringEditScope !== "one")) {
       return validateRecurrenceDraft({ recurrenceDraft, draft });
     }
     return null;
@@ -172,6 +174,9 @@ export default function useCalendarEventEditor({
       setTouchedFields({});
       setSaveAttempted(false);
       setManualOverrides(createManualOverrides());
+      setBatchDrafts([]);
+      setRecurrenceDraft(null);
+      setManualRecurrenceOverride(false);
       setRecurringEditScope(null);
       setTitleInput("");
       resetLocationSuggestions();
@@ -224,13 +229,15 @@ export default function useCalendarEventEditor({
     if (mode !== "editor") return;
     if (intentState.mode === "recurring") {
       if (isEditingRecurring && recurringEditScope === "one") return;
+      if (manualRecurrenceOverride) return;
+      setManualRecurrenceOverride(false);
       setRecurrenceDraft(normalizeRecurrenceDraft(intentState.recurrenceDraft, draftRef.current));
       return;
     }
-    if (!isEditingRecurring) {
+    if (!isEditingRecurring && !manualRecurrenceOverride) {
       setRecurrenceDraft((current) => (current ? null : current));
     }
-  }, [intentState.mode, intentState.recurrenceDraft, isEditingRecurring, mode, recurringEditScope]);
+  }, [intentState.mode, intentState.recurrenceDraft, isEditingRecurring, manualRecurrenceOverride, mode, recurringEditScope]);
 
   const clearEditorState = useCallback(() => {
     editorRequestIdRef.current += 1;
@@ -244,6 +251,7 @@ export default function useCalendarEventEditor({
     setManualOverrides(createManualOverrides());
     setBatchDrafts([]);
     setRecurrenceDraft(null);
+    setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
     resetLocationSuggestions();
   }, [resetLocationSuggestions]);
@@ -272,6 +280,7 @@ export default function useCalendarEventEditor({
     setTitleParseNow(Date.now());
     setManualOverrides(createManualOverrides());
     setRecurrenceDraft(null);
+    setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
     setEditingEvent(null);
     setConfirmDelete(false);
@@ -331,6 +340,7 @@ export default function useCalendarEventEditor({
     setManualOverrides(createManualOverrides());
     setBatchDrafts([]);
     setRecurrenceDraft(event?.isRecurring && event?.recurrence ? normalizeRecurrenceDraft(event.recurrence, nextDraft) : null);
+    setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
     setEditingEvent(event);
     setConfirmDelete(false);
@@ -363,6 +373,7 @@ export default function useCalendarEventEditor({
     } else if (editingEvent?.recurrence) {
       setRecurrenceDraft(normalizeRecurrenceDraft(editingEvent.recurrence, draft));
     }
+    setManualRecurrenceOverride(false);
     setError(null);
     setErrorCode(null);
   }, [draft, editingEvent]);
@@ -414,7 +425,39 @@ export default function useCalendarEventEditor({
     setErrorCode(null);
   }, []);
 
+  const exitBatchMode = useCallback(() => {
+    if (intentState.mode !== "batch") return;
+    const singleDraft = titleAssist.singleDraft || batchDrafts[0] || null;
+    const nextTitle = titleAssist.cleanTitle || singleDraft?.title || effectiveTitle || titleInput;
+    setTitleInput(nextTitle);
+    setTitleParseNow(Date.now());
+    setDraft((current) => ({
+      ...current,
+      ...(singleDraft ? {
+        startDate: singleDraft.startDate || current.startDate,
+        endDate: singleDraft.endDate || current.endDate,
+        startTime: singleDraft.startTime || current.startTime,
+        endTime: singleDraft.endTime || current.endTime,
+        allDay: singleDraft.allDay ?? current.allDay,
+      } : null),
+      title: nextTitle,
+    }));
+    setManualOverrides((current) => ({
+      ...current,
+      startDate: !!singleDraft?.startDate || current.startDate,
+      endDate: !!singleDraft?.endDate || current.endDate,
+      startTime: !!singleDraft?.startTime || current.startTime,
+      endTime: !!singleDraft?.endTime || current.endTime,
+      allDay: singleDraft?.allDay != null || current.allDay,
+    }));
+    setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
+    setBatchDrafts([]);
+    setError(null);
+    setErrorCode(null);
+  }, [batchDrafts, effectiveTitle, intentState.mode, titleAssist.cleanTitle, titleAssist.singleDraft, titleInput]);
+
   const updateRecurrenceDraft = useCallback((field, value) => {
+    setManualRecurrenceOverride(true);
     setRecurrenceDraft((current) => {
       const existing = normalizeRecurrenceDraft(current, draft);
       if (field === "frequency") {
@@ -458,7 +501,26 @@ export default function useCalendarEventEditor({
     setErrorCode(null);
   }, [draft]);
 
+  const selectRecurrencePreset = useCallback((frequency) => {
+    setManualRecurrenceOverride(true);
+    if (!frequency) {
+      setRecurrenceDraft(null);
+      setError(null);
+      setErrorCode(null);
+      return;
+    }
+    setRecurrenceDraft((current) => normalizeRecurrenceDraft({
+      ...current,
+      frequency,
+      interval: current?.interval || 1,
+      ends: current?.ends || { type: "never" },
+    }, draft));
+    setError(null);
+    setErrorCode(null);
+  }, [draft]);
+
   const toggleRecurrenceWeekday = useCallback((weekday) => {
+    setManualRecurrenceOverride(true);
     setRecurrenceDraft((current) => {
       const existing = normalizeRecurrenceDraft(current, draft);
       const weekdays = existing.weekdays.includes(weekday)
@@ -500,7 +562,7 @@ export default function useCalendarEventEditor({
         editingEvent,
         isEditingRecurring,
         recurringEditScope,
-        intentMode: intentState.mode,
+        intentMode: intentState.mode !== "batch" && recurrenceDraft ? "recurring" : intentState.mode,
       });
 
       if (result.kind === "batch-create") {
@@ -652,6 +714,7 @@ export default function useCalendarEventEditor({
     intentState,
     batchDrafts,
     recurrenceDraft,
+    manualRecurrenceOverride,
     recurringEditScope,
     effectiveTitle,
     writableCalendars,
@@ -675,7 +738,9 @@ export default function useCalendarEventEditor({
     updateField,
     updateBatchDraft,
     removeBatchDraft,
+    exitBatchMode,
     updateRecurrenceDraft,
+    selectRecurrencePreset,
     toggleRecurrenceWeekday,
     selectRecurringEditScope,
     handleTitleInputChange,
