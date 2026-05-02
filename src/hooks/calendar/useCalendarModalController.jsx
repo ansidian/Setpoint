@@ -15,6 +15,7 @@ import {
   ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
+import useCalendarModalEditorRouting from "./useCalendarModalEditorRouting.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import { ymdFromView } from "./calendarModalSelectionModel.js";
 import {
@@ -78,16 +79,6 @@ function buildFallbackDayState(rawItems) {
   };
 }
 
-function pacificDateKeyFromMs(ms) {
-  if (!ms) return null;
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(ms));
-}
-
 export default function useCalendarModalController({
   open,
   onClose,
@@ -143,6 +134,7 @@ export default function useCalendarModalController({
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
   const navigateMonthRef = useRef(null);
+  const eventEditorRef = useRef(null);
   const resizeRafRef = useRef(0);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
   const {
@@ -192,53 +184,42 @@ export default function useCalendarModalController({
     focusDateKey(ymd);
   }
 
-  const handleEventEditorSaved = useCallback((savedEvent) => {
-    const current = floatingDetailRef.current;
-    if (!current?.open || current.view !== "events" || (current.mode !== "edit" && current.mode !== "create")) return;
-    if (current.saveRequestId && current.saveRequestId !== current.activeSaveRequestId) return;
-    if (!savedEvent?.id) {
-      setFloatingDetail(null);
-      return;
-    }
-    const dateKey = savedEvent.startMs ? new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Los_Angeles",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(savedEvent.startMs)) : current.dateKey;
-    const parsed = parseYmd(dateKey);
-    const itemId = activeView.getItemId ? activeView.getItemId(savedEvent) : savedEvent.id;
-    if (parsed) {
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(dateKey);
-    }
-    setSelectedItemId(String(itemId));
-    setFloatingDetail({
-      ...current,
-      mode: "detail",
-      itemId: String(itemId),
-      dateKey,
-      day: parsed?.day ?? current.day ?? null,
-      itemsSnapshot: [savedEvent],
-      editorSessionId: null,
-      saveRequestId: null,
-      activeSaveRequestId: null,
-      dirty: false,
-    });
-  }, [activeView, floatingDetailRef, setFloatingDetail, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
+  const suppressAgendaPassiveSync = useCallback((durationMs = 900) => {
+    agendaPassiveSyncSuppressedUntilRef.current = Math.max(
+      agendaPassiveSyncSuppressedUntilRef.current,
+      performance.now() + durationMs,
+    );
+  }, []);
 
-  const handleEventEditorDeleted = useCallback((deletedEvent) => {
-    const current = floatingDetailRef.current;
-    if (current?.open && current.view === "events") {
-      setFloatingDetail(null);
-    }
-    const deletedId = deletedEvent && activeView.getItemId
-      ? activeView.getItemId(deletedEvent)
-      : deletedEvent?.id;
-    if (deletedId != null && String(selectedItemId) === String(deletedId)) {
-      setSelectedItemId(null);
-    }
-  }, [activeView, floatingDetailRef, selectedItemId, setFloatingDetail, setSelectedItemId]);
+  const {
+    cancelFloatingEditor,
+    handleEventEditorDeleted,
+    handleEventEditorSaved,
+    handleFloatingDeadlineDeleted,
+    handleFloatingDeadlineSaved,
+    openFloatingDeadlineCreate,
+    openFloatingDeadlineEdit,
+    openFloatingEventCreate,
+    openFloatingEventEdit,
+  } = useCalendarModalEditorRouting({
+    activeSelectedDateKey,
+    activeView,
+    eventEditorRef,
+    findDateCell,
+    floatingDetailRef,
+    openFloatingDetail,
+    selectedDay,
+    selectedItemId,
+    setDeadlineDraftPreview,
+    setDeadlineEditor,
+    setFloatingDetail,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+    suppressAgendaPassiveSync,
+    viewMonth,
+    viewYear,
+  });
 
   const eventEditor = useCalendarEventEditor({
     open,
@@ -259,6 +240,10 @@ export default function useCalendarModalController({
   const openEventCreate = eventEditor.openCreate;
   const prefetchEventSources = eventEditor.prefetchSources;
 
+  useLayoutEffect(() => {
+    eventEditorRef.current = eventEditor;
+  }, [eventEditor]);
+
   useEffect(() => {
     if (!eventEditor.editable || typeof window === "undefined") return undefined;
     if (typeof window.requestIdleCallback === "function") {
@@ -270,12 +255,6 @@ export default function useCalendarModalController({
   }, [open, view, eventEditor.editable, prefetchEventSources]);
 
   const closeEventEditor = eventEditor.closeEditor;
-  function suppressAgendaPassiveSync(durationMs = 900) {
-    agendaPassiveSyncSuppressedUntilRef.current = Math.max(
-      agendaPassiveSyncSuppressedUntilRef.current,
-      performance.now() + durationMs,
-    );
-  }
 
   const eventQuickActions = useCalendarQuickActions({
     editable: !!eventsData?.editable,
@@ -328,179 +307,6 @@ export default function useCalendarModalController({
       handleFloatingDeadlineDeleted(taskId);
     },
   });
-
-  function openFloatingEventCreate(seedDate = null) {
-    suppressAgendaPassiveSync();
-    const dateKey = seedDate || activeSelectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay });
-    const parsed = parseYmd(dateKey);
-    if (parsed) {
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(dateKey);
-    }
-    setSelectedItemId(null);
-    eventEditor.openCreate?.();
-    openFloatingDetail({
-      mode: "create",
-      view: "events",
-      dateKey,
-      day: parsed?.day ?? null,
-      anchorElement: findDateCell(dateKey),
-      sourceCellElement: findDateCell(dateKey),
-      anchorKind: "day-cell",
-      parked: !findDateCell(dateKey),
-    });
-  }
-
-  function openFloatingEventEdit(item, options = {}) {
-    if (!item?.writable) return;
-    suppressAgendaPassiveSync();
-    const itemId = activeView.getItemId ? activeView.getItemId(item) : item.id;
-    const dateKey = options.dateKey || pacificDateKeyFromMs(item.startMs) || activeSelectedDateKey;
-    const fallbackCell = findDateCell(dateKey);
-    const parsed = parseYmd(dateKey);
-    if (parsed) {
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(dateKey);
-    }
-    setSelectedItemId(itemId != null ? String(itemId) : null);
-    eventEditor.openEdit?.(item);
-    const current = floatingDetailRef.current;
-    const reuseCurrentAnchor = current?.open
-      && current.view === "events"
-      && String(current.itemId) === String(itemId)
-      && !current.parked;
-    openFloatingDetail({
-      mode: "edit",
-      view: "events",
-      itemId: itemId != null ? String(itemId) : null,
-      dateKey,
-      day: parsed?.day ?? null,
-      anchorElement: options.anchorElement || (reuseCurrentAnchor ? current.anchorElement : null) || fallbackCell,
-      sourceCellElement: options.sourceCellElement || (reuseCurrentAnchor ? current.sourceCellElement : null) || fallbackCell,
-      exclusionElement: options.exclusionElement || null,
-      anchorKind: options.anchorKind || (reuseCurrentAnchor ? current.anchorKind : fallbackCell ? "day-cell" : "parked"),
-      parked: options.parked ?? (!options.anchorElement && !reuseCurrentAnchor && !fallbackCell),
-      itemsSnapshot: [item],
-    });
-  }
-
-  function openFloatingDeadlineCreate(seedDate = null) {
-    const dateKey = seedDate || activeSelectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay });
-    const parsed = parseYmd(dateKey);
-    if (parsed) {
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(dateKey);
-    }
-    setSelectedItemId(null);
-    setDeadlineEditor({ mode: "create", seedDate: dateKey || null });
-    setDeadlineDraftPreview(null);
-    openFloatingDetail({
-      mode: "create",
-      view: "deadlines",
-      dateKey,
-      day: parsed?.day ?? null,
-      anchorElement: findDateCell(dateKey),
-      sourceCellElement: findDateCell(dateKey),
-      anchorKind: "day-cell",
-      parked: !findDateCell(dateKey),
-    });
-  }
-
-  function openFloatingDeadlineEdit(task, options = {}) {
-    if (task?.source !== "todoist") return;
-    const itemId = String(task.id);
-    const dateKey = options.dateKey || task.due_date || activeSelectedDateKey;
-    const fallbackCell = findDateCell(dateKey);
-    const parsed = parseYmd(dateKey);
-    if (parsed) {
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(dateKey);
-    }
-    setSelectedItemId(itemId);
-    setDeadlineEditor({ mode: "edit", taskId: itemId });
-    setDeadlineDraftPreview(null);
-    const current = floatingDetailRef.current;
-    const reuseCurrentAnchor = current?.open
-      && current.view === "deadlines"
-      && String(current.itemId) === itemId
-      && !current.parked;
-    openFloatingDetail({
-      mode: "edit",
-      view: "deadlines",
-      itemId,
-      dateKey,
-      day: parsed?.day ?? null,
-      anchorElement: options.anchorElement || (reuseCurrentAnchor ? current.anchorElement : null) || fallbackCell,
-      sourceCellElement: options.sourceCellElement || (reuseCurrentAnchor ? current.sourceCellElement : null) || fallbackCell,
-      exclusionElement: options.exclusionElement || null,
-      anchorKind: options.anchorKind || (reuseCurrentAnchor ? current.anchorKind : fallbackCell ? "day-cell" : "parked"),
-      parked: options.parked ?? (!options.anchorElement && !reuseCurrentAnchor && !fallbackCell),
-      itemsSnapshot: [task],
-    });
-  }
-
-  function cancelFloatingEditor() {
-    const current = floatingDetailRef.current;
-    if (!current?.open || (current.mode !== "edit" && current.mode !== "create")) return;
-    if (current.view === "events") {
-      eventEditor.closeEditor?.();
-    }
-    if (current.view === "deadlines") {
-      setDeadlineEditor(null);
-      setDeadlineDraftPreview(null);
-    }
-    if (current.mode === "create") {
-      setFloatingDetail(null);
-      return;
-    }
-    setFloatingDetail({
-      ...current,
-      mode: "detail",
-      editorSessionId: null,
-      saveRequestId: null,
-      activeSaveRequestId: null,
-      dirty: false,
-    });
-  }
-
-  function handleFloatingDeadlineSaved(task) {
-    const current = floatingDetailRef.current;
-    if (!current?.open || current.view !== "deadlines" || (current.mode !== "edit" && current.mode !== "create")) return;
-    if (!task?.id) {
-      setFloatingDetail(null);
-      return;
-    }
-    const dateKey = task.due_date || current.dateKey || activeSelectedDateKey;
-    const parsed = parseYmd(dateKey);
-    if (parsed) {
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(dateKey);
-    }
-    setSelectedItemId(String(task.id));
-    setDeadlineEditor(null);
-    setDeadlineDraftPreview(null);
-    setFloatingDetail({
-      ...current,
-      mode: "detail",
-      itemId: String(task.id),
-      dateKey,
-      day: parsed?.day ?? current.day ?? null,
-      itemsSnapshot: [task],
-      editorSessionId: null,
-      saveRequestId: null,
-      activeSaveRequestId: null,
-      dirty: false,
-    });
-  }
-
-  function handleFloatingDeadlineDeleted(taskId) {
-    setDeadlineEditor(null);
-    setDeadlineDraftPreview(null);
-    setFloatingDetail(null);
-    if (String(selectedItemId) === String(taskId)) {
-      setSelectedItemId(null);
-    }
-  }
 
   const handleViewChange = useCallback((nextView) => {
     const current = floatingDetailRef.current;
