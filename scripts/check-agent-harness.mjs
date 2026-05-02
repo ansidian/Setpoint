@@ -9,7 +9,6 @@ const componentSizeBaseline = {
   // create/edit orchestration into the floating shell. These remain explicit refactor debt.
   files: {
     'src/components/calendar/CalendarRailStates.jsx': 982,
-    'src/components/dashboard/rails/Rails.jsx': 988,
     'src/components/email/EmailSection.jsx': 641,
     'src/components/shell/ShellHeaderChrome.jsx': 656,
   },
