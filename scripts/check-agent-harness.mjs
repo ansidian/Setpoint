@@ -7,9 +7,7 @@ const componentSizeBaseline = {
   threshold: 600,
   // Calendar floating editor migration keeps existing rail/mobile fallbacks while moving desktop
   // create/edit orchestration into the floating shell. These remain explicit refactor debt.
-  files: {
-    'src/components/email/EmailSection.jsx': 641,
-  },
+  files: {},
 }
 
 const failures = []
