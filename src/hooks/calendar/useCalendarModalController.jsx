@@ -528,6 +528,7 @@ export default function useCalendarModalController({
     eventEditor,
     deadlineEditor,
     deadlineDraftPreview,
+    weatherData,
     floatingDetail,
     setMonthMotionDirection,
     setViewDate,

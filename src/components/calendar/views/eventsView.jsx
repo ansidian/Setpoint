@@ -75,10 +75,29 @@ function compactEventTimeRange(ev) {
   return `${startTime} ${startMeridiem}-${endTime} ${endMeridiem}`;
 }
 
-function compute({ data, viewYear, viewMonth }) {
+function buildWeatherCellMeta(weatherData) {
+  const cellMetaByDate = {};
+  for (const day of weatherData?.dailyForecast || []) {
+    if (!day?.dateKey) continue;
+    cellMetaByDate[day.dateKey] = {
+      ...(cellMetaByDate[day.dateKey] || {}),
+      weather: {
+        dateKey: day.dateKey,
+        high: day.high,
+        low: day.low,
+        icon: day.icon,
+        summary: day.summary || "",
+      },
+    };
+  }
+  return cellMetaByDate;
+}
+
+function compute({ data, viewYear, viewMonth, weatherData = null }) {
   const events = data?.events || [];
+  const cellMetaByDate = buildWeatherCellMeta(weatherData);
   if (!events.length)
-    return { itemsByDay: {}, itemsByDate: {}, totalEvents: 0, allDayEvents: 0 };
+    return { itemsByDay: {}, itemsByDate: {}, totalEvents: 0, allDayEvents: 0, cellMetaByDate };
 
   const itemsByDay = {};
   const itemsByDate = {};
@@ -119,7 +138,7 @@ function compute({ data, viewYear, viewMonth }) {
   for (const dateKey of Object.keys(itemsByDate)) {
     itemsByDate[dateKey] = orderDetailEvents(itemsByDate[dateKey]);
   }
-  return { itemsByDay, itemsByDate, totalEvents, allDayEvents };
+  return { itemsByDay, itemsByDate, totalEvents, allDayEvents, cellMetaByDate };
 }
 
 function canNavigateBack() {
