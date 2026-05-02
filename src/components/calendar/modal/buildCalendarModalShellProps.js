@@ -13,6 +13,7 @@ export default function buildCalendarModalShellProps({
   return {
     panelRef: refs.panelRef,
     scrollRef: refs.scrollRef,
+    contextRailRef: refs.contextRailRef,
     panelWidth: viewModel.panelWidth,
     layout: viewModel.layout,
     view: viewState.view,

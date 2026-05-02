@@ -320,6 +320,7 @@ export function ItemChip({
       data-testid="calendar-cell-item-chip"
       data-inline-overflow-item={inlineOverflowItem ? "true" : undefined}
       data-item-id={String(item.id)}
+      data-date-key={dateKey || undefined}
       data-hovered={active ? "true" : "false"}
       draggable={dragAllowed}
       data-calendar-focus-ring="true"

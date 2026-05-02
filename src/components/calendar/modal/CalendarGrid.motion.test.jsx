@@ -537,4 +537,31 @@ describe("CalendarGrid overflow motion coverage", () => {
       expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
     });
   });
+
+  it("closes open overflow when ghost removal changes the hidden item composition", async () => {
+    const dayEvents = Array.from({ length: 4 }, (_, index) => buildEvent(20, index));
+    const ghostPreview = {
+      kind: "event",
+      ghosts: [{
+        id: "ghost-create-20",
+        kind: "event",
+        title: "Draft hold",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "15:30",
+        allDay: false,
+        color: "#89b4fa",
+      }],
+    };
+    const { props, rerender } = renderGrid({ 20: dayEvents }, { ghostPreview });
+
+    fireEvent.click(await screen.findByTestId("calendar-cell-overflow-trigger-20"));
+    expect(await screen.findByTestId("calendar-cell-overflow-popover")).toBeTruthy();
+
+    rerender(<CalendarGrid {...props} itemsByDay={{ 20: dayEvents }} ghostPreview={null} />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+    });
+  });
 });

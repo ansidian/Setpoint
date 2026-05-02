@@ -81,6 +81,7 @@ export function resolveFloatingDetailPlacement({
   parked = false,
   preferredSide = null,
   forcedSide = null,
+  allowRailOverlap = false,
 }) {
   const bounds = normalizedBounds(calendarRect);
   const isEditor = mode === "edit" || mode === "create";
@@ -137,7 +138,8 @@ export function resolveFloatingDetailPlacement({
 
   const idealTop = caretRect.top + caretRect.height / 2 - height / 2;
   const top = clamp(idealTop, bounds.top, bounds.bottom - height);
-  const exclusions = [sourceRect, exclusionRect, railRect].filter(Boolean);
+  const railExclusion = allowRailOverlap ? null : railRect;
+  const exclusions = [sourceRect, exclusionRect, railExclusion].filter(Boolean);
   const rightCandidate = {
     side: "right",
     top,
@@ -159,13 +161,13 @@ export function resolveFloatingDetailPlacement({
   const leftClear = leftCandidate.left + width <= referenceRect.left - PANEL_GAP + 1
     && !exclusions.some((rect) => rectIntersects(panelRect(leftCandidate), rect));
   let selected = null;
-  if (forcedSide === "left") {
+  if (forcedSide === "left" && allowRailOverlap) {
     selected = leftCandidate;
-  } else if (forcedSide === "right") {
+  } else if (forcedSide === "right" && allowRailOverlap) {
     selected = rightCandidate;
-  } else if (preferredSide === "left" && leftClear) {
+  } else if ((forcedSide || preferredSide) === "left" && leftClear) {
     selected = leftCandidate;
-  } else if (preferredSide === "right" && rightClear) {
+  } else if ((forcedSide || preferredSide) === "right" && rightClear) {
     selected = rightCandidate;
   } else if (rightClear) {
     selected = rightCandidate;

@@ -42,6 +42,7 @@ describe("calendarFloatingDetailModel", () => {
     const nextDetail = { anchorKind: "span" };
 
     expect(preservedReanchorSide(current, nextDetail, "events", "2026-05-02")).toBe("right");
+    expect(preservedReanchorSide({ ...current, sideIntent: "user-flip", forcedSide: "left" }, nextDetail, "events", "2026-05-02")).toBeNull();
     expect(preservedReanchorSide({ ...current, dirty: true }, nextDetail, "events", "2026-05-02")).toBeNull();
     expect(preservedReanchorSide(current, nextDetail, "deadlines", "2026-05-02")).toBeNull();
   });

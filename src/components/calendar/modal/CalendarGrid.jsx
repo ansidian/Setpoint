@@ -21,6 +21,10 @@ import {
   spanCoversOverflowDate,
 } from "./calendarGridUtils.js";
 
+function overflowHiddenSignature(items) {
+  return (items || []).map((item) => String(item.id)).join("\u001f");
+}
+
 export default function CalendarGrid({
   view,
   viewYear,
@@ -144,6 +148,22 @@ export default function CalendarGrid({
   );
   const closeOverflowWithoutFocus = useCallback(() => {
     setOverflowState(null);
+  }, [setOverflowState]);
+  const validateOverflowHiddenItems = useCallback((composition) => {
+    setOverflowState((current) => {
+      if (!sameOverflowDate(current, composition.dateKey, composition.day)) {
+        return current;
+      }
+      const nextSignature = composition.hiddenSignature ?? overflowHiddenSignature(composition.hiddenItems);
+      if (
+        current.hiddenSignature === nextSignature
+        && current.totalCount === composition.totalCount
+        && current.visibleCount === composition.visibleCount
+      ) {
+        return current;
+      }
+      return null;
+    });
   }, [setOverflowState]);
   const markOverflowInteraction = useCallback(() => {
     ignoreOverflowScrollUntilRef.current = performance.now() + 220;
@@ -480,6 +500,7 @@ export default function CalendarGrid({
                       viewYear,
                       viewMonth,
                       anchorKey,
+                      hiddenSignature: overflowHiddenSignature(hiddenItems),
                     };
                   });
                 }}
@@ -495,6 +516,7 @@ export default function CalendarGrid({
                     inlineOverflowExternal: true,
                     onInlineOverflowInteraction: markOverflowInteraction,
                     onCloseInlineOverflow: closeOverflowWithoutFocus,
+                    onHiddenItemsChange: validateOverflowHiddenItems,
                     onBeforeItemAction: onCloseFloatingDetail,
                     pinnedIds: eventDateCells ? spanLayout.pinnedIds : null,
                     reservedLaneCount,

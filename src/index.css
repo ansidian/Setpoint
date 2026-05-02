@@ -175,6 +175,10 @@ body {
   box-shadow: none;
 }
 
+[data-calendar-suppress-focus-ring="true"] :focus {
+  outline: none;
+}
+
 .mouse-spotlight-canvas {
   position: fixed;
   left: 0;
