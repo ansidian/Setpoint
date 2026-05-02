@@ -66,6 +66,9 @@ export default function InboxList({
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
   totalCount, unreadCount, briefingAgoLabel, briefingGeneratedAt, searchRef,
   liveEmailsLoading = false,
+  indexedSearchActive = false,
+  indexedSearchLoading = false,
+  indexedSearchError = null,
 }) {
   const [collapsed, setCollapsed] = useState({});
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
@@ -145,7 +148,8 @@ export default function InboxList({
                 e.currentTarget.blur();
               }
             }}
-            placeholder='Search or ask briefing search, "bills due this week"'
+            aria-label="Search indexed mail"
+            placeholder="Search indexed mail"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
               fontSize: 12, color: "#cdd6f4", fontFamily: "inherit",
@@ -210,7 +214,11 @@ export default function InboxList({
           </span>{" "}
           <span style={{ color: "rgba(205,214,244,0.4)" }}>unread · </span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{totalCount}</span>
-          <span style={{ color: "rgba(205,214,244,0.4)" }}> total</span>
+          <span style={{ color: "rgba(205,214,244,0.4)" }}>
+            {indexedSearchActive
+              ? ` indexed result${totalCount === 1 ? "" : "s"}`
+              : " total"}
+          </span>
         </span>
         <span style={{ flex: 1 }} />
         {briefingAgoLabel && (
@@ -227,6 +235,31 @@ export default function InboxList({
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+        {indexedSearchLoading && (
+          <div
+            style={{
+              padding: "10px 14px",
+              fontSize: 11,
+              color: "rgba(205,214,244,0.62)",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}
+          >
+            Searching persisted mail index...
+          </div>
+        )}
+        {indexedSearchError && (
+          <div
+            style={{
+              padding: "10px 14px",
+              fontSize: 11,
+              color: "#f38ba8",
+              borderBottom: "1px solid rgba(243,139,168,0.12)",
+              background: "rgba(243,139,168,0.06)",
+            }}
+          >
+            {indexedSearchError}
+          </div>
+        )}
         {liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact />}
         {showSkeletonRows ? (
           <InboxLiveLoadingBlock />
@@ -432,7 +465,7 @@ export default function InboxList({
                 eyebrow="Inbox"
                 title={searchQuery ? "No emails match this view" : "No emails available"}
                 message={searchQuery
-                  ? "Try clearing the query, switching lanes, or checking another account."
+                  ? "Try a sender, subject word, or another account. Search covers indexed INBOX mail only."
                   : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
                 compact
                 minHeight="100%"

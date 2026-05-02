@@ -10,6 +10,7 @@ import {
   unpinEmail,
   snoozeEmail,
   markAllEmailsAsRead,
+  searchEmails,
 } from "../../api";
 import { getGmailUrl } from "../../lib/email-links";
 import {
@@ -20,6 +21,7 @@ import {
   collectLiveEmails,
   collectResurfaced,
   collectPinSnapshots,
+  mergeReadState,
 } from "./helpers";
 
 export default function useInboxController({
@@ -58,6 +60,14 @@ export default function useInboxController({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [liveTrashedUids, setLiveTrashedUids] = useState(() => new Set());
   const [billOpen, setBillOpen] = useState(false);
+  const [indexedSearch, setIndexedSearch] = useState({
+    query: "",
+    emails: [],
+    accountsById: {},
+    loading: false,
+    error: null,
+  });
+  const searchRequestRef = useRef(0);
 
   const setSessionField = useCallback((field, value) => {
     onSessionStateChange((prev) => ({
@@ -95,22 +105,18 @@ export default function useInboxController({
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPinnedSet(new Set(pinnedIds || []));
   }, [pinnedIds]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPinnedSnapshotMap(new Map((pinnedSnapshots || []).map((entry) => [entry.uid || entry.id, entry])));
   }, [pinnedSnapshots]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSnoozedMap(new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])));
   }, [snoozedEntries]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setResurfacedMap(new Map((resurfacedEntries || []).map((entry) => [entry.uid, entry])));
   }, [resurfacedEntries]);
 
@@ -161,7 +167,10 @@ export default function useInboxController({
     resurfacedMap,
   ]);
 
+  const indexedSearchActive = search.trim().length >= 2;
+
   const visibleEmails = useMemo(() => {
+    if (indexedSearchActive) return indexedSearch.emails;
     return flatEmails.filter((email) => {
       const uid = email.uid || email.id;
       const snoozeUntil = snoozedMap.get(uid);
@@ -169,10 +178,6 @@ export default function useInboxController({
       if (accountId !== "__all" && email._accountKey !== accountId) return false;
       if (lane === "__live" && !email._untriaged) return false;
       if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
-      if (search) {
-        const haystack = `${email.subject || ""} ${email.from || ""} ${email.preview || ""}`.toLowerCase();
-        if (!haystack.includes(search.toLowerCase())) return false;
-      }
       return true;
     }).sort((a, b) => {
       const aPinned = pinnedSet.has(a.uid || a.id);
@@ -186,7 +191,55 @@ export default function useInboxController({
       const bKey = b._resurfacedAt || new Date(b.date).getTime();
       return bKey - aKey;
     });
-  }, [flatEmails, accountId, lane, search, snoozedMap, nowTick, pinnedSet]);
+  }, [flatEmails, accountId, lane, snoozedMap, nowTick, pinnedSet, indexedSearch.emails, indexedSearchActive]);
+
+  useEffect(() => {
+    const term = search.trim();
+    searchRequestRef.current += 1;
+    const requestId = searchRequestRef.current;
+
+    if (term.length < 2) {
+      setIndexedSearch({
+        query: term,
+        emails: [],
+        accountsById: {},
+        loading: false,
+        error: null,
+      });
+      return undefined;
+    }
+
+    setIndexedSearch((prev) => ({
+      ...prev,
+      query: term,
+      loading: true,
+      error: null,
+    }));
+
+    const timeout = setTimeout(() => {
+      searchEmails(term)
+        .then((data) => {
+          if (searchRequestRef.current !== requestId) return;
+          setIndexedSearch(normalizeIndexedSearchResults(data, liveReadOverrides));
+        })
+        .catch((err) => {
+          if (searchRequestRef.current !== requestId) return;
+          setIndexedSearch({
+            query: term,
+            emails: [],
+            accountsById: {},
+            loading: false,
+            error: err.message || "Search failed",
+          });
+        });
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  // Intentionally key the API request only on the query. Some callers pass
+  // object-literal read override defaults, and including that object here
+  // would restart the debounce after every search-state render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const laneCounts = useMemo(() => {
     const counts = { action: 0, fyi: 0, noise: 0 };
@@ -234,8 +287,10 @@ export default function useInboxController({
 
   const selectedEmail = useMemo(() => {
     if (!selectedId) return null;
+    const searchHit = indexedSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
+    if (searchHit) return searchHit;
     return flatEmails.find((email) => email.id === selectedId || email.uid === selectedId) || null;
-  }, [selectedId, flatEmails]);
+  }, [selectedId, flatEmails, indexedSearch.emails]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -244,19 +299,22 @@ export default function useInboxController({
   }, [selectedEmail, selectedId, setSelectedId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBillOpen(false);
   }, [selectedId]);
-
-  const flatEmailsRef = useRef(flatEmails);
-  useEffect(() => {
-    flatEmailsRef.current = flatEmails;
-  }, [flatEmails]);
 
   const markEmailReadRef = useRef(markEmailRead);
   useEffect(() => {
     markEmailReadRef.current = markEmailRead;
   }, [markEmailRead]);
+
+  const updateIndexedSearchRead = useCallback((uid, read) => {
+    setIndexedSearch((prev) => ({
+      ...prev,
+      emails: prev.emails.map((email) => (
+        email.uid === uid || email.id === uid ? { ...email, read } : email
+      )),
+    }));
+  }, []);
 
   const markAllVisibleRead = useCallback(() => {
     const unread = visibleEmails.filter((email) => !email.read);
@@ -273,7 +331,15 @@ export default function useInboxController({
     }
 
     const allUids = unread.map((email) => email.uid).filter(Boolean);
-    if (allUids.length) markAllEmailsAsRead(allUids).catch(() => {});
+    if (allUids.length) {
+      setIndexedSearch((prev) => ({
+        ...prev,
+        emails: prev.emails.map((email) => (
+          allUids.includes(email.uid) ? { ...email, read: true } : email
+        )),
+      }));
+      markAllEmailsAsRead(allUids).catch(() => {});
+    }
   }, [visibleEmails, markEmailRead, onLiveReadOverrideChange]);
 
   const moveBy = useCallback((direction) => {
@@ -391,6 +457,7 @@ export default function useInboxController({
         markEmailRead(id);
         markEmailAsRead(uid).catch(() => {});
       }
+      updateIndexedSearchRead(uid, !markingUnread);
       if (markingUnread) closeSelectedEmail();
       return;
     }
@@ -454,6 +521,7 @@ export default function useInboxController({
     markEmailUnread,
     onLiveReadOverrideChange,
     closeSelectedEmail,
+    updateIndexedSearchRead,
   ]);
 
   const trashHold = useKeyHold({
@@ -473,9 +541,7 @@ export default function useInboxController({
   useEffect(() => {
     if (!selectedId) return undefined;
     const timeout = setTimeout(() => {
-      const email = flatEmailsRef.current.find(
-        (entry) => entry.id === selectedId || entry.uid === selectedId,
-      );
+      const email = selectedEmail;
       if (!email || email.read) return;
 
       if (email._live) {
@@ -485,11 +551,12 @@ export default function useInboxController({
       }
 
       markEmailReadRef.current(selectedId);
+      updateIndexedSearchRead(email.uid || selectedId, true);
       if (email.uid) markEmailAsRead(email.uid).catch(() => {});
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [selectedId, selectedEmail?.read, onLiveReadOverrideChange]);
+  }, [selectedId, selectedEmail, onLiveReadOverrideChange, updateIndexedSearchRead]);
 
   useEffect(() => {
     function onKey(event) {
@@ -564,6 +631,10 @@ export default function useInboxController({
     billOpen,
     setBillOpen,
     accountsById,
+    indexedSearchAccountsById: indexedSearch.accountsById,
+    indexedSearchActive,
+    indexedSearchLoading: indexedSearch.loading,
+    indexedSearchError: indexedSearch.error,
     visibleEmails,
     laneCounts,
     liveCount,
@@ -582,6 +653,63 @@ export default function useInboxController({
     layout: isMobile ? "two-pane" : customize.inboxLayout,
     grouping: isMobile ? "flat" : customize.inboxGrouping,
     briefingAgoLabel,
-    scopedAccount,
+    scopedAccount: indexedSearchActive ? null : scopedAccount,
+  };
+}
+
+function stripHighlight(value) {
+  return String(value || "").replace(/<\/?mark>/g, "");
+}
+
+function normalizeIndexedSearchResults(data, readOverrides) {
+  const accountsById = {};
+  const emails = [];
+
+  for (const account of data?.accounts || []) {
+    const accountKey = account.account_id;
+    const normalizedAccount = {
+      id: account.account_id,
+      name: account.account_label,
+      email: account.account_email,
+      color: account.account_color,
+      icon: account.account_icon || "Mail",
+    };
+    accountsById[accountKey] = normalizedAccount;
+
+    for (const result of account.results || []) {
+      const uid = result.uid;
+      emails.push({
+        id: uid,
+        uid,
+        subject: stripHighlight(result.subject),
+        from: result.from_name || result.from_address || "Unknown",
+        fromEmail: result.from_address,
+        from_email: result.from_address,
+        preview: stripHighlight(result.body_snippet || result.body_highlight),
+        body_preview: stripHighlight(result.body_snippet || result.body_highlight),
+        date: result.email_date,
+        email_date: result.email_date,
+        read: mergeReadState(result.read, uid, readOverrides),
+        account_id: account.account_id,
+        account_label: account.account_label,
+        account_email: account.account_email,
+        account_color: account.account_color,
+        account_icon: account.account_icon || "Mail",
+        web_url: result.web_url,
+        _accountKey: accountKey,
+        _account: normalizedAccount,
+        _lane: null,
+        _untriaged: false,
+        _indexedSearch: true,
+      });
+    }
+  }
+
+  return {
+    query: data?.query || "",
+    emails,
+    accountsById,
+    loading: false,
+    error: null,
   };
 }

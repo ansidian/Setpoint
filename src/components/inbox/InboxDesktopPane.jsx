@@ -26,6 +26,10 @@ export default function InboxDesktopPane({
   billOpen,
   setBillOpen,
   accountsById,
+  indexedSearchAccountsById,
+  indexedSearchActive,
+  indexedSearchLoading,
+  indexedSearchError,
   visibleEmails,
   laneCounts,
   liveCount,
@@ -44,6 +48,10 @@ export default function InboxDesktopPane({
   grouping,
   briefingAgoLabel,
 }) {
+  const rowAccountsById = indexedSearchActive
+    ? { ...accountsById, ...indexedSearchAccountsById }
+    : accountsById;
+
   return (
     <div
       data-testid="inbox-desktop-view"
@@ -108,11 +116,11 @@ export default function InboxDesktopPane({
             <InboxList
               accent={accent}
               emails={visibleEmails}
-              accountsById={accountsById}
+              accountsById={rowAccountsById}
               selectedId={selectedEmail?.id || selectedEmail?.uid || null}
               onOpen={(email) => setSelectedId(email.id || email.uid)}
               density={density}
-              layout={grouping}
+              layout={indexedSearchActive ? "flat" : grouping}
               showPreview={showPreview}
               pinnedIds={pinnedSet}
               searchQuery={search}
@@ -120,6 +128,9 @@ export default function InboxDesktopPane({
               onMarkAllRead={markAllVisibleRead}
               onRefresh={onRefresh}
               liveEmailsLoading={liveEmailsLoading}
+              indexedSearchActive={indexedSearchActive}
+              indexedSearchLoading={indexedSearchLoading}
+              indexedSearchError={indexedSearchError}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
               briefingAgoLabel={briefingAgoLabel}

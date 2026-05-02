@@ -164,6 +164,10 @@ export default function MobileInboxView({
   billOpen,
   setBillOpen,
   accountsById,
+  indexedSearchAccountsById,
+  indexedSearchActive,
+  indexedSearchLoading,
+  indexedSearchError,
   visibleEmails,
   mobileChipCounts,
   totalUnread,
@@ -180,6 +184,10 @@ export default function MobileInboxView({
   scopedAccount,
   liveEmailsLoading = false,
 }) {
+  const rowAccountsById = indexedSearchActive
+    ? { ...accountsById, ...indexedSearchAccountsById }
+    : accountsById;
+
   return (
     <div
       style={{
@@ -301,10 +309,10 @@ export default function MobileInboxView({
                 <Search size={13} color="rgba(205,214,244,0.45)" />
                 <input
                   ref={searchRef}
-                  aria-label="Search inbox"
+                  aria-label="Search indexed mail"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search inbox"
+                  placeholder="Search indexed mail"
                   style={{
                     flex: 1,
                     background: "transparent",
@@ -337,17 +345,17 @@ export default function MobileInboxView({
               data-testid="inbox-mobile-chip-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                gridTemplateColumns: indexedSearchActive ? "minmax(0, 1fr)" : "repeat(5, minmax(0, 1fr))",
                 gap: 6,
                 paddingTop: 10,
               }}
             >
-              {MOBILE_FILTER_CHIPS.map((chip) => (
+              {(indexedSearchActive ? [{ key: "__all", label: "All" }] : MOBILE_FILTER_CHIPS).map((chip) => (
                 <MobileChip
                   key={chip.key}
-                  active={lane === chip.key}
+                  active={indexedSearchActive ? true : lane === chip.key}
                   label={chip.label}
-                  count={mobileChipCounts[chip.key]}
+                  count={indexedSearchActive ? visibleEmails.length : mobileChipCounts[chip.key]}
                   onClick={() => setLane(chip.key)}
                   accent={accent}
                 />
@@ -366,11 +374,45 @@ export default function MobileInboxView({
             >
               <span>{scopedAccount ? scopedAccount.name || scopedAccount.email : "All accounts"}</span>
               <span style={{ opacity: 0.35 }}>·</span>
-              <span>{visibleEmails.length} shown</span>
+              <span>
+                {visibleEmails.length}{" "}
+                {indexedSearchActive
+                  ? `indexed result${visibleEmails.length === 1 ? "" : "s"}`
+                  : "shown"}
+              </span>
             </div>
           </div>
 
           <div style={{ padding: "6px 0 20px" }}>
+            {indexedSearchLoading && (
+              <div
+                style={{
+                  margin: "8px 16px",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  color: "rgba(205,214,244,0.62)",
+                  fontSize: 11,
+                }}
+              >
+                Searching persisted mail index...
+              </div>
+            )}
+            {indexedSearchError && (
+              <div
+                style={{
+                  margin: "8px 16px",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(243,139,168,0.18)",
+                  background: "rgba(243,139,168,0.06)",
+                  color: "#f38ba8",
+                  fontSize: 11,
+                }}
+              >
+                {indexedSearchError}
+              </div>
+            )}
             {liveEmailsLoading && visibleEmails.length > 0 && <MobileLiveLoadingBlock compact />}
             {liveEmailsLoading && visibleEmails.length === 0 ? (
               <MobileLiveLoadingBlock />
@@ -379,7 +421,7 @@ export default function MobileInboxView({
                 <EmailRow
                   key={email.id || email.uid}
                   email={email}
-                  account={accountsById[email.accountId] || accountsById[email._accountKey]}
+                  account={rowAccountsById[email.accountId] || rowAccountsById[email._accountKey]}
                   selected={false}
                   onOpen={(opened) => setSelectedId(opened.id || opened.uid)}
                   density={density}
