@@ -1,7 +1,7 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { minutesFromDisplayTime } from "../../ghostPreview.js";
-import { getDayState, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
+import { getDayState, getDeadlineSelectionId, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
 
 const LG_DEADLINE_CHIP_METRICS = {
   itemHeight: 36,
@@ -32,7 +32,7 @@ function toDeadlineDescriptor(task) {
   const timeLabel = task.due_time || sourceLabelFor(task);
 
   return {
-    id: String(task.id),
+    id: getDeadlineSelectionId(task),
     sourceItem: task,
     title: task.title || task.name || "Untitled",
     detail: [task.class_name || task.project_name, statusLabel(task.status)].filter(Boolean).join(" · "),

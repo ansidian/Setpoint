@@ -174,7 +174,7 @@ export default function useDeadlineQuickActions({
     if (sourceOf(task) === "todoist") {
       return todoistActionItems(task, {
         onEdit: () => onEditTask?.(task, contextMenu),
-        onComplete: () => actions.onCompleteTask?.(task.id),
+        onComplete: () => actions.onCompleteTask?.(task.id, task),
         onRequestDelete: requestDelete,
       });
     }

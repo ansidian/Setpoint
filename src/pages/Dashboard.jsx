@@ -128,6 +128,7 @@ export default function Dashboard() {
   const [calendarDeadlines, setCalendarDeadlines] = useState(null);
   const [calendarDeadlinesLoading, setCalendarDeadlinesLoading] = useState(false);
   const [calendarDeadlinesFetchedAt, setCalendarDeadlinesFetchedAt] = useState(0);
+  const updateCalendarDeadlineRangeData = calendarDeadlineRange.updateData;
   const calendarDeadlinesLoadingRef = useRef(false);
   const loadCalendarDeadlines = useCallback((opts) => {
     const force = !!opts?.force;
@@ -146,6 +147,10 @@ export default function Dashboard() {
         setCalendarDeadlinesLoading(false);
       });
   }, [calendarDeadlines, calendarDeadlinesFetchedAt]);
+  const updateCalendarDeadlinesLocal = useCallback((updater) => {
+    setCalendarDeadlines(updater);
+    updateCalendarDeadlineRangeData?.(updater);
+  }, [updateCalendarDeadlineRangeData]);
 
   const [calendarBillsData, setCalendarBillsData] = useState(null);
   const [calendarBillsFetchedAt, setCalendarBillsFetchedAt] = useState(0);
@@ -222,7 +227,7 @@ export default function Dashboard() {
       <DashboardProvider
         briefing={bd.briefing}
         setBriefing={bd.setBriefing}
-        setCalendarDeadlines={setCalendarDeadlines}
+        setCalendarDeadlines={updateCalendarDeadlinesLocal}
       >
         <RedesignShell
           bd={bd}

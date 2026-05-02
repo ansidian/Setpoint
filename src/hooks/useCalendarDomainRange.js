@@ -17,6 +17,7 @@ export default function useCalendarDomainRange({
 } = {}) {
   const cacheRef = useRef(new Map());
   const inFlightRef = useRef(new Map());
+  const activeKeyRef = useRef(null);
   const [data, setData] = useState(emptyData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,6 +30,7 @@ export default function useCalendarDomainRange({
     }
 
     const key = cacheKey(start, end);
+    activeKeyRef.current = key;
     const cached = cacheRef.current.get(key);
     if (fresh(cached)) {
       setData(cached.data);
@@ -76,11 +78,29 @@ export default function useCalendarDomainRange({
     setRevision((current) => current + 1);
   }, []);
 
+  const updateData = useCallback((updater) => {
+    if (disabled) return;
+    setData((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      const key = activeKeyRef.current;
+      if (key && cacheRef.current.has(key)) {
+        const entry = cacheRef.current.get(key);
+        cacheRef.current.set(key, {
+          ...entry,
+          data: next,
+        });
+      }
+      return next;
+    });
+    setRevision((current) => current + 1);
+  }, [disabled]);
+
   return {
     data,
     ensureRange,
     invalidate,
     markStale,
+    updateData,
     loading,
     error,
     revision,

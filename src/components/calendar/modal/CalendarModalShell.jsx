@@ -346,7 +346,8 @@ export default function CalendarModalShell({
             });
           } else {
             onCloseFloatingDetail?.();
-            setSelectedItemId(String(task.id));
+            const itemId = activeView.getItemId?.(task) ?? task.id;
+            setSelectedItemId(itemId != null ? String(itemId) : null);
             setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
             onDeadlineDraftPreviewChange?.(null);
           }
@@ -359,7 +360,8 @@ export default function CalendarModalShell({
         onTaskDeleted: (taskId) => {
           setDeadlineEditor(null);
           onDeadlineDraftPreviewChange?.(null);
-          if (String(effectiveSelectedItemId) === String(taskId)) {
+          const selectedId = String(effectiveSelectedItemId || "");
+          if (selectedId === String(taskId) || selectedId.includes(`:${taskId}-`)) {
             setSelectedItemId(null);
             onCloseFloatingDetail?.();
           }

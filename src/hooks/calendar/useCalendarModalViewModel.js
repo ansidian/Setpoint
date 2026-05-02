@@ -96,7 +96,13 @@ export default function useCalendarModalViewModel({
   const hasSelectedDay = activeSelectedDay != null;
   const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
   const showEventsLoading = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
-  const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading;
+  const hasRenderableDeadlineData = view === "deadlines"
+    && Object.values(itemsByDay).some((state) => {
+      const dayState = activeView.getDayState?.(state) ?? buildFallbackDayState(state);
+      return (dayState.totalCount || 0) > 0;
+    });
+  const showDeadlinesPendingUpdate = view === "deadlines" && !!viewData?.isLoading && hasRenderableDeadlineData;
+  const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading && !hasRenderableDeadlineData;
   const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
   const showDetail = view === "deadlines"
     ? showDeadlineEditor || (!showDeadlinesLoadingState && hasSelectedDay && selectedDayState.totalCount > 0)
@@ -140,6 +146,7 @@ export default function useCalendarModalViewModel({
     monthName,
     monthYear: String(viewYear),
     panelWidth,
+    pendingUpdate: showDeadlinesPendingUpdate,
     selectedDayState,
     selectedItems,
     showDetail,

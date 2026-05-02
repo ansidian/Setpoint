@@ -39,7 +39,7 @@ function DeadlinePrimaryActions({
             size={size}
             disabled={isCompleting}
             loading={isCompleting}
-            onClick={() => onComplete(task.id)}
+            onClick={() => onComplete(task.id, task)}
           />
         ) : null}
         <RailAction

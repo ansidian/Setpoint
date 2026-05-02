@@ -74,6 +74,7 @@ export default function TodoistDuePicker({
         onBack={onClose}
         accent={ACCENT}
         confirmLabel="Set due date"
+        allowPastDates
       />
     </AnchoredFloatingPanel>
   );

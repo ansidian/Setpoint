@@ -126,7 +126,7 @@ export default function CalendarModalHeader({
   const titleSize = layout.tier === "uhd" ? 40 : layout.tier === "xl" ? 40 : layout.tier === "lg" ? 36 : layout.tier === "md" ? 32 : 28;
   const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay, selectedDateKey);
   const selectedDate = selectedDateYmd(viewYear, viewMonth, selectedDay, selectedDateKey);
-  const showPendingUpdate = view === "events" && !!viewData?.pendingUpdate;
+  const showPendingUpdate = !!viewData?.pendingUpdate;
 
   return (
     <div

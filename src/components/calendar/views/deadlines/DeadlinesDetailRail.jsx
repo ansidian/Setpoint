@@ -5,7 +5,9 @@ import AddTaskPanel from "../../../todoist/AddTaskPanel";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
   formatFullDate,
+  deadlineMatchesItemId,
   getDayState,
+  getDeadlineSelectionId,
   normalizeStatus,
   SOURCE_COLORS,
   sourceLabelFor,
@@ -46,7 +48,7 @@ function DeadlinesDetail({
 
   const state = getDayState(items);
   const allItems = [...state.activeItems, ...state.completedItems];
-  const selectedTask = allItems.find((task) => String(task.id) === String(selectedItemId)) || null;
+  const selectedTask = allItems.find((task) => deadlineMatchesItemId(task, selectedItemId, selectedDateKey)) || null;
   const compressedSelectedCard = state.totalCount >= 2 || shouldCompressDeadlineCard(selectedTask);
   const compactDetail = state.totalCount >= 2;
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;
@@ -146,7 +148,7 @@ function DeadlinesDetail({
             if (normalizeStatus(task.status) === "in_progress") metaParts.push("In progress");
 
             return {
-              id: `${sourceOf(task)}-${task.id}`,
+              id: getDeadlineSelectionId(task),
               timeLabel: task.due_time || "End of day",
               title: task.title || task.name || "Untitled",
               subtitle,
@@ -160,8 +162,8 @@ function DeadlinesDetail({
                   testId={`deadline-status-indicator-${task.id}`}
                 />
               ),
-              selected: String(task.id) === String(selectedItemId),
-              onClick: () => onSelectItem?.(String(task.id)),
+              selected: deadlineMatchesItemId(task, selectedItemId, selectedDateKey),
+              onClick: () => onSelectItem?.(getDeadlineSelectionId(task)),
             };
           }),
         },
@@ -180,7 +182,7 @@ function DeadlinesDetail({
             metaParts.push("Complete");
 
             return {
-              id: `${sourceOf(task)}-${task.id}`,
+              id: getDeadlineSelectionId(task),
               timeLabel: task.due_time || "End of day",
               title: task.title || task.name || "Untitled",
               subtitle,
@@ -194,8 +196,8 @@ function DeadlinesDetail({
                   testId={`deadline-status-indicator-${task.id}`}
                 />
               ),
-              selected: String(task.id) === String(selectedItemId),
-              onClick: () => onSelectItem?.(String(task.id)),
+              selected: deadlineMatchesItemId(task, selectedItemId, selectedDateKey),
+              onClick: () => onSelectItem?.(getDeadlineSelectionId(task)),
             };
           }),
         },
@@ -207,6 +209,7 @@ function DeadlinesDetail({
 function DeadlinesFloatingDetail({
   items,
   selectedItemId,
+  selectedDateKey,
   onStartEdit,
   accent = "var(--ea-accent)",
 }) {
@@ -217,7 +220,7 @@ function DeadlinesFloatingDetail({
 
   const state = getDayState(items);
   const allItems = [...state.activeItems, ...state.completedItems];
-  const selectedTask = allItems.find((task) => String(task.id) === String(selectedItemId)) || null;
+  const selectedTask = allItems.find((task) => deadlineMatchesItemId(task, selectedItemId, selectedDateKey)) || null;
   const compressedSelectedCard = state.totalCount >= 2 || shouldCompressDeadlineCard(selectedTask);
   const compactDetail = state.totalCount >= 2;
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;

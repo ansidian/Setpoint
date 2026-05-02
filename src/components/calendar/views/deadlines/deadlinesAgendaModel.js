@@ -1,6 +1,7 @@
 import { buildDisplayedMonthGroups, sparseVisibleGroups } from "../agenda/agendaDateModel.js";
 import {
   getDayState,
+  getDeadlineSelectionId,
   normalizeStatus,
   SOURCE_COLORS,
   sourceLabelFor,
@@ -24,10 +25,11 @@ function toAgendaDeadline(task, dateKey) {
   const source = sourceOf(task);
   const status = normalizeStatus(task.status);
   const sourceColor = SOURCE_COLORS[source] || "#89b4fa";
+  const agendaItemId = getDeadlineSelectionId(task, dateKey);
   return {
     ...task,
     agendaDateKey: dateKey,
-    agendaItemId: String(task.id),
+    agendaItemId,
     agendaKey: `${source}:${task.id}-${dateKey}`,
     agendaTitle: deadlineTitle(task),
     agendaSubtitle: deadlineSubtitle(task),

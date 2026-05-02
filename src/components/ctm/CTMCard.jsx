@@ -116,7 +116,7 @@ export default function CTMCard({ task, expanded, onToggle, onComplete, onStatus
     if (newStatus === task.status) return;
     if (newStatus === "complete") {
       if (isTodoist) {
-        onComplete(task.id);
+        onComplete(task.id, task);
       } else {
         onStatusChange(task.id, "complete");
       }

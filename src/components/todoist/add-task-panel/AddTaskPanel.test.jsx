@@ -88,6 +88,56 @@ describe("AddTaskPanel due picker", () => {
     );
   });
 
+  it("allows creating a task with an overdue manual due date", async () => {
+    render(<PanelHarness />);
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Backfill notes" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Set due date" }));
+    vi.runOnlyPendingTimers();
+    const picker = screen.getByRole("dialog", { name: "Todoist due date picker" });
+    const pastDay = within(picker).getByRole("button", { name: "18" });
+
+    expect(pastDay.disabled).toBe(false);
+
+    fireEvent.click(pastDay);
+    fireEvent.click(within(picker).getByRole("button", { name: "Set due date" }));
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+
+    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "Backfill notes",
+        due_string: "2026-04-18 at 10:01 AM",
+      }),
+    );
+  });
+
+  it("submits parsed overdue NLP times as explicit Todoist due strings", async () => {
+    vi.setSystemTime(new Date("2026-04-20T19:45:00.000Z"));
+    render(<PanelHarness />);
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Backfill notes today at 9am" },
+    });
+
+    expect(screen.getByText("Today, Apr 20 at 9 AM")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+
+    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "Backfill notes",
+        due_string: "2026-04-20 at 9 AM",
+      }),
+    );
+  });
+
   it("submits recurring NLP as cleaned content plus Todoist due_string", async () => {
     render(<PanelHarness />);
     vi.runOnlyPendingTimers();

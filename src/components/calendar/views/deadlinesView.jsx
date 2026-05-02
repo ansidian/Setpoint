@@ -2,8 +2,10 @@ import {
   allComplete,
   canNavigateBack,
   compute,
+  deadlineMatchesItemId,
   getDayState,
   getDefaultSelectedItemId,
+  getDeadlineSelectionId,
   hasOverdue,
 } from "./deadlines/deadlinesModel.js";
 import { renderDeadlinesCellContents } from "./deadlines/DeadlinesCellContent.jsx";
@@ -23,7 +25,8 @@ const deadlinesView = {
   renderFooter: renderDeadlinesFooter,
   HeaderExtras: DeadlinesHeaderExtras,
   getDefaultSelectedItemId,
-  getItemId: (task) => task?.id,
+  getItemId: getDeadlineSelectionId,
+  matchesItemId: deadlineMatchesItemId,
   label: "Deadlines",
 };
 

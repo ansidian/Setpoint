@@ -378,7 +378,8 @@ export default function useCalendarModalController({
 
   function focusDeadlineTask(task) {
     focusDateKey(task?.due_date);
-    setSelectedItemId(task?.id != null ? String(task.id) : null);
+    const itemId = deadlinesView.getItemId(task);
+    setSelectedItemId(itemId != null ? String(itemId) : null);
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
   }
@@ -535,6 +536,9 @@ export default function useCalendarModalController({
     setSelectedItemId,
   });
   const { canGoPrev, computed, itemsByDay } = viewModel;
+  const shellViewData = view === "deadlines"
+    ? { ...viewData, pendingUpdate: viewModel.pendingUpdate }
+    : viewData;
 
   useEffect(() => {
     if (!open) {
@@ -760,7 +764,7 @@ export default function useCalendarModalController({
   const shellProps = buildCalendarModalShellProps({
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
     viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, monthMotionDirection, suppressFocusRing },
-    data: { activeView, viewData, weatherData },
+    data: { activeView, viewData: shellViewData, weatherData },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId },
     editors: { eventEditor, deadlineEditor, setDeadlineEditor, setDeadlineDraftPreview },

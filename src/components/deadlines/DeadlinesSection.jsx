@@ -233,7 +233,7 @@ export default function DeadlinesSection({ ctm, todoist, loaded, delay, style, c
                 anchorRef: { current: rowEl },
               });
             },
-            onComplete: () => handleCompleteTask(menuState.task.id),
+            onComplete: () => handleCompleteTask(menuState.task.id, menuState.task),
             onStatusChange: (status) =>
               handleUpdateTaskStatus(menuState.task.id, status),
             onDismissGhost: () => handleDismissGhost(menuState.task.id),

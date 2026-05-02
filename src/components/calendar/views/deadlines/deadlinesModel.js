@@ -53,6 +53,22 @@ export function sourceLabelFor(task) {
   return source === "todoist" ? "Todoist" : source === "canvas" ? "Canvas" : "CTM";
 }
 
+export function getDeadlineSelectionId(task, dateKey = null) {
+  if (!task || task.id == null) return null;
+  if (task.agendaItemId) return String(task.agendaItemId);
+  const occurrenceDateKey = dateKey || task.agendaDateKey || task.due_date;
+  const isRecurringTodoist = sourceOf(task) === "todoist" && !!task.is_recurring;
+  return isRecurringTodoist && occurrenceDateKey
+    ? `${sourceOf(task)}:${task.id}-${occurrenceDateKey}`
+    : String(task.id);
+}
+
+export function deadlineMatchesItemId(task, itemId, dateKey = null) {
+  if (!task || itemId == null) return false;
+  const target = String(itemId);
+  return String(getDeadlineSelectionId(task, dateKey)) === target || String(task.id) === target;
+}
+
 function orderDeadlines(items = []) {
   return [...items].sort((a, b) => {
     const aMs = dueDateToMs(a.due_date, a.due_time) ?? Number.POSITIVE_INFINITY;
@@ -88,7 +104,7 @@ export function getDefaultSelectedItemId(items = []) {
   const state = getDayState(items);
   const firstOpen = state.activeItems[0];
   const fallback = firstOpen || state.completedItems[0];
-  return String(fallback?.id || "");
+  return getDeadlineSelectionId(fallback) || "";
 }
 
 export function compute({ data, viewYear, viewMonth }) {
