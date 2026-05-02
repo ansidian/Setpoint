@@ -8,6 +8,8 @@ import { testConnection as testIcloud } from "../briefing/icloud.js";
 import { geocodeLocation } from "../briefing/weather.js";
 import { listModels } from "../briefing/claude.js";
 import { initScheduler } from "../briefing/scheduler.js";
+import { queueEmailIndexBackfill } from "../briefing/email-index.js";
+import { wakeEmailBackfillWorker } from "../briefing/email-backfill-worker.js";
 import { isEmbeddingAvailable } from "../embeddings/index.js";
 import {
   billExtractAvailability,
@@ -95,6 +97,8 @@ router.get("/accounts/gmail/callback", async (req, res) => {
         args: [label, result.accountId],
       });
     }
+    await queueEmailIndexBackfill(userId);
+    wakeEmailBackfillWorker();
     const baseUrl = process.env.NODE_ENV === "production" ? "" : "http://localhost:5173";
     res.redirect(`${baseUrl}/settings?account_connected=${result.email}`);
   } catch (err) {
@@ -202,6 +206,8 @@ router.post("/accounts/icloud", async (req, res) => {
         nextSort,
       ],
     });
+    await queueEmailIndexBackfill(userId);
+    wakeEmailBackfillWorker();
     res.json({ id: accountId, email, label: label || email });
   } catch (err) {
     console.error("Error adding iCloud account:", err);

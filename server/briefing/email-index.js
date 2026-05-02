@@ -31,6 +31,176 @@ export async function isIndexEmpty(userId) {
   return result.rows.length === 0;
 }
 
+function safeJson(value) {
+  if (!value) return {};
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function toIsoDate(value) {
+  return value ? new Date(value).toISOString().slice(0, 10) : null;
+}
+
+function oldestTargetDate(targetDays, now) {
+  return toIsoDate(new Date(now.getTime() - targetDays * 24 * 60 * 60 * 1000));
+}
+
+function normalizeTargetDays(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 365;
+  return Math.min(parsed, 3650);
+}
+
+async function listEmailAccounts(userId) {
+  const result = await db.execute({
+    sql: `SELECT id, label, email, type
+          FROM ea_accounts
+          WHERE user_id = ? AND type IN ('gmail', 'icloud')
+          ORDER BY sort_order ASC, created_at ASC`,
+    args: [userId],
+  });
+  return result.rows.filter((row) => row.type === "gmail" || row.type === "icloud");
+}
+
+export async function getEmailIndexHealth(userId, { mailboxScope = "inbox" } = {}) {
+  const accounts = await listEmailAccounts(userId);
+  if (!accounts.length) {
+    return { accounts: [] };
+  }
+
+  const [indexResult, stateResult] = await Promise.all([
+    db.execute({
+      sql: `SELECT account_id,
+                   COUNT(*) AS indexed_count,
+                   MIN(NULLIF(email_date, '')) AS oldest_indexed_date,
+                   MAX(NULLIF(email_date, '')) AS newest_indexed_date,
+                   MAX(indexed_at) AS last_indexed_at
+            FROM ea_email_index
+            WHERE user_id = ?
+            GROUP BY account_id`,
+      args: [userId],
+    }),
+    db.execute({
+      sql: `SELECT account_id, mailbox_scope, status, target_days,
+                   oldest_target_date, oldest_indexed_date, last_scanned_at,
+                   cursor_json, indexed_count, last_error, attempts,
+                   started_at, completed_at, updated_at
+            FROM ea_email_backfill_state
+            WHERE user_id = ? AND mailbox_scope = ?`,
+      args: [userId, mailboxScope],
+    }),
+  ]);
+
+  const indexByAccount = new Map(indexResult.rows.map((row) => [row.account_id, row]));
+  const stateByAccount = new Map(stateResult.rows.map((row) => [row.account_id, row]));
+
+  return {
+    accounts: accounts.map((account) => {
+      const index = indexByAccount.get(account.id) || {};
+      const state = stateByAccount.get(account.id);
+      const cursor = safeJson(state?.cursor_json);
+      return {
+        account_id: account.id,
+        label: account.label,
+        email: account.email,
+        type: account.type,
+        indexed_count: Number(index.indexed_count || 0),
+        oldest_indexed_date: index.oldest_indexed_date || null,
+        newest_indexed_date: index.newest_indexed_date || null,
+        last_indexed_at: index.last_indexed_at || null,
+        backfill: state ? {
+          mailbox_scope: state.mailbox_scope,
+          status: state.status,
+          target_days: state.target_days,
+          oldest_target_date: state.oldest_target_date,
+          oldest_indexed_date: state.oldest_indexed_date,
+          last_scanned_at: state.last_scanned_at,
+          current_window: cursor.currentWindow || null,
+          cursor_json: cursor,
+          indexed_count: Number(state.indexed_count || 0),
+          last_error: state.last_error || "",
+          attempts: Number(state.attempts || 0),
+          started_at: state.started_at || null,
+          completed_at: state.completed_at || null,
+          updated_at: state.updated_at || null,
+        } : {
+          mailbox_scope: mailboxScope,
+          status: "not_started",
+          target_days: null,
+          oldest_target_date: null,
+          oldest_indexed_date: null,
+          last_scanned_at: null,
+          current_window: null,
+          cursor_json: {},
+          indexed_count: 0,
+          last_error: "",
+          attempts: 0,
+          started_at: null,
+          completed_at: null,
+          updated_at: null,
+        },
+      };
+    }),
+  };
+}
+
+export async function queueEmailIndexBackfill(userId, {
+  targetDays,
+  mailboxScope = "inbox",
+  now = new Date(),
+} = {}) {
+  const normalizedTargetDays = normalizeTargetDays(targetDays);
+  const targetDate = oldestTargetDate(normalizedTargetDays, now);
+  const accounts = await listEmailAccounts(userId);
+  if (!accounts.length) {
+    return {
+      queued: false,
+      mailbox_scope: mailboxScope,
+      target_days: normalizedTargetDays,
+      oldest_target_date: targetDate,
+      accounts: [],
+    };
+  }
+
+  const stmts = accounts.map((account) => ({
+    sql: `INSERT INTO ea_email_backfill_state
+            (user_id, account_id, mailbox_scope, status, target_days,
+             oldest_target_date, cursor_json, attempts, started_at,
+             completed_at, updated_at)
+          VALUES (?, ?, ?, 'queued', ?, ?, '{}', 0, NULL, NULL, datetime('now'))
+          ON CONFLICT(user_id, account_id, mailbox_scope) DO UPDATE SET
+            status = CASE
+              WHEN ea_email_backfill_state.status = 'running' THEN ea_email_backfill_state.status
+              ELSE 'queued'
+            END,
+            target_days = excluded.target_days,
+            oldest_target_date = excluded.oldest_target_date,
+            last_error = '',
+            completed_at = NULL,
+            updated_at = datetime('now')`,
+    args: [userId, account.id, mailboxScope, normalizedTargetDays, targetDate],
+  }));
+
+  await db.batch(stmts);
+
+  return {
+    queued: true,
+    mailbox_scope: mailboxScope,
+    target_days: normalizedTargetDays,
+    oldest_target_date: targetDate,
+    accounts: accounts.map((account) => ({
+      account_id: account.id,
+      label: account.label,
+      email: account.email,
+      type: account.type,
+      status: "queued",
+    })),
+  };
+}
+
 export async function indexEmails(userId, emails) {
   if (!emails.length) return;
 

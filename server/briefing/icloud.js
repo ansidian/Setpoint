@@ -90,26 +90,7 @@ export async function fetchEmails(account, password, hoursBack) {
     })) {
       const msgDate = msg.envelope?.date;
       if (msgDate && new Date(msgDate) < cutoffDate) continue;
-
-      const from = msg.envelope?.from?.[0];
-      const fromName = from?.name || from?.address || "Unknown";
-      const fromAddress = from?.address || "";
-
-      emails.push({
-        uid: `icloud-${msg.uid}`,
-        account_id: account.id,
-        account_label: account.label,
-        account_email: account.email,
-        account_color: account.color,
-        account_icon: account.icon || "Apple",
-        from: fromName,
-        from_email: fromAddress,
-        subject: msg.envelope?.subject || "(no subject)",
-        body_preview: extractPreview(msg.source),
-        body_text: extractBodyText(msg.source),
-        date: msgDate ? new Date(msgDate).toISOString() : "",
-        read: msg.flags?.has("\\Seen") || false,
-      });
+      emails.push(normalizeMessage(account, msg));
     }
   } finally {
     lock.release();
@@ -117,6 +98,66 @@ export async function fetchEmails(account, password, hoursBack) {
 
   // Connection stays alive in pool for body fetches
   return emails;
+}
+
+export async function fetchEmailsInRange(account, password, {
+  start,
+  end,
+  limit,
+} = {}) {
+  if (!start || !end) {
+    throw new Error("iCloud range fetch requires start and end dates");
+  }
+
+  const client = await getPooledClient(account.email, password);
+  const emails = [];
+  const lock = await client.getMailboxLock("INBOX");
+
+  try {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const searchResults = await client.search({ since: startDate, before: endDate });
+    if (!searchResults.length) return { emails: [], cursor: null };
+
+    const selectedResults = limit ? searchResults.slice(0, limit) : searchResults;
+    for await (const msg of client.fetch(selectedResults, {
+      envelope: true,
+      flags: true,
+      bodyStructure: true,
+      source: { start: 0, maxLength: 262144 },
+    })) {
+      const msgDate = msg.envelope?.date ? new Date(msg.envelope.date) : null;
+      if (msgDate && (msgDate < startDate || msgDate >= endDate)) continue;
+      emails.push(normalizeMessage(account, msg));
+    }
+  } finally {
+    lock.release();
+  }
+
+  return { emails, cursor: null };
+}
+
+function normalizeMessage(account, msg) {
+  const msgDate = msg.envelope?.date;
+  const from = msg.envelope?.from?.[0];
+  const fromName = from?.name || from?.address || "Unknown";
+  const fromAddress = from?.address || "";
+
+  return {
+    uid: `icloud-${msg.uid}`,
+    account_id: account.id,
+    account_label: account.label,
+    account_email: account.email,
+    account_color: account.color,
+    account_icon: account.icon || "Apple",
+    from: fromName,
+    from_email: fromAddress,
+    subject: msg.envelope?.subject || "(no subject)",
+    body_preview: extractPreview(msg.source),
+    body_text: extractBodyText(msg.source),
+    date: msgDate ? new Date(msgDate).toISOString() : "",
+    read: msg.flags?.has("\\Seen") || false,
+  };
 }
 
 function extractAmounts(text) {

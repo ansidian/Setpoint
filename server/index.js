@@ -17,6 +17,7 @@ import calendarRoutes from "./routes/calendar.js";
 import notesRoutes from "./routes/notes.js";
 import { initScheduler, startBackgroundIndexer } from "./briefing/scheduler.js";
 import { startSnoozeWaker } from "./briefing/snooze-waker.js";
+import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
 import { migrate } from "./db/migrate.js";
 import { migrateLegacyEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
@@ -87,6 +88,7 @@ migrate().then(() => migrateLegacyEncryption()).then(() => {
       console.error("[EA Scheduler] Init failed:", err.message),
     );
     startBackgroundIndexer();
+    startEmailBackfillWorker();
     startSnoozeWaker();
   });
 }).catch((err) => {

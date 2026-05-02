@@ -9,7 +9,7 @@ import { fetchTodoistTasks, fetchTodoistTaskIdSet } from "./todoist.js";
 import { callClaude } from "./claude.js";
 import { getCategories, getUpcomingBills } from "./actual.js";
 import { embedAndStore, getContextForBriefing, isEmbeddingAvailable } from "../embeddings/index.js";
-import { indexEmails, isIndexEmpty } from "./email-index.js";
+import { indexEmails, isIndexEmpty, queueEmailIndexBackfill } from "./email-index.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";
 import { canonicalizeConfiguredAccounts } from "./account-canonical.js";
 
@@ -563,12 +563,11 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       console.error("[EA] Email indexing failed:", err.message)
     );
     if (indexEmpty) {
-      // one-time backfill: fetch 90 days of email metadata
-      console.log("[EA] Email index empty — starting 90-day backfill...");
-      fetchAllEmails(accounts, 2160)
-        .then(allEmails => indexEmails(userId, allEmails))
-        .then(() => console.log("[EA] Backfill complete"))
-        .catch(err => console.error("[EA] Backfill indexing failed:", err.message));
+      console.log("[EA] Email index empty — queueing historical INBOX backfill...");
+      queueEmailIndexBackfill(userId)
+        .then(() => import("./email-backfill-worker.js"))
+        .then(({ wakeEmailBackfillWorker }) => wakeEmailBackfillWorker())
+        .catch(err => console.error("[EA] Backfill queueing failed:", err.message));
     }
 
     // Reconcile after Todoist tasks are available (un-completed tasks get removed from table)

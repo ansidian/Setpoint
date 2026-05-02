@@ -32,6 +32,7 @@ vi.mock("../embeddings/index.js", () => ({
 vi.mock("./email-index.js", () => ({
   indexEmails: async () => {},
   isIndexEmpty: async () => false,
+  queueEmailIndexBackfill: async () => ({ queued: true }),
 }));
 vi.mock("./tombstones.js", () => ({ hydrateRecurringTombstones: async () => [] }));
 

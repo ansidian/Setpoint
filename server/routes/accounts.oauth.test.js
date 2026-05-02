@@ -9,6 +9,8 @@ const gmailApi = vi.hoisted(() => ({
   getAuthUrl: vi.fn((state) => `https://accounts.example.test/oauth?state=${state}`),
   handleCallback: vi.fn(async () => ({ email: "user@example.com", accountId: "gmail-user@example.com" })),
 }));
+const emailIndexApi = vi.hoisted(() => ({ queueEmailIndexBackfill: vi.fn(async () => ({ queued: true })) }));
+const emailBackfillApi = vi.hoisted(() => ({ wakeEmailBackfillWorker: vi.fn() }));
 
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
 vi.mock("../briefing/gmail.js", () => ({
@@ -24,6 +26,12 @@ vi.mock("../briefing/encryption.js", () => ({
 vi.mock("../briefing/weather.js", () => ({ geocodeLocation: vi.fn(async () => []) }));
 vi.mock("../briefing/claude.js", () => ({ listModels: vi.fn(async () => []) }));
 vi.mock("../briefing/scheduler.js", () => ({ initScheduler: vi.fn() }));
+vi.mock("../briefing/email-index.js", () => ({
+  queueEmailIndexBackfill: emailIndexApi.queueEmailIndexBackfill,
+}));
+vi.mock("../briefing/email-backfill-worker.js", () => ({
+  wakeEmailBackfillWorker: emailBackfillApi.wakeEmailBackfillWorker,
+}));
 vi.mock("../embeddings/index.js", () => ({ isEmbeddingAvailable: vi.fn(() => false) }));
 vi.mock("../briefing/account-canonical.js", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
@@ -143,6 +151,8 @@ describe("accounts Gmail OAuth binding", () => {
     expect(res.headers.location).toBe("http://localhost:5173/settings?account_connected=user@example.com");
     expect(gmailApi.handleCallback).toHaveBeenCalledWith("auth-code", null, "user-1");
     expect(stateStore.labelUpdateArgs).toEqual(["Work", "gmail-user@example.com"]);
+    expect(emailIndexApi.queueEmailIndexBackfill).toHaveBeenCalledWith("user-1");
+    expect(emailBackfillApi.wakeEmailBackfillWorker).toHaveBeenCalledWith();
     expect(res.headers["set-cookie"][0]).toContain("ea_oauth_bind=;");
   });
 });

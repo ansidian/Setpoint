@@ -13,7 +13,7 @@ vi.mock("./encryption.js", () => ({
 // We need to stub global fetch before importing the module
 vi.stubGlobal("fetch", vi.fn());
 
-const { chunkArray, fetchMessages, archiveMessage, unarchiveMessage } = await import("./gmail.js");
+const { chunkArray, fetchMessages, fetchEmailsInRange, archiveMessage, unarchiveMessage } = await import("./gmail.js");
 
 describe("gmail", () => {
   describe("chunkArray", () => {
@@ -136,5 +136,86 @@ describe("archiveMessage / unarchiveMessage", () => {
   it("archiveMessage throws when Gmail returns non-OK", async () => {
     fetch.mockResolvedValue({ ok: false, status: 403 });
     await expect(archiveMessage(fakeAccount, "18c4e7ab1234")).rejects.toThrow(/Gmail archive failed: 403/);
+  });
+});
+
+describe("fetchEmailsInRange", () => {
+  const fakeAccount = {
+    id: "gmail-work",
+    label: "Work",
+    email: "work@example.com",
+    color: "#123456",
+    icon: "Mail",
+    credentials_encrypted: "stub",
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("fetches a bounded INBOX date window and returns normalized indexable emails", async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          messages: [{ id: "msg-1" }],
+          nextPageToken: "next-page",
+          resultSizeEstimate: 2,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "msg-1",
+          snippet: "Short preview",
+          labelIds: ["INBOX", "UNREAD"],
+          payload: {
+            headers: [
+              { name: "From", value: "Sender <sender@example.com>" },
+              { name: "Subject", value: "Range message" },
+              { name: "Date", value: "Fri, 01 May 2026 10:00:00 -0700" },
+              { name: "Message-ID", value: "<msg-1@example.com>" },
+            ],
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: { data: Buffer.from("Full body $12.34", "utf8").toString("base64url") },
+              },
+            ],
+          },
+        }),
+      });
+
+    const result = await fetchEmailsInRange(fakeAccount, {
+      start: "2026-04-25T00:00:00Z",
+      end: "2026-05-02T00:00:00Z",
+      pageToken: "cursor-1",
+      maxResults: 25,
+    });
+
+    const listUrl = new URL(fetch.mock.calls[0][0]);
+    expect(listUrl.searchParams.get("q")).toBe("after:2026/04/25 before:2026/05/02");
+    expect(listUrl.searchParams.get("labelIds")).toBe("INBOX");
+    expect(listUrl.searchParams.get("pageToken")).toBe("cursor-1");
+    expect(listUrl.searchParams.get("maxResults")).toBe("25");
+    expect(result).toEqual({
+      emails: [
+        expect.objectContaining({
+          uid: "gmail-gmail-work-msg-1",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          from: "Sender <sender@example.com>",
+          subject: "Range message",
+          body_preview: "Short preview [amounts: $12.34]",
+          body_text: "Full body $12.34",
+          date: "Fri, 01 May 2026 10:00:00 -0700",
+          read: false,
+          message_id: "<msg-1@example.com>",
+        }),
+      ],
+      nextPageToken: "next-page",
+      resultSizeEstimate: 2,
+    });
   });
 });

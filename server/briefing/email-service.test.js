@@ -129,6 +129,60 @@ describe("buildEmailWebUrl", () => {
   });
 });
 
+describe("searchEmails contract", () => {
+  it("searches the persisted email index instead of latest briefing/live payloads", async () => {
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [
+        {
+          uid: "gmail-work-historical-1",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#123456",
+          account_icon: "Mail",
+          from_name: "Historical Sender",
+          from_address: "sender@example.com",
+          subject: "Tuition receipt from last semester",
+          body_snippet: "Historical indexed receipt",
+          email_date: "2025-09-03T12:00:00Z",
+          read: 1,
+          subject_highlight: "<mark>Tuition</mark> receipt from last semester",
+          body_highlight: "Historical indexed receipt",
+          rank: -1.25,
+        },
+      ],
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "tuition receipt",
+      limit: 5,
+    });
+
+    const query = mockDb.execute.mock.calls[0][0];
+    expect(query.sql).toMatch(/FROM ea_email_fts/);
+    expect(query.sql).toMatch(/JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid/);
+    expect(query.sql).not.toMatch(/ea_briefings|briefing_json|live/i);
+    expect(query.args).toEqual([`"tuition" "receipt"*`, "user-1", 90]);
+    expect(result).toEqual({
+      accounts: [
+        expect.objectContaining({
+          account_id: "gmail-work",
+          results: [
+            expect.objectContaining({
+              uid: "gmail-work-historical-1",
+              subject: "Tuition receipt from last semester",
+              email_date: "2025-09-03T12:00:00Z",
+              read: true,
+            }),
+          ],
+        }),
+      ],
+      total: 1,
+      query: "tuition receipt",
+    });
+  });
+});
+
 describe("markAllRead", () => {
   it("updates successful UID groups and reports partial failures", async () => {
     const gmailUid = "gmail-gmail-work-msg1";
