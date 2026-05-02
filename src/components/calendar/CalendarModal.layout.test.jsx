@@ -2005,8 +2005,9 @@ describe("CalendarModal responsive layout", () => {
       });
 
       expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
-      expect(screen.getByTestId("calendar-event-editor-rail").getAttribute("data-editor-layout")).toBe("desktop-staged");
-      expect(screen.getByTestId("calendar-event-editor-detail-layout").getAttribute("data-layout-mode")).toBe("desktop-staged");
+      expect(screen.getByTestId("calendar-event-editor-rail").getAttribute("data-editor-layout")).toBe("slim-icon");
+      expect(screen.queryByTestId("calendar-event-editor-detail-layout")).toBeNull();
+      expect(screen.getByTestId("calendar-event-compact-toolbar")).toBeTruthy();
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
       expect(screen.queryByTestId("calendar-modal-editor-expanded")).toBeNull();
       expect(body.style.gridTemplateColumns).toContain("320px");

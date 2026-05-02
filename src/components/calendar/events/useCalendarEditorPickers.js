@@ -2,12 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DATE_PICKER_WIDTH = 300;
 const DATE_PICKER_HEIGHT = 386;
+const SCHEDULE_PICKER_WIDTH = 318;
+const SCHEDULE_PICKER_HEIGHT = 430;
 const TIME_PICKER_WIDTH = 280;
 const TIME_PICKER_HEIGHT = 238;
 const SOURCE_PICKER_WIDTH = 320;
 const SOURCE_PICKER_HEIGHT = 280;
 const LOCATION_PICKER_WIDTH = 360;
 const LOCATION_PICKER_HEIGHT = 240;
+const RECURRENCE_PICKER_WIDTH = 340;
+const RECURRENCE_PICKER_HEIGHT = 520;
 
 export default function useCalendarEditorPickers(editor) {
   const {
@@ -42,6 +46,7 @@ export default function useCalendarEditorPickers(editor) {
   const endDateRef = useRef(null);
   const startTimeRef = useRef(null);
   const endTimeRef = useRef(null);
+  const repeatRef = useRef(null);
   const activeSourceSuggestionRef = useRef(0);
 
   useEffect(() => {
@@ -108,6 +113,15 @@ export default function useCalendarEditorPickers(editor) {
     style: { overflow: "hidden", padding: 8, zIndex: 10001 },
   };
 
+  const sharedSchedulePickerProps = {
+    panelRef: pickerPanelRef,
+    onClose: () => setOpenPicker(null),
+    width: SCHEDULE_PICKER_WIDTH,
+    height: SCHEDULE_PICKER_HEIGHT,
+    role: "dialog",
+    style: { overflow: "hidden", padding: 10, zIndex: 10001 },
+  };
+
   const sharedSourcePickerProps = {
     panelRef: pickerPanelRef,
     onClose: () => setOpenPicker(null),
@@ -132,6 +146,15 @@ export default function useCalendarEditorPickers(editor) {
     style: { overflow: "hidden", padding: 8, zIndex: 10001 },
   };
 
+  const sharedRecurrencePickerProps = {
+    panelRef: pickerPanelRef,
+    onClose: () => setOpenPicker(null),
+    width: RECURRENCE_PICKER_WIDTH,
+    height: RECURRENCE_PICKER_HEIGHT,
+    role: "dialog",
+    style: { overflow: "hidden", padding: 10, zIndex: 10001 },
+  };
+
   const missingCalendar = !draft.accountId || !draft.calendarId;
   const selectedSource = useMemo(() => (
     writableCalendars.find((entry) => entry.value === `${draft.accountId}::${draft.calendarId}`) || null
@@ -143,7 +166,7 @@ export default function useCalendarEditorPickers(editor) {
     && !!draft.startTime
     && !!draft.endTime
     && `${draft.endDate}T${draft.endTime}:00` < `${draft.startDate}T${draft.startTime}:00`;
-  const showTitleAssist = !!titleAssist.preview || !!titleAssist.locationQuery || !!titleAssist.sourceQuery;
+  const showTitleAssist = !!titleAssist.locationQuery || !!titleAssist.sourceQuery;
   const parsedSourceQuery = String(titleAssist.sourceQuery || "").trim();
   const parsedLocationQuery = String(titleAssist.locationQuery || "").trim();
   const filteredSourceSuggestions = useMemo(() => {
@@ -170,13 +193,13 @@ export default function useCalendarEditorPickers(editor) {
     && !!parsedLocationQuery
     && draft.location === parsedLocationQuery
     && dismissedAutoLocationQuery !== parsedLocationQuery;
-  const showLocationSuggestions = (openPicker === "location" || showAutoLocationSuggestions)
+  const showLocationSuggestions = openPicker === "location" || (showAutoLocationSuggestions
     && (
       locationSuggestionsLoading
       || !!locationSuggestionsError
       || locationSuggestions.length > 0
       || String(draft.location || "").trim().length >= 2
-    );
+    ));
   const shouldConsumeParsedSourceFromTitle = !!parsedSourceQuery
     && titleInput !== titleAssist.titleAfterSourceCommit;
   const shouldConsumeParsedLocationFromTitle = !!parsedLocationQuery
@@ -328,6 +351,7 @@ export default function useCalendarEditorPickers(editor) {
     endDateRef,
     startTimeRef,
     endTimeRef,
+    repeatRef,
     missingCalendar,
     selectedSource,
     invalidDateRange,
@@ -349,7 +373,9 @@ export default function useCalendarEditorPickers(editor) {
     onTitleChange,
     sharedDatePickerProps,
     sharedTimePickerProps,
+    sharedSchedulePickerProps,
     sharedSourcePickerProps,
     sharedLocationPickerProps,
+    sharedRecurrencePickerProps,
   };
 }

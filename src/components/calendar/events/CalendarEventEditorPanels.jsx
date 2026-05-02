@@ -1,13 +1,9 @@
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
-import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
-import TimePickerView from "@/components/shared/pickers/TimePickerView";
+import CalendarEventCompactSchedulePicker from "./CalendarEventCompactSchedulePicker";
+import CalendarEventRecurrencePicker from "./CalendarEventRecurrencePicker";
 import CalendarLocationSuggestionsPanel from "./CalendarLocationSuggestionsPanel";
 import SourcePickerPanel from "./CalendarSourcePickerPanel";
-import {
-  ACCENT,
-  toPacificYmd,
-  addMinutesToDraftDateTime,
-} from "./calendarEditorUtils";
+import { textFieldStyle } from "./calendarEditorUtils";
 
 export default function CalendarEventEditorPanels({ editor, pickers }) {
   const {
@@ -19,53 +15,33 @@ export default function CalendarEventEditorPanels({ editor, pickers }) {
     locationSuggestionsError,
     activeLocationSuggestion,
     updateField,
+    updateRecurrenceDraft,
+    selectRecurrencePreset,
+    toggleRecurrenceWeekday,
     selectLocationSuggestion,
   } = editor;
+  const schedulePickerField = typeof pickers.openPicker === "string" && pickers.openPicker.startsWith("schedule:")
+    ? pickers.openPicker.slice("schedule:".length)
+    : null;
+  const recurrenceAnchorRef = pickers.repeatRef.current?.isConnected
+    ? pickers.repeatRef
+    : pickers.sourceRef.current?.isConnected
+      ? pickers.sourceRef
+      : pickers.startDateRef;
 
   return (
     <>
-      {pickers.openPicker === "startDate" ? (
+      {schedulePickerField ? (
         <AnchoredFloatingPanel
           anchorRef={pickers.startDateRef}
-          ariaLabel="Start date picker"
-          {...pickers.sharedDatePickerProps}
+          ariaLabel="Compact schedule picker"
+          {...pickers.sharedSchedulePickerProps}
         >
-          <CalendarDateTimeView
-            nowTick={pickers.nowTick}
-            initialEpoch={new Date(`${draft.startDate || draft.endDate || "2026-01-01"}T12:00:00Z`).getTime()}
-            onSelect={(epoch) => {
-              updateField("startDate", toPacificYmd(epoch));
-              pickers.setOpenPicker("endDate");
-            }}
-            onBack={() => pickers.setOpenPicker(null)}
-            accent={ACCENT}
-            confirmLabel="Set start date"
-            mode="date-only"
-            allowPastDates
-            submitOnDateSelect
-          />
-        </AnchoredFloatingPanel>
-      ) : null}
-
-      {pickers.openPicker === "endDate" ? (
-        <AnchoredFloatingPanel
-          anchorRef={pickers.endDateRef}
-          ariaLabel="End date picker"
-          {...pickers.sharedDatePickerProps}
-        >
-          <CalendarDateTimeView
-            nowTick={pickers.nowTick}
-            initialEpoch={new Date(`${draft.endDate || draft.startDate || "2026-01-01"}T12:00:00Z`).getTime()}
-            onSelect={(epoch) => {
-              updateField("endDate", toPacificYmd(epoch));
-              pickers.setOpenPicker(null);
-            }}
-            onBack={() => pickers.setOpenPicker(null)}
-            accent={ACCENT}
-            confirmLabel="Set end date"
-            mode="date-only"
-            allowPastDates
-            submitOnDateSelect
+          <CalendarEventCompactSchedulePicker
+            draft={draft}
+            updateField={updateField}
+            initialField={schedulePickerField}
+            onClose={() => pickers.setOpenPicker(null)}
           />
         </AnchoredFloatingPanel>
       ) : null}
@@ -95,65 +71,70 @@ export default function CalendarEventEditorPanels({ editor, pickers }) {
           {...pickers.sharedLocationPickerProps}
           onClose={pickers.closeLocationSuggestions}
         >
-          <CalendarLocationSuggestionsPanel
-            suggestions={locationSuggestions}
-            loading={locationSuggestionsLoading}
-            error={locationSuggestionsError}
-            activeIndex={activeLocationSuggestion}
-            onSelect={async (item) => {
-              await selectLocationSuggestion(item);
-              pickers.consumeParsedLocationFromTitle();
-              pickers.setOpenPicker(null);
-            }}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+            {pickers.openPicker === "location" ? (
+              <input
+                data-testid="calendar-event-location"
+                aria-label="Event location"
+                value={draft.location}
+                onChange={(event) => updateField("location", event.target.value)}
+                onKeyDown={pickers.handleLocationSuggestionKey}
+                placeholder="Search places or type location"
+                style={textFieldStyle()}
+              />
+            ) : null}
+            {pickers.openPicker === "location" && draft.location?.trim() ? (
+              <button
+                type="button"
+                onClick={() => updateField("location", "")}
+                style={{
+                  alignSelf: "flex-start",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.03)",
+                  color: "rgba(205,214,244,0.68)",
+                  borderRadius: 8,
+                  padding: "6px 9px",
+                  fontSize: 11,
+                  fontWeight: 650,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                Clear location
+              </button>
+            ) : null}
+            <CalendarLocationSuggestionsPanel
+              suggestions={locationSuggestions}
+              loading={locationSuggestionsLoading}
+              error={locationSuggestionsError}
+              activeIndex={activeLocationSuggestion}
+              onSelect={async (item) => {
+                await selectLocationSuggestion(item);
+                pickers.consumeParsedLocationFromTitle();
+                pickers.setOpenPicker(null);
+              }}
+            />
+          </div>
+        </AnchoredFloatingPanel>
+      ) : null}
+
+      {pickers.openPicker === "recurrence" ? (
+        <AnchoredFloatingPanel
+          anchorRef={recurrenceAnchorRef}
+          ariaLabel="Recurrence picker"
+          {...pickers.sharedRecurrencePickerProps}
+        >
+          <CalendarEventRecurrencePicker
+            recurrenceDraft={editor.recurrenceDraft}
+            startDate={draft.startDate}
+            disabled={!editor.editable}
+            onSelectPreset={selectRecurrencePreset}
+            onUpdateRecurrence={updateRecurrenceDraft}
+            onToggleWeekday={toggleRecurrenceWeekday}
           />
         </AnchoredFloatingPanel>
       ) : null}
 
-      {pickers.openPicker === "startTime" ? (
-        <AnchoredFloatingPanel
-          anchorRef={pickers.startTimeRef}
-          ariaLabel="Start time picker"
-          {...pickers.sharedTimePickerProps}
-        >
-          <TimePickerView
-            initialTime={draft.startTime}
-            onSelect={(value) => {
-              updateField("startTime", value);
-              const seededEnd = addMinutesToDraftDateTime(draft.startDate, value, 30);
-              const shouldSyncEndDate = !draft.endDate
-                || draft.endDate === draft.startDate
-                || draft.endDate < seededEnd.date;
-              if (shouldSyncEndDate) {
-                updateField("endDate", seededEnd.date);
-              }
-              updateField("endTime", seededEnd.time);
-              pickers.setOpenPicker("endTime");
-            }}
-            onBack={() => pickers.setOpenPicker(null)}
-            accent={ACCENT}
-            confirmLabel="Set start time"
-          />
-        </AnchoredFloatingPanel>
-      ) : null}
-
-      {pickers.openPicker === "endTime" ? (
-        <AnchoredFloatingPanel
-          anchorRef={pickers.endTimeRef}
-          ariaLabel="End time picker"
-          {...pickers.sharedTimePickerProps}
-        >
-          <TimePickerView
-            initialTime={draft.endTime}
-            onSelect={(value) => {
-              updateField("endTime", value);
-              pickers.setOpenPicker(null);
-            }}
-            onBack={() => pickers.setOpenPicker(null)}
-            accent={ACCENT}
-            confirmLabel="Set end time"
-          />
-        </AnchoredFloatingPanel>
-      ) : null}
     </>
   );
 }

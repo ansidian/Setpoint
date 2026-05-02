@@ -22,8 +22,12 @@ export default function AnchoredFloatingPanel({
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ref.current access is intentionally excluded from deps
   const updatePos = useCallback(() => {
-    const rect = anchorRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const anchor = anchorRef.current;
+    const rect = anchor?.isConnected ? anchor.getBoundingClientRect() : null;
+    if (!rect) {
+      setPos(null);
+      return;
+    }
     let resolvedWidth = matchAnchorWidth ? rect.width : width;
     if (typeof minWidth === "number") resolvedWidth = Math.max(resolvedWidth, minWidth);
     if (typeof maxWidth === "number") resolvedWidth = Math.min(resolvedWidth, maxWidth);
@@ -48,16 +52,28 @@ export default function AnchoredFloatingPanel({
     });
   }, [anchorRef, height, matchAnchorWidth, maxWidth, minWidth, resolvedPanelRef, width]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM measurement for initial positioning
     updatePos();
+    let frame = null;
+    let attempts = 0;
+    const retryMissingAnchor = () => {
+      if (anchorRef.current?.isConnected || attempts >= 4) {
+        updatePos();
+        return;
+      }
+      attempts += 1;
+      frame = window.requestAnimationFrame(retryMissingAnchor);
+    };
+    frame = window.requestAnimationFrame(retryMissingAnchor);
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
     return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", updatePos, true);
       window.removeEventListener("resize", updatePos);
     };
-  }, [updatePos]);
+  }, [anchorRef, updatePos]);
 
   useLayoutEffect(() => {
     if (!pos) return;
@@ -78,6 +94,7 @@ export default function AnchoredFloatingPanel({
     function handlePointerDown(event) {
       if (resolvedPanelRef.current?.contains(event.target)) return;
       if (anchorRef.current?.contains(event.target)) return;
+      if (event.target?.closest?.("[data-calendar-popover-panel='true']")) return;
       onClose?.();
     }
 
@@ -106,14 +123,12 @@ export default function AnchoredFloatingPanel({
       ref={resolvedPanelRef}
       role={role}
       aria-label={ariaLabel}
+      data-calendar-popover-panel="true"
       style={{
         position: "fixed",
         top: pos.top,
         left: pos.left,
         width: pos.width,
-        maxHeight: typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined,
-        overflowY: "auto",
-        overscrollBehavior: "contain",
         isolation: "isolate",
         background: "#16161e",
         border: "1px solid rgba(255,255,255,0.08)",
@@ -121,6 +136,10 @@ export default function AnchoredFloatingPanel({
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         zIndex: 9999,
         ...style,
+        maxHeight: style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined),
+        overflow: style?.overflow === "hidden" ? undefined : style?.overflow,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
       }}
     >
       {children}
