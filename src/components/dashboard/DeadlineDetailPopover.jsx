@@ -326,7 +326,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
                   loading={completing}
                   onClick={() => {
                     setCompletingState({ taskId: task.id, pending: true });
-                    Promise.resolve(handleCompleteTask(task.id)).catch(() => {
+                    Promise.resolve(handleCompleteTask(task.id, task)).catch(() => {
                       setCompletingState({ taskId: task.id, pending: false });
                     });
                     window.setTimeout(() => onClose(), 720);

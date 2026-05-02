@@ -65,6 +65,12 @@ function ymdFromDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function formatTodoistResolvedDueString(resolved) {
+  if (!resolved?.date) return null;
+  const date = ymdFromDate(resolved.date);
+  return resolved.time ? `${date} at ${formatTime(resolved.time)}` : date;
+}
+
 function time24FromTime(time) {
   if (!time) return null;
   return `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
@@ -288,6 +294,7 @@ export function parseTokens(input, projects, labels) {
     project: null,
     labels: [],
     datePhrase: null,
+    dateDueString: null,
     dateFormatted: null,
     duePreview: null,
     recurrenceDraft: null,
@@ -344,6 +351,7 @@ export function parseTokens(input, projects, labels) {
   const resolved = resolveDate(result.stripped);
   if (resolved) {
     result.datePhrase = resolved.phrase;
+    result.dateDueString = formatTodoistResolvedDueString(resolved);
     result.dateFormatted = formatResolvedDate(resolved);
     result.duePreview = {
       dueDate: ymdFromDate(resolved.date),

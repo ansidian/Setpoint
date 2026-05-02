@@ -193,7 +193,7 @@ export default function useAddTaskPanelController({
   ), [manualLabels, overrides.labels, parsed.labels]);
   const resolvedDue = overrides.due
     ? manualDue?.dueString || null
-    : parsed.recurringDueString || parsed.datePhrase || seededCreateDue?.dueString || null;
+    : parsed.recurringDueString || parsed.dateDueString || parsed.datePhrase || seededCreateDue?.dueString || null;
   const dueDisplay = manualDue?.display || parsed.dateFormatted || seededDueDisplay || "";
   const recurrenceSummary = !overrides.due ? parsed.recurrenceSummary : null;
   const pickerDueEpoch = manualDue?.epochMs ?? seededDueEpoch;

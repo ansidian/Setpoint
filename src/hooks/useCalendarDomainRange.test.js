@@ -49,4 +49,41 @@ describe("useCalendarDomainRange", () => {
     expect(fetchRange).toHaveBeenCalledTimes(2);
     expect(result.current.data).toEqual({ value: "second" });
   });
+
+  it("locally updates the active range data and cache", async () => {
+    const fetchRange = vi.fn().mockResolvedValue({
+      todoist: {
+        upcoming: [{ id: "todo-1", title: "Open", status: "incomplete", source: "todoist" }],
+      },
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+    }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-01", "2026-04-30");
+    });
+
+    act(() => {
+      result.current.updateData((current) => ({
+        ...current,
+        todoist: {
+          ...current.todoist,
+          upcoming: current.todoist.upcoming.map((task) => (
+            task.id === "todo-1" ? { ...task, status: "complete" } : task
+          )),
+        },
+      }));
+    });
+
+    expect(result.current.data.todoist.upcoming[0].status).toBe("complete");
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-01", "2026-04-30");
+    });
+
+    expect(fetchRange).toHaveBeenCalledTimes(1);
+    expect(result.current.data.todoist.upcoming[0].status).toBe("complete");
+  });
 });

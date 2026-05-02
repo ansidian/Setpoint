@@ -1032,6 +1032,53 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
   });
 
+  it("keeps rendered deadlines visible and shows pending status during refresh", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="todo-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{}}
+        deadlinesRangeData={{
+          loading: true,
+          error: null,
+          ensureRange: vi.fn().mockResolvedValue({}),
+          data: {
+            todoist: {
+              upcoming: [
+                {
+                  id: "todo-1",
+                  title: "Backfill notes",
+                  due_date: "2026-04-20",
+                  due_time: "9:00 AM",
+                  source: "todoist",
+                  class_name: "Inbox",
+                  status: "open",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    ));
+
+    expect(screen.queryByTestId("calendar-grid-skeleton")).toBeNull();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Backfill notes")).toBeTruthy();
+    expect(screen.getByTestId("calendar-pending-update").getAttribute("aria-label")).toBe("Calendar updates pending");
+    expect(screen.getByTestId("calendar-pending-update").querySelector(".calendar-pending-update-icon")).toBeTruthy();
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Backfill notes");
+  });
+
   it("does not render completed-only deadlines into the month cell preview", () => {
     window.innerWidth = 1900;
 
