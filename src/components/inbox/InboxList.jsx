@@ -8,6 +8,7 @@ import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
 import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
+import InboxSearchFlagChips from "./InboxSearchFlagChips";
 
 /* ======================================================================
  * LIST (swimlane or flat)
@@ -186,6 +187,11 @@ export default function InboxList({
             <Kbd>⌘F</Kbd>
           )}
         </div>
+        <InboxSearchFlagChips
+          query={searchQuery}
+          onChange={onSearchChange}
+          accent={accent}
+        />
         <IconBtn
           onClick={onMarkAllRead}
           title="Mark all read"

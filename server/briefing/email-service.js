@@ -112,6 +112,47 @@ function sanitizeFtsQuery(raw) {
   return terms.join(" ") || `"${raw}"`;
 }
 
+function unsupportedSearchFlagError(flag) {
+  const err = new Error(`Unsupported email search flag: ${flag}`);
+  err.status = 400;
+  err.code = "unsupported_email_search_flag";
+  return err;
+}
+
+function invalidSearchFlagError(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.code = "invalid_email_search_flags";
+  return err;
+}
+
+function parseEmailSearchQuery(raw) {
+  const tokens = String(raw || "").trim().split(/\s+/).filter(Boolean);
+  const textTokens = [];
+  let readFilter = null;
+
+  for (const token of tokens) {
+    const normalized = token.toLowerCase();
+    if (normalized === "is:read" || normalized === "is:unread") {
+      const nextReadFilter = normalized === "is:read" ? 1 : 0;
+      if (readFilter != null && readFilter !== nextReadFilter) {
+        throw invalidSearchFlagError("Conflicting email search flags: is:read and is:unread");
+      }
+      readFilter = nextReadFilter;
+      continue;
+    }
+    if (/^is:[^\s]+$/i.test(token)) {
+      throw unsupportedSearchFlagError(token);
+    }
+    textTokens.push(token);
+  }
+
+  return {
+    textQuery: textTokens.join(" "),
+    readFilter,
+  };
+}
+
 async function markEmailsReadInIndex(userId, uids) {
   const list = Array.isArray(uids) ? uids : [uids];
   if (!list.length) return;
@@ -179,33 +220,53 @@ export async function getEmailBody(userId, uid) {
 export async function searchEmails(userId, { q, limit }) {
   const maxResults = Math.min(parseInt(limit) || 30, 100);
   const fetchLimit = Math.max(maxResults * 3, 90);
-  const result = await db.execute({
-    sql: `SELECT
-            idx.uid, idx.account_id, idx.account_label, idx.account_email,
-            idx.account_color, idx.account_icon,
-            idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-            idx.email_date, idx.read,
-            snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
-            snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
-            rank
-          FROM ea_email_fts
-          JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
-          WHERE ea_email_fts MATCH ? AND idx.user_id = ?
-          ORDER BY rank
-          LIMIT ?`,
-    args: [sanitizeFtsQuery(q.trim()), userId, fetchLimit],
-  });
+  const { textQuery, readFilter } = parseEmailSearchQuery(q);
+  const hasTextQuery = textQuery.trim().length > 0;
+  const readPredicate = readFilter == null ? "" : " AND idx.read = ?";
+  const result = hasTextQuery
+    ? await db.execute({
+        sql: `SELECT
+                idx.uid, idx.account_id, idx.account_label, idx.account_email,
+                idx.account_color, idx.account_icon,
+                idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
+                idx.email_date, idx.read,
+                snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
+                snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
+                rank
+              FROM ea_email_fts
+              JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
+              WHERE ea_email_fts MATCH ? AND idx.user_id = ?${readPredicate}
+              ORDER BY rank
+              LIMIT ?`,
+        args: readFilter == null
+          ? [sanitizeFtsQuery(textQuery), userId, fetchLimit]
+          : [sanitizeFtsQuery(textQuery), userId, readFilter, fetchLimit],
+      })
+    : await db.execute({
+        sql: `SELECT
+                idx.uid, idx.account_id, idx.account_label, idx.account_email,
+                idx.account_color, idx.account_icon,
+                idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
+                idx.email_date, idx.read,
+                NULL AS subject_highlight,
+                NULL AS body_highlight,
+                0 AS rank
+              FROM ea_email_index idx
+              WHERE idx.user_id = ?${readPredicate}
+              ORDER BY idx.email_date DESC
+              LIMIT ?`,
+        args: readFilter == null
+          ? [userId, fetchLimit]
+          : [userId, readFilter, fetchLimit],
+      });
 
-  const nowMs = Date.now();
-  const RECENCY_HALF_LIFE_DAYS = 30;
-  const scored = result.rows.map((row) => {
-    const t = row.email_date ? Date.parse(row.email_date) : NaN;
-    const ageDays = Number.isFinite(t) ? Math.max(0, (nowMs - t) / 86400000) : 0;
-    const hybrid = row.rank / (1 + ageDays / RECENCY_HALF_LIFE_DAYS);
-    return { row, hybrid };
-  });
-  scored.sort((a, b) => a.hybrid - b.hybrid);
-  const ranked = scored.slice(0, maxResults).map((s) => s.row);
+  const ranked = [...result.rows]
+    .sort((a, b) => {
+      const aTime = a.email_date ? Date.parse(a.email_date) : 0;
+      const bTime = b.email_date ? Date.parse(b.email_date) : 0;
+      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+    })
+    .slice(0, maxResults);
 
   const byAccount = {};
   for (const row of ranked) {
@@ -563,4 +624,5 @@ export const __testing__ = {
   findAccountByUid,
   buildEmailWebUrl,
   sanitizeFtsQuery,
+  parseEmailSearchQuery,
 };

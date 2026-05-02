@@ -129,7 +129,8 @@ router.get("/email-search", async (req, res) => {
     res.json(await emailService.searchEmails(EA_USER_ID, { q, limit }));
   } catch (err) {
     console.error("[EA] Email search error:", err.message);
-    res.status(err.status || 500).json({ message: "Email search failed" });
+    const status = err.status || 500;
+    res.status(status).json({ message: status < 500 ? err.message : "Email search failed" });
   }
 });
 

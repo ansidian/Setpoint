@@ -8,6 +8,7 @@ import EmailRow from "../EmailRow";
 import Reader from "../reader/Reader";
 import MobileFilterSheet from "./MobileFilterSheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import InboxSearchFlagChips from "../InboxSearchFlagChips";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -338,6 +339,14 @@ export default function MobileInboxView({
                 onClick={markAllVisibleRead}
                 accent={accent}
                 tinted={unreadInView > 0}
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 8, overflowX: "auto" }}>
+              <InboxSearchFlagChips
+                query={search}
+                onChange={setSearch}
+                accent={accent}
+                compact
               />
             </div>
 
