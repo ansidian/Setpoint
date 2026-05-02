@@ -1,8 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, forwardRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import Section from "../layout/Section";
 import useIsMobile from "../../hooks/useIsMobile";
+import NowMarker from "./schedule/NowMarker.jsx";
 import { buildWeekDays, derivePassedState } from "./schedule/scheduleModel.js";
+import useNowMarkerLayout from "./schedule/useNowMarkerLayout.js";
 
 function useNowTick() {
   const fmt = () => new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
@@ -19,55 +21,6 @@ function useNowTick() {
   }, []);
   return { time, tick, nowMs };
 }
-
-const NowMarker = forwardRef(function NowMarker(
-  { time, top, textSpan, flagInset },
-  ref,
-) {
-  const lineRef = useRef(null);
-
-  // Apply mask when line crosses over card text content
-  useEffect(() => {
-    const el = lineRef.current;
-    if (!el) return;
-    if (!textSpan) {
-      el.style.background =
-        "linear-gradient(90deg, #cba6da 0%, transparent 100%)";
-      el.style.maskImage = "";
-      el.style.webkitMaskImage = "";
-      return;
-    }
-    const w = el.offsetWidth;
-    const { start, end } = textSpan;
-    const clampedEnd = Math.min(end, w);
-    const hasRoom = clampedEnd + 24 < w;
-    const mask = hasRoom
-      ? `linear-gradient(90deg, black 0px, black ${start}px, rgba(0,0,0,0.12) ${start + 8}px, rgba(0,0,0,0.12) ${clampedEnd}px, black ${clampedEnd + 16}px, black ${w - 40}px, transparent 100%)`
-      : `linear-gradient(90deg, black 0px, black ${start}px, rgba(0,0,0,0.12) ${start + 8}px, rgba(0,0,0,0.12) ${w - 8}px, transparent 100%)`;
-    el.style.background = "#cba6da";
-    el.style.maskImage = mask;
-    el.style.webkitMaskImage = mask;
-  }, [textSpan]);
-
-  return (
-    <div
-      ref={ref}
-      className="absolute left-5 right-0 flex items-center gap-2 z-10 pointer-events-none"
-      style={{ top, right: flagInset || undefined }}
-    >
-      <div
-        ref={lineRef}
-        className="flex-1 h-px"
-        style={{
-          background: "linear-gradient(90deg, #cba6da 0%, transparent 100%)",
-        }}
-      />
-      <span className="text-[10px] max-sm:text-xs font-semibold tabular-nums text-[#cba6da] shrink-0 pointer-events-auto">
-        {time}
-      </span>
-    </div>
-  );
-});
 
 function TomorrowEventList({ events, showSource, opacity }) {
   return events.map((event, i) => (
@@ -319,144 +272,13 @@ export default function ScheduleSection({ calendar, tomorrowCalendar, nextWeekCa
   ]);
   const showSource = sources.size > 1;
 
-  // Compute pixel position for the now marker from card DOM measurements.
-  // useLayoutEffect is correct here — we read layout then sync state before paint.
-  const [markerTop, setMarkerTop] = useState(null);
   const prevMarkerTopRef = useRef(null);
-  const [inProgressIdx, setInProgressIdx] = useState(-1);
-  const [textSpan, setTextSpan] = useState(null);
-  const [flagInset, setFlagInset] = useState(0);
-
-  useLayoutEffect(() => {
-    if (view !== "today" || !liveCalendar?.length) {
-      setMarkerTop(null);
-      setInProgressIdx(-1);
-      setTextSpan(null);
-      setFlagInset(0);
-      return;
-    }
-    const cards = cardRefsRef.current;
-
-    // Find in-progress event (started but not ended)
-    const ipIdx = liveCalendar.findIndex(
-      e => !e.allDay && e.startMs <= nowMs && e.endMs && e.endMs > nowMs
-    );
-
-    if (ipIdx >= 0 && cards[ipIdx]) {
-      const card = cards[ipIdx];
-      const progress =
-        (nowMs - liveCalendar[ipIdx].startMs) /
-        (liveCalendar[ipIdx].endMs - liveCalendar[ipIdx].startMs);
-      setMarkerTop(card.offsetTop + progress * card.offsetHeight);
-      setInProgressIdx(ipIdx);
-
-      // Measure text content boundaries relative to the card's left edge.
-      // Card and line share the same left origin within the pl-5 container.
-      const innerCard = card.firstElementChild;
-      if (innerCard) {
-        const cardLeft = innerCard.getBoundingClientRect().left;
-        const cardRight = innerCard.getBoundingClientRect().right;
-        const flowKids = Array.from(innerCard.children).filter(
-          (el) => getComputedStyle(el).position !== "absolute",
-        );
-
-        // Measure flag badge inset — if the last flow child is a shrink-0
-        // flag, the marker should end before it
-        const lastKid = flowKids[flowKids.length - 1];
-        const lastIsFlag =
-          lastKid &&
-          getComputedStyle(lastKid).flexShrink === "0" &&
-          getComputedStyle(lastKid).flexGrow !== "1";
-        if (lastIsFlag) {
-          // card right padding (12px) + flag width + gap (12px)
-          setFlagInset(cardRight - lastKid.getBoundingClientRect().left + 16);
-        } else {
-          setFlagInset(0);
-        }
-
-        if (flowKids.length >= 2) {
-          const start =
-            flowKids[0].getBoundingClientRect().left - cardLeft - 12;
-          // Find the rightmost visible content edge. The title div is flex-1
-          // so its bounding rect fills the row — measure actual text width
-          // with canvas instead.
-          let end = 0;
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-          for (const child of flowKids) {
-            if (getComputedStyle(child).flexGrow === "1") {
-              for (const inner of child.children) {
-                const cs = getComputedStyle(inner);
-                if (cs.display === "block") {
-                  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-                  const textW = ctx.measureText(inner.textContent).width;
-                  const innerLeft =
-                    inner.getBoundingClientRect().left - cardLeft;
-                  end = Math.max(
-                    end,
-                    innerLeft + Math.min(textW, inner.clientWidth),
-                  );
-                } else {
-                  end = Math.max(
-                    end,
-                    inner.getBoundingClientRect().right - cardLeft,
-                  );
-                }
-              }
-            } else if (!lastIsFlag || child !== lastKid) {
-              // Skip the flag from text span measurement
-              end = Math.max(
-                end,
-                child.getBoundingClientRect().right - cardLeft,
-              );
-            }
-          }
-          setTextSpan({ start, end: end + 6 });
-        } else {
-          setTextSpan(null);
-        }
-      } else {
-        setTextSpan(null);
-        setFlagInset(0);
-      }
-      return;
-    }
-
-    // Find first future event by start time
-    const firstFutureIdx = liveCalendar.findIndex(e => !e.allDay && e.startMs > nowMs);
-
-    if (firstFutureIdx === 0) {
-      setMarkerTop(0);
-      setInProgressIdx(-1);
-      setTextSpan(null);
-      setFlagInset(0);
-      return;
-    }
-
-    if (firstFutureIdx > 0 && cards[firstFutureIdx - 1]) {
-      const prev = cards[firstFutureIdx - 1];
-      setMarkerTop(prev.offsetTop + prev.offsetHeight);
-      setInProgressIdx(-1);
-      setTextSpan(null);
-      setFlagInset(0);
-      return;
-    }
-
-    // After all events
-    const lastIdx = liveCalendar.length - 1;
-    if (cards[lastIdx]) {
-      setMarkerTop(cards[lastIdx].offsetTop + cards[lastIdx].offsetHeight);
-      setInProgressIdx(-1);
-      setTextSpan(null);
-      setFlagInset(0);
-      return;
-    }
-
-    setMarkerTop(null);
-    setInProgressIdx(-1);
-    setTextSpan(null);
-    setFlagInset(0);
-  }, [liveCalendar, nowMs, view]);
+  const { markerTop, inProgressIdx, textSpan, flagInset } = useNowMarkerLayout({
+    view,
+    liveCalendar,
+    nowMs,
+    cardRefsRef,
+  });
 
   // Smooth scroll to now marker on mount and briefing refresh (desktop only)
   useEffect(() => {
