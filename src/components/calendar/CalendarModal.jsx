@@ -94,6 +94,61 @@ function isFloatingDetailPanelTarget(target) {
     && !!target.closest("[data-calendar-floating-detail='true']");
 }
 
+function isFloatingDetailFlipSuppressedTarget(target, detail) {
+  if (!(target instanceof HTMLElement)) return false;
+  const gridOriginTrigger = target.closest(
+    "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment']",
+  );
+  if (gridOriginTrigger && detail?.anchorElement === gridOriginTrigger) return false;
+
+  return !!target.closest([
+      "[data-calendar-floating-detail='true']",
+      "button",
+      "a[href]",
+      "input",
+      "textarea",
+      "select",
+      "[contenteditable='true']",
+      "[role='button']",
+      "[role='link']",
+      "[role='menu']",
+      "[role='menuitem']",
+      "[role='listbox']",
+      "[role='option']",
+      "[data-suspend-calendar-hotkeys='true']",
+    ].join(", "));
+}
+
+function isGridOriginFloatingDetail(detail) {
+  if (!detail?.open || detail.mode !== "detail" || detail.parked || detail.userDragged) return false;
+  return isGridOriginAnchorKind(detail.anchorKind);
+}
+
+function placementSideFromCaret(caretSide) {
+  if (caretSide === "left") return "right";
+  if (caretSide === "right") return "left";
+  return null;
+}
+
+function isGridOriginAnchorKind(anchorKind) {
+  return ["chip", "span", "overflow-row"].includes(String(anchorKind || ""));
+}
+
+function preservedReanchorSide(current, nextDetail, nextView, nextDateKey) {
+  if (!current?.open || current.mode !== "detail" || current.parked || current.userDragged || current.dirty) return null;
+  if (current.view !== nextView || current.dateKey !== nextDateKey) return null;
+  if (!isGridOriginAnchorKind(current.anchorKind) || !isGridOriginAnchorKind(nextDetail.anchorKind)) return null;
+  return current.forcedSide
+    || placementSideFromCaret(current.initialPlacement?.caretSide)
+    || current.preferredSide
+    || null;
+}
+
+function rememberedSessionSide(sessionSideByViewRef, nextDetail, nextView) {
+  if (!isGridOriginAnchorKind(nextDetail.anchorKind)) return null;
+  return sessionSideByViewRef.current[nextView] || null;
+}
+
 function floatingDetailTypeLabel(view) {
   if (view === "events") return "Event";
   if (view === "bills") return "Bill";
@@ -186,6 +241,7 @@ export default function CalendarModal({
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
   const floatingDetailRef = useRef(null);
+  const floatingDetailSessionSideByViewRef = useRef({});
   const agendaRailRef = useRef(null);
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
@@ -289,6 +345,11 @@ export default function CalendarModal({
   useLayoutEffect(() => {
     floatingDetailRef.current = floatingDetail;
   }, [floatingDetail]);
+
+  useEffect(() => {
+    if (open) return;
+    floatingDetailSessionSideByViewRef.current = {};
+  }, [open]);
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -680,17 +741,22 @@ export default function CalendarModal({
     if (mode === "detail" && (!nextDetail.itemId || !anchorElement)) return;
     const preferredSide = nextDetail.preferredSide
       || (String(nextDetail.anchorKind || "").startsWith("agenda") ? "left" : null);
-    const initialPlacement = resolveFloatingDetailPlacement({
-      anchorRect: elementRect(anchorElement),
-      sourceRect: elementRect(nextDetail.sourceCellElement || inferredDayCell),
-      exclusionRect: elementRect(nextDetail.exclusionElement),
-      calendarRect: elementRect(panelRef.current),
-      panelHeight: mode === "detail" ? 300 : 560,
-      mode,
-      parked,
-      preferredSide,
-    });
     setFloatingDetail((current) => {
+      const forcedSide = nextDetail.forcedSide
+        || preservedReanchorSide(current, nextDetail, nextView, nextDateKey)
+        || rememberedSessionSide(floatingDetailSessionSideByViewRef, nextDetail, nextView)
+        || null;
+      const initialPlacement = resolveFloatingDetailPlacement({
+        anchorRect: elementRect(anchorElement),
+        sourceRect: elementRect(nextDetail.sourceCellElement || inferredDayCell),
+        exclusionRect: elementRect(nextDetail.exclusionElement),
+        calendarRect: elementRect(panelRef.current),
+        panelHeight: mode === "detail" ? 300 : 560,
+        mode,
+        parked,
+        preferredSide,
+        forcedSide,
+      });
       const nextItemId = nextDetail.itemId != null ? String(nextDetail.itemId) : null;
       const canReuseSnapshot = current?.open
         && String(current.itemId) === nextItemId
@@ -715,6 +781,7 @@ export default function CalendarModal({
         exclusionElement: nextDetail.exclusionElement || null,
         anchorKind: parked ? "parked" : nextDetail.anchorKind || (inferredDayCell ? "day-cell" : "chip"),
         preferredSide,
+        forcedSide,
         parked,
         userDragged: false,
         initialPlacement,
@@ -747,20 +814,47 @@ export default function CalendarModal({
             anchorKind: "parked",
             parked: true,
             userDragged: false,
+            forcedSide: null,
           }
         : current
     ));
   }
 
   function setFloatingDetailDragged(userDragged, placementKey = null) {
+    if (userDragged) {
+      const currentView = floatingDetailRef.current?.view;
+      if (currentView) delete floatingDetailSessionSideByViewRef.current[currentView];
+    }
     setFloatingDetail((current) => (
       current?.open && (!userDragged || !placementKey || current.placementKey === placementKey)
         ? {
             ...current,
             userDragged: !!userDragged,
+            forcedSide: userDragged ? null : current.forcedSide || null,
           }
         : current
     ));
+  }
+
+  function flipFloatingDetailSide() {
+    const currentDetail = floatingDetailRef.current;
+    if (!isGridOriginFloatingDetail(currentDetail) || currentDetail.dirty) return;
+    setFloatingDetail((current) => {
+      if (!isGridOriginFloatingDetail(current) || current.dirty) return current;
+      const currentSide = current.forcedSide
+        || placementSideFromCaret(current.initialPlacement?.caretSide)
+        || current.preferredSide
+        || "right";
+      const forcedSide = currentSide === "left" ? "right" : "left";
+      floatingDetailSessionSideByViewRef.current = {
+        ...floatingDetailSessionSideByViewRef.current,
+        [current.view]: forcedSide,
+      };
+      return {
+        ...current,
+        forcedSide,
+      };
+    });
   }
 
   const handleViewChange = useCallback((nextView) => {
@@ -1145,6 +1239,18 @@ export default function CalendarModal({
         return;
       }
 
+      if (event.key === " ") {
+        const currentDetail = floatingDetailRef.current;
+        if (isGridOriginFloatingDetail(currentDetail)
+          && !currentDetail.dirty
+          && !isFloatingDetailFlipSuppressedTarget(event.target, currentDetail)
+        ) {
+          flipFloatingDetailSide();
+          consumeCalendarKey();
+          return;
+        }
+      }
+
       if (
         (event.key === "Enter" || event.key === " ")
         && event.target instanceof HTMLElement
@@ -1263,7 +1369,7 @@ export default function CalendarModal({
           consumeCalendarKey();
           break;
         default:
-          if (event.key === "Enter" || (event.key.length === 1 && event.key !== "r" && event.key !== "R")) {
+          if (event.key === "Enter" || (event.key.length === 1 && event.key !== " " && event.key !== "r" && event.key !== "R")) {
             consumeCalendarKey();
           }
           break;

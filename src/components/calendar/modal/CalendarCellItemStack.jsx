@@ -18,7 +18,7 @@ function chipStyle({
   const isLarge = itemHeight >= 28;
   const isMedium = itemHeight >= 26;
   const horizontalPadding = itemHeight >= 36 ? 10 : isLarge ? 9 : isMedium ? 8 : 7;
-  const verticalPadding = hasMetadata ? (itemHeight >= 36 ? 4 : itemHeight >= 32 ? 3 : 2) : 0;
+  const verticalPadding = itemHeight >= 36 ? 4 : itemHeight >= 32 ? 3 : hasMetadata ? 2 : 0;
   const radius = isLarge ? 10 : isMedium ? 9 : 8;
 
   return {
@@ -26,9 +26,10 @@ function chipStyle({
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "center",
-    gap: hasMetadata ? 1 : 0,
+    gap: 0,
     minWidth: 0,
     boxSizing: "border-box",
+    overflow: "hidden",
     padding: hasMetadata
       ? `${verticalPadding}px ${horizontalPadding}px`
       : `0 ${horizontalPadding}px`,
@@ -67,19 +68,36 @@ function chipStyle({
 
 function metadataFontSize(metrics) {
   const itemHeight = metrics?.itemHeight ?? 24;
-  if (itemHeight >= 36) return 10;
-  if (itemHeight >= 32) return 9.5;
+  if (itemHeight >= 36) return 9;
+  if (itemHeight >= 32) return 8.75;
   if (itemHeight >= 28) return 9.25;
   return 9;
 }
 
-function titleFontSize(metrics) {
+function compactLeadingLabel(value) {
+  const label = String(value || "").trim();
+  const timeMatch = label.match(/^(\d{1,2})(?::([0-5]\d))?\s*([ap])\.?m\.?$/i);
+  if (!timeMatch) return label;
+  const hour = timeMatch[1];
+  const minute = timeMatch[2];
+  const suffix = timeMatch[3].toLowerCase();
+  return minute && minute !== "00" ? `${hour}:${minute}${suffix}` : `${hour}${suffix}`;
+}
+
+function chipContentFit(item, metrics) {
   const itemHeight = metrics?.itemHeight ?? 24;
-  if (itemHeight >= 36) return 11.75;
-  if (itemHeight >= 32) return 10.75;
-  if (itemHeight >= 28) return 10.5;
-  if (itemHeight >= 26) return 10.25;
-  return 10;
+  const compactLabel = compactLeadingLabel(item.leadingLabel);
+  const length = [compactLabel, item.title].filter(Boolean).join(" ").trim().length;
+
+  if (itemHeight >= 36) {
+    if (length <= 22) return { fontSize: 11, lineHeight: 1.08, lineClamp: 1 };
+    if (length <= 58) return { fontSize: 10.5, lineHeight: 1.08, lineClamp: 2 };
+    return { fontSize: 10, lineHeight: 1.08, lineClamp: 2 };
+  }
+  if (itemHeight >= 32) return { fontSize: length <= 22 ? 10.5 : 10, lineHeight: 1.06, lineClamp: length <= 22 ? 1 : 2 };
+  if (itemHeight >= 28) return { fontSize: 10.5, lineHeight: 1.05, lineClamp: 1 };
+  if (itemHeight >= 26) return { fontSize: 10.25, lineHeight: 1.05, lineClamp: 1 };
+  return { fontSize: 10, lineHeight: 1.05, lineClamp: 1 };
 }
 
 function metadataColor(item, selected) {
@@ -87,26 +105,30 @@ function metadataColor(item, selected) {
   return item.leadingColor || "rgba(205,214,244,0.62)";
 }
 
-function ChipMetadata({ item, selected, metrics }) {
+function ChipPrefix({ item, selected, metrics }) {
   if (!item.leadingLabel && !item.recurring) return null;
   const color = metadataColor(item, selected);
+  const itemHeight = metrics?.itemHeight ?? 24;
+  const compactLabel = compactLeadingLabel(item.leadingLabel);
 
   return (
     <span
       data-calendar-chip-meta="true"
       style={{
         minWidth: 0,
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
-        gap: (metrics?.itemHeight ?? 24) >= 36 ? 5 : 4,
+        gap: itemHeight >= 36 ? 5 : 4,
+        maxWidth: "100%",
         overflow: "hidden",
         fontSize: metadataFontSize(metrics),
         fontWeight: 700,
         letterSpacing: 0.15,
-        lineHeight: 1.05,
+        lineHeight: 1,
         color,
-        whiteSpace: "nowrap",
         fontVariantNumeric: "tabular-nums",
+        marginRight: 4,
+        verticalAlign: "baseline",
       }}
     >
       {item.leadingLabel ? (
@@ -115,16 +137,17 @@ function ChipMetadata({ item, selected, metrics }) {
             minWidth: 0,
             overflow: "hidden",
             textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
-          {item.leadingLabel}
+          {compactLabel}
         </span>
       ) : null}
       {item.recurring ? (
         <Repeat
           data-calendar-chip-recurring="true"
           aria-hidden="true"
-          size={(metrics?.itemHeight ?? 24) >= 36 ? 10 : 9}
+          size={itemHeight >= 36 ? 10 : 9}
           strokeWidth={2.4}
           style={{
             flexShrink: 0,
@@ -137,23 +160,54 @@ function ChipMetadata({ item, selected, metrics }) {
   );
 }
 
-function ChipTitle({ item, selected, metrics }) {
-  return (
-    <span
-      data-calendar-chip-title="true"
-      style={{
-        minWidth: 0,
-        overflow: "hidden",
+function ChipContent({ item, selected, metrics }) {
+  const fit = chipContentFit(item, metrics);
+  const lineHeightPx = Number((fit.fontSize * fit.lineHeight).toFixed(2));
+  const maxHeight = Number((lineHeightPx * fit.lineClamp).toFixed(2));
+  const clampStyle = fit.lineClamp > 1
+    ? {
+        display: "-webkit-box",
+        WebkitLineClamp: fit.lineClamp,
+        WebkitBoxOrient: "vertical",
+        overflowWrap: "break-word",
+        wordBreak: "normal",
+        whiteSpace: "normal",
+      }
+    : {
+        display: "block",
+        overflowWrap: "normal",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
-        fontSize: titleFontSize(metrics),
-        fontWeight: selected ? 600 : 500,
-        lineHeight: 1.1,
-        textDecoration: item.complete ? "line-through" : "none",
-        textDecorationColor: "rgba(205,214,244,0.28)",
+        wordBreak: "normal",
+      };
+
+  return (
+    <span
+      data-calendar-chip-content="true"
+      data-calendar-chip-title="true"
+      data-calendar-chip-title-fit={`${fit.fontSize}/${fit.lineClamp}`}
+      style={{
+        minWidth: 0,
+        minHeight: 0,
+        flex: "0 1 auto",
+        maxHeight,
+        overflow: "hidden",
+        ...clampStyle,
+        fontSize: fit.fontSize,
+        fontWeight: 500,
+        lineHeight: fit.lineHeight,
       }}
     >
-      {item.title}
+      <ChipPrefix item={item} selected={selected} metrics={metrics} />
+      <span
+        data-calendar-chip-title-text="true"
+        style={{
+          textDecoration: item.complete ? "line-through" : "none",
+          textDecorationColor: "rgba(205,214,244,0.28)",
+        }}
+      >
+        {item.title}
+      </span>
     </span>
   );
 }
@@ -351,8 +405,7 @@ function ItemChip({
           metrics,
         })}
       >
-        <ChipMetadata item={item} selected={false} metrics={metrics} />
-        <ChipTitle item={item} selected={false} metrics={metrics} />
+        <ChipContent item={item} selected={false} metrics={metrics} />
       </div>
     );
   }
@@ -427,8 +480,7 @@ function ItemChip({
         metrics,
       })}
     >
-      <ChipMetadata item={item} selected={selected} metrics={metrics} />
-      <ChipTitle item={item} selected={selected} metrics={metrics} />
+      <ChipContent item={item} selected={selected} metrics={metrics} />
     </button>
   );
 }

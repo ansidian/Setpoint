@@ -139,6 +139,27 @@ describe("EventsAgendaRail", () => {
     expect(within(rail).getByText("72°/55°")).toBeTruthy();
   });
 
+  it("scopes visual selection to the selected agenda date for multi-day events", () => {
+    renderRail({
+      selectedDateKey: "2026-05-05",
+      selectedItemId: "multi-day",
+      events: [
+        event({
+          id: "multi-day",
+          title: "Residency",
+          allDay: true,
+          start: "2026-05-05T07:00:00.000Z",
+          end: "2026-05-07T07:00:00.000Z",
+        }),
+      ],
+    });
+
+    const chips = screen.getAllByTestId("calendar-agenda-event-chip");
+    expect(chips).toHaveLength(2);
+    expect(chips[0].style.border).toBe("1px solid rgb(137, 180, 250)");
+    expect(chips[1].style.border).not.toBe("1px solid rgb(137, 180, 250)");
+  });
+
   it("uses normal sticky headers without terminal scroll affordances", () => {
     renderRail();
 

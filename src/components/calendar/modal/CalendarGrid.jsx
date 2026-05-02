@@ -138,11 +138,12 @@ function inlineOverflowItemStyle({ item, selected, active }) {
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
-    gap: 1,
+    gap: 0,
     height: 36,
     minWidth: 0,
     boxSizing: "border-box",
     padding: "4px 10px",
+    overflow: "hidden",
     borderRadius: 10,
     border: selected
       ? `1px solid color-mix(in srgb, ${accent} 48%, rgba(255,255,255,0.08))`
@@ -166,31 +167,45 @@ function inlineOverflowItemStyle({ item, selected, active }) {
   };
 }
 
-function InlineOverflowMetadata({ item, selected }) {
+function compactInlineOverflowLabel(value) {
+  const label = String(value || "").trim();
+  const timeMatch = label.match(/^(\d{1,2})(?::([0-5]\d))?\s*([ap])\.?m\.?$/i);
+  if (!timeMatch) return label;
+  const hour = timeMatch[1];
+  const minute = timeMatch[2];
+  const suffix = timeMatch[3].toLowerCase();
+  return minute && minute !== "00" ? `${hour}:${minute}${suffix}` : `${hour}${suffix}`;
+}
+
+function InlineOverflowPrefix({ item, selected }) {
   if (!item.leadingLabel && !item.recurring) return null;
   const color = selected
     ? item.leadingColor || item.accent || "var(--ea-accent)"
     : item.leadingColor || "rgba(205,214,244,0.62)";
+  const compactLabel = compactInlineOverflowLabel(item.leadingLabel);
   return (
     <span
+      data-calendar-chip-meta="true"
       style={{
         minWidth: 0,
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
         gap: 5,
+        maxWidth: "100%",
         overflow: "hidden",
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 700,
         letterSpacing: 0.15,
-        lineHeight: 1.05,
+        lineHeight: 1,
         color,
-        whiteSpace: "nowrap",
         fontVariantNumeric: "tabular-nums",
+        marginRight: 4,
+        verticalAlign: "baseline",
       }}
     >
       {item.leadingLabel ? (
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {item.leadingLabel}
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {compactLabel}
         </span>
       ) : null}
       {item.recurring ? (
@@ -201,6 +216,55 @@ function InlineOverflowMetadata({ item, selected }) {
           style={{ flexShrink: 0, color, opacity: selected ? 0.86 : 0.7 }}
         />
       ) : null}
+    </span>
+  );
+}
+
+function InlineOverflowChipContent({ item, selected }) {
+  const length = [compactInlineOverflowLabel(item.leadingLabel), item.title].filter(Boolean).join(" ").length;
+  const fontSize = length <= 22 ? 11 : length <= 58 ? 10.5 : 10;
+  const lineClamp = length <= 22 ? 1 : 2;
+  const lineHeight = 1.08;
+  const maxHeight = Number((fontSize * lineHeight * lineClamp).toFixed(2));
+  const clampStyle = lineClamp > 1
+    ? {
+        display: "-webkit-box",
+        WebkitLineClamp: lineClamp,
+        WebkitBoxOrient: "vertical",
+        overflowWrap: "break-word",
+        whiteSpace: "normal",
+      }
+    : {
+        display: "block",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      };
+
+  return (
+    <span
+      data-calendar-chip-content="true"
+      data-calendar-chip-title="true"
+      data-calendar-chip-title-fit={`${fontSize}/${lineClamp}`}
+      style={{
+        minWidth: 0,
+        maxHeight,
+        overflow: "hidden",
+        ...clampStyle,
+        fontSize,
+        fontWeight: selected ? 600 : 500,
+        lineHeight,
+      }}
+    >
+      <InlineOverflowPrefix item={item} selected={selected} />
+      <span
+        data-calendar-chip-title-text="true"
+        style={{
+          textDecoration: item.complete ? "line-through" : "none",
+          textDecorationColor: "rgba(205,214,244,0.28)",
+        }}
+      >
+        {item.title}
+      </span>
     </span>
   );
 }
@@ -323,22 +387,7 @@ function CalendarInlineOverflowLayer({
             onBlur={() => setActiveItemId((current) => (current === itemId ? null : current))}
             style={inlineOverflowItemStyle({ item, selected, active })}
           >
-            <InlineOverflowMetadata item={item} selected={selected} />
-            <span
-              style={{
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontSize: 11.75,
-                fontWeight: selected ? 600 : 500,
-                lineHeight: 1.1,
-                textDecoration: item.complete ? "line-through" : "none",
-                textDecorationColor: "rgba(205,214,244,0.28)",
-              }}
-            >
-              {item.title}
-            </span>
+            <InlineOverflowChipContent item={item} selected={selected} />
           </button>
         );
       })}

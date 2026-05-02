@@ -13,6 +13,11 @@ function keyForEvent(event, dateKey) {
   return `${event.agendaItemId || event.id}-${dateKey}`;
 }
 
+function isSelectedAgendaEvent(event, dateKey, selectedItemId, selectedDateKey) {
+  return String(selectedItemId || "") === String(event.agendaItemId || "")
+    && selectedDateKey === dateKey;
+}
+
 function groupDate(group) {
   const parsed = parseYmd(group.dateKey);
   return parsed ? new Date(parsed.year, parsed.month, parsed.day) : null;
@@ -414,7 +419,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
                   >
                     <AllDayChip
                       event={event}
-                      selected={String(selectedItemId || "") === String(event.agendaItemId || "")}
+                      selected={isSelectedAgendaEvent(event, group.dateKey, selectedItemId, selectedDateKey)}
                       onSelect={handleEventSelect}
                       quickActions={eventQuickActions}
                       onDirtyBlocked={dirtyBlocked}
@@ -464,7 +469,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
                   event={event}
                   dateKey={group.dateKey}
                   todayKey={todayKey}
-                  selected={String(selectedItemId || "") === String(event.agendaItemId || "")}
+                  selected={isSelectedAgendaEvent(event, group.dateKey, selectedItemId, selectedDateKey)}
                   onSelect={handleEventSelect}
                   quickActions={eventQuickActions}
                   onDirtyBlocked={dirtyBlocked}

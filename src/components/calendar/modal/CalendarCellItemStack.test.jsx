@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe("CalendarCellItemStack ghost visibility", () => {
-  it("stacks metadata above the title and marks recurring items passively", () => {
+  it("renders metadata as a compact run-in prefix and marks recurring items passively", () => {
     render(
       <CalendarCellItemStack
         day={20}
@@ -28,12 +28,68 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
     const chip = screen.getByTestId("calendar-cell-item-chip");
     const meta = chip.querySelector("[data-calendar-chip-meta='true']");
-    const title = chip.querySelector("[data-calendar-chip-title='true']");
+    const content = chip.querySelector("[data-calendar-chip-content='true']");
+    const title = chip.querySelector("[data-calendar-chip-title-text='true']");
 
-    expect(meta?.textContent).toContain("9:00 AM");
+    expect(meta?.textContent).toContain("9a");
     expect(title?.textContent).toBe("Weekly sync");
     expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeTruthy();
-    expect([...chip.children].indexOf(meta)).toBeLessThan([...chip.children].indexOf(title));
+    expect(content?.contains(meta)).toBe(true);
+    expect(content?.contains(title)).toBe(true);
+    expect(chip.style.flexDirection).toBe("column");
+  });
+
+  it("uses two readable title lines with a compact run-in prefix for long month chips", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "short", leadingLabel: "10:50 AM", title: "Sync" },
+          { id: "long", leadingLabel: "11:30 AM", title: "Advanced machine learning project review and lab planning" },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 2 }}
+      />,
+    );
+
+    const chips = screen.getAllByTestId("calendar-cell-item-chip");
+    const shortTitle = chips[0].querySelector("[data-calendar-chip-title='true']");
+    const longTitle = chips[1].querySelector("[data-calendar-chip-title='true']");
+
+    expect(chips[0].style.flexDirection).toBe("column");
+    expect(chips[1].style.flexDirection).toBe("column");
+    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.textContent).toContain("10:50a");
+    expect(shortTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("11/1");
+    expect(longTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("10/2");
+    expect(longTitle?.style.flex).toBe("0 1 auto");
+    expect(longTitle?.style.maxHeight).toBe("21.6px");
+    expect(longTitle?.style.overflow).toBe("hidden");
+    expect(longTitle?.style.webkitLineClamp).toBe("2");
+    expect(longTitle?.style.whiteSpace).toBe("normal");
+  });
+
+  it("keeps selected chip title metrics stable", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        selectedItemId="selected"
+        items={[
+          { id: "plain", leadingLabel: "Todoist", title: "Chase Prime Visa $15 statement credit deadline" },
+          { id: "selected", leadingLabel: "Todoist", title: "Chase Prime Visa $15 statement credit deadline" },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 2 }}
+      />,
+    );
+
+    const titles = screen
+      .getAllByTestId("calendar-cell-item-chip")
+      .map((chip) => chip.querySelector("[data-calendar-chip-title='true']"));
+
+    expect(titles[0]?.style.fontWeight).toBe("500");
+    expect(titles[1]?.style.fontWeight).toBe("500");
+    expect(titles[0]?.style.maxHeight).toBe(titles[1]?.style.maxHeight);
+    expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
+      titles[1]?.getAttribute("data-calendar-chip-title-fit"),
+    );
   });
 
   it("only strikes the title for completed items", () => {
@@ -49,7 +105,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
     const chip = screen.getByTestId("calendar-cell-item-chip");
     const meta = chip.querySelector("[data-calendar-chip-meta='true']");
-    const title = chip.querySelector("[data-calendar-chip-title='true']");
+    const title = chip.querySelector("[data-calendar-chip-title-text='true']");
 
     expect(meta?.style.textDecoration).toBe("");
     expect(title?.style.textDecoration).toBe("line-through");
@@ -269,7 +325,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
       />,
     );
 
-    expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("12:30 PM");
+    expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("12:30p");
     expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("Preview hold");
     expect(screen.getByText("+2 more")).toBeTruthy();
     expect(screen.queryByText("Visible hold")).toBeNull();
