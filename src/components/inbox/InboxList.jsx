@@ -375,7 +375,7 @@ export default function InboxList({
           <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
           <>
-            {!activeSnapshotMode && grouped.live.length > 0 && (
+            {grouped.live.length > 0 && (
               <div>
                 <StickyHeader borderColor="rgba(137,180,250,0.12)">
                   <div

@@ -127,10 +127,23 @@ export default function useInboxController({
   }, [activeSnapshotMode]);
 
   const flatEmails = useMemo(() => {
-    if (activeSnapshotMode) {
-      return collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides);
-    }
     const synthAccount = makeSynthAccount(emailAccounts);
+    const resurfacedEmails = collectResurfaced(
+      resurfacedMap,
+      synthAccount,
+      liveReadOverrides,
+      liveTrashedUids,
+    );
+
+    if (activeSnapshotMode) {
+      const resurfacedKeys = new Set(resurfacedEmails.map((entry) => entry.uid || entry.id));
+      return [
+        ...collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides)
+          .filter((entry) => !resurfacedKeys.has(entry.uid || entry.id)),
+        ...resurfacedEmails,
+      ];
+    }
+
     const out = [];
     const seenUids = new Set();
     const pushEmail = (entry) => {
