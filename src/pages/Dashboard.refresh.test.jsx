@@ -120,9 +120,9 @@ describe("Dashboard refresh wiring", () => {
 
     mocks.autoRefreshArgs.onQuickRefresh();
 
-    expect(mocks.handleQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
     expect(mocks.activeSnapshotRefresh).not.toHaveBeenCalled();
-    expect(mocks.activeSnapshotSync).not.toHaveBeenCalled();
+    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
     expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
     expect(mocks.markCalendarRangeStale).not.toHaveBeenCalled();
     expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
@@ -133,8 +133,8 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
     expect(mocks.markCalendarRangeStale).toHaveBeenCalledTimes(1);
     expect(mocks.refreshCalendarRangeInPlace).not.toHaveBeenCalled();
-    expect(mocks.handleQuickRefresh).toHaveBeenCalledTimes(2);
-    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
+    expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
+    expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(2);
     expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
     expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(2);
   });
@@ -148,7 +148,7 @@ describe("Dashboard refresh wiring", () => {
 
     fireEvent.keyDown(window, { key: "r" });
 
-    expect(mocks.handleQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
     expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
     expect(mocks.handleFullGeneration).not.toHaveBeenCalled();
   });

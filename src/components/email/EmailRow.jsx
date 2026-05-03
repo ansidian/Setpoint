@@ -49,9 +49,8 @@ function UrgentFlag({ email, size = "desktop" }) {
 }
 
 /**
- * Shared email row used by both EmailSection and LiveEmailSection. Clicking
- * the row opens the email in an EmailReaderOverlay via `onOpen`. There is
- * no inline expansion — the reader lives in a portal-based modal instead.
+ * Shared email row for legacy briefing-history email lists. Clicking the row
+ * opens the email in an EmailReaderOverlay via `onOpen`.
  *
  * Props:
  * - email          — email data object

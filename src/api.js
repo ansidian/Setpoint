@@ -52,10 +52,6 @@ export const getLatestBriefing = (scenarioOverride) => {
   return apiFetch(`/api/briefing/latest${qs}`);
 };
 export const getDevScenarios = () => apiFetch("/api/briefing/scenarios");
-export const triggerGeneration = () => apiFetch("/api/briefing/generate", { method: "POST" });
-export const quickRefresh = () => apiFetch("/api/briefing/refresh", { method: "POST" });
-export const pollStatus = (id) => apiFetch(`/api/briefing/status/${id}`);
-export const checkInProgress = () => apiFetch("/api/briefing/in-progress");
 export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
 export const syncActiveSnapshot = () => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
 export const moveSnapshotItemLane = (itemId, lane) =>

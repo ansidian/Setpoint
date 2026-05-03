@@ -429,11 +429,11 @@ export default function useInboxController({
           return next;
         });
         trashEmail(uid).then(() => onActiveSnapshotRefresh()).catch(() => {});
+      } else if (selectedEmail._activeSnapshot) {
+        trashEmail(uid).then(() => onActiveSnapshotRefresh()).catch(() => {});
       } else {
         handleDismiss(id);
-        trashEmail(uid).then(() => {
-          if (selectedEmail._activeSnapshot) onActiveSnapshotRefresh();
-        }).catch(() => {});
+        trashEmail(uid).catch(() => {});
       }
 
       setPinnedSet((prev) => {

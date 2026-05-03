@@ -56,17 +56,7 @@ function makeRes() {
   return res;
 }
 
-function stubDbDefault({ briefingJson, generatedAt }) {
-  mockDb.execute.mockImplementation(async ({ sql }) => {
-    if (sql.includes("FROM ea_briefings") && sql.includes("ORDER BY generated_at DESC LIMIT 1")) {
-      return generatedAt ? { rows: [{ id: 1, briefing_json: briefingJson, generated_at: generatedAt }] } : { rows: [] };
-    }
-    // pinned / snoozed / resurfaced / senders
-    return { rows: [] };
-  });
-}
-
-describe("GET /api/live/all — dynamic hoursBack", () => {
+describe("GET /api/live/all", () => {
   beforeEach(() => {
     mockDb.execute.mockReset();
     gmailFetchEmails.mockReset().mockResolvedValue([]);
@@ -75,180 +65,42 @@ describe("GET /api/live/all — dynamic hoursBack", () => {
     isIcloudMessageRead.mockReset().mockResolvedValue(null);
   });
 
-  it("uses 12h default when the briefing has zero known email UIDs (empty-briefing guard)", async () => {
-    // Briefing is 2h old, but empty — live must not shrink to 2h. A narrow
-    // slice would hide older email that mark-as-unread / manual resurface
-    // flows expect to see.
-    const generatedAt = new Date(Date.now() - 2 * 3600_000).toISOString().slice(0, 19).replace("T", " ");
-    const emptyBriefing = JSON.stringify({ emails: { accounts: [{ important: [], noise: [] }] } });
-    stubDbDefault({ briefingJson: emptyBriefing, generatedAt });
+  it("uses the fixed active email window without reading legacy briefing rows", async () => {
+    mockDb.execute.mockImplementation(async ({ sql }) => {
+      if (sql.includes("ea_briefings")) {
+        throw new Error("live route must not read legacy briefings");
+      }
+      return { rows: [] };
+    });
 
     const handler = findHandler("get", "/all");
-    await handler({}, makeRes());
+    const res = makeRes();
+    await handler({}, res);
 
     expect(gmailFetchEmails).toHaveBeenCalledTimes(1);
-    const passedHoursBack = gmailFetchEmails.mock.calls[0][1];
-    expect(passedHoursBack).toBe(12);
+    expect(gmailFetchEmails.mock.calls[0][1]).toBe(12);
+    expect(res.body.briefingGeneratedAt).toBeNull();
+    expect(res.body.briefingReadStatus).toEqual({});
+    expect(mockDb.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sql: expect.stringMatching(/ea_briefings/i) }),
+    );
   });
 
-  it("shrinks to elapsed time when the briefing has emails covering the backlog", async () => {
-    // Briefing 3h old (minus 1s to keep Math.ceil at 3) with an email in it —
-    // live only needs to cover the 3h gap.
-    const ms = 3 * 3600_000 - 1000;
-    const generatedAt = new Date(Date.now() - ms).toISOString().slice(0, 19).replace("T", " ");
-    const briefing = JSON.stringify({
-      emails: { accounts: [{ important: [{ id: "x1", uid: "u1" }], noise: [] }] },
-    });
-    stubDbDefault({ briefingJson: briefing, generatedAt });
-
-    const handler = findHandler("get", "/all");
-    await handler({}, makeRes());
-
-    const passedHoursBack = gmailFetchEmails.mock.calls[0][1];
-    expect(passedHoursBack).toBe(3);
-  });
-
-  it("reconciles briefing Gmail read state even when the email is outside the live fetch window", async () => {
-    const generatedAt = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 19).replace("T", " ");
-    const briefing = JSON.stringify({
-      emails: {
-        accounts: [{
-          name: "Work",
-          important: [{
-            id: "gmail-gmail-a-msg-1",
-            uid: "gmail-gmail-a-msg-1",
-            account_id: "gmail-a",
-            account_email: "w@e.com",
-            read: false,
-          }],
-          noise: [],
-        }],
-      },
-    });
-    stubDbDefault({ briefingJson: briefing, generatedAt });
-    isGmailMessageRead.mockResolvedValueOnce(true);
-
-    const handler = findHandler("get", "/all");
-    const res = makeRes();
-    await handler({}, res);
-
-    expect(res.body.briefingReadStatus).toEqual({ "gmail-gmail-a-msg-1": true });
-  });
-
-  it("preserves explicit false when provider says a briefing email is still unread", async () => {
+  it("does not strip bill flags by mutating legacy briefing JSON", async () => {
     mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (sql.includes("FROM ea_briefings") && sql.includes("ORDER BY generated_at DESC LIMIT 1")) {
-        return {
-          rows: [{
-            id: 1,
-            generated_at: new Date(Date.now() - 2 * 3600_000).toISOString().slice(0, 19).replace("T", " "),
-            briefing_json: JSON.stringify({
-              emails: {
-                accounts: [{
-                  name: "Work",
-                  important: [{
-                    id: "gmail-gmail-a-msg-2",
-                    uid: "gmail-gmail-a-msg-2",
-                    account_id: "gmail-a",
-                    account_email: "w@e.com",
-                    read: true,
-                  }],
-                  noise: [],
-                }],
-              },
-            }),
-          }],
-        };
+      if (/UPDATE\s+ea_briefings/i.test(sql)) {
+        throw new Error("live route must not mutate legacy briefings");
       }
       return { rows: [] };
     });
-    isGmailMessageRead.mockResolvedValueOnce(false);
 
     const handler = findHandler("get", "/all");
     const res = makeRes();
     await handler({}, res);
 
-    expect(Object.prototype.hasOwnProperty.call(res.body.briefingReadStatus, "gmail-gmail-a-msg-2")).toBe(true);
-    expect(res.body.briefingReadStatus["gmail-gmail-a-msg-2"]).toBe(false);
-  });
-
-  it("falls back to indexed read state when provider probing cannot confirm the latest briefing row", async () => {
-    const uid = "gmail-gmail-a-msg-3";
-    mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (sql.includes("FROM ea_briefings") && sql.includes("ORDER BY generated_at DESC LIMIT 1")) {
-        return {
-          rows: [{
-            id: 1,
-            generated_at: new Date(Date.now() - 2 * 3600_000).toISOString().slice(0, 19).replace("T", " "),
-            briefing_json: JSON.stringify({
-              emails: {
-                accounts: [{
-                  name: "Work",
-                  important: [{
-                    id: uid,
-                    uid,
-                    account_id: "gmail-a",
-                    account_email: "w@e.com",
-                    read: false,
-                  }],
-                  noise: [],
-                }],
-              },
-            }),
-          }],
-        };
-      }
-      if (sql.includes("FROM ea_email_index")) {
-        return { rows: [{ uid, read: 1 }] };
-      }
-      return { rows: [] };
-    });
-    isGmailMessageRead.mockResolvedValueOnce(null);
-
-    const handler = findHandler("get", "/all");
-    const res = makeRes();
-    await handler({}, res);
-
-    expect(res.body.briefingReadStatus).toEqual({ [uid]: true });
-  });
-
-  it("reconciles briefing noise read state from provider/index data too", async () => {
-    const uid = "gmail-gmail-a-noise-1";
-    mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (sql.includes("FROM ea_briefings") && sql.includes("ORDER BY generated_at DESC LIMIT 1")) {
-        return {
-          rows: [{
-            id: 1,
-            generated_at: new Date(Date.now() - 2 * 3600_000).toISOString().slice(0, 19).replace("T", " "),
-            briefing_json: JSON.stringify({
-              emails: {
-                accounts: [{
-                  name: "Work",
-                  important: [],
-                  noise: [{
-                    id: uid,
-                    uid,
-                    account_id: "gmail-a",
-                    account_email: "w@e.com",
-                    read: false,
-                  }],
-                }],
-              },
-            }),
-          }],
-        };
-      }
-      if (sql.includes("FROM ea_email_index")) {
-        return { rows: [{ uid, read: 1 }] };
-      }
-      return { rows: [] };
-    });
-    isGmailMessageRead.mockResolvedValueOnce(null);
-
-    const handler = findHandler("get", "/all");
-    const res = makeRes();
-    await handler({}, res);
-
-    expect(res.body.briefingReadStatus).toEqual({ [uid]: true });
+    expect(res.statusCode).toBe(200);
+    expect(mockDb.execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sql: expect.stringMatching(/UPDATE\s+ea_briefings/i) }),
+    );
   });
 });

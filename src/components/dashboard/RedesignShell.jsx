@@ -6,7 +6,7 @@ import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import { collectBriefingEmails, mergeReadState } from "../inbox/helpers";
+import { collectActiveSnapshotEmails, collectBriefingEmails, mergeReadState } from "../inbox/helpers";
 import { DashboardBody } from "./DashboardBody";
 import { buildBriefingStatus, getNextBriefingSchedule } from "./briefingStatus";
 import { makeCalendarBillsData } from "./calendarBillsData";
@@ -351,9 +351,7 @@ export function RedesignShell({
     });
   }, []);
 
-  // Unread count surfaced on the Inbox tab. This has to include briefing mail
-  // as well as live-polled mail so read/unread actions update the badge
-  // immediately without waiting for a page refresh.
+  // Include current snapshot/briefing mail plus live-polled mail in the Inbox badge.
   const liveUnreadCount = useMemo(() => {
     const seen = new Set();
     let unread = 0;
@@ -368,9 +366,11 @@ export function RedesignShell({
       if (!read) unread += 1;
     };
 
-    for (const email of collectBriefingEmails(briefing?.emails?.accounts || [])) {
-      addEmail(email, false);
-    }
+    const usingSnapshot = !!activeSnapshot?.snapshot?.snapshot;
+    const baseEmails = usingSnapshot
+      ? collectActiveSnapshotEmails(activeSnapshot.snapshot, liveReadOverrides)
+      : collectBriefingEmails(briefing?.emails?.accounts || []);
+    for (const email of baseEmails) addEmail(email, usingSnapshot);
 
     for (const email of liveData.liveEmails || []) {
       addEmail(email, true);
@@ -381,7 +381,7 @@ export function RedesignShell({
     }
 
     return unread;
-  }, [briefing?.emails?.accounts, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
+  }, [activeSnapshot?.snapshot, briefing?.emails?.accounts, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
 
   const liveEmailsLoading = liveData.isPolling;
   const queueCalendarDeadlineRefresh = useCallback(() => {
@@ -465,6 +465,7 @@ export function RedesignShell({
           <DashboardBody
             briefing={briefing}
             liveData={liveData}
+            activeSnapshot={activeSnapshot?.snapshot}
             calendarRange={calendarRange}
             customize={customize}
             accent={accent}

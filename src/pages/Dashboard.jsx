@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense, useCallback } from "react";
+import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
@@ -21,6 +21,20 @@ import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
+const EMPTY_CURRENT_BRIEFING = {
+  generatedAt: "",
+  dataUpdatedAt: null,
+  aiGeneratedAt: null,
+  skippedAI: false,
+  nonAiGenerationCount: 0,
+  weather: null,
+  aiInsights: [],
+  calendar: [],
+  ctm: { upcoming: [], stats: null },
+  todoist: { upcoming: [], stats: null },
+  model: null,
+  emails: { summary: "", accounts: [] },
+};
 
 function isCalendarDomainCacheStale(fetchedAt) {
   return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
@@ -52,16 +66,23 @@ export default function Dashboard() {
   });
   useNotifications(liveData);
   const bd = useBriefingData({ liveData, isMock });
+  const [currentSyncing, setCurrentSyncing] = useState(false);
   const refreshCalendarDomainsRef = useRef(null);
   const calendarWorkspaceRef = useRef({ open: false, view: "events", eventsRange: null });
   const calendarBillsRefreshRequestedRef = useRef(false);
   const markCalendarRangeStale = calendarRange.markStale;
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
-  const quickRefreshBriefing = bd.handleQuickRefresh;
   const handleTimerQuickRefresh = useCallback(() => {
-    return quickRefreshBriefing();
-  }, [quickRefreshBriefing]);
+    if (currentSyncing) return Promise.resolve();
+    setCurrentSyncing(true);
+    return Promise.all([
+      liveData.refreshNow?.(),
+      activeSnapshot.sync(),
+    ]).finally(() => setCurrentSyncing(false));
+  }, [activeSnapshot, currentSyncing, liveData]);
   const handleExplicitQuickRefresh = useCallback(() => {
+    if (currentSyncing) return Promise.resolve();
+    setCurrentSyncing(true);
     const calendarWorkspace = calendarWorkspaceRef.current;
     if (calendarWorkspace.open && calendarWorkspace.view === "events" && calendarWorkspace.eventsRange) {
       refreshCalendarRangeInPlace?.(calendarWorkspace.eventsRange.start, calendarWorkspace.eventsRange.end);
@@ -73,10 +94,10 @@ export default function Dashboard() {
     calendarBillRange.markStale?.();
     refreshCalendarDomainsRef.current?.({ force: true });
     return Promise.all([
-      quickRefreshBriefing(),
+      liveData.refreshNow?.(),
       activeSnapshot.sync(),
-    ]);
-  }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
+    ]).finally(() => setCurrentSyncing(false));
+  }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, liveData, markCalendarRangeStale, refreshCalendarRangeInPlace]);
   useAutoRefresh({
     disabled: isMock,
     lastQuickRefreshAt: bd.lastQuickRefreshAt,
@@ -88,12 +109,12 @@ export default function Dashboard() {
     function onKeyDown(e) {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.repeat || e.key !== "r") return;
-      if (bd.refreshing || bd.generating) return;
+      if (bd.refreshing || bd.generating || currentSyncing) return;
       handleExplicitQuickRefresh();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [bd.refreshing, bd.generating, handleExplicitQuickRefresh]);
+  }, [bd.refreshing, bd.generating, currentSyncing, handleExplicitQuickRefresh]);
 
   // Reconcile briefing read status from live data (kept from original)
   useEffect(() => {
@@ -176,11 +197,21 @@ export default function Dashboard() {
     };
   }, []);
 
-  if (bd.loading) return <LoadingSkeleton />;
-  if (bd.error && !bd.briefing) {
+  const canRenderActiveSnapshot = !!activeSnapshot.snapshot?.snapshot;
+  const effectiveBriefing = bd.briefing || (canRenderActiveSnapshot ? EMPTY_CURRENT_BRIEFING : null);
+  const shellBd = useMemo(
+    () => ({
+      ...(effectiveBriefing === bd.briefing ? bd : { ...bd, briefing: effectiveBriefing }),
+      refreshing: bd.refreshing || currentSyncing,
+    }),
+    [bd, currentSyncing, effectiveBriefing],
+  );
+
+  if (bd.loading && !canRenderActiveSnapshot) return <LoadingSkeleton />;
+  if (bd.error && !effectiveBriefing) {
     return <ErrorState message={bd.error} onRetry={() => window.location.reload()} />;
   }
-  if (!bd.briefing) {
+  if (!effectiveBriefing) {
     return (
       <div className="min-h-screen text-foreground font-sans flex items-center justify-center p-6">
         <div className="w-full max-w-[880px]">
@@ -206,12 +237,12 @@ export default function Dashboard() {
   return (
     <TooltipProvider>
       <DashboardProvider
-        briefing={bd.briefing}
+        briefing={effectiveBriefing}
         setBriefing={bd.setBriefing}
         setCalendarDeadlines={updateCalendarDeadlinesLocal}
       >
         <RedesignShell
-          bd={bd}
+          bd={shellBd}
           liveData={liveData}
           activeSnapshot={activeSnapshot}
           calendarRange={calendarRange}

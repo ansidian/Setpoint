@@ -12,7 +12,7 @@ import {
 } from "./layout/DashboardScenePrimitives";
 
 export function DashboardBody({
-  briefing, liveData, calendarRange, customize, accent,
+  briefing, liveData, activeSnapshot, calendarRange, customize, accent,
   isMobile = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenTodoistCreate, onJumpSection, setAddTaskOpen,
 }) {
@@ -54,7 +54,60 @@ export function DashboardBody({
   const todoist = useMemo(() => briefing?.todoist?.upcoming || [], [briefing?.todoist?.upcoming]);
   const deadlines = useMemo(() => [...ctm, ...todoist], [ctm, todoist]);
   const bills = liveData.liveBills || [];
-  const emailAccounts = ctx.emailAccounts;
+  const activeSnapshotEmailAccounts = useMemo(() => {
+    if (!activeSnapshot?.snapshot) return null;
+    const accounts = new Map((activeSnapshot.filters?.accounts || []).map((account) => [
+      account.account_id,
+      {
+        id: account.account_id,
+        name: account.label || account.email || account.account_id,
+        email: account.email || "",
+        color: account.color || accent,
+        icon: account.icon || "Mail",
+        unread: 0,
+        important: [],
+        noise: [],
+      },
+    ]));
+    const ensureAccount = (item) => {
+      const key = item.account_id || "snapshot";
+      if (!accounts.has(key)) {
+        accounts.set(key, {
+          id: key,
+          name: item.account_label || item.account_email || "Snapshot",
+          email: item.account_email || "",
+          color: item.account_color || accent,
+          icon: item.account_icon || "Mail",
+          unread: 0,
+          important: [],
+          noise: [],
+        });
+      }
+      return accounts.get(key);
+    };
+    const rows = [
+      ...(activeSnapshot.carryover || []).map((item) => ({ ...item, lane: "needs_attention" })),
+      ...(activeSnapshot.lanes?.needs_attention || []),
+      ...(activeSnapshot.lanes?.fyi || []),
+    ];
+    for (const item of rows) {
+      const account = ensureAccount(item);
+      const lane = item.lane === "fyi" ? "fyi" : "action";
+      const email = {
+        id: String(item.uid || item.email_id || item.id),
+        uid: String(item.uid || item.email_id || item.id),
+        subject: item.subject || "",
+        from: item.from || item.from_name || item.from_address || "Unknown",
+        date: item.date || item.email_date || item.email_date_at_snapshot,
+        read: !!item.read,
+        triage: lane,
+      };
+      account.important.push(email);
+      if (!email.read) account.unread += 1;
+    }
+    return Array.from(accounts.values());
+  }, [accent, activeSnapshot]);
+  const emailAccounts = activeSnapshotEmailAccounts || ctx.emailAccounts;
   const pressureNow = useMemo(() => new Date(`${today}T12:00:00Z`).getTime(), [today]);
   const displayEvents = liveEventsReady ? events : seededEvents;
   const eventLoadingState = liveEventsReady
