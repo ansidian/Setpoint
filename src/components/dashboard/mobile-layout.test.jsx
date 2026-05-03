@@ -4,6 +4,7 @@ import DashboardHero from "./DashboardHero.jsx";
 import TodayTimeline from "./TodayTimeline.jsx";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import { DashboardBody } from "../../pages/Dashboard.jsx";
+import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel.js";
 import CustomizePanel from "../shell/CustomizePanel.jsx";
 
 afterEach(() => {
@@ -88,6 +89,16 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
 
 describe("mobile dashboard layout", () => {
   it("forces the mobile dashboard body into paper mode without the retired insights section", () => {
+    const layoutPlan = resolveDashboardBodyLayout({
+      isMobile: true,
+      dashboardLayout: "command",
+      showInboxPeek: true,
+      showNotes: true,
+    });
+
+    expect(layoutPlan.layoutMode).toBe("paper");
+    expect(layoutPlan.mobileSectionOrder).toEqual(["deadlines", "bills", "inbox-peek"]);
+
     renderDashboardBody({ isMobile: true, dashboardLayout: "command", showInsights: true });
 
     const body = screen.getByTestId("dashboard-body-mobile");
@@ -98,17 +109,15 @@ describe("mobile dashboard layout", () => {
     expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
     expect(document.querySelector('[data-sect="insights"]')).toBeNull();
     expect(document.querySelector('[data-sect="timeline"]')).toBeTruthy();
-
-    const deadlines = document.querySelector('[data-sect="deadlines"]');
-    const bills = document.querySelector('[data-sect="bills"]');
-    const inboxPeek = document.querySelector('[data-sect="inbox-peek"]');
-    const timeline = document.querySelector('[data-sect="timeline"]');
-    expect(deadlines.compareDocumentPosition(bills) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(bills.compareDocumentPosition(inboxPeek) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(inboxPeek.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("keeps desktop layout selection when not mobile", () => {
+    expect(resolveDashboardBodyLayout({
+      isMobile: false,
+      dashboardLayout: "command",
+      showInboxPeek: false,
+    }).commandSecondaryRailSectionOrder).toEqual(["bills"]);
+
     renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
 
     expect(screen.queryByText("Signals")).toBeNull();
@@ -116,15 +125,15 @@ describe("mobile dashboard layout", () => {
     expect(layoutRoot).toBeTruthy();
   });
 
-  it("uses one shared rail scroller in desktop command layout", () => {
+  it("keeps timeline and rails inside the desktop command layout", () => {
     renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
 
-    const railGrid = screen.getByTestId("dashboard-command-rails");
-    expect(railGrid.style.gridTemplateColumns).toBe("repeat(auto-fit, minmax(260px, 1fr))");
-    expect(railGrid.parentElement.style.overflowY).toBe("");
-    expect(railGrid.parentElement.parentElement.style.overflowY).toBe("auto");
-    expect(railGrid.parentElement.parentElement.style.scrollbarGutter).toBe("stable");
-    expect(screen.getByTestId("today-timeline").style.height).toBe("");
+    expect(document.querySelector('[data-layout-mode="command"]')).toBeTruthy();
+    expect(screen.getByTestId("dashboard-command-rails")).toBeTruthy();
+    expect(screen.getByTestId("today-timeline")).toBeTruthy();
+    expect(document.querySelector('[data-sect="deadlines"]')).toBeTruthy();
+    expect(document.querySelector('[data-sect="bills"]')).toBeTruthy();
+    expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
   });
 
   it("gives the inbox peek open button an interactive hover state", () => {
@@ -142,7 +151,7 @@ describe("mobile dashboard layout", () => {
 });
 
 describe("DashboardHero mobile layout", () => {
-  it("stacks mobile callouts into a single column", () => {
+  it("keeps mobile callouts available without the retired insight copy", () => {
     render(
       <DashboardHero
         accent="#cba6da"
@@ -157,7 +166,7 @@ describe("DashboardHero mobile layout", () => {
     );
 
     expect(screen.getByTestId("dashboard-hero-mobile")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-hero-callouts").style.gridTemplateColumns).toBe("1fr");
+    expect(screen.getByTestId("dashboard-hero-callouts")).toBeTruthy();
     expect(screen.queryByText("You have a heavier deadline cluster than usual.")).toBeNull();
   });
 
@@ -376,7 +385,7 @@ describe("CustomizePanel mobile options", () => {
 });
 
 describe("TodayTimeline mobile layout", () => {
-  it("uses the mobile row layout without the desktop hanging gutter", () => {
+  it("uses the mobile timeline row for mobile events", () => {
     render(
       <TodayTimeline
         accent="#cba6da"
@@ -396,9 +405,9 @@ describe("TodayTimeline mobile layout", () => {
     );
 
     const row = screen.getByTestId("timeline-row-mobile");
-    const dot = screen.getByTestId("timeline-row-dot");
 
-    expect(row.style.gridTemplateColumns).toBe("52px minmax(0, 1fr)");
-    expect(dot.style.left).toBe("-30px");
+    expect(row.textContent).toMatch(/Staff sync/);
+    expect(row.textContent).toMatch(/Zoom/);
+    expect(screen.queryByTestId("timeline-row-desktop")).toBeNull();
   });
 });

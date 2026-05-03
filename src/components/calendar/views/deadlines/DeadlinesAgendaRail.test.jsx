@@ -73,8 +73,9 @@ describe("DeadlinesAgendaRail", () => {
       "todoist:repeat-1-2026-05-09",
       "done-1",
     ]);
-    expect(rows[0].style.background).not.toContain("color-mix");
-    expect(rows[1].style.background).toContain("color-mix");
+    expect(rows[0].getAttribute("data-selected")).toBe("false");
+    expect(rows[1].getAttribute("data-selected")).toBe("true");
+    expect(rows[1].getAttribute("aria-current")).toBe("true");
 
     fireEvent.click(rows[1]);
     expect(onDeadlineAction).toHaveBeenCalledWith(expect.objectContaining({

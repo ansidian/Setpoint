@@ -1,10 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import request from "supertest";
+import {
+  createAuthTestDb,
+  seedGmailAccount,
+  seedSession,
+} from "../test-utils/auth-db.js";
 
-const mockDb = { execute: vi.fn(), batch: vi.fn() };
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
 const gmailApi = vi.hoisted(() => ({
   getAuthUrl: vi.fn((state) => `https://accounts.example.test/oauth?state=${state}`),
   handleCallback: vi.fn(async () => ({ email: "user@example.com", accountId: "gmail-user@example.com" })),
@@ -12,7 +19,12 @@ const gmailApi = vi.hoisted(() => ({
 const emailIndexApi = vi.hoisted(() => ({ queueEmailIndexBackfill: vi.fn(async () => ({ queued: true })) }));
 const emailBackfillApi = vi.hoisted(() => ({ wakeEmailBackfillWorker: vi.fn() }));
 
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+    batch: (...args) => testState.db.current.batch(...args),
+  },
+}));
 vi.mock("../briefing/gmail.js", () => ({
   getAuthUrl: gmailApi.getAuthUrl,
   handleCallback: gmailApi.handleCallback,
@@ -53,51 +65,29 @@ function makeApp() {
   return app;
 }
 
-const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
-
 describe("accounts Gmail OAuth binding", () => {
-  const stateStore = { row: null, labelUpdateArgs: null };
-
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    stateStore.row = null;
-    stateStore.labelUpdateArgs = null;
-    mockDb.execute.mockImplementation(async ({ sql, args }) => {
-      if (sql.includes("FROM ea_sessions")) {
-        return args[0] === sessionHash || args[0] === "cookie-session"
-          ? { rows: [{ expires_at: Date.now() + 60_000 }] }
-          : { rows: [] };
-      }
-      if (sql.startsWith("INSERT INTO ea_csrf_tokens")) {
-        stateStore.row = {
-          token: args[0],
-          account_label: args[1],
-          expires_at: args[2],
-          browser_bind_hash: args[3],
-          oauth_user_id: args[4],
-          oauth_label: args[5],
-        };
-        return { rowsAffected: 1 };
-      }
-      if (sql.startsWith("SELECT account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label FROM ea_csrf_tokens")) {
-        return stateStore.row?.token === args[0] ? { rows: [stateStore.row] } : { rows: [] };
-      }
-      if (sql.startsWith("DELETE FROM ea_csrf_tokens")) {
-        if (stateStore.row?.token === args[0]) stateStore.row = null;
-        return { rowsAffected: 1 };
-      }
-      if (sql.startsWith("UPDATE ea_accounts SET label = ? WHERE id = ?")) {
-        stateStore.labelUpdateArgs = args;
-        return { rowsAffected: 1 };
-      }
-      return { rows: [] };
-    });
+    testState.db.current = await createAuthTestDb();
+    await seedSession(testState.db.current, "cookie-session");
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
   });
 
   it("sets a short-lived OAuth bind cookie and stores its hash", async () => {
+    const before = Date.now();
+
     const res = await request(makeApp())
       .get("/api/ea/accounts/gmail/auth?label=Work")
       .set("Cookie", ["ea_session=cookie-session"]);
+
+    const csrfResult = await testState.db.current.execute({
+      sql: "SELECT token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label FROM ea_csrf_tokens",
+      args: [],
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.url).toMatch(/^https:\/\/accounts\.example\.test\/oauth\?state=/);
@@ -106,51 +96,83 @@ describe("accounts Gmail OAuth binding", () => {
     expect(cookieHeader).toContain("SameSite=Lax");
     expect(cookieHeader).toContain("HttpOnly");
     const rawBind = cookieHeader.match(/ea_oauth_bind=([^;]+)/)[1];
-    expect(stateStore.row.browser_bind_hash).toBe(
+    expect(csrfResult.rows).toHaveLength(1);
+    expect(csrfResult.rows[0]).toMatchObject({
+      account_label: "user-1:Work",
+      oauth_user_id: "user-1",
+      oauth_label: "Work",
+    });
+    expect(csrfResult.rows[0].browser_bind_hash).toBe(
       crypto.createHash("sha256").update(rawBind).digest("hex"),
     );
-    expect(stateStore.row.oauth_user_id).toBe("user-1");
-    expect(stateStore.row.oauth_label).toBe("Work");
+    expect(csrfResult.rows[0].expires_at).toBeGreaterThan(before + 9 * 60 * 1000);
   });
 
   it("rejects callback when browser bind cookie is missing", async () => {
-    stateStore.row = {
+    await seedCsrfToken({
       token: "state-1",
-      account_label: "user-1:Work",
-      expires_at: Date.now() + 60_000,
-      browser_bind_hash: crypto.createHash("sha256").update("expected-bind").digest("hex"),
-      oauth_user_id: "user-1",
-      oauth_label: "Work",
-    };
+      browserBind: "expected-bind",
+      label: "Work",
+    });
 
     const res = await request(makeApp())
       .get("/api/ea/accounts/gmail/callback?code=auth-code&state=state-1");
 
+    const csrfResult = await testState.db.current.execute({
+      sql: "SELECT token FROM ea_csrf_tokens WHERE token = ?",
+      args: ["state-1"],
+    });
+
     expect(res.status).toBe(400);
     expect(res.text).toMatch(/binding missing/i);
     expect(gmailApi.handleCallback).not.toHaveBeenCalled();
+    expect(csrfResult.rows).toHaveLength(0);
   });
 
   it("accepts callback only when browser bind cookie matches", async () => {
-    stateStore.row = {
+    await seedGmailAccount(testState.db.current, { label: "Gmail" });
+    await seedCsrfToken({
       token: "state-1",
-      account_label: "user-1:Work",
-      expires_at: Date.now() + 60_000,
-      browser_bind_hash: crypto.createHash("sha256").update("bind-cookie").digest("hex"),
-      oauth_user_id: "user-1",
-      oauth_label: "Work",
-    };
+      browserBind: "bind-cookie",
+      label: "Work",
+    });
 
     const res = await request(makeApp())
       .get("/api/ea/accounts/gmail/callback?code=auth-code&state=state-1")
       .set("Cookie", ["ea_oauth_bind=bind-cookie"]);
 
+    const accountResult = await testState.db.current.execute({
+      sql: "SELECT label FROM ea_accounts WHERE id = ?",
+      args: ["gmail-user@example.com"],
+    });
+    const csrfResult = await testState.db.current.execute({
+      sql: "SELECT token FROM ea_csrf_tokens WHERE token = ?",
+      args: ["state-1"],
+    });
+
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("http://localhost:5173/settings?account_connected=user@example.com");
     expect(gmailApi.handleCallback).toHaveBeenCalledWith("auth-code", null, "user-1");
-    expect(stateStore.labelUpdateArgs).toEqual(["Work", "gmail-user@example.com"]);
+    expect(accountResult.rows[0].label).toBe("Work");
+    expect(csrfResult.rows).toHaveLength(0);
     expect(emailIndexApi.queueEmailIndexBackfill).toHaveBeenCalledWith("user-1");
     expect(emailBackfillApi.wakeEmailBackfillWorker).toHaveBeenCalledWith();
     expect(res.headers["set-cookie"][0]).toContain("ea_oauth_bind=;");
   });
 });
+
+async function seedCsrfToken({ token, browserBind, label }) {
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_csrf_tokens
+            (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
+      token,
+      `user-1:${label}`,
+      Date.now() + 60_000,
+      crypto.createHash("sha256").update(browserBind).digest("hex"),
+      "user-1",
+      label,
+    ],
+  });
+}

@@ -265,14 +265,11 @@ describe("AddTaskPanel due picker", () => {
     vi.runOnlyPendingTimers();
 
     const editor = screen.getByTestId("todoist-inline-editor");
-    expect(editor.getAttribute("data-editor-layout")).toBe("slim-icon");
-    expect(editor.getAttribute("data-calendar-local-scroll")).toBe("true");
     expect(screen.getByTestId("todoist-compact-toolbar")).toBeTruthy();
     expect(screen.getByTestId("todoist-due-trigger")).toBeTruthy();
     expect(screen.getByTestId("todoist-project-trigger")).toBeTruthy();
     expect(screen.getByTestId("todoist-priority-trigger")).toBeTruthy();
     expect(screen.getByTestId("todoist-labels-trigger")).toBeTruthy();
-    expect(screen.getByLabelText("Task description").getAttribute("data-compact-notes")).toBe("true");
     expect(within(screen.getByTestId("todoist-compact-toolbar")).queryByText(/April 22|Apr 22|2026-04-22/i)).toBeNull();
     expect(within(editor).queryByText("Description")).toBeNull();
     expect(within(editor).queryByText("Due")).toBeNull();

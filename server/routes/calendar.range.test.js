@@ -55,6 +55,8 @@ function makeApp() {
 
 describe("GET /api/calendar/range", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     loadUserConfig.mockResolvedValue({
       accounts: [
         { id: "a1", type: "gmail", email: "x@y.com", calendar_enabled: 1 },
@@ -75,6 +77,7 @@ describe("GET /api/calendar/range", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("returns 400 when start param missing", async () => {
@@ -141,9 +144,12 @@ describe("GET /api/calendar/range", () => {
 describe("GET /api/calendar/deadlines/range", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     loadCompletedTaskIds.mockResolvedValue(new Set());
     hydrateRecurringTombstones.mockResolvedValue([
       { id: "todo-recurring", title: "Completed today", due_date: "2026-05-02", source: "todoist", status: "complete" },
@@ -174,8 +180,9 @@ describe("GET /api/calendar/deadlines/range", () => {
     expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["dupe", "todo-1", "todo-recurring"]);
     expect(res.body.ctm.stats).toEqual({ total: 0 });
     expect(res.body.todoist.stats).toEqual({ total: 3 });
+    expect(res.body.minDate).toBe("2025-05-03");
     expect(res.body.errors).toEqual([]);
-    expect(res.body.fetchedAt).toEqual(expect.any(String));
+    expect(res.body.fetchedAt).toBe("2026-05-03T19:00:00.000Z");
   });
 
   it("keeps available deadline source data when another source fails", async () => {
@@ -212,6 +219,8 @@ describe("GET /api/calendar/deadlines/range", () => {
 
 describe("GET /api/calendar/bills/range", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     getCalendarBillsRange.mockResolvedValue({
       schedules: [{ id: "sched-1:2026-05-10", name: "Mortgage", next_date: "2026-05-10", paid: false }],
       recentTransactions: [],
@@ -222,6 +231,7 @@ describe("GET /api/calendar/bills/range", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("returns range-backed bills payloads", async () => {
@@ -233,8 +243,9 @@ describe("GET /api/calendar/bills/range", () => {
     expect(getCalendarBillsRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
     expect(res.body.schedules).toHaveLength(1);
     expect(res.body.recentTransactions).toEqual([]);
+    expect(res.body.minDate).toBe("2025-05-03");
     expect(res.body.errors).toEqual([]);
-    expect(res.body.fetchedAt).toEqual(expect.any(String));
+    expect(res.body.fetchedAt).toBe("2026-05-03T19:00:00.000Z");
   });
 
   it("returns an empty bills payload with source errors when Actual fails", async () => {

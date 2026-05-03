@@ -1,8 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createEmailIndexTestDb,
+  seedEmailAccount,
+} from "./test-utils/email-index-db.js";
 
-const mockDb = { execute: vi.fn() };
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
 
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+  },
+}));
 vi.mock("./encryption.js", () => ({
   decrypt: (value) => value,
   encrypt: (value) => value,
@@ -13,11 +23,31 @@ vi.stubGlobal("fetch", vi.fn());
 const { handleCallback } = await import("./gmail.js");
 
 describe("gmail callback canonicalization", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    fetch.mockReset();
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
   });
 
   it("reuses the canonical Gmail row when the same email is re-authorized", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-fresh",
+      type: "gmail",
+      email: "user@example.com",
+      label: "Work",
+      sort_order: 2,
+    });
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-old",
+      type: "gmail",
+      email: "USER@example.com",
+      label: "Work old",
+      sort_order: 7,
+    });
     fetch
       .mockResolvedValueOnce({
         ok: true,
@@ -33,33 +63,37 @@ describe("gmail callback canonicalization", () => {
         json: async () => ({ emailAddress: "User@example.com" }),
       });
 
-    mockDb.execute
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: "gmail-fresh",
-            type: "gmail",
-            email: "user@example.com",
-            label: "Work",
-            sort_order: 2,
-            updated_at: "2026-04-20T10:00:00Z",
-          },
-          {
-            id: "gmail-old",
-            type: "gmail",
-            email: "USER@example.com",
-            label: "Work old",
-            sort_order: 7,
-            updated_at: "2026-04-18T10:00:00Z",
-          },
-        ],
-      })
-      .mockResolvedValueOnce({ rowsAffected: 1 });
-
     const result = await handleCallback("auth-code", "ignored", "user-1");
 
-    expect(result.accountId).toBe("gmail-fresh");
-    const insertCall = mockDb.execute.mock.calls.find(([call]) => call.sql.includes("INSERT INTO ea_accounts"));
-    expect(insertCall[0].args[0]).toBe("gmail-fresh");
+    expect(result).toEqual({
+      email: "User@example.com",
+      accountId: "gmail-fresh",
+    });
+    const rows = await testState.db.current.execute({
+      sql: `SELECT id, email, label, credentials_encrypted, sort_order
+            FROM ea_accounts
+            WHERE user_id = ? AND type = 'gmail'
+            ORDER BY id`,
+      args: ["user-1"],
+    });
+    expect(rows.rows).toEqual([
+      expect.objectContaining({
+        id: "gmail-fresh",
+        email: "User@example.com",
+        label: "Work",
+        sort_order: 2,
+      }),
+      expect.objectContaining({
+        id: "gmail-old",
+        email: "USER@example.com",
+        label: "Work old",
+        sort_order: 7,
+      }),
+    ]);
+    expect(JSON.parse(rows.rows[0].credentials_encrypted)).toMatchObject({
+      access_token: "tok",
+      refresh_token: "rtok",
+      scopes: ["https://www.googleapis.com/auth/gmail.modify"],
+    });
   });
 });

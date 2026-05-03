@@ -4,6 +4,7 @@ export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, act
   const pad = compact ? 12 : 14;
   return (
     <div
+      data-accent={accent}
       style={{
         minHeight: 0,
         padding: pad,

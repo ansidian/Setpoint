@@ -11,6 +11,7 @@ import { epochFromLa } from "../../inbox/helpers";
 import { formatResolvedDate, parseTokens } from "./parsing";
 import { buildManualDue, getInitialDueEpoch } from "./due";
 import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.js";
+import { buildTodoistTaskPayload } from "./submitPayload";
 
 function buildSeededDue(initialDueDate) {
   if (!initialDueDate) return null;
@@ -479,14 +480,16 @@ export default function useAddTaskPanelController({
     setSubmitting(true);
     setError(null);
     try {
-      const payload = { content: parsed.stripped };
-      if (description.trim()) payload.description = description.trim();
-      if (resolvedProject) payload.project_id = resolvedProject.id;
-      if (resolvedPriority) payload.priority = resolvedPriority;
-      if (isEdit || resolvedLabels.length) {
-        payload.labels = resolvedLabels.map((label) => label.name);
-      }
-      if (resolvedDue) payload.due_string = resolvedDue;
+      const payload = buildTodoistTaskPayload({
+        parsed,
+        input,
+        description,
+        resolvedProject,
+        resolvedPriority,
+        resolvedLabels,
+        resolvedDue,
+        isEdit,
+      });
 
       let task;
       if (isEdit) {

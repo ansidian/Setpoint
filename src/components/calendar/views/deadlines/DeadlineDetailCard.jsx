@@ -83,6 +83,7 @@ export default function DeadlineDetailCard({
         transition={motion.layout}
         data-testid="calendar-selected-deadline-card"
         data-density={density}
+        data-height-mode="auto"
         style={{ flexShrink: 0 }}
       >
         <RailHeroCard accent={accent} compact actions={actions}>
@@ -209,6 +210,7 @@ export default function DeadlineDetailCard({
       transition={motion.layout}
       data-testid="calendar-selected-deadline-card"
       data-density={density}
+      data-height-mode="auto"
       style={{ flexShrink: 0 }}
     >
       <RailHeroCard accent={accent} compact={compact} actions={actions}>

@@ -1,29 +1,88 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// vi.mock is hoisted — these factories run fresh after each vi.resetModules()
-// `q()` returns a chainable query builder; `runQuery` consumes it and returns
-// a `{ data }` envelope. Tests don't care about the filtered results, just
-// that the calls don't blow up on an undefined function.
+const actualApiState = vi.hoisted(() => ({
+  accounts: [],
+  payees: [],
+  categoryGroups: [],
+  budgets: [],
+  schedules: [],
+  rules: [],
+  transactions: [],
+  reset() {
+    this.accounts = [
+      { id: "a1", name: "Checking", type: "checking", closed: false },
+      { id: "a2", name: "Closed card", type: "credit", closed: true },
+    ];
+    this.payees = [
+      { id: "p1", name: "Test Payee", transfer_acct: null },
+      { id: "p2", name: "Visa Transfer", transfer_acct: "a2" },
+    ];
+    this.categoryGroups = [
+      { name: "Bills", categories: [{ id: "c1", name: "Rent" }] },
+      { name: "Internal", categories: [{ id: "internal", name: "Transfer" }] },
+    ];
+    this.budgets = [{ groupId: "sync-123" }];
+    this.schedules = [];
+    this.rules = [];
+    this.transactions = [];
+  },
+}));
+actualApiState.reset();
+
+// vi.mock is hoisted — these factories run fresh after each vi.resetModules().
+// The fake stores enough Actual state for tests to assert adapter outcomes
+// without depending on Actual's query-builder call shape.
 vi.mock("@actual-app/api", () => {
-  const queryBuilder = {
-    filter: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-  };
-  return {
-    default: {
-      init: vi.fn().mockResolvedValue(undefined),
-      downloadBudget: vi.fn().mockResolvedValue(undefined),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-      sync: vi.fn().mockResolvedValue(undefined),
-      getAccounts: vi.fn().mockResolvedValue([{ id: "a1", name: "Checking", type: "checking", closed: false }]),
-      getPayees: vi.fn().mockResolvedValue([{ id: "p1", name: "Test Payee", transfer_acct: null }]),
-      getCategoryGroups: vi.fn().mockResolvedValue([{ name: "Bills", categories: [{ id: "c1", name: "Rent" }] }]),
-      getBudgets: vi.fn().mockResolvedValue([{ groupId: "sync-123" }]),
-      addTransactions: vi.fn().mockResolvedValue(undefined),
-      q: vi.fn(() => queryBuilder),
-      runQuery: vi.fn().mockResolvedValue({ data: [] }),
+  function createQuery(table) {
+    return {
+      table,
+      filter: vi.fn(function filter() {
+        return this;
+      }),
+      select: vi.fn(function select(fields) {
+        this.fields = fields;
+        return this;
+      }),
+    };
+  }
+
+  const actualApi = {
+    init: vi.fn().mockResolvedValue(undefined),
+    downloadBudget: vi.fn().mockResolvedValue(undefined),
+    shutdown: vi.fn().mockResolvedValue(undefined),
+    sync: vi.fn().mockResolvedValue(undefined),
+    getAccounts: vi.fn().mockImplementation(async () => actualApiState.accounts),
+    getPayees: vi.fn().mockImplementation(async () => actualApiState.payees),
+    getCategoryGroups: vi.fn().mockImplementation(async () => actualApiState.categoryGroups),
+    getBudgets: vi.fn().mockImplementation(async () => actualApiState.budgets),
+    getRules: vi.fn().mockImplementation(async () => actualApiState.rules),
+    addTransactions: vi.fn().mockImplementation(async (accountId, transactions) => {
+      actualApiState.transactions.push(...transactions.map((txn) => ({ accountId, ...txn })));
+    }),
+    q: vi.fn(createQuery),
+    runQuery: vi.fn().mockImplementation(async (query) => {
+      if (query.table === "transactions") return { data: actualApiState.transactions };
+      if (query.table === "schedules") return { data: actualApiState.schedules };
+      return { data: [] };
+    }),
+    createPayee: vi.fn(async ({ name }) => {
+      const id = `payee-${actualApiState.payees.length + 1}`;
+      actualApiState.payees.push({ id, name, transfer_acct: null });
+      return id;
+    }),
+    createSchedule: vi.fn(async ({ name, date }) => {
+      const id = `schedule-${actualApiState.schedules.length + 1}`;
+      actualApiState.schedules.push({ id, name, next_date: date, completed: false });
+      return id;
+    }),
+    internal: {
+      send: vi.fn().mockResolvedValue(undefined),
     },
+    __state: actualApiState,
+    __getTransactions: () => actualApiState.transactions,
+    __resetState: () => actualApiState.reset(),
   };
+  return { default: actualApi };
 });
 
 vi.mock("../db/connection.js", () => ({
@@ -42,6 +101,7 @@ describe("actual.js mutex (withLock)", () => {
     // Reset all mocks so call counts start from 0
     vi.resetModules();
     vi.clearAllMocks();
+    actualApiState.reset();
   });
 
   it("two concurrent calls execute sequentially (second starts after first finishes)", async () => {
@@ -93,6 +153,42 @@ describe("actual.js metadata cache", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    actualApiState.reset();
+  });
+
+  it("maps Actual accounts, payees, categories, schedules, and recent transactions", async () => {
+    const { getMetadata } = await import("./actual.js");
+    const actualApi = (await import("@actual-app/api")).default;
+    actualApi.__state.schedules = [
+      { id: "s1", name: "Electricity", rule: "r1", next_date: "2026-05-10", completed: false },
+      { id: "s2", name: "Paycheck", rule: "r2", next_date: "2026-05-15", completed: false },
+      { id: "s3", name: "Completed transfer", rule: "r3", next_date: "2026-05-18", completed: true },
+    ];
+    actualApi.__state.rules = [
+      { id: "r1", conditions: [{ field: "amount", value: -12234 }, { field: "payee", value: "p1" }] },
+      { id: "r2", conditions: [{ field: "amount", value: 250000 }, { field: "payee", value: "p1" }] },
+      { id: "r3", conditions: [{ field: "amount", value: 5000 }, { field: "payee", value: "p2" }] },
+    ];
+    actualApi.__state.transactions = [
+      { id: "t1", date: "2026-05-11", amount: -12234, payee: "p1", schedule: "s1" },
+      { id: "t2", date: "2026-05-12", amount: 0, payee: "p1", schedule: null },
+      { id: "t3", date: "2026-05-13", amount: -1000, payee: null, schedule: null },
+    ];
+
+    const metadata = await getMetadata("user1");
+
+    expect(metadata.accounts).toEqual([{ id: "a1", name: "Checking", type: "checking" }]);
+    expect(metadata.payees).toEqual([{ id: "p1", name: "Test Payee" }]);
+    expect(metadata.categories).toEqual([
+      { group_name: "Bills", categories: [{ id: "c1", name: "Rent" }] },
+    ]);
+    expect(metadata.schedules).toEqual([
+      expect.objectContaining({ id: "s1", type: "bill" }),
+      expect.objectContaining({ id: "s2", type: "income" }),
+    ]);
+    expect(metadata.recentTransactions).toEqual([
+      { payee: "Test Payee", payeeId: "p1", amount: 122.34, date: "2026-05-11", scheduleId: "s1" },
+    ]);
   });
 
   it("getMetadata returns cached data on second call within TTL (init called once)", async () => {
@@ -131,6 +227,7 @@ describe("actual.js sendBill mutex", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    actualApiState.reset();
   });
 
   it("sendBill acquires the mutex (init not called concurrently with getMetadata)", async () => {
@@ -168,6 +265,7 @@ describe("actual.js testConnection mutex", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    actualApiState.reset();
   });
 
   it("testConnection acquires the mutex (init not called concurrently with getMetadata)", async () => {
@@ -197,6 +295,7 @@ describe("actual.js createQuickTxn", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    actualApiState.reset();
   });
 
   it("resolves account name case-insensitively and posts a negative-signed payment", async () => {
@@ -211,9 +310,9 @@ describe("actual.js createQuickTxn", () => {
       date: "2026-04-16",
     });
 
-    expect(actualApi.addTransactions).toHaveBeenCalledTimes(1);
-    const [accountId, [txn]] = actualApi.addTransactions.mock.calls[0];
-    expect(accountId).toBe("a1");
+    const [txn] = actualApi.__getTransactions();
+    expect(actualApi.__getTransactions()).toHaveLength(1);
+    expect(txn.accountId).toBe("a1");
     expect(txn.amount).toBe(-1234);
     expect(txn.payee_name).toBe("Starbucks");
     expect(txn.date).toBe("2026-04-16");
@@ -235,7 +334,7 @@ describe("actual.js createQuickTxn", () => {
       date: "2026-04-16",
     });
 
-    const [, [txn]] = actualApi.addTransactions.mock.calls[0];
+    const [txn] = actualApi.__getTransactions();
     expect(txn.amount).toBe(5000);
   });
 
@@ -251,7 +350,7 @@ describe("actual.js createQuickTxn", () => {
 
     expect(err).toBeInstanceOf(Error);
     expect(err.status).toBe(404);
-    expect(actualApi.addTransactions).not.toHaveBeenCalled();
+    expect(actualApi.__getTransactions()).toEqual([]);
   });
 
   it("resolves category name and attaches category id to transaction", async () => {
@@ -266,7 +365,7 @@ describe("actual.js createQuickTxn", () => {
       date: "2026-04-16",
     });
 
-    const [, [txn]] = actualApi.addTransactions.mock.calls[0];
+    const [txn] = actualApi.__getTransactions();
     expect(txn.category).toBe("c1");
   });
 

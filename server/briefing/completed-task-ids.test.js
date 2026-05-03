@@ -1,7 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createCompletedTasksTestDb,
+  listCompletedTasks,
+  seedCompletedTask,
+} from "../test-utils/completed-tasks-db.js";
 
-const mockDb = { execute: vi.fn() };
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
+
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+  },
+}));
 vi.mock("./encryption.js", () => ({ decrypt: () => "mocked" }));
 vi.mock("./gmail.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("./icloud.js", () => ({ fetchEmails: async () => [] }));
@@ -14,40 +26,46 @@ vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 const { loadCompletedTaskIds } = await import("./index.js");
 
 describe("loadCompletedTaskIds", () => {
-  it("returns only ids from legacy dedupe rows (due_date IS NULL)", async () => {
-    mockDb.execute.mockReset();
-    mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (sql.startsWith("SELECT")) {
-        return { rows: [{ todoist_id: "legacy-1" }, { todoist_id: "legacy-2" }] };
-      }
-      return { rows: [] };
+  beforeEach(async () => {
+    testState.db.current = await createCompletedTasksTestDb();
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+  });
+
+  it("returns only ids from legacy dedupe rows", async () => {
+    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-1" });
+    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-2" });
+    await seedCompletedTask(testState.db.current, {
+      todoist_id: "tombstone-1",
+      due_date: "2026-04-18",
+      snapshot_json: JSON.stringify({ id: "tombstone-1", title: "Done" }),
     });
 
     const ids = await loadCompletedTaskIds("user-1", []);
-    expect(ids).toEqual(new Set(["legacy-1", "legacy-2"]));
 
-    const selectCall = mockDb.execute.mock.calls.find(
-      ([arg]) => arg.sql?.startsWith("SELECT"),
-    );
-    expect(selectCall[0].sql).toMatch(/due_date IS NULL/i);
+    expect(ids).toEqual(new Set(["legacy-1", "legacy-2"]));
   });
 
   it("reconciles un-completed tasks by removing only legacy rows, not tombstones", async () => {
-    mockDb.execute.mockReset();
-    mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (sql.startsWith("SELECT")) {
-        return { rows: [{ todoist_id: "legacy-a" }] };
-      }
-      return { rows: [] };
+    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-a" });
+    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-b" });
+    await seedCompletedTask(testState.db.current, {
+      todoist_id: "tombstone-a",
+      due_date: "2026-04-18",
+      snapshot_json: JSON.stringify({ id: "tombstone-a", title: "Done" }),
     });
 
-    const ids = await loadCompletedTaskIds("user-1", [{ id: "legacy-a" }]);
-    expect(ids.has("legacy-a")).toBe(false);
+    const ids = await loadCompletedTaskIds("user-1", [
+      { id: "legacy-a" },
+      { id: "tombstone-a" },
+    ]);
+    const rows = await listCompletedTasks(testState.db.current);
 
-    const deleteCall = mockDb.execute.mock.calls.find(
-      ([arg]) => arg.sql?.startsWith("DELETE"),
-    );
-    expect(deleteCall).toBeDefined();
-    expect(deleteCall[0].sql).toMatch(/due_date IS NULL/i);
+    expect(ids).toEqual(new Set(["legacy-b"]));
+    expect(rows.map((row) => row.todoist_id)).toEqual(["legacy-b", "tombstone-a"]);
+    expect(rows.find((row) => row.todoist_id === "tombstone-a").due_date).toBe("2026-04-18");
   });
 });

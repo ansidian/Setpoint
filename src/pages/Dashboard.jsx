@@ -18,23 +18,10 @@ import useCalendarRange from "../hooks/useCalendarRange";
 import { RedesignShell, DashboardBody } from "../components/dashboard/RedesignShell";
 import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
+import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
-const EMPTY_CURRENT_BRIEFING = {
-  generatedAt: "",
-  dataUpdatedAt: null,
-  aiGeneratedAt: null,
-  skippedAI: false,
-  nonAiGenerationCount: 0,
-  weather: null,
-  aiInsights: [],
-  calendar: [],
-  ctm: { upcoming: [], stats: null },
-  todoist: { upcoming: [], stats: null },
-  model: null,
-  emails: { summary: "", accounts: [] },
-};
 
 function isCalendarDomainCacheStale(fetchedAt) {
   return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
@@ -197,8 +184,13 @@ export default function Dashboard() {
     };
   }, []);
 
-  const canRenderActiveSnapshot = !!activeSnapshot.snapshot?.snapshot;
-  const effectiveBriefing = bd.briefing || (canRenderActiveSnapshot ? EMPTY_CURRENT_BRIEFING : null);
+  const briefingState = resolveDashboardBriefingState({
+    loading: bd.loading,
+    error: bd.error,
+    briefing: bd.briefing,
+    activeSnapshot: activeSnapshot.snapshot,
+  });
+  const { effectiveBriefing } = briefingState;
   const shellBd = useMemo(
     () => ({
       ...(effectiveBriefing === bd.briefing ? bd : { ...bd, briefing: effectiveBriefing }),
@@ -207,11 +199,11 @@ export default function Dashboard() {
     [bd, currentSyncing, effectiveBriefing],
   );
 
-  if (bd.loading && !canRenderActiveSnapshot) return <LoadingSkeleton />;
-  if (bd.error && !effectiveBriefing) {
+  if (briefingState.view === "loading") return <LoadingSkeleton />;
+  if (briefingState.view === "error") {
     return <ErrorState message={bd.error} onRetry={() => window.location.reload()} />;
   }
-  if (!effectiveBriefing) {
+  if (briefingState.view === "empty") {
     return (
       <div className="min-h-screen text-foreground font-sans flex items-center justify-center p-6">
         <div className="w-full max-w-[880px]">
