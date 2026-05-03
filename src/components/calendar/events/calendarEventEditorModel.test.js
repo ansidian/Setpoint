@@ -143,6 +143,11 @@ describe("calendarEventEditorModel", () => {
     expect(validateSingleDraft({ draft, effectiveTitle: "Standup" }))
       .toBe("End time must be on or after start time.");
 
+    expect(validateSingleDraft({
+      draft: { ...draft, endTime: "10:00" },
+      effectiveTitle: "Standup",
+    })).toBeNull();
+
     expect(validateBatchDrafts({
       draft: { ...draft, endTime: "10:30" },
       effectiveTitle: "Standup",
