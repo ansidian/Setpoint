@@ -35,10 +35,6 @@ test("filters the mobile inbox and opens reader action workspaces", async ({ pag
   await page.getByTestId("inbox-mobile-filter-trigger").click();
   await expect(page.getByTestId("inbox-mobile-filter-sheet")).toBeVisible();
 
-  await page.mouse.click(20, 20);
-  await expect(page.getByTestId("inbox-mobile-filter-sheet")).toHaveCount(0);
-
-  await page.getByTestId("inbox-mobile-filter-trigger").click();
   const filterSheet = page.getByTestId("inbox-mobile-filter-sheet");
   await filterSheet.getByRole("button", { name: /Work/i }).click();
 

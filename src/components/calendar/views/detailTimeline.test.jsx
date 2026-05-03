@@ -163,12 +163,12 @@ describe("calendar detail timeline", () => {
 
     const { rerender } = render(renderDetail("event-1"));
     expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-event-card").style.height).toBe("");
+    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-height-mode")).toBe("auto");
 
     rerender(renderDetail("event-2"));
 
     expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-event-card").style.height).toBe("");
+    expect(screen.getByTestId("calendar-selected-event-card").getAttribute("data-height-mode")).toBe("auto");
     expect(screen.getByTestId("calendar-selected-event-title").textContent).toBe("CS4662-01: ADV MACHINE & DEEP LEARNING");
   });
 
@@ -224,7 +224,7 @@ describe("calendar detail timeline", () => {
     );
 
     const hero = screen.getByTestId("calendar-selected-event-card").firstElementChild;
-    expect(hero?.getAttribute("style")).toContain("rgb(245, 158, 11)");
+    expect(hero?.getAttribute("data-accent")).toBe("#f59e0b");
   });
 
   it("renders selected event CTAs in the selected card footer", () => {
@@ -521,8 +521,9 @@ describe("calendar detail timeline", () => {
       }),
     );
 
-    const timeValue = screen.getByText("10:50 AM-12:05 PM");
-    expect(timeValue.style.whiteSpace).toBe("nowrap");
+    const timeValue = screen.getByTestId("calendar-selected-event-time");
+    expect(timeValue.textContent).toBe("10:50 AM-12:05 PM");
+    expect(timeValue.getAttribute("data-nowrap")).toBe("true");
   });
 
   it("renders deadlines chronologically, uses End of day, and selects rows in-place", () => {
@@ -649,7 +650,7 @@ describe("calendar detail timeline", () => {
     );
 
     const hero = screen.getByTestId("calendar-selected-deadline-card").firstElementChild;
-    expect(hero?.getAttribute("style")).toContain("rgb(232, 119, 106)");
+    expect(hero?.getAttribute("data-accent")).toBe("#e8776a");
   });
 
   it("shows completed deadlines immediately when a day only has completed items", () => {
@@ -810,12 +811,12 @@ describe("calendar detail timeline", () => {
 
     const { rerender } = render(renderDetail("todo-1"));
     expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-deadline-card").style.height).toBe("");
+    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-height-mode")).toBe("auto");
 
     rerender(renderDetail("todo-2"));
 
     expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
-    expect(screen.getByTestId("calendar-selected-deadline-card").style.height).toBe("");
+    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-height-mode")).toBe("auto");
     expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Senior Design Deliverables");
   });
 
@@ -871,7 +872,7 @@ describe("calendar detail timeline", () => {
 
     expect(screen.getByText("Open early")).toBeTruthy();
     expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByText("Complete early").style.textDecoration).toContain("line-through");
+    expect(screen.getByText("Complete early").closest("s")).toBeTruthy();
   });
 
   it("keeps completed-only deadline month cells visually quiet", () => {
@@ -886,7 +887,7 @@ describe("calendar detail timeline", () => {
     );
 
     expect(screen.getByText("Complete early")).toBeTruthy();
-    expect(screen.getByText("Complete early").style.textDecoration).toContain("line-through");
+    expect(screen.getByText("Complete early").closest("s")).toBeTruthy();
   });
 
   it("shows unpaid bills first and hides paid bills behind a collapsed section", () => {

@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import Dashboard from "./Dashboard.jsx";
+import { resolveDashboardBriefingState } from "./Dashboard.bootState.js";
 
 const mocks = vi.hoisted(() => ({
   activeSnapshot: {
@@ -110,6 +111,16 @@ describe("Dashboard boot", () => {
   });
 
   it("mounts the active dashboard when snapshot data exists without a current legacy briefing", () => {
+    const bootState = resolveDashboardBriefingState({
+      loading: false,
+      error: null,
+      briefing: null,
+      activeSnapshot: mocks.activeSnapshot,
+    });
+
+    expect(bootState.view).toBe("dashboard");
+    expect(bootState.effectiveBriefing.emails.accounts).toEqual([]);
+
     render(
       <BrowserRouter>
         <Dashboard />

@@ -1,77 +1,97 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
+import { createAuthTestDb, hashSessionToken, seedSession } from "../test-utils/auth-db.js";
 
-const mockDb = { execute: vi.fn() };
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
 
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+  },
+}));
 
 const { createSession, validateSession, deleteSession } = await import("./auth.js");
 
 describe("auth middleware session storage", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(async () => {
+    testState.db.current = await createAuthTestDb();
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await testState.db.current?.close?.();
+    testState.db.current = null;
   });
 
   it("stores hashed session tokens and returns the raw cookie value", async () => {
+    const before = Date.now();
     vi.spyOn(crypto, "randomBytes").mockReturnValue(Buffer.alloc(32, 1));
-    mockDb.execute.mockResolvedValue({});
 
     const rawToken = await createSession();
 
     const expectedRaw = Buffer.alloc(32, 1).toString("hex");
-    const expectedStored = `sha256:${crypto.createHash("sha256").update(expectedRaw).digest("hex")}`;
-    expect(rawToken).toBe(expectedRaw);
-    expect(mockDb.execute).toHaveBeenCalledWith({
-      sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-      args: [expectedStored, expect.any(Number)],
+    const expectedStored = hashSessionToken(expectedRaw);
+    const result = await testState.db.current.execute({
+      sql: "SELECT token, expires_at FROM ea_sessions",
+      args: [],
     });
+
+    expect(rawToken).toBe(expectedRaw);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].token).toBe(expectedStored);
+    expect(result.rows[0].token).not.toBe(rawToken);
+    expect(result.rows[0].expires_at).toBeGreaterThan(before + 29 * 24 * 60 * 60 * 1000);
   });
 
   it("validates hashed session rows", async () => {
-    mockDb.execute.mockResolvedValueOnce({
-      rows: [{ expires_at: Date.now() + 60_000 }],
-    });
+    await seedSession(testState.db.current, "cookie-session");
 
     const ok = await validateSession("cookie-session");
 
+    const result = await testState.db.current.execute({
+      sql: "SELECT token FROM ea_sessions",
+      args: [],
+    });
     expect(ok).toBe(true);
-    expect(mockDb.execute).toHaveBeenCalledTimes(1);
-    expect(mockDb.execute.mock.calls[0][0].args[0]).toMatch(/^sha256:/);
+    expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("cookie-session")]);
   });
 
   it("accepts legacy raw session rows and migrates them to hashed storage", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ expires_at: Date.now() + 60_000 }] })
-      .mockResolvedValueOnce({ rowsAffected: 1 });
+    await testState.db.current.execute({
+      sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
+      args: ["legacy-session", Date.now() + 60_000],
+    });
 
     const ok = await validateSession("legacy-session");
 
+    const result = await testState.db.current.execute({
+      sql: "SELECT token FROM ea_sessions ORDER BY token",
+      args: [],
+    });
     expect(ok).toBe(true);
-    expect(mockDb.execute).toHaveBeenNthCalledWith(2, {
-      sql: "SELECT expires_at FROM ea_sessions WHERE token = ?",
-      args: ["legacy-session"],
-    });
-    expect(mockDb.execute).toHaveBeenNthCalledWith(3, {
-      sql: "UPDATE ea_sessions SET token = ? WHERE token = ?",
-      args: [
-        `sha256:${crypto.createHash("sha256").update("legacy-session").digest("hex")}`,
-        "legacy-session",
-      ],
-    });
+    expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("legacy-session")]);
   });
 
   it("deletes both raw and hashed token forms on logout", async () => {
-    mockDb.execute.mockResolvedValue({ rowsAffected: 1 });
+    await testState.db.current.batch([
+      {
+        sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
+        args: ["logout-session", Date.now() + 60_000],
+      },
+      {
+        sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
+        args: [hashSessionToken("logout-session"), Date.now() + 60_000],
+      },
+    ]);
 
     await deleteSession("logout-session");
 
-    expect(mockDb.execute).toHaveBeenCalledWith({
-      sql: "DELETE FROM ea_sessions WHERE token IN (?, ?)",
-      args: [
-        "logout-session",
-        `sha256:${crypto.createHash("sha256").update("logout-session").digest("hex")}`,
-      ],
+    const result = await testState.db.current.execute({
+      sql: "SELECT token FROM ea_sessions",
+      args: [],
     });
+    expect(result.rows).toHaveLength(0);
   });
 });

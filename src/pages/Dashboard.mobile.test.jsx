@@ -175,6 +175,20 @@ function renderShell() {
 }
 
 describe("RedesignShell mobile behavior", () => {
+  it("uses the mobile task surface for task creation chords without mounting the desktop calendar", async () => {
+    mockIsMobile = true;
+    renderShell();
+
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.queryByTestId("calendar-modal")).toBeNull();
+
+    fireEvent.keyDown(window, { key: "g" });
+    fireEvent.keyDown(window, { key: "t" });
+
+    expect(await screen.findByTestId("add-task-panel")).toBeTruthy();
+    expect(screen.queryByTestId("calendar-modal")).toBeNull();
+  });
+
   it("keeps calendar available on desktop and opens it from the hotkey", async () => {
     mockIsMobile = false;
     renderShell();

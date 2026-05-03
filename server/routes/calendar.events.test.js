@@ -119,10 +119,36 @@ describe("calendar event routes", () => {
       });
 
     expect(res.status).toBe(201);
+    expect(res.body.event).toMatchObject({
+      id: "event-1",
+      title: "Planning",
+      accountId: "gmail-main",
+      calendarId: "primary",
+    });
     expect(createCalendarEvent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "gmail-main" }),
       expect.objectContaining({ title: "Planning", calendarId: "primary" }),
     );
+  });
+
+  it("returns a typed 404 when creating against an unavailable calendar account", async () => {
+    const res = await request(makeApp())
+      .post("/api/calendar/events")
+      .send({
+        accountId: "gmail-missing",
+        calendarId: "primary",
+        title: "Planning",
+        allDay: true,
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+      });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({
+      code: "calendar_account_not_found",
+      message: "Calendar account not found",
+    });
+    expect(createCalendarEvent).not.toHaveBeenCalled();
   });
 
   it("creates a recurring calendar event when recurrence is provided", async () => {
@@ -383,6 +409,19 @@ describe("calendar event routes", () => {
       lat: 34.0522,
       lng: -118.2437,
     });
+  });
+
+  it("requires a query before requesting place suggestions", async () => {
+    const res = await request(makeApp())
+      .get("/api/calendar/places/suggest")
+      .query({ sessionToken: "session-1" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      code: "calendar_places_query_required",
+      message: "q parameter required",
+    });
+    expect(suggestGooglePlaces).not.toHaveBeenCalled();
   });
 
   it("returns normalized place details for a selected place", async () => {

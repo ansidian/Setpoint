@@ -37,10 +37,12 @@ describe("CalendarCell", () => {
     );
 
     const header = screen.getByTestId("calendar-cell-header");
+    const weather = screen.getByTestId("calendar-cell-weather");
+
     expect(header.contains(screen.getByTestId("calendar-cell-date-header-2026-04-07"))).toBe(true);
-    expect(screen.getByTestId("calendar-cell-weather").textContent).toBe("83/61");
-    expect(screen.getByTestId("calendar-cell-weather").querySelector("svg")).toBeTruthy();
-    expect(screen.getByTestId("calendar-cell-weather").style.color).toBe("rgba(205, 214, 244, 0.48)");
-    expect(screen.getByTestId("calendar-cell-weather").getAttribute("title")).toBe("Sunny");
+    expect(header.contains(weather)).toBe(true);
+    expect(weather.textContent).toBe("83/61");
+    expect(weather.getAttribute("aria-label")).toBe("Sunny");
+    expect(weather.getAttribute("title")).toBe("Sunny");
   });
 });

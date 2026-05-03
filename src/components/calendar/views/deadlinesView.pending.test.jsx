@@ -75,4 +75,22 @@ describe("deadlinesView Todoist completion feedback", () => {
 
     resolveComplete({});
   });
+
+  it("returns to the ready action when Todoist completion fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    completeTask.mockRejectedValueOnce(new Error("Todoist unavailable"));
+
+    render(<DeferredCompleteHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: /mark complete/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /completing/i })).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
+    });
+
+    errorSpy.mockRestore();
+  });
 });

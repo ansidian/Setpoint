@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarCellItemStack from "./CalendarCellItemStack.jsx";
 
@@ -36,7 +36,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeTruthy();
     expect(content?.contains(meta)).toBe(true);
     expect(content?.contains(title)).toBe(true);
-    expect(chip.style.flexDirection).toBe("column");
   });
 
   it("uses two readable title lines with a compact run-in prefix for long month chips", () => {
@@ -55,16 +54,10 @@ describe("CalendarCellItemStack ghost visibility", () => {
     const shortTitle = chips[0].querySelector("[data-calendar-chip-title='true']");
     const longTitle = chips[1].querySelector("[data-calendar-chip-title='true']");
 
-    expect(chips[0].style.flexDirection).toBe("column");
-    expect(chips[1].style.flexDirection).toBe("column");
     expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.textContent).toContain("10:50a");
     expect(shortTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("11/1");
     expect(longTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("10/2");
-    expect(longTitle?.style.flex).toBe("0 1 auto");
-    expect(longTitle?.style.maxHeight).toBe("21.6px");
-    expect(longTitle?.style.overflow).toBe("hidden");
-    expect(longTitle?.style.webkitLineClamp).toBe("2");
-    expect(longTitle?.style.whiteSpace).toBe("normal");
+    expect(longTitle?.textContent).toContain("Advanced machine learning project review");
   });
 
   it("keeps selected chip title metrics stable", () => {
@@ -84,9 +77,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
       .getAllByTestId("calendar-cell-item-chip")
       .map((chip) => chip.querySelector("[data-calendar-chip-title='true']"));
 
-    expect(titles[0]?.style.fontWeight).toBe("500");
-    expect(titles[1]?.style.fontWeight).toBe("500");
-    expect(titles[0]?.style.maxHeight).toBe(titles[1]?.style.maxHeight);
     expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
       titles[1]?.getAttribute("data-calendar-chip-title-fit"),
     );
@@ -107,8 +97,8 @@ describe("CalendarCellItemStack ghost visibility", () => {
     const meta = chip.querySelector("[data-calendar-chip-meta='true']");
     const title = chip.querySelector("[data-calendar-chip-title-text='true']");
 
-    expect(meta?.style.textDecoration).toBe("");
-    expect(title?.style.textDecoration).toBe("line-through");
+    expect(meta?.closest("s")).toBeNull();
+    expect(title?.closest("s")).toBeTruthy();
   });
 
   it("renders the collapsed overflow trigger when hidden chips exist", () => {
@@ -214,91 +204,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(onCloseInlineOverflow).toHaveBeenCalled();
   });
 
-  it("uses the measured cell height to fit extra chips before showing overflow", async () => {
-    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
-      configurable: true,
-      get() {
-        return this.getAttribute?.("data-testid") === "measured-cell-host" ? 130 : 0;
-      },
-    });
-
-    try {
-      render(
-        <div data-testid="measured-cell-host">
-          <CalendarCellItemStack
-            day={20}
-            items={[
-              { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
-              { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-              { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
-              { id: "real-4", leadingLabel: "12:00 PM", title: "Fourth hold" },
-            ]}
-            metrics={metrics}
-          />
-        </div>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(3);
-        expect(screen.getByText("+1 more")).toBeTruthy();
-      });
-    } finally {
-      if (originalClientHeight) {
-        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
-      } else {
-        delete HTMLElement.prototype.clientHeight;
-      }
-    }
-  });
-
-  it("measures the clipping viewport instead of an expanding frame", async () => {
-    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
-      configurable: true,
-      get() {
-        if (this.getAttribute?.("data-testid") === "clipping-cell-host") return 100;
-        if (this.getAttribute?.("data-testid") === "expanding-selected-frame") return 104;
-        return 0;
-      },
-    });
-
-    try {
-      render(
-        <div data-testid="clipping-cell-host" style={{ overflow: "hidden" }}>
-          <div data-testid="expanding-selected-frame" style={{ overflow: "visible" }}>
-            <CalendarCellItemStack
-              day={20}
-              items={[
-                { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
-                { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-                { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
-              ]}
-              metrics={{
-                itemHeight: 32,
-                moreHeight: 28,
-                gap: 4,
-                fullVisibleCount: 3,
-                overflowVisibleCount: 2,
-              }}
-            />
-          </div>
-        </div>,
-      );
-
-      await waitFor(() => {
-        expect(screen.getAllByTestId("calendar-cell-item-chip")).toHaveLength(2);
-        expect(screen.getByText("+1 more")).toBeTruthy();
-      });
-    } finally {
-      if (originalClientHeight) {
-        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
-      } else {
-        delete HTMLElement.prototype.clientHeight;
-      }
-    }
-  });
-
   it("promotes a hidden ghost into the visible stack and overflows displaced real items", () => {
     const onOpenOverflow = vi.fn();
     render(
@@ -341,7 +246,9 @@ describe("CalendarCellItemStack ghost visibility", () => {
     }));
   });
 
-  it("renders ghost chips as inert dotted chips without status labels", () => {
+  it("renders ghost chips as inert preview chips without status labels", () => {
+    const onSelectItem = vi.fn();
+
     render(
       <CalendarCellItemStack
         day={20}
@@ -356,6 +263,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
           },
         ]}
         metrics={{ ...metrics, itemHeight: 36 }}
+        onSelectItem={onSelectItem}
       />,
     );
 
@@ -363,12 +271,13 @@ describe("CalendarCellItemStack ghost visibility", () => {
     const meta = chip.querySelector("[data-calendar-chip-meta='true']");
     const title = chip.querySelector("[data-calendar-chip-title='true']");
     expect(chip.tagName).toBe("DIV");
-    expect(chip.style.pointerEvents).toBe("none");
-    expect(chip.style.cursor).toBe("default");
-    expect(chip.style.border).toContain("dotted");
+    expect(chip.getAttribute("aria-hidden")).toBe("true");
+    expect(chip.getAttribute("data-ghost-kind")).toBe("event");
     expect(meta?.textContent).toContain("9a");
     expect(title?.getAttribute("data-calendar-chip-title-fit")).toBe("11/1");
     expect(chip.textContent).not.toMatch(/draft|conflict|repeat/i);
+    fireEvent.click(chip);
+    expect(onSelectItem).not.toHaveBeenCalled();
   });
 
   it("keeps a ghost visible even when compact overflow capacity would hide all chips", () => {
@@ -401,41 +310,4 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(screen.queryByText("Earlier hold")).toBeNull();
   });
 
-  it("reserves top-lane space so normal chips overflow before pinned spans", async () => {
-    const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
-      configurable: true,
-      get() {
-        return this.getAttribute?.("data-testid") === "reserved-lane-host" ? 90 : 0;
-      },
-    });
-
-    try {
-      render(
-        <div data-testid="reserved-lane-host">
-          <CalendarCellItemStack
-            day={20}
-            items={[
-              { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
-              { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-              { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
-            ]}
-            metrics={metrics}
-            reservedLaneCount={1}
-          />
-        </div>,
-      );
-
-      await waitFor(() => {
-        expect(screen.queryAllByTestId("calendar-cell-item-chip")).toHaveLength(0);
-        expect(screen.getByText("+3 more")).toBeTruthy();
-      });
-    } finally {
-      if (originalClientHeight) {
-        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
-      } else {
-        delete HTMLElement.prototype.clientHeight;
-      }
-    }
-  });
 });

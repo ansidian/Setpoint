@@ -160,6 +160,7 @@ function ChipPrefix({ item, selected, metrics }) {
 
 function ChipContent({ item, selected, metrics }) {
   const fit = chipContentFit(item, metrics);
+  const TitleTag = item.complete ? "s" : "span";
   const lineHeightPx = Number((fit.fontSize * fit.lineHeight).toFixed(2));
   const maxHeight = Number((lineHeightPx * fit.lineClamp).toFixed(2));
   const clampStyle = fit.lineClamp > 1
@@ -197,15 +198,14 @@ function ChipContent({ item, selected, metrics }) {
       }}
     >
       <ChipPrefix item={item} selected={selected} metrics={metrics} />
-      <span
+      <TitleTag
         data-calendar-chip-title-text="true"
         style={{
-          textDecoration: item.complete ? "line-through" : "none",
           textDecorationColor: "rgba(205,214,244,0.28)",
         }}
       >
         {item.title}
-      </span>
+      </TitleTag>
     </span>
   );
 }

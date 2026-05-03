@@ -70,6 +70,8 @@ function DeadlineRow({ task, selected, onSelect, quickActions }) {
       data-testid="calendar-agenda-deadline-row"
       data-agenda-key={task.agendaKey}
       data-item-id={task.agendaItemId}
+      data-selected={selected ? "true" : "false"}
+      aria-current={selected ? "true" : undefined}
       onClick={(event) => onSelect(task, event.currentTarget)}
       onContextMenu={(event) => {
         if (!quickActions?.openContextMenu?.({

@@ -1,7 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createEmailIndexTestDb,
+  seedIndexedEmail,
+} from "./test-utils/email-index-db.js";
 
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
 const mockDb = { execute: vi.fn() };
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => mockDb.execute(...args),
+  },
+}));
 vi.mock("./encryption.js", () => ({ decrypt: () => "decrypted" }));
 vi.mock("./gmail.js", () => ({
   fetchEmailBody: vi.fn(),
@@ -35,6 +46,13 @@ const { __testing__ } = emailService;
 beforeEach(() => {
   vi.clearAllMocks();
   mockDb.execute.mockReset();
+  mockDb.execute.mockImplementation((...args) => testState.db.current?.execute(...args));
+  testState.db.current = null;
+});
+
+afterEach(async () => {
+  await testState.db.current?.close?.();
+  testState.db.current = null;
 });
 
 describe("findAccountByUid", () => {
@@ -131,26 +149,16 @@ describe("buildEmailWebUrl", () => {
 
 describe("searchEmails contract", () => {
   it("searches the persisted email index instead of latest briefing/live payloads", async () => {
-    mockDb.execute.mockResolvedValueOnce({
-      rows: [
-        {
-          uid: "gmail-work-historical-1",
-          account_id: "gmail-work",
-          account_label: "Work",
-          account_email: "work@example.com",
-          account_color: "#123456",
-          account_icon: "Mail",
-          from_name: "Historical Sender",
-          from_address: "sender@example.com",
-          subject: "Tuition receipt from last semester",
-          body_snippet: "Historical indexed receipt",
-          email_date: "2025-09-03T12:00:00Z",
-          read: 1,
-          subject_highlight: "<mark>Tuition</mark> receipt from last semester",
-          body_highlight: "Historical indexed receipt",
-          rank: -1.25,
-        },
-      ],
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-historical-1",
+      from_name: "Historical Sender",
+      from_address: "sender@example.com",
+      subject: "Tuition receipt from last semester",
+      body_snippet: "Historical indexed receipt",
+      body_text: "Historical indexed receipt from last semester",
+      email_date: "2025-09-03T12:00:00Z",
+      read: 1,
     });
 
     const result = await emailService.searchEmails("user-1", {
@@ -158,11 +166,6 @@ describe("searchEmails contract", () => {
       limit: 5,
     });
 
-    const query = mockDb.execute.mock.calls[0][0];
-    expect(query.sql).toMatch(/FROM ea_email_fts/);
-    expect(query.sql).toMatch(/JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid/);
-    expect(query.sql).not.toMatch(/ea_briefings|briefing_json|live/i);
-    expect(query.args).toEqual([`"tuition" "receipt"*`, "user-1", 90]);
     expect(result).toEqual({
       accounts: [
         expect.objectContaining({
@@ -183,40 +186,47 @@ describe("searchEmails contract", () => {
   });
 
   it("combines is:unread with full-text search against indexed read state", async () => {
-    mockDb.execute.mockResolvedValueOnce({ rows: [] });
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "unread-amazon",
+      subject: "Amazon delivery",
+      body_text: "Amazon package update",
+      read: 0,
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "read-amazon",
+      subject: "Amazon receipt",
+      body_text: "Amazon receipt",
+      read: 1,
+    });
 
-    await emailService.searchEmails("user-1", {
+    const result = await emailService.searchEmails("user-1", {
       q: "is:unread amazon",
       limit: 5,
     });
 
-    const query = mockDb.execute.mock.calls[0][0];
-    expect(query.sql).toMatch(/ea_email_fts MATCH \?/);
-    expect(query.sql).toMatch(/idx\.read = \?/);
-    expect(query.args).toEqual([`"amazon"*`, "user-1", 0, 90]);
+    expect(result.total).toBe(1);
+    expect(result.accounts[0].results).toEqual([
+      expect.objectContaining({
+        uid: "unread-amazon",
+        read: false,
+      }),
+    ]);
   });
 
   it("supports flag-only unread searches without requiring FTS text", async () => {
-    mockDb.execute.mockResolvedValueOnce({
-      rows: [
-        {
-          uid: "gmail-work-unread-1",
-          account_id: "gmail-work",
-          account_label: "Work",
-          account_email: "work@example.com",
-          account_color: "#123456",
-          account_icon: "Mail",
-          from_name: "Sender",
-          from_address: "sender@example.com",
-          subject: "Unread note",
-          body_snippet: "Needs attention",
-          email_date: "2026-05-01T12:00:00Z",
-          read: 0,
-          subject_highlight: null,
-          body_highlight: null,
-          rank: 0,
-        },
-      ],
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-unread-1",
+      subject: "Unread note",
+      body_snippet: "Needs attention",
+      read: 0,
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-read-1",
+      subject: "Read note",
+      body_snippet: "Already handled",
+      read: 1,
     });
 
     const result = await emailService.searchEmails("user-1", {
@@ -224,65 +234,55 @@ describe("searchEmails contract", () => {
       limit: 5,
     });
 
-    const query = mockDb.execute.mock.calls[0][0];
-    expect(query.sql).not.toMatch(/ea_email_fts MATCH/);
-    expect(query.sql).toMatch(/FROM ea_email_index idx/);
-    expect(query.sql).toMatch(/idx\.read = \?/);
-    expect(query.args).toEqual(["user-1", 0, 90]);
+    expect(result.total).toBe(1);
+    expect(result.accounts[0].results[0].uid).toBe("gmail-work-unread-1");
     expect(result.accounts[0].results[0].read).toBe(false);
   });
 
   it("supports is:read as an indexed read predicate", async () => {
-    mockDb.execute.mockResolvedValueOnce({ rows: [] });
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "read-invoice",
+      subject: "Read invoice",
+      body_text: "Invoice paid",
+      read: 1,
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "unread-invoice",
+      subject: "Unread invoice",
+      body_text: "Invoice due",
+      read: 0,
+    });
 
-    await emailService.searchEmails("user-1", {
+    const result = await emailService.searchEmails("user-1", {
       q: "is:read invoice",
       limit: 5,
     });
 
-    const query = mockDb.execute.mock.calls[0][0];
-    expect(query.sql).toMatch(/idx\.read = \?/);
-    expect(query.args).toEqual([`"invoice"*`, "user-1", 1, 90]);
+    expect(result.total).toBe(1);
+    expect(result.accounts[0].results).toEqual([
+      expect.objectContaining({
+        uid: "read-invoice",
+        read: true,
+      }),
+    ]);
   });
 
   it("returns indexed search results newest to oldest", async () => {
-    mockDb.execute.mockResolvedValueOnce({
-      rows: [
-        {
-          uid: "older",
-          account_id: "gmail-work",
-          account_label: "Work",
-          account_email: "work@example.com",
-          account_color: "#123456",
-          account_icon: "Mail",
-          from_name: "Sender",
-          from_address: "sender@example.com",
-          subject: "Older invoice",
-          body_snippet: "Older indexed result",
-          email_date: "2026-04-01T12:00:00Z",
-          read: 1,
-          subject_highlight: null,
-          body_highlight: null,
-          rank: -20,
-        },
-        {
-          uid: "newer",
-          account_id: "gmail-work",
-          account_label: "Work",
-          account_email: "work@example.com",
-          account_color: "#123456",
-          account_icon: "Mail",
-          from_name: "Sender",
-          from_address: "sender@example.com",
-          subject: "Newer invoice",
-          body_snippet: "Newer indexed result",
-          email_date: "2026-05-01T12:00:00Z",
-          read: 1,
-          subject_highlight: null,
-          body_highlight: null,
-          rank: -1,
-        },
-      ],
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "older",
+      subject: "Older invoice",
+      body_snippet: "Older indexed result",
+      body_text: "Older invoice result",
+      email_date: "2026-04-01T12:00:00Z",
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "newer",
+      subject: "Newer invoice",
+      body_snippet: "Newer indexed result",
+      body_text: "Newer invoice result",
+      email_date: "2026-05-01T12:00:00Z",
     });
 
     const result = await emailService.searchEmails("user-1", {

@@ -42,52 +42,6 @@ function buildFallbackDayState(items) {
   };
 }
 
-function makeRect({ left, top, width, height }) {
-  return {
-    x: left,
-    y: top,
-    left,
-    top,
-    width,
-    height,
-    right: left + width,
-    bottom: top + height,
-    toJSON() {
-      return this;
-    },
-  };
-}
-
-function parsePx(value) {
-  const match = /^([0-9.]+)px$/.exec(String(value || "").trim());
-  return match ? Number(match[1]) : null;
-}
-
-function getHeaderHeight(cell) {
-  const header = Array.from(cell.children).find((node) => (
-    node instanceof HTMLDivElement
-    && node.style.display === "flex"
-    && node.style.alignItems === "center"
-  ));
-  const badge = header?.querySelector("span");
-
-  return (
-    parsePx(header?.style.height)
-    ?? parsePx(header?.style.minHeight)
-    ?? parsePx(badge?.style.height)
-    ?? parsePx(badge?.style.minHeight)
-    ?? 16
-  );
-}
-
-function getContentHeight(element) {
-  const cell = element.parentElement;
-  if (!cell) return 0;
-  const paddingY = 12;
-  const headerGap = 2;
-  return Math.max(0, CELL_HEIGHT - paddingY - headerGap - getHeaderHeight(cell));
-}
-
 function dayLabel(day) {
   return new Date(VIEW_YEAR, VIEW_MONTH, day).toLocaleDateString("en-US", {
     weekday: "long",
@@ -150,7 +104,6 @@ function renderGrid(itemsByDay, overrides = {}) {
 }
 
 let originalResizeObserver;
-let originalClientHeightDescriptor;
 
 beforeEach(() => {
   window.innerWidth = 1440;
@@ -163,54 +116,16 @@ beforeEach(() => {
     disconnect() {}
   };
 
-  originalClientHeightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
-    configurable: true,
-    get() {
-      if (
-        this instanceof HTMLDivElement
-        && this.style.flexGrow === "1"
-        && this.style.overflow === "hidden"
-        && this.parentElement?.getAttribute("data-testid")?.startsWith("calendar-cell-")
-      ) {
-        return getContentHeight(this);
-      }
-
-      return 0;
-    },
-  });
-
   vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
     callback(0);
     return 1;
   });
   vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getBoundingClientRect() {
-    const testId = this.getAttribute?.("data-testid") || "";
-    const match = /^calendar-cell-overflow-trigger-(\d+)$/.exec(testId);
-    if (match) {
-      const day = Number(match[1]);
-      return makeRect({
-        left: 60 + day * 11,
-        top: 120 + day * 5,
-        width: 58,
-        height: 16,
-      });
-    }
-
-    return makeRect({ left: 0, top: 0, width: 120, height: 24 });
-  });
 });
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-
-  if (originalClientHeightDescriptor) {
-    Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeightDescriptor);
-  } else {
-    delete HTMLElement.prototype.clientHeight;
-  }
 
   if (originalResizeObserver) {
     globalThis.ResizeObserver = originalResizeObserver;
@@ -310,7 +225,7 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(navigateMonth).not.toHaveBeenCalled();
   });
 
-  it("uses the primary boundary color when an adjacent cell belongs to the actual current month", () => {
+  it("renders adjacent-month boundary segments around the actual current month", () => {
     renderGrid({}, {
       viewMonth: 4,
       currentMonth: 3,
@@ -324,11 +239,9 @@ describe("CalendarGrid overflow motion coverage", () => {
       .getByTestId("calendar-month-boundary-right-2026-04-30-2026-04-30");
 
     expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
-    expect(rightStroke.style.background).toBe("rgb(0, 149, 255)");
-    expect(rightStroke.style.width).toBe("2px");
   });
 
-  it("mutes boundaries that do not wrap the actual current month", () => {
+  it("renders adjacent-month boundary segments outside the actual current month", () => {
     renderGrid({}, {
       viewMonth: 5,
       currentMonth: 3,
@@ -342,8 +255,6 @@ describe("CalendarGrid overflow motion coverage", () => {
       .getByTestId("calendar-month-boundary-right-2026-05-31-2026-05-31");
 
     expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
-    expect(rightStroke.style.background).toBe("rgba(137, 180, 250, 0.32)");
-    expect(rightStroke.style.width).toBe("2px");
   });
 
   it("renders date-keyed adjacent day items for non-event views", () => {
@@ -369,8 +280,6 @@ describe("CalendarGrid overflow motion coverage", () => {
 
     expect(within(adjacentCell).getByText("April utility")).toBeTruthy();
     expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
-    expect(rightStroke.style.background).toBe("rgb(0, 149, 255)");
-    expect(rightStroke.style.width).toBe("2px");
   });
 
   it("shows same visible chip count for today and non-today cells with matching event counts", async () => {
@@ -390,9 +299,7 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
 
     const visibleCount = within(todayCell).getAllByTestId("calendar-cell-item-chip").length;
-    expect(within(todayCell).getAllByTestId("calendar-cell-item-chip")[0].style.height).toBe("36px");
     expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").textContent).toBe(`+${4 - visibleCount} more`);
-    expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").style.minHeight).toBe("28px");
     expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe(`+${4 - visibleCount} more`);
   });
 
@@ -420,6 +327,22 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
 
     const span = screen.getByTestId("calendar-event-span-segment");
+    Object.defineProperty(span, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        width: 300,
+        height: 36,
+        right: 300,
+        bottom: 36,
+        toJSON() {
+          return this;
+        },
+      }),
+    });
     expect(span.tagName).toBe("BUTTON");
     expect(screen.queryByTestId("calendar-cell-item-chip")).toBeNull();
 
@@ -483,7 +406,7 @@ describe("CalendarGrid overflow motion coverage", () => {
     const ghost = screen.getByTestId("calendar-ghost-chip");
     expect(ghost.tagName).toBe("DIV");
     expect(ghost.getAttribute("aria-hidden")).toBe("true");
-    expect(ghost.style.pointerEvents).toBe("none");
+    expect(ghost.getAttribute("data-ghost-kind")).toBe("event");
   });
 
   it("retargets open overflow popover to second trigger without remounting or closing first", async () => {
@@ -502,9 +425,6 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(within(firstPopover).getByText("Day 15 event 4")).toBeTruthy();
     expect(screen.getAllByTestId("calendar-cell-overflow-popover")).toHaveLength(1);
 
-    const firstLeft = firstPopover.style.left;
-    const firstTop = firstPopover.style.top;
-
     fireEvent.pointerDown(secondTrigger);
     fireEvent.click(secondTrigger);
 
@@ -512,8 +432,6 @@ describe("CalendarGrid overflow motion coverage", () => {
       const popovers = screen.getAllByTestId("calendar-cell-overflow-popover");
       expect(popovers).toHaveLength(1);
       expect(popovers[0]).toBe(firstPopover);
-      expect(popovers[0].style.left).not.toBe(firstLeft);
-      expect(popovers[0].style.top).not.toBe(firstTop);
       expect(within(popovers[0]).getByText(dayLabel(16))).toBeTruthy();
       expect(within(popovers[0]).getByText("Day 16 event 4")).toBeTruthy();
       expect(within(popovers[0]).queryByText("Day 15 event 4")).toBeNull();

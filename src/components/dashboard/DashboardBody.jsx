@@ -10,6 +10,7 @@ import {
   DashboardBodyLayout,
   DashboardSurface,
 } from "./layout/DashboardScenePrimitives";
+import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel";
 
 export function DashboardBody({
   briefing, liveData, activeSnapshot, calendarRange, customize, accent,
@@ -17,7 +18,13 @@ export function DashboardBody({
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenTodoistCreate, onJumpSection, setAddTaskOpen,
 }) {
   const { dashboardLayout, density, showInboxPeek, showNotes } = customize;
-  const effectiveLayout = isMobile ? "paper" : dashboardLayout;
+  const layoutPlan = resolveDashboardBodyLayout({
+    isMobile,
+    dashboardLayout,
+    showInboxPeek,
+    showNotes,
+  });
+  const effectiveLayout = layoutPlan.layoutMode;
   const ctx = useDashboard();
 
   const seededEvents = useMemo(() => briefing?.calendar || [], [briefing?.calendar]);
@@ -231,6 +238,13 @@ export function DashboardBody({
   ) : null;
 
   const notesSection = showNotes ? <NotesRail accent={accent} /> : null;
+  const sectionByKey = {
+    deadlines: deadlinesSection,
+    bills: billsSection,
+    "inbox-peek": inboxSection,
+    notes: notesSection,
+  };
+  const sectionsFor = (sectionKeys) => sectionKeys.map((key) => sectionByKey[key]).filter(Boolean);
 
   return (
     <DashboardBodyLayout
@@ -238,10 +252,10 @@ export function DashboardBody({
       isMobile={isMobile}
       hero={hero}
       timelinePanel={timelinePanel}
-      mobileSections={[deadlinesSection, billsSection, inboxSection]}
-      primaryRailSections={[deadlinesSection, billsSection, inboxSection]}
-      commandPrimaryRailSections={[deadlinesSection, notesSection]}
-      commandSecondaryRailSections={[billsSection, inboxSection]}
+      mobileSections={sectionsFor(layoutPlan.mobileSectionOrder)}
+      primaryRailSections={sectionsFor(layoutPlan.primaryRailSectionOrder)}
+      commandPrimaryRailSections={sectionsFor(layoutPlan.commandPrimaryRailSectionOrder)}
+      commandSecondaryRailSections={sectionsFor(layoutPlan.commandSecondaryRailSectionOrder)}
     />
   );
 }

@@ -77,6 +77,7 @@ function SectionLabel({
 function TimelineRow({ item, compact = false }) {
   const [hovered, setHovered] = useState(false);
   const interactive = typeof item.onClick === "function";
+  const TitleTag = item.complete ? "s" : "span";
   const rowMetrics = compact
     ? {
         timeColumn: "60px",
@@ -260,7 +261,6 @@ function TimelineRow({ item, compact = false }) {
               fontWeight: item.selected ? 600 : 500,
               lineHeight: rowMetrics.titleLineHeight,
               letterSpacing: rowMetrics.titleLetterSpacing,
-              textDecoration: item.complete ? "line-through" : "none",
               textDecorationColor: "rgba(205,214,244,0.3)",
               display: "-webkit-box",
               WebkitLineClamp: compact ? 2 : 3,
@@ -268,7 +268,7 @@ function TimelineRow({ item, compact = false }) {
               overflow: "hidden",
             }}
           >
-            {item.title}
+            <TitleTag>{item.title}</TitleTag>
           </div>
           {item.subtitle && (
             <div

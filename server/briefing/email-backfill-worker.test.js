@@ -1,30 +1,40 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createEmailIndexTestDb,
+  seedEmailAccount,
+} from "./test-utils/email-index-db.js";
 
-const mockDb = { execute: vi.fn() };
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
 const gmailApi = vi.hoisted(() => ({ fetchEmailsInRange: vi.fn() }));
 const icloudApi = vi.hoisted(() => ({ fetchEmailsInRange: vi.fn() }));
-const emailIndexApi = vi.hoisted(() => ({
-  indexEmails: vi.fn(),
-  queueEmailIndexBackfill: vi.fn(),
-}));
 
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+    batch: (...args) => testState.db.current.batch(...args),
+  },
+}));
 vi.mock("./gmail.js", () => ({ fetchEmailsInRange: gmailApi.fetchEmailsInRange }));
 vi.mock("./icloud.js", () => ({ fetchEmailsInRange: icloudApi.fetchEmailsInRange }));
-vi.mock("./email-index.js", () => ({
-  indexEmails: emailIndexApi.indexEmails,
-  queueEmailIndexBackfill: emailIndexApi.queueEmailIndexBackfill,
-}));
 vi.mock("./encryption.js", () => ({ decrypt: vi.fn(() => "icloud-password") }));
 
 const worker = await import("./email-backfill-worker.js");
 
-beforeEach(() => {
-  vi.clearAllMocks();
+beforeEach(async () => {
+  testState.db.current = await createEmailIndexTestDb();
+  gmailApi.fetchEmailsInRange.mockReset();
+  icloudApi.fetchEmailsInRange.mockReset();
 });
 
-function queuedState(overrides = {}) {
-  return {
+afterEach(async () => {
+  await testState.db.current?.close?.();
+  testState.db.current = null;
+});
+
+async function seedBackfillState(overrides = {}) {
+  const state = {
     user_id: "user-1",
     account_id: "gmail-work",
     mailbox_scope: "inbox",
@@ -36,24 +46,60 @@ function queuedState(overrides = {}) {
     attempts: 0,
     ...overrides,
   };
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_email_backfill_state
+            (user_id, account_id, mailbox_scope, status, target_days,
+             oldest_target_date, cursor_json, indexed_count, attempts, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      state.user_id,
+      state.account_id,
+      state.mailbox_scope,
+      state.status,
+      state.target_days,
+      state.oldest_target_date,
+      state.cursor_json,
+      state.indexed_count,
+      state.attempts,
+      state.updated_at || "2026-05-02 09:00:00",
+    ],
+  });
+  return state;
+}
+
+async function readBackfillState(accountId = "gmail-work") {
+  const result = await testState.db.current.execute({
+    sql: `SELECT status, cursor_json, indexed_count, oldest_indexed_date,
+                 last_scanned_at, last_error, attempts, completed_at
+          FROM ea_email_backfill_state
+          WHERE user_id = ? AND account_id = ? AND mailbox_scope = 'inbox'`,
+    args: ["user-1", accountId],
+  });
+  return result.rows[0];
 }
 
 describe("processNextBackfillWindow", () => {
   it("processes one newest-to-oldest Gmail window and persists progress", async () => {
-    const email = { uid: "gmail-gmail-work-msg-1", subject: "Backfill" };
-    mockDb.execute
-      .mockResolvedValueOnce({ rows: [queuedState()] })
-      .mockResolvedValueOnce({ rowsAffected: 1 })
-      .mockResolvedValueOnce({
-        rows: [{
-          id: "gmail-work",
-          user_id: "user-1",
-          type: "gmail",
-          email: "work@example.com",
-          label: "Work",
-        }],
-      })
-      .mockResolvedValueOnce({ rowsAffected: 1 });
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    await seedBackfillState();
+    const email = {
+      uid: "gmail-gmail-work-msg-1",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      from: "Backfill Sender <sender@example.com>",
+      subject: "Backfill",
+      body_preview: "Backfill preview",
+      body_text: "Backfill body",
+      date: "2026-04-28T12:00:00.000Z",
+      read: false,
+    };
     gmailApi.fetchEmailsInRange.mockResolvedValueOnce({
       emails: [email],
       nextPageToken: null,
@@ -73,31 +119,50 @@ describe("processNextBackfillWindow", () => {
         pageToken: undefined,
       },
     );
-    expect(emailIndexApi.indexEmails).toHaveBeenCalledWith("user-1", [email]);
-    const finalUpdate = mockDb.execute.mock.calls.at(-1)[0];
-    expect(finalUpdate.sql).toMatch(/status = \?/);
-    expect(finalUpdate.args[0]).toBe("queued");
-    expect(JSON.parse(finalUpdate.args[1])).toMatchObject({
+    expect(result).toMatchObject({
+      processed: true,
+      status: "queued",
+      indexed: 1,
+    });
+
+    const state = await readBackfillState();
+    expect(state).toMatchObject({
+      status: "queued",
+      indexed_count: 1,
+      oldest_indexed_date: "2026-04-28T12:00:00.000Z",
+      last_scanned_at: "2026-05-02T12:00:00.000Z",
+      last_error: "",
+      attempts: 1,
+      completed_at: null,
+    });
+    expect(JSON.parse(state.cursor_json)).toMatchObject({
       nextWindowEnd: "2026-04-25T12:00:00.000Z",
       currentWindow: {
         start: "2026-04-25T12:00:00.000Z",
         end: "2026-05-02T12:00:00.000Z",
       },
     });
-    expect(finalUpdate.args[2]).toBe(1);
-    expect(result).toMatchObject({
-      processed: true,
-      status: "queued",
-      indexed: 1,
+
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT idx.uid, idx.subject, idx.read, fts.body_text
+            FROM ea_email_index idx
+            JOIN ea_email_fts fts ON fts.uid = idx.uid
+            WHERE idx.user_id = ?`,
+      args: ["user-1"],
     });
+    expect(indexed.rows).toEqual([
+      expect.objectContaining({
+        uid: "gmail-gmail-work-msg-1",
+        subject: "Backfill",
+        read: 0,
+        body_text: "Backfill body",
+      }),
+    ]);
   });
 
   it("keeps the same Gmail window when a provider page token remains", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce({ rows: [queuedState()] })
-      .mockResolvedValueOnce({ rowsAffected: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: "gmail-work", user_id: "user-1", type: "gmail" }] })
-      .mockResolvedValueOnce({ rowsAffected: 1 });
+    await seedEmailAccount(testState.db.current, { id: "gmail-work", type: "gmail" });
+    await seedBackfillState();
     gmailApi.fetchEmailsInRange.mockResolvedValueOnce({
       emails: [],
       nextPageToken: "page-2",
@@ -106,53 +171,78 @@ describe("processNextBackfillWindow", () => {
 
     await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
 
-    const cursor = JSON.parse(mockDb.execute.mock.calls.at(-1)[0].args[1]);
-    expect(cursor.nextWindowEnd).toBe("2026-05-02T12:00:00.000Z");
-    expect(cursor.pageToken).toBe("page-2");
+    const state = await readBackfillState();
+    expect(JSON.parse(state.cursor_json)).toMatchObject({
+      nextWindowEnd: "2026-05-02T12:00:00.000Z",
+      pageToken: "page-2",
+    });
   });
 
   it("pauses auth failures instead of hot-looping", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce({ rows: [queuedState()] })
-      .mockResolvedValueOnce({ rowsAffected: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: "gmail-work", user_id: "user-1", type: "gmail" }] })
-      .mockResolvedValueOnce({ rowsAffected: 1 });
+    await seedEmailAccount(testState.db.current, { id: "gmail-work", type: "gmail" });
+    await seedBackfillState();
     gmailApi.fetchEmailsInRange.mockRejectedValueOnce(new Error("Gmail range list failed: 401"));
 
     const result = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
 
-    const failureUpdate = mockDb.execute.mock.calls.at(-1)[0];
-    expect(failureUpdate.args[0]).toBe("paused");
-    expect(failureUpdate.args[2]).toBe("Gmail range list failed: 401");
+    const state = await readBackfillState();
+    expect(state).toMatchObject({
+      status: "paused",
+      last_error: "Gmail range list failed: 401",
+      attempts: 1,
+    });
     expect(result).toMatchObject({ processed: true, status: "paused" });
   });
 
   it("marks transient failures retryable with attempts incremented", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce({ rows: [queuedState({ attempts: 1 })] })
-      .mockResolvedValueOnce({ rowsAffected: 1 })
-      .mockResolvedValueOnce({ rows: [{ id: "gmail-work", user_id: "user-1", type: "gmail" }] })
-      .mockResolvedValueOnce({ rowsAffected: 1 });
+    await seedEmailAccount(testState.db.current, { id: "gmail-work", type: "gmail" });
+    await seedBackfillState({ attempts: 1 });
     gmailApi.fetchEmailsInRange.mockRejectedValueOnce(new Error("Gmail range list failed: 503"));
 
     const result = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
 
-    const failureUpdate = mockDb.execute.mock.calls.at(-1)[0];
-    expect(failureUpdate.args[0]).toBe("retry");
-    expect(failureUpdate.args[3]).toBe(2);
+    const state = await readBackfillState();
+    expect(state).toMatchObject({
+      status: "retry",
+      last_error: "Gmail range list failed: 503",
+      attempts: 2,
+    });
     expect(result).toMatchObject({ processed: true, status: "retry" });
   });
 });
 
 describe("resumeInterruptedBackfills", () => {
   it("returns interrupted running jobs to retryable state on startup", async () => {
-    mockDb.execute.mockResolvedValueOnce({ rowsAffected: 2 });
+    await seedBackfillState({
+      account_id: "gmail-work",
+      status: "running",
+      updated_at: "2026-05-02 09:00:00",
+    });
+    await seedBackfillState({
+      account_id: "icloud-main",
+      status: "running",
+      updated_at: "2026-05-02 09:01:00",
+    });
 
     await worker.resumeInterruptedBackfills();
 
-    expect(mockDb.execute).toHaveBeenCalledWith({
-      sql: expect.stringMatching(/UPDATE ea_email_backfill_state/),
+    const rows = await testState.db.current.execute({
+      sql: `SELECT account_id, status, last_error
+            FROM ea_email_backfill_state
+            ORDER BY account_id`,
       args: [],
     });
+    expect(rows.rows).toEqual([
+      {
+        account_id: "gmail-work",
+        status: "retry",
+        last_error: "Backfill interrupted before completion",
+      },
+      {
+        account_id: "icloud-main",
+        status: "retry",
+        last_error: "Backfill interrupted before completion",
+      },
+    ]);
   });
 });

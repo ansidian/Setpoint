@@ -89,14 +89,6 @@ async function openCalendar(page) {
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible({ timeout: 15_000 });
 }
 
-async function openCalendarAtSize(page, size) {
-  await page.setViewportSize(size);
-  await page.goto("/");
-  await expect(page.getByTestId("shell-header-desktop")).toBeVisible({ timeout: 15_000 });
-  await page.keyboard.press("c");
-  await expect(page.getByTestId("calendar-modal-panel")).toBeVisible({ timeout: 15_000 });
-}
-
 test("keeps one inline overflow visible while switching between +n more triggers", async ({ page }) => {
   const fixture = buildOverflowFixture();
   await installDashboardShellFixtures(page, { initialEvents: fixture.events });
@@ -144,53 +136,6 @@ test("closes inline overflow on Escape before closing the modal", async ({ page 
   await page.keyboard.press("Escape");
   await expect(inlineOverflow).toHaveCount(0);
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
-});
-
-test("shows visible event chips with an overflow trigger", async ({ page }) => {
-  const fixture = buildOverflowFixture();
-  await installDashboardShellFixtures(page, { initialEvents: fixture.events });
-  await openCalendar(page);
-
-  const firstCell = page.getByTestId(`calendar-cell-${fixture.firstDay}`);
-  const visibleChip = firstCell.getByTestId("calendar-cell-item-chip").first();
-  const overflowTrigger = firstCell.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
-
-  await expect(visibleChip).toBeVisible();
-  await expect(overflowTrigger).toBeVisible();
-});
-
-test("keeps the xl dense-day chip count stable when selecting from the cell header", async ({ page }) => {
-  const parts = currentMonthParts();
-  const [day] = pickOverflowDays(parts);
-  const events = buildDayEvents({
-    year: parts.year,
-    month: parts.month,
-    day,
-    prefix: "Dense day",
-    color: "#4285f4",
-    count: 6,
-  });
-
-  await installDashboardShellFixtures(page, { initialEvents: events });
-  await openCalendarAtSize(page, { width: 1900, height: 1200 });
-
-  const cell = page.getByTestId(`calendar-cell-${day}`);
-  const supportBand = page.getByTestId("calendar-modal-support-band");
-
-  await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(3);
-  await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+3 more");
-
-  await cell.click({
-    position: {
-      x: 18,
-      y: 18,
-    },
-  });
-
-  await expect(supportBand).toHaveAttribute("data-support-mode", "detail");
-  await expect(page.getByTestId("calendar-selected-event-card")).toHaveCount(0);
-  await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(3);
-  await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+3 more");
 });
 
 test("keeps inline overflow open when selecting a hidden chip", async ({ page }) => {

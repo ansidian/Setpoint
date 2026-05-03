@@ -201,6 +201,7 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
       transition={motion.layout}
       data-testid="calendar-selected-event-card"
       data-density="compressed"
+      data-height-mode="auto"
       style={{ flexShrink: 0 }}
     >
       <RailHeroCard accent={accent} compact actions={actions}>
@@ -249,6 +250,8 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
             }}
           >
             <span
+              data-testid="calendar-selected-event-time"
+              data-nowrap="true"
               style={{
                 fontSize: 12.5,
                 lineHeight: 1.35,
