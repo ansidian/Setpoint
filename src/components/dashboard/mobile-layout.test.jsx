@@ -288,6 +288,23 @@ describe("TodayTimeline controls", () => {
     expect(deadlinesFilter.style.background).toBe("rgba(255, 255, 255, 0.035)");
     expect(deadlinesFilter.style.color).toBe("rgba(205, 214, 244, 0.82)");
   });
+
+  it("keeps the now marker visible when events are toggled off", () => {
+    render(
+      <TodayTimeline
+        accent="#cba6da"
+        events={[]}
+        deadlines={[]}
+        onJump={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("timeline-now-marker")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("switch", { name: /events/i }));
+
+    expect(screen.getByTestId("timeline-now-marker")).toBeTruthy();
+  });
 });
 
 describe("CustomizePanel mobile options", () => {

@@ -8,6 +8,7 @@ import {
   GUTTER,
   MOBILE_GUTTER,
   MOBILE_SPINE_LEFT,
+  resolveTimelineNowMarkerTop,
   SPINE_LEFT,
 } from "./timeline-helpers";
 
@@ -37,56 +38,11 @@ export default function TimelineDayGroup({
       setMarkerTop(null);
       return;
     }
-    if (items.length === 0) {
-      setMarkerTop(12);
-      return;
-    }
-
-    let liveIndex = -1;
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      if (item.kind !== "event") continue;
-      if (item.startMs != null && item.endMs != null && item.startMs <= now && now < item.endMs) {
-        liveIndex = index;
-        break;
-      }
-    }
-
-    if (liveIndex >= 0 && rowRefs.current[liveIndex]) {
-      const row = rowRefs.current[liveIndex];
-      const item = items[liveIndex];
-      const progress = (now - item.startMs) / (item.endMs - item.startMs);
-      setMarkerTop(row.offsetTop + progress * row.offsetHeight);
-      return;
-    }
-
-    let firstFutureIndex = -1;
-    for (let index = 0; index < items.length; index += 1) {
-      const ms = items[index].startMs ?? items[index].dueAtMs;
-      if (ms != null && ms > now) {
-        firstFutureIndex = index;
-        break;
-      }
-    }
-
-    if (firstFutureIndex === 0) {
-      setMarkerTop(0);
-      return;
-    }
-    if (firstFutureIndex > 0 && rowRefs.current[firstFutureIndex - 1]) {
-      const previousRow = rowRefs.current[firstFutureIndex - 1];
-      setMarkerTop(previousRow.offsetTop + previousRow.offsetHeight + 2);
-      return;
-    }
-
-    const lastIndex = items.length - 1;
-    if (rowRefs.current[lastIndex]) {
-      const lastRow = rowRefs.current[lastIndex];
-      setMarkerTop(lastRow.offsetTop + lastRow.offsetHeight + 2);
-      return;
-    }
-
-    setMarkerTop(null);
+    setMarkerTop(resolveTimelineNowMarkerTop({
+      items,
+      now,
+      rows: rowRefs.current,
+    }));
   }, [isToday, items, now]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
