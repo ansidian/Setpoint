@@ -4,7 +4,7 @@ export default function RefreshBanner({ progress }) {
       <div className="w-[18px] h-[18px] border-[1.5px] border-white/[0.06] border-t-primary rounded-full animate-spin shrink-0" />
       <div>
         <div className="text-[13px] font-semibold text-foreground/90">
-          Generating fresh briefing...
+          Syncing dashboard data...
         </div>
         <div className="text-xs text-muted-foreground/60 mt-0.5 transition-opacity duration-200">
           {progress || "Starting up..."}

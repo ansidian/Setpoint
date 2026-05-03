@@ -144,6 +144,20 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
               {email.urgentFlag.label || email.urgency}
             </span>
           )}
+          {!untriaged && email.category && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center",
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+                padding: "2px 6px", borderRadius: 4,
+                color: "rgba(205,214,244,0.62)",
+                background: "rgba(205,214,244,0.06)",
+                border: "1px solid rgba(205,214,244,0.10)",
+              }}
+            >
+              {email.category.replace(/_/g, " ")}
+            </span>
+          )}
         </div>
         {showPreview && density !== "compact" && email.preview && (
           <div

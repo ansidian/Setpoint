@@ -87,33 +87,31 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
 }
 
 describe("mobile dashboard layout", () => {
-  it("forces the mobile dashboard body into paper mode and keeps insights as a compact section", () => {
+  it("forces the mobile dashboard body into paper mode without the retired insights section", () => {
     renderDashboardBody({ isMobile: true, dashboardLayout: "command", showInsights: true });
 
     const body = screen.getByTestId("dashboard-body-mobile");
     expect(body.getAttribute("data-layout-mode")).toBe("paper");
-    expect(screen.getByText("Signals")).toBeTruthy();
+    expect(screen.queryByText("Signals")).toBeNull();
     expect(document.querySelector('[data-sect="deadlines"]')).toBeTruthy();
     expect(document.querySelector('[data-sect="bills"]')).toBeTruthy();
     expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
-    expect(document.querySelector('[data-sect="insights"]')).toBeTruthy();
+    expect(document.querySelector('[data-sect="insights"]')).toBeNull();
     expect(document.querySelector('[data-sect="timeline"]')).toBeTruthy();
 
     const deadlines = document.querySelector('[data-sect="deadlines"]');
     const bills = document.querySelector('[data-sect="bills"]');
     const inboxPeek = document.querySelector('[data-sect="inbox-peek"]');
-    const insights = document.querySelector('[data-sect="insights"]');
     const timeline = document.querySelector('[data-sect="timeline"]');
     expect(deadlines.compareDocumentPosition(bills) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(bills.compareDocumentPosition(inboxPeek) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(inboxPeek.compareDocumentPosition(insights) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(insights.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(inboxPeek.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("keeps desktop layout selection when not mobile", () => {
     renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
 
-    expect(screen.getByText("Signals")).toBeTruthy();
+    expect(screen.queryByText("Signals")).toBeNull();
     const layoutRoot = document.querySelector('[data-layout-mode="command"]');
     expect(layoutRoot).toBeTruthy();
   });
@@ -321,7 +319,8 @@ describe("CustomizePanel mobile options", () => {
 
     expect(screen.queryByText("Dashboard layout")).toBeNull();
     expect(screen.queryByText("Dashboard density")).toBeNull();
-    expect(screen.getByText("Show signals")).toBeTruthy();
+    expect(screen.queryByText("Show signals")).toBeNull();
+    expect(screen.getByText("Show inbox peek")).toBeTruthy();
   });
 
   it("hides desktop-only inbox controls on mobile", () => {

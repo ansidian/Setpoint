@@ -55,8 +55,8 @@ graph TB
 | UI | shadcn/ui, Radix, Framer Motion | Component primitives, animations |
 | Backend | Express 4 | HTTP API server |
 | Database | Turso (LibSQL) | SQLite-compatible cloud DB |
-| AI | Claude API (Anthropic) | Email triage, bill detection, insights |
-| Search | OpenAI text-embedding-3-small, SQLite FTS5 | RAG vector embeddings + full-text email search |
+| AI | Claude API (Anthropic) | Email triage and bill detection |
+| Search | SQLite FTS5 | Full-text email search |
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
 | Calendar | Google Calendar API | Event sync (reuses Gmail OAuth) |
 | Weather | Pirate Weather | Forecast data |
@@ -64,7 +64,7 @@ graph TB
 | Finance | @actual-app/api | Budget tracking, bill management |
 | Auth | bcrypt, cookie sessions | Password login, session tokens |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
-| Scheduling | node-cron | Automated briefing generation |
+| Scheduling | node-cron | Snapshot boundary checks and background workers |
 
 ## Directory Map
 
@@ -80,9 +80,9 @@ ea-dashboard/
 │   │   ├── tasks-service.js        # Complete task (CTM+Todoist), CTM status, tombstone dismiss, Todoist CRUD
 │   │   ├── bills-service.js        # Actual Budget wrappers + Haiku-powered bill extraction
 │   │   ├── dev-service.js          # Dev-only helpers (reindex emails)
-│   │   ├── claude.js               # Claude API: tool_choice-forced submit_briefing, slot minting, validator retry
-│   │   ├── insight-validator.js    # Pure-function insight validator (forbidden words, slot refs)
-│   │   ├── insight-icons.js        # Icon selection for AI-generated insights
+│   │   ├── claude.js               # Claude API: tool_choice-forced submit_briefing for email triage + bill detection
+│   │   ├── insight-validator.js    # Legacy insight compatibility for old briefing history
+│   │   ├── insight-icons.js        # Legacy icon normalization for old insight history
 │   │   ├── gmail.js                # Gmail OAuth, fetch, mark-read, trash
 │   │   ├── icloud.js               # IMAP connection pool, fetch, mark-read, trash
 │   │   ├── calendar.js             # Google Calendar: today/tomorrow/next-week ranges
@@ -97,12 +97,10 @@ ea-dashboard/
 │   │   ├── email-index.js          # FTS5 email indexing for cross-account search
 │   │   ├── encryption.js           # AES-256-GCM encrypt/decrypt (legacy CBC migration)
 │   │   └── scheduler.js            # Cron job management with hot reload
-│   ├── embeddings/                 # Vector search: chunk, embed, query (RAG)
 │   ├── routes/
 │   │   ├── auth.js                 # Login, session check, logout (rate-limited)
 │   │   ├── briefing/               # Thin HTTP handlers split by domain (index, lifecycle, email, tasks, bills, dev)
 │   │   ├── accounts.js             # Account CRUD, Gmail OAuth, settings, schedules, API tokens
-│   │   ├── search.js               # Vector search + Claude analysis
 │   │   ├── calendar.js             # Read-only calendar endpoints (mounted at /api/calendar)
 │   │   └── live.js                 # Real-time data: new emails, calendar, weather, bills
 │   ├── middleware/
@@ -143,7 +141,7 @@ ea-dashboard/
 │   │   ├── layout/                 # Header, SummaryBar, Section, Loading, Error
 │   │   ├── shell/                  # ShellHeader, CommandPalette, CustomizePanel
 │   │   ├── dashboard/              # TodayTimeline and other dashboard-root pieces
-│   │   ├── briefing/               # InsightsSection, HistoryPanel, Search
+│   │   ├── briefing/               # Legacy briefing history/search components
 │   │   ├── email/                  # EmailTabSection, EmailSection, LiveEmail, EmailRow, Body
 │   │   ├── inbox/                  # Inbox-style grouped email views
 │   │   ├── calendar/               # ScheduleSection (today/tomorrow/next-week, NowMarker)
@@ -163,7 +161,7 @@ ea-dashboard/
 │       ├── bill-utils.js           # Bill normalization and dedupe helpers
 │       ├── email-links.js          # Parse/transform email links for safe rendering
 │       ├── icons.js / icons.jsx    # Icon registry shared across components
-│       └── insight-resolver.js     # Typed date slot renderer for Claude insights
+│       └── insight-resolver.js     # Legacy typed date slot renderer for old insight history
 └── docs/                           # Local gitignored working docs, plans, references, generated snapshots
 ```
 
@@ -190,7 +188,6 @@ graph TD
     Dashboard --> DashboardProvider
     DashboardProvider --> DashboardHeader
     DashboardProvider --> SummaryBar
-    DashboardProvider --> InsightsSection
     DashboardProvider --> ScheduleSection
     DashboardProvider --> DeadlinesSection
     DashboardProvider --> BillsPaymentsSection
@@ -289,13 +286,11 @@ graph LR
     Route --> Auth["/api/auth"]
     Route --> Briefing["/api/briefing"]
     Route --> EA["/api/ea"]
-    Route --> Search["/api/search"]
     Route --> Live["/api/live"]
     Route --> Cal["/api/calendar"]
 
     Briefing --> ReqAuth[requireAuth middleware]
     EA --> ReqAuth
-    Search --> ReqAuth
     Live --> ReqAuth
     Cal --> ReqAuth
     ReqAuth --> Handler[Route Handler]
@@ -308,7 +303,6 @@ graph LR
 | Auth | `/api/auth` | 3 | Login (rate-limited 5/15min), session check, logout |
 | Briefing | `/api/briefing` | ~38 | Generate, poll, refresh, email ops (read/trash/pin/snooze/dismiss), FTS email search, task ops, Actual Budget, scenarios |
 | Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
-| Search | `/api/search` | 2 | Vector search, Claude re-rank |
 | Live | `/api/live` | 1 | Combined real-time data (emails, calendar, weather, bills) |
 | Calendar | `/api/calendar` | 1 | Read-only calendar slice exposed separately from briefing |
 
@@ -340,13 +334,13 @@ Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in
 
 ## Briefing Pipeline
 
-This is the core of the system. A briefing is a single JSON object containing triaged emails, calendar events, weather, deadlines, tasks, bills, and AI insights.
+This is the core of the system. A briefing is a single JSON object containing triaged emails, calendar events, weather, deadlines, tasks, and bills. `aiInsights: []` may remain in stored JSON as a temporary compatibility stub, but always-on AI Insights are retired as an active feature.
 
 ### Generation Flow
 
 ```mermaid
 flowchart TD
-    Trigger["Trigger<br/>(schedule cron OR manual POST)"]
+    Trigger["Trigger<br/>(manual legacy POST)"]
     Config["loadUserConfig()<br/>accounts + settings from DB"]
     
     subgraph Parallel["Parallel Fetch"]
@@ -373,8 +367,6 @@ flowchart TD
     Index["indexEmails()<br/>(async, fire-and-forget)<br/>FTS5 full-text index"]
 
     Store["Store in ea_briefings<br/>status: ready"]
-    Embed["embedAndStore()<br/>(async, fire-and-forget)"]
-
     Trigger --> Config --> Parallel
     Parallel --> Index
     Parallel --> Filter
@@ -384,7 +376,6 @@ flowchart TD
     Delta -->|Full| ClaudeFull --> PostProcess
     Delta -->|Delta| ClaudeDelta --> Merge --> PostProcess
     PostProcess --> Store
-    Store --> Embed
 ```
 
 ### Claude Integration
@@ -395,37 +386,15 @@ System prompt (~120 lines) instructs Claude to:
 - **Triage emails**: actionable (needs response), fyi (real activity), noise (marketing/automated)
 - **Detect bills**: extract payee, amount, due_date, type, category
 - **Flag urgency**: set `urgentFlag: { label, date }` for hard deadlines
-- **Generate insights**: 2-4 items connecting emails + calendar + deadlines, written as templates with typed date slots (see "Typed Date Slots for Insights" below)
+- **Return no insights**: keep `aiInsights: []` for compatibility only
 
 Email interests from settings override noise classification. Scheduled payments from Actual Budget are cross-referenced to suppress duplicate bill detections.
 
 Model selection: user-configurable, defaults to `claude-sonnet-4-6`. Temperature `0` for format adherence. Retries 3x with exponential backoff on 429/529.
 
-### Typed Date Slots for Insights
+### Legacy Insight Compatibility
 
-Claude never writes relative date words ("tomorrow", "tonight", "this morning") in insight text. Instead, each insight has a template and a slots object:
-
-```json
-{
-  "icon": "🎬",
-  "template": "The Boys viewing is {cal_a3f8}.",
-  "slots": { "cal_a3f8": { "iso": "2026-04-08", "time": "20:00" } }
-}
-```
-
-The frontend renders every temporal word from `src/lib/insight-resolver.js` based on the current time at read, so a morning-generated briefing's "tonight at 8pm" reads as "last night at 8pm" the next morning without regeneration. See the `renderSlot` function for the full mapping (today/tomorrow/yesterday/this morning/afternoon/evening/tonight/last night/weekday/absolute).
-
-**Slot pre-minting.** Before calling Claude, `server/briefing/claude.js` builds a dictionary of stable candidate slots from source data: `ctm_{id}`, `tk_{id}` (stable IDs from source), `cal_{hash8}`, `nwcal_{hash8}`, `bill_{hash8}` (content-based hashes for items without stable IDs). These slots are passed to Claude in the user message. Claude references them by ID (`{tk_abc}`) and leaves its own `slots` object empty. New slots are only minted when Claude references a computed date not present in the input; those keys are prefixed `new_`.
-
-**Embedded per-insight.** Slots are stored inside each insight object, not in a top-level briefing dictionary. This is necessary because delta generation merges new Claude output with previous-briefing insights — top-level slot dicts would collide across generations.
-
-**Validation and repair pipeline.** After Claude returns:
-1. Slot references are resolved: the template's `{id}` refs are looked up in Claude's `slots` first, then fall back to the pre-minted global dict. Only referenced slots are kept (dead-weight stripped).
-2. `insight-validator.js` runs: forbidden temporal words in the template → fail. Unknown slot refs → fail. Malformed iso/time → fail.
-3. On failure, a **Haiku reformatter** is called (`claude-haiku-4-5`) with a scoped prompt: "convert this broken insight to template format". Output is re-validated.
-4. If the reformatter still fails, the insight is dropped (fewer insights is better than corrupted ones).
-
-Historical briefings use `briefing.aiGeneratedAt` as the resolver's `now`, so they freeze to their original reading. The latest briefing's `now` ticks every 60s via `InsightsSection` so relative phrases roll over live. Old briefings in the DB that predate the slot system render unchanged via a back-compat path in `resolveInsight` (`!insight.template → insight.text`).
+Typed-date insight resolver and validator modules remain for old `ea_briefings` history and dev scenarios, but new generation does not inject historical context or write visible insight items. Dashboard surfaces no longer render the Insights rail.
 
 ### Key Optimizations
 
@@ -433,7 +402,7 @@ Historical briefings use `briefing.aiGeneratedAt` as the resolver's `now`, so th
 
 **Skip AI** — If inbox is clean (no new unread), calendar hasn't changed, and last AI call was <16 hours ago, clone the previous briefing and only update weather/calendar/CTM/Todoist. No Claude API call.
 
-**Email Indexing** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. The 2-hour background indexer remains the freshness path for newly arrived mail. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
+**Email Indexing & Push Ingestion** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. Gmail accounts can register an INBOX Pub/Sub watch through `GMAIL_PUBSUB_TOPIC`; `/api/gmail/push` decodes the Pub/Sub envelope, queues an account-level `gmail_history_sync` job, and returns quickly. The history-sync worker uses the stored Gmail `last_history_id` cursor to fetch new INBOX messages, index them, create pending durable triage rows, and enqueue message-level `email_triage` jobs. The 2-hour background indexer remains a reconciliation path for missed push events, downtime, watch expiry, and iCloud polling. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
 
 **Post-Processing** — Server always overwrites AI-generated calendar, weather, CTM, and Todoist data with fresh server-fetched values. This prevents hallucinations. Email accounts are regrouped by `account_label` to fix potential Claude misclassification. Duplicate bills from payment processors (PayPal, Venmo, etc.) are detected and suppressed.
 
@@ -449,8 +418,6 @@ Historical briefings use `briefing.aiGeneratedAt` as the resolver's `now`, so th
 | Todoist | `server/briefing/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/briefing/actual.js` | @actual-app/api SDK | Server URL + password (encrypted) | Empty array, continue |
 | Claude | `server/briefing/claude.js` | Anthropic Messages API | API key | Generation fails (status: error) |
-| OpenAI | `server/embeddings/` | Embeddings API | API key | Skip embedding (fire-and-forget) |
-
 All data source failures are caught individually — one source going down never blocks the briefing. Claude is the exception: if it fails, the generation is marked as `error`.
 
 ## Database Schema
@@ -517,18 +484,6 @@ erDiagram
         text user_id PK
         text email_id PK
         datetime dismissed_at
-    }
-
-    ea_embeddings {
-        int id PK
-        text user_id
-        int briefing_id FK
-        text section_type "email | task | bill | insight | calendar"
-        text chunk_text
-        blob embedding "F32_BLOB 1536-dim"
-        text source_date
-        text metadata "JSON"
-        datetime created_at
     }
 
     ea_completed_tasks {
@@ -605,6 +560,35 @@ erDiagram
         text updated_at
     }
 
+    ea_gmail_watch_state {
+        text user_id
+        text account_id
+        text email_address
+        text last_history_id "Gmail history cursor"
+        text watch_expiration_at
+        text watch_status "active/inactive/error"
+        text last_notification_at
+        text last_renewed_at
+        text last_sync_at
+        text last_error
+    }
+
+    ea_triage_jobs {
+        text user_id
+        text account_id
+        text email_id "nullable for account-level jobs"
+        text job_type "gmail_history_sync/email_triage"
+        text status "queued/running/complete/failed"
+        text idempotency_key
+        int priority
+        int attempts
+        text payload_json
+        text locked_at
+        text last_error
+        text scheduled_for
+        text completed_at
+    }
+
     ea_email_fts {
         text uid "UNINDEXED join key"
         text from_name "FTS5 indexed"
@@ -614,7 +598,6 @@ erDiagram
         text body_text "FTS5 indexed (full body)"
     }
 
-    ea_briefings ||--o{ ea_embeddings : "briefing_id"
 ```
 
 ### Migrations
@@ -631,7 +614,7 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 | 6 | `006_email_interests.sql` | `email_interests_json` on settings |
 | 7 | `007_dismissed_emails.sql` | `ea_dismissed_emails` table |
 | 8 | `008_sessions.sql` | `ea_sessions` + `ea_csrf_tokens` tables |
-| 9 | `009_embeddings.sql` | `ea_embeddings` table + indexes |
+| 9 | `009_embeddings.sql` | Legacy retired embeddings table; no active routes or writes |
 | 10 | `010_account_sort_order.sql` | `sort_order` on accounts |
 | 11 | `011_important_senders.sql` | `important_senders_json` on settings |
 | 12 | `012_gmail_user_index.sql` | `gmail_index` on accounts |
@@ -652,6 +635,8 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 | 27 | `027_notes.sql` | Local notes table |
 | 28 | `028_csrf_browser_bind.sql` | OAuth browser-binding metadata |
 | 29 | `029_email_backfill_state.sql` | Durable per-account email backfill state |
+| 30 | `030_triage_snapshots.sql` | Durable email triage, snapshot windows/items, triage jobs/rules/feedback |
+| 31 | `031_gmail_watch_state.sql` | Gmail Pub/Sub watch state and history cursor |
 
 ## Key Patterns
 
@@ -686,7 +671,7 @@ Reference implementations: `BriefingHistoryPanel.jsx`, `src/components/shared/pi
 
 ### Scheduler
 
-Database-driven cron jobs via `node-cron`. Schedules stored as JSON array in `ea_settings.schedules_json`. Each entry: `{ label, time, tz, enabled, skipped_until? }`. Hot-reloaded on settings update (all jobs cleared and recreated). Skip functionality sets `skipped_until` to midnight tomorrow in the schedule's timezone.
+Database-driven cron jobs via `node-cron`. Schedules stored as JSON array in `ea_settings.schedules_json`. Each entry: `{ label, time, tz, enabled, skipped_until? }`. Hot-reloaded on settings update (all jobs cleared and recreated). Schedule ticks advance the active email snapshot boundary through `snapshot-service`; they do not trigger legacy batch briefing generation. Skip functionality sets `skipped_until` to midnight tomorrow in the schedule's timezone.
 
 ### Recurring Todoist Tombstones
 
@@ -809,19 +794,18 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 | PATCH | `/api/ea/accounts/reorder` | Reorder accounts |
 | GET | `/api/ea/settings` | Fetch all settings |
 | PUT | `/api/ea/settings` | Update settings |
-| POST | `/api/ea/schedules/skip` | Skip scheduled briefing |
+
+### Gmail Push
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/gmail/push` | Pub/Sub webhook; requires `GMAIL_PUBSUB_PUSH_TOKEN`, decodes Gmail `emailAddress`/`historyId`, and queues `gmail_history_sync` |
+| POST | `/api/ea/schedules/skip` | Skip scheduled snapshot boundary |
 | GET | `/api/ea/models` | Available Claude models |
 | GET | `/api/ea/geocode` | Location string to lat/lng |
 | POST | `/api/ea/suspend` | Suspend Render service |
 | GET | `/api/ea/important-senders` | Get important senders |
 | PUT | `/api/ea/important-senders` | Update important senders |
-
-### Search
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/search` | Vector similarity search (RAG) |
-| POST | `/api/search/analyze` | Claude re-ranking of search results |
 
 ### Live Data
 

@@ -60,6 +60,79 @@ export function collectBriefingEmails(emailAccounts) {
   return out;
 }
 
+export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = {}) {
+  if (!activeSnapshot?.snapshot) return [];
+  const accountMap = new Map((activeSnapshot.filters?.accounts || []).map((account) => [
+    account.account_id,
+    {
+      id: account.account_id,
+      account_id: account.account_id,
+      name: account.label || account.email || account.account_id,
+      email: account.email || "",
+      color: account.color || "#cba6da",
+      icon: account.icon || "Mail",
+      unread: account.count || 0,
+      important: [],
+      noise: [],
+    },
+  ]));
+  const rows = [
+    ...(activeSnapshot.carryover || []).map((item) => ({ ...item, _snapshotCarryover: true })),
+    ...(activeSnapshot.lanes?.needs_attention || []),
+    ...(activeSnapshot.lanes?.fyi || []),
+    ...(activeSnapshot.lanes?.noise || []),
+  ];
+
+  return rows.map((item) => {
+    const uid = item.uid || item.email_id || item.id;
+    const account = accountMap.get(item.account_id) || {
+      id: item.account_id,
+      account_id: item.account_id,
+      name: item.account_label || item.account_email || item.account_id,
+      email: item.account_email || "",
+      color: item.account_color || "#cba6da",
+      icon: item.account_icon || "Mail",
+      important: [],
+      noise: [],
+    };
+    const lane = item._snapshotCarryover
+      ? "carryover"
+      : item.lane === "action"
+        ? "needs_attention"
+        : item.lane;
+    return {
+      ...item,
+      snapshot_item_id: item.snapshot_item_id || item.id,
+      id: String(uid),
+      uid: String(uid),
+      subject: item.subject || "",
+      from: item.from || item.from_name || item.from_address || "Unknown",
+      fromEmail: item.fromEmail || item.from_email || item.from_address || "",
+      from_email: item.from_email || item.fromEmail || item.from_address || "",
+      preview: item.preview || item.summary || "",
+      body_preview: item.body_preview || item.preview || item.summary || "",
+      date: item.date || item.email_date,
+      read: mergeReadState(item.read, uid, liveReadOverrides),
+      account_id: item.account_id,
+      account_label: account.name,
+      account_email: account.email,
+      account_color: account.color,
+      account_icon: account.icon,
+      _accountKey: account.id || account.name,
+      _account: account,
+      _lane: lane,
+      _untriaged: false,
+      _activeSnapshot: true,
+      _carryover: lane === "carryover",
+      urgentFlag: item.escalation_badge
+        ? { label: item.escalation_badge }
+        : item.urgency === "high"
+          ? { label: "High" }
+          : item.urgentFlag,
+    };
+  });
+}
+
 // Build entries for live-polled emails (arrived after last briefing, not yet
 // triaged by the latest briefing). Merges resurfaced metadata when a live uid is also
 // present in resurfacedMap — Gmail's `newer_than:Nh` poll re-fetches

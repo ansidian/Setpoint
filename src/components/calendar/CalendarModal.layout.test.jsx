@@ -3192,23 +3192,23 @@ describe("CalendarModal responsive layout", () => {
 
     const input = await screen.findByPlaceholderText(/Buy groceries tomorrow/i);
     fireEvent.change(input, {
-      target: { value: "Plan sprint May 2 at 9am" },
+      target: { value: "Plan sprint May 2 2027 at 9am" },
     });
 
-    expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("May 2, 2026 · 9 AM");
+    expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("May 2, 2027 · 9 AM");
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
     }, { timeout: 1500 });
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 850));
     });
 
-    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
+    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
     expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getByDisplayValue("Plan sprint May 2 at 9am")).toBeTruthy();
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 2, 2026 · 9 AM");
+    expect(screen.getByDisplayValue("Plan sprint May 2 2027 at 9am")).toBeTruthy();
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 2, 2027 · 9 AM");
   });
 
   it("opens event create after closing a Todoist create focus request", async () => {

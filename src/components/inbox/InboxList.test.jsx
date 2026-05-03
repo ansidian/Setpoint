@@ -92,6 +92,37 @@ describe("InboxList", () => {
     expect(screen.queryByTestId("inbox-list-empty-state-card")).toBeNull();
   });
 
+  it("uses active snapshot loading copy while Sync now refreshes triage lanes", () => {
+    render(
+      <InboxList
+        accent="#cba6da"
+        emails={[]}
+        accountsById={{}}
+        selectedId={null}
+        onOpen={() => {}}
+        density="default"
+        layout="swimlanes"
+        showPreview
+        pinnedIds={new Set()}
+        searchQuery=""
+        onSearchChange={() => {}}
+        onMarkAllRead={() => {}}
+        onRefresh={() => {}}
+        liveEmailsLoading
+        totalCount={0}
+        unreadCount={0}
+        briefingAgoLabel={null}
+        briefingGeneratedAt={null}
+        searchRef={null}
+        activeSnapshotMode
+      />,
+    );
+
+    const loadingBlock = screen.getByTestId("inbox-live-loading-block");
+    expect(loadingBlock.textContent).toContain("Syncing active snapshot");
+    expect(loadingBlock.textContent).not.toContain("Checking live mail");
+  });
+
   it("shows row-shaped live loading cues even when briefing mail is already visible", () => {
     render(
       <InboxList
@@ -125,5 +156,44 @@ describe("InboxList", () => {
     expect(screen.getByTestId("inbox-live-loading-block")).toBeTruthy();
     expect(screen.getByTestId("inbox-live-skeleton")).toBeTruthy();
     expect(screen.getByTestId("email-row")).toBeTruthy();
+  });
+
+  it("renders active snapshot lanes without the old live triage split", () => {
+    render(
+      <InboxList
+        accent="#cba6da"
+        emails={[
+          { id: "carry-1", uid: "carry-1", date: "2026-05-02T12:00:00.000Z", _lane: "carryover" },
+          { id: "need-1", uid: "need-1", date: "2026-05-03T12:00:00.000Z", _lane: "needs_attention" },
+          { id: "fyi-1", uid: "fyi-1", date: "2026-05-03T13:00:00.000Z", _lane: "fyi" },
+          { id: "noise-1", uid: "noise-1", date: "2026-05-03T14:00:00.000Z", _lane: "noise" },
+        ]}
+        accountsById={{}}
+        selectedId={null}
+        onOpen={() => {}}
+        density="default"
+        layout="swimlanes"
+        showPreview
+        pinnedIds={new Set()}
+        searchQuery=""
+        onSearchChange={() => {}}
+        onMarkAllRead={() => {}}
+        onRefresh={() => {}}
+        totalCount={4}
+        unreadCount={4}
+        briefingAgoLabel={null}
+        briefingGeneratedAt={null}
+        searchRef={null}
+        activeSnapshotMode
+        snapshotCategories={[{ category: "finance", count: 1 }]}
+      />,
+    );
+
+    expect(screen.getByText("Carryover")).toBeTruthy();
+    expect(screen.getByText("Needs Attention")).toBeTruthy();
+    expect(screen.getByText("FYI")).toBeTruthy();
+    expect(screen.getByText("Noise")).toBeTruthy();
+    expect(screen.getByText("finance")).toBeTruthy();
+    expect(screen.queryByText("Not yet triaged")).toBeNull();
   });
 });

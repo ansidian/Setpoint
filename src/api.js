@@ -56,6 +56,16 @@ export const triggerGeneration = () => apiFetch("/api/briefing/generate", { meth
 export const quickRefresh = () => apiFetch("/api/briefing/refresh", { method: "POST" });
 export const pollStatus = (id) => apiFetch(`/api/briefing/status/${id}`);
 export const checkInProgress = () => apiFetch("/api/briefing/in-progress");
+export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
+export const moveSnapshotItemLane = (itemId, lane) =>
+  apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/lane`, {
+    method: "PATCH",
+    body: JSON.stringify({ lane }),
+  });
+export const dismissSnapshotItemForToday = (itemId) =>
+  apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/dismiss`, { method: "POST" });
+export const markSnapshotItemHandled = (itemId) =>
+  apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/handled`, { method: "POST" });
 export const getBriefingHistory = () => apiFetch("/api/briefing/history");
 export const getBriefingById = (id) => apiFetch(`/api/briefing/${id}`);
 // 5-minute in-memory TTL cache for email bodies. Bodies don't mutate

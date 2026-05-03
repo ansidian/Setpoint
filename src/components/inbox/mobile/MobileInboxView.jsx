@@ -13,7 +13,8 @@ import InboxSearchFlagChips from "../InboxSearchFlagChips";
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
   { key: "__live", label: "New" },
-  { key: "action", label: "Action" },
+  { key: "carryover", label: "Carry" },
+  { key: "needs_attention", label: "Needs" },
   { key: "fyi", label: "FYI" },
   { key: "noise", label: "Noise" },
 ];
@@ -119,7 +120,7 @@ function MobileLiveSkeletonRows({ count = 4, compact = false }) {
   );
 }
 
-function MobileLiveLoadingBlock({ compact = false }) {
+function MobileLiveLoadingBlock({ compact = false, activeSnapshotMode = false }) {
   return (
     <div
       data-testid="inbox-mobile-live-loading-block"
@@ -135,7 +136,7 @@ function MobileLiveLoadingBlock({ compact = false }) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
-        Checking live mail
+        {activeSnapshotMode ? "Syncing active snapshot" : "Checking live mail"}
       </div>
       <MobileLiveSkeletonRows count={compact ? 2 : 3} compact />
     </div>
@@ -184,6 +185,7 @@ export default function MobileInboxView({
   briefingAgoLabel,
   scopedAccount,
   liveEmailsLoading = false,
+  activeSnapshotMode = false,
 }) {
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
@@ -216,6 +218,7 @@ export default function MobileInboxView({
           setBillOpen={setBillOpen}
           trashHoldProgress={trashHold.progress}
           snoozeHoldProgress={snoozeHold.progress}
+          allowPin={!activeSnapshotMode}
           isMobile
         />
       ) : (
@@ -243,7 +246,7 @@ export default function MobileInboxView({
                     color: accent,
                   }}
                 >
-                  Inbox snapshot
+                  {activeSnapshotMode ? "Active snapshot" : "Inbox snapshot"}
                 </span>
                 <span style={{ flex: 1 }} />
                 {briefingAgoLabel && (
@@ -422,9 +425,11 @@ export default function MobileInboxView({
                 {indexedSearchError}
               </div>
             )}
-            {liveEmailsLoading && visibleEmails.length > 0 && <MobileLiveLoadingBlock compact />}
+            {liveEmailsLoading && visibleEmails.length > 0 && (
+              <MobileLiveLoadingBlock compact activeSnapshotMode={activeSnapshotMode} />
+            )}
             {liveEmailsLoading && visibleEmails.length === 0 ? (
-              <MobileLiveLoadingBlock />
+              <MobileLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
             ) : visibleEmails.length > 0 ? (
               visibleEmails.map((email) => (
                 <EmailRow

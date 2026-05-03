@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Zap, FileText, BellOff, ArrowUp, ArrowDown } from "lucide-react";
+import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History } from "lucide-react";
 import { LANE } from "../../lib/redesign-helpers";
+import Tooltip from "../shared/Tooltip";
 
 export function Kbd({ children }) {
   return (
@@ -104,7 +105,13 @@ export function IconBtn({ children, onClick, title, tinted, accent = "#cba6da" }
 
 export function LaneIcon({ laneKey }) {
   const color = LANE[laneKey].color;
-  const Icon = laneKey === "action" ? Zap : laneKey === "fyi" ? FileText : BellOff;
+  const Icon = laneKey === "needs_attention" || laneKey === "action"
+    ? Zap
+    : laneKey === "carryover"
+      ? History
+      : laneKey === "fyi"
+        ? FileText
+        : BellOff;
   return <Icon size={11} color={color} />;
 }
 
@@ -213,25 +220,33 @@ export function NumberField({
 }
 
 export function QuickAction({
-  icon: Icon, label, onClick, primary, danger, hint,
-  accent = "#cba6da", buttonRef, title,
+  icon: Icon, label, onClick, primary, danger,
+  accent = "#cba6da", buttonRef, ariaLabel, tooltip,
   holdProgress = 0, holdColor,
 }) {
   const [hover, setHover] = useState(false);
-  return (
+  const iconOnly = !label;
+  const accessibleLabel = ariaLabel || tooltip || label;
+  const control = (
     <button
       ref={buttonRef}
       type="button"
       onClick={onClick}
-      title={title}
+      aria-label={iconOnly ? accessibleLabel : ariaLabel}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         position: "relative", overflow: "hidden",
+        flexShrink: 0,
         display: "inline-flex", alignItems: "center", gap: 6,
-        padding: "7px 11px", borderRadius: 8,
+        justifyContent: "center",
+        width: iconOnly ? 36 : undefined,
+        height: 36,
+        padding: iconOnly ? 0 : "0 11px",
+        borderRadius: 8,
         fontSize: 11, fontWeight: 600, fontFamily: "inherit",
-        cursor: "pointer", transition: "background 120ms, border-color 120ms, color 120ms",
+        cursor: "pointer", transition: "background 150ms, border-color 150ms, color 150ms, transform 150ms",
+        transform: hover ? "translateY(-1px)" : "translateY(0)",
         background: primary ? `linear-gradient(135deg, ${accent}38, rgba(137,220,235,0.18))`
                  : hover ? "rgba(255,255,255,0.05)"
                  : "rgba(255,255,255,0.02)",
@@ -257,11 +272,11 @@ export function QuickAction({
       )}
       {Icon && <Icon size={11} style={{ position: "relative" }} />}
       {label && <span style={{ position: "relative" }}>{label}</span>}
-      {hint && (
-        <span style={{ position: "relative", fontSize: 9, opacity: 0.6, marginLeft: 2, fontFamily: "Fira Code, monospace" }}>
-          {hint}
-        </span>
-      )}
     </button>
   );
+  return tooltip ? (
+    <Tooltip text={tooltip} side="bottom" sideOffset={8}>
+      {control}
+    </Tooltip>
+  ) : control;
 }

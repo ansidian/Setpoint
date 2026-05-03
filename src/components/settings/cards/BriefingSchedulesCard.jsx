@@ -51,9 +51,9 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
 
   return (
     <SettingsCard
-      title="Briefing Schedules"
+      title="Snapshot Boundaries"
       icon={<CalendarClock size={14} />}
-      description="Daily schedule entries that trigger automatic briefing generation."
+      description="Schedule times for rolling the active email snapshot window."
     >
       <div ref={schedContainerRef} className="flex flex-col gap-3">
         {visibleSchedules.map((schedule) => {
@@ -105,7 +105,7 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
                     patch({ schedules_json: updated });
                   }}
                   className="inline-flex min-h-[32px] min-w-[32px] shrink-0 items-center justify-center rounded-md text-muted-foreground/45 transition-colors hover:bg-white/[0.04] hover:text-danger"
-                  aria-label="Remove schedule"
+                  aria-label="Remove boundary"
                 >
                   <X size={14} />
                 </button>
@@ -144,7 +144,7 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
                       setSettings((current) => ({ ...(current || {}), schedules: updated }));
                       patch({ schedules_json: updated });
                     }}
-                    aria-label={schedule.enabled ? "Disable schedule" : "Enable schedule"}
+                    aria-label={schedule.enabled ? "Disable boundary" : "Enable boundary"}
                   />
                   <span className="min-w-[52px] text-[11px] text-muted-foreground/60">
                     {schedule.enabled ? "Enabled" : "Disabled"}
@@ -155,6 +155,7 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
                     variant="secondary"
                     className={SETTINGS_SECONDARY_BUTTON_CLASS}
                     size="xs"
+                    aria-label={isSkipped ? "Boundary skipped today" : "Skip boundary today"}
                     onClick={async () => {
                       const result = await skipSchedule(originalIndex, !isSkipped);
                       if (result.schedules) {
@@ -175,14 +176,14 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
           onClick={() => {
             const updated = [
               ...(settings?.schedules || []),
-              { label: "New Schedule", time: "08:00", enabled: false },
+              { label: "New Boundary", time: "08:00", enabled: false },
             ];
             setSettings((current) => ({ ...(current || {}), schedules: updated }));
             patch({ schedules_json: updated });
           }}
           className="rounded-lg border border-dashed border-white/[0.1] bg-transparent px-3.5 py-2 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:border-white/[0.2] hover:text-foreground"
         >
-          + Add Schedule
+          + Add Boundary
         </button>
       </div>
     </SettingsCard>

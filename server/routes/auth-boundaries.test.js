@@ -103,9 +103,6 @@ vi.mock("../briefing/claude.js", () => ({
 vi.mock("../briefing/scheduler.js", () => ({
   initScheduler: vi.fn(),
 }));
-vi.mock("../embeddings/index.js", () => ({
-  isEmbeddingAvailable: vi.fn(() => false),
-}));
 vi.mock("../briefing/account-canonical.js", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
 }));
@@ -153,9 +150,6 @@ function setSessionRow(expiresAt = Date.now() + 60_000) {
     if (sql.includes("SELECT * FROM ea_settings")) {
       return { rows: [{ user_id: "user-1" }] };
     }
-    if (sql.includes("SELECT COUNT(*) as count FROM ea_embeddings")) {
-      return { rows: [{ count: 0 }] };
-    }
     if (sql.includes("SELECT * FROM ea_notes")) {
       return { rows: [] };
     }
@@ -178,9 +172,6 @@ function setBearerRow(scopes = ["actual:write"]) {
     }
     if (sql.includes("SELECT * FROM ea_settings")) {
       return { rows: [{ user_id: "user-1" }] };
-    }
-    if (sql.includes("SELECT COUNT(*) as count FROM ea_embeddings")) {
-      return { rows: [{ count: 0 }] };
     }
     if (sql.includes("SELECT * FROM ea_notes")) {
       return { rows: [] };
@@ -219,6 +210,17 @@ describe("auth boundaries", () => {
       .set("Authorization", "Bearer scoped-token");
 
     expect(res.status).toBe(401);
+  });
+
+  it("omits retired embedding status from settings", async () => {
+    setSessionRow();
+    const res = await request(makeApp())
+      .get("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty("openai_available");
+    expect(res.body).not.toHaveProperty("embedding_count");
   });
 
   it("blocks bearer auth on notes route", async () => {

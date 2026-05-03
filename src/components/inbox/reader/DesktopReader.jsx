@@ -1,15 +1,18 @@
 import {
-  ArrowDown,
-  ArrowUp,
+  BellOff,
+  CalendarX,
+  Check,
   Clock,
   CreditCard,
   ExternalLink,
+  FileText,
   Mail,
   MailOpen,
   Pin,
   Reply,
   Sparkles,
   Trash2,
+  Zap,
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
@@ -197,6 +200,7 @@ export default function DesktopReader({
   setBillOpen,
   trashHoldProgress,
   snoozeHoldProgress,
+  allowPin = true,
   snoozeBtnRef,
   snoozeOpen,
   setSnoozeOpen,
@@ -205,6 +209,8 @@ export default function DesktopReader({
   setDrafting,
 }) {
   const gmailUrl = getGmailUrl(email);
+  const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
+  const showSnapshotActions = email._activeSnapshot;
 
   return (
     <div
@@ -227,36 +233,82 @@ export default function DesktopReader({
           flexShrink: 0,
         }}
       >
-        <QuickAction icon={ArrowUp} hint="K" onClick={() => onAction("prev")} accent={accent} />
-        <QuickAction icon={ArrowDown} hint="J" onClick={() => onAction("next")} accent={accent} />
         <span style={{ flex: 1 }} />
         {(email._untriaged || email.hasBill) && (
           <QuickAction
             icon={CreditCard}
             label={billOpen ? "Hide bill" : "Pay bill"}
+            tooltip={billOpen ? "Hide bill panel" : "Open bill panel"}
             primary={!billOpen}
             onClick={() => setBillOpen((value) => !value)}
             accent="#a6e3a1"
           />
         )}
+        {showSnapshotActions && snapshotLane !== "needs_attention" && (
+          <QuickAction
+            icon={Zap}
+            ariaLabel="Move to Needs Attention"
+            tooltip="Move to Needs Attention"
+            onClick={() => onAction("snapshot-move-lane", "needs_attention")}
+            accent="#f38ba8"
+          />
+        )}
+        {showSnapshotActions && snapshotLane !== "fyi" && (
+          <QuickAction
+            icon={FileText}
+            ariaLabel="Move to FYI"
+            tooltip="Move to FYI"
+            onClick={() => onAction("snapshot-move-lane", "fyi")}
+            accent="#89b4fa"
+          />
+        )}
+        {showSnapshotActions && snapshotLane !== "noise" && (
+          <QuickAction
+            icon={BellOff}
+            ariaLabel="Move to Noise"
+            tooltip="Move to Noise"
+            onClick={() => onAction("snapshot-move-lane", "noise")}
+            accent="#a6adc8"
+          />
+        )}
+        {showSnapshotActions && snapshotLane === "needs_attention" && (
+          <QuickAction
+            icon={Check}
+            ariaLabel="Mark handled"
+            tooltip="Mark handled"
+            onClick={() => onAction("snapshot-handled")}
+            accent="#a6e3a1"
+          />
+        )}
+        {showSnapshotActions && (
+          <QuickAction
+            icon={CalendarX}
+            ariaLabel="Dismiss from today"
+            tooltip="Dismiss from today"
+            onClick={() => onAction("snapshot-dismiss")}
+            accent="#f9e2af"
+          />
+        )}
         <QuickAction
           icon={email.read ? Mail : MailOpen}
-          label={email.read ? "Mark unread" : "Mark read"}
-          hint="U"
+          ariaLabel={email.read ? "Mark unread" : "Mark read"}
+          tooltip={email.read ? "Mark unread" : "Mark read"}
           onClick={() => onAction("toggle-read")}
           accent={accent}
         />
-        <QuickAction
-          icon={Pin}
-          label={pinned ? "Pinned" : "Pin"}
-          hint="P"
-          onClick={() => onAction("pin")}
-          accent={accent}
-        />
+        {allowPin && (
+          <QuickAction
+            icon={Pin}
+            ariaLabel={pinned ? "Unpin email" : "Pin email"}
+            tooltip={pinned ? "Unpin email" : "Pin email"}
+            onClick={() => onAction("pin")}
+            accent={accent}
+          />
+        )}
         <QuickAction
           icon={Clock}
-          label="Snooze"
-          hint="S"
+          ariaLabel="Snooze email"
+          tooltip="Snooze email"
           buttonRef={snoozeBtnRef}
           onClick={() => setSnoozeOpen((value) => !value)}
           accent={accent}
@@ -273,17 +325,16 @@ export default function DesktopReader({
         {gmailUrl && (
           <QuickAction
             icon={ExternalLink}
-            label="Open in Gmail"
-            hint="O"
-            title="Open in Gmail"
+            ariaLabel="Open in Gmail"
+            tooltip="Open in Gmail"
             onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")}
             accent={accent}
           />
         )}
         <QuickAction
           icon={Trash2}
-          label="Trash"
-          hint="E"
+          ariaLabel="Trash email"
+          tooltip="Trash email"
           danger
           onClick={() => onAction("trash")}
           accent={accent}
@@ -430,9 +481,9 @@ export default function DesktopReader({
           <QuickAction
             icon={Reply}
             label="Review reply"
+            tooltip="Review draft reply"
             primary
             onClick={() => setDrafting(true)}
-            hint="R"
             accent={accent}
           />
         </div>

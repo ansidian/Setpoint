@@ -124,7 +124,7 @@ export default function CustomizePanel({
     accent, serifChoice,
     dashboardLayout, inboxLayout, inboxGrouping,
     density, inboxDensity, aiVerbosity,
-    showInsights, showInboxPeek, showPreview, sidebarCompact,
+    showInboxPeek, showPreview, sidebarCompact,
     setKey, reset,
   } = customize;
 
@@ -208,9 +208,6 @@ export default function CustomizePanel({
               />
             </Row>
           )}
-          <Row label="Show signals">
-            <Toggle value={showInsights} onChange={(v) => setKey("showInsights", v)} accent={accent} />
-          </Row>
           <Row label="Show inbox peek">
             <Toggle value={showInboxPeek} onChange={(v) => setKey("showInboxPeek", v)} accent={accent} />
           </Row>

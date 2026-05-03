@@ -11,10 +11,10 @@ import { dirname, join } from "path";
 import authRoutes from "./routes/auth.js";
 import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.js";
-import searchRoutes from "./routes/search.js";
 import liveRoutes from "./routes/live.js";
 import calendarRoutes from "./routes/calendar.js";
 import notesRoutes from "./routes/notes.js";
+import gmailPushRoutes from "./routes/gmail-push.js";
 import { initScheduler, startBackgroundIndexer } from "./briefing/scheduler.js";
 import { startSnoozeWaker } from "./briefing/snooze-waker.js";
 import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
@@ -50,6 +50,7 @@ app.use("/api", (req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
     return next();
   }
+  if (req.path === "/gmail/push") return next();
   if (req.path === "/auth/login") return next();
   if (req.headers.authorization?.startsWith("Bearer ")) return next();
   if (req.headers["x-requested-with"] !== "EADashboard") {
@@ -62,10 +63,10 @@ app.use("/api", (req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/briefing", briefingRoutes);
 app.use("/api/ea", accountsRoutes);
-app.use("/api/search", searchRoutes);
 app.use("/api/live", liveRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/notes", notesRoutes);
+app.use("/api/gmail", gmailPushRoutes);
 
 // Serve static frontend in production (behind auth)
 if (process.env.NODE_ENV === "production") {

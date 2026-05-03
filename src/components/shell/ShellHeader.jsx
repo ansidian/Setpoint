@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   BriefingStatusPill,
-  ConfirmGenerateToast,
   OverflowMenu,
   PaletteTriggerButton,
   RefreshButton,
@@ -12,7 +11,7 @@ import {
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.
  * Tabs are hotkey-indexed (1 = dashboard, 2 = inbox). ⌘K opens the palette.
- * Refresh shows a progress fill while holding, becomes a confirm pill at 100%.
+ * Sync now refreshes current dashboard data.
  */
 export default function ShellHeader({
   accent,
@@ -25,11 +24,9 @@ export default function ShellHeader({
   onOpenCalendar,
   briefingStatus,
   liveUnreadCount = 0,
-  refreshHold,
   refreshing,
   generating,
   onQuickRefresh,
-  onFullGenerate,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -59,9 +56,6 @@ export default function ShellHeader({
     return () => window.removeEventListener("keydown", onKey);
   }, [onTab]);
 
-  const holdPct = refreshHold?.holdProgress ?? 0;
-  const confirming = refreshHold?.showConfirm;
-
   return (
     <div
       data-testid={isMobile ? "shell-header-mobile" : "shell-header-desktop"}
@@ -90,12 +84,9 @@ export default function ShellHeader({
         <BriefingStatusPill accent={accent} briefingStatus={briefingStatus} />
       )}
       <RefreshButton
-        accent={accent}
         isMobile={isMobile}
-        refreshHold={refreshHold}
         refreshing={refreshing}
         generating={generating}
-        holdPct={holdPct}
         onQuickRefresh={onQuickRefresh}
       />
       <div ref={menuRef} style={{ position: "relative" }}>
@@ -109,12 +100,6 @@ export default function ShellHeader({
           onOpenCustomize={onOpenCustomize}
         />
       </div>
-      <ConfirmGenerateToast
-        accent={accent}
-        confirming={confirming}
-        onFullGenerate={onFullGenerate}
-        onCancel={() => refreshHold?.setShowConfirm?.(false)}
-      />
     </div>
   );
 }

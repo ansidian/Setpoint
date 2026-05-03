@@ -125,7 +125,10 @@ export function LaneRow({ laneKey, lane, setLane, laneCounts }) {
 export function LaneAll({ accent, lane, setLane, laneCounts }) {
   const [hover, setHover] = useState(false);
   const isActive = lane === "__all";
-  const count = (laneCounts.action || 0) + (laneCounts.fyi || 0) + (laneCounts.noise || 0);
+  const count = (laneCounts.needs_attention || laneCounts.action || 0)
+    + (laneCounts.carryover || 0)
+    + (laneCounts.fyi || 0)
+    + (laneCounts.noise || 0);
   return (
     <button
       type="button"
@@ -227,7 +230,8 @@ export default function Sidebar({
           <Eyebrow style={{ padding: "0 10px 8px" }}>Triage lanes</Eyebrow>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <LaneAll accent={accent} lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="action" lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="carryover" lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="needs_attention" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="fyi" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} />
           </div>

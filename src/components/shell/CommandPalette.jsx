@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  LayoutList, Inbox, Clock, AlertCircle, CreditCard, Sparkles,
+  LayoutList, Inbox, Clock, AlertCircle, CreditCard,
   RefreshCw, Search, ArrowRight, Calendar, History, Settings as SettingsIcon, Sliders,
   CalendarPlus, ListPlus,
 } from "lucide-react";
@@ -38,7 +38,6 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "go-dashboard", icon: LayoutList, label: "Go to Dashboard", hint: "1", kind: "tab", payload: "dashboard" },
     { id: "go-inbox",     icon: Inbox,      label: "Go to Inbox",     hint: "2", kind: "tab", payload: "inbox" },
     { id: "timeline",     icon: Clock,      label: "Today timeline",  kind: "scroll", payload: "timeline" },
-    { id: "insights",     icon: Sparkles,   label: "Signals",         kind: "scroll", payload: "insights" },
     { id: "deadlines",    icon: AlertCircle, label: "Deadlines",      kind: "scroll", payload: "deadlines" },
     { id: "bills",        icon: CreditCard, label: "Bills",           kind: "scroll", payload: "bills" },
     { id: "new-todoist",  icon: ListPlus,   label: "New Todoist task", hint: "G T", kind: "todoist" },
@@ -46,8 +45,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "calendar",     icon: Calendar,   label: "Open calendar",   hint: "C", kind: "calendar" },
     { id: "history",      icon: History,    label: "Briefing history", kind: "history" },
     { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },
-    { id: "refresh",      icon: RefreshCw,  label: "Refresh data",    hint: "R", kind: "refresh" },
-    { id: "regenerate",   icon: Sparkles,   label: "Generate fresh briefing", kind: "regenerate" },
+    { id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },
     { id: "settings",     icon: SettingsIcon, label: "Open settings", kind: "settings" },
   ], []);
 

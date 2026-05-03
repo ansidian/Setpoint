@@ -32,7 +32,6 @@ vi.mock("../briefing/email-index.js", () => ({
 vi.mock("../briefing/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: emailBackfillApi.wakeEmailBackfillWorker,
 }));
-vi.mock("../embeddings/index.js", () => ({ isEmbeddingAvailable: vi.fn(() => false) }));
 vi.mock("../briefing/account-canonical.js", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
 }));

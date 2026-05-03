@@ -13,7 +13,6 @@ vi.mock("../db/dev-fixture.js", () => ({
   generateEnrichedMock: vi.fn(async () => ({ mock: true })),
   generateMockHistory: vi.fn(() => [{ id: 1, generated_at: "x", generation_time_ms: 0 }]),
 }));
-vi.mock("../db/dev-seed-embeddings.js", () => ({ seedEmbeddings: vi.fn(() => Promise.resolve()) }));
 vi.mock("../db/scenarios/index.js", () => ({ applyScenarios: vi.fn() }));
 
 const originalEnv = process.env.NODE_ENV;

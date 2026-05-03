@@ -17,6 +17,7 @@ import {
   batchMarkAsRead as icloudBatchMarkAsRead,
 } from "./icloud.js";
 import * as storedBriefingService from "./stored-briefing-service.js";
+import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
 import { loadUserConfig } from "./index.js";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "./account-canonical.js";
 
@@ -356,6 +357,12 @@ export async function trash(userId, uid) {
       sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
       args: [userId, uid],
     }),
+    markProviderRemovedFromActiveSnapshots(
+      userId,
+      found.account.uid_account_id || found.account.id,
+      uid,
+      "trashed",
+    ),
   ]);
 }
 
