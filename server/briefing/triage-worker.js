@@ -1,5 +1,6 @@
 import db from "../db/connection.js";
 import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+import { getEmailTriageModeForUser } from "./triage-mode.js";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "./email-ai-models.js";
 import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
@@ -429,6 +430,27 @@ function fallbackDecision(email, err) {
   };
 }
 
+function noModelDecision(email) {
+  return {
+    lane: "needs_attention",
+    category: "uncategorized",
+    urgency: "normal",
+    escalation_badge: "Needs Review",
+    summary: email.body_snippet || email.subject || "Review provider message.",
+    action: "Review",
+    deadline_at: null,
+    confidence: null,
+    triage_source: "no_model_fallback",
+    rule_id: null,
+    model_usage: {},
+    estimated_cost_usd: null,
+    latency_ms: null,
+    cheap_model_result: null,
+    strong_model_result: null,
+    bill_candidate: null,
+  };
+}
+
 function maybeBillCandidate(email, decision) {
   if (decision.bill_candidate) return decision.bill_candidate;
   const text = emailSearchText(email);
@@ -731,6 +753,20 @@ async function claimNextEmailTriageJob(dbClient, now) {
   return job;
 }
 
+async function peekNextEmailTriageJob(dbClient, now) {
+  const result = await dbClient.execute({
+    sql: `SELECT *
+          FROM ea_triage_jobs
+          WHERE job_type = 'email_triage'
+            AND status = 'queued'
+            AND (scheduled_for IS NULL OR scheduled_for <= ?)
+          ORDER BY priority ASC, created_at ASC
+          LIMIT 1`,
+    args: [nowIso(now)],
+  });
+  return result.rows[0] || null;
+}
+
 async function loadEmailForJob(job, dbClient) {
   const result = await dbClient.execute({
     sql: `SELECT t.id AS triage_id,
@@ -769,8 +805,9 @@ async function updateTriageRow(email, decision, {
   dbClient,
   now,
   status = "complete",
+  inferBillCandidate = true,
 } = {}) {
-  const billCandidate = maybeBillCandidate(email, decision);
+  const billCandidate = inferBillCandidate ? maybeBillCandidate(email, decision) : null;
   await dbClient.execute({
     sql: `UPDATE ea_email_triage
           SET lane = ?,
@@ -885,6 +922,18 @@ export async function processNextEmailTriageJob({
   modelClient,
   now = new Date(),
 } = {}) {
+  const nextJob = await peekNextEmailTriageJob(dbClient, now);
+  if (!nextJob) return { processed: false };
+
+  const mode = await getEmailTriageModeForUser(nextJob.user_id, { dbClient });
+  if (mode.effective_email_triage_mode === "paused") {
+    return {
+      processed: false,
+      paused: true,
+      ...mode,
+    };
+  }
+
   const job = await claimNextEmailTriageJob(dbClient, now);
   if (!job) return { processed: false };
 
@@ -908,15 +957,25 @@ export async function processNextEmailTriageJob({
   let modelCalls = [];
   let status = "complete";
   try {
-    const routed = await routeEmailForTriage(email, { dbClient, modelClient });
-    decision = routed.decision;
-    modelCalls = routed.modelCalls;
+    if (mode.effective_email_triage_mode === "no_model") {
+      decision = noModelDecision(email);
+      modelCalls = [];
+    } else {
+      const routed = await routeEmailForTriage(email, { dbClient, modelClient });
+      decision = routed.decision;
+      modelCalls = routed.modelCalls;
+    }
   } catch (err) {
     decision = fallbackDecision(email, err);
     status = "failed";
   }
 
-  await updateTriageRow(email, decision, { dbClient, now, status });
+  await updateTriageRow(email, decision, {
+    dbClient,
+    now,
+    status,
+    inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
+  });
   await attachToActiveSnapshot(email, decision, { dbClient, now });
   await completeJob(job, dbClient, now, status === "failed" ? decision.error : "");
 

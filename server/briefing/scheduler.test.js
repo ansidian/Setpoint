@@ -27,7 +27,7 @@ vi.mock("./email-index.js", () => ({ indexEmails: vi.fn() }));
 vi.mock("./gmail-sync.js", () => gmailSyncApi);
 vi.mock("./triage-worker.js", () => triageWorkerApi);
 
-const { initScheduler } = await import("./scheduler.js");
+const { initScheduler, runEmailTriageWorker } = await import("./scheduler.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -70,5 +70,21 @@ describe("initScheduler", () => {
       }),
     );
     expect(briefingApi.generateBriefing).not.toHaveBeenCalled();
+  });
+});
+
+describe("email triage scheduler worker", () => {
+  it("stops the batch loop cleanly when triage mode is paused", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    triageWorkerApi.processNextEmailTriageJob.mockResolvedValueOnce({
+      processed: false,
+      paused: true,
+    });
+
+    await runEmailTriageWorker();
+
+    expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(1);
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

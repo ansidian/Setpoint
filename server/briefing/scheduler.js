@@ -171,13 +171,14 @@ async function runGmailHistorySyncWorker() {
   }
 }
 
-async function runEmailTriageWorker() {
+export async function runEmailTriageWorker() {
   if (emailTriageInFlight) return;
   emailTriageInFlight = true;
   try {
     let processed = 0;
     for (let i = 0; i < 10; i++) {
       const result = await processNextEmailTriageJob();
+      if (result.paused) break;
       if (!result.processed) break;
       processed++;
     }

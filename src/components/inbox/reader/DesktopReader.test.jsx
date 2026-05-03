@@ -46,6 +46,19 @@ function renderReader(overrides = {}) {
 }
 
 describe("DesktopReader snapshot actions", () => {
+  it("keeps the bill-pay affordance visible for triaged finance bill emails", () => {
+    renderReader({
+      email: {
+        subject: "Utility payment due",
+        category: "finance",
+        hasBill: true,
+        _untriaged: false,
+      },
+    });
+
+    expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
+  });
+
   it("shows manual correction controls for active snapshot rows", () => {
     renderReader();
 

@@ -7,6 +7,12 @@ vi.mock("@/components/settings/cards/BillExtractionAiCard", () => ({
   },
 }));
 
+vi.mock("@/components/settings/cards/EmailTriageModeCard", () => ({
+  default: function EmailTriageModeCardMock() {
+    return <div data-testid="email-triage-mode-card" />;
+  },
+}));
+
 vi.mock("@/components/settings/cards/ApiTokensCard", () => ({
   default: function ApiTokensCardMock() {
     return <div data-testid="api-tokens-card" />;
@@ -30,6 +36,7 @@ describe("SystemSettingsSection", () => {
     );
 
     expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+    expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
     expect(screen.getByTestId("api-tokens-card")).toBeTruthy();
     expect(screen.queryByText("Search & Historical Context")).toBeNull();
     expect(screen.queryByText("OpenAI embeddings")).toBeNull();
