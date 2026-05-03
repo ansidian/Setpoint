@@ -64,6 +64,8 @@ export default function CalendarGrid({
   onReanchorFloatingDetail,
   floatingDetailOpen = false,
   floatingDetailParked = false,
+  floatingDetailMode = null,
+  floatingDetailDateKey = null,
   floatingEditorDirty = false,
   onShakeFloatingEditor,
   onDirectDateAction,
@@ -101,6 +103,7 @@ export default function CalendarGrid({
       ? deadlineQuickActions
       : null;
   const selectedCellKey = selectedDateKey;
+  const floatingEditorOpen = floatingDetailMode === "edit" || floatingDetailMode === "create";
   const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
   const monthCells = buildCalendarMonthCells({
     cellCount: eventCellCount,
@@ -178,6 +181,14 @@ export default function CalendarGrid({
     dateKey = null,
     { clearItemSelection = false, directDateAction = true } = {},
   ) {
+    if (
+      floatingEditorOpen
+      && floatingDetailDateKey
+      && dateKey === floatingDetailDateKey
+      && selectedItemId == null
+    ) {
+      return;
+    }
     if (floatingEditorDirty) {
       onShakeFloatingEditor?.();
       return;
@@ -208,6 +219,14 @@ export default function CalendarGrid({
     dateKey = null,
     { keepOverflowOpen = false, anchorMeta = null } = {},
   ) {
+    if (
+      floatingEditorOpen
+      && selectedItemId != null
+      && String(itemId) === String(selectedItemId)
+      && (!floatingDetailDateKey || !dateKey || dateKey === floatingDetailDateKey)
+    ) {
+      return;
+    }
     if (floatingEditorDirty) {
       onShakeFloatingEditor?.();
       return;
@@ -272,6 +291,8 @@ export default function CalendarGrid({
     activeMonthWheelStateRef,
     canGoPrev,
     closeOverflow,
+    floatingDetailDateKey,
+    floatingDetailMode,
     floatingDetailOpen,
     floatingDetailParked,
     gridShellRef,

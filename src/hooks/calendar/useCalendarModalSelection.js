@@ -3,6 +3,7 @@ import { ymdFromParts } from "../../components/calendar/calendarDateUtils.js";
 import {
   buildCalendarModalSyncSnapshot,
   parseFocusDate,
+  resolveFocusViewDate,
 } from "./calendarModalSelectionModel.js";
 
 export default function useCalendarModalSelection({
@@ -17,11 +18,12 @@ export default function useCalendarModalSelection({
   const currentYear = now.getFullYear();
   const todayDate = now.getDate();
   const initialFocus = open ? parseFocusDate(focusDate) : null;
+  const currentViewDate = { month: currentMonth, year: currentYear };
 
   const [viewDate, setViewDate] = useState(() => (
     initialFocus
-      ? { month: initialFocus.getMonth(), year: initialFocus.getFullYear() }
-      : { month: currentMonth, year: currentYear }
+      ? resolveFocusViewDate(initialFocus, currentViewDate)
+      : currentViewDate
   ));
   const [selectedDay, setSelectedDay] = useState(() => (initialFocus ? initialFocus.getDate() : null));
   const [selectedDateKey, setSelectedDateKey] = useState(() => (initialFocus ? ymdFromParts(initialFocus.getFullYear(), initialFocus.getMonth(), initialFocus.getDate()) : null));
@@ -91,7 +93,7 @@ export default function useCalendarModalSelection({
     const focus = parseFocusDate(ymd);
     if (!focus) return null;
     const dateKey = ymdFromParts(focus.getFullYear(), focus.getMonth(), focus.getDate());
-    setViewDate({ month: focus.getMonth(), year: focus.getFullYear() });
+    setViewDate((current) => resolveFocusViewDate(focus, current));
     setSelectedDay(focus.getDate());
     setSelectedDateKey(dateKey);
     return { dateKey, day: focus.getDate() };

@@ -26,6 +26,7 @@ export default function CalendarModalShell({
   canGoPrev,
   navigateMonth,
   monthMotionDirection,
+  workspaceTransientCloseToken = 0,
   onViewChange,
   HeaderExtras,
   viewData,
@@ -98,6 +99,9 @@ export default function CalendarModalShell({
   const floatingEditorOpen = !layout.stacked
     && !!floatingDetail?.open
     && (floatingDetail.mode === "edit" || floatingDetail.mode === "create");
+  const floatingDetailGridDateKey = floatingEditorOpen
+    ? floatingDetail?.dateKey || null
+    : ghostPreview?.targetDate || floatingDetail?.dateKey || null;
   const railEventEditor = floatingEditorOpen && view === "events"
     ? { ...eventEditor, isEditorOpen: false, mode: "detail" }
     : eventEditor;
@@ -254,6 +258,7 @@ export default function CalendarModalShell({
     ghostPreview,
     onDeadlineDraftPreviewChange,
     onCloseFloatingDetail,
+    transientCloseToken: workspaceTransientCloseToken,
   });
 
   const selectedItemPool = activeView.getDayState
@@ -288,6 +293,7 @@ export default function CalendarModalShell({
             expandedDesktop
             host="floating"
             ghostPreview={ghostPreview}
+            transientCloseToken={workspaceTransientCloseToken}
           />
         )
       : floatingEditorOpen && floatingDetail.view === "deadlines"
@@ -318,6 +324,7 @@ export default function CalendarModalShell({
             onDraftPreviewChange: onDeadlineDraftPreviewChange,
             onEditorDirtyChange: onFloatingEditorDirtyChange,
             ghostPreview,
+            transientCloseToken: workspaceTransientCloseToken,
           })
         : activeView.renderFloatingDetail?.({
         selectedDay,
@@ -537,6 +544,8 @@ export default function CalendarModalShell({
                   onReanchorFloatingDetail={onReanchorFloatingDetail}
                   floatingDetailOpen={!!floatingDetail?.open}
                   floatingDetailParked={!!floatingDetail?.parked}
+                  floatingDetailMode={floatingDetail?.mode || null}
+                  floatingDetailDateKey={floatingDetailGridDateKey}
                   floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
                   showCompletedDeadlines={showCompletedDeadlines}
                   onShakeFloatingEditor={onShakeFloatingEditor}

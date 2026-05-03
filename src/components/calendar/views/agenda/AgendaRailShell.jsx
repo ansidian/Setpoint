@@ -46,7 +46,6 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
   skeleton = null,
   showSkeleton = false,
   onPassiveDateChange,
-  onDirtyBlocked,
   getSectionProps,
   renderHeader,
   renderGroup,
@@ -204,10 +203,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       }
       active ||= groups[0]?.dateKey || null;
       if (!active || active === selectedDateKey) return;
-      if (floatingEditorDirty) {
-        onDirtyBlocked?.();
-        return;
-      }
+      if (floatingEditorDirty) return;
       onPassiveDateChange?.(active);
     });
   }

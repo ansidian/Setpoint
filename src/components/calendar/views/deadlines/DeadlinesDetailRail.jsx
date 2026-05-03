@@ -35,6 +35,7 @@ function DeadlinesDetail({
   onTaskDeleted,
   onDraftPreviewChange,
   onEditorDirtyChange,
+  transientCloseToken,
   accent = "var(--ea-accent)",
   data,
 }) {
@@ -77,6 +78,7 @@ function DeadlinesDetail({
         initialDueDate={seedDate}
         onDraftPreviewChange={onDraftPreviewChange}
         onDirtyChange={onEditorDirtyChange}
+        transientCloseToken={transientCloseToken}
         onClose={onCloseEditor}
         onTaskAdded={(task) => {
           handleAddTask(task);

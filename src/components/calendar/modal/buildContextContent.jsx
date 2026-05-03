@@ -30,6 +30,7 @@ export default function buildContextContent({
   ghostPreview,
   onDeadlineDraftPreviewChange,
   onCloseFloatingDetail,
+  transientCloseToken,
 }) {
   if (view === "events" && eventEditor.isEditorOpen) {
     return (
@@ -37,6 +38,7 @@ export default function buildContextContent({
         editor={eventEditor}
         expandedDesktop={!layout.stacked}
         ghostPreview={ghostPreview}
+        transientCloseToken={transientCloseToken}
       />
     );
   }
@@ -86,6 +88,7 @@ export default function buildContextContent({
       },
       onDraftPreviewChange: onDeadlineDraftPreviewChange,
       ghostPreview,
+      transientCloseToken,
     });
   }
 

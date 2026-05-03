@@ -1388,6 +1388,36 @@ describe("Calendar event editor rail", () => {
     });
   });
 
+  it("keeps the current month after saving an event on a visible trailing day", async () => {
+    renderModal({ focusDate: "2026-05-02" });
+    mockCreateCalendarEvent.mockResolvedValue({
+      event: {
+        id: "event-trailing-day",
+        title: "Planning block",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-06-01T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-06-01T16:30:00.000Z").getTime(),
+        writable: true,
+        allDay: false,
+      },
+    });
+
+    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Planning block" },
+    });
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalled();
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+  });
+
   it("cancels the editor on browser back", async () => {
     renderModal();
 

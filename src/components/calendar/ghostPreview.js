@@ -313,6 +313,18 @@ export function dateOutsideMonth(dateKey, viewYear, viewMonth) {
   return !!parsed && (parsed.year !== viewYear || parsed.month !== viewMonth);
 }
 
+export function dateOutsideVisibleGrid(dateKey, viewYear, viewMonth) {
+  const parsed = parseYmd(dateKey);
+  if (!parsed) return false;
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const rowCount = Math.ceil((firstDay + daysInMonth) / 7);
+  const firstVisible = new Date(viewYear, viewMonth, 1 - firstDay);
+  const lastVisible = new Date(viewYear, viewMonth, rowCount * 7 - firstDay);
+  const candidate = new Date(parsed.year, parsed.month, parsed.day);
+  return candidate < firstVisible || candidate > lastVisible;
+}
+
 export function monthFromYmd(dateKey) {
   const parsed = parseYmd(dateKey);
   return parsed ? { year: parsed.year, month: parsed.month, day: parsed.day } : null;

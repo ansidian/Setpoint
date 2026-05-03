@@ -64,6 +64,28 @@ function getCurrentMonthGridRows() {
   return Math.ceil((firstDay + daysInMonth) / 7);
 }
 
+async function flushAnimationFrame() {
+  await act(async () => {
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  });
+}
+
+function pointerClick(element) {
+  fireEvent.pointerDown(element);
+  fireEvent.click(element);
+}
+
+function stubRect(element, rect) {
+  element.getBoundingClientRect = vi.fn(() => ({
+    width: 100,
+    height: 24,
+    left: 0,
+    right: 100,
+    bottom: 124,
+    ...rect,
+  }));
+}
+
 describe("CalendarModal responsive layout", () => {
   it("fills the viewport as a workspace and only stacks at the narrow fallback", async () => {
     window.innerWidth = 1900;
@@ -2154,6 +2176,753 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
+  });
+
+  it("keeps an event create workspace open while wheel-browsing the month grid", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("calendar-event-schedule-trigger"));
+    expect(await screen.findByTestId("calendar-compact-schedule-picker")).toBeTruthy();
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/Apr 20, 2026/i);
+    expect(screen.queryByTestId("calendar-compact-schedule-picker")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+  });
+
+  it("returns a clean event create workspace to its anchor without closing it", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+
+    pointerClick(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+  });
+
+  it("parks a clean event create workspace when month navigation immediately follows opening it", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    const newEventButton = screen.getByRole("button", { name: /new event on apr 20/i });
+    const nextMonthButton = screen.getByRole("button", { name: /next month/i });
+
+    await act(async () => {
+      fireEvent.click(newEventButton);
+      fireEvent.pointerDown(nextMonthButton);
+      fireEvent.click(nextMonthButton);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    });
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+  });
+
+  it("opens a seeded create workspace on a visible trailing day without jumping months", async () => {
+    window.innerWidth = 1900;
+
+    const baseProps = {
+      open: true,
+      onClose: () => {},
+      view: "events",
+      onViewChange: () => {},
+      eventsData: {
+        editable: true,
+        getEvents: () => [],
+      },
+      billsData: {},
+      deadlinesData: {},
+    };
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        {...baseProps}
+        focusDate="2026-05-02"
+      />,
+    ));
+
+    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        {...baseProps}
+        openRequestId={1}
+        focusDate="2026-06-01"
+        focusItemId="new"
+      />,
+    ));
+
+    await flushAnimationFrame();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+    expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/Jun 1, 2026/i);
+  });
+
+  it("returns a clean event create workspace anchored to an interior current-month day", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-05-07"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-passive-day",
+              title: "Morning hold",
+              startMs: new Date("2026-05-01T16:00:00.000Z").getTime(),
+              endMs: new Date("2026-05-01T17:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-7"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on may 7/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    pointerClick(screen.getByRole("button", { name: /next month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/June\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    });
+
+    pointerClick(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 950));
+    });
+
+    const agendaRail = screen
+      .getAllByTestId("events-agenda-rail")
+      .find((rail) => rail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-05-07']"));
+    expect(agendaRail).toBeTruthy();
+    stubRect(agendaRail, { top: 100, bottom: 500, height: 400 });
+    agendaRail.querySelectorAll("[data-agenda-date-header='true']").forEach((header) => {
+      stubRect(header, { top: 600, bottom: 624 });
+    });
+    const passiveHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-05-01']");
+    expect(passiveHeader).toBeTruthy();
+    stubRect(passiveHeader, {
+      top: 90,
+      bottom: 114,
+    });
+
+    fireEvent.scroll(agendaRail);
+    await flushAnimationFrame();
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+  });
+
+  it("returns a dirty event create workspace without treating month navigation as a close attempt", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Rough hold" },
+    });
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+
+    pointerClick(screen.getByRole("button", { name: /previous month/i }));
+    await flushAnimationFrame();
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+    expect(screen.getByDisplayValue("Rough hold")).toBeTruthy();
+  });
+
+  it("ignores the active dirty event create anchor after returning from park", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Rough hold" },
+    });
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+
+    pointerClick(screen.getByRole("button", { name: /previous month/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    await flushAnimationFrame();
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeNull();
+    expect(screen.getByDisplayValue("Rough hold")).toBeTruthy();
+
+    pointerClick(screen.getByTestId("calendar-cell-date-header-2026-04-20"));
+    await flushAnimationFrame();
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeNull();
+    expect(screen.getByDisplayValue("Rough hold")).toBeTruthy();
+  });
+
+  it("keeps an event edit workspace open while wheel-browsing the month grid", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+    });
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Design review revised" },
+    });
+    const scheduleTrigger = within(panel)
+      .getAllByTestId("calendar-event-schedule-trigger")
+      .find((trigger) => /Apr 20, 2026/i.test(trigger.getAttribute("aria-label") || ""));
+    fireEvent.click(scheduleTrigger);
+    expect(await screen.findByTestId("calendar-compact-schedule-picker")).toBeTruthy();
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByDisplayValue("Design review revised")).toBeTruthy();
+    expect(screen.queryByTestId("calendar-compact-schedule-picker")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
+    });
+    expect(screen.getByDisplayValue("Design review revised")).toBeTruthy();
+  });
+
+  it("returns a clean event edit workspace to its chip anchor without closing it", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+    });
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+
+    pointerClick(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
+    });
+    expect(screen.getByDisplayValue("Design review")).toBeTruthy();
+  });
+
+  it("ignores the active clean event edit chip after returning from park", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    });
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+
+    pointerClick(screen.getByRole("button", { name: /previous month/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
+    });
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByDisplayValue("Design review")).toBeTruthy();
+  });
+
+  it("does not replay a stale dirty-block shake on the next event edit workspace", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    let panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    });
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Design review revised" },
+    });
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: /close/i }));
+    await flushAnimationFrame();
+    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /cancel editor/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("detail");
+    });
+
+    panel = screen.getByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+    await flushAnimationFrame();
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeNull();
+  });
+
+  it("leaves event workspace popovers alone for ignored month-grid wheel gestures", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByTestId("calendar-cell-20"));
+    fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("calendar-event-schedule-trigger"));
+    expect(await screen.findByTestId("calendar-compact-schedule-picker")).toBeTruthy();
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaX: 240,
+      deltaY: 80,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+    expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
+    expect(screen.getByTestId("calendar-compact-schedule-picker")).toBeTruthy();
+  });
+
+  it("keeps a Todoist create workspace open and closes transient panels while wheel-browsing the month grid", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="new"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    const editor = await screen.findByTestId("todoist-inline-editor");
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Submit lab notes" },
+    });
+    fireEvent.click(screen.getByTestId("todoist-due-trigger"));
+    expect(await screen.findByRole("dialog", { name: /todoist due date picker/i })).toBeTruthy();
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    expect(screen.getByTestId("todoist-inline-editor")).toBe(editor);
+    expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: /todoist due date picker/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    });
+    expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
+  });
+
+  it("keeps a Todoist edit workspace open while wheel-browsing the month grid", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              {
+                id: "todo-1",
+                title: "First task",
+                due_date: "2026-04-20",
+                due_time: "9:00 AM",
+                source: "todoist",
+                class_name: "Inbox",
+                status: "open",
+              },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("deadlines-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /^edit$/i }));
+    const editor = await screen.findByTestId("todoist-inline-editor");
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "First task revised" },
+    });
+    fireEvent.click(screen.getByTestId("todoist-priority-trigger"));
+    expect(await screen.findByRole("option", { name: "P2 High" })).toBeTruthy();
+
+    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
+      deltaY: 100,
+      deltaMode: 0,
+      cancelable: true,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
+    });
+    expect(screen.getByTestId("todoist-inline-editor")).toBe(editor);
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    expect(screen.getByDisplayValue("First task revised")).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "P2 High" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
+    });
+    expect(screen.getByDisplayValue("First task revised")).toBeTruthy();
   });
 
   it("opens floating bill detail from a bills agenda row", async () => {

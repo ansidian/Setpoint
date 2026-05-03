@@ -19,6 +19,7 @@ export default function CalendarEventEditorRail({
   editor,
   ghostPreview = null,
   host = "rail",
+  transientCloseToken = 0,
 }) {
   const {
     draft,
@@ -46,7 +47,7 @@ export default function CalendarEventEditorRail({
     reconnect,
   } = editor;
 
-  const pickers = useCalendarEditorPickers(editor);
+  const pickers = useCalendarEditorPickers(editor, transientCloseToken);
   const {
     setOpenPicker,
     titleRef,

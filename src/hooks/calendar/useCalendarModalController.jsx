@@ -117,6 +117,8 @@ export default function useCalendarModalController({
   ));
   const viewportWidth = useViewportWidth();
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
+  const [manualMonthBrowseKey, setManualMonthBrowseKey] = useState(0);
+  const [workspaceTransientCloseToken, setWorkspaceTransientCloseToken] = useState(0);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
   const [agendaScrollCommand, setAgendaScrollCommand] = useState(null);
   const [pendingItemDetailFocus, setPendingItemDetailFocus] = useState(null);
@@ -136,6 +138,7 @@ export default function useCalendarModalController({
     floatingDetailRef,
     findDateCell,
     openFloatingDetail,
+    reanchorFloatingDetail,
     closeFloatingDetail,
     parkFloatingDetail,
     setFloatingDetailDragged,
@@ -353,10 +356,32 @@ export default function useCalendarModalController({
     onClose();
   }, [floatingDetailRef, onClose, setFloatingDetail, setSuppressFocusRing, shakeFloatingEditor]);
 
-  function navigateMonth(dir) {
-    setDeadlineDraftPreview(null);
+  function navigateMonth(dir, _options = {}) {
+    const currentFloating = floatingDetailRef.current;
+    const activeEditorOpen =
+      eventEditorRef.current?.isEditorOpen
+      || !!deadlineEditor?.mode
+      || (
+        currentFloating?.open
+        && (currentFloating.mode === "edit" || currentFloating.mode === "create")
+      );
+    const preserveEditor = activeEditorOpen;
+    const shouldParkFloatingEditor =
+      currentFloating?.open
+      && (currentFloating.mode === "edit" || currentFloating.mode === "create");
+
+    if (preserveEditor) {
+      setWorkspaceTransientCloseToken((token) => token + 1);
+      setManualMonthBrowseKey((key) => key + 1);
+    } else {
+      setDeadlineDraftPreview(null);
+    }
     setMonthMotionDirection(dir > 0 ? 1 : -1);
-    if (floatingDetail?.open) {
+    if (preserveEditor) {
+      if (shouldParkFloatingEditor) {
+        parkFloatingDetail();
+      }
+    } else if (floatingDetail?.open) {
       parkFloatingDetail();
     } else {
       closeEventEditor();
@@ -390,6 +415,7 @@ export default function useCalendarModalController({
     if (!parsed) return;
     const current = floatingDetailRef.current;
     if (current?.open && (current.mode === "edit" || current.mode === "create")) {
+      if (passive) return;
       if (current.dirty) {
         shakeFloatingEditor();
         return;
@@ -535,6 +561,7 @@ export default function useCalendarModalController({
     setSelectedDay,
     setSelectedDateKey,
     setSelectedItemId,
+    manualMonthBrowseKey,
   });
   const { canGoPrev, computed, itemsByDay } = viewModel;
   const shellViewData = view === "deadlines"
@@ -764,7 +791,7 @@ export default function useCalendarModalController({
 
   const shellProps = buildCalendarModalShellProps({
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
-    viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, monthMotionDirection, suppressFocusRing },
+    viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, monthMotionDirection, suppressFocusRing, workspaceTransientCloseToken },
     data: { activeView, viewData: shellViewData, weatherData },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId },
@@ -779,7 +806,7 @@ export default function useCalendarModalController({
       scrollAgendaToEvent,
     },
     floating: {
-      floatingDetail, openFloatingDetail, closeFloatingDetail, parkFloatingDetail, setFloatingDetailDragged,
+      floatingDetail, openFloatingDetail, reanchorFloatingDetail, closeFloatingDetail, parkFloatingDetail, setFloatingDetailDragged,
       openFloatingEventCreate, openFloatingEventEdit, openFloatingDeadlineCreate, openFloatingDeadlineEdit,
       cancelFloatingEditor, setFloatingEditorDirty, setFloatingEditorSaveRequest, shakeFloatingEditor,
       handleFloatingDeadlineSaved, handleFloatingDeadlineDeleted,

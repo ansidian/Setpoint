@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import {
+  isFloatingDetailActiveAnchorTarget,
   isFloatingDetailPanelTarget,
   isFloatingDetailTriggerTarget,
 } from "./calendarFloatingDetailModel.js";
@@ -41,12 +42,17 @@ export default function useCalendarModalOutsideDismiss({
     function handleClick(event) {
       const suppressors = [...suppressOutsideClickRef.current.values()];
       if (suppressors.some((test) => test?.(event.target))) return;
+      if (event.target.closest?.("[data-calendar-month-navigation='true']")) return;
       if (isFloatingDetailPanelTarget(event.target)) return;
       const roleLayer = event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]');
       if (roleLayer && !panelRef.current?.contains(roleLayer)) return;
       if (floatingDetail?.open) {
         if (floatingDetail.mode === "edit" || floatingDetail.mode === "create") {
-          if (floatingDetail.dirty && !isFloatingDetailTriggerTarget(event.target)) {
+          if (
+            floatingDetail.dirty
+            && !isFloatingDetailTriggerTarget(event.target)
+            && !isFloatingDetailActiveAnchorTarget(event.target, floatingDetail)
+          ) {
             shakeFloatingEditor();
           }
           return;
@@ -66,9 +72,7 @@ export default function useCalendarModalOutsideDismiss({
     return () => document.removeEventListener("pointerdown", handleClick);
   }, [
     closeCalendarModal,
-    floatingDetail?.dirty,
-    floatingDetail?.mode,
-    floatingDetail?.open,
+    floatingDetail,
     open,
     panelRef,
     setFloatingDetail,

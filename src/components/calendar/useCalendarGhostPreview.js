@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import {
   buildDeadlineGhostPreview,
   buildEventGhostPreview,
-  dateOutsideMonth,
+  dateOutsideVisibleGrid,
   monthFromYmd,
 } from "./ghostPreview.js";
 
@@ -21,8 +21,10 @@ export default function useCalendarGhostPreview({
   setSelectedDay,
   setSelectedDateKey,
   setSelectedItemId,
+  manualMonthBrowseKey = 0,
 }) {
   const autoNavRef = useRef({ lastNavigateAt: 0, lastTargetDate: "" });
+  const suppressedAutoNavRef = useRef({ browseKey: manualMonthBrowseKey, ghostSignature: "" });
   const eventGhostPreview = useMemo(() => (
     view === "events"
       ? buildEventGhostPreview({ editor: eventEditor, events: viewData?.events || [] })
@@ -36,9 +38,29 @@ export default function useCalendarGhostPreview({
     });
   }, [computed.itemsByDate, deadlineDraftPreview, deadlineEditor?.mode, view]);
   const ghostPreview = view === "events" ? eventGhostPreview : deadlineGhostPreview;
+  const ghostSignature = useMemo(() => {
+    const ghosts = ghostPreview?.ghosts || [];
+    return JSON.stringify(ghosts.map((ghost) => ({
+      kind: ghost?.kind,
+      startDate: ghost?.startDate,
+      endDate: ghost?.endDate,
+      startTime: ghost?.startTime,
+      endTime: ghost?.endTime,
+      dueDate: ghost?.dueDate,
+      dueTime: ghost?.dueTime,
+      allDay: !!ghost?.allDay,
+    })));
+  }, [ghostPreview?.ghosts]);
 
   useEffect(() => {
-    if (!open || !ghostPreview?.targetDate || !dateOutsideMonth(ghostPreview.targetDate, viewYear, viewMonth)) return undefined;
+    const suppressed = suppressedAutoNavRef.current;
+    if (suppressed.browseKey === manualMonthBrowseKey) return;
+    suppressedAutoNavRef.current = { browseKey: manualMonthBrowseKey, ghostSignature };
+  }, [ghostSignature, manualMonthBrowseKey]);
+
+  useEffect(() => {
+    if (!open || !ghostPreview?.targetDate || !dateOutsideVisibleGrid(ghostPreview.targetDate, viewYear, viewMonth)) return undefined;
+    if (suppressedAutoNavRef.current.ghostSignature === ghostSignature) return undefined;
     const target = ghostPreview.targetDate;
     const timeout = window.setTimeout(() => {
       const nowMs = Date.now();
@@ -55,7 +77,7 @@ export default function useCalendarGhostPreview({
       last.lastTargetDate = target;
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [ghostPreview?.targetDate, open, setMonthMotionDirection, setSelectedDateKey, setSelectedDay, setSelectedItemId, setViewDate, viewMonth, viewYear]);
+  }, [ghostPreview?.targetDate, ghostSignature, open, setMonthMotionDirection, setSelectedDateKey, setSelectedDay, setSelectedItemId, setViewDate, viewMonth, viewYear]);
 
   return ghostPreview;
 }
