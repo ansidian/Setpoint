@@ -68,6 +68,8 @@ function renderInbox({
   seedSelectedId = null,
   customize = {},
   liveEmails = [makeLiveInboxEmail()],
+  snoozedEntries = [],
+  resurfacedEntries = [],
 } = {}) {
   const briefing = {
     emails: {
@@ -93,8 +95,8 @@ function renderInbox({
         briefingSummary={briefing.emails.summary}
         briefingGeneratedAt="2026-04-19 15:00:00"
         liveEmails={liveEmails}
-        snoozedEntries={[]}
-        resurfacedEntries={[]}
+        snoozedEntries={snoozedEntries}
+        resurfacedEntries={resurfacedEntries}
         onOpenDashboard={() => {}}
         onRefresh={() => {}}
         seedSelectedId={seedSelectedId}
@@ -278,5 +280,61 @@ describe("InboxView mobile", () => {
     expect(screen.getByText("Active snapshot")).toBeTruthy();
     expect(screen.getByText(/1 email across 1 account/i)).toBeTruthy();
     expect(screen.queryByText("Handle the approval first, then everything else can wait.")).toBeNull();
+  });
+
+  it("shows resurfaced snoozes as fresh live rows in active snapshot mode", () => {
+    activeSnapshotMock.state = {
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [{
+            id: 11,
+            snapshot_item_id: 11,
+            uid: "snapshot-msg-1",
+            email_id: "snapshot-msg-1",
+            account_id: "gmail-work",
+            lane: "needs_attention",
+            subject: "Original snapshot action",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs a response.",
+            date: "2026-05-03T15:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    renderInbox({
+      isMobile: true,
+      liveEmails: [],
+      resurfacedEntries: [{
+        uid: "snapshot-msg-1",
+        resurfaced_at: Date.parse("2026-05-03T16:00:00.000Z"),
+        read: false,
+        snapshot: {
+          uid: "snapshot-msg-1",
+          id: "snapshot-msg-1",
+          subject: "Woke from snooze",
+          from: "Dana",
+          fromEmail: "dana@example.com",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#89dceb",
+          date: "2026-05-03T15:00:00.000Z",
+          preview: "Back in the inbox.",
+          read: false,
+        },
+      }],
+    });
+
+    expect(screen.getByText("Woke from snooze")).toBeTruthy();
+    expect(screen.getByText("Snoozed")).toBeTruthy();
+    expect(screen.queryByText("Original snapshot action")).toBeNull();
   });
 });
