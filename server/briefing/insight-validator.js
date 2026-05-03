@@ -1,7 +1,7 @@
 // Validates model-generated insights that use the typed date slot system.
 // Pure functions — no network, no DB — so the tests can exercise every
-// failure mode in isolation. The `email-ai.js` retry loop and the Haiku
-// reformatter fallback both depend on this module.
+// failure mode in isolation. Kept for legacy fixtures and historical insight
+// rendering tests; the active email-AI path no longer generates insights.
 
 // Temporal words that must never appear in an insight template. The template
 // is a controlled output, not freeform prose, so strict matching is fine —

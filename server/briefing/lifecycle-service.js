@@ -4,7 +4,20 @@ import * as storedBriefingService from "./stored-briefing-service.js";
 import { generateEnrichedMock, generateMockHistory } from "../db/dev-fixture.js";
 import { applyScenarios } from "../db/scenarios/index.js";
 
+function legacyRuntimeRetired(message) {
+  const err = new Error(message);
+  err.status = 410;
+  return err;
+}
+
+function legacyBriefingRuntimeEnabled() {
+  return process.env.NODE_ENV !== "production";
+}
+
 export async function triggerGeneration(userId) {
+  if (!legacyBriefingRuntimeEnabled()) {
+    throw legacyRuntimeRetired("Legacy briefing generation is retired");
+  }
   generateBriefing(userId).catch((err) =>
     console.error("[Briefing] Generation failed:", err.message),
   );
@@ -17,6 +30,9 @@ export async function triggerGeneration(userId) {
 }
 
 export async function getInProgress(userId) {
+  if (!legacyBriefingRuntimeEnabled()) {
+    return { generating: false, retired: true };
+  }
   const result = await db.execute({
     sql: `SELECT id, progress FROM ea_briefings
           WHERE user_id = ? AND status = 'generating'
@@ -28,6 +44,9 @@ export async function getInProgress(userId) {
 }
 
 export async function refresh(userId) {
+  if (!legacyBriefingRuntimeEnabled()) {
+    throw legacyRuntimeRetired("Legacy briefing refresh is retired");
+  }
   const result = await quickRefresh(userId);
   result.briefingJson = await storedBriefingService.mergeAccountPrefs(result.briefingJson, userId);
   return result;
@@ -98,6 +117,9 @@ export async function getHistory(userId, { limit = 20 } = {}) {
 }
 
 export async function getStatus(userId, id) {
+  if (!legacyBriefingRuntimeEnabled()) {
+    throw legacyRuntimeRetired("Legacy briefing status polling is retired");
+  }
   const result = await db.execute({
     sql: `SELECT id, status, error_message, generation_time_ms, progress
           FROM ea_briefings WHERE id = ? AND user_id = ?`,

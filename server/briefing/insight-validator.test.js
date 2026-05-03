@@ -195,7 +195,7 @@ describe("validateInsights — batch", () => {
   });
 });
 
-describe("FORBIDDEN_TEMPORAL_REGEX — exported for Haiku reformatter use", () => {
+describe("FORBIDDEN_TEMPORAL_REGEX", () => {
   it("is a RegExp", () => {
     expect(FORBIDDEN_TEMPORAL_REGEX).toBeInstanceOf(RegExp);
   });

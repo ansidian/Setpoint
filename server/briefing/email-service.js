@@ -314,7 +314,6 @@ export async function markRead(userId, uid) {
   } else {
     await gmailMarkAsRead(found.account, uid);
   }
-  await storedBriefingService.markEmailsRead(userId, uid);
   await markEmailsReadInIndex(userId, uid);
 }
 
@@ -331,7 +330,6 @@ export async function markUnread(userId, uid) {
   } else {
     await gmailMarkAsUnread(found.account, uid);
   }
-  await storedBriefingService.markEmailsUnread(userId, uid);
   await markEmailsUnreadInIndex(userId, uid);
 }
 
@@ -516,7 +514,6 @@ export async function markAllRead(userId, uids) {
   });
 
   if (updatedUids.length) {
-    await storedBriefingService.markEmailsRead(userId, updatedUids);
     await markEmailsReadInIndex(userId, updatedUids);
   }
 

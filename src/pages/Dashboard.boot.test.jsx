@@ -1,0 +1,122 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BrowserRouter } from "react-router-dom";
+import Dashboard from "./Dashboard.jsx";
+
+const mocks = vi.hoisted(() => ({
+  activeSnapshot: {
+    snapshot: { id: 10 },
+    lanes: {
+      needs_attention: [{
+        id: 42,
+        uid: "gmail-a-msg-1",
+        email_id: "gmail-a-msg-1",
+        account_id: "gmail-a",
+        subject: "Review contract",
+      }],
+      fyi: [],
+      noise: [],
+    },
+    carryover: [],
+    filters: { accounts: [], categories: [] },
+  },
+}));
+
+vi.mock("../api", () => ({
+  getCalendarDeadlines: vi.fn().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } }),
+  getCalendarDeadlinesRange: vi.fn(),
+  getCalendarBillsRange: vi.fn(),
+  deleteBriefing: vi.fn(),
+}));
+
+vi.mock("../hooks/useLiveData", () => ({
+  default: () => ({
+    liveEmails: [],
+    allSchedules: [],
+    recentTransactions: [],
+    payeeMap: {},
+    actualBudgetUrl: "",
+    actualConfigured: false,
+    refreshNow: vi.fn(),
+  }),
+}));
+
+vi.mock("../hooks/useCalendarRange", () => ({
+  default: () => ({
+    ensureRange: vi.fn().mockResolvedValue([]),
+    markStale: vi.fn(),
+    refreshRangeInPlace: vi.fn(),
+  }),
+}));
+
+vi.mock("../hooks/useCalendarDomainRange", () => ({
+  default: () => ({
+    data: null,
+    ensureRange: vi.fn(),
+    markStale: vi.fn(),
+    loading: false,
+    error: null,
+  }),
+}));
+
+vi.mock("../hooks/useBriefingData", () => ({
+  default: () => ({
+    loading: false,
+    error: null,
+    briefing: null,
+    setBriefing: vi.fn(),
+    refreshing: false,
+    generating: false,
+    genProgress: null,
+    latestId: null,
+    schedules: [],
+    viewingPast: null,
+    lastQuickRefreshAt: null,
+    handleQuickRefresh: vi.fn(),
+    selectHistory: vi.fn(),
+  }),
+}));
+
+vi.mock("../hooks/useActiveSnapshot", () => ({
+  default: () => ({
+    snapshot: mocks.activeSnapshot,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+    sync: vi.fn(),
+  }),
+}));
+
+vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
+vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
+
+vi.mock("../components/dashboard/RedesignShell", () => ({
+  RedesignShell: ({ bd, activeSnapshot }) => (
+    <div data-testid="dashboard-shell">
+      {bd.briefing?.emails?.accounts?.length ?? 0}
+      {activeSnapshot?.snapshot ? " active-snapshot" : ""}
+    </div>
+  ),
+  DashboardBody: () => null,
+}));
+
+describe("Dashboard boot", () => {
+  beforeEach(() => {
+    window.history.replaceState({}, "", "/");
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("mounts the active dashboard when snapshot data exists without a current legacy briefing", () => {
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    expect(screen.getByTestId("dashboard-shell").textContent).toContain("active-snapshot");
+    expect(screen.queryByText(/no briefings yet/i)).toBeNull();
+  });
+});

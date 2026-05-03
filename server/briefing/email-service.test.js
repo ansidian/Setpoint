@@ -335,7 +335,7 @@ describe("markAllRead", () => {
         message: "iCloud batch failed",
       }],
     });
-    expect(storedBriefingService.markEmailsRead).toHaveBeenCalledWith("u1", [gmailUid]);
+    expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenLastCalledWith({
       sql: "UPDATE ea_email_index SET read = 1 WHERE user_id = ? AND uid IN (?)",
       args: ["u1", gmailUid],
@@ -378,6 +378,6 @@ describe("markAllRead", () => {
       }),
       [gmailUid],
     );
-    expect(storedBriefingService.markEmailsRead).toHaveBeenCalledWith("u1", [gmailUid]);
+    expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
   });
 });

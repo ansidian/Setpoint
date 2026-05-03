@@ -1,10 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   getLatestBriefing,
-  triggerGeneration,
-  quickRefresh,
-  pollStatus,
-  checkInProgress,
   getSettings,
 } from "../api";
 import { transformBriefing } from "../transform";
@@ -19,11 +15,11 @@ export default function useBriefingData({ liveData, isMock }) {
   const [briefing, setBriefing] = useState(hasCache ? cache.briefing : null);
   const [loading, setLoading] = useState(!hasCache);
   const [refreshing, setRefreshing] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const generating = false;
   const [error, setError] = useState(null);
   const [loaded, setLoaded] = useState(hasCache);
   const [modelLabel, setModelLabel] = useState(hasCache ? cache.modelLabel : "AI");
-  const [genProgress, setGenProgress] = useState(null);
+  const genProgress = null;
   const [viewingPast, setViewingPast] = useState(null);
   const [latestBriefing, setLatestBriefing] = useState(hasCache ? cache.briefing : null);
   const [latestId, setLatestId] = useState(hasCache ? cache.latestId : null);
@@ -32,38 +28,6 @@ export default function useBriefingData({ liveData, isMock }) {
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);
 
   // --- Polling ---
-
-  function startPolling(id) {
-    setGenerating(true);
-    const poll = setInterval(async () => {
-      try {
-        const { status, error_message, progress } = await pollStatus(id);
-        if (progress) setGenProgress(progress);
-        if (status === "ready") {
-          clearInterval(poll);
-          setGenProgress(null);
-          const res = await getLatestBriefing();
-          const transformed = transformBriefing(res.briefing);
-          setBriefing(transformed);
-          setLatestBriefing(transformed);
-          setLatestId(res.id);
-          setViewingPast(null);
-          setGenerating(false);
-          cache = { ...(cache || {}), briefing: transformed, latestId: res.id };
-        } else if (status === "error") {
-          clearInterval(poll);
-          setGenProgress(null);
-          setError(error_message);
-          setGenerating(false);
-        }
-      } catch {
-        clearInterval(poll);
-        setGenProgress(null);
-        setError("Lost connection while generating briefing.");
-        setGenerating(false);
-      }
-    }, 2000);
-  }
 
   // --- Data fetching ---
 
@@ -86,14 +50,6 @@ export default function useBriefingData({ liveData, isMock }) {
       })
       .catch(() => {});
 
-    checkInProgress()
-      .then(({ generating: inProgress, id, progress }) => {
-        if (inProgress && id) {
-          if (progress) setGenProgress(progress);
-          startPolling(id);
-        }
-      })
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -105,20 +61,7 @@ export default function useBriefingData({ liveData, isMock }) {
         setLatestId(res.id);
         cache = { ...(cache || {}), briefing: transformed, latestId: res.id };
 
-        if (isMock) return;
-        sessionStorage.removeItem("ea_settings_changed");
-        setRefreshing(true);
-        quickRefresh()
-          .then((result) => {
-            const updated = transformBriefing(result.briefingJson);
-            setBriefing(updated);
-            setLatestBriefing(updated);
-            setLatestId(result.id);
-            setLastQuickRefreshAt(Date.now());
-            cache = { ...(cache || {}), briefing: updated, latestId: result.id };
-          })
-          .catch(() => {})
-          .finally(() => setRefreshing(false));
+        if (!isMock) sessionStorage.removeItem("ea_settings_changed");
       })
       .catch((err) => setError(err.message))
       .finally(() => {
@@ -156,17 +99,9 @@ export default function useBriefingData({ liveData, isMock }) {
     if (refreshing || generating) return;
     setRefreshing(true);
     try {
-      const [result] = await Promise.all([
-        quickRefresh(),
-        liveData.refreshNow(),
-      ]);
-      const transformed = transformBriefing(result.briefingJson);
-      setBriefing(transformed);
-      setLatestBriefing(transformed);
-      setLatestId(result.id);
       setViewingPast(null);
       setLastQuickRefreshAt(Date.now());
-      cache = { ...(cache || {}), briefing: transformed, latestId: result.id };
+      await liveData.refreshNow?.();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -175,14 +110,7 @@ export default function useBriefingData({ liveData, isMock }) {
   }
 
   async function handleFullGeneration() {
-    setGenerating(true);
-    try {
-      const genResult = await triggerGeneration();
-      startPolling(genResult.id);
-    } catch (err) {
-      setError(err.message);
-      setGenerating(false);
-    }
+    setError("Legacy briefing generation is retired.");
   }
 
   // --- History navigation ---

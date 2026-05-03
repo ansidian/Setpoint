@@ -4,6 +4,14 @@ import * as emailService from "../../briefing/email-service.js";
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
 
+function legacyPinEnabled() {
+  return process.env.NODE_ENV !== "production";
+}
+
+function rejectRetiredPin(res) {
+  return res.status(410).json({ message: "Legacy briefing pinning is retired" });
+}
+
 router.get("/email/:uid", async (req, res) => {
   try {
     res.json(await emailService.getEmailBody(EA_USER_ID, req.params.uid));
@@ -25,6 +33,7 @@ router.post("/dismiss/:emailId", async (req, res) => {
 });
 
 router.post("/pin/:emailId", async (req, res) => {
+  if (!legacyPinEnabled()) return rejectRetiredPin(res);
   try {
     await emailService.pin(EA_USER_ID, req.params.emailId, req.body?.snapshot);
     res.json({ ok: true });
@@ -35,6 +44,7 @@ router.post("/pin/:emailId", async (req, res) => {
 });
 
 router.delete("/pin/:emailId", async (req, res) => {
+  if (!legacyPinEnabled()) return rejectRetiredPin(res);
   try {
     await emailService.unpin(EA_USER_ID, req.params.emailId);
     res.json({ ok: true });

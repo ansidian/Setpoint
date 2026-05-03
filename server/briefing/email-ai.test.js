@@ -206,4 +206,45 @@ describe("callEmailAiModel", () => {
     expect(body.tools[0]).toMatchObject({ type: "function", name: "submit_briefing" });
     expect(body.tool_choice).toEqual({ type: "function", name: "submit_briefing" });
   });
+
+  it("coerces leaked insight output to [] without invoking the retired reformatter", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        model: "gpt-5.5",
+        status: "completed",
+        output: [
+          {
+            type: "function_call",
+            name: "submit_briefing",
+            arguments: JSON.stringify({
+              aiInsights: [{
+                icon: "Sparkles",
+                template: "This retired prose should not be reformatted.",
+                slots: {},
+              }],
+              emails: { summary: "No important mail.", accounts: [] },
+            }),
+          },
+        ],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    });
+
+    const result = await callEmailAiModel({
+      provider: "openai",
+      model: "gpt-5.5",
+      emails: [],
+      calendar: [],
+      ctmDeadlines: [],
+      todoistTasks: [],
+      emailInterests: [],
+      categories: [],
+      upcomingBills: [],
+      nextWeekCalendar: [],
+    });
+
+    expect(result.aiInsights).toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
 });

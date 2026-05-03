@@ -22,7 +22,15 @@ beforeEach(() => {
   process.env.NODE_ENV = originalEnv;
 });
 
-const { getLatest, getById, getStatus } = await import("./lifecycle-service.js");
+const briefingRuntime = await import("./index.js");
+const {
+  getLatest,
+  getById,
+  getStatus,
+  getInProgress,
+  refresh,
+  triggerGeneration,
+} = await import("./lifecycle-service.js");
 
 describe("getLatest", () => {
   it("returns real briefing when row exists", async () => {
@@ -85,5 +93,46 @@ describe("getStatus", () => {
   it("throws 404 when not found", async () => {
     mockDb.execute.mockResolvedValueOnce({ rows: [] });
     await expect(getStatus("u1", "99")).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("legacy runtime quarantine", () => {
+  beforeEach(() => {
+    process.env.NODE_ENV = "production";
+  });
+
+  it("blocks production batch generation before generateBriefing can write ea_briefings", async () => {
+    await expect(triggerGeneration("u1")).rejects.toMatchObject({
+      status: 410,
+      message: "Legacy briefing generation is retired",
+    });
+
+    expect(briefingRuntime.generateBriefing).not.toHaveBeenCalled();
+    expect(mockDb.execute).not.toHaveBeenCalled();
+  });
+
+  it("blocks production quick refresh before quickRefresh can mutate ea_briefings", async () => {
+    await expect(refresh("u1")).rejects.toMatchObject({
+      status: 410,
+      message: "Legacy briefing refresh is retired",
+    });
+
+    expect(briefingRuntime.quickRefresh).not.toHaveBeenCalled();
+  });
+
+  it("does not inspect legacy in-progress rows in production", async () => {
+    const out = await getInProgress("u1");
+
+    expect(out).toEqual({ generating: false, retired: true });
+    expect(mockDb.execute).not.toHaveBeenCalled();
+  });
+
+  it("blocks production generation status polling", async () => {
+    await expect(getStatus("u1", "1")).rejects.toMatchObject({
+      status: 410,
+      message: "Legacy briefing status polling is retired",
+    });
+
+    expect(mockDb.execute).not.toHaveBeenCalled();
   });
 });

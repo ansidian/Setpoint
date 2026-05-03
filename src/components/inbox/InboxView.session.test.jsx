@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
+import { dismissEmail, trashEmail } from "../../api";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -18,6 +19,9 @@ vi.mock("../../api", async () => {
     snoozeEmail: vi.fn().mockResolvedValue({}),
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
     dismissEmail: vi.fn().mockResolvedValue({}),
+    moveSnapshotItemLane: vi.fn().mockResolvedValue({}),
+    dismissSnapshotItemForToday: vi.fn().mockResolvedValue({}),
+    markSnapshotItemHandled: vi.fn().mockResolvedValue({}),
   };
 });
 
@@ -35,6 +39,7 @@ vi.mock("./reader/DraftReply.jsx", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 function makeAccounts(includeAction = true) {
@@ -184,5 +189,96 @@ describe("InboxView session state", () => {
       expect(screen.queryByTestId("inbox-mobile-reader")).toBeNull();
       expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
     });
+  });
+
+  it("trashes active snapshot email through provider removal without legacy dismiss", async () => {
+    const refreshSnapshot = vi.fn().mockResolvedValue({});
+    const activeSnapshot = {
+      snapshot: {
+        snapshot: { id: 77, updated_at: "2026-05-03T15:00:00.000Z" },
+        filters: {
+          accounts: [{
+            account_id: "gmail-a",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        carryover: [],
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      },
+      loading: false,
+      error: null,
+      refresh: refreshSnapshot,
+      sync: vi.fn(),
+    };
+    const [sessionState, setSessionState] = [
+      {
+        accountId: "__all",
+        lane: "__all",
+        search: "",
+        selectedId: "gmail-a-msg-1",
+      },
+      vi.fn(),
+    ];
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          pinnedIds={[]}
+          pinnedSnapshots={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={sessionState}
+          onSessionStateChange={setSessionState}
+        />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /trash email/i }));
+
+    expect(trashEmail).toHaveBeenCalledWith("gmail-a-msg-1");
+    expect(dismissEmail).not.toHaveBeenCalled();
   });
 });

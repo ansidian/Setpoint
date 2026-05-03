@@ -71,12 +71,6 @@ export default function EmailSection({ summary, model: _model, loaded, delay, st
     setLoadingBillId(null);
   }, [setSelectedEmail, setLoadingBillId]);
 
-  // Portals escape display:none on a parent, so when EmailTabSection hides
-  // this section via the display-swap, the overlay would otherwise float
-  // over the sibling Live tab. The overlay render below uses `active` in
-  // its open condition — we intentionally keep selectedEmail/openNoise state
-  // alive across tab switches so the reader reopens where you left off.
-
   const readerNav = useEmailReaderNav({
     list: navList,
     openEmail: selectedEmail,
