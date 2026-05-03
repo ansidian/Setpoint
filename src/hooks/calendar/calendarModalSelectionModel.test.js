@@ -119,6 +119,34 @@ describe("calendarModalSelectionModel", () => {
     });
   });
 
+  it("clears stale day and item focus for clean deadline create requests", () => {
+    const snapshot = buildCalendarModalSyncSnapshot({
+      open: true,
+      view: "deadlines",
+      prevOpen: true,
+      prevView: "deadlines",
+      prevOpenRequestId: 1,
+      openRequestId: 2,
+      focusDate: null,
+      focusItemId: "new",
+      viewDate: { month: 3, year: 2026 },
+      selectedDay: 20,
+      selectedDateKey: "2026-04-20",
+      selectedItemId: "todo-1",
+      pendingFocusDate: null,
+      pendingFocusItemId: null,
+    });
+
+    expect(snapshot).toMatchObject({
+      nextSelectedDay: null,
+      nextSelectedDateKey: null,
+      nextSelectedItemId: null,
+      nextPendingFocusDate: null,
+      nextPendingFocusItemId: null,
+      openCreate: true,
+    });
+  });
+
   it("detects view-date equality by month and year", () => {
     expect(isSameViewDate({ month: 4, year: 2026 }, { month: 4, year: 2026 })).toBe(true);
     expect(isSameViewDate({ month: 4, year: 2026 }, { month: 5, year: 2026 })).toBe(false);

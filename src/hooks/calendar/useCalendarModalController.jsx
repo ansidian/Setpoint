@@ -488,7 +488,9 @@ export default function useCalendarModalController({
     handledInitialDeadlineCreateRef.current = requestKey;
     window.requestAnimationFrame(() => {
       if (!floatingDetailRef.current?.open) {
-        openFloatingDeadlineCreate(focusDate || activeSelectedDateKey || null);
+        openFloatingDeadlineCreate(focusDate || activeSelectedDateKey || null, {
+          allowSelectionFallback: !!focusDate,
+        });
       }
     });
     // Initial create focus is keyed by the explicit open request, not every selection update.
@@ -512,7 +514,9 @@ export default function useCalendarModalController({
       }
     } else if (snapshot?.openCreate && view === "deadlines") {
       if (usesFloatingEditor) {
-        openFloatingDeadlineCreate(focusDate || snapshot.nextSelectedDateKey || null);
+        openFloatingDeadlineCreate(focusDate || snapshot.nextSelectedDateKey || null, {
+          allowSelectionFallback: !!focusDate || !!snapshot.nextSelectedDateKey,
+        });
       } else {
         setDeadlineEditor({ mode: "create", seedDate: focusDate || null });
       }
