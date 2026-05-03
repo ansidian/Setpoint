@@ -9,6 +9,7 @@ export default function TimelineNowMarker({
 }) {
   return (
     <div
+      data-testid="timeline-now-marker"
       style={{
         position: "absolute",
         left: 0,
