@@ -24,11 +24,6 @@ vi.mock("./actual.js", () => ({
   getCategories: async () => [],
   getUpcomingBills: async () => [],
 }));
-vi.mock("../embeddings/index.js", () => ({
-  embedAndStore: async () => {},
-  getContextForBriefing: async () => null,
-  isEmbeddingAvailable: () => false,
-}));
 vi.mock("./email-index.js", () => ({
   indexEmails: async () => {},
   isIndexEmpty: async () => false,

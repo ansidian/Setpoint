@@ -36,24 +36,32 @@ beforeEach(() => {
 });
 
 describe("BriefingSchedulesCard", () => {
-  it("adds and removes schedules while persisting the updated payload", async () => {
+  it("presents schedules as snapshot boundaries instead of briefing generation", () => {
+    renderCard();
+
+    expect(screen.getByText("Snapshot Boundaries")).toBeTruthy();
+    expect(screen.getByText("Schedule times for rolling the active email snapshot window.")).toBeTruthy();
+    expect(screen.queryByText(/briefing generation/i)).toBeNull();
+  });
+
+  it("adds and removes snapshot boundaries while persisting the updated payload", async () => {
     const patch = vi.fn();
     renderCard({ patch });
 
-    fireEvent.click(screen.getByRole("button", { name: /\+ add schedule/i }));
+    fireEvent.click(screen.getByRole("button", { name: /\+ add boundary/i }));
 
-    expect(screen.getByDisplayValue("New Schedule")).toBeTruthy();
+    expect(screen.getByDisplayValue("New Boundary")).toBeTruthy();
     expect(patch).toHaveBeenLastCalledWith({
       schedules_json: [
         { label: "Morning", time: "08:00", enabled: true },
-        { label: "New Schedule", time: "08:00", enabled: false },
+        { label: "New Boundary", time: "08:00", enabled: false },
       ],
     });
 
-    fireEvent.click(screen.getAllByLabelText("Remove schedule")[1]);
+    fireEvent.click(screen.getAllByLabelText("Remove boundary")[1]);
 
     await waitFor(() => {
-      expect(screen.queryByDisplayValue("New Schedule")).toBeNull();
+      expect(screen.queryByDisplayValue("New Boundary")).toBeNull();
     });
     expect(patch).toHaveBeenLastCalledWith({
       schedules_json: [{ label: "Morning", time: "08:00", enabled: true }],
@@ -64,7 +72,7 @@ describe("BriefingSchedulesCard", () => {
     const patch = vi.fn();
     renderCard({ patch });
 
-    fireEvent.click(screen.getByRole("switch", { name: /disable schedule/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /disable boundary/i }));
     expect(patch).toHaveBeenLastCalledWith({
       schedules_json: [{ label: "Morning", time: "08:00", enabled: false }],
     });
@@ -95,10 +103,10 @@ describe("BriefingSchedulesCard", () => {
 
     renderCard();
 
-    fireEvent.click(screen.getByRole("button", { name: /skip today/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skip boundary today/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /skipped/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /boundary skipped today/i })).toBeTruthy();
     });
     expect(mockApi.skipSchedule).toHaveBeenCalledWith(0, true);
   });

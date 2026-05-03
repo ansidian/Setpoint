@@ -6,7 +6,7 @@ afterEach(() => {
   cleanup();
 });
 
-function renderStrip(liveCount, liveLoading = false) {
+function renderStrip(liveCount, liveLoading = false, extraProps = {}) {
   render(
     <DigestStrip
       accent="#cba6da"
@@ -15,6 +15,7 @@ function renderStrip(liveCount, liveLoading = false) {
       liveLoading={liveLoading}
       summary="Brief summary"
       onJumpLane={vi.fn()}
+      {...extraProps}
     />,
   );
 }
@@ -38,5 +39,20 @@ describe("DigestStrip", () => {
 
     expect(screen.getByTestId("digest-live-slot").textContent).toContain("Live · checking");
     expect(screen.getByTestId("digest-live-slot").textContent).toContain("Retrieving live mail");
+  });
+
+  it("uses active snapshot language while triage sync is in flight", () => {
+    renderStrip(0, true, {
+      activeSnapshotMode: true,
+      accountCount: 2,
+      processingCount: 4,
+    });
+
+    expect(screen.getByText("Active snapshot")).toBeTruthy();
+    expect(screen.getByText("6 emails across 2 accounts. 2 need attention, 1 FYI, 3 noise.")).toBeTruthy();
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("Triage · syncing");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("4 messages processing");
+    expect(screen.queryByText("Briefing snapshot")).toBeNull();
+    expect(screen.getByTestId("digest-live-slot").textContent).not.toContain("Retrieving live mail");
   });
 });

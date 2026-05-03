@@ -1,17 +1,32 @@
 import cron from "node-cron";
 import db from "../db/connection.js";
-import { generateBriefing, loadUserConfig, fetchAllEmails } from "./index.js";
+import { loadUserConfig, fetchAllEmails } from "./index.js";
 import { indexEmails } from "./email-index.js";
+import { advanceSnapshotBoundary } from "./snapshot-service.js";
+import {
+  enqueueEmailTriageForEmails,
+  processNextGmailHistorySyncJob,
+  renewDueGmailWatches,
+} from "./gmail-sync.js";
+import { processNextEmailTriageJob } from "./triage-worker.js";
 
 const activeJobs = [];
 // Background indexer state lives outside activeJobs so initScheduler's re-runs
 // (triggered on account changes) don't tear down the passive email sweep.
 let indexerJob = null;
 let sweepInFlight = false;
+let gmailWatchRenewalJob = null;
+let gmailHistorySyncJob = null;
+let gmailHistorySyncInFlight = false;
+let emailTriageJob = null;
+let emailTriageInFlight = false;
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
 const INDEXER_LOOKBACK_HOURS = 2;
 const INDEXER_CRON = "*/10 * * * *";
+const GMAIL_WATCH_RENEWAL_CRON = "17 3 * * *";
+const GMAIL_HISTORY_SYNC_CRON = "* * * * *";
+const EMAIL_TRIAGE_CRON = "* * * * *";
 
 export async function initScheduler() {
   // Clear any existing jobs (in case of re-init)
@@ -45,7 +60,7 @@ export async function initScheduler() {
               const match = freshSchedules.find(s => s.time === schedule.time && s.label === schedule.label);
               if (match?.skipped_until && new Date(match.skipped_until) > new Date()) {
                 console.log(
-                  `[EA Scheduler] Skipping ${schedule.label} briefing — skipped until ${match.skipped_until}`,
+                  `[EA Scheduler] Skipping ${schedule.label} snapshot boundary — skipped until ${match.skipped_until}`,
                 );
                 return;
               }
@@ -54,16 +69,19 @@ export async function initScheduler() {
             }
 
             console.log(
-              `[EA Scheduler] Generating ${schedule.label} briefing for user ${row.user_id}`,
+              `[EA Scheduler] Advancing ${schedule.label} snapshot boundary for user ${row.user_id}`,
             );
             try {
-              await generateBriefing(row.user_id, { scheduleLabel: schedule.label });
+              await advanceSnapshotBoundary(row.user_id, {
+                timeZone: schedule.tz || "America/Los_Angeles",
+                scheduleLabel: schedule.label,
+              });
               console.log(
-                `[EA Scheduler] ${schedule.label} briefing generated successfully`,
+                `[EA Scheduler] ${schedule.label} snapshot boundary ready`,
               );
             } catch (err) {
               console.error(
-                `[EA Scheduler] ${schedule.label} briefing failed:`,
+                `[EA Scheduler] ${schedule.label} snapshot boundary failed:`,
                 err.message,
               );
             }
@@ -73,7 +91,7 @@ export async function initScheduler() {
 
         activeJobs.push(job);
         console.log(
-          `[EA Scheduler] Scheduled ${schedule.label} briefing at ${schedule.time} ${schedule.tz || "America/Los_Angeles"} for user ${row.user_id}`,
+          `[EA Scheduler] Scheduled ${schedule.label} snapshot boundary at ${schedule.time} ${schedule.tz || "America/Los_Angeles"} for user ${row.user_id}`,
         );
       }
     }
@@ -109,7 +127,10 @@ async function sweepIndex() {
           accounts,
           INDEXER_LOOKBACK_HOURS,
         );
-        if (emails.length) await indexEmails(row.user_id, emails);
+        if (emails.length) {
+          await indexEmails(row.user_id, emails);
+          await enqueueEmailTriageForEmails(row.user_id, emails);
+        }
       } catch (err) {
         console.error(
           `[EA Indexer] Sweep failed for user ${row.user_id}:`,
@@ -121,6 +142,50 @@ async function sweepIndex() {
     console.error("[EA Indexer] Sweep iteration failed:", err.message);
   } finally {
     sweepInFlight = false;
+  }
+}
+
+async function runGmailWatchRenewal() {
+  try {
+    await renewDueGmailWatches();
+  } catch (err) {
+    console.error("[Gmail Watch] Renewal sweep failed:", err.message);
+  }
+}
+
+async function runGmailHistorySyncWorker() {
+  if (gmailHistorySyncInFlight) return;
+  gmailHistorySyncInFlight = true;
+  try {
+    let processed = 0;
+    for (let i = 0; i < 10; i++) {
+      const result = await processNextGmailHistorySyncJob();
+      if (!result.processed) break;
+      processed++;
+    }
+    if (processed) console.log(`[Gmail Sync] Processed ${processed} history sync job(s)`);
+  } catch (err) {
+    console.error("[Gmail Sync] Worker failed:", err.message);
+  } finally {
+    gmailHistorySyncInFlight = false;
+  }
+}
+
+async function runEmailTriageWorker() {
+  if (emailTriageInFlight) return;
+  emailTriageInFlight = true;
+  try {
+    let processed = 0;
+    for (let i = 0; i < 10; i++) {
+      const result = await processNextEmailTriageJob();
+      if (!result.processed) break;
+      processed++;
+    }
+    if (processed) console.log(`[Email Triage] Processed ${processed} email triage job(s)`);
+  } catch (err) {
+    console.error("[Email Triage] Worker failed:", err.message);
+  } finally {
+    emailTriageInFlight = false;
   }
 }
 
@@ -140,4 +205,40 @@ export function startBackgroundIndexer() {
       console.error("[EA Indexer] Initial sweep failed:", err.message),
     );
   }, 5000);
+
+  if (gmailWatchRenewalJob) {
+    gmailWatchRenewalJob.stop();
+    gmailWatchRenewalJob = null;
+  }
+  gmailWatchRenewalJob = cron.schedule(GMAIL_WATCH_RENEWAL_CRON, runGmailWatchRenewal);
+  console.log(`[Gmail Watch] Renewal scheduled (${GMAIL_WATCH_RENEWAL_CRON})`);
+  setTimeout(() => {
+    runGmailWatchRenewal().catch((err) =>
+      console.error("[Gmail Watch] Initial renewal failed:", err.message),
+    );
+  }, 8000);
+
+  if (gmailHistorySyncJob) {
+    gmailHistorySyncJob.stop();
+    gmailHistorySyncJob = null;
+  }
+  gmailHistorySyncJob = cron.schedule(GMAIL_HISTORY_SYNC_CRON, runGmailHistorySyncWorker);
+  console.log(`[Gmail Sync] History worker scheduled (${GMAIL_HISTORY_SYNC_CRON})`);
+  setTimeout(() => {
+    runGmailHistorySyncWorker().catch((err) =>
+      console.error("[Gmail Sync] Initial worker failed:", err.message),
+    );
+  }, 10000);
+
+  if (emailTriageJob) {
+    emailTriageJob.stop();
+    emailTriageJob = null;
+  }
+  emailTriageJob = cron.schedule(EMAIL_TRIAGE_CRON, runEmailTriageWorker);
+  console.log(`[Email Triage] Worker scheduled (${EMAIL_TRIAGE_CRON})`);
+  setTimeout(() => {
+    runEmailTriageWorker().catch((err) =>
+      console.error("[Email Triage] Initial worker failed:", err.message),
+    );
+  }, 12000);
 }

@@ -1,5 +1,4 @@
 export { BriefingStatusPill } from "./BriefingStatusPill.jsx";
-export { ConfirmGenerateToast } from "./ConfirmGenerateToast.jsx";
 export { Kbd } from "./Kbd.jsx";
 export { OverflowMenu } from "./OverflowMenu.jsx";
 export { PaletteTriggerButton } from "./PaletteTriggerButton.jsx";

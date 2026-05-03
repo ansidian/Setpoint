@@ -38,7 +38,7 @@ function InboxLiveSkeletonRows({ count = 5, compact = false }) {
   );
 }
 
-function InboxLiveLoadingBlock({ compact = false }) {
+function InboxLiveLoadingBlock({ compact = false, activeSnapshotMode = false }) {
   return (
     <div
       data-testid="inbox-live-loading-block"
@@ -54,7 +54,7 @@ function InboxLiveLoadingBlock({ compact = false }) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
-        Checking live mail
+        {activeSnapshotMode ? "Syncing active snapshot" : "Checking live mail"}
       </div>
       <InboxLiveSkeletonRows count={compact ? 2 : 3} compact />
     </div>
@@ -70,18 +70,28 @@ export default function InboxList({
   indexedSearchActive = false,
   indexedSearchLoading = false,
   indexedSearchError = null,
+  activeSnapshotMode = false,
+  processingCount = 0,
+  activeSnapshotError = null,
+  snapshotCategories = [],
+  categoryFilter = "__all",
+  onCategoryFilterChange,
 }) {
-  const [collapsed, setCollapsed] = useState({});
+  const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { noise: true } : {}));
+  const effectiveCollapsed = activeSnapshotMode ? { noise: true, ...collapsed } : collapsed;
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   const showSkeletonRows = liveEmailsLoading && emails.length === 0;
 
   const grouped = useMemo(() => {
-    const g = { pinned: [], live: [], action: [], fyi: [], noise: [] };
+    const g = { pinned: [], live: [], carryover: [], needs_attention: [], action: [], fyi: [], noise: [] };
     for (const e of emails) {
       const key = e.uid || e.id;
-      if (pinnedIds?.has?.(key) || pinnedIds?.has?.(e.id)) g.pinned.push(e);
+      if (!activeSnapshotMode && (pinnedIds?.has?.(key) || pinnedIds?.has?.(e.id))) g.pinned.push(e);
       else if (e._untriaged) g.live.push(e);
-      else g[e._lane]?.push(e);
+      else {
+        const laneKey = e._lane === "action" ? "needs_attention" : e._lane;
+        g[laneKey]?.push(e);
+      }
     }
     g.pinned.sort((a, b) => new Date(b.date) - new Date(a.date));
     // Use resurfaced_at as the sort key for woken snooze emails so they land
@@ -89,7 +99,7 @@ export default function InboxList({
     const liveKey = (e) => e._resurfacedAt || new Date(e.date).getTime();
     g.live.sort((a, b) => liveKey(b) - liveKey(a));
     return g;
-  }, [emails, pinnedIds]);
+  }, [activeSnapshotMode, emails, pinnedIds]);
 
   const renderRows = (list) => list.map((email) => {
     const rowKey = email.id || email.uid;
@@ -200,7 +210,7 @@ export default function InboxList({
         >
           <CheckCheck size={11} />
         </IconBtn>
-        <IconBtn onClick={onRefresh} title="Refresh"><RefreshCw size={11} /></IconBtn>
+        <IconBtn onClick={onRefresh} title="Sync now"><RefreshCw size={11} /></IconBtn>
       </div>
 
       <div
@@ -241,6 +251,64 @@ export default function InboxList({
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+        {activeSnapshotMode && snapshotCategories.length > 0 && !indexedSearchActive && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 12px",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+              overflowX: "auto",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => onCategoryFilterChange?.("__all")}
+              style={{
+                flexShrink: 0,
+                borderRadius: 999,
+                border: `1px solid ${categoryFilter === "__all" ? `${accent}44` : "rgba(255,255,255,0.08)"}`,
+                background: categoryFilter === "__all" ? `${accent}16` : "rgba(255,255,255,0.03)",
+                color: categoryFilter === "__all" ? "#fff" : "rgba(205,214,244,0.66)",
+                padding: "5px 9px",
+                fontFamily: "inherit",
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "background 150ms, border-color 150ms, color 150ms",
+              }}
+            >
+              All categories
+            </button>
+            {snapshotCategories.map((entry) => (
+              <button
+                key={entry.category}
+                type="button"
+                onClick={() => onCategoryFilterChange?.(entry.category)}
+                style={{
+                  flexShrink: 0,
+                  borderRadius: 999,
+                  border: `1px solid ${categoryFilter === entry.category ? `${accent}44` : "rgba(255,255,255,0.08)"}`,
+                  background: categoryFilter === entry.category ? `${accent}16` : "rgba(255,255,255,0.03)",
+                  color: categoryFilter === entry.category ? "#fff" : "rgba(205,214,244,0.66)",
+                  padding: "5px 9px",
+                  fontFamily: "inherit",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                  transition: "background 150ms, border-color 150ms, color 150ms",
+                }}
+              >
+                {entry.category.replace(/_/g, " ")}
+                <span style={{ marginLeft: 5, color: categoryFilter === entry.category ? accent : "rgba(205,214,244,0.42)" }}>
+                  {entry.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         {indexedSearchLoading && (
           <div
             style={{
@@ -266,9 +334,49 @@ export default function InboxList({
             {indexedSearchError}
           </div>
         )}
-        {liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact />}
+        {activeSnapshotError && !indexedSearchActive && (
+          <div
+            style={{
+              padding: "10px 14px",
+              fontSize: 11,
+              color: "#f38ba8",
+              borderBottom: "1px solid rgba(243,139,168,0.12)",
+              background: "rgba(243,139,168,0.06)",
+            }}
+          >
+            {activeSnapshotError}
+          </div>
+        )}
+        {activeSnapshotMode && processingCount > 0 && !indexedSearchActive && (
+          <div
+            style={{
+              margin: "10px 12px 6px",
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: "1px solid rgba(137,180,250,0.18)",
+              background: "rgba(137,180,250,0.06)",
+              color: "rgba(205,214,244,0.72)",
+              fontSize: 11,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 999,
+                background: "#89b4fa",
+                boxShadow: "0 0 8px rgba(137,180,250,0.65)",
+              }}
+            />
+            Processing {processingCount} email{processingCount === 1 ? "" : "s"}
+          </div>
+        )}
+        {liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact activeSnapshotMode={activeSnapshotMode} />}
         {showSkeletonRows ? (
-          <InboxLiveLoadingBlock />
+          <InboxLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
         ) : layout === "swimlanes" ? (
           <>
             {grouped.pinned.length > 0 && (
@@ -307,17 +415,17 @@ export default function InboxList({
                       {grouped.pinned.length}
                     </span>
                     <span style={{ flex: 1 }} />
-                    {collapsed.pinned ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
+                    {effectiveCollapsed.pinned ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
                   </div>
                 </StickyHeader>
-                {!collapsed.pinned && (
+                {!effectiveCollapsed.pinned && (
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     {renderRows(grouped.pinned)}
                   </div>
                 )}
               </div>
             )}
-            {grouped.live.length > 0 && (
+            {!activeSnapshotMode && grouped.live.length > 0 && (
               <div>
                 <StickyHeader borderColor="rgba(137,180,250,0.12)">
                   <div
@@ -384,17 +492,17 @@ export default function InboxList({
                     >
                       Not yet triaged
                     </span>
-                    {collapsed.live ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
+                    {effectiveCollapsed.live ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
                   </div>
                 </StickyHeader>
-                {!collapsed.live && (
+                {!effectiveCollapsed.live && (
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     {renderRows(grouped.live)}
                   </div>
                 )}
               </div>
             )}
-            {["action", "fyi", "noise"].map((k) => (
+            {["carryover", "needs_attention", "fyi", "noise"].map((k) => (
               grouped[k].length > 0 && (
                 <div key={k}>
                   <StickyHeader borderColor="rgba(255,255,255,0.03)">
@@ -433,10 +541,10 @@ export default function InboxList({
                         {grouped[k].length}
                       </span>
                       <span style={{ flex: 1 }} />
-                      {collapsed[k] ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
+                      {effectiveCollapsed[k] ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
                     </div>
                   </StickyHeader>
-                  {!collapsed[k] && (
+                  {!effectiveCollapsed[k] && (
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       {renderRows(grouped[k])}
                     </div>

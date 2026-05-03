@@ -14,7 +14,7 @@ const HAIKU_REFORMATTER_MODEL = "claude-haiku-4-5-20251001";
 
 const TZ = "America/Los_Angeles";
 
-const SYSTEM_PROMPT = `You are a personal executive assistant. You receive emails, calendar events, and academic deadlines. Your job is email triage, bill detection, and cross-source insights. Weather, calendar, deadlines, and CTM data are handled by the server — do NOT include them in your output.
+const SYSTEM_PROMPT = `You are a personal executive assistant. You receive emails, calendar events, and academic deadlines. Your job is email triage and bill detection. Weather, calendar, deadlines, CTM data, and cross-source insights are handled elsewhere — do NOT include them in your output.
 
 1. TRIAGE EMAILS: Classify each email's "triage" as "actionable", "fyi", or "noise". Include actionable + fyi in the important array, include noise in a compact noise array (from + subject only) AND count in noise_count. Set urgency: high/medium/low.
    Summary: count each triage category separately — "10 emails across 3 accounts. 4 need attention, 2 FYI, 4 noise." "Need attention" = actionable only. Do NOT count fyi emails as needing attention. No subjects/topics in summary.
@@ -39,7 +39,8 @@ const SYSTEM_PROMPT = `You are a personal executive assistant. You receive email
    - Partial match / discrepancy (payee matches but amount or date differs significantly): keep hasBill: true and note the discrepancy in the action field (e.g., "Xfinity $95.99 — scheduled $89.99").
    - No match: treat as new bill detection, same as usual.
 
-3. GENERATE INSIGHTS (0-4 items, quality over quantity): Connect dots across emails, calendar, and deadlines. Be specific and actionable. Returning 0 insights is valid when nothing non-obvious exists — do NOT pad to hit a count.
+3. AI INSIGHTS ARE RETIRED: Always return aiInsights as an empty array. Do not spend output tokens generating insight prose.
+   LEGACY FORMAT NOTES: The aiInsights key remains in the submit_briefing schema only as a temporary compatibility stub.
    Calendar events with "passed": true already ended — skip them. Focus on what's ahead.
    When "Next Week's Calendar" is provided, naturally blend it into insights — reference upcoming events when they connect to today's emails, deadlines, or calendar (e.g., prep needed, follow-ups, busy days ahead). Do not force a separate next-week insight if nothing is noteworthy.
 
@@ -119,7 +120,8 @@ const SUBMIT_BRIEFING_TOOL = {
     properties: {
       aiInsights: {
         type: "array",
-        description: "2-4 insights. Each must use template + slots format. No relative date words in template.",
+        maxItems: 0,
+        description: "Compatibility stub. Must be an empty array; AI Insights are retired.",
         items: {
           type: "object",
           required: ["icon", "template", "slots"],
@@ -523,7 +525,6 @@ export async function callClaude({
   model,
   emailInterests,
   categories,
-  historicalContext,
   upcomingBills,
   nextWeekCalendar,
 }) {
@@ -602,7 +603,7 @@ ${ctmSummary}
 ${todoistSummary}
 
 ## Next Week's Calendar (for insights only — do NOT include in output)
-${nextWeekSummary || "No events"}${interestsNote}${categoriesNote}${scheduledNote}${historicalContext ? `\n\n## Historical Context (from your previous briefings — use for trends, comparisons, continuity)\n${historicalContext}` : ""}`;
+${nextWeekSummary || "No events"}${interestsNote}${categoriesNote}${scheduledNote}`;
 
   console.log(`[EA] Calling Claude API with model: ${selectedModel}`);
 

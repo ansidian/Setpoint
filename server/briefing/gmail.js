@@ -138,6 +138,10 @@ async function getValidToken(account) {
   return credentials.access_token;
 }
 
+export async function getAccessToken(account) {
+  return getValidToken(account);
+}
+
 // Extract dollar amounts from text for bill detection
 function extractAmounts(text) {
   const matches = text.match(/\$\d[\d,]*\.\d{2}/g);
@@ -276,6 +280,13 @@ export async function fetchEmailsInRange(account, {
     nextPageToken: listData.nextPageToken || null,
     resultSizeEstimate: listData.resultSizeEstimate || 0,
   };
+}
+
+export async function fetchEmailsByIds(account, messageIds) {
+  if (!messageIds?.length) return [];
+  const token = await getValidToken(account);
+  const messages = await fetchMessages(token, messageIds);
+  return messages.map((msg) => normalizeMessage(account, msg));
 }
 
 export function chunkArray(arr, size) {

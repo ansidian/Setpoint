@@ -17,6 +17,7 @@ export default function Reader({
   setBillOpen,
   trashHoldProgress = 0,
   snoozeHoldProgress = 0,
+  allowPin = true,
   isMobile = false,
 }) {
   const snoozeBtnRef = useRef(null);
@@ -45,6 +46,7 @@ export default function Reader({
     setBillOpen,
     trashHoldProgress,
     snoozeHoldProgress,
+    allowPin,
     snoozeBtnRef,
     snoozeOpen,
     setSnoozeOpen,

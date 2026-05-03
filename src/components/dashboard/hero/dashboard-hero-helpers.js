@@ -19,7 +19,6 @@ import {
   urgencyForDays,
 } from "../../../lib/redesign-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
-import { resolveInsight } from "../../../lib/insight-resolver";
 
 export const WEATHER_ICONS = {
   Sun,
@@ -103,10 +102,7 @@ export function buildHeroCallouts({ events, deadlines, bills, now }) {
   return out.slice(0, 3);
 }
 
-export function buildHeroStateOfDay(briefing, now) {
-  const insights = briefing?.aiInsights || [];
-  const top = insights[0];
-  const headline = top ? resolveInsight(top, new Date(now)) : "";
+export function buildHeroStateOfDay(briefing) {
   const summary = briefing?.emails?.summary || "";
-  return { headline, summary };
+  return { headline: "", summary };
 }

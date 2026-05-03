@@ -3,40 +3,33 @@ import { RefreshCw } from "lucide-react";
 import { Kbd } from "./Kbd.jsx";
 
 export function RefreshButton({
-  accent,
   isMobile = false,
-  refreshHold,
   refreshing,
   generating,
-  holdPct,
   onQuickRefresh,
 }) {
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   const busy = refreshing || generating;
-  const holding = holdPct > 0;
-  const lifted = hover && !pressed && !busy && !holding;
+  const lifted = hover && !pressed && !busy;
 
   return (
     <button
       type="button"
-      aria-label="Refresh dashboard"
-      onPointerDown={(event) => {
+      aria-label="Sync now"
+      onPointerDown={() => {
         setPressed(true);
-        refreshHold?.startHold?.(event);
       }}
-      onPointerUp={(event) => {
+      onPointerUp={() => {
         setPressed(false);
-        refreshHold?.endHold?.(event);
       }}
       onPointerLeave={() => {
         setPressed(false);
         setHover(false);
-        refreshHold?.endHold?.(true);
       }}
       onMouseEnter={() => setHover(true)}
       onClick={() => {
-        if (!holdPct) onQuickRefresh?.();
+        onQuickRefresh?.();
       }}
       disabled={busy}
       style={{
@@ -59,27 +52,14 @@ export function RefreshButton({
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
       }}
-      title={isMobile ? "Tap to refresh · Hold for full briefing" : "Tap to refresh · Hold for full briefing · R"}
+      title={isMobile ? "Sync current dashboard data" : "Sync current dashboard data · R"}
     >
-      {holdPct > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: `${holdPct}%`,
-            background: `linear-gradient(90deg, ${accent}30, ${accent}15)`,
-            borderRadius: 8,
-          }}
-        />
-      )}
       <RefreshCw
         size={isMobile ? 10 : 11}
         style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}
       />
       <span style={{ position: "relative" }}>
-        {refreshing ? "Refreshing…" : holdPct > 0 ? "Hold…" : "Refresh"}
+        {refreshing ? "Syncing…" : "Sync now"}
       </span>
       {!isMobile && <Kbd>R</Kbd>}
     </button>

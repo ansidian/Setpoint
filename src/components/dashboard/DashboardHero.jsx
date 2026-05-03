@@ -50,7 +50,7 @@ export default function DashboardHero({
   }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming]);
   const bills = useMemo(() => liveBills || [], [liveBills]);
 
-  const stateOfDay = useMemo(() => buildHeroStateOfDay(briefing, now), [briefing, now]);
+  const stateOfDay = useMemo(() => buildHeroStateOfDay(briefing), [briefing]);
 
   const theCallouts = useMemo(
     () => buildHeroCallouts({ events, deadlines, bills, now }),
@@ -98,7 +98,6 @@ export default function DashboardHero({
       >
         <HeroMessageBlock
           accent={accent}
-          briefing={briefing}
           compact={compact}
           greet={greet}
           isMobile={isMobile}

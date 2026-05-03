@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import DashboardHero from "./DashboardHero";
 import TodayTimeline from "./TodayTimeline";
-import { InsightsRail, DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
+import { DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
 import NotesRail from "../notes/NotesRail";
 import { useDashboard } from "../../context/DashboardContext";
 import { focusPressureDate } from "../../lib/focus-windows";
@@ -16,7 +16,7 @@ export function DashboardBody({
   isMobile = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenTodoistCreate, onJumpSection, setAddTaskOpen,
 }) {
-  const { dashboardLayout, density, showInsights, showInboxPeek, showNotes } = customize;
+  const { dashboardLayout, density, showInboxPeek, showNotes } = customize;
   const effectiveLayout = isMobile ? "paper" : dashboardLayout;
   const ctx = useDashboard();
 
@@ -54,7 +54,6 @@ export function DashboardBody({
   const todoist = useMemo(() => briefing?.todoist?.upcoming || [], [briefing?.todoist?.upcoming]);
   const deadlines = useMemo(() => [...ctm, ...todoist], [ctm, todoist]);
   const bills = liveData.liveBills || [];
-  const insights = briefing?.aiInsights || [];
   const emailAccounts = ctx.emailAccounts;
   const pressureNow = useMemo(() => new Date(`${today}T12:00:00Z`).getTime(), [today]);
   const displayEvents = liveEventsReady ? events : seededEvents;
@@ -156,16 +155,6 @@ export function DashboardBody({
     </DashboardSurface>
   );
 
-  const insightsSection = showInsights ? (
-    <InsightsRail
-      accent={accent}
-      insights={insights}
-      onJump={handleRailJump}
-      isMobile={isMobile}
-      maxItems={isMobile ? 2 : 5}
-    />
-  ) : null;
-
   const deadlinesSection = <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} isMobile={isMobile} />;
 
   const billsSection = (
@@ -196,9 +185,9 @@ export function DashboardBody({
       isMobile={isMobile}
       hero={hero}
       timelinePanel={timelinePanel}
-      mobileSections={[deadlinesSection, billsSection, inboxSection, insightsSection]}
-      primaryRailSections={[insightsSection, deadlinesSection, billsSection, inboxSection]}
-      commandPrimaryRailSections={[insightsSection, deadlinesSection, notesSection]}
+      mobileSections={[deadlinesSection, billsSection, inboxSection]}
+      primaryRailSections={[deadlinesSection, billsSection, inboxSection]}
+      commandPrimaryRailSections={[deadlinesSection, notesSection]}
       commandSecondaryRailSections={[billsSection, inboxSection]}
     />
   );

@@ -1,8 +1,18 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
-import { searchEmails } from "../../api";
+import { searchEmails, markEmailAsRead, markEmailAsUnread } from "../../api";
+
+const activeSnapshotMock = vi.hoisted(() => ({
+  state: {
+    snapshot: null,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  },
+}));
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -22,6 +32,10 @@ vi.mock("../../api", async () => {
   };
 });
 
+vi.mock("../../hooks/useActiveSnapshot", () => ({
+  default: () => activeSnapshotMock.state,
+}));
+
 vi.mock("../bills/BillBadge.jsx", () => ({
   default: function BillBadgeMock() {
     return <div data-testid="bill-badge">Bill badge</div>;
@@ -38,6 +52,12 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  activeSnapshotMock.state = {
+    snapshot: null,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  };
 });
 
 function makeAccounts() {
@@ -243,6 +263,103 @@ describe("InboxView mobile", () => {
     expect(screen.queryByTestId("inbox-mobile-reader")).toBeNull();
     expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
     expect(screen.getByText("Fresh live ping")).toBeTruthy();
+  });
+
+  it("updates active snapshot read state immediately when opening and toggling mail", async () => {
+    function SnapshotHarness() {
+      const [readOverrides, setReadOverrides] = useState({});
+      return (
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          liveEmails={[]}
+          liveReadOverrides={readOverrides}
+          onLiveReadOverrideChange={(uid, read) => {
+            setReadOverrides((prev) => ({ ...prev, [uid]: read }));
+          }}
+          pinnedIds={[]}
+          pinnedSnapshots={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          seedSelectedId="snapshot-msg-1"
+          isMobile
+        />
+      );
+    }
+
+    activeSnapshotMock.state = {
+      snapshot: {
+        snapshot: { id: 1, updated_at: "2026-05-03T15:00:00.000Z" },
+        filters: {
+          accounts: [{
+            account_id: "gmail-work",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        lanes: {
+          needs_attention: [{
+            id: 11,
+            snapshot_item_id: 11,
+            uid: "snapshot-msg-1",
+            email_id: "snapshot-msg-1",
+            account_id: "gmail-work",
+            lane: "needs_attention",
+            subject: "Snapshot action",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs a response.",
+            date: "2026-05-03T15:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+        carryover: [],
+        processing: { active: false, queued: 0, running: 0, total: 0 },
+      },
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <SnapshotHarness />
+      </DashboardProvider>,
+    );
+
+    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(markEmailAsRead).toHaveBeenCalledWith("snapshot-msg-1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Actions/i }));
+    expect(screen.getByRole("button", { name: /Mark unread/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Mark unread/i }));
+    expect(markEmailAsUnread).toHaveBeenCalledWith("snapshot-msg-1");
   });
 
   it("keeps the desktop inbox path intact", () => {

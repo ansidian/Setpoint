@@ -2,7 +2,6 @@ import db from "../db/connection.js";
 import { generateBriefing, quickRefresh } from "./index.js";
 import * as storedBriefingService from "./stored-briefing-service.js";
 import { generateEnrichedMock, generateMockHistory } from "../db/dev-fixture.js";
-import { seedEmbeddings } from "../db/dev-seed-embeddings.js";
 import { applyScenarios } from "../db/scenarios/index.js";
 
 export async function triggerGeneration(userId) {
@@ -44,7 +43,6 @@ export async function getLatest(userId, { mock, scenarios }) {
   });
 
   if (mock && process.env.NODE_ENV !== "production") {
-    seedEmbeddings().catch((err) => console.warn("[EA] Dev embedding seed failed:", err.message));
     const mockBriefing = await generateEnrichedMock(userId);
     applyScenarios(mockBriefing, scenarios || []);
     return {
@@ -58,7 +56,6 @@ export async function getLatest(userId, { mock, scenarios }) {
 
   if (!result.rows.length) {
     if (process.env.NODE_ENV !== "production") {
-      seedEmbeddings().catch((err) => console.warn("[EA] Dev embedding seed failed:", err.message));
       const mockBriefing = await generateEnrichedMock(userId);
       applyScenarios(mockBriefing, scenarios || []);
       return {

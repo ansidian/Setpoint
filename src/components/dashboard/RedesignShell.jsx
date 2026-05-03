@@ -20,7 +20,7 @@ const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
 
 export function RedesignShell({
-  bd, liveData, calendarRange, isMock = false, refreshHold, handleFullGeneration,
+  bd, liveData, calendarRange, isMock = false,
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
   calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines = () => {},
@@ -247,10 +247,9 @@ export function RedesignShell({
     else if (item.kind === "history") setHistoryOpen(true);
     else if (item.kind === "customize") setCustomizeOpen(true);
     else if (item.kind === "refresh") onQuickRefresh?.();
-    else if (item.kind === "regenerate") handleFullGeneration();
     else if (item.kind === "settings") window.location.href = "/settings";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpToSection, onQuickRefresh, handleFullGeneration, openTodoistCreate, setShellTab]);
+  }, [jumpToSection, onQuickRefresh, openTodoistCreate, setShellTab]);
 
   const eventsData = useMemo(() => ({
     ensureRange: calendarRange.ensureRange,
@@ -442,11 +441,9 @@ export function RedesignShell({
         onOpenCalendar={() => openCalendar()}
         briefingStatus={briefingStatus}
         liveUnreadCount={liveUnreadCount}
-        refreshHold={refreshHold}
         refreshing={bd.refreshing}
         generating={bd.generating}
         onQuickRefresh={onQuickRefresh}
-        onFullGenerate={handleFullGeneration}
       />
 
       <div

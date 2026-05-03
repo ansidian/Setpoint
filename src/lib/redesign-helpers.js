@@ -207,10 +207,12 @@ export function buildTimeline({ events = [], deadlines = [], bills = [] }) {
 
 // Tri-color lane metadata for the inbox
 export const LANE = {
-  action: { key: "action", label: "Needs you", color: "#f38ba8", soft: "rgba(243,139,168,0.12)", border: "rgba(243,139,168,0.22)", icon: "Zap" },
-  fyi:    { key: "fyi",    label: "For your info", color: "#89dceb", soft: "rgba(137,220,235,0.10)", border: "rgba(137,220,235,0.20)", icon: "FileText" },
-  noise:  { key: "noise",  label: "Noise",        color: "#6c7086", soft: "rgba(108,112,134,0.10)", border: "rgba(255,255,255,0.05)", icon: "BellOff" },
+  needs_attention: { key: "needs_attention", label: "Needs Attention", color: "#f38ba8", soft: "rgba(243,139,168,0.12)", border: "rgba(243,139,168,0.22)", icon: "Zap" },
+  carryover: { key: "carryover", label: "Carryover", color: "#f9e2af", soft: "rgba(249,226,175,0.10)", border: "rgba(249,226,175,0.22)", icon: "History" },
+  fyi:    { key: "fyi",    label: "FYI", color: "#89dceb", soft: "rgba(137,220,235,0.10)", border: "rgba(137,220,235,0.20)", icon: "FileText" },
+  noise:  { key: "noise",  label: "Noise", color: "#6c7086", soft: "rgba(108,112,134,0.10)", border: "rgba(255,255,255,0.05)", icon: "BellOff" },
 };
+LANE.action = LANE.needs_attention;
 
 // Derive a lane from an email's existing fields (briefing already triages into
 // important[] vs noise[], and urgency lives on each email).
@@ -218,7 +220,7 @@ export function deriveLane(email) {
   if (!email) return "fyi";
   if (email.lane) return email.lane;
   if (email._lane) return email._lane;
-  if (email.urgency === "high" || email.urgentFlag) return "action";
+  if (email.urgency === "high" || email.urgentFlag) return "needs_attention";
   if (email.noise) return "noise";
   return "fyi";
 }

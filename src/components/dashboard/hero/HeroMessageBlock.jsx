@@ -3,7 +3,6 @@ import { pacificClock, pacificDate } from "../../../lib/redesign-helpers";
 
 export default function HeroMessageBlock({
   accent,
-  briefing,
   compact,
   greet,
   isMobile = false,
@@ -111,7 +110,7 @@ export default function HeroMessageBlock({
         }}
       >
         <Activity size={9} color={accent} />
-        Briefing · {(briefing?.aiInsights || []).length} signals
+        Briefing ready
       </div>
     </div>
   );

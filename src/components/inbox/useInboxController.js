@@ -11,6 +11,9 @@ import {
   snoozeEmail,
   markAllEmailsAsRead,
   searchEmails,
+  moveSnapshotItemLane,
+  dismissSnapshotItemForToday,
+  markSnapshotItemHandled,
 } from "../../api";
 import { getGmailUrl } from "../../lib/email-links";
 import {
@@ -18,6 +21,7 @@ import {
   defaultSnoozeTs,
   makeSynthAccount,
   collectBriefingEmails,
+  collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
   collectPinSnapshots,
@@ -26,6 +30,7 @@ import {
 
 export default function useInboxController({
   emailAccounts = [],
+  activeSnapshot = null,
   liveEmails = [],
   liveReadOverrides = {},
   onLiveReadOverrideChange = () => {},
@@ -38,6 +43,7 @@ export default function useInboxController({
   briefingGeneratedAt,
   sessionState,
   onSessionStateChange = () => {},
+  onActiveSnapshotRefresh = () => {},
 }) {
   const accountId = sessionState?.accountId || "__all";
   const lane = sessionState?.lane || "__all";
@@ -60,6 +66,7 @@ export default function useInboxController({
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [liveTrashedUids, setLiveTrashedUids] = useState(() => new Set());
   const [billOpen, setBillOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("__all");
   const [indexedSearch, setIndexedSearch] = useState({
     query: "",
     emails: [],
@@ -128,7 +135,18 @@ export default function useInboxController({
     return map;
   }, [emailAccounts]);
 
+  const activeSnapshotMode = !!activeSnapshot?.snapshot;
+  const snapshotCategories = activeSnapshot?.filters?.categories || [];
+
+  useEffect(() => {
+    if (activeSnapshotMode) return;
+    setCategoryFilter("__all");
+  }, [activeSnapshotMode]);
+
   const flatEmails = useMemo(() => {
+    if (activeSnapshotMode) {
+      return collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides);
+    }
     const synthAccount = makeSynthAccount(emailAccounts);
     const out = [];
     const seenUids = new Set();
@@ -159,6 +177,8 @@ export default function useInboxController({
     for (const entry of collectPinSnapshots(pinnedSnapshotMap, synthAccount)) pushEmail(entry);
     return out;
   }, [
+    activeSnapshot,
+    activeSnapshotMode,
     emailAccounts,
     liveEmails,
     liveReadOverrides,
@@ -176,6 +196,7 @@ export default function useInboxController({
       const snoozeUntil = snoozedMap.get(uid);
       if (snoozeUntil && snoozeUntil > nowTick) return false;
       if (accountId !== "__all" && email._accountKey !== accountId) return false;
+      if (categoryFilter !== "__all" && email.category !== categoryFilter) return false;
       if (lane === "__live" && !email._untriaged) return false;
       if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
       return true;
@@ -183,7 +204,7 @@ export default function useInboxController({
       const aPinned = pinnedSet.has(a.uid || a.id);
       const bPinned = pinnedSet.has(b.uid || b.id);
       if (aPinned !== bPinned) return aPinned ? -1 : 1;
-      const order = { action: 0, fyi: 1, noise: 2 };
+      const order = { carryover: 0, needs_attention: 1, action: 1, fyi: 2, noise: 3 };
       if (a._untriaged && !b._untriaged) return -1;
       if (!a._untriaged && b._untriaged) return 1;
       if (order[a._lane] !== order[b._lane]) return (order[a._lane] ?? 3) - (order[b._lane] ?? 3);
@@ -191,7 +212,7 @@ export default function useInboxController({
       const bKey = b._resurfacedAt || new Date(b.date).getTime();
       return bKey - aKey;
     });
-  }, [flatEmails, accountId, lane, snoozedMap, nowTick, pinnedSet, indexedSearch.emails, indexedSearchActive]);
+  }, [flatEmails, accountId, categoryFilter, lane, snoozedMap, nowTick, pinnedSet, indexedSearch.emails, indexedSearchActive]);
 
   useEffect(() => {
     const term = search.trim();
@@ -242,12 +263,13 @@ export default function useInboxController({
   }, [search]);
 
   const laneCounts = useMemo(() => {
-    const counts = { action: 0, fyi: 0, noise: 0 };
+    const counts = { needs_attention: 0, action: 0, carryover: 0, fyi: 0, noise: 0 };
     for (const email of flatEmails) {
       if (accountId !== "__all" && email._accountKey !== accountId) continue;
       if (email._untriaged) continue;
       if (email._lane in counts) counts[email._lane] += 1;
     }
+    counts.action = counts.needs_attention;
     return counts;
   }, [flatEmails, accountId]);
 
@@ -261,7 +283,9 @@ export default function useInboxController({
     const counts = {
       __all: 0,
       __live: 0,
+      needs_attention: 0,
       action: 0,
+      carryover: 0,
       fyi: 0,
       noise: 0,
     };
@@ -274,6 +298,7 @@ export default function useInboxController({
       if (email._untriaged) counts.__live += 1;
       else if (email._lane && counts[email._lane] != null) counts[email._lane] += 1;
     }
+    counts.action = counts.needs_attention;
     return counts;
   }, [flatEmails, snoozedMap, nowTick, accountId]);
 
@@ -323,6 +348,10 @@ export default function useInboxController({
     const liveUids = [];
     for (const email of unread) {
       if (email._live && email.uid) liveUids.push(email.uid);
+      else if (email._activeSnapshot && email.uid) {
+        onLiveReadOverrideChange(email.uid, true);
+        markEmailRead(email.id || email.uid);
+      }
       else markEmailRead(email.id || email.uid);
     }
 
@@ -399,10 +428,12 @@ export default function useInboxController({
           next.add(uid);
           return next;
         });
-        trashEmail(uid).catch(() => {});
+        trashEmail(uid).then(() => onActiveSnapshotRefresh()).catch(() => {});
       } else {
         handleDismiss(id);
-        trashEmail(uid).catch(() => {});
+        trashEmail(uid).then(() => {
+          if (selectedEmail._activeSnapshot) onActiveSnapshotRefresh();
+        }).catch(() => {});
       }
 
       setPinnedSet((prev) => {
@@ -420,6 +451,32 @@ export default function useInboxController({
         return next;
       });
 
+      moveBy(1);
+      return;
+    }
+
+    if (kind === "snapshot-move-lane") {
+      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      moveSnapshotItemLane(selectedEmail.snapshot_item_id, payload)
+        .then(() => onActiveSnapshotRefresh())
+        .catch(() => {});
+      return;
+    }
+
+    if (kind === "snapshot-dismiss") {
+      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      dismissSnapshotItemForToday(selectedEmail.snapshot_item_id)
+        .then(() => onActiveSnapshotRefresh())
+        .catch(() => {});
+      moveBy(1);
+      return;
+    }
+
+    if (kind === "snapshot-handled") {
+      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      markSnapshotItemHandled(selectedEmail.snapshot_item_id)
+        .then(() => onActiveSnapshotRefresh())
+        .catch(() => {});
       moveBy(1);
       return;
     }
@@ -450,6 +507,10 @@ export default function useInboxController({
         onLiveReadOverrideChange(uid, !markingUnread);
         const call = markingUnread ? markEmailAsUnread : markEmailAsRead;
         call(uid).catch(() => {});
+      } else if (selectedEmail._activeSnapshot) {
+        onLiveReadOverrideChange(uid, !markingUnread);
+        const call = markingUnread ? markEmailAsUnread : markEmailAsRead;
+        call(uid).catch(() => {});
       } else if (markingUnread) {
         markEmailUnread(id);
         markEmailAsUnread(uid).catch(() => {});
@@ -463,6 +524,7 @@ export default function useInboxController({
     }
 
     if (kind === "pin") {
+      if (activeSnapshotMode) return;
       const key = uid;
       const isPinned = pinnedSet.has(key) || pinnedSet.has(id);
       setPinnedSet((prev) => {
@@ -512,6 +574,7 @@ export default function useInboxController({
       }
     }
   }, [
+    activeSnapshotMode,
     selectedEmail,
     moveBy,
     handleDismiss,
@@ -522,6 +585,7 @@ export default function useInboxController({
     onLiveReadOverrideChange,
     closeSelectedEmail,
     updateIndexedSearchRead,
+    onActiveSnapshotRefresh,
   ]);
 
   const trashHold = useKeyHold({
@@ -545,6 +609,12 @@ export default function useInboxController({
       if (!email || email.read) return;
 
       if (email._live) {
+        onLiveReadOverrideChange(email.uid, true);
+        markEmailAsRead(email.uid).catch(() => {});
+        return;
+      }
+
+      if (email._activeSnapshot && email.uid) {
         onLiveReadOverrideChange(email.uid, true);
         markEmailAsRead(email.uid).catch(() => {});
         return;
@@ -652,6 +722,10 @@ export default function useInboxController({
     sidebarCompact: isMobile ? false : customize.sidebarCompact,
     layout: isMobile ? "two-pane" : customize.inboxLayout,
     grouping: isMobile ? "flat" : customize.inboxGrouping,
+    activeSnapshotMode,
+    snapshotCategories,
+    categoryFilter,
+    setCategoryFilter,
     briefingAgoLabel,
     scopedAccount: indexedSearchActive ? null : scopedAccount,
   };

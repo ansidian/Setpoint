@@ -8,6 +8,8 @@ export default function InboxDesktopPane({
   briefingSummary,
   briefingGeneratedAt,
   liveEmailsLoading = false,
+  processingCount = 0,
+  activeSnapshotError = null,
   emailAccounts,
   onOpenDashboard,
   onRefresh,
@@ -47,6 +49,10 @@ export default function InboxDesktopPane({
   layout,
   grouping,
   briefingAgoLabel,
+  activeSnapshotMode = false,
+  snapshotCategories = [],
+  categoryFilter = "__all",
+  setCategoryFilter,
 }) {
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
@@ -70,7 +76,10 @@ export default function InboxDesktopPane({
         counts={laneCounts}
         liveCount={liveCount}
         liveLoading={liveEmailsLoading}
+        processingCount={processingCount}
         summary={briefingSummary}
+        activeSnapshotMode={activeSnapshotMode}
+        accountCount={emailAccounts.length}
         onJumpLane={(key) => setLane(key)}
       />
 
@@ -128,6 +137,8 @@ export default function InboxDesktopPane({
               onMarkAllRead={markAllVisibleRead}
               onRefresh={onRefresh}
               liveEmailsLoading={liveEmailsLoading}
+              processingCount={processingCount}
+              activeSnapshotError={activeSnapshotError}
               indexedSearchActive={indexedSearchActive}
               indexedSearchLoading={indexedSearchLoading}
               indexedSearchError={indexedSearchError}
@@ -136,6 +147,10 @@ export default function InboxDesktopPane({
               briefingAgoLabel={briefingAgoLabel}
               briefingGeneratedAt={briefingGeneratedAt}
               searchRef={searchRef}
+              activeSnapshotMode={activeSnapshotMode}
+              snapshotCategories={snapshotCategories}
+              categoryFilter={categoryFilter}
+              onCategoryFilterChange={setCategoryFilter}
             />
           </div>
           {layout !== "list-only" && (
@@ -154,6 +169,7 @@ export default function InboxDesktopPane({
               trashHoldProgress={trashHold.progress}
               snoozeHoldProgress={snoozeHold.progress}
               isMobile={false}
+              allowPin={!activeSnapshotMode}
             />
           )}
         </div>

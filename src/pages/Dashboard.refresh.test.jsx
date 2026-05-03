@@ -1,11 +1,10 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import Dashboard from "./Dashboard.jsx";
 
 const mocks = vi.hoisted(() => ({
   autoRefreshArgs: null,
-  holdGestureArgs: null,
   invalidateCalendarRange: vi.fn(),
   markCalendarRangeStale: vi.fn(),
   refreshCalendarRangeInPlace: vi.fn(),
@@ -71,19 +70,6 @@ vi.mock("../hooks/useAutoRefresh", () => ({
   },
 }));
 
-vi.mock("../hooks/useHoldGesture", () => ({
-  default: (args) => {
-    mocks.holdGestureArgs = args;
-    return {
-      showConfirm: false,
-      setShowConfirm: vi.fn(),
-      startHold: vi.fn(),
-      endHold: vi.fn(),
-      holdTimerRef: { current: null },
-    };
-  },
-}));
-
 vi.mock("../hooks/useNotifications", () => ({
   default: () => {},
 }));
@@ -97,7 +83,6 @@ vi.mock("../components/shared/EmptyStateSplash", () => ({
 describe("Dashboard refresh wiring", () => {
   beforeEach(() => {
     mocks.autoRefreshArgs = null;
-    mocks.holdGestureArgs = null;
     mocks.invalidateCalendarRange.mockReset();
     mocks.markCalendarRangeStale.mockReset();
     mocks.refreshCalendarRangeInPlace.mockReset();
@@ -127,7 +112,7 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
     expect(mocks.markCalendarDomainRangeStale).not.toHaveBeenCalled();
 
-    mocks.holdGestureArgs.onShortPress();
+    fireEvent.click(screen.getByRole("button", { name: /sync now/i }));
 
     expect(mocks.invalidateCalendarRange).not.toHaveBeenCalled();
     expect(mocks.markCalendarRangeStale).toHaveBeenCalledTimes(1);
@@ -135,5 +120,18 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.handleQuickRefresh).toHaveBeenCalledTimes(2);
     expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
     expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps the R hotkey to Sync now without invoking briefing generation", () => {
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "r" });
+
+    expect(mocks.handleQuickRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.handleFullGeneration).not.toHaveBeenCalled();
   });
 });

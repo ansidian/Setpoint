@@ -16,11 +16,10 @@ The dashboard fetches data from multiple sources, sends it through Claude for an
 - **Academic deadlines** — Fetches Canvas LMS assignments via [Canvas-LMS-Task-Manager](https://github.com/ansidian/Canvas-LMS-Task-Manager), with status tracking (incomplete/in-progress/complete)
 - **Todoist integration** — Personal tasks merged and deduplicated with academic deadlines
 - **Weather** — Current conditions and hourly forecasts via Pirate Weather
-- **AI insights** — Claude generates 2-4 actionable insights connecting information across emails, calendar, and deadlines. Date references use a typed slot system that auto-updates as the day progresses — "tonight at 8pm" becomes "last night at 8pm" the next morning without regenerating the briefing
 - **Delta refresh** — On subsequent refreshes, only new emails are sent to Claude and merged with previous triage to save tokens
 - **Skip AI** — When inbox is clean and calendar unchanged, clones the previous briefing without an API call
 - **Live data** — 5-minute background polling for new emails, calendar changes, and weather updates between briefings
-- **Scheduled generation** — Cron-based briefing generation at user-defined times and timezones
+- **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without triggering batch briefing generation
 - **Inbox search** — The Inbox tab searches the persisted email index (FTS5) across indexed INBOX mail for every account, with a resumable 365-day default backfill for historical coverage
 - **Briefing history** — Browse and compare past briefings
 - **Important senders** — Configure priority senders for real-time browser notifications
@@ -35,7 +34,7 @@ The dashboard fetches data from multiple sources, sends it through Claude for an
 | Backend | Express.js (Node.js 24.x) |
 | Database | Turso (LibSQL) |
 | AI | Claude API (Sonnet/Haiku, configurable) |
-| Search | OpenAI embeddings (text-embedding-3-small) |
+| Search | SQLite FTS5 email index |
 | Email | Gmail (OAuth 2.0), iCloud (IMAP) |
 | Calendar | Google Calendar API |
 | Weather | Pirate Weather API |
@@ -66,13 +65,15 @@ EA_ENCRYPTION_KEY=
 # Claude API
 ANTHROPIC_API_KEY=
 
-# OpenAI (optional)
+# OpenAI (optional, only for OpenAI bill extraction provider)
 OPENAI_API_KEY=
 
 # Google OAuth (Gmail + Calendar)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=https://your-app.onrender.com/api/ea/accounts/gmail/callback
+GMAIL_PUBSUB_TOPIC=projects/your-project/topics/gmail-push
+GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
 
 # CTM API (Canvas LMS deadlines — optional)
 CTM_API_URL=https://your-ctm-instance/api

@@ -10,7 +10,6 @@ import { listModels } from "../briefing/claude.js";
 import { initScheduler } from "../briefing/scheduler.js";
 import { queueEmailIndexBackfill } from "../briefing/email-index.js";
 import { wakeEmailBackfillWorker } from "../briefing/email-backfill-worker.js";
-import { isEmbeddingAvailable } from "../embeddings/index.js";
 import {
   billExtractAvailability,
   isAllowedBillExtractModel,
@@ -374,18 +373,6 @@ router.get("/settings", async (req, res) => {
     safe.render_configured =
       !!(process.env.RENDER_API_KEY && process.env.RENDER_SERVICE_ID) ||
       process.env.NODE_ENV !== "production";
-
-    // Embedding/RAG status
-    safe.openai_available = isEmbeddingAvailable();
-    try {
-      const countResult = await db.execute({
-        sql: "SELECT COUNT(*) as count FROM ea_embeddings WHERE user_id = ?",
-        args: [userId],
-      });
-      safe.embedding_count = countResult.rows[0].count;
-    } catch {
-      safe.embedding_count = 0;
-    }
 
     res.json(safe);
   } catch (err) {

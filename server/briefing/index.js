@@ -8,7 +8,6 @@ import { fetchCTMDeadlines } from "./ctm.js";
 import { fetchTodoistTasks, fetchTodoistTaskIdSet } from "./todoist.js";
 import { callClaude } from "./claude.js";
 import { getCategories, getUpcomingBills } from "./actual.js";
-import { embedAndStore, getContextForBriefing, isEmbeddingAvailable } from "../embeddings/index.js";
 import { indexEmails, isIndexEmpty, queueEmailIndexBackfill } from "./email-index.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";
 import { canonicalizeConfiguredAccounts } from "./account-canonical.js";
@@ -620,6 +619,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       deduplicateBills(cloned);
       cloned.nextWeekCalendar = nextWeekCalendar;
       cloned.tomorrowCalendar = tomorrowCalendar;
+      cloned.aiInsights = [];
       cloned.dataUpdatedAt = new Date().toISOString();
       cloned.generatedAt = nowPacific();
       if (scheduleLabel) cloned.scheduleLabel = scheduleLabel;
@@ -640,19 +640,6 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
     const model = settings.claude_model || undefined;
     const emailInterests = settings.email_interests_json ? JSON.parse(settings.email_interests_json) : [];
 
-    // RAG: retrieve historical context from past briefing embeddings
-    let historicalContext = null;
-    if (isEmbeddingAvailable()) {
-      try {
-        historicalContext = await getContextForBriefing(userId);
-        if (historicalContext) console.log(`[EA] Injecting historical context (${historicalContext.length} chars)`);
-      } catch (err) {
-        console.warn("[EA] Historical context retrieval failed:", err.message);
-      }
-    } else {
-      console.warn("[EA] OPENAI_API_KEY not set — briefing will lack historical context");
-    }
-
     // Lazy-load Actual Budget data — only needed when Claude runs (avoids 20k+ CRDT sync on clone path)
     const [categories, upcomingBills] = await Promise.all([
       getCategories(userId).catch((err) => {
@@ -669,7 +656,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
     if (unreadNew.length > 0 && unreadNew.length < emails.length && prevBriefing) {
       await updateProgress(briefingId, `Sending ${unreadNew.length} new email${unreadNew.length !== 1 ? "s" : ""} to ${model || "Claude"}...`);
       console.log(`[EA] Delta generation: ${unreadNew.length} new unread emails (${emails.length - newEmails.length} previously triaged)`);
-      briefingJson = await callClaude({ emails: unreadNew, calendar, ctmDeadlines, todoistTasks, model, emailInterests, categories, historicalContext, upcomingBills, nextWeekCalendar });
+      briefingJson = await callClaude({ emails: unreadNew, calendar, ctmDeadlines, todoistTasks, model, emailInterests, categories, upcomingBills, nextWeekCalendar });
 
       // Merge previous triage with new triage using pure function
       const allEmailIds = new Set(emails.map(e => e.id || e.uid));
@@ -680,7 +667,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       const emailsForClaude = unreadNew.length > 0 ? unreadNew : emails;
       await updateProgress(briefingId, `Sending ${emailsForClaude.length} email${emailsForClaude.length !== 1 ? "s" : ""} to ${model || "Claude"}...`);
       console.log(`[EA] Full generation: ${emailsForClaude.length} emails`);
-      briefingJson = await callClaude({ emails: emailsForClaude, calendar, ctmDeadlines, todoistTasks, model, emailInterests, categories, historicalContext, upcomingBills, nextWeekCalendar });
+      briefingJson = await callClaude({ emails: emailsForClaude, calendar, ctmDeadlines, todoistTasks, model, emailInterests, categories, upcomingBills, nextWeekCalendar });
       // Tag all emails with seenCount 1
       for (const acct of briefingJson.emails?.accounts || []) {
         acct.important = acct.important.map(e => ({ ...e, seenCount: 1 }));
@@ -744,9 +731,9 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
     briefingJson.generatedAt = nowPacific();
     briefingJson.dataUpdatedAt = new Date().toISOString();
     briefingJson.aiGeneratedAt = new Date().toISOString();
+    briefingJson.aiInsights = [];
     briefingJson.nonAiGenerationCount = 0;
     if (scheduleLabel) briefingJson.scheduleLabel = scheduleLabel;
-    if (!isEmbeddingAvailable()) briefingJson.ragUnavailable = true;
 
     const elapsed = Date.now() - startTime;
     await db.execute({
@@ -757,12 +744,6 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
     // Pins are now sticky (kept visible across briefings + bias the next
     // triage). We intentionally do not clear them here — the user manages
     // pin/unpin explicitly, and trashing an email clears its pin server-side.
-
-    // Async: embed this briefing's chunks for future RAG (fire-and-forget)
-    const sourceDate = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-    embedAndStore({ userId, briefingId, briefingJson, sourceDate }).catch(err => {
-      console.warn(`[EA] Embedding failed for briefing ${briefingId}:`, err.message);
-    });
 
     return { id: briefingId, briefingJson };
   } catch (error) {

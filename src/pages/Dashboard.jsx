@@ -9,7 +9,6 @@ import { DashboardProvider } from "../context/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import useLiveData from "../hooks/useLiveData";
-import useHoldGesture from "../hooks/useHoldGesture";
 import useBriefingData from "../hooks/useBriefingData";
 import useAutoRefresh from "../hooks/useAutoRefresh";
 import useNotifications from "../hooks/useNotifications";
@@ -73,46 +72,23 @@ export default function Dashboard() {
     refreshCalendarDomainsRef.current?.({ force: true });
     return quickRefreshBriefing();
   }, [calendarBillRange, calendarDeadlineRange, markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
-  const refreshHold = useHoldGesture({ onShortPress: handleExplicitQuickRefresh });
-
   useAutoRefresh({
     disabled: isMock,
     lastQuickRefreshAt: bd.lastQuickRefreshAt,
     onQuickRefresh: handleTimerQuickRefresh,
   });
 
-  const handleFullGeneration = useCallback(async () => {
-    refreshHold.setShowConfirm(false);
-    bd.handleFullGeneration();
-  }, [refreshHold, bd]);
-
-  // R hotkey (same as before). Also wire Escape to dismiss the generate
-  // confirmation so the user can back out without mouse.
+  // R hotkey maps to the explicit Sync now action.
   useEffect(() => {
     function onKeyDown(e) {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      if (e.key === "Escape" && refreshHold.showConfirm) {
-        refreshHold.setShowConfirm(false);
-        return;
-      }
       if (e.repeat || e.key !== "r") return;
       if (bd.refreshing || bd.generating) return;
-      if (refreshHold.showConfirm) { handleFullGeneration(); return; }
-      refreshHold.startHold();
-    }
-    function onKeyUp(e) {
-      if (e.key !== "r") return;
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      if (!refreshHold.holdTimerRef.current) return;
-      refreshHold.endHold(false);
+      handleExplicitQuickRefresh();
     }
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  });
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [bd.refreshing, bd.generating, handleExplicitQuickRefresh]);
 
   // Reconcile briefing read status from live data (kept from original)
   useEffect(() => {
@@ -207,10 +183,10 @@ export default function Dashboard() {
             icon={<Sun size={46} className="text-[#f9e2af]" />}
             eyebrow="Briefings"
             title="No briefings yet"
-            message="Connect the inboxes and services that feed the dashboard, then generate the first briefing to seed the workspace."
+            message="Connect the inboxes and services that feed the dashboard, then sync current data to seed the workspace."
             actions={(
               <>
-                <Button onClick={handleFullGeneration}>Generate First Briefing</Button>
+                <Button onClick={handleExplicitQuickRefresh}>Sync now</Button>
                 <Button variant="outline" asChild><Link to="/settings">Settings</Link></Button>
               </>
             )}
@@ -234,8 +210,6 @@ export default function Dashboard() {
           liveData={liveData}
           calendarRange={calendarRange}
           isMock={isMock}
-          refreshHold={refreshHold}
-          handleFullGeneration={handleFullGeneration}
           onQuickRefresh={handleExplicitQuickRefresh}
           historyOpen={historyOpen}
           setHistoryOpen={setHistoryOpen}

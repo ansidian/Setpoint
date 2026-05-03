@@ -1,12 +1,70 @@
 import { Sparkles } from "lucide-react";
 import { LANE } from "../../lib/redesign-helpers";
 
-export default function DigestStrip({ accent, counts, liveCount, liveLoading = false, summary, onJumpLane }) {
+function pluralize(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function buildActiveSnapshotSummary(counts, accountCount) {
+  const needs = counts.needs_attention || counts.action || 0;
+  const fyi = counts.fyi || 0;
+  const noise = counts.noise || 0;
+  const total = needs + fyi + noise + (counts.carryover || 0);
+  return [
+    `${pluralize(total, "email")} across ${pluralize(accountCount, "account")}.`,
+    `${needs} need attention, ${fyi} FYI, ${noise} noise.`,
+  ].join(" ");
+}
+
+export default function DigestStrip({
+  accent,
+  counts,
+  liveCount,
+  liveLoading = false,
+  processingCount = 0,
+  summary,
+  activeSnapshotMode = false,
+  accountCount = 0,
+  onJumpLane,
+}) {
   const items = [
-    { key: "action", count: counts.action, verb: "need you", ...LANE.action },
+    { key: "needs_attention", count: counts.needs_attention || counts.action, verb: "need attention", ...LANE.needs_attention },
+    { key: "carryover", count: counts.carryover, verb: "carried over", ...LANE.carryover },
     { key: "fyi",    count: counts.fyi,    verb: "for your info", ...LANE.fyi },
     { key: "noise",  count: counts.noise,  verb: "filtered", ...LANE.noise },
   ];
+  const activityActive = liveCount > 0 || liveLoading || processingCount > 0;
+  const headline = activeSnapshotMode ? "Active snapshot" : "Briefing snapshot";
+  const resolvedSummary = activeSnapshotMode
+    ? buildActiveSnapshotSummary(counts, accountCount)
+    : summary;
+  const statusLabel = activeSnapshotMode
+    ? activityActive ? "Triage · syncing" : "Triage · current"
+    : liveLoading ? "Live · checking" : liveCount > 0 ? "Live · untriaged" : "Live · quiet";
+  const statusDetail = activeSnapshotMode
+    ? activityActive
+      ? processingCount > 0
+        ? `${pluralize(processingCount, "message")} processing`
+        : "Updating active lanes"
+      : "No pending triage"
+    : liveLoading
+      ? "Retrieving live mail"
+      : liveCount > 0
+        ? (
+          <>
+            <span
+              style={{
+                fontWeight: 600, color: "#fff",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {liveCount}
+            </span>{" "}
+            new since briefing
+          </>
+        )
+        : "No new live mail";
+
   return (
     <div
       style={{
@@ -34,9 +92,9 @@ export default function DigestStrip({ accent, counts, liveCount, liveLoading = f
               color: accent, fontWeight: 700,
             }}
           >
-            Briefing snapshot
+            {headline}
           </div>
-          {summary && (
+          {resolvedSummary && (
             <div
               className="ea-display"
               style={{
@@ -44,7 +102,7 @@ export default function DigestStrip({ accent, counts, liveCount, liveLoading = f
                 marginTop: 4, fontStyle: "italic",
               }}
             >
-              {summary}
+              {resolvedSummary}
             </div>
           )}
         </div>
@@ -103,9 +161,9 @@ export default function DigestStrip({ accent, counts, liveCount, liveLoading = f
           style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "6px 10px 6px 8px", borderRadius: 8,
-            background: liveCount > 0 || liveLoading ? "rgba(137,180,250,0.08)" : "rgba(255,255,255,0.02)",
-            border: liveCount > 0 || liveLoading ? "1px dashed rgba(137,180,250,0.28)" : "1px dashed rgba(255,255,255,0.08)",
-            opacity: liveCount > 0 || liveLoading ? 1 : 0.52,
+            background: activityActive ? "rgba(137,180,250,0.08)" : "rgba(255,255,255,0.02)",
+            border: activityActive ? "1px dashed rgba(137,180,250,0.28)" : "1px dashed rgba(255,255,255,0.08)",
+            opacity: activityActive ? 1 : 0.52,
             minWidth: 184,
           }}
         >
@@ -119,15 +177,15 @@ export default function DigestStrip({ accent, counts, liveCount, liveLoading = f
               <span
                 style={{
                   position: "absolute", inset: 0, borderRadius: 999,
-                  background: liveCount > 0 || liveLoading ? "#89b4fa" : "rgba(205,214,244,0.3)",
+                  background: activityActive ? "#89b4fa" : "rgba(205,214,244,0.3)",
                   opacity: 0.3,
-                  animation: liveCount > 0 || liveLoading ? "livepulse 2s ease-out infinite" : "none",
+                  animation: activityActive ? "livepulse 2s ease-out infinite" : "none",
               }}
             />
             <span
               style={{
-                width: 5, height: 5, borderRadius: 999, background: liveCount > 0 || liveLoading ? "#89b4fa" : "rgba(205,214,244,0.45)",
-                boxShadow: liveCount > 0 || liveLoading ? "0 0 6px #89b4fa" : "none",
+                width: 5, height: 5, borderRadius: 999, background: activityActive ? "#89b4fa" : "rgba(205,214,244,0.45)",
+                boxShadow: activityActive ? "0 0 6px #89b4fa" : "none",
               }}
             />
           </span>
@@ -135,29 +193,13 @@ export default function DigestStrip({ accent, counts, liveCount, liveLoading = f
             <div
               style={{
                 fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase",
-                color: liveCount > 0 || liveLoading ? "#89b4fa" : "rgba(205,214,244,0.55)", fontWeight: 700,
+                color: activityActive ? "#89b4fa" : "rgba(205,214,244,0.55)", fontWeight: 700,
               }}
             >
-              {liveLoading ? "Live · checking" : liveCount > 0 ? "Live · untriaged" : "Live · quiet"}
+              {statusLabel}
             </div>
             <div style={{ fontSize: 11, color: "rgba(205,214,244,0.85)", marginTop: 2 }}>
-              {liveLoading ? (
-                "Retrieving live mail"
-              ) : liveCount > 0 ? (
-                <>
-                  <span
-                    style={{
-                      fontWeight: 600, color: "#fff",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {liveCount}
-                  </span>{" "}
-                  new since briefing
-                </>
-              ) : (
-                "No new live mail"
-              )}
+              {statusDetail}
             </div>
           </div>
         </div>

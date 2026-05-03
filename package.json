@@ -18,6 +18,7 @@
     "check:harness": "node scripts/check-agent-harness.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "triage:eval": "node server/scripts/triage-eval.js",
     "test:e2e": "playwright test",
     "test:e2e:setup": "playwright test --project=setup",
     "test:e2e:headed": "playwright test --headed",
