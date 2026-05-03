@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildBatchCreateItems,
   deleteCalendarEventAction,
   saveCalendarEventAction,
 } from "./calendarEventEditorActions";
@@ -94,6 +95,201 @@ describe("calendarEventEditorActions", () => {
         error: "That slot is unavailable.",
       }),
     ]);
+  });
+
+  it("builds batch create items from retained draft rows", () => {
+    expect(buildBatchCreateItems({
+      draft: {
+        ...draft,
+        allDay: true,
+        location: "  Office  ",
+        description: "Notes",
+      },
+      effectiveTitle: "Work",
+      batchDrafts: [
+        {
+          title: "",
+          startDate: "2026-05-06",
+          endDate: "2026-05-07",
+          startTime: "17:00",
+          endTime: "17:30",
+        },
+        {
+          title: "Review",
+          startDate: "2026-05-08",
+          endDate: "2026-05-08",
+          startTime: "09:15",
+          endTime: "10:00",
+        },
+      ],
+    })).toEqual([
+      {
+        accountId: "gmail-main",
+        calendarId: "primary",
+        title: "Work",
+        allDay: true,
+        startDate: "2026-05-06",
+        endDate: "2026-05-07",
+        startTime: null,
+        endTime: null,
+        location: "  Office  ",
+        description: "Notes",
+      },
+      {
+        accountId: "gmail-main",
+        calendarId: "primary",
+        title: "Review",
+        allDay: true,
+        startDate: "2026-05-08",
+        endDate: "2026-05-08",
+        startTime: null,
+        endTime: null,
+        location: "  Office  ",
+        description: "Notes",
+      },
+    ]);
+  });
+
+  it("creates recurring events with a normalized recurrence payload and refresh bounds", async () => {
+    const savedEvent = {
+      id: "series-created",
+      title: "Work",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-06T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-06T16:30:00.000Z").getTime(),
+      allDay: false,
+      isRecurring: true,
+    };
+    const client = {
+      create: vi.fn().mockResolvedValue({ event: savedEvent }),
+    };
+
+    const result = await saveCalendarEventAction({
+      draft,
+      effectiveTitle: "Work",
+      recurrenceDraft: {
+        frequency: "monthly",
+        interval: "2",
+        ends: { type: "onDate", untilDate: "2026-06-01" },
+      },
+      intentMode: "recurring",
+    }, client);
+
+    expect(client.create).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: "gmail-main",
+      calendarId: "primary",
+      title: "Work",
+      startDate: "2026-05-06",
+      endDate: "2026-05-06",
+      recurrence: {
+        frequency: "monthly",
+        interval: 2,
+        monthDay: 6,
+        ends: { type: "onDate", untilDate: "2026-06-01" },
+      },
+    }));
+    expect(result).toMatchObject({
+      kind: "create",
+      savedEvent,
+      focusDate: "2026-05-06",
+      shouldRefresh: true,
+      shouldUpsert: false,
+      bounds: { start: "2026-05-06", end: "2026-05-06" },
+    });
+  });
+
+  it("creates single events with the draft payload and optimistic upsert result", async () => {
+    const savedEvent = {
+      id: "event-equal-time",
+      title: "Hold",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-06T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-06T16:00:00.000Z").getTime(),
+      allDay: false,
+    };
+    const client = {
+      create: vi.fn().mockResolvedValue({ event: savedEvent }),
+    };
+
+    const result = await saveCalendarEventAction({
+      draft: {
+        ...draft,
+        title: "Ignored draft title",
+        startTime: "09:00",
+        endTime: "09:00",
+      },
+      effectiveTitle: "Hold",
+      intentMode: "single",
+    }, client);
+
+    expect(client.create).toHaveBeenCalledWith({
+      accountId: "gmail-main",
+      calendarId: "primary",
+      title: "Hold",
+      allDay: false,
+      startDate: "2026-05-06",
+      endDate: "2026-05-06",
+      startTime: "09:00",
+      endTime: "09:00",
+      location: "Office",
+      description: "Notes",
+    });
+    expect(result).toMatchObject({
+      kind: "create",
+      savedEvent,
+      focusDate: "2026-05-06",
+      shouldRefresh: false,
+      shouldUpsert: true,
+      bounds: { start: "2026-05-06", end: "2026-05-06" },
+    });
+  });
+
+  it("updates events with a new target calendar while preserving source metadata", async () => {
+    const editingEvent = {
+      id: "event-move",
+      etag: '"etag-move"',
+      title: "Planning",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-06T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-06T16:30:00.000Z").getTime(),
+      allDay: false,
+    };
+    const savedEvent = {
+      ...editingEvent,
+      calendarId: "school",
+    };
+    const client = {
+      update: vi.fn().mockResolvedValue({ event: savedEvent }),
+    };
+
+    const result = await saveCalendarEventAction({
+      draft: {
+        ...draft,
+        calendarId: "school",
+      },
+      effectiveTitle: "Planning",
+      editingEvent,
+      intentMode: "single",
+    }, client);
+
+    expect(client.update).toHaveBeenCalledWith("event-move", expect.objectContaining({
+      accountId: "gmail-main",
+      calendarId: "school",
+      sourceAccountId: "gmail-main",
+      sourceCalendarId: "primary",
+      etag: '"etag-move"',
+    }));
+    expect(result).toMatchObject({
+      kind: "update",
+      savedEvent,
+      focusDate: "2026-05-06",
+      shouldRefresh: false,
+      shouldUpsert: true,
+      bounds: { start: "2026-05-06", end: "2026-05-06" },
+    });
   });
 
   it("updates recurring events with scope metadata and asks the caller to refresh bounds", async () => {

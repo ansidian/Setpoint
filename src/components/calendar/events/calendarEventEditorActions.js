@@ -185,7 +185,7 @@ export async function saveCalendarEventAction(options, client = defaultClient) {
 
   const bounds = mergeBounds(eventBounds(editingEvent), draftBounds(draft), eventBounds(savedEvent));
   const shouldRefresh = (!editingEvent && intentMode === "recurring")
-    || (editingEvent && (isEditingRecurring || shouldSendRecurrence));
+    || !!(editingEvent && (isEditingRecurring || shouldSendRecurrence));
 
   return {
     kind: editingEvent ? "update" : "create",

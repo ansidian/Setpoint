@@ -93,8 +93,6 @@ function makeBriefing() {
     aiInsights: [],
     aiGeneratedAt: "2026-04-19T15:00:00.000Z",
     dataUpdatedAt: "2026-04-19T15:04:00.000Z",
-    skippedAI: false,
-    nonAiGenerationCount: 0,
     emails: {
       summary: "Brief summary",
       accounts: [
@@ -228,109 +226,6 @@ describe("RedesignShell mobile behavior", () => {
 
     fireEvent.keyDown(window, { key: "c" });
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
-  });
-
-  it("describes clone-path briefings in the shell status surface", () => {
-    mockIsMobile = false;
-    const props = makeProps();
-    props.bd.briefing = {
-      ...makeBriefing(),
-      skippedAI: true,
-      nonAiGenerationCount: 2,
-    };
-
-    render(
-      <BrowserRouter>
-        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
-        </DashboardProvider>
-      </BrowserRouter>,
-    );
-
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Quiet x2");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).not.toContain("Updated");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
-    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
-  });
-
-  it("keeps the briefing headline visible when a refresh notice becomes active", async () => {
-    mockIsMobile = false;
-    const props = makeProps();
-    const view = render(
-      <BrowserRouter>
-        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
-        </DashboardProvider>
-      </BrowserRouter>,
-    );
-
-    view.rerender(
-      <BrowserRouter>
-        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell
-            {...props}
-            bd={{
-              ...props.bd,
-              latestId: "latest-2",
-              lastQuickRefreshAt: Date.now(),
-            }}
-          />
-        </DashboardProvider>
-      </BrowserRouter>,
-    );
-
-    await waitFor(() => {
-      const text = screen.getByTestId("shell-header-briefing-status").textContent;
-      expect(text).toContain("Briefing");
-      expect(text).toContain("Updated");
-      expect(text).not.toContain("Briefing updated just now");
-      expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Briefing refreshed");
-    });
-  });
-
-  it("compacts just-now update copy in the shell status pill", () => {
-    mockIsMobile = false;
-    const props = makeProps();
-    props.bd.briefing = {
-      ...makeBriefing(),
-      dataUpdatedAt: new Date().toISOString(),
-      skippedAI: true,
-      nonAiGenerationCount: 1,
-    };
-
-    render(
-      <BrowserRouter>
-        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
-        </DashboardProvider>
-      </BrowserRouter>,
-    );
-
-    const status = screen.getByTestId("shell-header-briefing-status");
-    expect(status.textContent).toContain("Updated");
-    expect(status.textContent).not.toContain("Updated just now");
-    expect(status.getAttribute("title")).toContain("Updated just now");
-  });
-
-  it("drops the update badge after one minute", () => {
-    mockIsMobile = false;
-    const props = makeProps();
-    props.bd.briefing = {
-      ...makeBriefing(),
-      dataUpdatedAt: new Date(Date.now() - 61_000).toISOString(),
-      skippedAI: true,
-      nonAiGenerationCount: 1,
-    };
-
-    render(
-      <BrowserRouter>
-        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
-        </DashboardProvider>
-      </BrowserRouter>,
-    );
-
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).not.toContain("Updated");
   });
 
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {

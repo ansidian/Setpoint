@@ -43,7 +43,7 @@ function shiftEventByDays(event, deltaDays) {
   };
 }
 
-function buildReschedulePayload(event, shiftedEvent, scope) {
+export function buildReschedulePayload(event, shiftedEvent, scope) {
   return {
     accountId: event.accountId,
     calendarId: event.calendarId,

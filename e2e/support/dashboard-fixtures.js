@@ -38,8 +38,6 @@ function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) 
     generatedAt: "9:00 AM · Wednesday, April 22, 2026",
     dataUpdatedAt: nowIso,
     aiGeneratedAt: nowIso,
-    skippedAI: false,
-    nonAiGenerationCount: 0,
     weather: {
       temp: 68,
       high: 72,
@@ -48,9 +46,7 @@ function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) 
       hourly: [],
       location: "Los Angeles, CA",
     },
-    aiInsights: [
-      { icon: "Calendar", text: "Calendar fixtures are active for Playwright evaluation." },
-    ],
+    aiInsights: [],
     calendar: events,
     ctm: {
       upcoming: [],
@@ -298,10 +294,6 @@ async function installBaseDashboardFixtures(page, {
     json(route, { ...defaultSettings(), ...settings }),
   );
 
-  await page.route("**/api/briefing/in-progress", async (route) =>
-    json(route, { generating: false }),
-  );
-
   await page.route("**/api/live/all", async (route) =>
     json(route, defaultLiveData(liveData)),
   );
@@ -316,10 +308,6 @@ async function installBaseDashboardFixtures(page, {
 
   await page.route("**/api/briefing/latest**", async (route) =>
     json(route, { id: 9001, briefing: buildBriefing({ events, emailAccounts, briefing }) }),
-  );
-
-  await page.route("**/api/briefing/refresh", async (route) =>
-    json(route, { id: 9002, briefingJson: buildBriefing({ events, emailAccounts, briefing }) }),
   );
 
   await page.route("**/api/calendar/range**", async (route) => {

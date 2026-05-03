@@ -1,21 +1,31 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createClient } from "@libsql/client";
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
+import express from "express";
+import request from "supertest";
 
-const mockDb = { execute: vi.fn() };
-const gmailFetchEmails = vi.fn();
-const icloudFetchEmails = vi.fn();
-const isGmailMessageRead = vi.fn();
-const isIcloudMessageRead = vi.fn();
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+  gmailFetchEmails: vi.fn(),
+  icloudFetchEmails: vi.fn(),
+  isGmailMessageRead: vi.fn(),
+  isIcloudMessageRead: vi.fn(),
+}));
 
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
-vi.mock("../middleware/auth.js", () => ({ requireCookieSession: (_req, _res, next) => next() }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+  },
+}));
 vi.mock("../briefing/encryption.js", () => ({ decrypt: (v) => v }));
 vi.mock("../briefing/gmail.js", () => ({
-  fetchEmails: (...a) => gmailFetchEmails(...a),
-  isMessageRead: (...a) => isGmailMessageRead(...a),
+  fetchEmails: (...args) => testState.gmailFetchEmails(...args),
+  isMessageRead: (...args) => testState.isGmailMessageRead(...args),
 }));
 vi.mock("../briefing/icloud.js", () => ({
-  fetchEmails: (...a) => icloudFetchEmails(...a),
-  isMessageRead: (...a) => isIcloudMessageRead(...a),
+  fetchEmails: (...args) => testState.icloudFetchEmails(...args),
+  isMessageRead: (...args) => testState.isIcloudMessageRead(...args),
 }));
 vi.mock("../briefing/calendar.js", () => ({
   fetchCalendar: async () => [],
@@ -34,9 +44,18 @@ vi.mock("../briefing/actual.js", () => ({
 vi.mock("../briefing/index.js", () => ({
   loadUserConfig: async () => ({
     accounts: [
-      { id: "gmail-a", type: "gmail", label: "Work", email: "w@e.com", credentials_encrypted: "{}" },
+      {
+        id: "gmail-a",
+        type: "gmail",
+        label: "Work",
+        email: "w@example.com",
+        credentials_encrypted: "{}",
+      },
     ],
-    settings: { weather_location: "X", important_senders_json: "[]" },
+    settings: {
+      weather_location: "El Monte, CA",
+      important_senders_json: JSON.stringify([{ address: "boss@example.com", name: "Boss" }]),
+    },
   }),
 }));
 
@@ -44,63 +63,179 @@ process.env.EA_USER_ID = "u1";
 
 const { default: router } = await import("./live.js");
 
-function findHandler(method, path) {
-  const layer = router.stack.find((l) => l.route?.path === path && l.route.methods[method]);
-  return layer?.route?.stack.slice(-1)[0]?.handle;
+function makeApp() {
+  const app = express();
+  app.use(cookieParser());
+  app.use("/api/live", router);
+  return app;
 }
 
-function makeRes() {
-  const res = { statusCode: 200, body: null };
-  res.status = (c) => { res.statusCode = c; return res; };
-  res.json = (b) => { res.body = b; return res; };
-  return res;
+function hashSessionToken(raw) {
+  return `sha256:${crypto.createHash("sha256").update(raw).digest("hex")}`;
+}
+
+async function createMigratedDb() {
+  const db = createClient({ url: "file::memory:" });
+  await db.executeMultiple(`
+    CREATE TABLE ea_sessions (
+      token TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE ea_pinned_emails (
+      user_id TEXT NOT NULL,
+      email_id TEXT NOT NULL,
+      email_snapshot TEXT
+    );
+
+    CREATE TABLE ea_snoozed_emails (
+      user_id TEXT NOT NULL,
+      email_id TEXT NOT NULL,
+      until_ts INTEGER,
+      resurfaced_at INTEGER,
+      email_snapshot TEXT,
+      status TEXT NOT NULL
+    );
+  `);
+  await db.execute({
+    sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
+    args: [hashSessionToken("cookie-session"), Date.now() + 60_000],
+  });
+  return db;
+}
+
+async function seedEmailState({ pinned = [], snoozed = [], resurfaced = [] } = {}) {
+  for (const entry of pinned) {
+    await testState.db.current.execute({
+      sql: "INSERT INTO ea_pinned_emails (user_id, email_id, email_snapshot) VALUES (?, ?, ?)",
+      args: ["u1", entry.id, JSON.stringify(entry.snapshot)],
+    });
+  }
+  for (const entry of snoozed) {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_snoozed_emails (user_id, email_id, until_ts, resurfaced_at, email_snapshot, status)
+            VALUES (?, ?, ?, NULL, ?, 'snoozed')`,
+      args: ["u1", entry.id, entry.untilTs, JSON.stringify(entry.snapshot)],
+    });
+  }
+  for (const entry of resurfaced) {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_snoozed_emails (user_id, email_id, until_ts, resurfaced_at, email_snapshot, status)
+            VALUES (?, ?, NULL, ?, ?, 'resurfaced')`,
+      args: ["u1", entry.id, entry.resurfacedAt, JSON.stringify(entry.snapshot)],
+    });
+  }
 }
 
 describe("GET /api/live/all", () => {
-  beforeEach(() => {
-    mockDb.execute.mockReset();
-    gmailFetchEmails.mockReset().mockResolvedValue([]);
-    icloudFetchEmails.mockReset().mockResolvedValue([]);
-    isGmailMessageRead.mockReset().mockResolvedValue(null);
-    isIcloudMessageRead.mockReset().mockResolvedValue(null);
+  beforeEach(async () => {
+    testState.db.current = await createMigratedDb();
+    testState.gmailFetchEmails.mockReset().mockResolvedValue([]);
+    testState.icloudFetchEmails.mockReset().mockResolvedValue([]);
+    testState.isGmailMessageRead.mockReset().mockResolvedValue(null);
+    testState.isIcloudMessageRead.mockReset().mockResolvedValue(null);
   });
 
-  it("uses the fixed active email window without reading legacy briefing rows", async () => {
-    mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (sql.includes("ea_briefings")) {
-        throw new Error("live route must not read legacy briefings");
-      }
-      return { rows: [] };
-    });
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+  });
 
-    const handler = findHandler("get", "/all");
-    const res = makeRes();
-    await handler({}, res);
+  it("requires a cookie session before fetching live data", async () => {
+    const res = await request(makeApp()).get("/api/live/all");
 
-    expect(gmailFetchEmails).toHaveBeenCalledTimes(1);
-    expect(gmailFetchEmails.mock.calls[0][1]).toBe(12);
-    expect(res.body.briefingGeneratedAt).toBeNull();
-    expect(res.body.briefingReadStatus).toEqual({});
-    expect(mockDb.execute).not.toHaveBeenCalledWith(
-      expect.objectContaining({ sql: expect.stringMatching(/ea_briefings/i) }),
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ message: "Not authenticated" });
+    expect(testState.gmailFetchEmails).not.toHaveBeenCalled();
+  });
+
+  it("fetches the active email window without legacy briefing rows", async () => {
+    testState.gmailFetchEmails.mockResolvedValueOnce([
+      {
+        uid: "gmail-live",
+        from: "Boss <boss@example.com>",
+        subject: "Standup",
+        read: false,
+      },
+    ]);
+
+    const res = await request(makeApp())
+      .get("/api/live/all")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(testState.gmailFetchEmails).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-a", email: "w@example.com" }),
+      12,
     );
+    expect(res.body).toMatchObject({
+      briefingGeneratedAt: null,
+      briefingReadStatus: {},
+      pinnedIds: [],
+      pinnedSnapshots: [],
+      snoozedEntries: [],
+      resurfacedEntries: [],
+      actualConfigured: false,
+      actualBudgetUrl: null,
+    });
+    expect(res.body.emails).toHaveLength(1);
+    expect(res.body.emails[0]).toMatchObject({
+      uid: "gmail-live",
+      subject: "Standup",
+      isImportantSender: true,
+    });
+    expect(res.body.weather.location).toBe("El Monte, CA");
   });
 
-  it("does not strip bill flags by mutating legacy briefing JSON", async () => {
-    mockDb.execute.mockImplementation(async ({ sql }) => {
-      if (/UPDATE\s+ea_briefings/i.test(sql)) {
-        throw new Error("live route must not mutate legacy briefings");
-      }
-      return { rows: [] };
+  it("returns active pinned, snoozed, and resurfaced email state", async () => {
+    testState.isGmailMessageRead.mockResolvedValueOnce(true);
+    await seedEmailState({
+      pinned: [{
+        id: "gmail-pinned",
+        snapshot: { uid: "gmail-pinned", subject: "Pinned note" },
+      }],
+      snoozed: [{
+        id: "gmail-snoozed",
+        untilTs: Date.now() + 60_000,
+        snapshot: { uid: "gmail-snoozed", subject: "Later" },
+      }],
+      resurfaced: [{
+        id: "gmail-resurfaced",
+        resurfacedAt: Date.now() - 10_000,
+        snapshot: {
+          uid: "gmail-resurfaced",
+          account_id: "gmail-a",
+          subject: "Awake again",
+          read: false,
+        },
+      }],
     });
 
-    const handler = findHandler("get", "/all");
-    const res = makeRes();
-    await handler({}, res);
+    const res = await request(makeApp())
+      .get("/api/live/all")
+      .set("Cookie", ["ea_session=cookie-session"]);
 
-    expect(res.statusCode).toBe(200);
-    expect(mockDb.execute).not.toHaveBeenCalledWith(
-      expect.objectContaining({ sql: expect.stringMatching(/UPDATE\s+ea_briefings/i) }),
+    expect(res.status).toBe(200);
+    expect(res.body.pinnedIds).toEqual(["gmail-pinned"]);
+    expect(res.body.pinnedSnapshots).toEqual([
+      expect.objectContaining({ uid: "gmail-pinned", subject: "Pinned note" }),
+    ]);
+    expect(res.body.snoozedEntries).toEqual([
+      expect.objectContaining({
+        uid: "gmail-snoozed",
+        snapshot: expect.objectContaining({ subject: "Later" }),
+      }),
+    ]);
+    expect(res.body.resurfacedEntries).toEqual([
+      expect.objectContaining({
+        uid: "gmail-resurfaced",
+        read: true,
+        snapshot: expect.objectContaining({ subject: "Awake again" }),
+      }),
+    ]);
+    expect(testState.isGmailMessageRead).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-a" }),
+      "gmail-resurfaced",
     );
   });
 });

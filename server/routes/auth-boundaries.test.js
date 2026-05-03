@@ -1,15 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import express from "express";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createClient } from "@libsql/client";
 import crypto from "crypto";
 import cookieParser from "cookie-parser";
+import express from "express";
 import request from "supertest";
 
-const mockDb = {
-  execute: vi.fn(),
-  batch: vi.fn(),
-};
+const testState = vi.hoisted(() => ({
+  db: { current: null },
+}));
 
-vi.mock("../db/connection.js", () => ({ default: mockDb }));
+vi.mock("../db/connection.js", () => ({
+  default: {
+    execute: (...args) => testState.db.current.execute(...args),
+    batch: (...args) => testState.db.current.batch(...args),
+  },
+}));
 vi.mock("../briefing/bills-service.js", () => ({
   sendBill: vi.fn(async () => ({ success: true })),
   markBillPaid: vi.fn(async () => ({ success: true })),
@@ -122,6 +127,7 @@ const liveRoutes = (await import("./live.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
 const notesRoutes = (await import("./notes.js")).default;
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
+const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
 function makeApp() {
   const app = express();
@@ -134,56 +140,88 @@ function makeApp() {
   return app;
 }
 
-function setSessionRow(expiresAt = Date.now() + 60_000) {
-  mockDb.execute.mockImplementation(async ({ sql, args }) => {
-    if (sql.includes("FROM ea_sessions")) {
-      return args[0] === "cookie-session"
-        ? { rows: [{ expires_at: expiresAt }] }
-        : { rows: [] };
-    }
-    if (sql.includes("FROM ea_api_tokens")) {
-      return { rows: [] };
-    }
-    if (sql.includes("SELECT * FROM ea_settings")) {
-      return { rows: [{ user_id: "user-1" }] };
-    }
-    if (sql.includes("SELECT * FROM ea_notes")) {
-      return { rows: [] };
-    }
-    return { rows: [] };
+async function createMigratedDb() {
+  const db = createClient({ url: "file::memory:" });
+  await db.executeMultiple(`
+    CREATE TABLE ea_sessions (
+      token TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE ea_api_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token_hash TEXT NOT NULL,
+      label TEXT,
+      scopes TEXT NOT NULL,
+      created_at INTEGER,
+      last_used_at INTEGER,
+      expires_at INTEGER
+    );
+
+    CREATE TABLE ea_settings (
+      user_id TEXT PRIMARY KEY,
+      actual_budget_password_encrypted TEXT,
+      todoist_api_token_encrypted TEXT,
+      schedules_json TEXT,
+      email_interests_json TEXT,
+      claude_model TEXT,
+      email_ai_provider TEXT,
+      email_ai_model TEXT,
+      bill_extract_provider TEXT,
+      bill_extract_model TEXT,
+      email_triage_mode TEXT DEFAULT 'auto'
+    );
+
+    CREATE TABLE ea_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      content TEXT,
+      sort_order INTEGER DEFAULT 0
+    );
+  `);
+  await db.execute({
+    sql: "INSERT INTO ea_settings (user_id, email_triage_mode) VALUES (?, ?)",
+    args: ["user-1", "auto"],
+  });
+  return db;
+}
+
+async function seedSession(expiresAt = Date.now() + 60_000) {
+  await testState.db.current.execute({
+    sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
+    args: [sessionHash, expiresAt],
   });
 }
 
-function setBearerRow(scopes = ["actual:write"]) {
-  mockDb.execute.mockImplementation(async ({ sql, args }) => {
-    if (sql.includes("FROM ea_api_tokens")) {
-      return args[0] === bearerHash
-        ? { rows: [{ id: 1, scopes: JSON.stringify(scopes), expires_at: null }] }
-        : { rows: [] };
-    }
-    if (sql.startsWith("UPDATE ea_api_tokens SET last_used_at")) {
-      return { rows: [] };
-    }
-    if (sql.includes("FROM ea_sessions")) {
-      return { rows: [] };
-    }
-    if (sql.includes("SELECT * FROM ea_settings")) {
-      return { rows: [{ user_id: "user-1" }] };
-    }
-    if (sql.includes("SELECT * FROM ea_notes")) {
-      return { rows: [] };
-    }
-    return { rows: [] };
+async function seedBearer(scopes = ["actual:write"]) {
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at)
+          VALUES (?, ?, ?, ?, NULL)`,
+    args: [bearerHash, "Shortcut", JSON.stringify(scopes), Date.now()],
   });
 }
 
-beforeEach(() => {
+async function getSettingsRow() {
+  const result = await testState.db.current.execute({
+    sql: "SELECT * FROM ea_settings WHERE user_id = ?",
+    args: ["user-1"],
+  });
+  return result.rows[0];
+}
+
+beforeEach(async () => {
+  testState.db.current = await createMigratedDb();
   vi.clearAllMocks();
+});
+
+afterEach(async () => {
+  await testState.db.current?.close?.();
+  testState.db.current = null;
 });
 
 describe("auth boundaries", () => {
   it("blocks bearer auth on live route", async () => {
-    setBearerRow();
+    await seedBearer();
     const res = await request(makeApp())
       .get("/api/live/all")
       .set("Authorization", "Bearer scoped-token");
@@ -192,7 +230,7 @@ describe("auth boundaries", () => {
   });
 
   it("blocks bearer auth on briefing latest route", async () => {
-    setBearerRow();
+    await seedBearer();
     const res = await request(makeApp())
       .get("/api/briefing/latest")
       .set("Authorization", "Bearer scoped-token");
@@ -201,7 +239,7 @@ describe("auth boundaries", () => {
   });
 
   it("blocks bearer auth on settings route", async () => {
-    setBearerRow();
+    await seedBearer();
     const res = await request(makeApp())
       .get("/api/ea/settings")
       .set("Authorization", "Bearer scoped-token");
@@ -210,7 +248,7 @@ describe("auth boundaries", () => {
   });
 
   it("omits retired embedding status from settings", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
@@ -221,7 +259,7 @@ describe("auth boundaries", () => {
   });
 
   it("returns stored and effective email triage mode from settings", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
@@ -232,7 +270,7 @@ describe("auth boundaries", () => {
   });
 
   it("rejects invalid email triage mode writes", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -243,21 +281,18 @@ describe("auth boundaries", () => {
   });
 
   it("updates valid email triage mode writes", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ email_triage_mode: "paused" });
 
     expect(res.status).toBe(200);
-    expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
-      sql: expect.stringContaining("email_triage_mode = ?"),
-      args: expect.arrayContaining(["paused", "user-1"]),
-    }));
+    expect(await getSettingsRow()).toMatchObject({ email_triage_mode: "paused" });
   });
 
   it("blocks bearer auth on notes route", async () => {
-    setBearerRow();
+    await seedBearer();
     const res = await request(makeApp())
       .get("/api/notes")
       .set("Authorization", "Bearer scoped-token");
@@ -266,7 +301,7 @@ describe("auth boundaries", () => {
   });
 
   it("allows scoped bearer auth on quick-txn", async () => {
-    setBearerRow(["actual:write"]);
+    await seedBearer(["actual:write"]);
     const res = await request(makeApp())
       .post("/api/briefing/actual/quick-txn")
       .set("Authorization", "Bearer scoped-token")
@@ -280,7 +315,7 @@ describe("auth boundaries", () => {
   });
 
   it("allows cookie session auth on quick-txn", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .post("/api/briefing/actual/quick-txn")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -294,7 +329,7 @@ describe("auth boundaries", () => {
   });
 
   it("allows transfer bill sends without a payee when transfer fields are present", async () => {
-    setSessionRow();
+    await seedSession();
     const payload = {
       type: "transfer",
       amount: 197.5,
@@ -314,7 +349,7 @@ describe("auth boundaries", () => {
   });
 
   it("rejects transfer bill sends with missing transfer fields before calling Actual", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .post("/api/briefing/actual/send")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -326,7 +361,7 @@ describe("auth boundaries", () => {
   });
 
   it("keeps normal cookie session access on protected routes", async () => {
-    setSessionRow();
+    await seedSession();
     const res = await request(makeApp())
       .get("/api/briefing/latest")
       .set("Cookie", ["ea_session=cookie-session"]);
@@ -336,7 +371,7 @@ describe("auth boundaries", () => {
   });
 
   it("rejects bearer auth on non-quick-txn bills endpoints", async () => {
-    setBearerRow(["actual:write"]);
+    await seedBearer(["actual:write"]);
     const res = await request(makeApp())
       .get("/api/briefing/actual/metadata")
       .set("Authorization", "Bearer scoped-token");

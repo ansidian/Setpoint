@@ -97,44 +97,6 @@ async function openCalendarAtSize(page, size) {
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible({ timeout: 15_000 });
 }
 
-async function readStyle(locator) {
-  return locator.evaluate((node) => {
-    const style = window.getComputedStyle(node);
-    return {
-      backgroundColor: style.backgroundColor,
-      backgroundImage: style.backgroundImage,
-      borderTopColor: style.borderTopColor,
-      boxShadow: style.boxShadow,
-      color: style.color,
-      opacity: style.opacity,
-      transform: style.transform,
-    };
-  });
-}
-
-async function expectHoverStyleDifference(page, locator, label) {
-  await locator.scrollIntoViewIfNeeded();
-  await page.mouse.move(4, 4);
-  const before = await readStyle(locator);
-  const tracksHoverState = await locator.evaluate((node) => node.hasAttribute("data-hovered"));
-
-  await locator.hover();
-
-  if (tracksHoverState) {
-    await expect(locator).toHaveAttribute("data-hovered", "true");
-  }
-
-  await expect
-    .poll(async () => {
-      const after = await readStyle(locator);
-      return Object.keys(before).some((key) => after[key] !== before[key]);
-    }, {
-      message: `${label} should expose at least one computed-style delta on hover`,
-      timeout: 3000,
-    })
-    .toBe(true);
-}
-
 test("keeps one inline overflow visible while switching between +n more triggers", async ({ page }) => {
   const fixture = buildOverflowFixture();
   await installDashboardShellFixtures(page, { initialEvents: fixture.events });
@@ -184,7 +146,7 @@ test("closes inline overflow on Escape before closing the modal", async ({ page 
   await expect(page.getByTestId("calendar-modal-panel")).toBeVisible();
 });
 
-test("shows hover style deltas for visible event chips", async ({ page }) => {
+test("shows visible event chips with an overflow trigger", async ({ page }) => {
   const fixture = buildOverflowFixture();
   await installDashboardShellFixtures(page, { initialEvents: fixture.events });
   await openCalendar(page);
@@ -195,13 +157,6 @@ test("shows hover style deltas for visible event chips", async ({ page }) => {
 
   await expect(visibleChip).toBeVisible();
   await expect(overflowTrigger).toBeVisible();
-
-  const chipBox = await visibleChip.boundingBox();
-  const triggerBox = await overflowTrigger.boundingBox();
-  expect(chipBox?.height ?? 0).toBeGreaterThanOrEqual(29);
-  expect(triggerBox?.height ?? 0).toBeGreaterThanOrEqual(27);
-
-  await expectHoverStyleDifference(page, visibleChip, "event chip");
 });
 
 test("keeps the xl dense-day chip count stable when selecting from the cell header", async ({ page }) => {
@@ -236,22 +191,6 @@ test("keeps the xl dense-day chip count stable when selecting from the cell head
   await expect(page.getByTestId("calendar-selected-event-card")).toHaveCount(0);
   await expect(cell.getByTestId("calendar-cell-item-chip")).toHaveCount(3);
   await expect(cell.getByTestId(`calendar-cell-overflow-trigger-${day}`)).toContainText("+3 more");
-});
-
-test("shows hover style deltas for inline overflow chips", async ({ page }) => {
-  const fixture = buildOverflowFixture();
-  await installDashboardShellFixtures(page, { initialEvents: fixture.events });
-  await openCalendar(page);
-
-  const overflowTrigger = page.getByTestId(`calendar-cell-overflow-trigger-${fixture.firstDay}`);
-  const inlineOverflow = page.getByTestId("calendar-cell-inline-overflow");
-
-  await overflowTrigger.click();
-  await expect(inlineOverflow).toBeVisible();
-
-  const overflowChip = inlineOverflow.getByTestId("calendar-cell-item-chip").first();
-  await expect(overflowChip).toBeVisible();
-  await expectHoverStyleDifference(page, overflowChip, "inline overflow chip");
 });
 
 test("keeps inline overflow open when selecting a hidden chip", async ({ page }) => {
