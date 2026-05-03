@@ -6,7 +6,6 @@ import { encrypt, decrypt } from "../briefing/encryption.js";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../briefing/gmail.js";
 import { testConnection as testIcloud } from "../briefing/icloud.js";
 import { geocodeLocation } from "../briefing/weather.js";
-import { listModels } from "../briefing/claude.js";
 import { initScheduler } from "../briefing/scheduler.js";
 import { queueEmailIndexBackfill } from "../briefing/email-index.js";
 import { wakeEmailBackfillWorker } from "../briefing/email-backfill-worker.js";
@@ -16,6 +15,11 @@ import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
 } from "../briefing/bill-extractors/catalog.js";
+import {
+  emailAiModelAvailability,
+  isAllowedEmailAiModel,
+  resolveEmailAiModelConfig,
+} from "../briefing/email-ai-models.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 
 const router = Router();
@@ -366,6 +370,14 @@ router.get("/settings", async (req, res) => {
       ? JSON.parse(email_interests_json)
       : [];
 
+    const emailAiModel = resolveEmailAiModelConfig({
+      provider: safe.email_ai_provider,
+      model: safe.email_ai_model,
+      legacyModel: safe.claude_model,
+    });
+    safe.email_ai_provider = emailAiModel.provider;
+    safe.email_ai_model = emailAiModel.model;
+    safe.claude_model = safe.claude_model || emailAiModel.model;
     safe.bill_extract_provider = safe.bill_extract_provider || DEFAULT_BILL_EXTRACT_PROVIDER;
     safe.bill_extract_model = safe.bill_extract_model || DEFAULT_BILL_EXTRACT_MODEL;
 
@@ -383,7 +395,7 @@ router.get("/settings", async (req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_interests_json, todoist_api_token, bill_extract_provider, bill_extract_model } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, bill_extract_provider, bill_extract_model } = req.body;
 
   try {
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
@@ -399,6 +411,24 @@ router.put("/settings", async (req, res) => {
     if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
     if (actual_budget_sync_id !== undefined) { updates.push("actual_budget_sync_id = ?"); args.push(actual_budget_sync_id); }
     if (claude_model !== undefined) { updates.push("claude_model = ?"); args.push(claude_model || null); }
+    if (email_ai_provider !== undefined || email_ai_model !== undefined || claude_model !== undefined) {
+      const resolved = resolveEmailAiModelConfig({
+        provider: email_ai_provider,
+        model: email_ai_model,
+        legacyModel: claude_model,
+      });
+      if (!isAllowedEmailAiModel(resolved.provider, resolved.model)) {
+        return res.status(400).json({ message: "Invalid email_ai_provider/model combination" });
+      }
+      if (email_ai_provider !== undefined || email_ai_model !== undefined || claude_model !== undefined) {
+        updates.push("email_ai_provider = ?");
+        args.push(resolved.provider);
+      }
+      if (email_ai_provider !== undefined || email_ai_model !== undefined || claude_model !== undefined) {
+        updates.push("email_ai_model = ?");
+        args.push(resolved.model);
+      }
+    }
     if (email_interests_json !== undefined) { updates.push("email_interests_json = ?"); args.push(typeof email_interests_json === "string" ? email_interests_json : JSON.stringify(email_interests_json)); }
     if (todoist_api_token !== undefined) { updates.push("todoist_api_token_encrypted = ?"); args.push(todoist_api_token ? encrypt(todoist_api_token) : null); }
     if (bill_extract_provider !== undefined || bill_extract_model !== undefined) {
@@ -494,10 +524,9 @@ router.post("/schedules/skip", async (req, res) => {
   }
 });
 
-router.get("/models", async (req, res) => {
+router.get("/models", async (_req, res) => {
   try {
-    const models = await listModels();
-    res.json(models);
+    res.json(emailAiModelAvailability());
   } catch (err) {
     console.error("Error fetching models:", err.message);
     res.status(500).json({ message: err.message });

@@ -3,6 +3,7 @@ import { validateInsight, SLOT_REF_REGEX } from "./insight-validator.js";
 import { ALLOWED_INSIGHT_ICONS, normalizeInsightIcon } from "./insight-icons.js";
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // Preferred defaults in order — first available one is used if no model is configured
 const PREFERRED_MODELS = [
   "claude-sonnet-4-6",
@@ -46,7 +47,7 @@ const SYSTEM_PROMPT = `You are a personal executive assistant. You receive email
 
    GROUNDING RULE (absolute):
    - Every insight MUST reference specific items from the provided input. Primary anchors: a particular email, calendar event, or historical context entry. Deadlines, Todoist tasks, and scheduled bills may be referenced ONLY as secondary cross-references (see SINGLE-SOURCE RESTATEMENT BAN below), never as the sole anchor. If an insight cannot point to a specific input item under these rules, do NOT generate it.
-   - DO NOT surface holidays, observances, tax deadlines, seasonal reminders, cultural events, or any "did you know"-style facts from your training data. The user does not need Claude to remind them that Tax Day, Thanksgiving, Daylight Saving, etc. are approaching. These are BANNED from insights unconditionally — even if they feel helpful. The only exception is if such an event is explicitly mentioned in the input data (e.g., an email about tax filing), in which case reference the email, not the holiday.
+   - DO NOT surface holidays, observances, tax deadlines, seasonal reminders, or any "did you know"-style facts from your training data. The user does not need the email AI to remind them that Tax Day, Thanksgiving, Daylight Saving, etc. are approaching. These are BANNED from insights unconditionally — even if they feel helpful. The only exception is if such an event is explicitly mentioned in the input data (e.g., an email about tax filing), in which case reference the email, not the holiday.
 
    SINGLE-SOURCE RESTATEMENT BAN (absolute):
    - Academic Deadlines, Todoist Tasks, and Scheduled Payments are displayed to the user in their own dedicated UI sections. The user can read them directly. Do NOT generate insights that merely restate, summarize, or make surface-level observations about these items on their own (e.g., "Assignment 3 is due Thu," "You have two deadlines back-to-back," "Spotify renews Tuesday," "Todoist task X is due tomorrow"). These are BANNED — even if grounded in the input.
@@ -109,7 +110,7 @@ RULES (for email triage):
 You MUST respond by calling the submit_briefing tool. Do not respond with free text.`;
 
 // --- Tool schema for submit_briefing ---
-// Forces Claude to return structured output conforming to the slot-system
+// Forces model output to conform to the slot-system
 // contract. tool_choice below makes this the only allowed response path.
 const SUBMIT_BRIEFING_TOOL = {
   name: "submit_briefing",
@@ -137,7 +138,7 @@ const SUBMIT_BRIEFING_TOOL = {
             },
             slots: {
               type: "object",
-              description: "Date slots minted by Claude for dates NOT in the pre-minted list. Leave EMPTY when the template only uses pre-minted slot IDs. Keys must start with 'new_'.",
+              description: "Date slots minted by the model for dates NOT in the pre-minted list. Leave EMPTY when the template only uses pre-minted slot IDs. Keys must start with 'new_'.",
               additionalProperties: {
                 type: "object",
                 required: ["iso"],
@@ -271,7 +272,7 @@ function parseAmPmTime(str) {
 
 /**
  * Build the pre-minted slot candidate dictionary from briefing input data.
- * Each slot has a stable, content-derived ID plus a human label for Claude's
+ * Each slot has a stable, content-derived ID plus a human label for the model's
  * reference in the prompt. The frontend renderer consumes only { iso, time }.
  */
 export function buildSlotCandidates({
@@ -329,7 +330,7 @@ export function buildSlotCandidates({
   return slots;
 }
 
-// Strip the human `label` field from a slot — Claude-facing context vs
+// Strip the human `label` field from a slot — model-facing context vs
 // stored slot data are different things.
 function slotDataOnly(slot) {
   const { iso, time } = slot;
@@ -403,14 +404,14 @@ async function callAnthropicAPI(body) {
 
     if (attempt < maxRetries) {
       const delay = Math.min(2000 * 2 ** attempt, 30000);
-      console.warn(`[EA] Claude API returned ${res.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
+      console.warn(`[EA] Anthropic API returned ${res.status}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delay));
     }
   }
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Claude API error (${res.status}): ${text}`);
+    throw new Error(`Anthropic API error (${res.status}): ${text}`);
   }
 
   return res.json();
@@ -423,7 +424,7 @@ function extractToolUseInput(data, toolName) {
   if (!block || !block.input) {
     const fallbackText = (data.content || []).find(c => c.type === "text")?.text || "";
     throw new Error(
-      `Claude response missing ${toolName} tool_use block. stop_reason=${data.stop_reason}, text=${fallbackText.slice(0, 200)}`,
+      `Anthropic response missing ${toolName} tool_use block. stop_reason=${data.stop_reason}, text=${fallbackText.slice(0, 200)}`,
     );
   }
   return block.input;
@@ -460,7 +461,7 @@ function resolveInsightSlots(insight, preMinted) {
   return { ...insight, slots: clean };
 }
 
-// Format pre-minted slots as a compact reference block for the Claude prompt.
+// Format pre-minted slots as a compact reference block for the email AI prompt.
 function formatSlotReferenceBlock(preMinted) {
   const entries = Object.entries(preMinted);
   if (entries.length === 0) return "No pre-minted slots.";
@@ -517,22 +518,16 @@ If the insight cannot be rescued (e.g. references something no longer in scope),
 
 // --- Main entry point ---
 
-export async function callClaude({
+function buildEmailAiRequestContext({
   emails,
   calendar,
   ctmDeadlines,
   todoistTasks,
-  model,
   emailInterests,
   categories,
   upcomingBills,
   nextWeekCalendar,
 }) {
-  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
-
-  const selectedModel = model || PREFERRED_MODELS[0];
-
-  // --- Context blocks ---
   const { block: nowBlock, todayIso } = buildNowBlock();
 
   const preMintedSlots = buildSlotCandidates({
@@ -605,33 +600,10 @@ ${todoistSummary}
 ## Next Week's Calendar (for insights only — do NOT include in output)
 ${nextWeekSummary || "No events"}${interestsNote}${categoriesNote}${scheduledNote}`;
 
-  console.log(`[EA] Calling Claude API with model: ${selectedModel}`);
+  return { nowBlock, preMintedSlots, userMessage };
+}
 
-  const body = JSON.stringify({
-    model: selectedModel,
-    max_tokens: 16384,
-    temperature: 0,
-    tools: [SUBMIT_BRIEFING_TOOL],
-    tool_choice: { type: "tool", name: "submit_briefing" },
-    // cache_control on system caches [tools, system] (tools come first in the
-    // cache prefix order). Keeping the marker here preserves the existing cache
-    // hit behaviour and also covers the newly-added tool schema.
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: userMessage }],
-  });
-
-  const data = await callAnthropicAPI(body);
-  const usage = data.usage || {};
-  if (usage.cache_read_input_tokens) {
-    console.log(`[EA] Cache hit: ${usage.cache_read_input_tokens} tokens read from cache, ${usage.cache_creation_input_tokens || 0} written`);
-  } else if (usage.cache_creation_input_tokens) {
-    console.log(`[EA] Cache miss: ${usage.cache_creation_input_tokens} tokens written to cache`);
-  }
-  console.log(`[EA] Tokens — input: ${usage.input_tokens || "?"}, output: ${usage.output_tokens || "?"}, stop: ${data.stop_reason || "?"}`);
-
-  const result = extractToolUseInput(data, "submit_briefing");
-  result.model = data.model || selectedModel;
-
+async function finalizeEmailAiResult(result, { preMintedSlots, nowBlock }) {
   // --- Insight validation + repair pipeline ---
   const rawInsights = Array.isArray(result.aiInsights) ? result.aiInsights : [];
   const finalInsights = [];
@@ -701,33 +673,111 @@ ${nextWeekSummary || "No events"}${interestsNote}${categoriesNote}${scheduledNot
   return result;
 }
 
-const MODELS_CACHE_TTL_MS = 60 * 60 * 1000;
-let modelsCache = null;
+export async function callEmailAiModel({ provider = "anthropic", ...args }) {
+  if (provider === "openai") return callOpenAIEmailAi(args);
+  return callAnthropicEmailAi(args);
+}
 
-export async function listModels() {
+export async function callAnthropicEmailAi({
+  model,
+  ...args
+}) {
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
 
-  if (modelsCache && Date.now() - modelsCache.at < MODELS_CACHE_TTL_MS) {
-    return modelsCache.data;
-  }
+  const selectedModel = model || PREFERRED_MODELS[0];
+  const context = buildEmailAiRequestContext(args);
 
-  const res = await fetch("https://api.anthropic.com/v1/models?limit=100", {
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
+  console.log(`[EA] Calling Anthropic API with model: ${selectedModel}`);
+
+  const body = JSON.stringify({
+    model: selectedModel,
+    max_tokens: 16384,
+    temperature: 0,
+    tools: [SUBMIT_BRIEFING_TOOL],
+    tool_choice: { type: "tool", name: "submit_briefing" },
+    // cache_control on system caches [tools, system] (tools come first in the
+    // cache prefix order). Keeping the marker here preserves the existing cache
+    // hit behaviour and also covers the newly-added tool schema.
+    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: context.userMessage }],
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Models API error (${res.status}): ${text}`);
+  const data = await callAnthropicAPI(body);
+  const usage = data.usage || {};
+  if (usage.cache_read_input_tokens) {
+    console.log(`[EA] Cache hit: ${usage.cache_read_input_tokens} tokens read from cache, ${usage.cache_creation_input_tokens || 0} written`);
+  } else if (usage.cache_creation_input_tokens) {
+    console.log(`[EA] Cache miss: ${usage.cache_creation_input_tokens} tokens written to cache`);
+  }
+  console.log(`[EA] Tokens — input: ${usage.input_tokens || "?"}, output: ${usage.output_tokens || "?"}, stop: ${data.stop_reason || "?"}`);
+
+  const result = extractToolUseInput(data, "submit_briefing");
+  result.model = data.model || selectedModel;
+  result.provider = "anthropic";
+
+  return finalizeEmailAiResult(result, context);
+}
+
+async function callOpenAIEmailAi({
+  model,
+  ...args
+}) {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not set");
+
+  const selectedModel = model || "gpt-5.5";
+  const context = buildEmailAiRequestContext(args);
+
+  console.log(`[EA] Calling OpenAI Responses API with model: ${selectedModel}`);
+
+  const apiRes = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      instructions: SYSTEM_PROMPT,
+      input: context.userMessage,
+      max_output_tokens: 12000,
+      reasoning: { effort: "low" },
+      tools: [
+        {
+          type: "function",
+          name: SUBMIT_BRIEFING_TOOL.name,
+          description: SUBMIT_BRIEFING_TOOL.description,
+          parameters: SUBMIT_BRIEFING_TOOL.input_schema,
+          strict: false,
+        },
+      ],
+      tool_choice: { type: "function", name: SUBMIT_BRIEFING_TOOL.name },
+    }),
+  });
+
+  if (!apiRes.ok) {
+    const text = await apiRes.text();
+    throw new Error(`OpenAI Responses API error (${apiRes.status}): ${text}`);
   }
 
-  const data = await res.json();
-  const models = (data.data || [])
-    .map(m => ({ id: m.id, name: m.display_name || m.id, created: m.created_at }))
-    .sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+  const data = await apiRes.json();
+  const usage = data.usage || {};
+  console.log(`[EA] OpenAI tokens — input: ${usage.input_tokens || "?"}, output: ${usage.output_tokens || "?"}, status: ${data.status || "?"}`);
 
-  modelsCache = { at: Date.now(), data: models };
-  return models;
+  const result = extractOpenAIFunctionArguments(data, SUBMIT_BRIEFING_TOOL.name);
+  result.model = data.model || selectedModel;
+  result.provider = "openai";
+
+  return finalizeEmailAiResult(result, context);
+}
+
+function extractOpenAIFunctionArguments(data, name) {
+  const call = (data.output || []).find((item) => item.type === "function_call" && item.name === name);
+  if (!call?.arguments) {
+    throw new Error(`OpenAI response did not include ${name} function arguments`);
+  }
+  try {
+    return JSON.parse(call.arguments);
+  } catch (err) {
+    throw new Error(`OpenAI ${name} arguments were not valid JSON: ${err.message}`);
+  }
 }

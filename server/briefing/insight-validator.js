@@ -1,6 +1,6 @@
-// Validates Claude-generated insights that use the typed date slot system.
+// Validates model-generated insights that use the typed date slot system.
 // Pure functions — no network, no DB — so the tests can exercise every
-// failure mode in isolation. The `claude.js` retry loop and the Haiku
+// failure mode in isolation. The `email-ai.js` retry loop and the Haiku
 // reformatter fallback both depend on this module.
 
 // Temporal words that must never appear in an insight template. The template

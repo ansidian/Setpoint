@@ -12,8 +12,9 @@ export const BILL_EXTRACT_CATALOG = [
     provider: "openai",
     label: "OpenAI",
     envVar: "OPENAI_API_KEY",
-    defaultModel: "gpt-5.4",
+    defaultModel: "gpt-5.5",
     models: [
+      { id: "gpt-5.5", label: "GPT-5.5" },
       { id: "gpt-5.4", label: "GPT-5.4" },
       { id: "gpt-5.4-mini", label: "GPT-5.4 mini" },
       { id: "gpt-5.4-nano", label: "GPT-5.4 nano" },

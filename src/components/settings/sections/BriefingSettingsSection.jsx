@@ -1,84 +1,21 @@
-import { useCallback, useState } from "react";
-import { Bot, Clock, Tag, X } from "lucide-react";
-import { getModels } from "@/api";
+import { Clock, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  FieldHint,
   SectionLabel,
   SettingsCard,
 } from "@/components/settings/settings-ui";
 import { SETTINGS_PRIMARY_BUTTON_CLASS } from "@/components/settings/settings-core";
+import EmailAiModelCard from "@/components/settings/cards/EmailAiModelCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
 
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-
 export default function BriefingSettingsSection({ settings, setSettings, patch }) {
-  const [models, setModels] = useState([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-
-  const ensureModelsLoaded = useCallback(() => {
-    if (models.length > 0 || modelsLoading) return;
-    setModelsLoading(true);
-    getModels().then(setModels).catch(() => {}).finally(() => setModelsLoading(false));
-  }, [models.length, modelsLoading]);
-
-  const selectedModel = settings?.claude_model || DEFAULT_MODEL;
-  const fallbackModelOption = {
-    id: selectedModel,
-    name: models.find((model) => model.id === selectedModel)?.name || selectedModel,
-  };
-  const modelOptions = models.length > 0 ? models : [fallbackModelOption];
   const emailInterests = settings?.email_interests || [];
 
   return (
     <>
-      <SettingsCard
-        title="Claude Model"
-        icon={<Bot size={14} />}
-        description="Model used for briefing generation. Haiku is cheapest; Sonnet is more capable."
-      >
-        <Select
-          value={selectedModel}
-          onValueChange={(value) => {
-            setSettings((current) => ({ ...(current || {}), claude_model: value }));
-            patch({ claude_model: value });
-          }}
-          onOpenChange={(open) => {
-            if (open) ensureModelsLoaded();
-          }}
-        >
-          <SelectTrigger
-            className="w-full bg-input/30 hover:bg-input/50"
-            onFocus={ensureModelsLoaded}
-            onPointerDown={ensureModelsLoaded}
-            aria-label="Select Claude model"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent
-            align="start"
-            className="bg-[#16161e] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]"
-          >
-            {modelOptions.map((model) => (
-              <SelectItem key={model.id} value={model.id} className="text-[13px]">
-                {model.name || model.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {modelsLoading ? (
-          <FieldHint className="mt-2">Loading available models…</FieldHint>
-        ) : null}
-      </SettingsCard>
+      <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />
 
       <SettingsCard
         title="Email Lookback"

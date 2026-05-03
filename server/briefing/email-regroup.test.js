@@ -7,7 +7,7 @@ vi.mock("./icloud.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("./calendar.js", () => ({ fetchCalendar: async () => [] }));
 vi.mock("./weather.js", () => ({ fetchWeather: async () => ({}) }));
 vi.mock("./ctm.js", () => ({ fetchCTMDeadlines: async () => [] }));
-vi.mock("./claude.js", () => ({ callClaude: async () => ({}) }));
+vi.mock("./email-ai.js", () => ({ callEmailAiModel: async () => ({}) }));
 vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 
 const { fixEmailAccounts } = await import("./index.js");
@@ -17,7 +17,7 @@ describe("fixEmailAccounts", () => {
     vi.restoreAllMocks();
   });
 
-  it("regroups emails by original account_label when Claude mis-grouped", () => {
+  it("regroups emails by original account_label when the model mis-grouped", () => {
     const inputEmails = [
       { uid: "e1", account_label: "Gmail", account_icon: "G", account_color: "#red" },
       { uid: "e2", account_label: "iCloud", account_icon: "I", account_color: "#blue" },
@@ -28,7 +28,7 @@ describe("fixEmailAccounts", () => {
           name: "Gmail",
           important: [
             { id: "e1", from: "A", subject: "A" },
-            { id: "e2", from: "B", subject: "B" }, // mis-grouped by Claude
+            { id: "e2", from: "B", subject: "B" }, // mis-grouped by the model
           ],
           noise_count: 3,
         }],
@@ -46,7 +46,7 @@ describe("fixEmailAccounts", () => {
     expect(icloud.important[0].id).toBe("e2");
   });
 
-  it("emails with no uid match fall back to the Claude account name with default icon/color", () => {
+  it("emails with no uid match fall back to the model account name with default icon/color", () => {
     const inputEmails = [
       { uid: "e1", account_label: "Gmail", account_icon: "G", account_color: "#red" },
     ];
@@ -96,7 +96,7 @@ describe("fixEmailAccounts", () => {
     expect(() => fixEmailAccounts(briefingJson, inputEmails)).not.toThrow();
   });
 
-  it("reassigns all emails from one Claude account to two correct accounts via uid lookup", () => {
+  it("reassigns all emails from one model account to two correct accounts via uid lookup", () => {
     const inputEmails = [
       { uid: "e1", account_label: "Work", account_icon: "W", account_color: "#111" },
       { uid: "e2", account_label: "Personal", account_icon: "P", account_color: "#222" },
@@ -125,7 +125,7 @@ describe("fixEmailAccounts", () => {
     expect(personal.important[0].id).toBe("e2");
   });
 
-  it("drops noise entries whose id is already in important (Claude double-classify)", () => {
+  it("drops noise entries whose id is already in important (model double-classify)", () => {
     const inputEmails = [
       { uid: "e1", account_label: "Gmail", account_icon: "G", account_color: "#red" },
       { uid: "e2", account_label: "Gmail", account_icon: "G", account_color: "#red" },
@@ -177,7 +177,7 @@ describe("fixEmailAccounts", () => {
     expect(gmail.important).toHaveLength(2);
   });
 
-  it("preserves noise_count from Claude's original account grouping", () => {
+  it("preserves noise_count from the model's original account grouping", () => {
     const inputEmails = [
       { uid: "e1", account_label: "Gmail", account_icon: "G", account_color: "#red" },
     ];

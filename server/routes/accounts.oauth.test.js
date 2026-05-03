@@ -24,7 +24,6 @@ vi.mock("../briefing/encryption.js", () => ({
   decrypt: vi.fn((value) => value),
 }));
 vi.mock("../briefing/weather.js", () => ({ geocodeLocation: vi.fn(async () => []) }));
-vi.mock("../briefing/claude.js", () => ({ listModels: vi.fn(async () => []) }));
 vi.mock("../briefing/scheduler.js", () => ({ initScheduler: vi.fn() }));
 vi.mock("../briefing/email-index.js", () => ({
   queueEmailIndexBackfill: emailIndexApi.queueEmailIndexBackfill,

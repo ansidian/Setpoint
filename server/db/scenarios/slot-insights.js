@@ -1,11 +1,11 @@
 // Replaces briefing.aiInsights with a set of template+slots insights that
 // exercise every branch of the frontend insight-resolver without requiring
-// a real Claude API call. Useful for verifying:
+// a real email AI API call. Useful for verifying:
 //   - "tonight", "tomorrow", "this morning" rendering
 //   - "last night" / "yesterday" back-references
 //   - weekday rendering for >= 2 days out
 //   - distant (> 6 days) absolute-date rendering
-//   - new-slot minting (the kind Claude would produce for derived dates)
+//   - new-slot minting (the kind an AI model would produce for derived dates)
 //   - back-compat insights (icon + text, no template) rendering unchanged
 //
 // Usage: ?mock=1&scenario=slot-insights
@@ -73,7 +73,7 @@ export default function slotInsights(briefing) {
         flight_dep: { iso: twoWeeksOut, time: "07:15" },
       },
     },
-    // 6. New minted slot (what Claude emits when computing derived dates)
+    // 6. New minted slot (what a model emits when computing derived dates)
     {
       icon: "📦",
       template: "Your Amazon delivery of the travel pillow should arrive {new_delivery}, in time for your flight. No action needed — tracking email is in your Gmail.",

@@ -7,7 +7,8 @@ describe("formatModelName", () => {
     expect(formatModelName("claude-sonnet-4-6")).toBe("Sonnet 4.6");
   });
 
-  it("returns GPT family for OpenAI gpt-5.4 variants instead of falling back to Claude", () => {
+  it("returns GPT family for OpenAI GPT-5 variants instead of falling back to Claude", () => {
+    expect(formatModelName("gpt-5.5")).toBe("GPT-5.5");
     expect(formatModelName("gpt-5.4")).toBe("GPT-5.4");
     expect(formatModelName("gpt-5.4-mini")).toBe("GPT-5.4 mini");
     expect(formatModelName("gpt-5.4-nano")).toBe("GPT-5.4 nano");
