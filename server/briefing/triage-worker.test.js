@@ -164,6 +164,89 @@ describe("email triage worker", () => {
     ]);
   });
 
+  it("finalizes one-time verification codes without model calls", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Here's your verification code 367936",
+      body_snippet: "Please verify it's you. This code expires soon.",
+      body_text: "Please verify it's you. Enter verification code 367936 to continue.",
+      from_name: "LinkedIn",
+      from_address: "security-noreply@linkedin.com",
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:16:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "noise",
+      source: "rule",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: `SELECT lane, category, urgency, triage_source, summary, action,
+                   cheap_model_result_json, strong_model_result_json
+            FROM ea_email_triage WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "noise",
+      category: "security",
+      urgency: "low",
+      triage_source: "rule",
+      summary: "One-time authentication code.",
+      action: "Ignore",
+      cheap_model_result_json: null,
+      strong_model_result_json: null,
+    });
+  });
+
+  it("finalizes obvious promotional subject lines without model calls", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Your promo code unlocks free shipping today",
+      body_snippet: "Use this limited offer before it expires.",
+      body_text: "Use this limited offer before it expires.",
+      from_name: "Shop",
+      from_address: "offers@shop.example",
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:17:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "noise",
+      source: "rule",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: "SELECT lane, category, triage_source, summary, action FROM ea_email_triage WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "noise",
+      category: "marketing",
+      triage_source: "rule",
+      summary: "Promotional subject line.",
+      action: "Ignore",
+    });
+  });
+
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
@@ -306,6 +389,50 @@ describe("email triage worker", () => {
       process.env.OPENAI_API_KEY = originalOpenAiKey;
       global.fetch = undefined;
     }
+  });
+
+  it("keeps account recovery and new sign-in code mail on the strong model", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "New sign-in verification code",
+      body_snippet: "A new sign-in used your verification code. Review if this wasn't you.",
+      body_text: "A new sign-in used your verification code. Review account recovery options if this wasn't you.",
+      from_name: "Account Security",
+      from_address: "security@example.com",
+    });
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "needs_attention",
+          category: "security",
+          urgency: "high",
+          escalation_badge: "High Risk",
+          summary: "New sign-in needs review.",
+          action: "Review account activity",
+          deadline_at: null,
+          confidence: 0.93,
+          bill_candidate: null,
+        },
+        usage: { input_tokens: 90, output_tokens: 30 },
+        tier,
+      })),
+    };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:21:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "needs_attention",
+      source: "strong_model",
+      model_calls: ["strong"],
+    });
+    expect(modelClient.classify).toHaveBeenCalledTimes(1);
+    expect(modelClient.classify).toHaveBeenCalledWith(expect.objectContaining({ tier: "strong" }));
   });
 
   it("uses enabled database rules before falling back to model routing", async () => {
