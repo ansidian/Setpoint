@@ -28,8 +28,6 @@ vi.mock("../../api", async () => {
     markEmailAsRead: vi.fn().mockResolvedValue({}),
     markEmailAsUnread: vi.fn().mockResolvedValue({}),
     trashEmail: vi.fn().mockResolvedValue({}),
-    pinEmail: vi.fn().mockResolvedValue({}),
-    unpinEmail: vi.fn().mockResolvedValue({}),
     snoozeEmail: vi.fn().mockResolvedValue({}),
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
     dismissEmail: vi.fn().mockResolvedValue({}),
@@ -95,8 +93,6 @@ function renderInbox({
         briefingSummary={briefing.emails.summary}
         briefingGeneratedAt="2026-04-19 15:00:00"
         liveEmails={liveEmails}
-        pinnedIds={[]}
-        pinnedSnapshots={[]}
         snoozedEntries={[]}
         resurfacedEntries={[]}
         onOpenDashboard={() => {}}
@@ -206,8 +202,6 @@ describe("InboxView mobile", () => {
           onLiveReadOverrideChange={(uid, read) => {
             setReadOverrides((prev) => ({ ...prev, [uid]: read }));
           }}
-          pinnedIds={[]}
-          pinnedSnapshots={[]}
           snoozedEntries={[]}
           resurfacedEntries={[]}
           onOpenDashboard={() => {}}

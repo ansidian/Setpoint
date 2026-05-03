@@ -27,17 +27,12 @@ router.get("/all", async (_req, res) => {
     const briefingReadStatus = {};
     const hoursBack = 12;
 
-    // Build important senders list (manual only) + load pinned + active snoozes.
-    // Snapshots travel with pins/snoozes so the inbox can render pinned emails
-    // that have aged out of the current briefing window, and expose "waking"
-    // snoozes without waiting for the next briefing.
+    // Build important senders list (manual only) + load active snoozes.
+    // Snapshots travel with snoozes so the inbox can expose "waking"
+    // snoozes without waiting for the next snapshot refresh.
     const nowTs = Date.now();
-    const [manualSendersRaw, pinnedResult, snoozedResult, resurfacedResult] = await Promise.all([
+    const [manualSendersRaw, snoozedResult, resurfacedResult] = await Promise.all([
       Promise.resolve(settings.important_senders_json),
-      db.execute({
-        sql: "SELECT email_id, email_snapshot FROM ea_pinned_emails WHERE user_id = ?",
-        args: [userId],
-      }),
       db.execute({
         sql: "SELECT email_id, until_ts, email_snapshot FROM ea_snoozed_emails WHERE user_id = ? AND status = 'snoozed' AND until_ts > ?",
         args: [userId, nowTs],
@@ -55,10 +50,6 @@ router.get("/all", async (_req, res) => {
       if (!raw) return null;
       try { return JSON.parse(raw); } catch { return null; }
     };
-    const pinnedIds = pinnedResult.rows.map(r => r.email_id);
-    const pinnedSnapshots = pinnedResult.rows
-      .map(r => parseSnapshot(r.email_snapshot))
-      .filter(Boolean);
     const snoozedEntries = snoozedResult.rows.map(r => ({
       uid: r.email_id,
       until_ts: Number(r.until_ts),
@@ -221,8 +212,6 @@ router.get("/all", async (_req, res) => {
       importantSenders: Array.from(importantSendersMap.values()),
       briefingGeneratedAt,
       briefingReadStatus,
-      pinnedIds,
-      pinnedSnapshots,
       snoozedEntries,
       resurfacedEntries,
       fetchedAt: new Date().toISOString(),

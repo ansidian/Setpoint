@@ -82,12 +82,6 @@ async function createMigratedDb() {
       expires_at INTEGER NOT NULL
     );
 
-    CREATE TABLE ea_pinned_emails (
-      user_id TEXT NOT NULL,
-      email_id TEXT NOT NULL,
-      email_snapshot TEXT
-    );
-
     CREATE TABLE ea_snoozed_emails (
       user_id TEXT NOT NULL,
       email_id TEXT NOT NULL,
@@ -104,13 +98,7 @@ async function createMigratedDb() {
   return db;
 }
 
-async function seedEmailState({ pinned = [], snoozed = [], resurfaced = [] } = {}) {
-  for (const entry of pinned) {
-    await testState.db.current.execute({
-      sql: "INSERT INTO ea_pinned_emails (user_id, email_id, email_snapshot) VALUES (?, ?, ?)",
-      args: ["u1", entry.id, JSON.stringify(entry.snapshot)],
-    });
-  }
+async function seedEmailState({ snoozed = [], resurfaced = [] } = {}) {
   for (const entry of snoozed) {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_snoozed_emails (user_id, email_id, until_ts, resurfaced_at, email_snapshot, status)
@@ -171,8 +159,6 @@ describe("GET /api/live/all", () => {
     expect(res.body).toMatchObject({
       briefingGeneratedAt: null,
       briefingReadStatus: {},
-      pinnedIds: [],
-      pinnedSnapshots: [],
       snoozedEntries: [],
       resurfacedEntries: [],
       actualConfigured: false,
@@ -187,13 +173,9 @@ describe("GET /api/live/all", () => {
     expect(res.body.weather.location).toBe("El Monte, CA");
   });
 
-  it("returns active pinned, snoozed, and resurfaced email state", async () => {
+  it("returns active snoozed and resurfaced email state", async () => {
     testState.isGmailMessageRead.mockResolvedValueOnce(true);
     await seedEmailState({
-      pinned: [{
-        id: "gmail-pinned",
-        snapshot: { uid: "gmail-pinned", subject: "Pinned note" },
-      }],
       snoozed: [{
         id: "gmail-snoozed",
         untilTs: Date.now() + 60_000,
@@ -216,10 +198,8 @@ describe("GET /api/live/all", () => {
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    expect(res.body.pinnedIds).toEqual(["gmail-pinned"]);
-    expect(res.body.pinnedSnapshots).toEqual([
-      expect.objectContaining({ uid: "gmail-pinned", subject: "Pinned note" }),
-    ]);
+    expect(res.body).not.toHaveProperty("pinnedIds");
+    expect(res.body).not.toHaveProperty("pinnedSnapshots");
     expect(res.body.snoozedEntries).toEqual([
       expect.objectContaining({
         uid: "gmail-snoozed",

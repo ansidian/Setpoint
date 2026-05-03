@@ -6,8 +6,6 @@ import {
   markEmailAsRead,
   markEmailAsUnread,
   trashEmail,
-  pinEmail,
-  unpinEmail,
   snoozeEmail,
   markAllEmailsAsRead,
   searchEmails,
@@ -24,7 +22,6 @@ import {
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
-  collectPinSnapshots,
   mergeReadState,
 } from "./helpers";
 
@@ -34,8 +31,6 @@ export default function useInboxController({
   liveEmails = [],
   liveReadOverrides = {},
   onLiveReadOverrideChange = () => {},
-  pinnedIds,
-  pinnedSnapshots = [],
   snoozedEntries = [],
   resurfacedEntries = [],
   customize,
@@ -53,10 +48,6 @@ export default function useInboxController({
   const mobileFilterPanelRef = useRef(null);
   const selectedId = sessionState?.selectedId || null;
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [pinnedSet, setPinnedSet] = useState(() => new Set(pinnedIds || []));
-  const [pinnedSnapshotMap, setPinnedSnapshotMap] = useState(
-    () => new Map((pinnedSnapshots || []).map((entry) => [entry.uid || entry.id, entry])),
-  );
   const [snoozedMap, setSnoozedMap] = useState(
     () => new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])),
   );
@@ -110,14 +101,6 @@ export default function useInboxController({
     const id = setInterval(() => setNowTick(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    setPinnedSet(new Set(pinnedIds || []));
-  }, [pinnedIds]);
-
-  useEffect(() => {
-    setPinnedSnapshotMap(new Map((pinnedSnapshots || []).map((entry) => [entry.uid || entry.id, entry])));
-  }, [pinnedSnapshots]);
 
   useEffect(() => {
     setSnoozedMap(new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])));
@@ -174,7 +157,6 @@ export default function useInboxController({
     )) {
       pushEmail(entry);
     }
-    for (const entry of collectPinSnapshots(pinnedSnapshotMap, synthAccount)) pushEmail(entry);
     return out;
   }, [
     activeSnapshot,
@@ -183,7 +165,6 @@ export default function useInboxController({
     liveEmails,
     liveReadOverrides,
     liveTrashedUids,
-    pinnedSnapshotMap,
     resurfacedMap,
   ]);
 
@@ -201,9 +182,6 @@ export default function useInboxController({
       if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
       return true;
     }).sort((a, b) => {
-      const aPinned = pinnedSet.has(a.uid || a.id);
-      const bPinned = pinnedSet.has(b.uid || b.id);
-      if (aPinned !== bPinned) return aPinned ? -1 : 1;
       const order = { carryover: 0, needs_attention: 1, action: 1, fyi: 2, noise: 3 };
       if (a._untriaged && !b._untriaged) return -1;
       if (!a._untriaged && b._untriaged) return 1;
@@ -212,7 +190,7 @@ export default function useInboxController({
       const bKey = b._resurfacedAt || new Date(b.date).getTime();
       return bKey - aKey;
     });
-  }, [flatEmails, accountId, categoryFilter, lane, snoozedMap, nowTick, pinnedSet, indexedSearch.emails, indexedSearchActive]);
+  }, [flatEmails, accountId, categoryFilter, lane, snoozedMap, nowTick, indexedSearch.emails, indexedSearchActive]);
 
   useEffect(() => {
     const term = search.trim();
@@ -436,14 +414,6 @@ export default function useInboxController({
         trashEmail(uid).catch(() => {});
       }
 
-      setPinnedSet((prev) => {
-        if (!prev.has(uid) && !prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.delete(uid);
-        next.delete(id);
-        return next;
-      });
-
       setSnoozedMap((prev) => {
         if (!prev.has(uid)) return prev;
         const next = new Map(prev);
@@ -523,62 +493,10 @@ export default function useInboxController({
       return;
     }
 
-    if (kind === "pin") {
-      if (activeSnapshotMode) return;
-      const key = uid;
-      const isPinned = pinnedSet.has(key) || pinnedSet.has(id);
-      setPinnedSet((prev) => {
-        const next = new Set(prev);
-        if (isPinned) {
-          next.delete(key);
-          next.delete(id);
-        } else {
-          next.add(key);
-        }
-        return next;
-      });
-
-      if (isPinned) {
-        setPinnedSnapshotMap((prev) => {
-          if (!prev.has(key)) return prev;
-          const next = new Map(prev);
-          next.delete(key);
-          return next;
-        });
-        unpinEmail(key).catch(() => {
-          setPinnedSet((prev) => {
-            const next = new Set(prev);
-            next.add(key);
-            return next;
-          });
-        });
-      } else {
-        const snapshot = buildEmailSnapshot(selectedEmail);
-        setPinnedSnapshotMap((prev) => {
-          const next = new Map(prev);
-          next.set(key, snapshot);
-          return next;
-        });
-        pinEmail(key, snapshot).catch(() => {
-          setPinnedSet((prev) => {
-            const next = new Set(prev);
-            next.delete(key);
-            return next;
-          });
-          setPinnedSnapshotMap((prev) => {
-            const next = new Map(prev);
-            next.delete(key);
-            return next;
-          });
-        });
-      }
-    }
   }, [
-    activeSnapshotMode,
     selectedEmail,
     moveBy,
     handleDismiss,
-    pinnedSet,
     buildEmailSnapshot,
     markEmailRead,
     markEmailUnread,
@@ -653,9 +571,6 @@ export default function useInboxController({
       } else if (event.key === "k" || event.key === "ArrowUp") {
         event.preventDefault();
         moveBy(-1);
-      } else if (event.key === "p") {
-        event.preventDefault();
-        onAction("pin");
       } else if (event.key === "o") {
         event.preventDefault();
         if (!selectedEmail) return;
@@ -697,7 +612,6 @@ export default function useInboxController({
     selectedAccount,
     mobileFiltersOpen,
     setMobileFiltersOpen,
-    pinnedSet,
     billOpen,
     setBillOpen,
     accountsById,

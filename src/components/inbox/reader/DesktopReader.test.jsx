@@ -33,7 +33,6 @@ function renderReader(overrides = {}) {
       setBillOpen={() => {}}
       trashHoldProgress={0}
       snoozeHoldProgress={0}
-      allowPin={false}
       snoozeBtnRef={{ current: null }}
       snoozeOpen={false}
       setSnoozeOpen={() => {}}
@@ -66,6 +65,7 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.getByRole("button", { name: /move to noise/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /dismiss from today/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /pin email/i })).toBeNull();
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Move to Noise")).toBeNull();
     expect(screen.queryByText("Dismiss")).toBeNull();

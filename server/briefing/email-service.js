@@ -348,10 +348,6 @@ export async function trash(userId, uid) {
   }
   await Promise.all([
     db.execute({
-      sql: "DELETE FROM ea_pinned_emails WHERE user_id = ? AND email_id = ?",
-      args: [userId, uid],
-    }),
-    db.execute({
       sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
       args: [userId, uid],
     }),
@@ -596,23 +592,6 @@ export async function wake(userId, uid) {
       // Non-fatal; DB state is correct.
     }
   }
-}
-
-export async function pin(userId, emailId, snapshot) {
-  const snapshotJson = snapshot ? JSON.stringify(snapshot) : null;
-  await db.execute({
-    sql: `INSERT INTO ea_pinned_emails (user_id, email_id, email_snapshot)
-          VALUES (?, ?, ?)
-          ON CONFLICT(user_id, email_id) DO UPDATE SET email_snapshot = excluded.email_snapshot`,
-    args: [userId, emailId, snapshotJson],
-  });
-}
-
-export async function unpin(userId, emailId) {
-  await db.execute({
-    sql: "DELETE FROM ea_pinned_emails WHERE user_id = ? AND email_id = ?",
-    args: [userId, emailId],
-  });
 }
 
 export async function dismiss(userId, emailId) {

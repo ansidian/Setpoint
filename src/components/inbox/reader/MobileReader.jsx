@@ -12,7 +12,6 @@ import {
   ExternalLink,
   Mail,
   MailOpen,
-  Pin,
   Trash2,
   XCircle,
   Zap,
@@ -132,7 +131,6 @@ export default function MobileReader({
   email,
   account,
   accent,
-  pinned,
   onAction,
   onClose,
   showTriage,
@@ -143,7 +141,6 @@ export default function MobileReader({
   bodyState,
   drafting,
   setDrafting,
-  allowPin = true,
 }) {
   const gmailUrl = getGmailUrl(email);
   const showBillToggle = email._untriaged || email.hasBill;
@@ -577,14 +574,6 @@ export default function MobileReader({
               label={email.read ? "Mark unread" : "Mark read"}
               onClick={() => handleAction("toggle-read")}
             />
-            {allowPin && (
-              <MobileActionRow
-                icon={Pin}
-                label={pinned ? "Unpin" : "Pin"}
-                active={pinned}
-                onClick={() => handleAction("pin")}
-              />
-            )}
             <MobileActionRow
               icon={Clock}
               label="Snooze"

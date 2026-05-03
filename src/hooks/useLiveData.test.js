@@ -36,8 +36,6 @@ describe("useLiveData", () => {
       briefingReadStatus: {},
       actualConfigured: false,
       actualBudgetUrl: null,
-      pinnedIds: [],
-      pinnedSnapshots: [],
       snoozedEntries: [],
       resurfacedEntries: [],
     });

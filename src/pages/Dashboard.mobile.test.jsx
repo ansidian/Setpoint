@@ -139,8 +139,6 @@ function makeProps() {
       recentTransactions: [],
       payeeMap: {},
       actualBudgetUrl: "",
-      pinnedIds: [],
-      pinnedSnapshots: {},
       snoozedEntries: [],
       resurfacedEntries: [],
       briefingGeneratedAt: null,

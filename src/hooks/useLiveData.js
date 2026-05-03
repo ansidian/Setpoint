@@ -22,8 +22,6 @@ export default function useLiveData({ disabled = false } = {}) {
   const [billsLoading, setBillsLoading] = useState(true);
   const [actualConfigured, setActualConfigured] = useState(true);
   const [actualBudgetUrl, setActualBudgetUrl] = useState(null);
-  const [pinnedIds, setPinnedIds] = useState([]);
-  const [pinnedSnapshots, setPinnedSnapshots] = useState([]);
   const [snoozedEntries, setSnoozedEntries] = useState([]);
   const [resurfacedEntries, setResurfacedEntries] = useState([]);
   const mountedRef = useRef(true);
@@ -53,8 +51,6 @@ export default function useLiveData({ disabled = false } = {}) {
       setLastFetched(data.fetchedAt || new Date().toISOString());
       setActualConfigured(data.actualConfigured || false);
       setActualBudgetUrl(data.actualBudgetUrl || null);
-      setPinnedIds(data.pinnedIds || []);
-      setPinnedSnapshots(data.pinnedSnapshots || []);
       setSnoozedEntries(data.snoozedEntries || []);
       setResurfacedEntries(data.resurfacedEntries || []);
       setBillsLoading(false);
@@ -128,8 +124,6 @@ export default function useLiveData({ disabled = false } = {}) {
     billsLoading,
     actualConfigured,
     actualBudgetUrl,
-    pinnedIds,
-    pinnedSnapshots,
     snoozedEntries,
     resurfacedEntries,
     refreshNow,
