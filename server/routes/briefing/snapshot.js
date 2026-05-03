@@ -13,6 +13,15 @@ router.get("/snapshot/active", async (_req, res) => {
   }
 });
 
+router.post("/snapshot/sync", async (_req, res) => {
+  try {
+    res.json(await snapshotService.syncActiveSnapshot(EA_USER_ID));
+  } catch (err) {
+    console.error("Error syncing active snapshot:", err);
+    res.status(err.status || 500).json({ message: "Failed to sync active snapshot" });
+  }
+});
+
 router.patch("/snapshot/items/:itemId/lane", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);

@@ -9,6 +9,7 @@ import Reader from "../reader/Reader";
 import MobileFilterSheet from "./MobileFilterSheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
+import { buildActiveSnapshotSummary } from "../snapshotSummary";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -190,6 +191,9 @@ export default function MobileInboxView({
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
     : accountsById;
+  const snapshotSummary = activeSnapshotMode
+    ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
+    : briefingSummary;
 
   return (
     <div
@@ -255,7 +259,7 @@ export default function MobileInboxView({
                   </span>
                 )}
               </div>
-              {briefingSummary && (
+              {snapshotSummary && (
                 <div
                   className="ea-display"
                   style={{
@@ -266,7 +270,7 @@ export default function MobileInboxView({
                     fontStyle: "italic",
                   }}
                 >
-                  {briefingSummary}
+                  {snapshotSummary}
                 </div>
               )}
               <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap" }}>

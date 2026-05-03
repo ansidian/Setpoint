@@ -1,10 +1,16 @@
 import db from "../db/connection.js";
 import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "./email-ai-models.js";
+import {
+  DEFAULT_BILL_EXTRACT_PROVIDER,
+  DEFAULT_BILL_EXTRACT_MODEL,
+  isAllowedBillExtractModel,
+} from "./bill-extractors/catalog.js";
 
 const CHEAP_CONFIDENCE_FLOOR = 0.72;
 const RISK_CATEGORIES = new Set(["finance", "security", "legal", "school"]);
-const DEFAULT_CHEAP_MODEL = process.env.EA_TRIAGE_CHEAP_MODEL || "claude-haiku-4-5-20251001";
-const DEFAULT_STRONG_MODEL = process.env.EA_TRIAGE_STRONG_MODEL || "claude-sonnet-4-6";
+const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
+const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
 
 const TRIAGE_TOOL = {
   name: "submit_email_triage",
@@ -379,8 +385,8 @@ function maybeBillCandidate(email, decision) {
   };
 }
 
-async function classifyWithModel(modelClient, tier, email, reason) {
-  const client = modelClient || createAnthropicTriageModelClient();
+async function classifyWithModel(getModelClient, tier, email, reason) {
+  const client = await getModelClient();
   if (!client?.classify) throw new Error("No triage model client configured");
   return normalizeModelDecision(await client.classify({ tier, email, reason }), tier);
 }
@@ -408,20 +414,126 @@ function extractAnthropicToolInput(data) {
   return toolBlock.input;
 }
 
-export function createAnthropicTriageModelClient({
+function extractOpenAIToolInput(data) {
+  for (const item of data.output || []) {
+    if (item.type !== "function_call" || item.name !== "submit_email_triage") continue;
+    if (typeof item.arguments === "string") return JSON.parse(item.arguments);
+    if (item.arguments && typeof item.arguments === "object") return item.arguments;
+  }
+  throw new Error("Triage model returned no tool decision");
+}
+
+function modelChoiceFromEnv(tier, fallback) {
+  const envModel = tier === "cheap"
+    ? process.env.EA_TRIAGE_CHEAP_MODEL
+    : process.env.EA_TRIAGE_STRONG_MODEL;
+  if (!envModel) return fallback;
+  return {
+    provider: inferEmailAiProviderFromModel(envModel) || fallback.provider,
+    model: envModel,
+  };
+}
+
+function normalizeBillExtractChoice(row = {}) {
+  const provider = row.bill_extract_provider || DEFAULT_BILL_EXTRACT_PROVIDER;
+  const model = row.bill_extract_model || DEFAULT_BILL_EXTRACT_MODEL;
+  if (!isAllowedBillExtractModel(provider, model)) {
+    return {
+      provider: DEFAULT_BILL_EXTRACT_PROVIDER,
+      model: DEFAULT_BILL_EXTRACT_MODEL,
+    };
+  }
+  return { provider, model };
+}
+
+async function loadTriageModelConfig(userId, dbClient = db) {
+  let row = {};
+  try {
+    const result = await dbClient.execute({
+      sql: `SELECT email_ai_provider, email_ai_model, claude_model,
+                   bill_extract_provider, bill_extract_model
+            FROM ea_settings WHERE user_id = ?`,
+      args: [userId],
+    });
+    row = result.rows?.[0] || {};
+  } catch {
+    row = {};
+  }
+
+  const cheap = normalizeBillExtractChoice(row);
+  const strong = resolveEmailAiModelConfig({
+    provider: row.email_ai_provider,
+    model: row.email_ai_model,
+    legacyModel: row.claude_model || DEFAULT_STRONG_MODEL,
+  });
+
+  return {
+    cheap: modelChoiceFromEnv("cheap", cheap),
+    strong: modelChoiceFromEnv("strong", strong),
+  };
+}
+
+export function createTriageModelClient({
   fetchImpl = fetch,
-  cheapModel = DEFAULT_CHEAP_MODEL,
-  strongModel = DEFAULT_STRONG_MODEL,
+  config = {
+    cheap: { provider: "anthropic", model: DEFAULT_CHEAP_MODEL },
+    strong: { provider: "anthropic", model: DEFAULT_STRONG_MODEL },
+  },
 } = {}) {
   return {
     async classify({ tier, email, reason }) {
+      const choice = config[tier] || config.cheap || config.strong;
+      if (choice.provider === "openai") {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          const err = new Error("OPENAI_API_KEY not set for triage");
+          err.status = 503;
+          throw err;
+        }
+        const started = Date.now();
+        const res = await fetchImpl("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: choice.model,
+            instructions: TRIAGE_SYSTEM_PROMPT,
+            input: compactEmailForPrompt(email, reason),
+            max_output_tokens: 500,
+            reasoning: { effort: "low" },
+            tools: [{
+              type: "function",
+              name: TRIAGE_TOOL.name,
+              description: TRIAGE_TOOL.description,
+              parameters: TRIAGE_TOOL.input_schema,
+              strict: false,
+            }],
+            tool_choice: { type: "function", name: TRIAGE_TOOL.name },
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text?.();
+          throw new Error(`OpenAI triage API error (${res.status})${text ? `: ${text}` : ""}`);
+        }
+        const data = await res.json();
+        return {
+          decision: extractOpenAIToolInput(data),
+          usage: data.usage || {},
+          provider: "openai",
+          model: data.model || choice.model,
+          tier,
+          latency_ms: Date.now() - started,
+        };
+      }
+
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
         const err = new Error("ANTHROPIC_API_KEY not set for triage");
         err.status = 503;
         throw err;
       }
-      const model = tier === "strong" ? strongModel : cheapModel;
       const started = Date.now();
       const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -431,7 +543,7 @@ export function createAnthropicTriageModelClient({
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model,
+          model: choice.model,
           max_tokens: 500,
           system: TRIAGE_SYSTEM_PROMPT,
           tools: [TRIAGE_TOOL],
@@ -451,12 +563,26 @@ export function createAnthropicTriageModelClient({
         decision: extractAnthropicToolInput(data),
         usage: data.usage || {},
         provider: "anthropic",
-        model,
+        model: data.model || choice.model,
         tier,
         latency_ms: Date.now() - started,
       };
     },
   };
+}
+
+export function createAnthropicTriageModelClient({
+  fetchImpl = fetch,
+  cheapModel = DEFAULT_CHEAP_MODEL,
+  strongModel = DEFAULT_STRONG_MODEL,
+} = {}) {
+  return createTriageModelClient({
+    fetchImpl,
+    config: {
+      cheap: { provider: "anthropic", model: cheapModel },
+      strong: { provider: "anthropic", model: strongModel },
+    },
+  });
 }
 
 export async function routeEmailForTriage(email, {
@@ -466,6 +592,15 @@ export async function routeEmailForTriage(email, {
   const rules = await loadRules(email.user_id, dbClient);
   const routed = routeFromRules(email, rules);
   const modelCalls = [];
+  let resolvedModelClient = modelClient;
+  const getModelClient = async () => {
+    if (!resolvedModelClient) {
+      resolvedModelClient = createTriageModelClient({
+        config: await loadTriageModelConfig(email.user_id, dbClient),
+      });
+    }
+    return resolvedModelClient;
+  };
 
   if (routed.route === "rule") {
     return {
@@ -478,7 +613,7 @@ export async function routeEmailForTriage(email, {
   }
 
   if (routed.route === "strong") {
-    const strong = await classifyWithModel(modelClient, "strong", email, routed.reason);
+    const strong = await classifyWithModel(getModelClient, "strong", email, routed.reason);
     modelCalls.push("strong");
     return {
       decision: {
@@ -489,13 +624,13 @@ export async function routeEmailForTriage(email, {
     };
   }
 
-  const cheap = await classifyWithModel(modelClient, "cheap", email, routed.reason);
+  const cheap = await classifyWithModel(getModelClient, "cheap", email, routed.reason);
   modelCalls.push("cheap");
   if (!shouldEscalateCheap(cheap)) {
     return { decision: cheap, modelCalls };
   }
 
-  const strong = await classifyWithModel(modelClient, "strong", email, "Cheap model confidence or risk required escalation.");
+  const strong = await classifyWithModel(getModelClient, "strong", email, "Cheap model confidence or risk required escalation.");
   modelCalls.push("strong");
   return {
     decision: {

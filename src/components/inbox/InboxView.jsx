@@ -12,6 +12,7 @@ export default function InboxView({
   briefingGeneratedAt,
   liveEmails = [],
   liveEmailsLoading = false,
+  activeSnapshot: controlledActiveSnapshot = null,
   liveReadOverrides = {},
   onLiveReadOverrideChange,
   pinnedIds,
@@ -52,7 +53,8 @@ export default function InboxView({
     selectedId: resolvedSessionState?.selectedId || null,
   }), [resolvedSessionState]);
 
-  const activeSnapshot = useActiveSnapshot();
+  const localActiveSnapshot = useActiveSnapshot({ disabled: !!controlledActiveSnapshot });
+  const activeSnapshot = controlledActiveSnapshot || localActiveSnapshot;
   const snapshotAccounts = useMemo(() => (
     activeSnapshot.snapshot?.filters?.accounts || []
   ).map((account) => ({
@@ -73,7 +75,7 @@ export default function InboxView({
 
   const handleRefresh = async () => {
     await onRefresh?.();
-    await activeSnapshot.refresh();
+    if (!controlledActiveSnapshot) await (activeSnapshot.sync?.() || activeSnapshot.refresh());
   };
 
   const controller = useInboxController({

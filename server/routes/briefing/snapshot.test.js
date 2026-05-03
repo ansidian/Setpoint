@@ -8,15 +8,19 @@ const mockDb = { execute: vi.fn() };
 
 vi.mock("../../db/connection.js", () => ({ default: mockDb }));
 vi.mock("../../briefing/snapshot-service.js", () => ({
-  getActiveSnapshotView: vi.fn(async () => ({
+	  getActiveSnapshotView: vi.fn(async () => ({
     snapshot: { id: 1, status: "active" },
     lanes: { needs_attention: [], fyi: [], noise: [] },
     carryover: [],
     laneCounts: { needs_attention: 0, fyi: 0, noise: 0, carryover: 0 },
     processing: { queued: 0, running: 0, total: 0, active: false },
     filters: { accounts: [], categories: [] },
-  })),
-  moveSnapshotItemLane: vi.fn(async () => ({ id: 42, lane: "fyi" })),
+	  })),
+	  syncActiveSnapshot: vi.fn(async () => ({
+	    snapshot: { id: 1, status: "active" },
+	    processing: { queued: 2, running: 0, total: 2, active: true },
+	  })),
+	  moveSnapshotItemLane: vi.fn(async () => ({ id: 42, lane: "fyi" })),
   dismissSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: "now" })),
   markSnapshotItemHandled: vi.fn(async () => ({ id: 42, handled_at: "now" })),
 }));
@@ -56,9 +60,19 @@ describe("snapshot routes", () => {
     expect(res.status).toBe(200);
     expect(res.body.snapshot).toEqual({ id: 1, status: "active" });
     expect(snapshotService.getActiveSnapshotView).toHaveBeenCalledWith("user-1");
-  });
+	  });
 
-  it("moves a snapshot item lane", async () => {
+	  it("syncs the active snapshot through briefing cookie auth", async () => {
+	    const res = await request(makeApp())
+	      .post("/api/briefing/snapshot/sync")
+	      .set("Cookie", ["ea_session=cookie-session"]);
+
+	    expect(res.status).toBe(200);
+	    expect(res.body.processing).toEqual({ queued: 2, running: 0, total: 2, active: true });
+	    expect(snapshotService.syncActiveSnapshot).toHaveBeenCalledWith("user-1");
+	  });
+
+	  it("moves a snapshot item lane", async () => {
     const res = await request(makeApp())
       .patch("/api/briefing/snapshot/items/42/lane")
       .set("Cookie", ["ea_session=cookie-session"])

@@ -21,6 +21,7 @@ const InboxView = lazy(() => import("../inbox/InboxView"));
 
 export function RedesignShell({
   bd, liveData, calendarRange, isMock = false,
+  activeSnapshot,
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
   calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines = () => {},
@@ -509,6 +510,7 @@ export function RedesignShell({
               briefingGeneratedAt={liveData.briefingGeneratedAt}
               liveEmails={liveData.liveEmails}
               liveEmailsLoading={liveEmailsLoading}
+              activeSnapshot={activeSnapshot}
               liveReadOverrides={liveReadOverrides}
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
               pinnedIds={liveData.pinnedIds}

@@ -384,4 +384,52 @@ describe("InboxView mobile", () => {
 
     expect(screen.getByText("Select an email")).toBeTruthy();
   });
+
+  it("uses active snapshot counts instead of stale briefing summary copy on mobile", () => {
+    activeSnapshotMock.state = {
+      snapshot: {
+        snapshot: { id: 1, updated_at: "2026-05-03T15:00:00.000Z" },
+        filters: {
+          accounts: [{
+            account_id: "gmail-work",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        lanes: {
+          needs_attention: [{
+            id: 11,
+            snapshot_item_id: 11,
+            uid: "snapshot-msg-1",
+            email_id: "snapshot-msg-1",
+            account_id: "gmail-work",
+            lane: "needs_attention",
+            subject: "Snapshot action",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs a response.",
+            date: "2026-05-03T15:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+        carryover: [],
+        processing: { active: false, queued: 0, running: 0, total: 0 },
+      },
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    expect(screen.getByText("Active snapshot")).toBeTruthy();
+    expect(screen.getByText(/1 email across 1 account/i)).toBeTruthy();
+    expect(screen.queryByText("Handle the approval first, then everything else can wait.")).toBeNull();
+  });
 });
