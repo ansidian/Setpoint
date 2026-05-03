@@ -238,7 +238,7 @@ describe("CalendarGrid overflow motion coverage", () => {
 
     const gridShell = screen.getByTestId("calendar-grid-shell");
     fireEvent.wheel(gridShell, { deltaY: 100, deltaMode: 0, cancelable: true });
-    expect(navigateMonth).toHaveBeenCalledWith(1);
+    expect(navigateMonth).toHaveBeenCalledWith(1, { source: "month-grid-wheel" });
     expect(navigateMonth).toHaveBeenCalledTimes(1);
   });
 
@@ -251,7 +251,7 @@ describe("CalendarGrid overflow motion coverage", () => {
     fireEvent.wheel(gridShell, { deltaY: 19, deltaMode: 0, cancelable: true });
     fireEvent.wheel(gridShell, { deltaY: 13, deltaMode: 0, cancelable: true });
 
-    expect(navigateMonth).toHaveBeenCalledWith(1);
+    expect(navigateMonth).toHaveBeenCalledWith(1, { source: "month-grid-wheel" });
     expect(navigateMonth).toHaveBeenCalledTimes(1);
   });
 

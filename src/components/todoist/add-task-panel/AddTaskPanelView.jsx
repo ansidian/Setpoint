@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { createElement, useState } from "react";
+import { createElement, useCallback, useState } from "react";
 import { CalendarClock, Flag, Folder, Tags, Trash2, X } from "lucide-react";
 import { Dropdown, LabelPicker, PriorityIndicator, RemoveLabelButton, TokenAutocomplete } from "./controls";
 import TodoistDuePicker from "./TodoistDuePicker";
@@ -294,8 +294,19 @@ export default function AddTaskPanelView({
     cancelDelete,
     isInline,
     host,
+    transientCloseToken,
   } = controller;
-  const [openCompactPanel, setOpenCompactPanel] = useState(null);
+  const [openCompactPanelState, setOpenCompactPanelState] = useState(() => ({ token: transientCloseToken, value: null }));
+  const openCompactPanel = openCompactPanelState.token === transientCloseToken ? openCompactPanelState.value : null;
+  const setOpenCompactPanel = useCallback((nextValue) => {
+    setOpenCompactPanelState((prev) => {
+      const currentValue = prev.token === transientCloseToken ? prev.value : null;
+      return {
+        token: transientCloseToken,
+        value: typeof nextValue === "function" ? nextValue(currentValue) : nextValue,
+      };
+    });
+  }, [transientCloseToken]);
 
   if (!isInline && !pos) return null;
   const showDraftPreview = !!(draftPreview?.dueDate && (!draftPreview.isEditing || draftPreview.placementChanged));

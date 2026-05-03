@@ -330,6 +330,7 @@ export default function CalendarFloatingDetailPanel({
       }
     : anchoredPlacement;
   const manualTransitionActive = manualPlacementActive || dragging || manualDragActive;
+  const feedbackVisible = feedbackActive && open && editorMode && !!detail?.shakeKey;
 
   return createPortal(
     <AnimatePresence initial={false}>
@@ -393,7 +394,7 @@ export default function CalendarFloatingDetailPanel({
           />
         ) : null}
         <div
-          data-calendar-floating-editor-feedback={feedbackActive ? "active" : undefined}
+          data-calendar-floating-editor-feedback={feedbackVisible ? "active" : undefined}
           style={{
             position: "relative",
             display: "flex",
@@ -409,7 +410,7 @@ export default function CalendarFloatingDetailPanel({
             overflow: "hidden",
             overscrollBehavior: "contain",
             zIndex: 1,
-            animation: feedbackActive
+            animation: feedbackVisible
               ? reducedMotion
                 ? "calendarFloatingEditorPulse 170ms cubic-bezier(0.16, 1, 0.3, 1)"
                 : "calendarFloatingEditorShake 230ms cubic-bezier(0.16, 1, 0.3, 1)"

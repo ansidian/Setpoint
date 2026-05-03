@@ -17,6 +17,8 @@ export default function useCalendarGridEffects({
   activeMonthWheelStateRef,
   canGoPrev,
   closeOverflow,
+  floatingDetailDateKey,
+  floatingDetailMode,
   floatingDetailOpen,
   floatingDetailParked,
   gridShellRef,
@@ -68,33 +70,62 @@ export default function useCalendarGridEffects({
   }, [gridShellRef, resolvedOverflow, setOverflowState]);
 
   useEffect(() => {
-    if (!floatingDetailParked || !selectedItemId || !selectedDateKey) return;
-    const chips = [
-      ...(gridShellRef.current?.querySelectorAll(
-        "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-event-span-segment']",
-      ) || []),
-    ];
-    const anchor = chips.find(
-      (element) =>
-        element.getAttribute("data-item-id") === String(selectedItemId),
-    );
-    if (!anchor) return;
-    const sourceCellElement = anchor.closest("[role='gridcell']");
-    if (sourceCellElement?.getAttribute("data-date-key") !== selectedDateKey)
+    if (!floatingDetailParked) return;
+    const reanchorMode = floatingDetailMode === "edit" || floatingDetailMode === "create"
+      ? floatingDetailMode
+      : "detail";
+    const targetDateKey = floatingDetailDateKey || selectedDateKey;
+    if (!targetDateKey) return;
+    if (selectedItemId) {
+      const chips = [
+        ...(gridShellRef.current?.querySelectorAll(
+          "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-event-span-segment']",
+        ) || []),
+      ];
+      const anchor = chips.find(
+        (element) =>
+          element.getAttribute("data-item-id") === String(selectedItemId),
+      );
+      if (!anchor) return;
+      const sourceCellElement = anchor.closest("[role='gridcell']");
+      if (sourceCellElement?.getAttribute("data-date-key") !== targetDateKey)
+        return;
+      onReanchorFloatingDetail?.({
+        mode: reanchorMode,
+        view,
+        itemId: String(selectedItemId),
+        dateKey: targetDateKey,
+        day:
+          Number(sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) ||
+          selectedDay,
+        anchorElement: anchor,
+        sourceCellElement,
+        exclusionElement: null,
+        anchorKind: "chip",
+      });
       return;
+    }
+
+    if (reanchorMode === "detail") return;
+    const sourceCellElement = gridShellRef.current?.querySelector?.(
+      `[role='gridcell'][data-date-key='${targetDateKey}']`,
+    ) || null;
+    if (!sourceCellElement) return;
     onReanchorFloatingDetail?.({
+      mode: reanchorMode,
       view,
-      itemId: String(selectedItemId),
-      dateKey: selectedDateKey,
+      dateKey: targetDateKey,
       day:
         Number(sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) ||
         selectedDay,
-      anchorElement: anchor,
+      anchorElement: sourceCellElement,
       sourceCellElement,
       exclusionElement: null,
-      anchorKind: "chip",
+      anchorKind: "day-cell",
     });
   }, [
+    floatingDetailDateKey,
+    floatingDetailMode,
     floatingDetailParked,
     onReanchorFloatingDetail,
     selectedDateKey,
@@ -179,7 +210,7 @@ export default function useCalendarGridEffects({
         return;
       }
 
-      navigateMonth(direction);
+      navigateMonth(direction, { source: "month-grid-wheel" });
       wheelState.lastNavigateAt = now;
       wheelState.ignoreUntil = now + MONTH_WHEEL_COOLDOWN_MS;
     }

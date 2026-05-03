@@ -5,6 +5,12 @@ export function isFloatingDetailTriggerTarget(target) {
     && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip'], [data-testid='calendar-agenda-bill-row'], [data-testid='calendar-agenda-deadline-row']");
 }
 
+export function isFloatingDetailActiveAnchorTarget(target, detail) {
+  return target instanceof HTMLElement
+    && !!detail?.anchorElement
+    && detail.anchorElement.contains(target);
+}
+
 export function isFloatingDetailPanelTarget(target) {
   return target instanceof HTMLElement
     && !!target.closest("[data-calendar-floating-detail='true']");

@@ -13,7 +13,7 @@ const LOCATION_PICKER_HEIGHT = 240;
 const RECURRENCE_PICKER_WIDTH = 340;
 const RECURRENCE_PICKER_HEIGHT = 520;
 
-export default function useCalendarEditorPickers(editor) {
+export default function useCalendarEditorPickers(editor, transientCloseToken = 0) {
   const {
     draft,
     titleInput,
@@ -33,7 +33,7 @@ export default function useCalendarEditorPickers(editor) {
     save,
   } = editor;
 
-  const [openPicker, setOpenPicker] = useState(null);
+  const [openPickerState, setOpenPickerState] = useState(() => ({ token: transientCloseToken, value: null }));
   const [activeSourceSuggestion, setActiveSourceSuggestion] = useState(0);
   const [dismissedAutoLocationQuery, setDismissedAutoLocationQuery] = useState("");
   const [dismissedAutoSourceQuery, setDismissedAutoSourceQuery] = useState("");
@@ -48,6 +48,17 @@ export default function useCalendarEditorPickers(editor) {
   const endTimeRef = useRef(null);
   const repeatRef = useRef(null);
   const activeSourceSuggestionRef = useRef(0);
+  const transientClosePending = openPickerState.token !== transientCloseToken;
+  const openPicker = transientClosePending ? null : openPickerState.value;
+  const setOpenPicker = useCallback((nextValue) => {
+    setOpenPickerState((prev) => {
+      const currentValue = prev.token === transientCloseToken ? prev.value : null;
+      return {
+        token: transientCloseToken,
+        value: typeof nextValue === "function" ? nextValue(currentValue) : nextValue,
+      };
+    });
+  }, [transientCloseToken]);
 
   useEffect(() => {
     if (!openPicker) return undefined;
@@ -61,7 +72,7 @@ export default function useCalendarEditorPickers(editor) {
 
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [openPicker]);
+  }, [openPicker, setOpenPicker]);
 
   useEffect(() => {
     if (!isEditorOpen) return undefined;
@@ -184,11 +195,13 @@ export default function useCalendarEditorPickers(editor) {
       return haystack.includes(normalizedQuery);
     });
   }, [parsedSourceQuery, writableCalendars]);
-  const showAutoSourceSuggestions = !openPicker
+  const showAutoSourceSuggestions = !transientClosePending
+    && !openPicker
     && !!parsedSourceQuery
     && dismissedAutoSourceQuery !== parsedSourceQuery;
   const showSourceSuggestions = openPicker === "source" || showAutoSourceSuggestions;
   const showAutoLocationSuggestions = !showSourceSuggestions
+    && !transientClosePending
     && !openPicker
     && !!parsedLocationQuery
     && draft.location === parsedLocationQuery
@@ -213,7 +226,7 @@ export default function useCalendarEditorPickers(editor) {
       setOpenPicker(null);
     }
     setActiveSourceSuggestion(0);
-  }, [parsedSourceQuery, showAutoSourceSuggestions]);
+  }, [parsedSourceQuery, setOpenPicker, showAutoSourceSuggestions]);
 
   const closeLocationSuggestions = useCallback(() => {
     if (showAutoLocationSuggestions) {
@@ -222,7 +235,7 @@ export default function useCalendarEditorPickers(editor) {
       setOpenPicker(null);
     }
     clearLocationSuggestions();
-  }, [clearLocationSuggestions, parsedLocationQuery, showAutoLocationSuggestions]);
+  }, [clearLocationSuggestions, parsedLocationQuery, setOpenPicker, showAutoLocationSuggestions]);
 
   const consumeParsedLocationFromTitle = useCallback(() => {
     if (!shouldConsumeParsedLocationFromTitle) return;
@@ -243,7 +256,7 @@ export default function useCalendarEditorPickers(editor) {
     consumeParsedSourceFromTitle();
     setOpenPicker(null);
     setActiveSourceSuggestion(0);
-  }, [consumeParsedSourceFromTitle, updateField]);
+  }, [consumeParsedSourceFromTitle, setOpenPicker, updateField]);
 
   const handleSourceSuggestionKey = useCallback(async (event) => {
     if (!showSourceSuggestions) return false;
@@ -282,7 +295,7 @@ export default function useCalendarEditorPickers(editor) {
       return true;
     }
     return false;
-  }, [closeSourceSuggestions, filteredSourceSuggestions, selectSourceSuggestion, showSourceSuggestions]);
+  }, [closeSourceSuggestions, filteredSourceSuggestions, selectSourceSuggestion, setOpenPicker, showSourceSuggestions]);
 
   const handleLocationSuggestionKey = useCallback(async (event) => {
     if (!showLocationSuggestions) return false;
@@ -323,6 +336,7 @@ export default function useCalendarEditorPickers(editor) {
     closeLocationSuggestions,
     locationSuggestions.length,
     moveActiveLocationSuggestion,
+    setOpenPicker,
     showLocationSuggestions,
   ]);
 
@@ -335,10 +349,11 @@ export default function useCalendarEditorPickers(editor) {
   const onTitleChange = useCallback((event) => {
     activeSourceSuggestionRef.current = 0;
     setActiveSourceSuggestion(0);
+    setOpenPicker(null);
     setDismissedAutoSourceQuery("");
     setDismissedAutoLocationQuery("");
     handleTitleInputChange(event.target.value);
-  }, [handleTitleInputChange]);
+  }, [handleTitleInputChange, setOpenPicker]);
 
   return {
     openPicker,

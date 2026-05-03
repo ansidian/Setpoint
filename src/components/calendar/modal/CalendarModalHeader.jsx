@@ -168,6 +168,7 @@ export default function CalendarModalHeader({
               aria-label="Previous month"
               aria-disabled={!canGoPrev}
               disabled={!canGoPrev}
+              data-calendar-month-navigation="true"
               onMouseEnter={(event) => handleHeaderButtonHover(event, canGoPrev)}
               onMouseLeave={resetHeaderButtonHover}
               data-calendar-focus-ring="true"
@@ -184,6 +185,7 @@ export default function CalendarModalHeader({
               type="button"
               onClick={() => navigateMonth(1)}
               aria-label="Next month"
+              data-calendar-month-navigation="true"
               onMouseEnter={(event) => handleHeaderButtonHover(event, true)}
               onMouseLeave={resetHeaderButtonHover}
               data-calendar-focus-ring="true"

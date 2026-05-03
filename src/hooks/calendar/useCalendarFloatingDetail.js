@@ -39,6 +39,13 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
   const previousFloatingDetailRef = useRef(null);
   const sessionSideByViewRef = useRef({});
 
+  const setSyncedFloatingDetail = useCallback((nextOrUpdater) => {
+    const current = floatingDetailRef.current;
+    const next = typeof nextOrUpdater === "function" ? nextOrUpdater(current) : nextOrUpdater;
+    floatingDetailRef.current = next;
+    setFloatingDetail(next);
+  }, []);
+
   useLayoutEffect(() => {
     floatingDetailRef.current = floatingDetail;
   }, [floatingDetail]);
@@ -63,28 +70,28 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
   }, [panelRef]);
 
   const shakeFloatingEditor = useCallback(() => {
-    setFloatingDetail((current) => (
+    setSyncedFloatingDetail((current) => (
       current?.open && (current.mode === "edit" || current.mode === "create")
         ? { ...current, shakeKey: (current.shakeKey || 0) + 1 }
         : current
     ));
-  }, []);
+  }, [setSyncedFloatingDetail]);
 
   const setFloatingEditorDirty = useCallback((dirty) => {
-    setFloatingDetail((current) => (
+    setSyncedFloatingDetail((current) => (
       current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty !== !!dirty
         ? { ...current, dirty: !!dirty }
         : current
     ));
-  }, []);
+  }, [setSyncedFloatingDetail]);
 
   const setFloatingEditorSaveRequest = useCallback((requestId) => {
-    setFloatingDetail((current) => (
+    setSyncedFloatingDetail((current) => (
       current?.open && (current.mode === "edit" || current.mode === "create")
         ? { ...current, saveRequestId: requestId, activeSaveRequestId: requestId }
         : current
     ));
-  }, []);
+  }, [setSyncedFloatingDetail]);
 
   const openFloatingDetail = useCallback((nextDetail) => {
     if (!nextDetail) return;
@@ -101,7 +108,7 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     if (mode === "detail" && (!nextDetail.itemId || !anchorElement)) return;
     const preferredSide = nextDetail.preferredSide
       || (String(nextDetail.anchorKind || "").startsWith("agenda") ? "left" : null);
-    setFloatingDetail((current) => {
+    setSyncedFloatingDetail((current) => {
       if (
         mode === "detail"
         && current?.open
@@ -144,6 +151,7 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         && current.view === nextView
         && String(current.itemId || "") === String(nextItemId || "")
         && current.dateKey === nextDateKey;
+      const shakeKey = isSameSession ? current?.shakeKey || 0 : 0;
       return {
         open: true,
         mode,
@@ -175,10 +183,62 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         saveRequestId: null,
         activeSaveRequestId: null,
         dirty: false,
-        shakeKey: current?.shakeKey || 0,
+        shakeKey,
       };
     });
-  }, [findDateCell, panelRef, railRef, view]);
+  }, [findDateCell, panelRef, railRef, setSyncedFloatingDetail, view]);
+
+  const reanchorFloatingDetail = useCallback((nextAnchor) => {
+    if (!nextAnchor) return;
+    setSyncedFloatingDetail((current) => {
+      if (!current?.open) return current;
+      const mode = current.mode || "detail";
+      const nextView = current.view || nextAnchor.view || view;
+      const nextDateKey = nextAnchor.dateKey || current.dateKey || null;
+      const suppliedAnchor = nextAnchor.anchorElement || null;
+      const inferredDayCell = !suppliedAnchor && mode !== "detail" ? findDateCell(nextDateKey) : null;
+      const anchorElement = suppliedAnchor || inferredDayCell;
+      if (!anchorElement) return current;
+      const sourceCellElement = nextAnchor.sourceCellElement || inferredDayCell || null;
+      const preferredSide = current.preferredSide || null;
+      const forcedSide = current.forcedSide || null;
+      const sideIntent = current.sideIntent || "auto";
+      const initialPlacement = resolveFloatingDetailPlacement({
+        anchorRect: elementRect(anchorElement),
+        sourceRect: elementRect(sourceCellElement),
+        exclusionRect: elementRect(nextAnchor.exclusionElement),
+        calendarRect: elementRect(panelRef.current),
+        railRect: elementRect(railRef?.current),
+        panelHeight: mode === "detail" ? 300 : 560,
+        mode,
+        parked: false,
+        preferredSide,
+        forcedSide,
+        allowRailOverlap: sideIntent === "user-flip",
+      });
+      return {
+        ...current,
+        placementKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        view: nextView,
+        itemId: nextAnchor.itemId != null ? String(nextAnchor.itemId) : current.itemId,
+        dateKey: nextDateKey,
+        day: nextAnchor.day ?? current.day ?? null,
+        anchorElement,
+        sourceCellElement,
+        exclusionElement: nextAnchor.exclusionElement || null,
+        anchorKind: nextAnchor.anchorKind || (inferredDayCell ? "day-cell" : current.anchorKind || "chip"),
+        preferredSide,
+        forcedSide,
+        sideIntent,
+        parked: false,
+        userDragged: false,
+        initialPlacement,
+        itemsSnapshot: Array.isArray(nextAnchor.itemsSnapshot)
+          ? nextAnchor.itemsSnapshot
+          : current.itemsSnapshot,
+      };
+    });
+  }, [findDateCell, panelRef, railRef, setSyncedFloatingDetail, view]);
 
   const closeFloatingDetail = useCallback(() => {
     const current = floatingDetailRef.current;
@@ -187,12 +247,12 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
       return;
     }
     clearSessionSide(sessionSideByViewRef, current);
-    setFloatingDetail(null);
-  }, [shakeFloatingEditor]);
+    setSyncedFloatingDetail(null);
+  }, [setSyncedFloatingDetail, shakeFloatingEditor]);
 
   const parkFloatingDetail = useCallback(() => {
     clearSessionSide(sessionSideByViewRef, floatingDetailRef.current);
-    setFloatingDetail((current) => (
+    setSyncedFloatingDetail((current) => (
       current?.open
         ? {
             ...current,
@@ -207,13 +267,13 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
           }
         : current
     ));
-  }, []);
+  }, [setSyncedFloatingDetail]);
 
   const setFloatingDetailDragged = useCallback((userDragged, placementKey = null) => {
     if (userDragged) {
       clearSessionSide(sessionSideByViewRef, floatingDetailRef.current);
     }
-    setFloatingDetail((current) => (
+    setSyncedFloatingDetail((current) => (
       current?.open && (!userDragged || !placementKey || current.placementKey === placementKey)
         ? {
             ...current,
@@ -223,12 +283,12 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
           }
         : current
     ));
-  }, []);
+  }, [setSyncedFloatingDetail]);
 
   const flipFloatingDetailSide = useCallback(() => {
     const currentDetail = floatingDetailRef.current;
     if (!isGridOriginFloatingDetail(currentDetail) || currentDetail.dirty) return;
-    setFloatingDetail((current) => {
+    setSyncedFloatingDetail((current) => {
       if (!isGridOriginFloatingDetail(current) || current.dirty) return current;
       const currentSide = current.forcedSide
         || placementSideFromCaret(current.initialPlacement?.caretSide)
@@ -247,14 +307,15 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         sideIntent: "user-flip",
       };
     });
-  }, []);
+  }, [setSyncedFloatingDetail]);
 
   return {
     floatingDetail,
-    setFloatingDetail,
+    setFloatingDetail: setSyncedFloatingDetail,
     floatingDetailRef,
     findDateCell,
     openFloatingDetail,
+    reanchorFloatingDetail,
     closeFloatingDetail,
     parkFloatingDetail,
     setFloatingDetailDragged,

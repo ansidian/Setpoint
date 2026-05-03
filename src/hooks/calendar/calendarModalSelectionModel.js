@@ -16,6 +16,24 @@ export function isSameViewDate(a, b) {
   return a?.month === b?.month && a?.year === b?.year;
 }
 
+export function isDateVisibleInMonthGrid(date, viewDate) {
+  if (!date || !viewDate) return false;
+  const firstOfMonth = new Date(viewDate.year, viewDate.month, 1);
+  const firstDay = firstOfMonth.getDay();
+  const daysInMonth = new Date(viewDate.year, viewDate.month + 1, 0).getDate();
+  const rowCount = Math.ceil((firstDay + daysInMonth) / 7);
+  const firstVisible = new Date(viewDate.year, viewDate.month, 1 - firstDay);
+  const lastVisible = new Date(viewDate.year, viewDate.month, rowCount * 7 - firstDay);
+  const candidate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return candidate >= firstVisible && candidate <= lastVisible;
+}
+
+export function resolveFocusViewDate(focus, currentViewDate) {
+  if (!focus) return currentViewDate;
+  if (isDateVisibleInMonthGrid(focus, currentViewDate)) return currentViewDate;
+  return { month: focus.getMonth(), year: focus.getFullYear() };
+}
+
 export function buildCalendarModalSyncSnapshot({
   open,
   view,
@@ -52,7 +70,7 @@ export function buildCalendarModalSyncSnapshot({
     nextPendingFocusItemId = focusItemId ? String(focusItemId) : null;
 
     if (openingFocus) {
-      nextViewDate = { month: openingFocus.getMonth(), year: openingFocus.getFullYear() };
+      nextViewDate = resolveFocusViewDate(openingFocus, nextViewDate);
       nextSelectedDay = openingFocus.getDate();
       nextSelectedDateKey = ymdFromParts(openingFocus.getFullYear(), openingFocus.getMonth(), openingFocus.getDate());
       nextSelectedItemId = focusItemId ? String(focusItemId) : null;
@@ -70,7 +88,7 @@ export function buildCalendarModalSyncSnapshot({
     nextPendingFocusItemId = focusItemId ? String(focusItemId) : null;
 
     if (requestFocus) {
-      nextViewDate = { month: requestFocus.getMonth(), year: requestFocus.getFullYear() };
+      nextViewDate = resolveFocusViewDate(requestFocus, nextViewDate);
       nextSelectedDay = requestFocus.getDate();
       nextSelectedDateKey = ymdFromParts(requestFocus.getFullYear(), requestFocus.getMonth(), requestFocus.getDate());
       nextSelectedItemId = focusItemId ? String(focusItemId) : null;
@@ -88,7 +106,7 @@ export function buildCalendarModalSyncSnapshot({
         : (nextPendingFocusItemId ? String(nextPendingFocusItemId) : null);
 
     if (pendingFocus) {
-      nextViewDate = { month: pendingFocus.getMonth(), year: pendingFocus.getFullYear() };
+      nextViewDate = resolveFocusViewDate(pendingFocus, nextViewDate);
       nextSelectedDay = pendingFocus.getDate();
       nextSelectedDateKey = ymdFromParts(pendingFocus.getFullYear(), pendingFocus.getMonth(), pendingFocus.getDate());
       nextSelectedItemId = nextFocusedItemId;

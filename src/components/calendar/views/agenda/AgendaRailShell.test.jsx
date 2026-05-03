@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AgendaRailShell from "./AgendaRailShell.jsx";
 
@@ -138,5 +138,50 @@ describe("AgendaRailShell", () => {
     await flushRailEffects();
 
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does not dirty-block passive scroll sync while an editor is open", async () => {
+    const onDirtyBlocked = vi.fn();
+    const onPassiveDateChange = vi.fn();
+
+    render(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-02"
+        floatingEditorDirty
+        onDirtyBlocked={onDirtyBlocked}
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    });
+
+    const rail = screen.getByTestId("agenda-shell");
+    const firstHeader = screen.getByTestId("header-2026-05-01");
+    const secondHeader = screen.getByTestId("header-2026-05-02");
+    rail.getBoundingClientRect = () => ({ top: 100, bottom: 500, left: 0, right: 280, width: 280, height: 400 });
+    firstHeader.getBoundingClientRect = () => ({ top: 96, bottom: 130, left: 0, right: 280, width: 280, height: 34 });
+    secondHeader.getBoundingClientRect = () => ({ top: 600, bottom: 634, left: 0, right: 280, width: 280, height: 34 });
+
+    fireEvent.scroll(rail);
+    await flushRailEffects();
+
+    expect(onDirtyBlocked).not.toHaveBeenCalled();
+    expect(onPassiveDateChange).not.toHaveBeenCalled();
   });
 });

@@ -43,6 +43,7 @@ export default function useCalendarModalViewModel({
   setSelectedDay,
   setSelectedDateKey,
   setSelectedItemId,
+  manualMonthBrowseKey,
 }) {
   const computed = useMemo(
     () => activeView.compute({ data: viewData, viewYear, viewMonth, weatherData }),
@@ -64,6 +65,7 @@ export default function useCalendarModalViewModel({
     setSelectedDay,
     setSelectedDateKey,
     setSelectedItemId,
+    manualMonthBrowseKey,
   });
 
   const { firstDay, daysInMonth } = getMonthData(viewYear, viewMonth);
