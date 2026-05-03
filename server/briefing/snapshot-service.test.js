@@ -280,6 +280,8 @@ describe("active briefing snapshots", () => {
             VALUES
               ('user-1', 'gmail-work', 'msg-pending', 'email_triage', 'queued', 'queued-1'),
               ('user-1', 'gmail-work', 'msg-running', 'email_triage', 'running', 'running-1'),
+              ('user-1', 'gmail-work', NULL, 'gmail_history_sync', 'queued', 'history-queued-1'),
+              ('user-1', 'gmail-work', NULL, 'gmail_history_sync', 'running', 'history-running-1'),
               ('user-2', 'gmail-work', 'msg-other', 'email_triage', 'queued', 'queued-other')`,
     });
 
@@ -294,6 +296,22 @@ describe("active briefing snapshots", () => {
       running: 1,
       total: 2,
       active: true,
+      email_triage_mode: "auto",
+      effective_email_triage_mode: "no_model",
+      email_triage: {
+        pending: 1,
+        queued: 1,
+        running: 1,
+        total: 2,
+        active: true,
+      },
+      gmail_history_sync: {
+        pending: 1,
+        queued: 1,
+        running: 1,
+        total: 2,
+        active: true,
+      },
     });
     expect(view.laneCounts).toEqual({
       needs_attention: 1,

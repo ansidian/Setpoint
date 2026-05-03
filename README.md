@@ -8,15 +8,15 @@ Built with the help of Claude Opus 4.6.
 
 ## What it does
 
-The dashboard fetches data from multiple sources, sends email context through the configured email AI provider, and produces a structured briefing that surfaces what actually matters:
+The dashboard fetches data from multiple sources, continuously indexes incoming email, and produces a structured briefing that surfaces what actually matters:
 
-- **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account
+- **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local fallback, or pauses job draining.
 - **Bill & transaction detection** — Extracts financial data (payee, amount, due date) from emails with optional one-click logging to Actual Budget
 - **Calendar consolidation** — Aggregates Google Calendar events across all connected accounts with color coding, conflict detection, and a live now-marker timeline
 - **Academic deadlines** — Fetches Canvas LMS assignments via [Canvas-LMS-Task-Manager](https://github.com/ansidian/Canvas-LMS-Task-Manager), with status tracking (incomplete/in-progress/complete)
 - **Todoist integration** — Personal tasks merged and deduplicated with academic deadlines
 - **Weather** — Current conditions and hourly forecasts via Pirate Weather
-- **Delta refresh** — On subsequent refreshes, only new emails are sent to email AI and merged with previous triage to save tokens
+- **Continuous snapshots** — Incoming mail is indexed and attached to active snapshot windows so the Inbox can update between scheduled boundaries
 - **Skip AI** — When inbox is clean and calendar unchanged, clones the previous briefing without an API call
 - **Live data** — 5-minute background polling for new emails, calendar changes, and weather updates between briefings
 - **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without triggering batch briefing generation
@@ -95,6 +95,8 @@ npm run dev        # runs both Vite (frontend) and Express (backend) concurrentl
 ```
 
 Frontend: `http://localhost:5173` — proxies `/api/*` to Express on port 3001.
+
+By default, `email_triage_mode = auto` resolves to `no_model` outside production, so `npm run dev` can index and show incoming mail without spending model budget. Production `auto` resolves to `real`. Change the mode under Settings → System when you intentionally want real local triage or need to pause triage job draining.
 
 ### Production
 

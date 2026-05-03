@@ -20,6 +20,11 @@ import {
   isAllowedEmailAiModel,
   resolveEmailAiModelConfig,
 } from "../briefing/email-ai-models.js";
+import {
+  getEmailTriageModeForUser,
+  isAllowedStoredEmailTriageMode,
+  normalizeStoredEmailTriageMode,
+} from "../briefing/triage-mode.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 
 const router = Router();
@@ -380,6 +385,9 @@ router.get("/settings", async (req, res) => {
     safe.claude_model = safe.claude_model || emailAiModel.model;
     safe.bill_extract_provider = safe.bill_extract_provider || DEFAULT_BILL_EXTRACT_PROVIDER;
     safe.bill_extract_model = safe.bill_extract_model || DEFAULT_BILL_EXTRACT_MODEL;
+    const triageMode = await getEmailTriageModeForUser(userId);
+    safe.email_triage_mode = normalizeStoredEmailTriageMode(safe.email_triage_mode);
+    safe.email_triage_effective_mode = triageMode.effective_email_triage_mode;
 
     // Render suspend availability
     safe.render_configured =
@@ -395,7 +403,7 @@ router.get("/settings", async (req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, bill_extract_provider, bill_extract_model } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, bill_extract_provider, bill_extract_model, email_triage_mode } = req.body;
 
   try {
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
@@ -431,6 +439,13 @@ router.put("/settings", async (req, res) => {
     }
     if (email_interests_json !== undefined) { updates.push("email_interests_json = ?"); args.push(typeof email_interests_json === "string" ? email_interests_json : JSON.stringify(email_interests_json)); }
     if (todoist_api_token !== undefined) { updates.push("todoist_api_token_encrypted = ?"); args.push(todoist_api_token ? encrypt(todoist_api_token) : null); }
+    if (email_triage_mode !== undefined) {
+      if (!isAllowedStoredEmailTriageMode(email_triage_mode)) {
+        return res.status(400).json({ message: "Invalid email_triage_mode" });
+      }
+      updates.push("email_triage_mode = ?");
+      args.push(email_triage_mode);
+    }
     if (bill_extract_provider !== undefined || bill_extract_model !== undefined) {
       const provider = bill_extract_provider ?? DEFAULT_BILL_EXTRACT_PROVIDER;
       const model = bill_extract_model ?? DEFAULT_BILL_EXTRACT_MODEL;

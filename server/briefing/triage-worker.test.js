@@ -37,7 +37,8 @@ async function createMigratedDb() {
       email_ai_model TEXT DEFAULT NULL,
       claude_model TEXT DEFAULT NULL,
       bill_extract_provider TEXT DEFAULT 'anthropic',
-      bill_extract_model TEXT DEFAULT 'claude-haiku-4-5'
+      bill_extract_model TEXT DEFAULT 'claude-haiku-4-5',
+      email_triage_mode TEXT DEFAULT 'auto'
     );
   `);
   await db.executeMultiple(triageMigrationSql);
@@ -60,6 +61,12 @@ async function queueEmail(dbClient, email = {}) {
     ...email,
   };
   await dbClient.batch([
+    {
+      sql: `INSERT INTO ea_settings (user_id, email_triage_mode)
+            VALUES (?, 'real')
+            ON CONFLICT(user_id) DO NOTHING`,
+      args: [row.user_id],
+    },
     {
       sql: `INSERT INTO ea_email_index
               (uid, user_id, account_id, account_label, account_email,
@@ -102,6 +109,109 @@ async function queueEmail(dbClient, email = {}) {
 }
 
 describe("email triage worker", () => {
+  it("finalizes queued mail with no-model fallback without model calls or bill candidates", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Payment due tomorrow",
+      body_snippet: "Your utility payment of $120 is due tomorrow.",
+      body_text: "Your utility payment of $120 is due tomorrow.",
+      from_name: "Utility Billing",
+      from_address: "billing@utility.example",
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_settings SET email_triage_mode = 'no_model' WHERE user_id = ?",
+      args: ["user-1"],
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:10:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "needs_attention",
+      source: "no_model_fallback",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: `SELECT lane, category, urgency, escalation_badge, triage_status,
+                   triage_source, summary, action, model_usage_json,
+                   cheap_model_result_json, strong_model_result_json,
+                   estimated_cost_usd, latency_ms, bill_candidate_json
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "needs_attention",
+      category: "uncategorized",
+      urgency: "normal",
+      escalation_badge: "Needs Review",
+      triage_status: "complete",
+      triage_source: "no_model_fallback",
+      summary: "Your utility payment of $120 is due tomorrow.",
+      action: "Review",
+      model_usage_json: "{}",
+      cheap_model_result_json: null,
+      strong_model_result_json: null,
+      estimated_cost_usd: null,
+      latency_ms: null,
+      bill_candidate_json: null,
+    });
+
+    const items = await dbClient.execute({
+      sql: `SELECT lane_at_snapshot, action_at_snapshot, escalation_badge_at_snapshot
+            FROM ea_briefing_snapshot_items
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(items.rows[0]).toMatchObject({
+      lane_at_snapshot: "needs_attention",
+      action_at_snapshot: "Review",
+      escalation_badge_at_snapshot: "Needs Review",
+    });
+  });
+
+  it("leaves email triage jobs queued when mode is paused", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient);
+    await dbClient.execute({
+      sql: "UPDATE ea_settings SET email_triage_mode = 'paused' WHERE user_id = ?",
+      args: ["user-1"],
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:12:00.000Z"),
+    });
+
+    expect(result).toEqual({
+      processed: false,
+      paused: true,
+      email_triage_mode: "paused",
+      effective_email_triage_mode: "paused",
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const jobs = await dbClient.execute({
+      sql: "SELECT status, attempts, locked_at FROM ea_triage_jobs WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    expect(jobs.rows[0]).toMatchObject({
+      status: "queued",
+      attempts: 0,
+      locked_at: null,
+    });
+  });
+
   it("finalizes obvious noise with rules only and attaches it to the active snapshot", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient);
@@ -333,8 +443,8 @@ describe("email triage worker", () => {
     const dbClient = await createMigratedDb();
     await dbClient.execute({
       sql: `INSERT INTO ea_settings
-              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model)
-            VALUES (?, 'openai', 'gpt-5.4', 'anthropic', 'claude-haiku-4-5')`,
+              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model, email_triage_mode)
+            VALUES (?, 'openai', 'gpt-5.4', 'anthropic', 'claude-haiku-4-5', 'real')`,
       args: ["user-1"],
     });
     await queueEmail(dbClient, {
@@ -636,8 +746,8 @@ describe("email triage worker", () => {
     const dbClient = await createMigratedDb();
     await dbClient.execute({
       sql: `INSERT INTO ea_settings
-              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model)
-            VALUES (?, 'anthropic', 'claude-sonnet-4-6', 'openai', 'gpt-5.4-nano')`,
+              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model, email_triage_mode)
+            VALUES (?, 'anthropic', 'claude-sonnet-4-6', 'openai', 'gpt-5.4-nano', 'real')`,
       args: ["user-1"],
     });
     await queueEmail(dbClient, {

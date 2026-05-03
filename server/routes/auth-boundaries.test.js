@@ -220,6 +220,42 @@ describe("auth boundaries", () => {
     expect(res.body).not.toHaveProperty("embedding_count");
   });
 
+  it("returns stored and effective email triage mode from settings", async () => {
+    setSessionRow();
+    const res = await request(makeApp())
+      .get("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.email_triage_mode).toBe("auto");
+    expect(res.body.email_triage_effective_mode).toBe("no_model");
+  });
+
+  it("rejects invalid email triage mode writes", async () => {
+    setSessionRow();
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ email_triage_mode: "disabled" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Invalid email_triage_mode");
+  });
+
+  it("updates valid email triage mode writes", async () => {
+    setSessionRow();
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ email_triage_mode: "paused" });
+
+    expect(res.status).toBe(200);
+    expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringContaining("email_triage_mode = ?"),
+      args: expect.arrayContaining(["paused", "user-1"]),
+    }));
+  });
+
   it("blocks bearer auth on notes route", async () => {
     setBearerRow();
     const res = await request(makeApp())

@@ -2,6 +2,7 @@ import db from "../db/connection.js";
 import { loadUserConfig, fetchAllEmails } from "./index.js";
 import { indexEmails } from "./email-index.js";
 import { enqueueEmailTriageForEmails } from "./gmail-sync.js";
+import { getEmailTriageModeForUser } from "./triage-mode.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 const TRIAGE_LANES = new Set(["needs_attention", "fyi", "noise"]);
@@ -422,24 +423,47 @@ async function insertFeedback(dbClient, item, feedbackType, fromValue, toValue) 
 
 async function loadProcessingState(dbClient, userId) {
   const result = await dbClient.execute({
-    sql: `SELECT status, COUNT(*) AS count
+    sql: `SELECT job_type, status, COUNT(*) AS count
           FROM ea_triage_jobs
           WHERE user_id = ?
-            AND job_type = 'email_triage'
+            AND job_type IN ('email_triage', 'gmail_history_sync')
             AND status IN ('queued', 'running')
-          GROUP BY status`,
+          GROUP BY job_type, status`,
     args: [userId],
   });
-  const counts = { queued: 0, running: 0 };
-  for (const row of result.rows) {
-    counts[row.status] = normalizeCount(row.count);
-  }
-  const total = counts.queued + counts.running;
-  return {
-    ...counts,
-    total,
-    active: total > 0,
+  const countsByType = {
+    email_triage: { pending: 0, queued: 0, running: 0, total: 0, active: false },
+    gmail_history_sync: { pending: 0, queued: 0, running: 0, total: 0, active: false },
   };
+  for (const row of result.rows) {
+    const type = countsByType[row.job_type];
+    if (!type) continue;
+    if (row.status === "queued") {
+      type.pending = normalizeCount(row.count);
+      type.queued = type.pending;
+    }
+    if (row.status === "running") type.running = normalizeCount(row.count);
+  }
+  for (const type of Object.values(countsByType)) {
+    type.total = type.pending + type.running;
+    type.active = type.total > 0;
+  }
+  const mode = await getEmailTriageModeForUser(userId, { dbClient });
+  const emailTriage = countsByType.email_triage;
+  return {
+    queued: emailTriage.queued,
+    running: emailTriage.running,
+    total: emailTriage.total,
+    active: emailTriage.active || countsByType.gmail_history_sync.active,
+    ...mode,
+    email_triage: countsByType.email_triage,
+    gmail_history_sync: countsByType.gmail_history_sync,
+  };
+}
+
+async function defaultProcessNextEmailTriageJob(options) {
+  const { processNextEmailTriageJob } = await import("./triage-worker.js");
+  return processNextEmailTriageJob(options);
 }
 
 function buildFilters(items) {
@@ -523,6 +547,7 @@ export async function syncActiveSnapshot(userId, {
   fetchAllEmailsFn = fetchAllEmails,
   indexEmailsFn = indexEmails,
   enqueueEmailTriageForEmailsFn = enqueueEmailTriageForEmails,
+  processNextEmailTriageJobFn = defaultProcessNextEmailTriageJob,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
 } = {}) {
@@ -533,6 +558,11 @@ export async function syncActiveSnapshot(userId, {
   if (emails.length) {
     await indexEmailsFn(userId, emails);
     await enqueueEmailTriageForEmailsFn(userId, emails, { dbClient });
+  }
+
+  for (let i = 0; i < 25; i++) {
+    const result = await processNextEmailTriageJobFn({ dbClient, now });
+    if (result?.paused || !result?.processed) break;
   }
 
   return getActiveSnapshotView(userId, { dbClient, now, timeZone });
