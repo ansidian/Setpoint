@@ -107,7 +107,7 @@ export async function initScheduler() {
 
 // Passive email indexer: sweeps every account's inbox every 10 minutes and
 // upserts recent messages into the FTS index so search finds mail that
-// arrived between briefing runs. No Claude, no briefing — cheap enough to
+// arrived between briefing runs. No email AI, no briefing — cheap enough to
 // run continuously.
 async function sweepIndex() {
   if (sweepInFlight) return;

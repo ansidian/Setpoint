@@ -104,7 +104,7 @@ describe("extractBill (Anthropic)", () => {
 });
 
 describe("extractBill (OpenAI)", () => {
-  it.each(["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"])(
+  it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"])(
     "uses Responses API structured output and returns the same normalized shape (%s)",
     async (model) => {
       mockSettings("openai", model);
@@ -150,7 +150,7 @@ describe("extractBill (OpenAI)", () => {
   );
 
   it("surfaces a clear unavailable error when OPENAI_API_KEY is missing", async () => {
-    mockSettings("openai", "gpt-5.4");
+    mockSettings("openai", "gpt-5.5");
     delete process.env.OPENAI_API_KEY;
     mockActual.getCategories.mockResolvedValueOnce([]);
     mockActual.getAccounts.mockResolvedValueOnce([]);

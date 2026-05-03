@@ -36,7 +36,7 @@ export default function billMatch(briefing) {
     urgentFlag: null,
   });
 
-  // 1:1 match suppressed: Claude detected a bill but it matches a scheduled payment exactly
+  // 1:1 match suppressed: email AI detected a bill but it matches a scheduled payment exactly
   accounts[0].important.push({
     id: "mock-billmatch-tmobile",
     message_id: "<mock-tmobile@t-mobile.com>",
@@ -51,7 +51,7 @@ export default function billMatch(briefing) {
     hasBill: false,
     extractedBill: null,
     urgentFlag: null,
-    // hasBill intentionally false — simulates Claude suppressing a confident 1:1 match
+    // hasBill intentionally false — simulates email AI suppressing a confident 1:1 match
   });
 
   // No match: genuinely new bill, no corresponding schedule

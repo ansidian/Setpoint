@@ -2,13 +2,13 @@
 
 A personal executive assistant dashboard that consolidates emails, calendars, weather, academic deadlines, tasks, and finances into a single AI-powered daily briefing. Built to solve the problem of managing multiple email accounts and calendar events where things often get lost in the noise.
 
-This is a work-in-progress personal project — not built with public use in mind. If you want to run it yourself, it's a BYOK (bring your own key) system via the Claude API.
+This is a work-in-progress personal project — not built with public use in mind. If you want to run it yourself, it's a BYOK (bring your own key) system via Anthropic and/or OpenAI.
 
 Built with the help of Claude Opus 4.6.
 
 ## What it does
 
-The dashboard fetches data from multiple sources, sends it through Claude for analysis, and produces a structured briefing that surfaces what actually matters:
+The dashboard fetches data from multiple sources, sends email context through the configured email AI provider, and produces a structured briefing that surfaces what actually matters:
 
 - **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account
 - **Bill & transaction detection** — Extracts financial data (payee, amount, due date) from emails with optional one-click logging to Actual Budget
@@ -16,7 +16,7 @@ The dashboard fetches data from multiple sources, sends it through Claude for an
 - **Academic deadlines** — Fetches Canvas LMS assignments via [Canvas-LMS-Task-Manager](https://github.com/ansidian/Canvas-LMS-Task-Manager), with status tracking (incomplete/in-progress/complete)
 - **Todoist integration** — Personal tasks merged and deduplicated with academic deadlines
 - **Weather** — Current conditions and hourly forecasts via Pirate Weather
-- **Delta refresh** — On subsequent refreshes, only new emails are sent to Claude and merged with previous triage to save tokens
+- **Delta refresh** — On subsequent refreshes, only new emails are sent to email AI and merged with previous triage to save tokens
 - **Skip AI** — When inbox is clean and calendar unchanged, clones the previous briefing without an API call
 - **Live data** — 5-minute background polling for new emails, calendar changes, and weather updates between briefings
 - **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without triggering batch briefing generation
@@ -33,7 +33,7 @@ The dashboard fetches data from multiple sources, sends it through Claude for an
 | UI | shadcn/ui, Radix, Framer Motion |
 | Backend | Express.js (Node.js 24.x) |
 | Database | Turso (LibSQL) |
-| AI | Claude API (Sonnet/Haiku, configurable) |
+| AI | Anthropic and OpenAI providers for email triage, summaries, and bill signals |
 | Search | SQLite FTS5 email index |
 | Email | Gmail (OAuth 2.0), iCloud (IMAP) |
 | Calendar | Google Calendar API |
@@ -62,10 +62,10 @@ TURSO_AUTH_TOKEN=
 # Encryption key for stored credentials (64-char hex)
 EA_ENCRYPTION_KEY=
 
-# Claude API
+# Email AI providers
 ANTHROPIC_API_KEY=
 
-# OpenAI (optional, only for OpenAI bill extraction provider)
+# OpenAI (optional; enables OpenAI email AI and bill extraction providers)
 OPENAI_API_KEY=
 
 # Google OAuth (Gmail + Calendar)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Receipt } from "lucide-react";
-import { getBillExtractModels } from "@/api";
+import { Bot } from "lucide-react";
+import { getModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
 
@@ -9,8 +9,12 @@ const FALLBACK_PROVIDERS = [
     provider: "anthropic",
     label: "Anthropic",
     available: true,
-    defaultModel: "claude-haiku-4-5",
-    models: [{ id: "claude-haiku-4-5", label: "Haiku 4.5" }],
+    envVar: "ANTHROPIC_API_KEY",
+    defaultModel: "claude-sonnet-4-6",
+    models: [
+      { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+      { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+    ],
   },
   {
     provider: "openai",
@@ -22,18 +26,22 @@ const FALLBACK_PROVIDERS = [
       { id: "gpt-5.5", label: "GPT-5.5" },
       { id: "gpt-5.4", label: "GPT-5.4" },
       { id: "gpt-5.4-mini", label: "GPT-5.4 mini" },
-      { id: "gpt-5.4-nano", label: "GPT-5.4 nano" },
     ],
   },
 ];
 
-export default function BillExtractionAiCard({ settings, setSettings, patch }) {
+function inferProvider(model) {
+  if (model?.startsWith("gpt-")) return "openai";
+  return "anthropic";
+}
+
+export default function EmailAiModelCard({ settings, setSettings, patch }) {
   const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    getBillExtractModels()
+    getModels()
       .then((data) => {
         if (cancelled) return;
         if (Array.isArray(data) && data.length) setProviders(data);
@@ -45,27 +53,36 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }) {
     return () => { cancelled = true; };
   }, []);
 
-  const selectedProvider = settings?.bill_extract_provider || "anthropic";
-  const selectedModel = settings?.bill_extract_model || "claude-haiku-4-5";
-
-  const providerEntry = providers.find((p) => p.provider === selectedProvider) || providers[0];
+  const legacyModel = settings?.claude_model;
+  const selectedProvider = settings?.email_ai_provider
+    || inferProvider(settings?.email_ai_model || legacyModel);
+  const providerEntry = providers.find((entry) => entry.provider === selectedProvider) || providers[0];
+  const selectedModel = settings?.email_ai_model
+    || legacyModel
+    || providerEntry?.defaultModel
+    || "claude-sonnet-4-6";
 
   function applyChange(nextProvider, nextModel) {
-    const next = providers.find((p) => p.provider === nextProvider) || providers[0];
-    const model = next.models.some((m) => m.id === nextModel) ? nextModel : next.defaultModel;
+    const next = providers.find((entry) => entry.provider === nextProvider) || providers[0];
+    const model = next.models.some((entry) => entry.id === nextModel) ? nextModel : next.defaultModel;
     setSettings((current) => ({
       ...(current || {}),
-      bill_extract_provider: nextProvider,
-      bill_extract_model: model,
+      email_ai_provider: nextProvider,
+      email_ai_model: model,
+      claude_model: model,
     }));
-    patch({ bill_extract_provider: nextProvider, bill_extract_model: model });
+    patch({
+      email_ai_provider: nextProvider,
+      email_ai_model: model,
+      claude_model: model,
+    });
   }
 
   return (
     <SettingsCard
-      title="Bill Extraction AI"
-      icon={<Receipt size={14} />}
-      description="Model used to extract payee, amount, due date, and category from bill emails. Independent of the briefing model."
+      title="Email Summary AI"
+      icon={<Bot size={14} />}
+      description="Model used for briefing email summaries, bill detection context, and inbox triage."
     >
       <div className="flex flex-col gap-3">
         <ProviderModelSelect
@@ -73,17 +90,15 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }) {
           provider={selectedProvider}
           model={selectedModel}
           onChange={applyChange}
-          providerAriaLabel="Bill extraction provider"
-          modelAriaLabel="Bill extraction model"
+          providerAriaLabel="Email summary provider"
+          modelAriaLabel="Email summary model"
         />
 
         <div className="flex items-center gap-2">
           {providerEntry?.available ? (
             <StatusPill tone="success">{providerEntry.label} key configured</StatusPill>
           ) : (
-            <StatusPill tone="warning">
-              Set {providerEntry?.envVar || (selectedProvider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY")}
-            </StatusPill>
+            <StatusPill tone="warning">Set {providerEntry?.envVar || "ANTHROPIC_API_KEY"}</StatusPill>
           )}
           {loading ? <FieldHint>Loading providers…</FieldHint> : null}
         </div>

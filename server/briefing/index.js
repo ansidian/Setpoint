@@ -6,7 +6,8 @@ import { fetchCalendar, getNextWeekRange, getTomorrowRange } from "./calendar.js
 import { fetchWeather } from "./weather.js";
 import { fetchCTMDeadlines } from "./ctm.js";
 import { fetchTodoistTasks, fetchTodoistTaskIdSet } from "./todoist.js";
-import { callClaude } from "./claude.js";
+import { callEmailAiModel } from "./email-ai.js";
+import { resolveEmailAiModelConfig } from "./email-ai-models.js";
 import { getCategories, getUpcomingBills } from "./actual.js";
 import { indexEmails, isIndexEmpty, queueEmailIndexBackfill } from "./email-index.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";
@@ -282,7 +283,7 @@ export function fixEmailAccounts(briefingJson, inputEmails, dbAccounts) {
     });
   }
 
-  // Collect all triaged emails from Claude's response, tag with correct account
+  // Collect all triaged emails from the email AI response, tag with correct account
   const allTriaged = [];
   for (const acct of briefingJson.emails.accounts) {
     for (const email of acct.important || []) {
@@ -310,8 +311,8 @@ export function fixEmailAccounts(briefingJson, inputEmails, dbAccounts) {
     grouped.get(accountLabel).important.push(email);
   }
 
-  // Preserve noise emails and noise_count from Claude's response.
-  // Drop any noise entry whose id is already in important — Claude occasionally
+  // Preserve noise emails and noise_count from the email AI response.
+  // Drop any noise entry whose id is already in important — the model occasionally
   // returns the same email in both arrays, which renders as duplicate rows
   // (one per lane) sharing a key, breaking selection and reconciliation.
   const allImportantIds = new Set();
@@ -573,7 +574,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
     const completedTaskIds = await loadCompletedTaskIds(userId, todoistTasks);
 
     // Optimization #2: Skip if nothing new (also exclude dismissed emails)
-    // Pinned emails bypass triaged filter and are treated as unread for Claude
+    // Pinned emails bypass the triaged filter and are treated as unread for email AI
     const newEmails = emails.filter(e => {
       const eid = e.id || e.uid;
       if (pinnedIds.has(eid)) return true;
@@ -612,7 +613,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       }
       // Guard against fixEmailAccounts' empty-inputs branch, which resets
       // accounts to zero-email seeded entries. That's correct for full-gen
-      // (Claude hallucinating triage from no inputs) but wrong here —
+      // (the model hallucinating triage from no inputs) but wrong here —
       // cloned already holds carry-forward emails, and a quiet fresh fetch
       // must not wipe them.
       if (emails.length) fixEmailAccounts(cloned, emails, accounts);
@@ -635,12 +636,16 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       return { id: briefingId, briefingJson: cloned, skippedAI: true };
     }
 
-    // Optimization #1: Delta-only generation — only send new emails to Claude,
+    // Optimization #1: Delta-only generation — only send new emails to email AI,
     // merge results with previous triage
-    const model = settings.claude_model || undefined;
+    const modelConfig = resolveEmailAiModelConfig({
+      provider: settings.email_ai_provider,
+      model: settings.email_ai_model,
+      legacyModel: settings.claude_model,
+    });
     const emailInterests = settings.email_interests_json ? JSON.parse(settings.email_interests_json) : [];
 
-    // Lazy-load Actual Budget data — only needed when Claude runs (avoids 20k+ CRDT sync on clone path)
+    // Lazy-load Actual Budget data — only needed when email AI runs (avoids 20k+ CRDT sync on clone path)
     const [categories, upcomingBills] = await Promise.all([
       getCategories(userId).catch((err) => {
         console.error("Actual Budget categories fetch failed:", err.message);
@@ -654,9 +659,9 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
 
     let briefingJson;
     if (unreadNew.length > 0 && unreadNew.length < emails.length && prevBriefing) {
-      await updateProgress(briefingId, `Sending ${unreadNew.length} new email${unreadNew.length !== 1 ? "s" : ""} to ${model || "Claude"}...`);
+      await updateProgress(briefingId, `Sending ${unreadNew.length} new email${unreadNew.length !== 1 ? "s" : ""} to ${modelConfig.model}...`);
       console.log(`[EA] Delta generation: ${unreadNew.length} new unread emails (${emails.length - newEmails.length} previously triaged)`);
-      briefingJson = await callClaude({ emails: unreadNew, calendar, ctmDeadlines, todoistTasks, model, emailInterests, categories, upcomingBills, nextWeekCalendar });
+      briefingJson = await callEmailAiModel({ emails: unreadNew, calendar, ctmDeadlines, todoistTasks, ...modelConfig, emailInterests, categories, upcomingBills, nextWeekCalendar });
 
       // Merge previous triage with new triage using pure function
       const allEmailIds = new Set(emails.map(e => e.id || e.uid));
@@ -664,17 +669,17 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       briefingJson.emails.accounts = mergedAccounts;
     } else {
       // Full generation: all emails are new or no previous triage
-      const emailsForClaude = unreadNew.length > 0 ? unreadNew : emails;
-      await updateProgress(briefingId, `Sending ${emailsForClaude.length} email${emailsForClaude.length !== 1 ? "s" : ""} to ${model || "Claude"}...`);
-      console.log(`[EA] Full generation: ${emailsForClaude.length} emails`);
-      briefingJson = await callClaude({ emails: emailsForClaude, calendar, ctmDeadlines, todoistTasks, model, emailInterests, categories, upcomingBills, nextWeekCalendar });
+      const emailsForAi = unreadNew.length > 0 ? unreadNew : emails;
+      await updateProgress(briefingId, `Sending ${emailsForAi.length} email${emailsForAi.length !== 1 ? "s" : ""} to ${modelConfig.model}...`);
+      console.log(`[EA] Full generation: ${emailsForAi.length} emails`);
+      briefingJson = await callEmailAiModel({ emails: emailsForAi, calendar, ctmDeadlines, todoistTasks, ...modelConfig, emailInterests, categories, upcomingBills, nextWeekCalendar });
       // Tag all emails with seenCount 1
       for (const acct of briefingJson.emails?.accounts || []) {
         acct.important = acct.important.map(e => ({ ...e, seenCount: 1 }));
       }
     }
 
-    // Reattach fields from original emails — Claude only sees/returns `id`, but the
+    // Reattach fields from original emails — email AI only sees/returns `id`, but the
     // frontend needs uid (for body fetching) and account_id/account_email (for the
     // direct Gmail web link).
     const origById = new Map(emails.map(e => [e.id || e.uid, e]));
@@ -694,7 +699,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
 
     await updateProgress(briefingId, "Finalizing briefing...");
 
-    // Always overwrite deadline data with server-fetched values (Claude may hallucinate these)
+    // Always overwrite deadline data with server-fetched values (the model may hallucinate these)
     const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedTaskIds);
     const tombstones = await hydrateRecurringTombstones(userId, todoistTaskIdSet);
     const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
@@ -712,7 +717,7 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       stats: computeDeadlineStats(todoistAfterCarry),
     };
 
-    // Server owns all deadline data (CTM, Todoist) — discard any Claude output
+    // Server owns all deadline data (CTM, Todoist) — discard any model output
     delete briefingJson.deadlines;
 
     // Overwrite calendar with server-fetched data (has accurate `passed` flags)
@@ -721,11 +726,11 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
     briefingJson.tomorrowCalendar = tomorrowCalendar;
 
     // Fix email account grouping: re-assign emails to correct accounts based on
-    // the original account_label from the fetched data (Claude sometimes misgroups)
+    // the original account_label from the fetched data (models sometimes misgroup)
     fixEmailAccounts(briefingJson, emails, accounts);
     deduplicateBills(briefingJson);
 
-    // Set server-fetched weather (Claude no longer returns this)
+    // Set server-fetched weather (email AI no longer returns this)
     briefingJson.weather = { ...weather, location: settings.weather_location || "El Monte, CA" };
 
     briefingJson.generatedAt = nowPacific();

@@ -1,6 +1,6 @@
 # Architecture
 
-Personal executive assistant dashboard that consolidates emails, calendars, weather, Canvas LMS deadlines, Todoist tasks, and finances into AI-powered daily briefings. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and Claude API. Deployed on Render.
+Personal executive assistant dashboard that consolidates emails, calendars, weather, Canvas LMS deadlines, Todoist tasks, and finances into AI-powered daily briefings. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and provider-backed email AI. Deployed on Render.
 
 ## System Overview
 
@@ -25,7 +25,7 @@ graph TB
         CTM[Canvas Task Manager API]
         Todoist[Todoist API]
         Actual[Actual Budget API]
-        Claude[Claude API]
+        EmailAI[Email AI<br/>Anthropic or OpenAI]
         OpenAI[OpenAI Embeddings]
     end
 
@@ -39,7 +39,7 @@ graph TB
     Routes --> Pipeline
     Scheduler -->|cron triggers| Pipeline
     Pipeline --> Gmail & iCloud & GCal & Weather & CTM & Todoist & Actual
-    Pipeline --> Claude
+    Pipeline --> EmailAI
     Pipeline --> OpenAI
     Routes --> Turso
     Pipeline --> Turso
@@ -55,7 +55,7 @@ graph TB
 | UI | shadcn/ui, Radix, Framer Motion | Component primitives, animations |
 | Backend | Express 4 | HTTP API server |
 | Database | Turso (LibSQL) | SQLite-compatible cloud DB |
-| AI | Claude API (Anthropic) | Email triage and bill detection |
+| AI | Anthropic Messages API, OpenAI Responses API | Email triage, summaries, and bill signals |
 | Search | SQLite FTS5 | Full-text email search |
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
 | Calendar | Google Calendar API | Event sync (reuses Gmail OAuth) |
@@ -78,9 +78,10 @@ ea-dashboard/
 │   │   ├── lifecycle-service.js    # Briefing lifecycle: trigger, poll, refresh, latest/history/by-id, delete
 │   │   ├── email-service.js        # Email read/unread/trash/snooze/pin/dismiss, FTS search, body fetch
 │   │   ├── tasks-service.js        # Complete task (CTM+Todoist), CTM status, tombstone dismiss, Todoist CRUD
-│   │   ├── bills-service.js        # Actual Budget wrappers + Haiku-powered bill extraction
+│   │   ├── bills-service.js        # Actual Budget wrappers + provider-backed bill extraction
 │   │   ├── dev-service.js          # Dev-only helpers (reindex emails)
-│   │   ├── claude.js               # Claude API: tool_choice-forced submit_briefing for email triage + bill detection
+│   │   ├── email-ai.js             # Provider-backed email summary, triage, and bill-signal extraction
+│   │   ├── email-ai-models.js      # Email AI provider/model catalog and validation
 │   │   ├── insight-validator.js    # Legacy insight compatibility for old briefing history
 │   │   ├── insight-icons.js        # Legacy icon normalization for old insight history
 │   │   ├── gmail.js                # Gmail OAuth, fetch, mark-read, trash
@@ -357,8 +358,8 @@ flowchart TD
     
     Delta{"Delta generation?<br/>New unread < total emails +<br/>previous triage exists"}
 
-    ClaudeFull["callClaude(ALL emails)<br/>Full triage"]
-    ClaudeDelta["callClaude(NEW emails only)<br/>Partial triage"]
+    EmailAiFull["callEmailAiModel(ALL emails)<br/>Full triage"]
+    EmailAiDelta["callEmailAiModel(NEW emails only)<br/>Partial triage"]
     
     Merge["mergeDeltaBriefing()<br/>New triage + carried-forward emails<br/>(seenCount < 3, still in inbox, not dismissed)"]
 
@@ -373,16 +374,16 @@ flowchart TD
     Filter --> Skip
     Skip -->|Yes| Clone --> Store
     Skip -->|No| Delta
-    Delta -->|Full| ClaudeFull --> PostProcess
-    Delta -->|Delta| ClaudeDelta --> Merge --> PostProcess
+    Delta -->|Full| EmailAiFull --> PostProcess
+    Delta -->|Delta| EmailAiDelta --> Merge --> PostProcess
     PostProcess --> Store
 ```
 
-### Claude Integration
+### Email AI Integration
 
-Claude is called via **forced tool use**. A single tool `submit_briefing` with a strict `input_schema` is declared, and `tool_choice: { type: "tool", name: "submit_briefing" }` forces the model to respond via that tool. Required fields and types are enforced at decode time — there is no JSON-from-text parsing.
+Email AI is called through the selected provider in `server/briefing/email-ai.js`. Anthropic uses forced tool use with `submit_briefing`; OpenAI uses Responses API function calling with the same shape. Required fields and types are enforced at decode time instead of JSON-from-text parsing.
 
-System prompt (~120 lines) instructs Claude to:
+System prompt (~120 lines) instructs the model to:
 - **Triage emails**: actionable (needs response), fyi (real activity), noise (marketing/automated)
 - **Detect bills**: extract payee, amount, due_date, type, category
 - **Flag urgency**: set `urgentFlag: { label, date }` for hard deadlines
@@ -390,7 +391,7 @@ System prompt (~120 lines) instructs Claude to:
 
 Email interests from settings override noise classification. Scheduled payments from Actual Budget are cross-referenced to suppress duplicate bill detections.
 
-Model selection: user-configurable, defaults to `claude-sonnet-4-6`. Temperature `0` for format adherence. Retries 3x with exponential backoff on 429/529.
+Model selection: user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence and retries 3x with exponential backoff on 429/529.
 
 ### Legacy Insight Compatibility
 
@@ -398,13 +399,13 @@ Typed-date insight resolver and validator modules remain for old `ea_briefings` 
 
 ### Key Optimizations
 
-**Delta Generation** — When new unread emails are a subset of total, only send new emails to Claude. Merge results with previous triage. Carried-forward emails increment `seenCount` and expire after 3 appearances.
+**Delta Generation** — When new unread emails are a subset of total, only send new emails to email AI. Merge results with previous triage. Carried-forward emails increment `seenCount` and expire after 3 appearances.
 
-**Skip AI** — If inbox is clean (no new unread), calendar hasn't changed, and last AI call was <16 hours ago, clone the previous briefing and only update weather/calendar/CTM/Todoist. No Claude API call.
+**Skip AI** — If inbox is clean (no new unread), calendar hasn't changed, and last AI call was <16 hours ago, clone the previous briefing and only update weather/calendar/CTM/Todoist. No email AI API call.
 
 **Email Indexing & Push Ingestion** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. Gmail accounts can register an INBOX Pub/Sub watch through `GMAIL_PUBSUB_TOPIC`; `/api/gmail/push` decodes the Pub/Sub envelope, queues an account-level `gmail_history_sync` job, and returns quickly. The history-sync worker uses the stored Gmail `last_history_id` cursor to fetch new INBOX messages, index them, create pending durable triage rows, and enqueue message-level `email_triage` jobs. The 2-hour background indexer remains a reconciliation path for missed push events, downtime, watch expiry, and iCloud polling. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
 
-**Post-Processing** — Server always overwrites AI-generated calendar, weather, CTM, and Todoist data with fresh server-fetched values. This prevents hallucinations. Email accounts are regrouped by `account_label` to fix potential Claude misclassification. Duplicate bills from payment processors (PayPal, Venmo, etc.) are detected and suppressed.
+**Post-Processing** — Server always overwrites AI-generated calendar, weather, CTM, and Todoist data with fresh server-fetched values. This prevents hallucinations. Email accounts are regrouped by `account_label` to fix potential model misclassification. Duplicate bills from payment processors (PayPal, Venmo, etc.) are detected and suppressed.
 
 ## Data Sources
 
@@ -417,8 +418,8 @@ Typed-date insight resolver and validator modules remain for old `ea_briefings` 
 | CTM | `server/briefing/ctm.js` | Custom REST API | Bearer token | Empty array, continue |
 | Todoist | `server/briefing/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/briefing/actual.js` | @actual-app/api SDK | Server URL + password (encrypted) | Empty array, continue |
-| Claude | `server/briefing/claude.js` | Anthropic Messages API | API key | Generation fails (status: error) |
-All data source failures are caught individually — one source going down never blocks the briefing. Claude is the exception: if it fails, the generation is marked as `error`.
+| Email AI | `server/briefing/email-ai.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Generation fails (status: error) |
+All data source failures are caught individually — one source going down never blocks the briefing. Email AI is the exception: if it fails, the generation is marked as `error`.
 
 ## Database Schema
 
@@ -650,7 +651,7 @@ All stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY`. Format
 
 ### Graceful Degradation
 
-Each data source is wrapped in `.catch()` within `Promise.all`. A Gmail outage returns an empty email array but the briefing still generates with calendar, weather, and tasks. Only Claude failure stops generation.
+Each data source is wrapped in `.catch()` within `Promise.all`. A Gmail outage returns an empty email array but the briefing still generates with calendar, weather, and tasks. Only email AI failure stops generation.
 
 ### Connection Pooling
 
@@ -801,7 +802,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 |--------|------|---------|
 | POST | `/api/gmail/push` | Pub/Sub webhook; requires `GMAIL_PUBSUB_PUSH_TOKEN`, decodes Gmail `emailAddress`/`historyId`, and queues `gmail_history_sync` |
 | POST | `/api/ea/schedules/skip` | Skip scheduled snapshot boundary |
-| GET | `/api/ea/models` | Available Claude models |
+| GET | `/api/ea/models` | Available email AI providers and models |
 | GET | `/api/ea/geocode` | Location string to lat/lng |
 | POST | `/api/ea/suspend` | Suspend Render service |
 | GET | `/api/ea/important-senders` | Get important senders |

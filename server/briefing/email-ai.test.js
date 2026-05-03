@@ -1,9 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
-// Set dummy API key BEFORE importing claude.js — the module reads it at load time
+// Set dummy API key BEFORE importing email-ai.js — the module reads it at load time
 process.env.ANTHROPIC_API_KEY = "test-key";
+process.env.OPENAI_API_KEY = "test-openai-key";
 
-const { buildSlotCandidates, fabricatedCalendarSlotKeys } = await import("./claude.js");
+const originalFetch = global.fetch;
+const { buildSlotCandidates, callEmailAiModel, fabricatedCalendarSlotKeys } = await import("./email-ai.js");
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
 
 describe("buildSlotCandidates", () => {
   it("returns empty dict on empty input", () => {
@@ -149,5 +156,54 @@ describe("fabricatedCalendarSlotKeys", () => {
     expect(fabricatedCalendarSlotKeys(null)).toEqual([]);
     expect(fabricatedCalendarSlotKeys(undefined)).toEqual([]);
     expect(fabricatedCalendarSlotKeys({})).toEqual([]);
+  });
+});
+
+describe("callEmailAiModel", () => {
+  it("routes OpenAI briefing work through Responses function calling", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        model: "gpt-5.5",
+        status: "completed",
+        output: [
+          {
+            type: "function_call",
+            name: "submit_briefing",
+            arguments: JSON.stringify({
+              aiInsights: [],
+              emails: { summary: "No important mail.", accounts: [] },
+            }),
+          },
+        ],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    });
+
+    const result = await callEmailAiModel({
+      provider: "openai",
+      model: "gpt-5.5",
+      emails: [],
+      calendar: [],
+      ctmDeadlines: [],
+      todoistTasks: [],
+      emailInterests: [],
+      categories: [],
+      upcomingBills: [],
+      nextWeekCalendar: [],
+    });
+
+    expect(result).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.5",
+      emails: { summary: "No important mail.", accounts: [] },
+      aiInsights: [],
+    });
+    const [url, options] = global.fetch.mock.calls[0];
+    const body = JSON.parse(options.body);
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    expect(body.model).toBe("gpt-5.5");
+    expect(body.tools[0]).toMatchObject({ type: "function", name: "submit_briefing" });
+    expect(body.tool_choice).toEqual({ type: "function", name: "submit_briefing" });
   });
 });

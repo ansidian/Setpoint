@@ -19,7 +19,7 @@ vi.mock("./todoist.js", () => ({
   fetchTodoistTasks: async () => [],
   fetchTodoistTaskIdSet: async () => new Set(),
 }));
-vi.mock("./claude.js", () => ({ callClaude: async () => ({ emails: { accounts: [] } }) }));
+vi.mock("./email-ai.js", () => ({ callEmailAiModel: async () => ({ emails: { accounts: [] } }) }));
 vi.mock("./actual.js", () => ({
   getCategories: async () => [],
   getUpcomingBills: async () => [],

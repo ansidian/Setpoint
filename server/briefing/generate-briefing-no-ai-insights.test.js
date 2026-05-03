@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockDb = { execute: vi.fn() };
-const mockClaude = vi.hoisted(() => ({
-  callClaude: vi.fn(),
+const mockEmailAi = vi.hoisted(() => ({
+  callEmailAiModel: vi.fn(),
 }));
 
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
@@ -37,7 +37,7 @@ vi.mock("./todoist.js", () => ({
   fetchTodoistTasks: async () => [],
   fetchTodoistTaskIdSet: async () => new Set(),
 }));
-vi.mock("./claude.js", () => mockClaude);
+vi.mock("./email-ai.js", () => mockEmailAi);
 vi.mock("./actual.js", () => ({
   getCategories: async () => [],
   getUpcomingBills: async () => [],
@@ -90,7 +90,7 @@ describe("generateBriefing without AI insights or embeddings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stubDb();
-    mockClaude.callClaude.mockResolvedValue({
+    mockEmailAi.callEmailAiModel.mockResolvedValue({
       aiInsights: [{ text: "Generated trend prose should not be visible." }],
       emails: {
         summary: "One email needs attention.",
@@ -112,7 +112,7 @@ describe("generateBriefing without AI insights or embeddings", () => {
   it("does not inject historical context, write embeddings, or persist visible AI insights", async () => {
     const result = await generateBriefing(USER_ID);
 
-    expect(mockClaude.callClaude).toHaveBeenCalledWith(
+    expect(mockEmailAi.callEmailAiModel).toHaveBeenCalledWith(
       expect.not.objectContaining({ historicalContext: expect.anything() }),
     );
     expect(result.briefingJson.aiInsights).toEqual([]);

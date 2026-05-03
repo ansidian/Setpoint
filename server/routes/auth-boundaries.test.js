@@ -97,9 +97,6 @@ vi.mock("../briefing/actual.js", () => ({
   getMetadata: vi.fn(async () => ({ schedules: [], payeeMap: {}, recentTransactions: [] })),
   isSchedulePaid: vi.fn(() => false),
 }));
-vi.mock("../briefing/claude.js", () => ({
-  listModels: vi.fn(async () => []),
-}));
 vi.mock("../briefing/scheduler.js", () => ({
   initScheduler: vi.fn(),
 }));

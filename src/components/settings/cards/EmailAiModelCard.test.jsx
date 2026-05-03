@@ -3,11 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
-  getBillExtractModels: vi.fn(),
+  getModels: vi.fn(),
 }));
 
 vi.mock("@/api", () => ({
-  getBillExtractModels: mockApi.getBillExtractModels,
+  getModels: mockApi.getModels,
 }));
 
 vi.mock("@/components/ui/select", async () => {
@@ -67,15 +67,15 @@ vi.mock("@/components/ui/select", async () => {
   };
 });
 
-const { default: BillExtractionAiCard } = await import("./BillExtractionAiCard.jsx");
+const { default: EmailAiModelCard } = await import("./EmailAiModelCard.jsx");
 
 function renderCard({ initialSettings, patch = vi.fn() } = {}) {
   function Harness() {
     const [settings, setSettings] = useState(initialSettings || {
-      bill_extract_provider: "anthropic",
-      bill_extract_model: "claude-haiku-4-5",
+      email_ai_provider: "anthropic",
+      email_ai_model: "claude-sonnet-4-6",
     });
-    return <BillExtractionAiCard settings={settings} setSettings={setSettings} patch={patch} />;
+    return <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />;
   }
 
   return {
@@ -90,14 +90,14 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  mockApi.getBillExtractModels.mockResolvedValue([
+  mockApi.getModels.mockResolvedValue([
     {
       provider: "anthropic",
       label: "Anthropic",
       available: true,
       envVar: "ANTHROPIC_API_KEY",
-      defaultModel: "claude-haiku-4-5",
-      models: [{ id: "claude-haiku-4-5", label: "Haiku 4.5" }],
+      defaultModel: "claude-sonnet-4-6",
+      models: [{ id: "claude-sonnet-4-6", label: "Sonnet 4.6" }],
     },
     {
       provider: "openai",
@@ -113,71 +113,39 @@ beforeEach(() => {
   ]);
 });
 
-describe("BillExtractionAiCard", () => {
-  it("renders provider and model as labeled peer fields", async () => {
+describe("EmailAiModelCard", () => {
+  it("renders provider-aware email summary model controls", async () => {
     renderCard();
 
     await waitFor(() => {
-      expect(mockApi.getBillExtractModels).toHaveBeenCalled();
+      expect(mockApi.getModels).toHaveBeenCalled();
     });
 
-    expect(screen.getByText("Provider")).toBeTruthy();
-    expect(screen.getByText("Model")).toBeTruthy();
-    expect(screen.getByLabelText("Bill extraction provider")).toBeTruthy();
-    expect(screen.getByLabelText("Bill extraction model")).toBeTruthy();
+    expect(screen.getByText("Email Summary AI")).toBeTruthy();
+    expect(screen.getByLabelText("Email summary provider")).toBeTruthy();
+    expect(screen.getByLabelText("Email summary model")).toBeTruthy();
   });
 
-  it("switches provider and resets the model to that provider's default", async () => {
+  it("switches OpenAI to the current GPT-5.5 default", async () => {
     const patch = vi.fn();
     renderCard({ patch });
 
     await waitFor(() => {
-      expect(mockApi.getBillExtractModels).toHaveBeenCalled();
+      expect(mockApi.getModels).toHaveBeenCalled();
     });
 
-    fireEvent.change(screen.getByLabelText("Bill extraction provider"), {
+    fireEvent.change(screen.getByLabelText("Email summary provider"), {
       target: { value: "openai" },
     });
 
     await waitFor(() => {
       expect(patch).toHaveBeenLastCalledWith({
-        bill_extract_provider: "openai",
-        bill_extract_model: "gpt-5.5",
+        email_ai_provider: "openai",
+        email_ai_model: "gpt-5.5",
+        claude_model: "gpt-5.5",
       });
     });
 
-    expect(screen.getByLabelText("Bill extraction model").value).toBe("gpt-5.5");
-  });
-
-  it("disables model selection and shows the env-var warning for an unavailable provider", async () => {
-    mockApi.getBillExtractModels.mockResolvedValueOnce([
-      {
-        provider: "anthropic",
-        label: "Anthropic",
-        available: true,
-        envVar: "ANTHROPIC_API_KEY",
-        defaultModel: "claude-haiku-4-5",
-        models: [{ id: "claude-haiku-4-5", label: "Haiku 4.5" }],
-      },
-      {
-        provider: "openai",
-        label: "OpenAI",
-        available: false,
-        envVar: "OPENAI_API_KEY",
-        defaultModel: "gpt-5.5",
-        models: [{ id: "gpt-5.5", label: "GPT-5.5" }],
-      },
-    ]);
-
-    renderCard({
-      initialSettings: {
-        bill_extract_provider: "openai",
-        bill_extract_model: "gpt-5.5",
-      },
-    });
-
-    await screen.findByText("Set OPENAI_API_KEY");
-
-    expect(screen.getByLabelText("Bill extraction model").disabled).toBe(true);
+    expect(screen.getByLabelText("Email summary model").value).toBe("gpt-5.5");
   });
 });

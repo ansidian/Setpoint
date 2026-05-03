@@ -22,7 +22,7 @@ export default function useBriefingData({ liveData, isMock }) {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [loaded, setLoaded] = useState(hasCache);
-  const [modelLabel, setModelLabel] = useState(hasCache ? cache.modelLabel : "Claude");
+  const [modelLabel, setModelLabel] = useState(hasCache ? cache.modelLabel : "AI");
   const [genProgress, setGenProgress] = useState(null);
   const [viewingPast, setViewingPast] = useState(null);
   const [latestBriefing, setLatestBriefing] = useState(hasCache ? cache.briefing : null);
@@ -70,17 +70,8 @@ export default function useBriefingData({ liveData, isMock }) {
   useEffect(() => {
     getSettings()
       .then((s) => {
-        const id = s?.claude_model || "claude-haiku-4-5-20251001";
-        const name = id
-          .replace(/^claude-/, "")
-          .replace(/-\d{8,}$/, "")
-          .replace(
-            /(\w+)-(\d+)-(\d+)/,
-            (_, n, maj, min) =>
-              `${n.charAt(0).toUpperCase() + n.slice(1)} ${maj}.${min}`,
-          )
-          .replace(/(\w+)$/, (m) => m.charAt(0).toUpperCase() + m.slice(1));
-        const nextLabel = `Claude ${name}`;
+        const id = s?.email_ai_model || s?.claude_model || "claude-sonnet-4-6";
+        const nextLabel = formatEmailAiModelLabel(id);
         setModelLabel(nextLabel);
         const nextSchedules = s?.schedules || [];
         if (s?.schedules) setSchedules(nextSchedules);
@@ -237,4 +228,20 @@ export default function useBriefingData({ liveData, isMock }) {
     backToLatest,
     navigateToEmail,
   };
+}
+
+function formatEmailAiModelLabel(model) {
+  if (!model) return "AI";
+  const gptMatch = model.match(/^gpt-(\d+(?:\.\d+)?)(?:-(mini|nano))?/i);
+  if (gptMatch) {
+    const variant = gptMatch[2] ? ` ${gptMatch[2]}` : "";
+    return `GPT-${gptMatch[1]}${variant}`;
+  }
+  const claudeMatch = model.match(/^claude-(opus|sonnet|haiku)-(\d+)-?(\d+)?/i);
+  if (claudeMatch) {
+    const family = claudeMatch[1].charAt(0).toUpperCase() + claudeMatch[1].slice(1);
+    const version = claudeMatch[3] ? `${claudeMatch[2]}.${claudeMatch[3]}` : claudeMatch[2];
+    return `${family} ${version}`;
+  }
+  return model;
 }

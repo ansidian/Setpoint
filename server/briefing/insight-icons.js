@@ -1,4 +1,4 @@
-// Allowed insight icons. Claude is prompted to pick from this list and the
+// Allowed insight icons. The email AI is prompted to pick from this list and the
 // tool schema constrains it via JSON-schema `enum`. Anything that leaks
 // through (e.g., historical briefings loaded from the DB, or a model that
 // ignores the schema) is normalized to a safe fallback.
