@@ -163,7 +163,6 @@ export default function MobileInboxView({
   closeSelectedEmail,
   mobileFiltersOpen,
   setMobileFiltersOpen,
-  pinnedSet,
   billOpen,
   setBillOpen,
   accountsById,
@@ -213,7 +212,6 @@ export default function MobileInboxView({
           email={selectedEmail}
           account={selectedAccount}
           accent={accent}
-          pinned={!!selectedEmail && (pinnedSet.has(selectedEmail.uid) || pinnedSet.has(selectedEmail.id))}
           onAction={onAction}
           onClose={closeSelectedEmail}
           showTriage={showTriage}
@@ -222,7 +220,6 @@ export default function MobileInboxView({
           setBillOpen={setBillOpen}
           trashHoldProgress={trashHold.progress}
           snoozeHoldProgress={snoozeHold.progress}
-          allowPin={!activeSnapshotMode}
           isMobile
         />
       ) : (
@@ -445,7 +442,6 @@ export default function MobileInboxView({
                   density={density}
                   showPreview={showPreview}
                   accent={accent}
-                  pinned={!!(pinnedSet.has(email.uid) || pinnedSet.has(email.id))}
                 />
               ))
             ) : (

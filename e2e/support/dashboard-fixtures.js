@@ -110,8 +110,6 @@ function defaultLiveData(overrides = {}) {
     fetchedAt: new Date().toISOString(),
     actualConfigured: false,
     actualBudgetUrl: null,
-    pinnedIds: [],
-    pinnedSnapshots: [],
     snoozedEntries: [],
     resurfacedEntries: [],
     ...overrides,
@@ -581,10 +579,6 @@ export async function installDashboardInboxFixtures(page) {
   );
 
   await page.route("**/api/briefing/dismiss/*", async (route) =>
-    json(route, { ok: true }),
-  );
-
-  await page.route("**/api/briefing/pin/*", async (route) =>
     json(route, { ok: true }),
   );
 

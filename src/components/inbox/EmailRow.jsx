@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Pin, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import { LANE } from "../../lib/redesign-helpers";
 import { timeAgo } from "./helpers";
 import { Avatar } from "./primitives";
 
-export default function EmailRow({ email, account, selected, onOpen, density, showPreview, accent, pinned }) {
+export default function EmailRow({ email, account, selected, onOpen, density, showPreview, accent }) {
   const [hover, setHover] = useState(false);
   const untriaged = email._untriaged;
   const laneKey = email._lane;
@@ -12,8 +12,8 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
   const urgColor = email.urgency === "high" ? "#f38ba8"
                   : email.urgency === "medium" ? "#fab387"
                   : "#a6adc8";
-  const dimmed = email.read && !pinned;
-  const barColor = pinned ? accent : (untriaged ? "#89b4fa" : (L ? L.color : "#6c7086"));
+  const dimmed = email.read;
+  const barColor = untriaged ? "#89b4fa" : (L ? L.color : "#6c7086");
   const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
   const hPad = 14;
 
@@ -43,9 +43,8 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
           background: untriaged
             ? `repeating-linear-gradient(180deg, ${barColor} 0 4px, transparent 4px 7px)`
             : barColor,
-          opacity: pinned ? 0.9 : untriaged ? 0.55 : 0.7,
-          boxShadow: pinned ? `0 0 8px ${accent}66`
-                   : untriaged ? "none"
+          opacity: untriaged ? 0.55 : 0.7,
+          boxShadow: untriaged ? "none"
                    : `0 0 6px ${barColor}40`,
         }}
       />
@@ -77,7 +76,6 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
           >
             {email.from}
           </span>
-          {pinned && <Pin size={10} color={accent} />}
           <span style={{ flex: 1 }} />
           <span
             style={{

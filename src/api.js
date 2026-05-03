@@ -92,12 +92,6 @@ export const peekEmailBody = (uid) => {
   return hit && hit.value && hit.expiresAt > Date.now() ? hit.value : null;
 };
 export const dismissEmail = (emailId) => apiFetch(`/api/briefing/dismiss/${encodeURIComponent(emailId)}`, { method: "POST" });
-export const pinEmail = (emailId, snapshot = null) =>
-  apiFetch(`/api/briefing/pin/${encodeURIComponent(emailId)}`, {
-    method: "POST",
-    body: JSON.stringify({ snapshot }),
-  });
-export const unpinEmail = (emailId) => apiFetch(`/api/briefing/pin/${encodeURIComponent(emailId)}`, { method: "DELETE" });
 export const snoozeEmail = (uid, untilTs, snapshot = null) =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/snooze`, {
     method: "POST",

@@ -40,7 +40,6 @@ function renderInboxList(props = {}) {
       density="default"
       layout="swimlanes"
       showPreview
-      pinnedIds={new Set()}
       searchQuery=""
       onSearchChange={() => {}}
       onMarkAllRead={() => {}}

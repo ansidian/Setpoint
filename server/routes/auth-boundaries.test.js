@@ -39,8 +39,6 @@ vi.mock("../briefing/lifecycle-service.js", () => ({
 vi.mock("../briefing/email-service.js", () => ({
   getEmailBody: vi.fn(),
   dismiss: vi.fn(),
-  pin: vi.fn(),
-  unpin: vi.fn(),
   snooze: vi.fn(),
   wake: vi.fn(),
   markRead: vi.fn(),
@@ -236,6 +234,15 @@ describe("auth boundaries", () => {
       .set("Authorization", "Bearer scoped-token");
 
     expect(res.status).toBe(401);
+  });
+
+  it("does not expose retired briefing pin routes", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .post("/api/briefing/pin/msg-1")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(404);
   });
 
   it("blocks bearer auth on settings route", async () => {

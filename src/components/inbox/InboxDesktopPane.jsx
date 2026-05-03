@@ -24,7 +24,6 @@ export default function InboxDesktopPane({
   selectedAccount,
   setSelectedId,
   closeSelectedEmail,
-  pinnedSet,
   billOpen,
   setBillOpen,
   accountsById,
@@ -131,7 +130,6 @@ export default function InboxDesktopPane({
               density={density}
               layout={indexedSearchActive ? "flat" : grouping}
               showPreview={showPreview}
-              pinnedIds={pinnedSet}
               searchQuery={search}
               onSearchChange={setSearch}
               onMarkAllRead={markAllVisibleRead}
@@ -159,7 +157,6 @@ export default function InboxDesktopPane({
               email={selectedEmail}
               account={selectedAccount}
               accent={accent}
-              pinned={!!selectedEmail && (pinnedSet.has(selectedEmail.uid) || pinnedSet.has(selectedEmail.id))}
               onAction={onAction}
               onClose={closeSelectedEmail}
               showTriage={showTriage}
@@ -169,7 +166,6 @@ export default function InboxDesktopPane({
               trashHoldProgress={trashHold.progress}
               snoozeHoldProgress={snoozeHold.progress}
               isMobile={false}
-              allowPin={!activeSnapshotMode}
             />
           )}
         </div>

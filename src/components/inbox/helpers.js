@@ -194,30 +194,6 @@ export function collectResurfaced(resurfacedMap, synthAccount, liveReadOverrides
   return out;
 }
 
-// Inject pin snapshots for emails that have aged out of the briefing/live
-// window so a pinned email keeps rendering. Caller dedups on uid — if the
-// email is already in a fresher source (briefing/live), that version wins.
-export function collectPinSnapshots(pinnedSnapshotMap, synthAccount) {
-  const out = [];
-  for (const snap of pinnedSnapshotMap.values()) {
-    const key = snap.uid || snap.id;
-    if (!key) continue;
-    const acc = synthAccount(snap);
-    out.push({
-      ...snap,
-      id: snap.id || snap.uid,
-      preview: snap.preview || snap.body_preview || "",
-      fromEmail: snap.fromEmail || snap.from_email,
-      _accountKey: acc.id || acc.name,
-      _account: acc,
-      _lane: snap._lane || deriveLane(snap),
-      _untriaged: false,
-      _fromPinSnapshot: true,
-    });
-  }
-  return out;
-}
-
 export function timeAgo(iso) {
   if (!iso) return "";
   const d = new Date(iso);

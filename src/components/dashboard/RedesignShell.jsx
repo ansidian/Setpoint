@@ -514,8 +514,6 @@ export function RedesignShell({
               activeSnapshot={activeSnapshot}
               liveReadOverrides={liveReadOverrides}
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
-              pinnedIds={liveData.pinnedIds}
-              pinnedSnapshots={liveData.pinnedSnapshots}
               snoozedEntries={liveData.snoozedEntries}
               resurfacedEntries={liveData.resurfacedEntries}
               onOpenDashboard={() => setShellTab("dashboard")}

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Mail, Search, CheckCheck, RefreshCw,
-  Sparkles, Pin, ChevronRight, ChevronDown, X,
+  Sparkles, ChevronRight, ChevronDown, X,
 } from "lucide-react";
 import { LANE, briefingPhaseLabel } from "../../lib/redesign-helpers";
 import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
@@ -63,7 +63,7 @@ function InboxLiveLoadingBlock({ compact = false }) {
 
 export default function InboxList({
   accent, emails, accountsById,
-  selectedId, onOpen, density, layout, showPreview, pinnedIds,
+  selectedId, onOpen, density, layout, showPreview,
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
   totalCount, unreadCount, briefingAgoLabel, briefingGeneratedAt, searchRef,
   liveEmailsLoading = false,
@@ -83,23 +83,20 @@ export default function InboxList({
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
 
   const grouped = useMemo(() => {
-    const g = { pinned: [], live: [], carryover: [], needs_attention: [], action: [], fyi: [], noise: [] };
+    const g = { live: [], carryover: [], needs_attention: [], action: [], fyi: [], noise: [] };
     for (const e of emails) {
-      const key = e.uid || e.id;
-      if (!activeSnapshotMode && (pinnedIds?.has?.(key) || pinnedIds?.has?.(e.id))) g.pinned.push(e);
-      else if (e._untriaged) g.live.push(e);
+      if (e._untriaged) g.live.push(e);
       else {
         const laneKey = e._lane === "action" ? "needs_attention" : e._lane;
         g[laneKey]?.push(e);
       }
     }
-    g.pinned.sort((a, b) => new Date(b.date) - new Date(a.date));
     // Use resurfaced_at as the sort key for woken snooze emails so they land
     // near the top of "live" alongside freshly-arrived mail.
     const liveKey = (e) => e._resurfacedAt || new Date(e.date).getTime();
     g.live.sort((a, b) => liveKey(b) - liveKey(a));
     return g;
-  }, [activeSnapshotMode, emails, pinnedIds]);
+  }, [emails]);
 
   const renderRows = (list) => list.map((email) => {
     const rowKey = email.id || email.uid;
@@ -115,7 +112,6 @@ export default function InboxList({
           density={density}
           showPreview={showPreview}
           accent={accent}
-          pinned={!!(pinnedIds?.has?.(email.uid) || pinnedIds?.has?.(email.id))}
         />
       </div>
     );
@@ -379,52 +375,6 @@ export default function InboxList({
           <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
           <>
-            {grouped.pinned.length > 0 && (
-              <div>
-                <StickyHeader borderColor={`${accent}22`}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleLane("pinned")}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleLane("pinned"); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8, width: "100%",
-                      cursor: "pointer", background: "transparent", border: "none",
-                      fontFamily: "inherit", color: "inherit", padding: 0,
-                    }}
-                  >
-                    <Pin size={11} color={accent} style={{ flexShrink: 0 }} />
-                    <span
-                      style={{
-                        fontSize: 10, fontWeight: 700, letterSpacing: 2,
-                        textTransform: "uppercase", color: accent,
-                        minWidth: 0, whiteSpace: "nowrap",
-                        overflow: "hidden", textOverflow: "ellipsis",
-                      }}
-                    >
-                      Pinned
-                    </span>
-                    <span
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-                        background: `${accent}22`, color: `${accent}cc`,
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {grouped.pinned.length}
-                    </span>
-                    <span style={{ flex: 1 }} />
-                    {effectiveCollapsed.pinned ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
-                  </div>
-                </StickyHeader>
-                {!effectiveCollapsed.pinned && (
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {renderRows(grouped.pinned)}
-                  </div>
-                )}
-              </div>
-            )}
             {!activeSnapshotMode && grouped.live.length > 0 && (
               <div>
                 <StickyHeader borderColor="rgba(137,180,250,0.12)">

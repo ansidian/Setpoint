@@ -8,7 +8,6 @@ import {
   FileText,
   Mail,
   MailOpen,
-  Pin,
   Reply,
   Sparkles,
   Trash2,
@@ -190,7 +189,6 @@ export default function DesktopReader({
   email,
   account,
   accent,
-  pinned,
   onAction,
   onClose,
   showTriage,
@@ -200,7 +198,6 @@ export default function DesktopReader({
   setBillOpen,
   trashHoldProgress,
   snoozeHoldProgress,
-  allowPin = true,
   snoozeBtnRef,
   snoozeOpen,
   setSnoozeOpen,
@@ -296,15 +293,6 @@ export default function DesktopReader({
           onClick={() => onAction("toggle-read")}
           accent={accent}
         />
-        {allowPin && (
-          <QuickAction
-            icon={Pin}
-            ariaLabel={pinned ? "Unpin email" : "Pin email"}
-            tooltip={pinned ? "Unpin email" : "Pin email"}
-            onClick={() => onAction("pin")}
-            accent={accent}
-          />
-        )}
         <QuickAction
           icon={Clock}
           ariaLabel="Snooze email"
