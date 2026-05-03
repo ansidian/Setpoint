@@ -38,7 +38,7 @@ function InboxLiveSkeletonRows({ count = 5, compact = false }) {
   );
 }
 
-function InboxLiveLoadingBlock({ compact = false, activeSnapshotMode = false }) {
+function InboxLiveLoadingBlock({ compact = false }) {
   return (
     <div
       data-testid="inbox-live-loading-block"
@@ -54,7 +54,7 @@ function InboxLiveLoadingBlock({ compact = false, activeSnapshotMode = false }) 
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
-        {activeSnapshotMode ? "Syncing active snapshot" : "Checking live mail"}
+        Checking live mail
       </div>
       <InboxLiveSkeletonRows count={compact ? 2 : 3} compact />
     </div>
@@ -80,7 +80,7 @@ export default function InboxList({
   const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { noise: true } : {}));
   const effectiveCollapsed = activeSnapshotMode ? { noise: true, ...collapsed } : collapsed;
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
-  const showSkeletonRows = liveEmailsLoading && emails.length === 0;
+  const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
 
   const grouped = useMemo(() => {
     const g = { pinned: [], live: [], carryover: [], needs_attention: [], action: [], fyi: [], noise: [] };
@@ -374,9 +374,9 @@ export default function InboxList({
             Processing {processingCount} email{processingCount === 1 ? "" : "s"}
           </div>
         )}
-        {liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact activeSnapshotMode={activeSnapshotMode} />}
+        {!activeSnapshotMode && liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact />}
         {showSkeletonRows ? (
-          <InboxLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
+          <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
           <>
             {grouped.pinned.length > 0 && (

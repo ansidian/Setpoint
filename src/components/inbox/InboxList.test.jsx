@@ -92,7 +92,7 @@ describe("InboxList", () => {
     expect(screen.queryByTestId("inbox-list-empty-state-card")).toBeNull();
   });
 
-  it("uses active snapshot loading copy while Sync now refreshes triage lanes", () => {
+  it("does not show the live skeleton loader while Sync now refreshes active snapshot lanes", () => {
     render(
       <InboxList
         accent="#cba6da"
@@ -118,9 +118,8 @@ describe("InboxList", () => {
       />,
     );
 
-    const loadingBlock = screen.getByTestId("inbox-live-loading-block");
-    expect(loadingBlock.textContent).toContain("Syncing active snapshot");
-    expect(loadingBlock.textContent).not.toContain("Checking live mail");
+    expect(screen.queryByTestId("inbox-live-loading-block")).toBeNull();
+    expect(screen.queryByTestId("inbox-live-skeleton")).toBeNull();
   });
 
   it("shows row-shaped live loading cues even when briefing mail is already visible", () => {
