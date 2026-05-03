@@ -11,6 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import useLiveData from "../hooks/useLiveData";
 import useBriefingData from "../hooks/useBriefingData";
 import useAutoRefresh from "../hooks/useAutoRefresh";
+import useActiveSnapshot from "../hooks/useActiveSnapshot";
 import useNotifications from "../hooks/useNotifications";
 import useCalendarDomainRange from "../hooks/useCalendarDomainRange";
 import useCalendarRange from "../hooks/useCalendarRange";
@@ -37,6 +38,7 @@ export default function Dashboard() {
   }, []);
 
   const liveData = useLiveData({ disabled: isMock });
+  const activeSnapshot = useActiveSnapshot({ disabled: isMock });
   const calendarRange = useCalendarRange({ disabled: isMock });
   const calendarDeadlineRange = useCalendarDomainRange({
     disabled: isMock,
@@ -70,8 +72,11 @@ export default function Dashboard() {
     calendarDeadlineRange.markStale?.();
     calendarBillRange.markStale?.();
     refreshCalendarDomainsRef.current?.({ force: true });
-    return quickRefreshBriefing();
-  }, [calendarBillRange, calendarDeadlineRange, markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
+    return Promise.all([
+      quickRefreshBriefing(),
+      activeSnapshot.sync(),
+    ]);
+  }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, markCalendarRangeStale, quickRefreshBriefing, refreshCalendarRangeInPlace]);
   useAutoRefresh({
     disabled: isMock,
     lastQuickRefreshAt: bd.lastQuickRefreshAt,
@@ -208,6 +213,7 @@ export default function Dashboard() {
         <RedesignShell
           bd={bd}
           liveData={liveData}
+          activeSnapshot={activeSnapshot}
           calendarRange={calendarRange}
           isMock={isMock}
           onQuickRefresh={handleExplicitQuickRefresh}

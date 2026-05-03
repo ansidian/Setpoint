@@ -1,4 +1,7 @@
 import db from "../db/connection.js";
+import { loadUserConfig, fetchAllEmails } from "./index.js";
+import { indexEmails } from "./email-index.js";
+import { enqueueEmailTriageForEmails } from "./gmail-sync.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 const TRIAGE_LANES = new Set(["needs_attention", "fyi", "noise"]);
@@ -512,6 +515,27 @@ export async function getActiveSnapshotView(userId, {
     processing,
     filters: buildFilters(items),
   };
+}
+
+export async function syncActiveSnapshot(userId, {
+  dbClient = db,
+  loadUserConfigFn = loadUserConfig,
+  fetchAllEmailsFn = fetchAllEmails,
+  indexEmailsFn = indexEmails,
+  enqueueEmailTriageForEmailsFn = enqueueEmailTriageForEmails,
+  now = new Date(),
+  timeZone = DEFAULT_TIMEZONE,
+} = {}) {
+  const { accounts, settings } = await loadUserConfigFn(userId);
+  const hoursBack = Number(settings?.email_lookback_hours) || 16;
+  const emails = await fetchAllEmailsFn(accounts, hoursBack);
+
+  if (emails.length) {
+    await indexEmailsFn(userId, emails);
+    await enqueueEmailTriageForEmailsFn(userId, emails, { dbClient });
+  }
+
+  return getActiveSnapshotView(userId, { dbClient, now, timeZone });
 }
 
 export async function moveSnapshotItemLane(userId, itemId, lane, {

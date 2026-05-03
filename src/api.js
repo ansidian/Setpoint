@@ -57,6 +57,7 @@ export const quickRefresh = () => apiFetch("/api/briefing/refresh", { method: "P
 export const pollStatus = (id) => apiFetch(`/api/briefing/status/${id}`);
 export const checkInProgress = () => apiFetch("/api/briefing/in-progress");
 export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
+export const syncActiveSnapshot = () => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
 export const moveSnapshotItemLane = (itemId, lane) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/lane`, {
     method: "PATCH",

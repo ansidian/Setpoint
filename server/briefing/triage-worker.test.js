@@ -31,6 +31,14 @@ async function createMigratedDb() {
       read INTEGER NOT NULL DEFAULT 0,
       indexed_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE ea_settings (
+      user_id TEXT PRIMARY KEY,
+      email_ai_provider TEXT DEFAULT 'anthropic',
+      email_ai_model TEXT DEFAULT NULL,
+      claude_model TEXT DEFAULT NULL,
+      bill_extract_provider TEXT DEFAULT 'anthropic',
+      bill_extract_model TEXT DEFAULT 'claude-haiku-4-5'
+    );
   `);
   await db.executeMultiple(triageMigrationSql);
   return db;
@@ -238,6 +246,68 @@ describe("email triage worker", () => {
     });
   });
 
+  it("uses the configured email summary model for direct strong triage", async () => {
+    const dbClient = await createMigratedDb();
+    await dbClient.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model)
+            VALUES (?, 'openai', 'gpt-5.4', 'anthropic', 'claude-haiku-4-5')`,
+      args: ["user-1"],
+    });
+    await queueEmail(dbClient, {
+      subject: "Security alert: payment due",
+      body_snippet: "Review this payment due security alert.",
+      body_text: "Your account has a security alert and a payment due. Review now.",
+      from_name: "Bank Security",
+      from_address: "security@bank.example",
+    });
+
+    const originalOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        model: "gpt-5.4",
+        output: [{
+          type: "function_call",
+          name: "submit_email_triage",
+          arguments: JSON.stringify({
+            lane: "needs_attention",
+            category: "security",
+            urgency: "high",
+            escalation_badge: "High Risk",
+            summary: "Security payment alert needs review.",
+            action: "Review account",
+            deadline_at: null,
+            confidence: 0.91,
+            bill_candidate: null,
+          }),
+        }],
+        usage: { input_tokens: 90, output_tokens: 30 },
+      }),
+    });
+
+    try {
+      const result = await processNextEmailTriageJob({
+        dbClient,
+        now: new Date("2026-05-03T12:21:00.000Z"),
+      });
+
+      expect(result).toMatchObject({
+        processed: true,
+        lane: "needs_attention",
+        source: "strong_model",
+        model_calls: ["strong"],
+      });
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toBe("https://api.openai.com/v1/responses");
+      expect(JSON.parse(options.body).model).toBe("gpt-5.4");
+    } finally {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+      global.fetch = undefined;
+    }
+  });
+
   it("uses enabled database rules before falling back to model routing", async () => {
     const dbClient = await createMigratedDb();
     await dbClient.execute({
@@ -433,6 +503,68 @@ describe("email triage worker", () => {
       decision: { category: "finance", confidence: 0.93 },
       tier: "cheap",
     });
+  });
+
+  it("uses the configured bill extraction model for cheap triage", async () => {
+    const dbClient = await createMigratedDb();
+    await dbClient.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model)
+            VALUES (?, 'anthropic', 'claude-sonnet-4-6', 'openai', 'gpt-5.4-nano')`,
+      args: ["user-1"],
+    });
+    await queueEmail(dbClient, {
+      subject: "Package update",
+      body_snippet: "Your item is moving through the network.",
+      body_text: "Your item is moving through the network and does not require action.",
+      from_name: "Shipping Desk",
+      from_address: "updates@shipper.example",
+    });
+
+    const originalOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        model: "gpt-5.4-nano",
+        output: [{
+          type: "function_call",
+          name: "submit_email_triage",
+          arguments: JSON.stringify({
+            lane: "fyi",
+            category: "delivery",
+            urgency: "low",
+            escalation_badge: null,
+            summary: "Package status update.",
+            action: "No action needed.",
+            deadline_at: null,
+            confidence: 0.94,
+            bill_candidate: null,
+          }),
+        }],
+        usage: { input_tokens: 70, output_tokens: 20 },
+      }),
+    });
+
+    try {
+      const result = await processNextEmailTriageJob({
+        dbClient,
+        now: new Date("2026-05-03T12:29:00.000Z"),
+      });
+
+      expect(result).toMatchObject({
+        processed: true,
+        lane: "fyi",
+        source: "cheap_model",
+        model_calls: ["cheap"],
+      });
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toBe("https://api.openai.com/v1/responses");
+      expect(JSON.parse(options.body).model).toBe("gpt-5.4-nano");
+    } finally {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+      global.fetch = undefined;
+    }
   });
 
   it("drops generic model escalation badges from FYI decisions", async () => {

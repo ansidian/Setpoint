@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getActiveSnapshot } from "../api";
+import { getActiveSnapshot, syncActiveSnapshot } from "../api";
 
 const PROCESSING_POLL_MS = 15_000;
 
@@ -20,6 +20,23 @@ export default function useActiveSnapshot({ disabled = false } = {}) {
       return data;
     } catch (err) {
       if (mountedRef.current) setError(err.message || "Failed to load active snapshot.");
+      return null;
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [disabled]);
+
+  const sync = useCallback(async () => {
+    if (disabled) return null;
+    setLoading(true);
+    try {
+      const data = await syncActiveSnapshot();
+      if (!mountedRef.current) return data;
+      setSnapshot(data);
+      setError(null);
+      return data;
+    } catch (err) {
+      if (mountedRef.current) setError(err.message || "Failed to sync active snapshot.");
       return null;
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -50,5 +67,6 @@ export default function useActiveSnapshot({ disabled = false } = {}) {
     loading,
     error,
     refresh,
+    sync,
   };
 }
