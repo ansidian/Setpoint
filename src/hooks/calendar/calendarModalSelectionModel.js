@@ -53,6 +53,7 @@ export function buildCalendarModalSyncSnapshot({
   const didOpen = !prevOpen && open;
   const didViewChange = prevView !== view;
   const didOpenRequest = open && prevOpenRequestId !== openRequestId;
+  const isCleanDeadlineCreateRequest = view === "deadlines" && focusItemId === "new" && !focusDate;
 
   if (!didOpen && !didViewChange && !didOpenRequest) return null;
 
@@ -66,14 +67,20 @@ export function buildCalendarModalSyncSnapshot({
   const requestFocus = didOpenRequest ? parseFocusDate(focusDate) : null;
 
   if (didOpen) {
-    nextPendingFocusDate = focusDate || null;
-    nextPendingFocusItemId = focusItemId ? String(focusItemId) : null;
+    nextPendingFocusDate = isCleanDeadlineCreateRequest ? null : focusDate || null;
+    nextPendingFocusItemId = isCleanDeadlineCreateRequest ? null : focusItemId ? String(focusItemId) : null;
 
     if (openingFocus) {
       nextViewDate = resolveFocusViewDate(openingFocus, nextViewDate);
       nextSelectedDay = openingFocus.getDate();
       nextSelectedDateKey = ymdFromParts(openingFocus.getFullYear(), openingFocus.getMonth(), openingFocus.getDate());
       nextSelectedItemId = focusItemId ? String(focusItemId) : null;
+    } else if (isCleanDeadlineCreateRequest) {
+      const today = new Date();
+      nextViewDate = { month: today.getMonth(), year: today.getFullYear() };
+      nextSelectedDay = null;
+      nextSelectedDateKey = null;
+      nextSelectedItemId = null;
     } else {
       const today = new Date();
       nextViewDate = { month: today.getMonth(), year: today.getFullYear() };
@@ -84,14 +91,18 @@ export function buildCalendarModalSyncSnapshot({
   }
 
   if (didOpenRequest && !didOpen) {
-    nextPendingFocusDate = focusDate || null;
-    nextPendingFocusItemId = focusItemId ? String(focusItemId) : null;
+    nextPendingFocusDate = isCleanDeadlineCreateRequest ? null : focusDate || null;
+    nextPendingFocusItemId = isCleanDeadlineCreateRequest ? null : focusItemId ? String(focusItemId) : null;
 
     if (requestFocus) {
       nextViewDate = resolveFocusViewDate(requestFocus, nextViewDate);
       nextSelectedDay = requestFocus.getDate();
       nextSelectedDateKey = ymdFromParts(requestFocus.getFullYear(), requestFocus.getMonth(), requestFocus.getDate());
       nextSelectedItemId = focusItemId ? String(focusItemId) : null;
+    } else if (isCleanDeadlineCreateRequest) {
+      nextSelectedDay = null;
+      nextSelectedDateKey = null;
+      nextSelectedItemId = null;
     } else if (focusItemId) {
       nextSelectedItemId = String(focusItemId);
     }

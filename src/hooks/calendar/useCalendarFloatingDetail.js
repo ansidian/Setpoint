@@ -243,11 +243,14 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
   const closeFloatingDetail = useCallback(() => {
     const current = floatingDetailRef.current;
     if (current?.open && (current.mode === "edit" || current.mode === "create")) {
-      if (current.dirty) shakeFloatingEditor();
-      return;
+      if (current.dirty) {
+        shakeFloatingEditor();
+        return false;
+      }
     }
     clearSessionSide(sessionSideByViewRef, current);
     setSyncedFloatingDetail(null);
+    return true;
   }, [setSyncedFloatingDetail, shakeFloatingEditor]);
 
   const parkFloatingDetail = useCallback(() => {

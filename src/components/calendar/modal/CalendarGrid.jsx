@@ -202,7 +202,7 @@ export default function CalendarGrid({
     if (isSelected && (!clearItemSelection || selectedItemId == null)) return;
 
     closeEventEditor();
-    onCloseFloatingDetail?.();
+    if (onCloseFloatingDetail?.() === false) return;
     if (view === "deadlines") {
       setDeadlineEditor(null);
     }

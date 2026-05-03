@@ -130,8 +130,11 @@ export default function useCalendarModalEditorRouting({
     });
   }, [activeSelectedDateKey, activeView, eventEditorRef, findDateCell, floatingDetailRef, openFloatingDetail, setSelectedDateKey, setSelectedDay, setSelectedItemId, suppressAgendaPassiveSync]);
 
-  const openFloatingDeadlineCreate = useCallback((seedDate = null) => {
-    const dateKey = seedDate || activeSelectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay });
+  const openFloatingDeadlineCreate = useCallback((seedDate = null, options = {}) => {
+    const allowSelectionFallback = options.allowSelectionFallback !== false;
+    const dateKey = seedDate || (allowSelectionFallback
+      ? activeSelectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay })
+      : null);
     const parsed = parseYmd(dateKey);
     if (parsed) {
       setSelectedDay(parsed.day);
