@@ -16,6 +16,7 @@ const migrationFiles = [
   "030_triage_snapshots.sql",
   "036_snapshot_item_source_metadata.sql",
   "031_gmail_watch_state.sql",
+  "039_align_email_fts_rowids.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>
@@ -104,9 +105,10 @@ export async function seedIndexedEmail(db, email = {}) {
     },
     {
       sql: `INSERT INTO ea_email_fts
-              (uid, from_name, from_address, subject, body_snippet, body_text)
-            VALUES (?, ?, ?, ?, ?, ?)`,
+              (rowid, uid, from_name, from_address, subject, body_snippet, body_text)
+            VALUES ((SELECT rowid FROM ea_email_index WHERE uid = ?), ?, ?, ?, ?, ?, ?)`,
       args: [
+        row.uid,
         row.uid,
         row.from_name,
         row.from_address,

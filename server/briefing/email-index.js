@@ -209,7 +209,7 @@ async function loadExistingIndexRows(userId, uids, { dbClient }) {
   for (let i = 0; i < uids.length; i += EMAIL_INDEX_LOOKUP_CHUNK_SIZE) {
     const chunk = uids.slice(i, i + EMAIL_INDEX_LOOKUP_CHUNK_SIZE);
     const result = await dbClient.execute({
-      sql: `SELECT uid, subject, body_snippet, body_text, read
+      sql: `SELECT rowid, uid, from_name, from_address, subject, body_snippet, body_text, read
             FROM ea_email_index
             WHERE user_id = ?
               AND uid IN (${chunk.map(() => "?").join(",")})`,
@@ -237,6 +237,8 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
     const read = email.read ? 1 : 0;
     const existing = existingRows.get(uid);
     const searchableChanged = !existing
+      || existing.from_name !== fromName
+      || existing.from_address !== fromAddress
       || existing.subject !== subject
       || existing.body_snippet !== bodySnippet
       || existing.body_text !== bodyText;
@@ -267,25 +269,31 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
                subject, body_snippet, body_text, email_date, read)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(uid) DO UPDATE SET
+                account_id = excluded.account_id,
+                account_label = excluded.account_label,
+                account_email = excluded.account_email,
+                account_color = excluded.account_color,
+                account_icon = excluded.account_icon,
+                from_name = excluded.from_name,
+                from_address = excluded.from_address,
                 subject = excluded.subject,
                 body_snippet = excluded.body_snippet,
                 body_text = excluded.body_text,
+                email_date = excluded.email_date,
                 read = excluded.read`,
         args,
       },
-      // FTS5 has no UNIQUE constraint on uid, so OR IGNORE is a no-op.
-      // Delete any prior row for this uid before inserting to prevent duplicates.
-      {
-        sql: `DELETE FROM ea_email_fts WHERE uid = ?`,
-        args: [uid],
-      },
+      existing ? {
+        sql: `DELETE FROM ea_email_fts WHERE rowid = ?`,
+        args: [existing.rowid],
+      } : null,
       {
         sql: `INSERT INTO ea_email_fts
-              (uid, from_name, from_address, subject, body_snippet, body_text)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [uid, fromName, fromAddress, subject, bodySnippet, bodyText],
+              (rowid, uid, from_name, from_address, subject, body_snippet, body_text)
+              VALUES ((SELECT rowid FROM ea_email_index WHERE uid = ?), ?, ?, ?, ?, ?, ?)`,
+        args: [uid, uid, fromName, fromAddress, subject, bodySnippet, bodyText],
       },
-    ];
+    ].filter(Boolean);
   });
 
   if (stmts.length) await dbClient.batch(stmts);

@@ -280,6 +280,98 @@ describe("email indexing", () => {
     expect(indexed.rows[0].read).toBe(1);
   });
 
+  it("keeps FTS rowids aligned with email index rowids across content updates", async () => {
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-rowid",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Original subject",
+        body_preview: "Original preview",
+        body_text: "Original body",
+        date: "2026-05-01T12:00:00Z",
+        read: false,
+      },
+    ]);
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-rowid",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Updated subject",
+        body_preview: "Updated preview",
+        body_text: "Updated body",
+        date: "2026-05-01T12:00:00Z",
+        read: false,
+      },
+    ]);
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT i.rowid AS index_rowid,
+                   f.rowid AS fts_rowid,
+                   f.subject,
+                   f.body_text
+            FROM ea_email_index i
+            JOIN ea_email_fts f ON f.uid = i.uid
+            WHERE i.uid = ?`,
+      args: ["gmail-work-msg-rowid"],
+    });
+
+    expect(rows.rows).toEqual([
+      {
+        index_rowid: rows.rows[0].index_rowid,
+        fts_rowid: rows.rows[0].index_rowid,
+        subject: "Updated subject",
+        body_text: "Updated body",
+      },
+    ]);
+  });
+
+  it("replaces changed FTS content by rowid instead of scanning by uid", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-rowid-delete",
+      subject: "Original subject",
+      body_snippet: "Original preview",
+      body_text: "Original body",
+      read: 0,
+    });
+    const dbClient = {
+      execute: (...args) => testState.db.current.execute(...args),
+      batch: vi.fn((...args) => testState.db.current.batch(...args)),
+    };
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-rowid-delete",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Updated subject",
+        body_preview: "Updated preview",
+        body_text: "Updated body",
+        date: "2026-05-01T12:00:00Z",
+        read: false,
+      },
+    ], { dbClient });
+
+    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
+    const ftsDelete = statements.find((statement) => statement.sql.includes("DELETE FROM ea_email_fts"));
+    expect(ftsDelete?.sql).toContain("WHERE rowid = ?");
+    expect(ftsDelete?.sql).not.toContain("WHERE uid = ?");
+  });
+
   it("logs indexing with a scoped current-system prefix", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
