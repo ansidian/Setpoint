@@ -14,6 +14,7 @@ const migrationFiles = [
   "019_email_body_text.sql",
   "029_email_backfill_state.sql",
   "030_triage_snapshots.sql",
+  "036_snapshot_item_source_metadata.sql",
   "031_gmail_watch_state.sql",
 ];
 

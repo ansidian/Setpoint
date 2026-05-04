@@ -9,6 +9,7 @@ const TARGETS = [
   { table: "ea_accounts", idCol: "id", valCol: "credentials_encrypted" },
   { table: "ea_settings", idCol: "user_id", valCol: "actual_budget_password_encrypted" },
   { table: "ea_settings", idCol: "user_id", valCol: "todoist_api_token_encrypted" },
+  { table: "ea_settings", idCol: "user_id", valCol: "todoist_oauth_refresh_token_encrypted" },
 ];
 
 async function rewriteColumn({ table, idCol, valCol }) {

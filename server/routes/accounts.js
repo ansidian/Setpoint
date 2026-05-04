@@ -26,6 +26,7 @@ import {
   normalizeStoredEmailTriageMode,
 } from "../briefing/triage-mode.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
+import { storeTodoistOAuthTokenResponse } from "../briefing/todoist-token.js";
 
 const router = Router();
 const GMAIL_OAUTH_BIND_COOKIE = "ea_oauth_bind";
@@ -359,12 +360,14 @@ router.get("/settings", async (req, res) => {
     const {
       actual_budget_password_encrypted,
       todoist_api_token_encrypted,
+      todoist_oauth_refresh_token_encrypted,
       schedules_json,
       email_interests_json,
       ...safe
     } = result.rows[0];
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
     safe.todoist_configured = !!todoist_api_token_encrypted;
+    safe.todoist_oauth_configured = !!(todoist_api_token_encrypted && todoist_oauth_refresh_token_encrypted);
     safe.schedules = schedules_json
       ? JSON.parse(schedules_json)
       : [
@@ -403,9 +406,12 @@ router.get("/settings", async (req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, bill_extract_provider, bill_extract_model, email_triage_mode } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode } = req.body;
 
   try {
+    if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
+      return res.status(400).json({ message: "Provide either todoist_api_token or todoist_oauth_token_response, not both" });
+    }
     await db.execute({ sql: "INSERT OR IGNORE INTO ea_settings (user_id) VALUES (?)", args: [userId] });
     const updates = [];
     const args = [];
@@ -438,7 +444,14 @@ router.put("/settings", async (req, res) => {
       }
     }
     if (email_interests_json !== undefined) { updates.push("email_interests_json = ?"); args.push(typeof email_interests_json === "string" ? email_interests_json : JSON.stringify(email_interests_json)); }
-    if (todoist_api_token !== undefined) { updates.push("todoist_api_token_encrypted = ?"); args.push(todoist_api_token ? encrypt(todoist_api_token) : null); }
+    if (todoist_api_token !== undefined) {
+      updates.push("todoist_api_token_encrypted = ?");
+      args.push(todoist_api_token ? encrypt(todoist_api_token) : null);
+      updates.push("todoist_oauth_refresh_token_encrypted = NULL");
+      updates.push("todoist_oauth_access_token_expires_at = NULL");
+      updates.push("todoist_oauth_scope = NULL");
+      updates.push("todoist_oauth_token_type = NULL");
+    }
     if (email_triage_mode !== undefined) {
       if (!isAllowedStoredEmailTriageMode(email_triage_mode)) {
         return res.status(400).json({ message: "Invalid email_triage_mode" });
@@ -459,6 +472,12 @@ router.put("/settings", async (req, res) => {
     if (updates.length > 0) {
       args.push(userId);
       await db.execute({ sql: `UPDATE ea_settings SET ${updates.join(", ")} WHERE user_id = ?`, args });
+    }
+    if (todoist_oauth_token_response !== undefined) {
+      const response = typeof todoist_oauth_token_response === "string"
+        ? JSON.parse(todoist_oauth_token_response)
+        : todoist_oauth_token_response;
+      await storeTodoistOAuthTokenResponse(userId, response);
     }
 
     // Purge Todoist items from latest briefing and completed tasks on disconnect

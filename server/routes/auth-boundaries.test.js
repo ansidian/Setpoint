@@ -116,11 +116,17 @@ vi.mock("../briefing/bill-extractors/catalog.js", () => ({
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
   DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));
+vi.mock("../dashboard/current-service.js", () => ({
+  getCurrentDashboard: vi.fn(async () => ({ weather: null, providerHealth: {} })),
+  getDashboardSystemHealth: vi.fn(async () => ({ providerHealth: {}, systemStatus: { state: "current", sources: [] } })),
+  syncCurrentDashboard: vi.fn(async () => ({ weather: null, providerHealth: {} })),
+}));
 
 process.env.EA_USER_ID = "user-1";
 
 const { createQuickTxn, sendBill } = await import("../briefing/bills-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
+const dashboardRoutes = (await import("./dashboard.js")).default;
 const liveRoutes = (await import("./live.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
 const notesRoutes = (await import("./notes.js")).default;
@@ -132,6 +138,7 @@ function makeApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/briefing", briefingRoutes);
+  app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/live", liveRoutes);
   app.use("/api/ea", accountsRoutes);
   app.use("/api/notes", notesRoutes);
@@ -160,6 +167,10 @@ async function createMigratedDb() {
       user_id TEXT PRIMARY KEY,
       actual_budget_password_encrypted TEXT,
       todoist_api_token_encrypted TEXT,
+      todoist_oauth_refresh_token_encrypted TEXT,
+      todoist_oauth_access_token_expires_at TEXT,
+      todoist_oauth_scope TEXT,
+      todoist_oauth_token_type TEXT,
       schedules_json TEXT,
       email_interests_json TEXT,
       claude_model TEXT,
@@ -236,6 +247,15 @@ describe("auth boundaries", () => {
     expect(res.status).toBe(401);
   });
 
+  it("blocks bearer auth on dashboard current route", async () => {
+    await seedBearer();
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Authorization", "Bearer scoped-token");
+
+    expect(res.status).toBe(401);
+  });
+
   it("does not expose retired briefing pin routes", async () => {
     await seedSession();
     const res = await request(makeApp())
@@ -296,6 +316,75 @@ describe("auth boundaries", () => {
 
     expect(res.status).toBe(200);
     expect(await getSettingsRow()).toMatchObject({ email_triage_mode: "paused" });
+  });
+
+  it("stores Todoist OAuth token responses without exposing token material", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        todoist_oauth_token_response: {
+          access_token: "access-1",
+          refresh_token: "refresh-1",
+          expires_in: 3600,
+          token_type: "Bearer",
+          scope: "data:read_write,data:delete",
+        },
+      });
+
+    expect(res.status).toBe(200);
+    const settings = await getSettingsRow();
+    expect(settings).toMatchObject({
+      todoist_api_token_encrypted: "enc:access-1",
+      todoist_oauth_refresh_token_encrypted: "enc:refresh-1",
+      todoist_oauth_token_type: "Bearer",
+      todoist_oauth_scope: "data:read_write,data:delete",
+    });
+    expect(settings.todoist_oauth_access_token_expires_at).toEqual(expect.any(String));
+
+    const getRes = await request(makeApp())
+      .get("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"]);
+    expect(getRes.body.todoist_configured).toBe(true);
+    expect(getRes.body.todoist_oauth_configured).toBe(true);
+    expect(getRes.body).not.toHaveProperty("todoist_api_token_encrypted");
+    expect(getRes.body).not.toHaveProperty("todoist_oauth_refresh_token_encrypted");
+  });
+
+  it("clears Todoist OAuth metadata when replacing with a personal token", async () => {
+    await seedSession();
+    await testState.db.current.execute({
+      sql: `UPDATE ea_settings
+            SET todoist_api_token_encrypted = ?,
+                todoist_oauth_refresh_token_encrypted = ?,
+                todoist_oauth_access_token_expires_at = ?,
+                todoist_oauth_scope = ?,
+                todoist_oauth_token_type = ?
+            WHERE user_id = ?`,
+      args: [
+        "enc:access-1",
+        "enc:refresh-1",
+        "2026-05-04T21:00:00.000Z",
+        "data:read_write",
+        "Bearer",
+        "user-1",
+      ],
+    });
+
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ todoist_api_token: "personal-token" });
+
+    expect(res.status).toBe(200);
+    expect(await getSettingsRow()).toMatchObject({
+      todoist_api_token_encrypted: "enc:personal-token",
+      todoist_oauth_refresh_token_encrypted: null,
+      todoist_oauth_access_token_expires_at: null,
+      todoist_oauth_scope: null,
+      todoist_oauth_token_type: null,
+    });
   });
 
   it("blocks bearer auth on notes route", async () => {

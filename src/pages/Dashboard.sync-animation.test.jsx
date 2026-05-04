@@ -80,6 +80,48 @@ vi.mock("../hooks/useActiveSnapshot", () => ({
   }),
 }));
 
+vi.mock("../hooks/useCurrentDashboard", () => ({
+  default: () => ({
+    liveData: {
+      liveEmails: [],
+      allSchedules: [],
+      recentTransactions: [],
+      payeeMap: {},
+      actualBudgetUrl: "",
+      actualConfigured: false,
+      refreshNow: mocks.liveRefreshNow,
+    },
+    activeSnapshot: {
+      snapshot: null,
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: mocks.activeSnapshotSync,
+    },
+    briefingData: {
+      loading: false,
+      error: null,
+      briefing: {
+        emails: { summary: "", accounts: [] },
+        ctm: { upcoming: [], stats: null },
+        todoist: { upcoming: [], stats: null },
+        calendar: [],
+        aiInsights: [],
+      },
+      setBriefing: vi.fn(),
+      refreshing: false,
+      generating: false,
+      genProgress: null,
+      latestId: null,
+      schedules: [],
+      viewingPast: null,
+      lastQuickRefreshAt: null,
+      handleQuickRefresh: vi.fn(),
+      selectHistory: vi.fn(),
+    },
+  }),
+}));
+
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
 vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
 vi.mock("../components/dev/DevPanel.jsx", () => ({ default: () => null }));

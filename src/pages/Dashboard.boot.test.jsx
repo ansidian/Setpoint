@@ -89,6 +89,44 @@ vi.mock("../hooks/useActiveSnapshot", () => ({
   }),
 }));
 
+vi.mock("../hooks/useCurrentDashboard", () => ({
+  default: () => ({
+    liveData: {
+      liveEmails: [],
+      liveWeather: null,
+      liveCalendar: null,
+      liveBills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: false,
+      actualBudgetUrl: null,
+      refreshNow: vi.fn(),
+    },
+    activeSnapshot: {
+      snapshot: mocks.activeSnapshot,
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    },
+    briefingData: {
+      loading: false,
+      error: null,
+      briefing: null,
+      setBriefing: vi.fn(),
+      refreshing: false,
+      generating: false,
+      genProgress: null,
+      latestId: null,
+      schedules: [],
+      viewingPast: null,
+      lastQuickRefreshAt: null,
+      handleQuickRefresh: vi.fn(),
+      selectHistory: vi.fn(),
+    },
+  }),
+}));
+
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
 vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
 

@@ -10,8 +10,8 @@ import { transformBriefing } from "../transform";
 // in the background.
 let cache = null;
 
-export default function useBriefingData({ liveData, isMock }) {
-  const hasCache = !isMock && cache !== null && cache.briefing != null;
+export default function useBriefingData({ liveData, isMock, disabled = false }) {
+  const hasCache = !disabled && !isMock && cache !== null && cache.briefing != null;
   const [briefing, setBriefing] = useState(hasCache ? cache.briefing : null);
   const [loading, setLoading] = useState(!hasCache);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,6 +32,7 @@ export default function useBriefingData({ liveData, isMock }) {
   // --- Data fetching ---
 
   useEffect(() => {
+    if (disabled) return;
     getSettings()
       .then((s) => {
         const id = s?.email_ai_model || s?.claude_model || "claude-sonnet-4-6";
@@ -50,9 +51,13 @@ export default function useBriefingData({ liveData, isMock }) {
       })
       .catch(() => {});
 
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
+    if (disabled) {
+      setLoading(false);
+      return;
+    }
     getLatestBriefing()
       .then((res) => {
         const transformed = transformBriefing(res.briefing);
@@ -68,11 +73,12 @@ export default function useBriefingData({ liveData, isMock }) {
         setLoading(false);
         setTimeout(() => setLoaded(true), 100);
       });
-  }, [isMock]);
+  }, [disabled, isMock]);
 
   // --- Dev scenario live apply ---
 
   useEffect(() => {
+    if (disabled) return undefined;
     const handler = async (e) => {
       const scenarios = e.detail?.scenarios;
       try {
@@ -91,7 +97,7 @@ export default function useBriefingData({ liveData, isMock }) {
     };
     window.addEventListener("devpanel:apply", handler);
     return () => window.removeEventListener("devpanel:apply", handler);
-  }, []);
+  }, [disabled]);
 
   // --- Actions ---
 

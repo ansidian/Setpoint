@@ -6,6 +6,7 @@ import {
   ShellBrand,
   ShellTabs,
 } from "./ShellHeaderChrome";
+import { SystemStatusButton } from "./SystemStatusButton.jsx";
 
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.
@@ -24,6 +25,7 @@ export default function ShellHeader({
   refreshing,
   generating,
   onQuickRefresh,
+  systemStatus,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -77,6 +79,7 @@ export default function ShellHeader({
       />
       <div style={{ flex: 1 }} />
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
+      <SystemStatusButton isMobile={isMobile} systemStatus={systemStatus} />
       <RefreshButton
         isMobile={isMobile}
         refreshing={refreshing}

@@ -23,11 +23,16 @@ const migrationSql = readFileSync(
   join(__dirname, "../db/migrations/030_triage_snapshots.sql"),
   "utf8",
 );
+const sourceMetadataMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/036_snapshot_item_source_metadata.sql"),
+  "utf8",
+);
 
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(emailIndexMigrationSql);
   await db.executeMultiple(migrationSql);
+  await db.executeMultiple(sourceMetadataMigrationSql);
   return db;
 }
 

@@ -406,6 +406,7 @@ export function RedesignShell({
         refreshing={bd.refreshing}
         generating={bd.generating}
         onQuickRefresh={onQuickRefresh}
+        systemStatus={liveData.systemStatus}
       />
 
       <div

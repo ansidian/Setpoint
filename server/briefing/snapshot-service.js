@@ -97,6 +97,8 @@ function normalizeCount(value) {
 }
 
 function normalizeSnapshotItem(row) {
+  const source = row.source || null;
+  const resurfacedAt = row.resurfaced_at == null ? null : Number(row.resurfaced_at);
   return {
     id: Number(row.id),
     snapshot_id: Number(row.snapshot_id),
@@ -126,6 +128,11 @@ function normalizeSnapshotItem(row) {
     account_icon: row.account_icon_at_snapshot || "Mail",
     sort_order: Number(row.sort_order || 0),
     is_carryover: Boolean(row.is_carryover),
+    source,
+    source_at: row.source_at || null,
+    resurfaced_at: resurfacedAt,
+    _resurfaced: source === "resurfaced_snooze",
+    _resurfacedAt: source === "resurfaced_snooze" ? resurfacedAt : null,
     dismissed_from_today_at: row.dismissed_from_today_at || null,
     handled_at: row.handled_at || null,
     provider_removed_at: row.provider_removed_at || null,
@@ -221,7 +228,7 @@ async function copyCarryoverItems(dbClient, userId, snapshot, window) {
              from_name_at_snapshot, from_address_at_snapshot, email_date_at_snapshot,
              account_label_at_snapshot, account_email_at_snapshot,
              account_color_at_snapshot, account_icon_at_snapshot, sort_order,
-             is_carryover)
+             is_carryover, source, source_at, resurfaced_at)
           SELECT ?, i.triage_id, i.user_id, i.account_id, i.email_id,
                  'needs_attention', i.summary_at_snapshot, i.action_at_snapshot,
                  i.urgency_at_snapshot, i.deadline_at_snapshot, i.category_at_snapshot,
@@ -229,7 +236,7 @@ async function copyCarryoverItems(dbClient, userId, snapshot, window) {
                  i.from_name_at_snapshot, i.from_address_at_snapshot, i.email_date_at_snapshot,
                  i.account_label_at_snapshot, i.account_email_at_snapshot,
                  i.account_color_at_snapshot, i.account_icon_at_snapshot, i.sort_order,
-                 1
+                 1, i.source, i.source_at, i.resurfaced_at
           FROM ea_briefing_snapshot_items i
           JOIN ea_email_triage t
             ON t.id = i.triage_id
@@ -395,6 +402,171 @@ async function loadActiveSnapshotItemsForEmail(dbClient, userId, accountId, emai
     args: [userId, accountId, emailId],
   });
   return result.rows;
+}
+
+function snapshotString(...values) {
+  for (const value of values) {
+    if (value != null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function snapshotLane(snapshot) {
+  const lane = snapshot?._lane || snapshot?.lane || "needs_attention";
+  return TRIAGE_LANES.has(lane) ? lane : "needs_attention";
+}
+
+function snapshotDate(snapshot) {
+  return snapshot?.date || snapshot?.email_date || snapshot?.email_date_at_snapshot || null;
+}
+
+async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso) {
+  const accountId = snapshotString(snapshot?.account_id, snapshot?.accountId, snapshot?._accountKey);
+  const emailId = snapshotString(snapshot?.uid, snapshot?.email_id, snapshot?.id);
+  if (!accountId || !emailId) return null;
+
+  const lane = snapshotLane(snapshot);
+  await dbClient.execute({
+    sql: `INSERT INTO ea_email_triage
+            (user_id, account_id, email_id, thread_id, lane, category, urgency,
+             escalation_badge, summary, action, deadline_at, triage_status,
+             triage_source, last_triaged_at, provider_state, handled_at, dismissed_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete',
+                  'snooze_resurface', ?, 'available', NULL, NULL)
+          ON CONFLICT(user_id, account_id, email_id) DO UPDATE SET
+            lane = excluded.lane,
+            category = excluded.category,
+            urgency = excluded.urgency,
+            escalation_badge = excluded.escalation_badge,
+            summary = excluded.summary,
+            action = excluded.action,
+            deadline_at = excluded.deadline_at,
+            triage_status = 'complete',
+            triage_source = 'snooze_resurface',
+            provider_state = 'available',
+            handled_at = NULL,
+            dismissed_at = NULL,
+            updated_at = datetime('now')`,
+    args: [
+      userId,
+      accountId,
+      emailId,
+      snapshot?.thread_id || snapshot?.threadId || null,
+      lane,
+      snapshot?.category || "uncategorized",
+      snapshot?.urgency || "normal",
+      snapshot?.escalation_badge || snapshot?.urgentFlag?.label || null,
+      snapshotString(snapshot?.summary, snapshot?.preview, snapshot?.body_preview),
+      snapshotString(snapshot?.action),
+      snapshot?.deadline_at || null,
+      nowIso,
+    ],
+  });
+
+  const result = await dbClient.execute({
+    sql: `SELECT id
+          FROM ea_email_triage
+          WHERE user_id = ? AND account_id = ? AND email_id = ?
+          LIMIT 1`,
+    args: [userId, accountId, emailId],
+  });
+  return {
+    triageId: Number(result.rows[0]?.id),
+    accountId,
+    emailId,
+    lane,
+  };
+}
+
+export async function attachResurfacedSnoozeToActiveSnapshot(userId, snapshot, {
+  dbClient = db,
+  now = new Date(),
+  timeZone = DEFAULT_TIMEZONE,
+  resurfacedAt = now.getTime(),
+} = {}) {
+  const nowIso = now.toISOString();
+  const triage = await upsertResurfacedTriage(dbClient, userId, snapshot, nowIso);
+  if (!triage?.triageId) return null;
+
+  const activeSnapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
+  await dbClient.execute({
+    sql: `INSERT INTO ea_briefing_snapshot_items
+            (snapshot_id, triage_id, user_id, account_id, email_id,
+             lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+             urgency_at_snapshot, deadline_at_snapshot, category_at_snapshot,
+             escalation_badge_at_snapshot, subject_at_snapshot, from_name_at_snapshot,
+             from_address_at_snapshot, email_date_at_snapshot, account_label_at_snapshot,
+             account_email_at_snapshot, account_color_at_snapshot, account_icon_at_snapshot,
+             sort_order, is_carryover, source, source_at, resurfaced_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0,
+                  'resurfaced_snooze', ?, ?)
+          ON CONFLICT(snapshot_id, triage_id) DO UPDATE SET
+            lane_at_snapshot = excluded.lane_at_snapshot,
+            summary_at_snapshot = excluded.summary_at_snapshot,
+            action_at_snapshot = excluded.action_at_snapshot,
+            urgency_at_snapshot = excluded.urgency_at_snapshot,
+            deadline_at_snapshot = excluded.deadline_at_snapshot,
+            category_at_snapshot = excluded.category_at_snapshot,
+            escalation_badge_at_snapshot = excluded.escalation_badge_at_snapshot,
+            subject_at_snapshot = excluded.subject_at_snapshot,
+            from_name_at_snapshot = excluded.from_name_at_snapshot,
+            from_address_at_snapshot = excluded.from_address_at_snapshot,
+            email_date_at_snapshot = excluded.email_date_at_snapshot,
+            account_label_at_snapshot = excluded.account_label_at_snapshot,
+            account_email_at_snapshot = excluded.account_email_at_snapshot,
+            account_color_at_snapshot = excluded.account_color_at_snapshot,
+            account_icon_at_snapshot = excluded.account_icon_at_snapshot,
+            is_carryover = 0,
+            dismissed_from_today_at = NULL,
+            handled_at = NULL,
+            provider_removed_at = NULL,
+            source = excluded.source,
+            source_at = excluded.source_at,
+            resurfaced_at = excluded.resurfaced_at,
+            updated_at = datetime('now')`,
+    args: [
+      activeSnapshot.id,
+      triage.triageId,
+      userId,
+      triage.accountId,
+      triage.emailId,
+      triage.lane,
+      snapshotString(snapshot?.summary, snapshot?.preview, snapshot?.body_preview),
+      snapshotString(snapshot?.action),
+      snapshot?.urgency || "normal",
+      snapshot?.deadline_at || null,
+      snapshot?.category || "uncategorized",
+      snapshot?.escalation_badge || snapshot?.urgentFlag?.label || null,
+      snapshotString(snapshot?.subject),
+      snapshotString(snapshot?.from_name, snapshot?.from),
+      snapshotString(snapshot?.from_address, snapshot?.from_email, snapshot?.fromEmail),
+      snapshotDate(snapshot),
+      snapshotString(snapshot?.account_label),
+      snapshotString(snapshot?.account_email),
+      snapshot?.account_color || "#818cf8",
+      snapshot?.account_icon || "Mail",
+      nowIso,
+      resurfacedAt,
+    ],
+  });
+
+  const result = await dbClient.execute({
+    sql: `SELECT i.*,
+                 idx.read,
+                 t.bill_candidate_json
+          FROM ea_briefing_snapshot_items i
+          LEFT JOIN ea_email_index idx
+            ON idx.user_id = i.user_id
+           AND idx.account_id = i.account_id
+           AND idx.uid = i.email_id
+          LEFT JOIN ea_email_triage t
+            ON t.id = i.triage_id
+          WHERE i.snapshot_id = ?
+            AND i.triage_id = ?
+          LIMIT 1`,
+    args: [activeSnapshot.id, triage.triageId],
+  });
+  return result.rows[0] ? normalizeSnapshotItem(result.rows[0]) : null;
 }
 
 function makeHttpError(message, status) {

@@ -4,32 +4,63 @@ import {
   deleteTodoistTask,
   fetchTodoistProjects,
   fetchTodoistLabels,
+  fetchTodoistTasksAll,
   createTodoistTask,
   updateTodoistTask,
 } from "./todoist.js";
-import { updateCTMEventStatus } from "./ctm.js";
+import { fetchCTMDeadlinesAll, updateCTMEventStatus } from "./ctm.js";
 import { buildSnapshot } from "./tombstones.js";
 import * as storedBriefingService from "./stored-briefing-service.js";
 
-export async function completeTask(userId, taskId) {
-  const latest = await db.execute({
-    sql: `SELECT id, briefing_json FROM ea_briefings
-          WHERE user_id = ? AND status = 'ready'
-          ORDER BY generated_at DESC LIMIT 1`,
-    args: [userId],
-  });
-  const briefing = latest.rows.length ? JSON.parse(latest.rows[0].briefing_json) : null;
+function findCtmTask(tasks, taskId) {
+  return (tasks || []).find((task) =>
+    String(task.id) === String(taskId) || String(task.todoist_id) === String(taskId),
+  ) || null;
+}
 
-  const ctmTask = briefing?.ctm?.upcoming?.find(
-    (t) => String(t.id) === taskId || t.todoist_id === taskId,
-  );
-  const todoistTask = briefing?.todoist?.upcoming?.find(
-    (t) => !t._tombstone && t.id === taskId,
-  );
+function findTodoistTask(tasks, taskId) {
+  return (tasks || []).find((task) =>
+    !task._tombstone && String(task.id) === String(taskId),
+  ) || null;
+}
+
+async function loadCompletionSources(userId) {
+  const [ctmTasks, todoistTasks] = await Promise.all([
+    fetchCTMDeadlinesAll().catch((err) => {
+      console.error("[Briefing] CTM task source fetch failed:", err.message);
+      return [];
+    }),
+    fetchTodoistTasksAll(userId, { refresh: true }).catch((err) => {
+      console.error("[Briefing] Todoist task source fetch failed:", err.message);
+      return [];
+    }),
+  ]);
+  return { ctmTasks, todoistTasks };
+}
+
+async function persistCompletedTodoistTask(userId, todoistId, task) {
+  if (task?.due_date) {
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO ea_completed_tasks
+            (user_id, todoist_id, completed_at, due_date, snapshot_json)
+            VALUES (?, ?, datetime('now'), ?, ?)`,
+      args: [userId, todoistId, task.due_date, JSON.stringify(buildSnapshot(task))],
+    });
+    return;
+  }
+
+  await db.execute({
+    sql: "INSERT OR IGNORE INTO ea_completed_tasks (user_id, todoist_id) VALUES (?, ?)",
+    args: [userId, todoistId],
+  });
+}
+
+export async function completeTask(userId, taskId) {
+  const { ctmTasks, todoistTasks } = await loadCompletionSources(userId);
+  const ctmTask = findCtmTask(ctmTasks, taskId);
+  const todoistTask = findTodoistTask(todoistTasks, taskId);
 
   const todoistId = ctmTask?.todoist_id || (todoistTask ? taskId : null);
-  const isRecurringTodoist = !!(todoistTask && todoistTask.is_recurring && !ctmTask);
-  const isTodoistOnly = !!todoistTask && !ctmTask;
 
   if (todoistId) {
     try {
@@ -39,19 +70,7 @@ export async function completeTask(userId, taskId) {
       wrapped.status = 502;
       throw wrapped;
     }
-    if (isRecurringTodoist) {
-      await db.execute({
-        sql: `INSERT OR REPLACE INTO ea_completed_tasks
-              (user_id, todoist_id, completed_at, due_date, snapshot_json)
-              VALUES (?, ?, datetime('now'), ?, ?)`,
-        args: [userId, todoistId, todoistTask.due_date, JSON.stringify(buildSnapshot(todoistTask))],
-      });
-    } else {
-      await db.execute({
-        sql: "INSERT OR IGNORE INTO ea_completed_tasks (user_id, todoist_id) VALUES (?, ?)",
-        args: [userId, todoistId],
-      });
-    }
+    await persistCompletedTodoistTask(userId, todoistId, todoistTask);
   }
 
   if (ctmTask) {
@@ -59,12 +78,6 @@ export async function completeTask(userId, taskId) {
       console.error("[Briefing] CTM status update failed:", err.message),
     );
   }
-
-  await storedBriefingService.applyTaskCompletion(userId, {
-    taskId,
-    isRecurringTodoist,
-    isTodoistOnly,
-  });
 }
 
 export async function updateCTMStatus(userId, taskId, status) {
@@ -77,26 +90,17 @@ export async function updateCTMStatus(userId, taskId, status) {
   await updateCTMEventStatus(Number(taskId), status);
 
   if (status === "complete") {
-    const latest = await db.execute({
-      sql: `SELECT id, briefing_json FROM ea_briefings
-            WHERE user_id = ? AND status = 'ready'
-            ORDER BY generated_at DESC LIMIT 1`,
-      args: [userId],
+    const ctmTasks = await fetchCTMDeadlinesAll().catch((err) => {
+      console.error("[Briefing] CTM task source fetch failed:", err.message);
+      return [];
     });
-    if (latest.rows.length) {
-      const briefing = JSON.parse(latest.rows[0].briefing_json);
-      const ctmTask = briefing.ctm?.upcoming?.find((t) => String(t.id) === taskId);
-      if (ctmTask?.todoist_id) {
-        await completeTodoistTask(userId, ctmTask.todoist_id).catch((err) =>
-          console.error("[Briefing] Todoist completion failed:", err.message),
-        );
-        await db.execute({
-          sql: "INSERT OR IGNORE INTO ea_completed_tasks (user_id, todoist_id) VALUES (?, ?)",
-          args: [userId, ctmTask.todoist_id],
-        });
-      }
+    const ctmTask = findCtmTask(ctmTasks, taskId);
+    if (ctmTask?.todoist_id) {
+      await completeTodoistTask(userId, ctmTask.todoist_id).catch((err) =>
+        console.error("[Briefing] Todoist completion failed:", err.message),
+      );
+      await persistCompletedTodoistTask(userId, ctmTask.todoist_id, null);
     }
-    await storedBriefingService.applyCTMCompletionAfterTodoistClose(userId, taskId);
   } else {
     await storedBriefingService.applyCTMStatusChange(userId, taskId, status);
   }

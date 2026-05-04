@@ -75,6 +75,10 @@ GOOGLE_REDIRECT_URI=https://your-app.onrender.com/api/ea/accounts/gmail/callback
 GMAIL_PUBSUB_TOPIC=projects/your-project/topics/gmail-push
 GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
 
+# Todoist OAuth refresh + webhook verification
+TODOIST_CLIENT_ID=todoist-developer-app-client-id
+TODOIST_CLIENT_SECRET=todoist-developer-app-client-secret
+
 # CTM API (Canvas LMS deadlines — optional)
 CTM_API_URL=https://your-ctm-instance/api
 CTM_API_KEY=
@@ -86,6 +90,61 @@ PIRATE_WEATHER_API_KEY=
 RENDER_API_KEY=
 RENDER_SERVICE_ID=
 ```
+
+### Todoist OAuth and webhook setup
+
+The server uses `TODOIST_CLIENT_SECRET` to verify Todoist's
+`X-Todoist-Hmac-SHA256` signature against the raw webhook body. It also uses
+`TODOIST_CLIENT_ID` plus `TODOIST_CLIENT_SECRET` to refresh Todoist OAuth access
+tokens before they expire.
+
+In the Todoist Developer app console, configure the webhook callback URL to:
+
+```text
+https://your-app.onrender.com/api/todoist/webhook
+```
+
+Todoist requires webhook URLs to be HTTPS and to omit explicit ports. For local
+testing, expose the Express server with a tunnel and use the tunnel HTTPS URL:
+
+```text
+https://<your-tunnel-host>/api/todoist/webhook
+```
+
+Todoist webhooks are tied to a Todoist app. For personal use, Todoist documents
+that webhooks do not fire for the app creator by default; activate them by
+completing that Todoist app's OAuth flow for your own account. Use scopes:
+
+```text
+data:read_write,data:delete
+```
+
+After exchanging the OAuth code for JSON containing `access_token`,
+`refresh_token`, and `expires_in`, store that full JSON response through the
+authenticated settings API. The app encrypts the access and refresh tokens,
+tracks expiry, and refreshes before Todoist REST/Sync calls:
+
+```bash
+curl -X PUT "https://dashboard.example.com/api/ea/settings" \
+  -H "Content-Type: application/json" \
+  -H "X-Requested-With: EADashboard" \
+  -H "Cookie: ea_session=<your-session-cookie>" \
+  --data-binary @- <<'JSON'
+{
+  "todoist_oauth_token_response": {
+    "access_token": "...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "refresh_token": "...",
+    "scope": "data:read_write,data:delete"
+  }
+}
+JSON
+```
+
+Existing long-lived personal Todoist tokens still work. Setting a personal token
+through the Settings UI clears OAuth refresh metadata and returns to the legacy
+single-token path.
 
 ### Running locally
 

@@ -1,5 +1,16 @@
-import { decrypt } from "./encryption.js";
-import db from "../db/connection.js";
+import {
+  getTodoistMirrorHealth,
+  listTodoistMirrorActiveTaskIds,
+  listTodoistMirrorActiveTasks,
+  listTodoistMirrorLabels,
+  listTodoistMirrorProjects,
+  markTodoistMirrorItemCompleted,
+  markTodoistMirrorItemDeleted,
+  syncTodoistMirror,
+  upsertTodoistMirrorItem,
+} from "./todoist-mirror.js";
+import { requestTodoistMirrorSync } from "./todoist-webhook.js";
+import { getTodoistApiToken } from "./todoist-token.js";
 
 const BASE_URL = "https://api.todoist.com/api/v1";
 const TODOIST_DUE_TASKS_QUERY = "!no date";
@@ -20,16 +31,13 @@ function toUiPriority(apiLevel) {
 // --- Caches: 10-minute TTL ---
 const CACHE_TTL_MS = 10 * 60 * 1000;
 let projectCache = { data: null, ts: 0 };
-let labelCache = { data: null, ts: 0 };
+const MIRROR_BOOTSTRAP_TIMEOUT_MS = 10_000;
+const MIRROR_REFRESH_TIMEOUT_MS = 2_000;
+const TODOIST_COMPLETED_RANGE_TIMEOUT_MS = 5_000;
+const backgroundSyncs = new Map();
 
 async function getToken(userId) {
-  const result = await db.execute({
-    sql: "SELECT todoist_api_token_encrypted FROM ea_settings WHERE user_id = ?",
-    args: [userId],
-  });
-  const encrypted = result.rows[0]?.todoist_api_token_encrypted;
-  if (!encrypted) return null;
-  return decrypt(encrypted);
+  return getTodoistApiToken(userId);
 }
 
 async function todoistFetch(token, path, options = {}) {
@@ -68,6 +76,106 @@ async function fetchProjects(token) {
   projectCache.data = map;
   projectCache.ts = Date.now();
   return map;
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+      timer.unref?.();
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+function requestTodoistMirrorBackgroundSync(userId) {
+  if (backgroundSyncs.has(userId)) return backgroundSyncs.get(userId);
+  const syncPromise = syncTodoistMirror(userId)
+    .catch((err) => {
+      console.error("[Todoist] background mirror sync failed:", err.message);
+      return null;
+    })
+    .finally(() => backgroundSyncs.delete(userId));
+  backgroundSyncs.set(userId, syncPromise);
+  return syncPromise;
+}
+
+async function waitForTodoistMirrorSync(userId, {
+  forceFull = false,
+  timeoutMs,
+} = {}) {
+  try {
+    return await withTimeout(syncTodoistMirror(userId, { forceFull }), timeoutMs);
+  } catch (err) {
+    console.error("[Todoist] mirror sync failed:", err.message);
+    return null;
+  }
+}
+
+function requestTodoistWriteReconciliation(userId) {
+  requestTodoistMirrorSync(userId, {
+    reason: "todoist-write",
+  });
+}
+
+async function prepareTodoistMirrorRead(userId, {
+  refresh = false,
+} = {}) {
+  const health = await getTodoistMirrorHealth(userId);
+  if (!health.configured) return health;
+
+  if (!health.lastSuccessAt) {
+    await waitForTodoistMirrorSync(userId, {
+      forceFull: true,
+      timeoutMs: MIRROR_BOOTSTRAP_TIMEOUT_MS,
+    });
+    return getTodoistMirrorHealth(userId);
+  }
+
+  if (refresh) {
+    await waitForTodoistMirrorSync(userId, {
+      timeoutMs: MIRROR_REFRESH_TIMEOUT_MS,
+    });
+  } else if (health.state !== "current") {
+    requestTodoistMirrorBackgroundSync(userId);
+  }
+
+  return getTodoistMirrorHealth(userId);
+}
+
+async function fetchMirrorProjectMap(userId) {
+  const projects = await listTodoistMirrorProjects(userId);
+  return new Map(projects.map((project) => [
+    project.id,
+    {
+      name: project.name,
+      color: project.color,
+      isInbox: project.isInbox,
+    },
+  ]));
+}
+
+async function fetchMirrorMappedTasks(userId, {
+  start = null,
+  end = null,
+  refresh = false,
+} = {}) {
+  const health = await prepareTodoistMirrorRead(userId, { refresh });
+  if (!health.configured) return { tasks: [], idSet: null, health };
+
+  const [projects, tasks] = await Promise.all([
+    fetchMirrorProjectMap(userId),
+    listTodoistMirrorActiveTasks(userId, { start, end }),
+  ]);
+  const mappedTasks = tasks.map((task) => mapTodoistTask(task, projects));
+  return {
+    tasks: mappedTasks,
+    idSet: new Set(mappedTasks.map((task) => String(task.id))),
+    health,
+  };
 }
 
 // Map Todoist color names to hex (subset of Todoist palette)
@@ -193,19 +301,6 @@ function dedupeTodoistRangeTasks(tasks) {
   return result;
 }
 
-async function fetchTodoistFiltered(token, query) {
-  const params = new URLSearchParams({ query, limit: "200" });
-  const allTasks = [];
-  let cursor = null;
-  do {
-    if (cursor) params.set("cursor", cursor);
-    const data = await todoistFetch(token, `/tasks/filter?${params}`);
-    allTasks.push(...(data.results || data.items || []));
-    cursor = data.next_cursor || null;
-  } while (cursor);
-  return allTasks;
-}
-
 async function fetchTodoistCompletedByDueDate(token, { start, end }) {
   const params = new URLSearchParams({ since: start, until: end, limit: "200" });
   const allTasks = [];
@@ -219,45 +314,36 @@ async function fetchTodoistCompletedByDueDate(token, { start, end }) {
   return allTasks;
 }
 
-export async function fetchTodoistTasks(userId) {
-  const token = await getToken(userId);
+async function fetchTodoistCompletedByDueDateWithFallback(token, { start, end }) {
   if (!token) return [];
+  try {
+    return await withTimeout(fetchTodoistCompletedByDueDate(token, { start, end }), TODOIST_COMPLETED_RANGE_TIMEOUT_MS) || [];
+  } catch (err) {
+    console.error("[Todoist] completed-by-due-date fetch failed:", err.message);
+    return [];
+  }
+}
 
-  const projects = await fetchProjects(token);
-  const tasks = await fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY);
-
-  return tasks
-    .filter(t => !t.checked && !t.is_deleted && t.due)
-    .map(t => mapTodoistTask(t, projects));
+export async function fetchTodoistTasks(userId, options = {}) {
+  const { tasks } = await fetchMirrorMappedTasks(userId, options);
+  return tasks;
 }
 
 // Full-horizon fetch for the calendar modal: overdue + future incomplete.
-export async function fetchTodoistTasksAll(userId) {
-  const token = await getToken(userId);
-  if (!token) return [];
-
-  const projects = await fetchProjects(token);
-  const tasks = await fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY);
-
-  return tasks
-    .filter(t => !t.checked && !t.is_deleted && t.due)
-    .map(t => mapTodoistTask(t, projects));
+export async function fetchTodoistTasksAll(userId, options = {}) {
+  const { tasks } = await fetchMirrorMappedTasks(userId, options);
+  return tasks;
 }
 
-export async function fetchTodoistTasksRange(userId, { start, end }) {
+export async function fetchTodoistTasksRange(userId, { start, end, refresh = false }) {
   const token = await getToken(userId);
-  if (!token) return [];
-
-  const projects = await fetchProjects(token);
-  const [activeTasks, completedTasks] = await Promise.all([
-    fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY),
-    fetchTodoistCompletedByDueDate(token, { start, end }),
+  const [{ tasks: active }, completedTasks] = await Promise.all([
+    fetchMirrorMappedTasks(userId, { start, end, refresh }),
+    fetchTodoistCompletedByDueDateWithFallback(token, { start, end }),
   ]);
+  if (!active.length && !token) return [];
 
-  const active = activeTasks
-    .filter(t => !t.checked && !t.is_deleted && t.due)
-    .map(t => mapTodoistTask(t, projects))
-    .filter(t => isWithinDateRange(t.due_date, start, end));
+  const projects = token && completedTasks.length ? await fetchProjects(token) : new Map();
   const completed = completedTasks
     .map(t => mapCompletedTodoistTask(t, projects))
     .filter(t => t.id && isWithinDateRange(t.due_date, start, end));
@@ -269,21 +355,23 @@ export async function fetchTodoistTasksRange(userId, { start, end }) {
 // Set of id strings for every non-deleted, non-checked task with a due date.
 // Returns null when Todoist isn't configured; callers must treat null as
 // "can't verify" and skip pruning rather than wiping every tombstone.
-export async function fetchTodoistTaskIdSet(userId) {
-  const token = await getToken(userId);
-  if (!token) return null;
-  const tasks = await fetchTodoistFiltered(token, TODOIST_DUE_TASKS_QUERY);
-  return new Set(
-    tasks
-      .filter(t => !t.is_deleted && !t.checked)
-      .map(t => String(t.id)),
-  );
+export async function fetchTodoistTaskIdSet(userId, options = {}) {
+  const health = await prepareTodoistMirrorRead(userId, options);
+  if (!health.configured) return null;
+  return listTodoistMirrorActiveTaskIds(userId);
+}
+
+export async function fetchTodoistTasksAndIdSet(userId, options = {}) {
+  const { tasks, idSet } = await fetchMirrorMappedTasks(userId, options);
+  return { tasks, idSet };
 }
 
 export async function completeTodoistTask(userId, taskId) {
   const token = await getToken(userId);
   if (!token) throw new Error("Todoist not configured");
   await todoistFetch(token, `/tasks/${taskId}/close`, { method: "POST" });
+  await markTodoistMirrorItemCompleted(userId, taskId);
+  requestTodoistWriteReconciliation(userId);
 }
 
 export async function deleteTodoistTask(userId, taskId) {
@@ -291,30 +379,31 @@ export async function deleteTodoistTask(userId, taskId) {
   if (!token) throw new Error("Todoist not configured");
   if (!taskId) throw new Error("Task id is required");
   await todoistFetch(token, `/tasks/${taskId}`, { method: "DELETE" });
+  await markTodoistMirrorItemDeleted(userId, taskId);
+  requestTodoistWriteReconciliation(userId);
 }
 
 export async function fetchTodoistProjects(userId) {
-  const token = await getToken(userId);
-  if (!token) throw new Error("Todoist not configured");
-  const projects = await fetchProjects(token);
-  return Array.from(projects.entries()).map(([id, p]) => ({
-    id,
-    name: p.name,
-    color: mapColor(p.color),
-    isInbox: !!p.isInbox,
+  const health = await prepareTodoistMirrorRead(userId);
+  if (!health.configured) throw new Error("Todoist not configured");
+  const projects = await listTodoistMirrorProjects(userId);
+  return projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    color: mapColor(project.color),
+    isInbox: !!project.isInbox,
   }));
 }
 
 export async function fetchTodoistLabels(userId) {
-  const token = await getToken(userId);
-  if (!token) throw new Error("Todoist not configured");
-  if (labelCache.data && Date.now() - labelCache.ts < CACHE_TTL_MS) {
-    return labelCache.data;
-  }
-  const data = await todoistFetch(token, "/labels");
-  const labels = (data.results || data).map(l => ({ id: l.id, name: l.name, color: mapColor(l.color) }));
-  labelCache = { data: labels, ts: Date.now() };
-  return labels;
+  const health = await prepareTodoistMirrorRead(userId);
+  if (!health.configured) throw new Error("Todoist not configured");
+  const labels = await listTodoistMirrorLabels(userId);
+  return labels.map((label) => ({
+    id: label.id,
+    name: label.name,
+    color: mapColor(label.color),
+  }));
 }
 
 export async function createTodoistTask(userId, { content, description, project_id, priority, labels, due_string }) {
@@ -333,6 +422,8 @@ export async function createTodoistTask(userId, { content, description, project_
     method: "POST",
     body: JSON.stringify(body),
   });
+  await upsertTodoistMirrorItem(userId, task);
+  requestTodoistWriteReconciliation(userId);
 
   // Return in the same format as fetchTodoistTasks
   const projects = await fetchProjects(token);
@@ -372,6 +463,8 @@ export async function updateTodoistTask(userId, taskId, { content, description, 
     method: "POST",
     body: JSON.stringify(body),
   });
+  await upsertTodoistMirrorItem(userId, task);
+  requestTodoistWriteReconciliation(userId);
 
   const projects = await fetchProjects(token);
   const proj = projects.get(task.project_id);
@@ -400,6 +493,10 @@ export async function testConnection(userId) {
   if (!token) throw new Error("Todoist API token not configured");
   const data = await todoistFetch(token, "/projects?limit=1");
   return { success: true, projectCount: (data.results || data).length };
+}
+
+export async function getTodoistSyncHealth(userId) {
+  return getTodoistMirrorHealth(userId);
 }
 
 // Test-only exports (do not use in production code)
