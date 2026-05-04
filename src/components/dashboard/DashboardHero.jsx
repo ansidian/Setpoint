@@ -7,7 +7,6 @@ import HeroCalloutCard from "./hero/HeroCalloutCard";
 import HeroContextRail from "./hero/HeroContextRail";
 import {
   buildHeroCallouts,
-  buildHeroStateOfDay,
   WEATHER_ICONS,
 } from "./hero/dashboard-hero-helpers";
 import HeroMessageBlock from "./hero/HeroMessageBlock";
@@ -50,8 +49,6 @@ export default function DashboardHero({
   }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming]);
   const bills = useMemo(() => liveBills || [], [liveBills]);
 
-  const stateOfDay = useMemo(() => buildHeroStateOfDay(briefing), [briefing]);
-
   const theCallouts = useMemo(
     () => buildHeroCallouts({ events, deadlines, bills, now }),
     [events, deadlines, bills, now],
@@ -68,9 +65,13 @@ export default function DashboardHero({
   const compact = density === "compact";
   const stacked = stack || isMobile;
   const outerPadding = isMobile
-    ? "16px 14px 14px"
-    : compact ? "18px 20px 14px" : "20px 22px 16px";
+    ? "12px 14px 10px"
+    : compact ? "12px 18px 10px" : "14px 20px 12px";
   const WeatherIcon = (weather?.icon && WEATHER_ICONS[weather.icon]) || WEATHER_ICONS.Sun;
+  const quickActions = [
+    { label: "New Task", icon: CheckCircle, action: "task" },
+    { label: "Add Event", icon: CalendarPlus, action: "event" },
+  ];
 
   return (
     <div
@@ -79,8 +80,8 @@ export default function DashboardHero({
         padding: outerPadding,
         position: "relative",
         overflow: "hidden",
-        margin: isMobile ? "0" : "12px 0 0",
-        borderRadius: isMobile ? 0 : 20,
+        margin: isMobile ? "0" : "8px 0 0",
+        borderRadius: isMobile ? 0 : 16,
         border: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
         background: isMobile
           ? "transparent"
@@ -91,19 +92,74 @@ export default function DashboardHero({
         style={{
           display: "grid",
           gridTemplateColumns: stacked ? "1fr" : "minmax(0, 1fr) 276px",
-          gap: stacked ? (isMobile ? 12 : 16) : 24,
+          gap: stacked ? (isMobile ? 10 : 12) : 18,
           alignItems: "start",
           position: "relative",
         }}
       >
-        <HeroMessageBlock
-          accent={accent}
-          compact={compact}
-          greet={greet}
-          isMobile={isMobile}
-          now={now}
-          stateOfDay={stateOfDay}
-        />
+        <div
+          data-testid="dashboard-hero-primary"
+          style={{
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: isMobile ? 10 : 12,
+          }}
+        >
+          <HeroMessageBlock
+            accent={accent}
+            compact={compact}
+            greet={greet}
+            isMobile={isMobile}
+            now={now}
+          />
+
+          <div
+            data-testid="dashboard-hero-actions"
+            style={{
+              display: "flex",
+              gap: isMobile ? 8 : 10,
+              flexWrap: "wrap",
+              position: "relative",
+              zIndex: 10,
+            }}
+          >
+            {quickActions.map((item) => (
+              <button
+                key={item.action}
+                onClick={() => onQuickAction?.(item.action)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: isMobile ? "7px 12px" : "7px 14px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#cdd6f4",
+                  fontSize: isMobile ? 12 : 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+              >
+                <item.icon size={isMobile ? 14 : 16} color={accent} />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <HeroContextRail
           accent={accent}
@@ -118,54 +174,6 @@ export default function DashboardHero({
         />
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: isMobile ? 8 : 10,
-          marginTop: isMobile ? 12 : 16,
-          flexWrap: "wrap",
-          position: "relative",
-          zIndex: 10,
-        }}
-      >
-        {[
-          { label: "New Task", icon: CheckCircle, action: "task" },
-          { label: "Add Event", icon: CalendarPlus, action: "event" },
-        ].map((item, i) => (
-          <button
-            key={i}
-            onClick={() => onQuickAction?.(item.action)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: isMobile ? "7px 12px" : "7px 14px",
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "#cdd6f4",
-              fontSize: isMobile ? 12 : 13,
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.08)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
-              e.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
-              e.currentTarget.style.transform = "translateY(0)";
-            }}
-          >
-            <item.icon size={isMobile ? 14 : 16} color={accent} />
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       {theCallouts.length > 0 && (
         <div
           data-testid="dashboard-hero-callouts"
@@ -173,9 +181,9 @@ export default function DashboardHero({
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr" : `repeat(${theCallouts.length}, 1fr)`,
             gap: 0,
-            marginTop: isMobile ? 10 : compact ? 12 : 14,
+            marginTop: isMobile ? 8 : compact ? 8 : 10,
             position: "relative",
-            paddingTop: isMobile ? 2 : 10,
+            paddingTop: isMobile ? 2 : 6,
             borderTop: "1px solid rgba(255,255,255,0.05)",
             alignItems: "stretch",
           }}

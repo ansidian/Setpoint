@@ -101,8 +101,3 @@ export function buildHeroCallouts({ events, deadlines, bills, now }) {
 
   return out.slice(0, 3);
 }
-
-export function buildHeroStateOfDay(briefing) {
-  const summary = briefing?.emails?.summary || "";
-  return { headline: "", summary };
-}

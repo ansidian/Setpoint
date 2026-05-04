@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  BriefingStatusPill,
   OverflowMenu,
   PaletteTriggerButton,
   RefreshButton,
@@ -14,7 +13,6 @@ import {
  * Sync now refreshes current dashboard data.
  */
 export default function ShellHeader({
-  accent,
   isMobile = false,
   tab,
   onTab,
@@ -22,7 +20,6 @@ export default function ShellHeader({
   onOpenCustomize,
   onOpenHistory,
   onOpenCalendar,
-  briefingStatus,
   liveUnreadCount = 0,
   refreshing,
   generating,
@@ -80,9 +77,6 @@ export default function ShellHeader({
       />
       <div style={{ flex: 1 }} />
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
-      {!isMobile && (
-        <BriefingStatusPill accent={accent} briefingStatus={briefingStatus} />
-      )}
       <RefreshButton
         isMobile={isMobile}
         refreshing={refreshing}

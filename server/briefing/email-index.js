@@ -249,5 +249,5 @@ export async function indexEmails(userId, emails) {
   });
 
   await db.batch(stmts);
-  console.log(`[EA] Indexed ${emails.length} emails`);
+  console.log(`[EA Index] Indexed ${emails.length} email(s)`);
 }

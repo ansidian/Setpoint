@@ -8,7 +8,6 @@ import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
 import { collectActiveSnapshotEmails, collectBriefingEmails, mergeReadState } from "../inbox/helpers";
 import { DashboardBody } from "./DashboardBody";
-import { buildBriefingStatus, getNextBriefingSchedule } from "./briefingStatus";
 import { makeCalendarBillsData } from "./calendarBillsData";
 export { DashboardBody };
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
@@ -282,48 +281,6 @@ export function RedesignShell({
     isMock,
   ]);
 
-  const [briefingStatusNow, setBriefingStatusNow] = useState(() => Date.now());
-  const [briefingNoticeUntil, setBriefingNoticeUntil] = useState(0);
-  const statusInitRef = useRef(false);
-  const prevLatestIdRef = useRef(bd.latestId);
-  const prevRefreshAtRef = useRef(bd.lastQuickRefreshAt);
-
-  useEffect(() => {
-    const id = setInterval(() => setBriefingStatusNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (!statusInitRef.current) {
-      statusInitRef.current = true;
-      prevLatestIdRef.current = bd.latestId;
-      prevRefreshAtRef.current = bd.lastQuickRefreshAt;
-      return;
-    }
-
-    const latestChanged = bd.latestId && prevLatestIdRef.current && prevLatestIdRef.current !== bd.latestId;
-    const quickRefreshChanged = bd.lastQuickRefreshAt && prevRefreshAtRef.current !== bd.lastQuickRefreshAt;
-    if (latestChanged || quickRefreshChanged) {
-      setBriefingNoticeUntil(Date.now() + 60_000);
-    }
-    prevLatestIdRef.current = bd.latestId;
-    prevRefreshAtRef.current = bd.lastQuickRefreshAt;
-  }, [bd.latestId, bd.lastQuickRefreshAt]);
-
-  const nextBriefing = useMemo(
-    () => getNextBriefingSchedule(bd.schedules, briefingStatusNow),
-    [bd.schedules, briefingStatusNow],
-  );
-  const briefingStatus = useMemo(
-    () => buildBriefingStatus({
-      briefing,
-      nextBriefing,
-      nowMs: briefingStatusNow,
-      noticeActive: briefingNoticeUntil > briefingStatusNow,
-    }),
-    [briefing, nextBriefing, briefingNoticeUntil, briefingStatusNow],
-  );
-
   useEffect(() => {
     const activeUids = new Set();
     for (const email of liveData.liveEmails || []) {
@@ -432,7 +389,6 @@ export function RedesignShell({
       {bd.generating && <RefreshBanner progress={bd.genProgress} />}
 
       <ShellHeader
-        accent={accent}
         isMobile={isMobile}
         tab={tab}
         onTab={setShellTab}
@@ -440,7 +396,6 @@ export function RedesignShell({
         onOpenCustomize={() => setCustomizeOpen((v) => !v)}
         onOpenHistory={() => setHistoryOpen((v) => !v)}
         onOpenCalendar={() => openCalendar()}
-        briefingStatus={briefingStatus}
         liveUnreadCount={liveUnreadCount}
         refreshing={bd.refreshing}
         generating={bd.generating}

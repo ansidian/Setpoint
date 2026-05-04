@@ -18,41 +18,41 @@ export default function HeroContextRail({
       style={{
         display: "flex",
         flexDirection: stacked && !isMobile ? "row" : "column",
-        gap: isMobile ? 8 : 10,
+        gap: isMobile ? 8 : 7,
         minWidth: 0,
-        paddingLeft: isMobile ? 0 : 18,
+        paddingLeft: isMobile ? 0 : 16,
         borderLeft: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
       }}
     >
       <div
         style={{
           flex: stacked && !isMobile ? 1 : "unset",
-          padding: isMobile ? "10px 12px" : "0 0 8px",
+          padding: isMobile ? "10px 12px" : "0 0 5px",
           borderRadius: 0,
           background: "transparent",
           border: "none",
           display: "grid",
           gridTemplateColumns: "auto 1fr",
-          gap: 12,
+          gap: isMobile ? 12 : 10,
           alignItems: "center",
         }}
       >
         <div
           style={{
-            width: isMobile ? 36 : 38,
-            height: isMobile ? 36 : 38,
+            width: isMobile ? 36 : 34,
+            height: isMobile ? 36 : 34,
             borderRadius: 10,
             background: isMobile ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.025)",
             display: "grid",
             placeItems: "center",
           }}
         >
-          <IconComponent size={20} color="#cdd6f4" />
+          <IconComponent size={isMobile ? 20 : 18} color="#cdd6f4" />
         </div>
         <div>
           <div
             style={{
-              fontSize: isMobile ? 15 : 18,
+              fontSize: isMobile ? 15 : 17,
               fontWeight: 500,
               color: "#cdd6f4",
               lineHeight: 1,
@@ -64,7 +64,7 @@ export default function HeroContextRail({
             style={{
               fontSize: isMobile ? 10 : 10.5,
               color: "rgba(205,214,244,0.5)",
-              marginTop: 3,
+              marginTop: isMobile ? 3 : 2,
               letterSpacing: 0.2,
             }}
           >

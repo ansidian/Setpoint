@@ -1,4 +1,3 @@
-export { BriefingStatusPill } from "./BriefingStatusPill.jsx";
 export { Kbd } from "./Kbd.jsx";
 export { OverflowMenu } from "./OverflowMenu.jsx";
 export { PaletteTriggerButton } from "./PaletteTriggerButton.jsx";
