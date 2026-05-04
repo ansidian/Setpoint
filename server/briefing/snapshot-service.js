@@ -8,6 +8,7 @@ import { getElapsedMs, logTiming } from "../timing.js";
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 const TRIAGE_LANES = new Set(["needs_attention", "fyi", "noise"]);
 const PROVIDER_REMOVED_STATES = new Set(["archived", "trashed"]);
+const ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT = new Map();
 
 function localDateParts(date, timeZone) {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -739,7 +740,7 @@ export async function getActiveSnapshotView(userId, {
   };
 }
 
-export async function syncActiveSnapshot(userId, {
+async function runActiveSnapshotSync(userId, {
   dbClient = db,
   loadUserConfigFn = loadUserConfig,
   fetchAllEmailsFn = fetchAllEmails,
@@ -761,8 +762,12 @@ export async function syncActiveSnapshot(userId, {
 
   if (emails.length) {
     await timeSnapshotSyncSource("indexAndEnqueue", async () => {
-      await indexEmailsFn(userId, emails);
-      await enqueueEmailTriageForEmailsFn(userId, emails, { dbClient });
+      await timeSnapshotSyncSource("emailIndex", () => indexEmailsFn(userId, emails, { dbClient }), {
+        emails: emails.length,
+      });
+      await timeSnapshotSyncSource("triageEnqueue", () => enqueueEmailTriageForEmailsFn(userId, emails, { dbClient }), {
+        emails: emails.length,
+      });
     }, {
       emails: emails.length,
     });
@@ -791,6 +796,28 @@ export async function syncActiveSnapshot(userId, {
     items: Object.values(result?.laneCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0),
     processingActive: !!result?.processing?.active,
   }));
+}
+
+export async function syncActiveSnapshot(userId, options = {}) {
+  const key = String(userId || "");
+  const existing = ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT.get(key);
+  if (existing) {
+    logTiming({
+      event: "snapshot-sync-source",
+      source: "singleFlight",
+      status: "joined",
+    });
+    return existing;
+  }
+
+  const promise = runActiveSnapshotSync(userId, options)
+    .finally(() => {
+      if (ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT.get(key) === promise) {
+        ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT.delete(key);
+      }
+    });
+  ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT.set(key, promise);
+  return promise;
 }
 
 export async function moveSnapshotItemLane(userId, itemId, lane, {

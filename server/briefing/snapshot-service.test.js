@@ -638,4 +638,37 @@ describe("active briefing snapshots", () => {
       expect.stringContaining('"event":"snapshot-sync-source","source":"snapshotView"'),
     ]));
   });
+
+  it("shares one active snapshot sync when concurrent requests target the same user", async () => {
+    const dbClient = await createMigratedDb();
+    let releaseConfig;
+    const loadUserConfigFn = vi.fn(() => new Promise((resolve) => {
+      releaseConfig = () => resolve({ accounts: [], settings: { email_lookback_hours: 16 } });
+    }));
+    const fetchAllEmailsFn = vi.fn(async () => []);
+    const indexEmailsFn = vi.fn();
+    const enqueueEmailTriageForEmailsFn = vi.fn();
+    const processNextEmailTriageJobFn = vi.fn(async () => ({ processed: false }));
+
+    const options = {
+      dbClient,
+      loadUserConfigFn,
+      fetchAllEmailsFn,
+      indexEmailsFn,
+      enqueueEmailTriageForEmailsFn,
+      processNextEmailTriageJobFn,
+      now: new Date("2026-05-03T16:15:00.000Z"),
+    };
+
+    const first = syncActiveSnapshot("user-1", options);
+    const second = syncActiveSnapshot("user-1", options);
+    expect(loadUserConfigFn).toHaveBeenCalledTimes(1);
+
+    releaseConfig();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult).toBe(secondResult);
+    expect(fetchAllEmailsFn).toHaveBeenCalledTimes(1);
+    expect(processNextEmailTriageJobFn).toHaveBeenCalledTimes(1);
+  });
 });
