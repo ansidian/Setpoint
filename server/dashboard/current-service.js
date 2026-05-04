@@ -26,6 +26,7 @@ const EMPTY_DEADLINES = {
 };
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
+const BACKGROUND_REFRESH_IN_FLIGHT = new Map();
 
 function parsePayload(row, fallback) {
   if (!row?.payload_json) return fallback;
@@ -167,6 +168,13 @@ function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOStr
 
 function expiresAtFor(now) {
   return new Date(now.getTime() + CACHE_TTL_MS).toISOString();
+}
+
+function fallbackPayloadForKey(key) {
+  if (key === "weather_current") return null;
+  if (key === "calendar_current") return [];
+  if (key === "deadlines_current") return EMPTY_DEADLINES;
+  return { bills: [], allSchedules: [], payeeMap: {}, actualConfigured: false, actualBudgetUrl: null };
 }
 
 function snapshotSyncTimeoutMs() {
@@ -318,13 +326,7 @@ async function refreshRows(userId, rows, refreshKeys, {
         error_message: null,
       };
     } catch (err) {
-      const fallback = key === "weather_current"
-        ? null
-        : key === "calendar_current"
-          ? []
-          : key === "deadlines_current"
-            ? EMPTY_DEADLINES
-            : { bills: [], allSchedules: [], payeeMap: {}, actualConfigured: false, actualBudgetUrl: null };
+      const fallback = fallbackPayloadForKey(key);
       console.error(`[Dashboard] ${key} refresh failed:`, err.message);
       await saveCacheRow(userId, key, fallback, {
         dbClient,
@@ -344,6 +346,65 @@ async function refreshRows(userId, rows, refreshKeys, {
     }
   }));
   return refreshedRows;
+}
+
+async function markRowsRefreshing(userId, rows, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const timestamp = now.toISOString();
+  const nextRows = { ...rows };
+  await dbClient.batch(CURRENT_CACHE_KEYS.map((key) => {
+    const currentPayload = rows[key]?.payload_json || JSON.stringify(fallbackPayloadForKey(key));
+    const fetchedAt = rows[key]?.fetched_at || null;
+    const expiresAt = rows[key]?.expires_at || timestamp;
+    nextRows[key] = {
+      user_id: userId,
+      cache_key: key,
+      payload_json: currentPayload,
+      fetched_at: fetchedAt,
+      expires_at: expiresAt,
+      status: "refreshing",
+      error_message: null,
+      refresh_started_at: timestamp,
+    };
+    return {
+      sql: `INSERT INTO ea_current_data_cache
+              (user_id, cache_key, payload_json, fetched_at, expires_at,
+               status, error_message, refresh_started_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'refreshing', NULL, ?, ?)
+            ON CONFLICT(user_id, cache_key) DO UPDATE SET
+              status = 'refreshing',
+              error_message = NULL,
+              refresh_started_at = excluded.refresh_started_at,
+              updated_at = excluded.updated_at`,
+      args: [userId, key, currentPayload, fetchedAt, expiresAt, timestamp, timestamp],
+    };
+  }));
+  return nextRows;
+}
+
+function scheduleBackgroundCurrentRefresh(userId, rows, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const key = String(userId || "");
+  if (BACKGROUND_REFRESH_IN_FLIGHT.has(key)) return;
+  BACKGROUND_REFRESH_IN_FLIGHT.set(key, { scheduled: true });
+  const timer = setTimeout(() => {
+    const promise = Promise.allSettled([
+      refreshRows(userId, rows, CURRENT_CACHE_KEYS, { dbClient, now, force: true }),
+      syncActiveSnapshot(userId),
+    ]).catch((err) => {
+      console.error("[Dashboard] background current refresh failed:", err.message);
+    }).finally(() => {
+      if (BACKGROUND_REFRESH_IN_FLIGHT.get(key) === promise) {
+        BACKGROUND_REFRESH_IN_FLIGHT.delete(key);
+      }
+    });
+    BACKGROUND_REFRESH_IN_FLIGHT.set(key, promise);
+  }, 0);
+  timer.unref?.();
 }
 
 async function refreshMissingRows(userId, rows, options) {
@@ -435,6 +496,28 @@ export async function syncCurrentDashboard(userId, {
       reason: snapshotResult.reason || null,
       timeoutMs: snapshotResult.reason === "timeout" ? timeoutMs : null,
       errorMessage: snapshotResult.error?.message || null,
+    },
+  });
+}
+
+export async function requestCurrentDashboardRefresh(userId, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const rows = await markRowsRefreshing(
+    userId,
+    await loadCacheRows(userId, { dbClient }),
+    { dbClient, now },
+  );
+  scheduleBackgroundCurrentRefresh(userId, rows, { dbClient, now });
+  return composeCurrentDashboardResponse(rows, {
+    activeSnapshot: await getActiveSnapshotView(userId),
+    providerHealth: await loadProviderHealth(userId, rows, { now }),
+    activeSnapshotHealth: {
+      state: "syncing",
+      reason: "background",
+      timeoutMs: null,
+      errorMessage: null,
     },
   });
 }

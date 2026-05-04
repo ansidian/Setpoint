@@ -3,6 +3,7 @@ import { requireCookieSession } from "../middleware/auth.js";
 import {
   getCurrentDashboard,
   getDashboardSystemHealth,
+  requestCurrentDashboardRefresh,
   syncCurrentDashboard,
 } from "../dashboard/current-service.js";
 import { timeRoute } from "../timing.js";
@@ -26,6 +27,15 @@ router.get("/health", timeRoute("/api/dashboard/health"), async (_req, res) => {
   } catch (err) {
     console.error("[Dashboard] health fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch dashboard health" });
+  }
+});
+
+router.post("/current/refresh", timeRoute("/api/dashboard/current/refresh"), async (_req, res) => {
+  try {
+    res.json(await requestCurrentDashboardRefresh(process.env.EA_USER_ID));
+  } catch (err) {
+    console.error("[Dashboard] current refresh request failed:", err);
+    res.status(500).json({ message: "Failed to request current dashboard refresh" });
   }
 });
 

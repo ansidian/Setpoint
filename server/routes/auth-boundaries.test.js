@@ -119,6 +119,7 @@ vi.mock("../briefing/bill-extractors/catalog.js", () => ({
 vi.mock("../dashboard/current-service.js", () => ({
   getCurrentDashboard: vi.fn(async () => ({ weather: null, providerHealth: {} })),
   getDashboardSystemHealth: vi.fn(async () => ({ providerHealth: {}, systemStatus: { state: "current", sources: [] } })),
+  requestCurrentDashboardRefresh: vi.fn(async () => ({ weather: null, providerHealth: {} })),
   syncCurrentDashboard: vi.fn(async () => ({ weather: null, providerHealth: {} })),
 }));
 
