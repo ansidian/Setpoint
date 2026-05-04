@@ -17,6 +17,7 @@ const gmailSyncApi = vi.hoisted(() => ({
 }));
 const triageWorkerApi = vi.hoisted(() => ({
   processNextEmailTriageJob: vi.fn(),
+  recoverStaleRunningTriageJobs: vi.fn(),
 }));
 
 vi.mock("node-cron", () => ({ default: cronApi }));
@@ -32,6 +33,7 @@ const { initScheduler, runEmailTriageWorker } = await import("./scheduler.js");
 beforeEach(() => {
   vi.clearAllMocks();
   cronApi.schedule.mockImplementation(() => ({ stop: vi.fn() }));
+  triageWorkerApi.recoverStaleRunningTriageJobs.mockResolvedValue({ recovered: 0 });
 });
 
 describe("initScheduler", () => {
@@ -83,6 +85,7 @@ describe("email triage scheduler worker", () => {
 
     await runEmailTriageWorker();
 
+    expect(triageWorkerApi.recoverStaleRunningTriageJobs).toHaveBeenCalledTimes(1);
     expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(1);
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
