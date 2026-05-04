@@ -326,6 +326,61 @@ describe("GET /api/dashboard/current", () => {
     ]);
   });
 
+  it("starts a background current refresh and returns cached rows without waiting for providers", async () => {
+    await seedCache("weather_current", { temp: 64, location: "El Monte, CA" });
+    await seedCache("calendar_current", [{ id: "cached-event" }]);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [{ id: "cached-bill" }],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    const pending = new Promise(() => {});
+    testState.fetchWeather.mockReturnValueOnce(pending);
+    testState.fetchCalendar.mockReturnValueOnce(pending);
+    testState.fetchCTMDeadlines.mockReturnValueOnce(pending);
+    testState.fetchTodoistTasks.mockReturnValueOnce(pending);
+    testState.getUpcomingBills.mockReturnValueOnce(pending);
+    testState.getActualMetadata.mockReturnValueOnce(pending);
+
+    const startedAt = Date.now();
+    const res = await request(makeApp())
+      .post("/api/dashboard/current/refresh")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      weather: { temp: 64, location: "El Monte, CA" },
+      calendar: [{ id: "cached-event" }],
+      bills: [{ id: "cached-bill" }],
+      activeSnapshot: { snapshot: { id: 42 } },
+      providerHealth: {
+        currentData: { state: "refreshing" },
+        activeSnapshot: { state: "syncing", reason: "background" },
+      },
+      systemStatus: {
+        state: "refreshing",
+      },
+    });
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT cache_key, status, refresh_started_at
+            FROM ea_current_data_cache
+            WHERE user_id = ?
+            ORDER BY cache_key`,
+      args: ["u1"],
+    });
+    expect(rows.rows).toEqual([
+      expect.objectContaining({ cache_key: "bills_current", status: "refreshing", refresh_started_at: expect.any(String) }),
+      expect.objectContaining({ cache_key: "calendar_current", status: "refreshing", refresh_started_at: expect.any(String) }),
+      expect.objectContaining({ cache_key: "deadlines_current", status: "refreshing", refresh_started_at: expect.any(String) }),
+      expect.objectContaining({ cache_key: "weather_current", status: "refreshing", refresh_started_at: expect.any(String) }),
+    ]);
+  });
+
   it("refreshes missing current rows per domain and stores them for later reads", async () => {
     testState.fetchWeather.mockResolvedValueOnce({ temp: 72, summary: "Clear" });
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-2", title: "Planning" }]);

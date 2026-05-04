@@ -3,10 +3,11 @@ import { renderHook, act } from "@testing-library/react";
 
 vi.mock("../api", () => ({
   getCurrentDashboard: vi.fn(),
+  requestCurrentDashboardRefresh: vi.fn(),
   syncCurrentDashboard: vi.fn(),
 }));
 
-const { getCurrentDashboard, syncCurrentDashboard } = await import("../api");
+const { getCurrentDashboard, requestCurrentDashboardRefresh, syncCurrentDashboard } = await import("../api");
 const { default: useCurrentDashboard } = await import("./useCurrentDashboard");
 
 const currentPayload = {
@@ -56,11 +57,17 @@ const currentPayload = {
 describe("useCurrentDashboard", () => {
   beforeEach(() => {
     getCurrentDashboard.mockReset().mockResolvedValue(currentPayload);
-    syncCurrentDashboard.mockReset().mockResolvedValue({
+    requestCurrentDashboardRefresh.mockReset().mockResolvedValue({
       ...currentPayload,
       weather: { temp: 80, icon: "Sun" },
       activeSnapshot: { ...currentPayload.activeSnapshot, snapshot: { id: 99 } },
       fetchedAt: "2026-05-04T12:05:00.000Z",
+    });
+    syncCurrentDashboard.mockReset().mockResolvedValue({
+      ...currentPayload,
+      weather: { temp: 85, icon: "Sun" },
+      activeSnapshot: { ...currentPayload.activeSnapshot, snapshot: { id: 100 } },
+      fetchedAt: "2026-05-04T12:06:00.000Z",
     });
   });
 
@@ -99,7 +106,7 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
-  it("uses light refresh for background refresh and forced sync for manual sync", async () => {
+  it("uses light refresh for polling, background refresh for manual sync, and keeps force sync separate", async () => {
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
 
@@ -107,14 +114,23 @@ describe("useCurrentDashboard", () => {
       await result.current.liveData.refreshNow();
     });
     expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(requestCurrentDashboardRefresh).not.toHaveBeenCalled();
     expect(syncCurrentDashboard).not.toHaveBeenCalled();
 
     await act(async () => {
       await result.current.activeSnapshot.sync();
     });
-    expect(syncCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(requestCurrentDashboardRefresh).toHaveBeenCalledTimes(1);
+    expect(syncCurrentDashboard).not.toHaveBeenCalled();
     expect(result.current.liveData.liveWeather).toEqual({ temp: 80, icon: "Sun" });
     expect(result.current.activeSnapshot.snapshot.snapshot).toEqual({ id: 99 });
+
+    await act(async () => {
+      await result.current.forceSync();
+    });
+    expect(syncCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(result.current.liveData.liveWeather).toEqual({ temp: 85, icon: "Sun" });
+    expect(result.current.activeSnapshot.snapshot.snapshot).toEqual({ id: 100 });
 
     unmount();
   });

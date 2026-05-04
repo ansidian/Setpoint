@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCurrentDashboard, syncCurrentDashboard } from "../api";
+import {
+  getCurrentDashboard,
+  requestCurrentDashboardRefresh,
+  syncCurrentDashboard,
+} from "../api";
 
 const EMPTY_DEADLINES = {
   ctm: { upcoming: [], stats: null },
@@ -61,10 +65,14 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
   const [loaded, setLoaded] = useState(false);
   const mountedRef = useRef(true);
 
-  const loadCurrent = useCallback(async ({ force = false } = {}) => {
+  const loadCurrent = useCallback(async ({ mode = "load" } = {}) => {
     if (disabled) return null;
-    const fetcher = force ? syncCurrentDashboard : getCurrentDashboard;
-    if (force) setRefreshing(true);
+    const fetcher = mode === "force"
+      ? syncCurrentDashboard
+      : mode === "background"
+        ? requestCurrentDashboardRefresh
+        : getCurrentDashboard;
+    if (mode !== "load") setRefreshing(true);
     else setLoading(true);
     try {
       const data = await fetcher();
@@ -89,8 +97,9 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
     }
   }, [disabled]);
 
-  const refreshNow = useCallback(() => loadCurrent({ force: false }), [loadCurrent]);
-  const sync = useCallback(() => loadCurrent({ force: true }), [loadCurrent]);
+  const refreshNow = useCallback(() => loadCurrent({ mode: "load" }), [loadCurrent]);
+  const sync = useCallback(() => loadCurrent({ mode: "background" }), [loadCurrent]);
+  const forceSync = useCallback(() => loadCurrent({ mode: "force" }), [loadCurrent]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -171,5 +180,6 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
     error,
     refresh: refreshNow,
     sync,
+    forceSync,
   };
 }
