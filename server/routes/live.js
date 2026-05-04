@@ -8,6 +8,7 @@ import { fetchCalendar, getNextWeekRange, getTomorrowRange } from "../briefing/c
 import { fetchWeather } from "../briefing/weather.js";
 import { getUpcomingBills, getRecentTransactions, getMetadata as getActualMetadata, isSchedulePaid } from "../briefing/actual.js";
 import { decrypt } from "../briefing/encryption.js";
+import { getTodoistSyncHealth } from "../briefing/todoist.js";
 import { getElapsedMs, logTiming, timeRoute } from "../timing.js";
 
 const router = Router();
@@ -125,6 +126,17 @@ function skippedLiveSource(source, fallback, reason) {
 
 function weatherFallback() {
   return { temp: 0, high: 0, low: 0, summary: "Weather unavailable", hourly: [] };
+}
+
+function unavailableTodoistHealth(err) {
+  return {
+    state: "unavailable",
+    configured: null,
+    lastSuccessAt: null,
+    lastError: err?.message || "Todoist sync health unavailable",
+    syncStartedAt: null,
+    ageMs: null,
+  };
 }
 
 // GET /api/live/all — combined live data endpoint
@@ -250,7 +262,7 @@ router.get("/all", async (_req, res) => {
       }),
     ];
 
-    const [emailArrays, calendar, nextWeekCalendar, tomorrowCalendar, weather, bills, recentTransactions, actualMeta, resurfacedReadStates] = await Promise.all([
+    const [emailArrays, calendar, nextWeekCalendar, tomorrowCalendar, weather, bills, recentTransactions, actualMeta, resurfacedReadStates, todoistSyncHealth] = await Promise.all([
       Promise.all(emailPromises).then(arrays => arrays.flat()),
       timeLiveWork("calendarCurrent", () => fetchCalendar(calendarAccounts), {
         degradedSources,
@@ -293,6 +305,7 @@ router.get("/all", async (_req, res) => {
           })
         : skippedLiveSource("actualMetadata", { schedules: [], payeeMap: {} }, "actual_not_configured"),
       resurfacedReadStatePromise,
+      getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
     ]);
 
     // Apply Gmail's current read state to resurfaced entries. `null` means the
@@ -337,6 +350,9 @@ router.get("/all", async (_req, res) => {
       degraded: {
         any: degradedSources.length > 0,
         sources: degradedSources,
+      },
+      providerHealth: {
+        todoist: todoistSyncHealth,
       },
       fetchedAt: new Date().toISOString(),
     });

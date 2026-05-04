@@ -11,13 +11,16 @@ import { dirname, join } from "path";
 import authRoutes from "./routes/auth.js";
 import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.js";
+import dashboardRoutes from "./routes/dashboard.js";
 import liveRoutes from "./routes/live.js";
 import calendarRoutes from "./routes/calendar.js";
 import notesRoutes from "./routes/notes.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
+import todoistWebhookRoutes from "./routes/todoist-webhook.js";
 import { initScheduler, startBackgroundIndexer } from "./briefing/scheduler.js";
 import { startSnoozeWaker } from "./briefing/snooze-waker.js";
 import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
+import { startTodoistMirrorSyncWorker } from "./briefing/todoist-webhook.js";
 import { migrate } from "./db/migrate.js";
 import { migrateLegacyEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
@@ -43,6 +46,7 @@ const bootStartedAt = performance.now();
 app.set("trust proxy", getTrustProxySetting());
 
 applySecurityMiddleware(app);
+app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRoutes);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -65,6 +69,7 @@ app.use("/api", (req, res, next) => {
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/briefing", briefingRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ea", accountsRoutes);
 app.use("/api/live", liveRoutes);
 app.use("/api/calendar", calendarRoutes);
@@ -121,6 +126,7 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("indexer", startupDelays.indexer, () => startBackgroundIndexer());
       scheduleStartupWorker("backfill", startupDelays.backfill, () => startEmailBackfillWorker());
       scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
+      scheduleStartupWorker("todoist-sync", startupDelays.scheduler, () => startTodoistMirrorSyncWorker());
     });
   }).catch((err) => {
     console.error("Migration failed:", err);

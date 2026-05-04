@@ -5,7 +5,7 @@ import { fetchEmails as fetchIcloudEmails } from "./icloud.js";
 import { fetchCalendar, getNextWeekRange, getTomorrowRange } from "./calendar.js";
 import { fetchWeather } from "./weather.js";
 import { fetchCTMDeadlines } from "./ctm.js";
-import { fetchTodoistTasks, fetchTodoistTaskIdSet } from "./todoist.js";
+import { fetchTodoistTasksAndIdSet } from "./todoist.js";
 import { callEmailAiModel } from "./email-ai.js";
 import { resolveEmailAiModelConfig } from "./email-ai-models.js";
 import { getCategories, getUpcomingBills } from "./actual.js";
@@ -56,11 +56,13 @@ async function hoursSinceLastBriefing(userId) {
 }
 
 // Fetch non-email data sources (calendar, weather, CTM)
-async function fetchLiveData(userId, accounts, settings) {
+async function fetchLiveData(userId, accounts, settings, {
+  refreshTodoist = false,
+} = {}) {
   const gmailAccounts = accounts.filter((a) => a.type === "gmail");
   const calendarAccounts = gmailAccounts.filter((a) => a.calendar_enabled);
 
-  const [calendar, nextWeekCalendar, tomorrowCalendar, weather, ctmDeadlines, todoistTasks, todoistTaskIdSet] = await Promise.all([
+  const [calendar, nextWeekCalendar, tomorrowCalendar, weather, ctmDeadlines, todoistBundle] = await Promise.all([
     fetchCalendar(calendarAccounts).catch((err) => {
       console.error("Calendar fetch failed:", err.message);
       return [];
@@ -84,18 +86,15 @@ async function fetchLiveData(userId, accounts, settings) {
       console.error("CTM events fetch failed:", err.message);
       return [];
     }),
-    fetchTodoistTasks(userId).catch((err) => {
+    fetchTodoistTasksAndIdSet(userId, { refresh: refreshTodoist }).catch((err) => {
       console.error("Todoist fetch failed:", err.message);
-      return [];
-    }),
-    // Separate full-horizon probe so tombstone orphan detection doesn't
-    // false-positive on weekly/monthly recurrences that advance past +8d.
-    // null signals "can't verify" so the hydrator skips pruning.
-    fetchTodoistTaskIdSet(userId).catch((err) => {
-      console.error("Todoist task id set fetch failed:", err.message);
-      return null;
+      return { tasks: [], idSet: null };
     }),
   ]);
+  const todoistTasks = todoistBundle.tasks || [];
+  // Full-horizon active IDs drive tombstone orphan detection. null signals
+  // "can't verify" so the hydrator skips pruning.
+  const todoistTaskIdSet = todoistBundle.idSet || null;
 
   return { calendar, nextWeekCalendar, tomorrowCalendar, weather, ctmDeadlines, todoistTasks, todoistTaskIdSet };
 }
@@ -748,7 +747,9 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
 // Quick refresh: update calendar, weather, CTM only — emails left to full generation
 export async function quickRefresh(userId) {
   const { accounts, settings } = await loadUserConfig(userId);
-  const { calendar, nextWeekCalendar, tomorrowCalendar, weather, ctmDeadlines, todoistTasks, todoistTaskIdSet } = await fetchLiveData(userId, accounts, settings);
+  const { calendar, nextWeekCalendar, tomorrowCalendar, weather, ctmDeadlines, todoistTasks, todoistTaskIdSet } = await fetchLiveData(userId, accounts, settings, {
+    refreshTodoist: true,
+  });
   const completedTaskIds = await loadCompletedTaskIds(userId, todoistTasks);
 
   // Load the latest ready briefing to patch into

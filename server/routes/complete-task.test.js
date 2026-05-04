@@ -12,6 +12,8 @@ const testState = vi.hoisted(() => ({
   deleteTodoistTask: vi.fn(),
   fetchTodoistProjects: vi.fn(),
   fetchTodoistLabels: vi.fn(),
+  fetchTodoistTasksAll: vi.fn(),
+  fetchCTMDeadlinesAll: vi.fn(),
   updateTodoistTask: vi.fn(),
   updateCTMEventStatus: vi.fn(),
 }));
@@ -29,12 +31,14 @@ vi.mock("../briefing/todoist.js", () => ({
   deleteTodoistTask: (...args) => testState.deleteTodoistTask(...args),
   fetchTodoistProjects: (...args) => testState.fetchTodoistProjects(...args),
   fetchTodoistLabels: (...args) => testState.fetchTodoistLabels(...args),
+  fetchTodoistTasksAll: (...args) => testState.fetchTodoistTasksAll(...args),
   createTodoistTask: (...args) => testState.createTodoistTask(...args),
   updateTodoistTask: (...args) => testState.updateTodoistTask(...args),
   fetchTodoistTaskIdSet: vi.fn(),
 }));
 
 vi.mock("../briefing/ctm.js", () => ({
+  fetchCTMDeadlinesAll: (...args) => testState.fetchCTMDeadlinesAll(...args),
   updateCTMEventStatus: (...args) => testState.updateCTMEventStatus(...args),
 }));
 
@@ -121,6 +125,8 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     testState.deleteTodoistTask.mockReset();
     testState.fetchTodoistProjects.mockReset();
     testState.fetchTodoistLabels.mockReset();
+    testState.fetchTodoistTasksAll.mockReset().mockResolvedValue([]);
+    testState.fetchCTMDeadlinesAll.mockReset().mockResolvedValue([]);
     testState.updateTodoistTask.mockReset();
     testState.updateCTMEventStatus.mockReset().mockResolvedValue(undefined);
   });
@@ -155,6 +161,7 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       is_recurring: true,
       status: "incomplete",
     };
+    testState.fetchTodoistTasksAll.mockResolvedValueOnce([task]);
     await seedBriefing({
       todoist: { upcoming: [task], stats: {} },
       ctm: { upcoming: [], stats: {} },
@@ -191,6 +198,14 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
 
   it("returns 502 without inserting a dedupe row when Todoist close fails", async () => {
     testState.completeTodoistTask.mockRejectedValueOnce(new Error("Todoist API 401: bad token"));
+    testState.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-fail",
+      title: "One-off",
+      due_date: "2026-04-18",
+      source: "todoist",
+      is_recurring: false,
+      status: "incomplete",
+    }]);
     await seedBriefing({
       todoist: {
         upcoming: [{
@@ -217,14 +232,57 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     expect((await latestBriefing()).todoist.upcoming).toHaveLength(1);
   });
 
-  it("mirrors a newly created Todoist task into the stored briefing so completion can close it", async () => {
-    testState.createTodoistTask.mockResolvedValueOnce({
+  it("completes a mirror-backed Todoist task without reading latest briefing JSON", async () => {
+    testState.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-domain",
+      title: "Submit project notes",
+      due_date: "2026-05-04",
+      due_time: "3:00 PM",
+      class_name: "Todoist",
+      class_color: "#cba6da",
+      url: "https://app.todoist.com/app/task/submit-project-notes-td-domain",
+      priority: 2,
+      labels: ["school"],
+      description: "Attach rubric notes",
+      source: "todoist",
+      is_recurring: false,
+      status: "incomplete",
+    }]);
+
+    const res = await request(makeApp())
+      .post("/api/briefing/complete-task/td-domain")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(testState.completeTodoistTask).toHaveBeenCalledWith("user-1", "td-domain");
+
+    const rows = await completedTaskRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      user_id: "user-1",
+      todoist_id: "td-domain",
+      due_date: "2026-05-04",
+    });
+    expect(JSON.parse(rows[0].snapshot_json)).toMatchObject({
+      id: "td-domain",
+      title: "Submit project notes",
+      due_date: "2026-05-04",
+      due_time: "3:00 PM",
+      source: "todoist",
+      is_recurring: false,
+    });
+  });
+
+  it("can complete a newly created Todoist task once it appears in the domain source", async () => {
+    const createdTask = {
       id: "td-new",
       title: "Pick up milk",
       due_date: "2026-04-18",
       source: "todoist",
       is_recurring: false,
-    });
+    };
+    testState.createTodoistTask.mockResolvedValueOnce(createdTask);
     await seedBriefing({
       todoist: { upcoming: [], stats: {} },
       ctm: { upcoming: [], stats: {} },
@@ -238,6 +296,7 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     expect(createRes.status).toBe(200);
     expect((await latestBriefing()).todoist.upcoming[0]).toMatchObject({ id: "td-new" });
 
+    testState.fetchTodoistTasksAll.mockResolvedValueOnce([createdTask]);
     const completeRes = await request(makeApp())
       .post("/api/briefing/complete-task/td-new")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -247,20 +306,23 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     expect(testState.completeTodoistTask).toHaveBeenCalledWith("user-1", "td-new");
     const rows = await completedTaskRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ todoist_id: "td-new", due_date: null, snapshot_json: null });
+    expect(rows[0]).toMatchObject({ todoist_id: "td-new", due_date: "2026-04-18" });
+    expect(JSON.parse(rows[0].snapshot_json)).toMatchObject({ id: "td-new", title: "Pick up milk" });
   });
 
-  it("records legacy dedupe state and marks non-recurring Todoist-only tasks complete", async () => {
+  it("stores a completed-task snapshot for non-recurring Todoist-only tasks", async () => {
+    const task = {
+      id: "td-one",
+      title: "One-off",
+      due_date: "2026-04-18",
+      source: "todoist",
+      is_recurring: false,
+      status: "incomplete",
+    };
+    testState.fetchTodoistTasksAll.mockResolvedValueOnce([task]);
     await seedBriefing({
       todoist: {
-        upcoming: [{
-          id: "td-one",
-          title: "One-off",
-          due_date: "2026-04-18",
-          source: "todoist",
-          is_recurring: false,
-          status: "incomplete",
-        }],
+        upcoming: [task],
         stats: {},
       },
       ctm: { upcoming: [], stats: {} },
@@ -274,13 +336,19 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     expect(res.status).toBe(200);
     const rows = await completedTaskRows();
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ todoist_id: "td-one", due_date: null, snapshot_json: null });
+    expect(rows[0]).toMatchObject({ todoist_id: "td-one", due_date: "2026-04-18" });
+    expect(JSON.parse(rows[0].snapshot_json)).toMatchObject({
+      id: "td-one",
+      title: "One-off",
+      source: "todoist",
+      is_recurring: false,
+    });
 
     const stored = await latestBriefing();
     expect(stored.todoist.upcoming).toHaveLength(1);
     expect(stored.todoist.upcoming[0]).toMatchObject({
       id: "td-one",
-      status: "complete",
+      status: "incomplete",
     });
   });
 });

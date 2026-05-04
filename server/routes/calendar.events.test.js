@@ -29,7 +29,10 @@ vi.mock("../briefing/google-places.js", () => ({
   getGooglePlaceDetails: vi.fn(),
 }));
 vi.mock("../briefing/ctm.js", () => ({ fetchCTMDeadlinesAll: vi.fn() }));
-vi.mock("../briefing/todoist.js", () => ({ fetchTodoistTasksAll: vi.fn() }));
+vi.mock("../briefing/todoist.js", () => ({
+  fetchTodoistTasksAll: vi.fn(),
+  getTodoistSyncHealth: vi.fn(),
+}));
 vi.mock("../briefing/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),

@@ -10,6 +10,10 @@ const triageMigrationSql = readFileSync(
   join(__dirname, "../db/migrations/030_triage_snapshots.sql"),
   "utf8",
 );
+const sourceMetadataMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/036_snapshot_item_source_metadata.sql"),
+  "utf8",
+);
 
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
@@ -43,6 +47,7 @@ async function createMigratedDb() {
     );
   `);
   await db.executeMultiple(triageMigrationSql);
+  await db.executeMultiple(sourceMetadataMigrationSql);
   return db;
 }
 

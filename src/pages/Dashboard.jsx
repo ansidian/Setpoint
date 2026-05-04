@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import useLiveData from "../hooks/useLiveData";
 import useBriefingData from "../hooks/useBriefingData";
+import useCurrentDashboard from "../hooks/useCurrentDashboard";
 import useAutoRefresh from "../hooks/useAutoRefresh";
 import useActiveSnapshot from "../hooks/useActiveSnapshot";
 import useNotifications from "../hooks/useNotifications";
@@ -46,8 +47,11 @@ export default function Dashboard() {
     return () => window.removeEventListener("devpanel:apply", handler);
   }, []);
 
-  const liveData = useLiveData({ disabled: isMock });
-  const activeSnapshot = useActiveSnapshot({ disabled: isMock });
+  const legacyLiveData = useLiveData({ disabled: true });
+  const legacyActiveSnapshot = useActiveSnapshot({ disabled: true });
+  const currentDashboard = useCurrentDashboard({ disabled: isMock });
+  const liveData = isMock ? legacyLiveData : currentDashboard.liveData;
+  const activeSnapshot = isMock ? legacyActiveSnapshot : currentDashboard.activeSnapshot;
   const calendarRange = useCalendarRange({ disabled: isMock });
   const calendarDeadlineRange = useCalendarDomainRange({
     disabled: isMock,
@@ -60,7 +64,8 @@ export default function Dashboard() {
     emptyData: null,
   });
   useNotifications(liveData);
-  const bd = useBriefingData({ liveData, isMock });
+  const legacyBd = useBriefingData({ liveData: legacyLiveData, isMock, disabled: !isMock });
+  const bd = isMock ? legacyBd : currentDashboard.briefingData;
   const [currentSyncing, setCurrentSyncing] = useState(false);
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);
   const refreshCalendarDomainsRef = useRef(null);
@@ -72,11 +77,8 @@ export default function Dashboard() {
     if (currentSyncing) return Promise.resolve();
     setLastQuickRefreshAt(Date.now());
     setCurrentSyncing(true);
-    return withSyncWatchdog(Promise.all([
-      liveData.refreshNow?.(),
-      activeSnapshot.sync(),
-    ])).finally(() => setCurrentSyncing(false));
-  }, [activeSnapshot, currentSyncing, liveData]);
+    return withSyncWatchdog(liveData.refreshNow?.()).finally(() => setCurrentSyncing(false));
+  }, [currentSyncing, liveData]);
   const handleExplicitQuickRefresh = useCallback(() => {
     if (currentSyncing) return Promise.resolve();
     setLastQuickRefreshAt(Date.now());
@@ -91,11 +93,8 @@ export default function Dashboard() {
     calendarDeadlineRange.markStale?.();
     calendarBillRange.markStale?.();
     refreshCalendarDomainsRef.current?.({ force: true });
-    return withSyncWatchdog(Promise.all([
-      liveData.refreshNow?.(),
-      activeSnapshot.sync(),
-    ])).finally(() => setCurrentSyncing(false));
-  }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, liveData, markCalendarRangeStale, refreshCalendarRangeInPlace]);
+    return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
+  }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, markCalendarRangeStale, refreshCalendarRangeInPlace]);
   useAutoRefresh({
     disabled: isMock,
     lastQuickRefreshAt,

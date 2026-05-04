@@ -24,6 +24,7 @@ vi.mock("../briefing/ctm.js", () => ({
 vi.mock("../briefing/todoist.js", () => ({
   fetchTodoistTasksAll: vi.fn(),
   fetchTodoistTasksRange: vi.fn(),
+  getTodoistSyncHealth: vi.fn(),
 }));
 vi.mock("../briefing/actual.js", () => ({
   getCalendarBillsRange: vi.fn(),
@@ -41,10 +42,11 @@ const {
   separateDeadlines,
 } = await import("../briefing/index.js");
 const { fetchCalendar } = await import("../briefing/calendar.js");
-const { fetchCTMDeadlinesRange } = await import("../briefing/ctm.js");
-const { fetchTodoistTasksRange } = await import("../briefing/todoist.js");
+const { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } = await import("../briefing/ctm.js");
+const { fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../briefing/todoist.js");
 const { getCalendarBillsRange } = await import("../briefing/actual.js");
 const { hydrateRecurringTombstones } = await import("../briefing/tombstones.js");
+const db = (await import("../db/connection.js")).default;
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {
@@ -68,6 +70,7 @@ describe("GET /api/calendar/range", () => {
     ]);
     fetchCTMDeadlinesRange.mockResolvedValue([]);
     fetchTodoistTasksRange.mockResolvedValue([]);
+    getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
     getCalendarBillsRange.mockResolvedValue({ schedules: [], recentTransactions: [], payeeMap: {} });
     hydrateRecurringTombstones.mockResolvedValue([]);
     loadCompletedTaskIds.mockResolvedValue(new Set());
@@ -141,6 +144,45 @@ describe("GET /api/calendar/range", () => {
   });
 });
 
+describe("GET /api/calendar/deadlines", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
+    fetchCTMDeadlinesAll.mockResolvedValue([]);
+    fetchTodoistTasksAll.mockResolvedValue([
+      { id: "todo-open", title: "Open task", due_date: "2026-05-04", source: "todoist", status: "incomplete" },
+    ]);
+    hydrateRecurringTombstones.mockResolvedValue([
+      { id: "todo-done", title: "Completed task", due_date: "2026-05-03", source: "todoist", status: "complete", _tombstone: true },
+    ]);
+    getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
+    loadCompletedTaskIds.mockResolvedValue(new Set());
+    separateDeadlines.mockImplementation((ctm, todoist) => ({ ctm, todoist }));
+    computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
+    db.execute.mockRejectedValue(new Error("latest briefing JSON should not be read"));
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("hydrates completed Todoist rows from completed-task snapshots without previous briefing JSON", async () => {
+    const res = await request(makeApp()).get("/api/calendar/deadlines");
+
+    expect(res.status).toBe(200);
+    expect(fetchTodoistTasksAll).toHaveBeenCalledWith(process.env.EA_USER_ID);
+    expect(hydrateRecurringTombstones).toHaveBeenCalledWith(
+      process.env.EA_USER_ID,
+      new Set(["todo-open"]),
+      { viewBoundary: "yesterday" },
+    );
+    expect(db.execute).not.toHaveBeenCalled();
+    expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
+    expect(res.body.todoist.stats).toEqual({ total: 2 });
+  });
+});
+
 describe("GET /api/calendar/deadlines/range", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -166,6 +208,7 @@ describe("GET /api/calendar/deadlines/range", () => {
       { id: "dupe", title: "Mirrored item", due_date: "2026-05-04", source: "todoist", status: "complete" },
       { id: "todo-1", title: "Standalone item", due_date: "2026-05-05", source: "todoist", status: "complete" },
     ]);
+    getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
   });
 
   it("returns range-backed CTM, Todoist, tombstones, stats, and fetchedAt", async () => {
@@ -180,6 +223,7 @@ describe("GET /api/calendar/deadlines/range", () => {
     expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["dupe", "todo-1", "todo-recurring"]);
     expect(res.body.ctm.stats).toEqual({ total: 0 });
     expect(res.body.todoist.stats).toEqual({ total: 3 });
+    expect(res.body.todoist.syncHealth).toEqual({ state: "current", configured: true, ageMs: 30_000 });
     expect(res.body.minDate).toBe("2025-05-03");
     expect(res.body.errors).toEqual([]);
     expect(res.body.fetchedAt).toBe("2026-05-03T19:00:00.000Z");

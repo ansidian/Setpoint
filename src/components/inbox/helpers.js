@@ -85,6 +85,8 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
 
   return rows.map((item) => {
     const uid = item.uid || item.email_id || item.id;
+    const resurfaced = item.source === "resurfaced_snooze" || item._resurfaced;
+    const resurfacedAt = item.resurfaced_at || item._resurfacedAt || (item.source_at ? Date.parse(item.source_at) : null);
     const account = accountMap.get(item.account_id) || {
       id: item.account_id,
       account_id: item.account_id,
@@ -95,7 +97,9 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       important: [],
       noise: [],
     };
-    const lane = item._snapshotCarryover
+    const lane = resurfaced
+      ? null
+      : item._snapshotCarryover
       ? "carryover"
       : item.lane === "action"
         ? "needs_attention"
@@ -121,9 +125,12 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       _accountKey: account.id || account.name,
       _account: account,
       _lane: lane,
-      _untriaged: false,
+      _untriaged: resurfaced,
+      _live: false,
       _activeSnapshot: true,
       _carryover: lane === "carryover",
+      _resurfaced: resurfaced,
+      _resurfacedAt: resurfacedAt,
       urgentFlag: item.escalation_badge
         ? { label: item.escalation_badge }
         : item.urgency === "high"

@@ -14,6 +14,7 @@ const testState = vi.hoisted(() => ({
   actualBills: vi.fn(),
   actualRecentTransactions: vi.fn(),
   actualMetadata: vi.fn(),
+  getTodoistSyncHealth: vi.fn(),
   isGmailMessageRead: vi.fn(),
   isIcloudMessageRead: vi.fn(),
 }));
@@ -45,6 +46,9 @@ vi.mock("../briefing/actual.js", () => ({
   getRecentTransactions: (...args) => testState.actualRecentTransactions(...args),
   getMetadata: (...args) => testState.actualMetadata(...args),
   isSchedulePaid: () => false,
+}));
+vi.mock("../briefing/todoist.js", () => ({
+  getTodoistSyncHealth: (...args) => testState.getTodoistSyncHealth(...args),
 }));
 vi.mock("../briefing/index.js", () => ({
   loadUserConfig: async () => ({
@@ -130,6 +134,14 @@ describe("GET /api/live/all", () => {
     testState.actualBills.mockReset().mockResolvedValue([]);
     testState.actualRecentTransactions.mockReset().mockResolvedValue([]);
     testState.actualMetadata.mockReset().mockResolvedValue({ schedules: [], payeeMap: {}, recentTransactions: [] });
+    testState.getTodoistSyncHealth.mockReset().mockResolvedValue({
+      state: "current",
+      configured: true,
+      lastSuccessAt: "2026-05-04T12:00:00.000Z",
+      lastError: null,
+      syncStartedAt: null,
+      ageMs: 30_000,
+    });
     testState.isGmailMessageRead.mockReset().mockResolvedValue(null);
     testState.isIcloudMessageRead.mockReset().mockResolvedValue(null);
     delete process.env.EA_LIVE_TIMEOUT_WEATHER_MS;
@@ -174,6 +186,12 @@ describe("GET /api/live/all", () => {
       resurfacedEntries: [],
       actualConfigured: false,
       actualBudgetUrl: null,
+      providerHealth: {
+        todoist: {
+          state: "current",
+          configured: true,
+        },
+      },
     });
     expect(res.body.emails).toHaveLength(1);
     expect(res.body.emails[0]).toMatchObject({
@@ -182,6 +200,7 @@ describe("GET /api/live/all", () => {
       isImportantSender: true,
     });
     expect(res.body.weather.location).toBe("El Monte, CA");
+    expect(testState.getTodoistSyncHealth).toHaveBeenCalledWith("u1");
   });
 
   it("returns active snoozed and resurfaced email state", async () => {
