@@ -8,7 +8,7 @@ import {
   processNextGmailHistorySyncJob,
   renewDueGmailWatches,
 } from "./gmail-sync.js";
-import { processNextEmailTriageJob } from "./triage-worker.js";
+import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
 
 const activeJobs = [];
 // Background indexer state lives outside activeJobs so initScheduler's re-runs
@@ -157,6 +157,7 @@ async function runGmailHistorySyncWorker() {
   if (gmailHistorySyncInFlight) return;
   gmailHistorySyncInFlight = true;
   try {
+    await recoverStaleRunningTriageJobs();
     let processed = 0;
     for (let i = 0; i < 10; i++) {
       const result = await processNextGmailHistorySyncJob();
@@ -175,6 +176,7 @@ export async function runEmailTriageWorker() {
   if (emailTriageInFlight) return;
   emailTriageInFlight = true;
   try {
+    await recoverStaleRunningTriageJobs();
     let processed = 0;
     for (let i = 0; i < 10; i++) {
       const result = await processNextEmailTriageJob();

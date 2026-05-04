@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it, vi } from "vitest";
-import { processNextEmailTriageJob } from "./triage-worker.js";
+import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const triageMigrationSql = readFileSync(
@@ -109,6 +109,107 @@ async function queueEmail(dbClient, email = {}) {
 }
 
 describe("email triage worker", () => {
+  it("recovers stale running email triage and Gmail history jobs without resetting attempts", async () => {
+    const dbClient = await createMigratedDb();
+    await dbClient.batch([
+      {
+        sql: `INSERT INTO ea_triage_jobs
+                (user_id, account_id, email_id, job_type, status, idempotency_key,
+                 attempts, locked_at)
+              VALUES (?, ?, ?, 'email_triage', 'running', ?, 2, ?)`,
+        args: [
+          "user-1",
+          "gmail-work",
+          "msg-1",
+          "email_triage:user-1:gmail-work:msg-1",
+          "2026-05-03T11:40:00.000Z",
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_triage_jobs
+                (user_id, account_id, email_id, job_type, status, idempotency_key,
+                 attempts, locked_at)
+              VALUES (?, ?, NULL, 'gmail_history_sync', 'running', ?, 3, ?)`,
+        args: [
+          "user-1",
+          "gmail-work",
+          "gmail_history_sync:user-1:gmail-work:100",
+          "2026-05-03T11:44:59.000Z",
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_triage_jobs
+                (user_id, account_id, email_id, job_type, status, idempotency_key,
+                 attempts, locked_at)
+              VALUES (?, ?, ?, 'email_triage', 'running', ?, 5, ?)`,
+        args: [
+          "user-1",
+          "gmail-work",
+          "fresh-msg",
+          "email_triage:user-1:gmail-work:fresh-msg",
+          "2026-05-03T11:50:01.000Z",
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_triage_jobs
+                (user_id, account_id, email_id, job_type, status, idempotency_key,
+                 attempts, locked_at)
+              VALUES (?, ?, ?, 'other_job', 'running', ?, 7, ?)`,
+        args: [
+          "user-1",
+          "gmail-work",
+          "other-msg",
+          "other_job:user-1:gmail-work:other-msg",
+          "2026-05-03T11:30:00.000Z",
+        ],
+      },
+    ]);
+
+    const result = await recoverStaleRunningTriageJobs({
+      dbClient,
+      now: new Date("2026-05-03T12:00:00.000Z"),
+    });
+
+    expect(result.recovered).toBe(2);
+    const jobs = await dbClient.execute({
+      sql: `SELECT job_type, email_id, status, attempts, locked_at, last_error
+            FROM ea_triage_jobs
+            ORDER BY id`,
+      args: [],
+    });
+    expect(jobs.rows).toEqual([
+      {
+        job_type: "email_triage",
+        email_id: "msg-1",
+        status: "queued",
+        attempts: 2,
+        locked_at: null,
+        last_error: "Recovered stale running job",
+      },
+      {
+        job_type: "gmail_history_sync",
+        email_id: null,
+        status: "queued",
+        attempts: 3,
+        locked_at: null,
+        last_error: "Recovered stale running job",
+      },
+      expect.objectContaining({
+        job_type: "email_triage",
+        email_id: "fresh-msg",
+        status: "running",
+        attempts: 5,
+      }),
+      expect.objectContaining({
+        job_type: "other_job",
+        email_id: "other-msg",
+        status: "running",
+        attempts: 7,
+      }),
+    ]);
+    await dbClient.close();
+  });
+
   it("finalizes queued mail with no-model fallback without model calls or bill candidates", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {

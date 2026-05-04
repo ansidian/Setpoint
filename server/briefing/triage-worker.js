@@ -12,6 +12,8 @@ const CHEAP_CONFIDENCE_FLOOR = 0.72;
 const RISK_CATEGORIES = new Set(["finance", "security", "legal", "school"]);
 const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
+const STALE_RUNNING_JOB_TYPES = ["email_triage", "gmail_history_sync"];
+const DEFAULT_STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 
 const TRIAGE_TOOL = {
   name: "submit_email_triage",
@@ -221,6 +223,27 @@ function safeJson(value, fallback = {}) {
 
 function nowIso(now) {
   return now.toISOString();
+}
+
+export async function recoverStaleRunningTriageJobs({
+  dbClient = db,
+  now = new Date(),
+  staleAfterMs = DEFAULT_STALE_RUNNING_JOB_MS,
+} = {}) {
+  const staleBefore = new Date(now.getTime() - staleAfterMs).toISOString();
+  const result = await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'queued',
+              locked_at = NULL,
+              last_error = ?,
+              updated_at = datetime('now')
+          WHERE status = 'running'
+            AND job_type IN (${STALE_RUNNING_JOB_TYPES.map(() => "?").join(", ")})
+            AND locked_at IS NOT NULL
+            AND locked_at <= ?`,
+    args: ["Recovered stale running job", ...STALE_RUNNING_JOB_TYPES, staleBefore],
+  });
+  return { recovered: Number(result.rowsAffected || 0) };
 }
 
 function toText(value) {
