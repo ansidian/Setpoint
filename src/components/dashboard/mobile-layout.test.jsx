@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DashboardHero from "./DashboardHero.jsx";
 import TodayTimeline from "./TodayTimeline.jsx";
@@ -168,6 +168,50 @@ describe("DashboardHero mobile layout", () => {
     expect(screen.getByTestId("dashboard-hero-mobile")).toBeTruthy();
     expect(screen.getByTestId("dashboard-hero-callouts")).toBeTruthy();
     expect(screen.queryByText("You have a heavier deadline cluster than usual.")).toBeNull();
+  });
+
+  it("does not render legacy briefing email summary or ready status in the hero", () => {
+    render(
+      <DashboardHero
+        accent="#cba6da"
+        density="comfortable"
+        briefing={makeBriefing({
+          emails: {
+            summary: "4 emails across 2 accounts. 3 need attention, 1 FYI, 0 noise.",
+            accounts: [],
+          },
+        })}
+        liveBills={[]}
+        liveCalendar={[]}
+        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
+        onJump={() => {}}
+      />,
+    );
+
+    expect(screen.queryByText("4 emails across 2 accounts. 3 need attention, 1 FYI, 0 noise.")).toBeNull();
+    expect(screen.queryByText("Briefing ready")).toBeNull();
+  });
+
+  it("keeps desktop quick actions in the primary hero column", () => {
+    render(
+      <DashboardHero
+        accent="#cba6da"
+        density="comfortable"
+        briefing={makeBriefing()}
+        liveBills={[]}
+        liveCalendar={[]}
+        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
+        onJump={() => {}}
+      />,
+    );
+
+    const primaryColumn = screen.getByTestId("dashboard-hero-primary");
+    const newTask = within(primaryColumn).getByRole("button", { name: /new task/i });
+    const addEvent = within(primaryColumn).getByRole("button", { name: /add event/i });
+
+    expect(primaryColumn.contains(newTask)).toBe(true);
+    expect(primaryColumn.contains(addEvent)).toBe(true);
+    expect(primaryColumn.compareDocumentPosition(screen.getByTestId("focus-window-card")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows an open-day priority summary instead of a midnight countdown when calendar is empty", () => {

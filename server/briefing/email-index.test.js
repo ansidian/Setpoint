@@ -167,6 +167,34 @@ describe("email indexing", () => {
       },
     ]);
   });
+
+  it("logs indexing with a scoped current-system prefix", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      await emailIndex.indexEmails("user-1", [
+        {
+          uid: "gmail-work-msg-2",
+          account_id: "gmail-work",
+          account_label: "Work",
+          account_email: "work@example.com",
+          account_color: "#123456",
+          account_icon: "Mail",
+          from: "Sender <sender@example.com>",
+          subject: "Updated subject",
+          body_preview: "Updated preview",
+          body_text: "Updated body",
+          date: "2026-05-01T12:00:00Z",
+          read: false,
+        },
+      ]);
+
+      expect(logSpy).toHaveBeenCalledWith("[EA Index] Indexed 1 email(s)");
+      expect(logSpy).not.toHaveBeenCalledWith(expect.stringMatching(/^\[EA\] Indexed .* emails$/));
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
 });
 
 describe("email index backfill trigger", () => {

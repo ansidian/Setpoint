@@ -193,10 +193,7 @@ describe("RedesignShell mobile behavior", () => {
 
     expect(screen.getByTestId("shell-header-desktop")).toBeTruthy();
     expect(screen.queryByTestId("calendar-modal")).toBeNull();
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Briefing");
-    expect(screen.getByTestId("shell-header-briefing-status").textContent).toContain("Next 9:00 AM");
-    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Morning Briefing");
-    expect(screen.getByTestId("shell-header-briefing-status").getAttribute("title")).toContain("Briefing refreshed");
+    expect(screen.queryByTestId("shell-header-briefing-status")).toBeNull();
 
     fireEvent.keyDown(window, { key: "c" });
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
