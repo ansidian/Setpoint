@@ -58,13 +58,39 @@ function itemsFromDatePool(activeView, pool) {
   return [];
 }
 
+function isCompleteItem(item) {
+  return item?.status === "complete";
+}
+
+function itemDueDate(item) {
+  return item?.agendaDateKey || item?.due_date || item?.next_date || null;
+}
+
 function resolvePendingFocusItem({ activeView, computed, dateKey, itemId }) {
-  const candidates = itemsFromDatePool(activeView, computed?.itemsByDate?.[dateKey]);
   const getItemId = activeView?.getItemId || ((item) => item?.id);
-  return candidates.find((item) => (
+  const matches = (item) => (
     activeView?.matchesItemId?.(item, itemId)
     || String(getItemId(item)) === String(itemId)
-  )) || null;
+    || String(item?.id) === String(itemId)
+  );
+  const sameDateCandidates = itemsFromDatePool(activeView, computed?.itemsByDate?.[dateKey]);
+  const sameDateOpen = sameDateCandidates.find((item) => matches(item) && !isCompleteItem(item));
+  if (sameDateOpen) return sameDateOpen;
+
+  const allByDate = computed?.itemsByDate || {};
+  const allMatches = Object.entries(allByDate)
+    .flatMap(([candidateDateKey, pool]) => (
+      itemsFromDatePool(activeView, pool)
+        .filter((item) => matches(item))
+        .map((item) => ({ item, candidateDateKey }))
+    ));
+  const openMatch = allMatches.find(({ item }) => !isCompleteItem(item));
+  if (openMatch) return openMatch.item;
+
+  return sameDateCandidates.find((item) => matches(item))
+    || allMatches.find(({ item }) => itemDueDate(item) === dateKey)?.item
+    || allMatches[0]?.item
+    || null;
 }
 
 export default function useCalendarModalController({
@@ -621,6 +647,7 @@ export default function useCalendarModalController({
       dateKey: pendingItemDetailFocus.dateKey,
       itemId: pendingItemDetailFocus.itemId,
     });
+    const resolvedDateKey = itemDueDate(item) || pendingItemDetailFocus.dateKey;
     const resolvedItemId = item
       ? String(activeView.getItemId ? activeView.getItemId(item) : item.id)
       : pendingItemDetailFocus.itemId;
@@ -637,7 +664,6 @@ export default function useCalendarModalController({
           return latest;
         }
         if ((latest.attempts || 0) >= 20) {
-          requestAgendaScroll({ type: "date", dateKey: latest.dateKey });
           return null;
         }
         return { ...latest, attempts: (latest.attempts || 0) + 1 };
@@ -649,59 +675,29 @@ export default function useCalendarModalController({
       return () => window.clearTimeout(id);
     }
 
-    const parsed = parseYmd(pendingItemDetailFocus.dateKey);
-    if (!parsed) {
-      setPendingItemDetailFocus(null);
-      return undefined;
-    }
-
-    let secondRaf = 0;
     const firstRaf = window.requestAnimationFrame(() => {
       suppressAgendaPassiveSync();
-      agendaRailRef.current?.scrollToItem?.(resolvedItemId, pendingItemDetailFocus.dateKey);
-      secondRaf = window.requestAnimationFrame(() => {
-        const anchorElement = agendaRailRef.current?.getItemAnchor?.(
-          resolvedItemId,
-          pendingItemDetailFocus.dateKey,
-        );
-        if (!anchorElement) {
-          retryOrDegrade();
-          return;
-        }
-        setSelectedDay(parsed.day);
-        setSelectedDateKey(pendingItemDetailFocus.dateKey);
-        setSelectedItemId(resolvedItemId);
-        openFloatingDetail({
-          mode: "detail",
-          view,
-          itemId: resolvedItemId,
-          dateKey: pendingItemDetailFocus.dateKey,
-          day: parsed.day,
-          anchorElement,
-          sourceCellElement: anchorElement,
-          anchorKind: "agenda-row",
-          itemsSnapshot: [item],
-        });
-        handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
-        setPendingItemDetailFocus(null);
-      });
+      const activated = agendaRailRef.current?.activateItem?.(
+        resolvedItemId,
+        resolvedDateKey,
+      );
+      if (!activated) {
+        retryOrDegrade();
+        return;
+      }
+      handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
+      setPendingItemDetailFocus(null);
     });
 
     return () => {
       window.cancelAnimationFrame(firstRaf);
-      if (secondRaf) window.cancelAnimationFrame(secondRaf);
     };
   }, [
     activeView,
     computed,
     floatingDetailRef,
     open,
-    openFloatingDetail,
     pendingItemDetailFocus,
-    requestAgendaScroll,
-    setSelectedDateKey,
-    setSelectedDay,
-    setSelectedItemId,
     shakeFloatingEditor,
     suppressAgendaPassiveSync,
     usesFloatingEditor,

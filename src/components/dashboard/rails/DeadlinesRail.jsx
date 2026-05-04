@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { AlertCircle } from "lucide-react";
 import { daysUntil } from "../../../lib/bill-utils";
 import { formatFullDate } from "../../../lib/dashboard-helpers";
+import { Skeleton } from "@/components/ui/skeleton";
 import Tooltip from "../../shared/Tooltip";
 import {
   CountBadge,
@@ -14,7 +15,47 @@ import {
 } from "./railPrimitives.jsx";
 import { PRIORITY_COLOR } from "./railModel.js";
 
-export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false }) {
+const MAX_VISIBLE_DEADLINES = 4;
+const DEADLINE_ROW_MIN_HEIGHT = 49;
+const DEADLINE_ROW_MIN_HEIGHT_MOBILE = 78;
+
+function DeadlinesRailLoadingPlaceholder({ isMobile = false }) {
+  return (
+    <div
+      data-testid="deadlines-rail-loading-placeholder"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        paddingTop: 2,
+      }}
+    >
+      {Array.from({ length: MAX_VISIBLE_DEADLINES }).map((_, index) => (
+        <div
+          key={index}
+          style={{
+            minHeight: isMobile ? DEADLINE_ROW_MIN_HEIGHT_MOBILE : DEADLINE_ROW_MIN_HEIGHT,
+            padding: isMobile ? "10px 2px" : "9px 2px",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            display: "grid",
+            gridTemplateColumns: isMobile ? "16px minmax(0, 1fr)" : "16px 1fr auto",
+            gap: 10,
+            alignItems: isMobile ? "start" : "center",
+          }}
+        >
+          <Skeleton className="h-[12px] w-[12px] rounded-full bg-white/8" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0 }}>
+            <Skeleton className="h-[12px] w-[58%] bg-white/10" />
+            <Skeleton className="h-[10px] w-[36%] bg-white/7" />
+          </div>
+          {!isMobile && <Skeleton className="h-[18px] w-[68px] bg-white/8" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false, loadingState = "ready" }) {
   const grouped = useMemo(() => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     const visible = [...deadlines]
@@ -35,16 +76,33 @@ export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile
   }, [deadlines]);
 
   const openCount = deadlines.filter((d) => d.status !== "complete").length;
+  const showLoadingPlaceholder = loadingState === "empty_loading";
+  const reservedListMinHeight = (isMobile ? DEADLINE_ROW_MIN_HEIGHT_MOBILE : DEADLINE_ROW_MIN_HEIGHT) * MAX_VISIBLE_DEADLINES;
 
   return (
     <div data-sect="deadlines">
       <SectionHeader
         title="Deadlines"
         isMobile={isMobile}
-        right={<CountBadge n={openCount} />}
+        right={showLoadingPlaceholder ? (
+          <div
+            data-testid="deadlines-rail-refresh-status"
+            style={{ fontSize: 10, color: "rgba(205,214,244,0.46)" }}
+          >
+            Checking Todoist...
+          </div>
+        ) : <CountBadge n={openCount} />}
       />
-      <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
-        {grouped.open.length > 0 && (
+      <div
+        style={{
+          marginTop: 10,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: showLoadingPlaceholder || grouped.open.length > 0 ? reservedListMinHeight : undefined,
+        }}
+      >
+        {showLoadingPlaceholder ? <DeadlinesRailLoadingPlaceholder isMobile={isMobile} /> : null}
+        {!showLoadingPlaceholder && grouped.open.length > 0 && (
           <DeadlineGroup
             label="Open"
             items={grouped.open}
@@ -53,7 +111,7 @@ export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile
             isMobile={isMobile}
           />
         )}
-        {grouped.completed.length > 0 && (
+        {!showLoadingPlaceholder && grouped.completed.length > 0 && (
           <div style={{ marginTop: grouped.open.length > 0 ? 12 : 0 }}>
             <DeadlineGroup
               label="Completed"
@@ -66,7 +124,7 @@ export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile
             />
           </div>
         )}
-        {grouped.open.length === 0 && grouped.completed.length === 0 && (
+        {!showLoadingPlaceholder && grouped.open.length === 0 && grouped.completed.length === 0 && (
           <EmptyRow icon={AlertCircle} label="No deadlines" />
         )}
       </div>

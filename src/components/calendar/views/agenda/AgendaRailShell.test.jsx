@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRef } from "react";
 import AgendaRailShell from "./AgendaRailShell.jsx";
 
 afterEach(() => {
@@ -183,5 +184,84 @@ describe("AgendaRailShell", () => {
 
     expect(onDirtyBlocked).not.toHaveBeenCalled();
     expect(onPassiveDateChange).not.toHaveBeenCalled();
+  });
+
+  it("activates a mounted agenda row without scrolling", async () => {
+    const railRef = createRef();
+    const onRowClick = vi.fn();
+
+    render(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={({ group, registerRow }) => (
+          group.dateKey === "2026-05-01" ? (
+            <span ref={(node) => registerRow(`row-1-${group.dateKey}`, node, group.dateKey)}>
+              <button
+                type="button"
+                data-testid="calendar-agenda-deadline-row"
+                data-item-id="row-1"
+                onClick={onRowClick}
+              >
+                Row one
+              </button>
+            </span>
+          ) : null
+        )}
+      />,
+    );
+    await flushRailEffects();
+
+    const rail = screen.getByTestId("agenda-shell");
+    rail.scrollTo = vi.fn();
+
+    expect(railRef.current.activateItem("row-1", "2026-05-01")).toBe(true);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    expect(rail.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("returns false when activating an agenda row that has not mounted", async () => {
+    const railRef = createRef();
+
+    render(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+
+    const rail = screen.getByTestId("agenda-shell");
+    rail.scrollTo = vi.fn();
+
+    expect(railRef.current.activateItem("missing", "2026-05-01")).toBe(false);
+    expect(rail.scrollTo).not.toHaveBeenCalled();
   });
 });

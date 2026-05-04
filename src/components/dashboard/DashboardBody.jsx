@@ -4,7 +4,7 @@ import TodayTimeline from "./TodayTimeline";
 import { DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
 import NotesRail from "../notes/NotesRail";
 import { useDashboard } from "../../context/DashboardContext";
-import { focusPressureDate } from "../../lib/focus-windows";
+import { focusPressureTarget } from "../../lib/focus-windows";
 import { getEventSelectionId } from "../../lib/redesign-helpers";
 import {
   DashboardBodyLayout,
@@ -14,7 +14,7 @@ import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel";
 
 export function DashboardBody({
   briefing, liveData, activeSnapshot, calendarRange, customize, accent,
-  isMobile = false,
+  isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false, calendarDeadlinesError = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenTodoistCreate, onJumpSection, setAddTaskOpen,
 }) {
   const { dashboardLayout, density, showInboxPeek, showNotes } = customize;
@@ -57,8 +57,22 @@ export function DashboardBody({
       });
     return () => { cancelled = true; };
   }, [ensureCalendarRange, today, seededEvents, calendarRevision]);
-  const ctm = useMemo(() => briefing?.ctm?.upcoming || [], [briefing?.ctm?.upcoming]);
-  const todoist = useMemo(() => briefing?.todoist?.upcoming || [], [briefing?.todoist?.upcoming]);
+  const calendarDeadlinesReady = calendarDeadlines != null;
+  const allowBriefingDeadlineFallback = calendarDeadlines === undefined || calendarDeadlinesError;
+  const ctm = useMemo(
+    () => {
+      if (calendarDeadlinesReady) return calendarDeadlines?.ctm?.upcoming || [];
+      return allowBriefingDeadlineFallback ? briefing?.ctm?.upcoming || [] : [];
+    },
+    [allowBriefingDeadlineFallback, briefing?.ctm?.upcoming, calendarDeadlines?.ctm?.upcoming, calendarDeadlinesReady],
+  );
+  const todoist = useMemo(
+    () => {
+      if (calendarDeadlinesReady) return calendarDeadlines?.todoist?.upcoming || [];
+      return allowBriefingDeadlineFallback ? briefing?.todoist?.upcoming || [] : [];
+    },
+    [allowBriefingDeadlineFallback, briefing?.todoist?.upcoming, calendarDeadlines?.todoist?.upcoming, calendarDeadlinesReady],
+  );
   const deadlines = useMemo(() => [...ctm, ...todoist], [ctm, todoist]);
   const bills = liveData.liveBills || [];
   const activeSnapshotEmailAccounts = useMemo(() => {
@@ -125,8 +139,11 @@ export function DashboardBody({
   const billsLoadingState = liveData.actualConfigured && liveData.billsLoading && !bills.length
     ? "empty_loading"
     : "ready";
-  const pressureFocusDate = useMemo(
-    () => focusPressureDate(deadlines, pressureNow),
+  const deadlinesLoadingState = !calendarDeadlinesReady && !allowBriefingDeadlineFallback && (calendarDeadlinesLoading || calendarDeadlines === null)
+    ? "empty_loading"
+    : "ready";
+  const pressureFocusTarget = useMemo(
+    () => focusPressureTarget(deadlines, pressureNow),
     [deadlines, pressureNow],
   );
 
@@ -155,8 +172,9 @@ export function DashboardBody({
       briefing={briefing}
       liveWeather={liveData.liveWeather}
       liveCalendar={displayEvents}
+      liveDeadlines={deadlines}
       liveBills={bills}
-      onOpenPressure={() => onOpenDeadlinesCalendar?.(pressureFocusDate)}
+      onOpenPressure={() => onOpenDeadlinesCalendar?.(pressureFocusTarget?.date || null, pressureFocusTarget?.id || null)}
       eventLoadingState={eventLoadingState}
       onQuickAction={(action) => {
         if (action === "task") {
@@ -215,7 +233,7 @@ export function DashboardBody({
     </DashboardSurface>
   );
 
-  const deadlinesSection = <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} isMobile={isMobile} />;
+  const deadlinesSection = <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} isMobile={isMobile} loadingState={deadlinesLoadingState} />;
 
   const billsSection = (
     <BillsRail

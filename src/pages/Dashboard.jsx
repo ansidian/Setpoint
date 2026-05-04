@@ -125,8 +125,9 @@ export default function Dashboard() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyTriggerRef = useRef(null);
 
-  const [calendarDeadlines, setCalendarDeadlines] = useState(null);
+  const [calendarDeadlines, setCalendarDeadlines] = useState(undefined);
   const [calendarDeadlinesLoading, setCalendarDeadlinesLoading] = useState(false);
+  const [calendarDeadlinesError, setCalendarDeadlinesError] = useState(false);
   const [calendarDeadlinesFetchedAt, setCalendarDeadlinesFetchedAt] = useState(0);
   const updateCalendarDeadlineRangeData = calendarDeadlineRange.updateData;
   const calendarDeadlinesLoadingRef = useRef(false);
@@ -135,13 +136,17 @@ export default function Dashboard() {
     if (calendarDeadlinesLoadingRef.current && !force) return;
     if (!force && calendarDeadlines && !isCalendarDomainCacheStale(calendarDeadlinesFetchedAt)) return;
     calendarDeadlinesLoadingRef.current = true;
+    setCalendarDeadlinesError(false);
     setCalendarDeadlinesLoading(true);
     getCalendarDeadlines()
       .then((data) => {
         setCalendarDeadlines(data);
         setCalendarDeadlinesFetchedAt(Date.now());
       })
-      .catch((err) => console.error("Calendar deadlines fetch failed:", err))
+      .catch((err) => {
+        console.error("Calendar deadlines fetch failed:", err);
+        setCalendarDeadlinesError(true);
+      })
       .finally(() => {
         calendarDeadlinesLoadingRef.current = false;
         setCalendarDeadlinesLoading(false);
@@ -256,6 +261,7 @@ export default function Dashboard() {
           historyTriggerRef={historyTriggerRef}
           calendarDeadlines={calendarDeadlines}
           calendarDeadlinesLoading={calendarDeadlinesLoading}
+          calendarDeadlinesError={calendarDeadlinesError}
           loadCalendarDeadlines={loadCalendarDeadlines}
           calendarBillsData={calendarBillsData}
           calendarBillRange={calendarBillRange}

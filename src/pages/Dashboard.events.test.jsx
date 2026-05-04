@@ -36,9 +36,13 @@ function renderDashboardBody({
   briefing,
   ensureRange,
   onOpenBillsCalendar = () => {},
+  onOpenDeadline = () => {},
   onOpenDeadlinesCalendar = () => {},
   onOpenEventsCalendar = () => {},
   liveData: liveDataOverrides = {},
+  calendarDeadlines = undefined,
+  calendarDeadlinesLoading = false,
+  calendarDeadlinesError = false,
 }) {
   return render(
     <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
@@ -70,8 +74,11 @@ function renderDashboardBody({
         }}
         accent="#cba6da"
         isMobile={false}
+        calendarDeadlines={calendarDeadlines}
+        calendarDeadlinesLoading={calendarDeadlinesLoading}
+        calendarDeadlinesError={calendarDeadlinesError}
         onOpenEmail={() => {}}
-        onOpenDeadline={() => {}}
+        onOpenDeadline={onOpenDeadline}
         onOpenBillsCalendar={onOpenBillsCalendar}
         onOpenEventsCalendar={onOpenEventsCalendar}
         onOpenDeadlinesCalendar={onOpenDeadlinesCalendar}
@@ -158,7 +165,7 @@ describe("Dashboard event loading", () => {
     expect(screen.queryByText("No upcoming bills")).toBeNull();
   });
 
-  it("deep links the pressure pill to the nearest deadline day", () => {
+  it("activates the nearest pressure deadline row", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -171,7 +178,83 @@ describe("Dashboard event loading", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /deadline soon/i }));
-    expect(onOpenDeadlinesCalendar).toHaveBeenCalledWith("2026-04-20");
+    expect(onOpenDeadlinesCalendar).toHaveBeenCalledWith("2026-04-20", "ctm-1");
+  });
+
+  it("holds stored briefing deadlines while live calendar deadlines are still loading", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    renderDashboardBody({
+      briefing: {
+        ...makeBriefing([]),
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [{
+            id: "todo-rec",
+            title: "Stale recurring review",
+            due_date: "2026-04-21",
+            source: "todoist",
+            status: "open",
+            is_recurring: true,
+          }],
+        },
+      },
+      ensureRange: vi.fn().mockResolvedValue([]),
+      calendarDeadlines: null,
+      calendarDeadlinesLoading: true,
+    });
+
+    expect(screen.getByTestId("deadlines-rail-loading-placeholder")).toBeTruthy();
+    expect(screen.queryByText("Stale recurring review")).toBeNull();
+    expect(screen.queryByRole("button", { name: /deadline soon/i })).toBeNull();
+  });
+
+  it("uses live calendar deadlines over stale briefing Todoist deadlines", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const onOpenDeadline = vi.fn();
+    renderDashboardBody({
+      briefing: {
+        ...makeBriefing([]),
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [{
+            id: "todo-rec",
+            title: "Recurring review",
+            due_date: "2026-04-21",
+            source: "todoist",
+            status: "open",
+            is_recurring: true,
+          }],
+        },
+      },
+      ensureRange: vi.fn().mockResolvedValue([]),
+      calendarDeadlines: {
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [{
+            id: "todo-rec",
+            title: "Recurring review",
+            due_date: "2026-04-23",
+            source: "todoist",
+            status: "open",
+            is_recurring: true,
+          }],
+        },
+      },
+      onOpenDeadline,
+    });
+
+    expect(screen.queryByRole("button", { name: /deadline soon/i })).toBeNull();
+    fireEvent.click(screen.getByTestId("hero-callout-deadline"));
+    expect(onOpenDeadline).toHaveBeenCalledWith(expect.objectContaining({
+      id: "todo-rec",
+      due_date: "2026-04-23",
+    }), expect.any(HTMLElement));
   });
 
   it("deep links timeline events to the selected calendar chip", () => {

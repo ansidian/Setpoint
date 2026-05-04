@@ -5,6 +5,7 @@ import Dashboard from "./Dashboard.jsx";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState.js";
 
 const mocks = vi.hoisted(() => ({
+  getCalendarDeadlines: vi.fn(),
   activeSnapshot: {
     snapshot: { id: 10 },
     lanes: {
@@ -24,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../api", () => ({
-  getCalendarDeadlines: vi.fn().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } }),
+  getCalendarDeadlines: mocks.getCalendarDeadlines,
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
   deleteBriefing: vi.fn(),
@@ -104,6 +105,8 @@ vi.mock("../components/dashboard/RedesignShell", () => ({
 describe("Dashboard boot", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
+    mocks.getCalendarDeadlines.mockReset();
+    mocks.getCalendarDeadlines.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
   });
 
   afterEach(() => {
@@ -129,5 +132,6 @@ describe("Dashboard boot", () => {
 
     expect(screen.getByTestId("dashboard-shell").textContent).toContain("active-snapshot");
     expect(screen.queryByText(/no briefings yet/i)).toBeNull();
+    expect(mocks.getCalendarDeadlines).not.toHaveBeenCalled();
   });
 });

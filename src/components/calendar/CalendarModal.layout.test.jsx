@@ -832,6 +832,82 @@ describe("CalendarModal responsive layout", () => {
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
   });
 
+  it("activates a dashboard-focused deadline without issuing an item scroll", async () => {
+    window.innerWidth = 1900;
+    const scrollTo = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="deadline-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: {
+            upcoming: [
+              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    const agendaHeader = agendaRail.querySelector("[data-agenda-date-header='true']");
+    const agendaRow = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
+    agendaRail.scrollTo = scrollTo;
+    agendaRail.scrollTop = 0;
+    agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    agendaHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+    agendaRow.getBoundingClientRect = () => ({ top: 400, bottom: 444, left: 0, right: 280, width: 280, height: 44 });
+    const clickRow = agendaRow.click.bind(agendaRow);
+    const clickSpy = vi.spyOn(agendaRow, "click").mockImplementation(() => clickRow());
+    scrollTo.mockClear();
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+    expect(clickSpy).toHaveBeenCalled();
+    expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(false);
+  });
+
+  it("activates the live recurring Todoist occurrence when dashboard focus has a stale due date", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="deadlines"
+        onViewChange={() => {}}
+        focusDate="2026-04-21"
+        focusItemId="todo-rec"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-rec", title: "Completed occurrence", due_date: "2026-04-21", source: "todoist", status: "complete", is_recurring: true },
+              { id: "todo-rec", title: "Current occurrence", due_date: "2026-04-23", source: "todoist", status: "open", is_recurring: true },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Current occurrence");
+  });
+
   it("closes a completed deadline floating detail when completed agenda rows are hidden", async () => {
     window.innerWidth = 1900;
 

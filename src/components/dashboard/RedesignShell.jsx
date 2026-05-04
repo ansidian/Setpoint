@@ -23,7 +23,7 @@ export function RedesignShell({
   activeSnapshot,
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
-  calendarDeadlines, calendarDeadlinesLoading, loadCalendarDeadlines = () => {},
+  calendarDeadlines, calendarDeadlinesLoading, calendarDeadlinesError = false, loadCalendarDeadlines = () => {},
   calendarBillsData, calendarBillRange, calendarDeadlineRange, loadCalendarBills = () => {},
   onCalendarWorkspaceChange,
 }) {
@@ -214,6 +214,12 @@ export function RedesignShell({
 
   const { accent } = customize;
   const briefing = bd.briefing;
+  const dashboardCalendarDeadlines = isMock
+    ? {
+        ctm: briefing?.ctm || { upcoming: [], stats: null },
+        todoist: briefing?.todoist || { upcoming: [], stats: null },
+      }
+    : calendarDeadlines;
 
   // Scroll/jump to data-sect targets within the dashboard tab
   const jumpToSection = useCallback((slug) => {
@@ -425,6 +431,9 @@ export function RedesignShell({
             customize={customize}
             accent={accent}
             isMobile={isMobile}
+            calendarDeadlines={dashboardCalendarDeadlines}
+            calendarDeadlinesLoading={calendarDeadlinesLoading}
+            calendarDeadlinesError={!!calendarDeadlinesError}
             viewingPast={bd.viewingPast}
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {

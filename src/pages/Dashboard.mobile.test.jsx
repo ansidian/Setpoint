@@ -251,6 +251,10 @@ describe("RedesignShell mobile behavior", () => {
         status: "open",
       },
     ];
+    props.calendarDeadlines = {
+      ctm: { upcoming: [] },
+      todoist: { upcoming: props.bd.briefing.todoist.upcoming },
+    };
 
     render(
       <BrowserRouter>
