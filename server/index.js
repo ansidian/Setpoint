@@ -21,11 +21,11 @@ import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
 import { migrate } from "./db/migrate.js";
 import { migrateLegacyEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
+import { getMissingRequiredEnv } from "./env.js";
 
 
 // fail fast if critical env vars are missing
-const REQUIRED_ENV = ["EA_USER_ID", "EA_PASSWORD_HASH", "EA_ENCRYPTION_KEY"];
-const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+const missing = getMissingRequiredEnv();
 if (missing.length) {
   console.error(`[EA] Missing required env vars: ${missing.join(", ")}`);
   process.exit(1);

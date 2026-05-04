@@ -76,14 +76,13 @@ ea-dashboard/
 │   │   ├── index.js                # Orchestrator: generateBriefing, quickRefresh, delta merge
 │   │   ├── stored-briefing-service.js # Sole funnel for `briefing_json` mutations (email reads, task completion, Todoist mirror)
 │   │   ├── lifecycle-service.js    # Briefing lifecycle: trigger, poll, refresh, latest/history/by-id, delete
-│   │   ├── email-service.js        # Email read/unread/trash/snooze/pin/dismiss, FTS search, body fetch
+│   │   ├── email-service.js        # Email read/unread/trash/snooze/dismiss, FTS search, body fetch
 │   │   ├── tasks-service.js        # Complete task (CTM+Todoist), CTM status, tombstone dismiss, Todoist CRUD
 │   │   ├── bills-service.js        # Actual Budget wrappers + provider-backed bill extraction
 │   │   ├── dev-service.js          # Dev-only helpers (reindex emails)
 │   │   ├── email-ai.js             # Provider-backed email summary, triage, and bill-signal extraction
 │   │   ├── email-ai-models.js      # Email AI provider/model catalog and validation
 │   │   ├── insight-validator.js    # Legacy insight compatibility for old briefing history
-│   │   ├── insight-icons.js        # Legacy icon normalization for old insight history
 │   │   ├── gmail.js                # Gmail OAuth, fetch, mark-read, trash
 │   │   ├── icloud.js               # IMAP connection pool, fetch, mark-read, trash
 │   │   ├── calendar.js             # Google Calendar: today/tomorrow/next-week ranges
@@ -110,7 +109,7 @@ ea-dashboard/
 │       ├── connection.js           # Turso client (remote prod, local dev file)
 │       ├── ctm-connection.js       # Read-only CTM database client
 │       ├── migrate.js              # Sequential SQL migration runner
-│       ├── migrations/             # 001–025 numbered .sql files
+│       ├── migrations/             # Numbered SQL files auto-run in order
 │       ├── dev-fixture.js          # Mock briefing generator for dev mode
 │       └── scenarios/              # Composable test fixtures (urgent-flags, bills, tombstones, etc.)
 ├── src/
@@ -128,7 +127,7 @@ ea-dashboard/
 │   ├── hooks/
 │   │   ├── useBriefingData.js      # Briefing lifecycle: fetch, poll, generate, history
 │   │   ├── useLiveData.js          # 5-min polling: live emails, calendar, weather, bills
-│   │   ├── useLiveEmailState.js    # Derived read/pinned/snoozed state for live email rows
+│   │   ├── useLiveEmailState.js    # Derived read/snoozed state for live email rows
 │   │   ├── useNotifications.js     # Browser notifications for events, bills, emails
 │   │   ├── useAutoRefresh.js       # Visibility-aware auto refresh of briefing data
 │   │   ├── useHoldGesture.js       # Long-press detection (1.5s) for refresh/suspend
@@ -137,7 +136,7 @@ ea-dashboard/
 │   │   ├── useIsMobile.js          # Responsive breakpoint hook
 │   │   ├── useMediaQuery.js        # Generic media-query matcher
 │   │   ├── briefing/               # Smaller briefing-specific hooks
-│   │   └── email/                  # Smaller email-specific hooks (pin/snooze etc.)
+│   │   └── email/                  # Smaller email-specific hooks
 │   ├── components/
 │   │   ├── layout/                 # Header, SummaryBar, Section, Loading, Error
 │   │   ├── shell/                  # ShellHeader, CommandPalette, CustomizePanel
@@ -302,7 +301,7 @@ graph LR
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
 | Auth | `/api/auth` | 3 | Login (rate-limited 5/15min), session check, logout |
-| Briefing | `/api/briefing` | ~38 | Generate, poll, refresh, email ops (read/trash/pin/snooze/dismiss), FTS email search, task ops, Actual Budget, scenarios |
+| Briefing | `/api/briefing` | ~38 | Generate, poll, refresh, email ops (read/trash/snooze/dismiss), FTS email search, task ops, Actual Budget, scenarios |
 | Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
 | Live | `/api/live` | 1 | Combined real-time data (emails, calendar, weather, bills) |
 | Calendar | `/api/calendar` | 1 | Read-only calendar slice exposed separately from briefing |
@@ -495,18 +494,6 @@ erDiagram
         datetime completed_at
     }
 
-    ea_pinned_emails {
-        text user_id PK
-        text email_id PK
-        text pinned_at
-    }
-
-    ea_pinned_emails_snapshot {
-        text user_id PK
-        text email_id PK
-        text snapshot_json "frozen email payload if source drops"
-    }
-
     ea_snoozed_emails {
         text user_id PK
         text email_id PK
@@ -626,9 +613,9 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 | 17 | `017_drop_gmail_index.sql` | Drop obsolete `gmail_index` column (Gmail now uses `?authuser=`) |
 | 18 | `018_dedupe_email_fts.sql` | Clean up duplicate rows in `ea_email_fts` |
 | 19 | `019_email_body_text.sql` | Add `body_text` to index + rebuild FTS with new column |
-| 20 | `020_pinned_emails.sql` | `ea_pinned_emails` table |
+| 20 | `020_pinned_emails.sql` | Legacy retired pin table; no active routes or writes |
 | 21 | `021_api_tokens.sql` | `ea_api_tokens` table — Bearer-auth for external integrations |
-| 22 | `022_pinned_emails_snapshot.sql` | `ea_pinned_emails_snapshot` for frozen payloads after source drop |
+| 22 | `022_pinned_emails_snapshot.sql` | Legacy retired pin snapshot column; migration retained for existing databases |
 | 23 | `023_snoozed_emails.sql` | `ea_snoozed_emails` + index on `(user_id, until_ts)` |
 | 24 | `024_snoozed_resurfaced.sql` | Track snooze resurface state |
 | 25 | `025_completed_tasks_metadata.sql` | Add `due_date` + `snapshot_json` to `ea_completed_tasks` |
@@ -680,10 +667,9 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 
 `server/briefing/tombstones.js`'s `hydrateRecurringTombstones(userId, todoistTaskIdSet)` compensates: it reads `ea_completed_tasks` entries whose `due_date` is still within the visibility window and whose `todoist_id` is no longer in the live set, then emits synthetic task rows rebuilt from `snapshot_json` (migration 025). The orchestrator merges these with the separated Todoist list so the completed instance keeps rendering until its due date falls off the window. `DeadlinesSection` treats tombstoned rows specially to avoid shared-id collisions (see recent commits `217286f`, `eb17d23`).
 
-### Snooze / Pin
+### Snooze
 
-- **Snooze:** `ea_snoozed_emails` holds `(user_id, email_id, until_ts, email_snapshot)`. `server/briefing/snooze-waker.js` runs periodically; when `until_ts` has passed it re-injects the email into the live feed using the stored snapshot (so the email stays visible even if it's already been fetched-and-filed in the underlying mailbox).
-- **Pin:** `ea_pinned_emails` holds the pin record; `ea_pinned_emails_snapshot` keeps a frozen payload so a pinned email keeps rendering if it's deleted from the source mailbox.
+`ea_snoozed_emails` holds `(user_id, email_id, until_ts, email_snapshot)`. `server/briefing/snooze-waker.js` runs periodically; when `until_ts` has passed it re-injects the email into the live feed using the stored snapshot (so the email stays visible even if it's already been fetched-and-filed in the underlying mailbox).
 
 ## API Reference
 
@@ -756,10 +742,8 @@ Health responses intentionally avoid email bodies. Use `indexed_count`, `oldest_
 | POST | `/api/briefing/email/:uid/trash` | Move email to trash |
 | POST | `/api/briefing/email/mark-all-read` | Batch mark as read |
 | POST | `/api/briefing/dismiss/:emailId` | Permanently dismiss email |
-| POST | `/api/briefing/email/:uid/pin` | Pin email (frozen snapshot saved) |
-| DELETE | `/api/briefing/email/:uid/pin` | Unpin email |
 | POST | `/api/briefing/email/:uid/snooze` | Snooze email until `until_ts` |
-| POST | `/api/briefing/email/:uid/unsnooze` | Cancel snooze and resurface |
+| DELETE | `/api/briefing/email/:uid/snooze` | Cancel snooze and resurface |
 
 Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `lifecycle.js`, `email.js`, `tasks.js`, `bills.js`, `dev.js`, all composed by `index.js`). Route handlers stay thin — business logic + DB live in `server/briefing/*-service.js` (every `briefing_json` mutation funnels through `stored-briefing-service.js`).
 
