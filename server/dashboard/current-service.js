@@ -122,7 +122,7 @@ function currentDataMessage(state) {
 }
 
 function todoistMessage(health) {
-  if (!health?.configured || health.state === "unconfigured") return "Todoist is not configured.";
+  if (health?.configured === false || health?.state === "unconfigured") return "Todoist is not configured.";
   if (health.state === "current") return "Todoist mirror is current.";
   if (health.state === "syncing") return "Todoist mirror is syncing.";
   if (health.state === "stale") return "Todoist mirror is stale.";
