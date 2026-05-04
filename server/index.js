@@ -126,7 +126,7 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("indexer", startupDelays.indexer, () => startBackgroundIndexer());
       scheduleStartupWorker("backfill", startupDelays.backfill, () => startEmailBackfillWorker());
       scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
-      scheduleStartupWorker("todoist-sync", startupDelays.scheduler, () => startTodoistMirrorSyncWorker());
+      scheduleStartupWorker("todoist-sync", startupDelays.todoistSync, () => startTodoistMirrorSyncWorker());
     });
   }).catch((err) => {
     console.error("Migration failed:", err);

@@ -27,9 +27,40 @@ describe("startup worker delays", () => {
 
     expect(delays).toMatchObject({
       scheduler: 122_500,
-      indexer: 122_500,
-      backfill: 122_500,
+      indexer: 242_500,
+      backfill: 722_500,
       snooze: 122_500,
+      todoistSync: 122_500,
+    });
+  });
+
+  it("stagger production startup workers so heavy catch-up work does not contend with first dashboard load", () => {
+    const delays = buildStartupWorkerDelays({ NODE_ENV: "production" }, () => 0);
+
+    expect(delays).toMatchObject({
+      scheduler: 60_000,
+      snooze: 60_000,
+      todoistSync: 60_000,
+      indexer: 180_000,
+      backfill: 660_000,
+    });
+  });
+
+  it("allows per-worker startup offset overrides", () => {
+    const delays = buildStartupWorkerDelays({
+      NODE_ENV: "production",
+      EA_STARTUP_WORKER_DELAY_MS: "1000",
+      EA_STARTUP_WORKER_JITTER_MS: "0",
+      EA_STARTUP_INDEXER_OFFSET_MS: "2000",
+      EA_STARTUP_BACKFILL_OFFSET_MS: "3000",
+      EA_STARTUP_TODOIST_SYNC_OFFSET_MS: "4000",
+    }, () => 0);
+
+    expect(delays).toMatchObject({
+      scheduler: 1000,
+      indexer: 3000,
+      backfill: 4000,
+      todoistSync: 5000,
     });
   });
 });
