@@ -113,6 +113,62 @@ describe("email index health", () => {
   });
 });
 
+describe("email indexing", () => {
+  it("updates read state and searchable content when a provider refetch sees an existing email", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-1",
+      subject: "Original subject",
+      body_snippet: "Original preview",
+      body_text: "Original body",
+      read: 0,
+    });
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-1",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Updated subject",
+        body_preview: "Updated preview",
+        body_text: "Updated body",
+        date: "2026-05-01T12:00:00Z",
+        read: true,
+      },
+    ]);
+
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT subject, body_snippet, body_text, read
+            FROM ea_email_index
+            WHERE uid = ?`,
+      args: ["gmail-work-msg-1"],
+    });
+    expect(indexed.rows[0]).toEqual({
+      subject: "Updated subject",
+      body_snippet: "Updated preview",
+      body_text: "Updated body",
+      read: 1,
+    });
+
+    const fts = await testState.db.current.execute({
+      sql: `SELECT subject, body_snippet, body_text
+            FROM ea_email_fts
+            WHERE uid = ?`,
+      args: ["gmail-work-msg-1"],
+    });
+    expect(fts.rows).toEqual([
+      {
+        subject: "Updated subject",
+        body_snippet: "Updated preview",
+        body_text: "Updated body",
+      },
+    ]);
+  });
+});
+
 describe("email index backfill trigger", () => {
   it("queues backfill state for every configured email account without fetching mail", async () => {
     await seedEmailAccount(testState.db.current, {
