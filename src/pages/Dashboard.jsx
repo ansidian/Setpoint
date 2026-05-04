@@ -22,9 +22,17 @@ import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
+const SYNC_WATCHDOG_MS = 45_000;
 
 function isCalendarDomainCacheStale(fetchedAt) {
   return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
+}
+
+function withSyncWatchdog(promise) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(resolve, SYNC_WATCHDOG_MS)),
+  ]);
 }
 
 export default function Dashboard() {
@@ -62,10 +70,10 @@ export default function Dashboard() {
   const handleTimerQuickRefresh = useCallback(() => {
     if (currentSyncing) return Promise.resolve();
     setCurrentSyncing(true);
-    return Promise.all([
+    return withSyncWatchdog(Promise.all([
       liveData.refreshNow?.(),
       activeSnapshot.sync(),
-    ]).finally(() => setCurrentSyncing(false));
+    ])).finally(() => setCurrentSyncing(false));
   }, [activeSnapshot, currentSyncing, liveData]);
   const handleExplicitQuickRefresh = useCallback(() => {
     if (currentSyncing) return Promise.resolve();
@@ -80,10 +88,10 @@ export default function Dashboard() {
     calendarDeadlineRange.markStale?.();
     calendarBillRange.markStale?.();
     refreshCalendarDomainsRef.current?.({ force: true });
-    return Promise.all([
+    return withSyncWatchdog(Promise.all([
       liveData.refreshNow?.(),
       activeSnapshot.sync(),
-    ]).finally(() => setCurrentSyncing(false));
+    ])).finally(() => setCurrentSyncing(false));
   }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, liveData, markCalendarRangeStale, refreshCalendarRangeInPlace]);
   useAutoRefresh({
     disabled: isMock,

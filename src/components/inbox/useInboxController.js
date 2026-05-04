@@ -442,7 +442,7 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       moveSnapshotItemLane(selectedEmail.snapshot_item_id, payload)
         .then(() => onActiveSnapshotRefresh())
-        .catch(() => {});
+        .catch(() => onActiveSnapshotRefresh());
       return;
     }
 
@@ -450,7 +450,7 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       dismissSnapshotItemForToday(selectedEmail.snapshot_item_id)
         .then(() => onActiveSnapshotRefresh())
-        .catch(() => {});
+        .catch(() => onActiveSnapshotRefresh());
       moveBy(1);
       return;
     }
@@ -459,7 +459,7 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       markSnapshotItemHandled(selectedEmail.snapshot_item_id)
         .then(() => onActiveSnapshotRefresh())
-        .catch(() => {});
+        .catch(() => onActiveSnapshotRefresh());
       moveBy(1);
       return;
     }

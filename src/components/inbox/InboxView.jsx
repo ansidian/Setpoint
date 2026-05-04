@@ -4,6 +4,15 @@ import useInboxController from "./useInboxController";
 import { useEffect, useMemo, useState } from "react";
 import useActiveSnapshot from "../../hooks/useActiveSnapshot";
 
+const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
+  snapshot: { id: "loading" },
+  filters: { accounts: [], categories: [] },
+  carryover: [],
+  lanes: { needs_attention: [], fyi: [], noise: [] },
+  laneCounts: { needs_attention: 0, fyi: 0, noise: 0, carryover: 0 },
+  processing: { total: 0, active: false },
+};
+
 export default function InboxView({
   accent,
   customize,
@@ -53,8 +62,10 @@ export default function InboxView({
 
   const localActiveSnapshot = useActiveSnapshot({ disabled: !!controlledActiveSnapshot });
   const activeSnapshot = controlledActiveSnapshot || localActiveSnapshot;
+  const snapshotInboxMode = !!controlledActiveSnapshot || !!activeSnapshot.snapshot?.snapshot;
+  const activeSnapshotView = activeSnapshot.snapshot || (snapshotInboxMode ? EMPTY_ACTIVE_SNAPSHOT_VIEW : null);
   const snapshotAccounts = useMemo(() => (
-    activeSnapshot.snapshot?.filters?.accounts || []
+    activeSnapshotView?.filters?.accounts || []
   ).map((account) => ({
     id: account.account_id,
     account_id: account.account_id,
@@ -65,11 +76,10 @@ export default function InboxView({
     unread: account.count || 0,
     important: [],
     noise: [],
-  })), [accent, activeSnapshot.snapshot?.filters?.accounts]);
+  })), [accent, activeSnapshotView?.filters?.accounts]);
 
-  const hasActiveSnapshot = !!activeSnapshot.snapshot?.snapshot;
-  const displayedAccounts = hasActiveSnapshot ? snapshotAccounts : emailAccounts;
-  const processingCount = activeSnapshot.snapshot?.processing?.total || 0;
+  const displayedAccounts = snapshotInboxMode ? snapshotAccounts : emailAccounts;
+  const processingCount = activeSnapshotView?.processing?.total || 0;
 
   const handleRefresh = async () => {
     await onRefresh?.();
@@ -78,15 +88,15 @@ export default function InboxView({
 
   const controller = useInboxController({
     emailAccounts: displayedAccounts,
-    activeSnapshot: activeSnapshot.snapshot,
-    liveEmails: hasActiveSnapshot ? [] : liveEmails,
+    activeSnapshot: activeSnapshotView,
+    liveEmails: snapshotInboxMode ? [] : liveEmails,
     liveReadOverrides,
     onLiveReadOverrideChange,
     snoozedEntries,
     resurfacedEntries,
     customize,
     isMobile,
-    briefingGeneratedAt: activeSnapshot.snapshot?.snapshot?.updated_at || briefingGeneratedAt,
+    briefingGeneratedAt: activeSnapshotView?.snapshot?.updated_at || briefingGeneratedAt,
     sessionState: normalizedSessionState,
     onSessionStateChange: setResolvedSessionState,
     onActiveSnapshotRefresh: activeSnapshot.refresh,
@@ -95,9 +105,11 @@ export default function InboxView({
   const sharedProps = {
     accent,
     briefingSummary,
-    briefingGeneratedAt: activeSnapshot.snapshot?.snapshot?.updated_at || briefingGeneratedAt,
+    briefingGeneratedAt: activeSnapshotView?.snapshot?.updated_at || briefingGeneratedAt,
     emailAccounts: displayedAccounts,
-    liveEmailsLoading: liveEmailsLoading || activeSnapshot.loading || !!processingCount,
+    liveEmailsLoading: snapshotInboxMode
+      ? activeSnapshot.loading || !!processingCount
+      : liveEmailsLoading || activeSnapshot.loading || !!processingCount,
     processingCount,
     activeSnapshotError: activeSnapshot.error,
     onOpenDashboard,

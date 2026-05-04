@@ -4,6 +4,7 @@ import { getEmailBody, peekEmailBody } from "../../../api";
 export default function useEmailBody(email) {
   const emailKey = email?.uid || email?.id;
   const hasFullBody = !!email?.fullBody;
+  const fallbackBody = email?.body || email?.preview || email?.body_preview || "";
   const [bodyState, setBodyState] = useState(() => {
     if (!email) return { loading: false, body: null, error: null };
     if (email.fullBody) return { loading: false, body: email.fullBody, error: null };
@@ -36,6 +37,10 @@ export default function useEmailBody(email) {
       })
       .catch((err) => {
         if (cancelled) return;
+        if (err.status === 404 && fallbackBody) {
+          setBodyState({ loading: false, body: fallbackBody, error: null });
+          return;
+        }
         setBodyState({ loading: false, body: null, error: err.message || "Failed to load email" });
       });
 
@@ -45,7 +50,7 @@ export default function useEmailBody(email) {
     // email.fullBody captured by hasFullBody; full object intentionally omitted
     // to avoid re-fetch on read-state mutations from parent reconciliation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emailKey, hasFullBody]);
+  }, [emailKey, hasFullBody, fallbackBody]);
 
   return bodyState;
 }

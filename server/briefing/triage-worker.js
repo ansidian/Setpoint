@@ -372,6 +372,44 @@ function routeFromRules(email, rules) {
   return { route: "cheap", reason: "No deterministic rule matched." };
 }
 
+function normalizeEmailInterests(raw) {
+  const parsed = typeof raw === "string" ? safeJson(raw, []) : raw;
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((interest) => String(interest || "").trim())
+    .filter(Boolean);
+}
+
+function matchEmailInterest(email, interests = []) {
+  if (!interests.length) return null;
+  const text = emailSearchText(email);
+  return interests.find((interest) => text.includes(toText(interest))) || null;
+}
+
+function interestDecision(interest) {
+  return {
+    route: "rule",
+    decision: {
+      lane: "fyi",
+      category: "updates",
+      urgency: "normal",
+      escalation_badge: null,
+      summary: `Matched email interest: ${interest}.`,
+      action: "Review when convenient",
+      deadline_at: null,
+      confidence: 0.95,
+      triage_source: "rule",
+      rule_id: null,
+      model_usage: {},
+      estimated_cost_usd: null,
+      latency_ms: null,
+      cheap_model_result: null,
+      strong_model_result: null,
+      bill_candidate: null,
+    },
+  };
+}
+
 async function loadRules(userId, dbClient) {
   const result = await dbClient.execute({
     sql: `SELECT *
@@ -384,6 +422,18 @@ async function loadRules(userId, dbClient) {
     ...result.rows,
     ...DEFAULT_RULES,
   ].sort((a, b) => Number(a.priority || 100) - Number(b.priority || 100));
+}
+
+async function loadEmailInterests(userId, dbClient) {
+  try {
+    const result = await dbClient.execute({
+      sql: "SELECT email_interests_json FROM ea_settings WHERE user_id = ?",
+      args: [userId],
+    });
+    return normalizeEmailInterests(result.rows?.[0]?.email_interests_json);
+  } catch {
+    return [];
+  }
 }
 
 function modelUsageFromResult(result, tier) {
@@ -694,8 +744,16 @@ export async function routeEmailForTriage(email, {
   dbClient = db,
   modelClient,
 } = {}) {
-  const rules = await loadRules(email.user_id, dbClient);
+  const [rules, interests] = await Promise.all([
+    loadRules(email.user_id, dbClient),
+    loadEmailInterests(email.user_id, dbClient),
+  ]);
   const routed = routeFromRules(email, rules);
+  const matchedInterest = matchEmailInterest(email, interests);
+  const interestRouted = matchedInterest && routed.route !== "strong"
+    ? interestDecision(matchedInterest)
+    : null;
+  const effectiveRouted = interestRouted || routed;
   const modelCalls = [];
   let resolvedModelClient = modelClient;
   const getModelClient = async () => {
@@ -707,29 +765,29 @@ export async function routeEmailForTriage(email, {
     return resolvedModelClient;
   };
 
-  if (routed.route === "rule") {
+  if (effectiveRouted.route === "rule") {
     return {
       decision: {
-        ...routed.decision,
-        rule_id: routed.rule?.id || null,
+        ...effectiveRouted.decision,
+        rule_id: effectiveRouted.rule?.id || null,
       },
       modelCalls,
     };
   }
 
-  if (routed.route === "strong") {
-    const strong = await classifyWithModel(getModelClient, "strong", email, routed.reason);
+  if (effectiveRouted.route === "strong") {
+    const strong = await classifyWithModel(getModelClient, "strong", email, effectiveRouted.reason);
     modelCalls.push("strong");
     return {
       decision: {
         ...strong,
-        rule_id: routed.rule?.id || null,
+        rule_id: effectiveRouted.rule?.id || null,
       },
       modelCalls,
     };
   }
 
-  const cheap = await classifyWithModel(getModelClient, "cheap", email, routed.reason);
+  const cheap = await classifyWithModel(getModelClient, "cheap", email, effectiveRouted.reason);
   modelCalls.push("cheap");
   if (!shouldEscalateCheap(cheap)) {
     return { decision: cheap, modelCalls };
