@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import Dashboard from "./Dashboard.jsx";
@@ -94,6 +94,8 @@ vi.mock("../components/shared/EmptyStateSplash", () => ({
 
 describe("Dashboard refresh wiring", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-04T12:00:00.000Z"));
     mocks.autoRefreshArgs = null;
     mocks.invalidateCalendarRange.mockReset();
     mocks.markCalendarRangeStale.mockReset();
@@ -109,6 +111,7 @@ describe("Dashboard refresh wiring", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("keeps timer refresh from invalidating calendar range while explicit refresh does", () => {
@@ -151,5 +154,21 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
     expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
     expect(mocks.handleFullGeneration).not.toHaveBeenCalled();
+  });
+
+  it("updates the auto-refresh cooldown timestamp after timer sync", async () => {
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    expect(mocks.autoRefreshArgs.lastQuickRefreshAt).toBeNull();
+
+    await act(async () => {
+      await mocks.autoRefreshArgs.onQuickRefresh();
+    });
+
+    expect(mocks.autoRefreshArgs.lastQuickRefreshAt).toBe(new Date("2026-05-04T12:00:00.000Z").getTime());
   });
 });

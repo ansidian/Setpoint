@@ -2,7 +2,7 @@ import { createClient } from "@libsql/client";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   advanceSnapshotBoundary,
   getActiveSnapshotView,
@@ -11,6 +11,7 @@ import {
   markProviderRemovedFromActiveSnapshots,
   markSnapshotItemHandled,
   moveSnapshotItemLane,
+  syncActiveSnapshot,
 } from "./snapshot-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -603,5 +604,33 @@ describe("active briefing snapshots", () => {
       args: [itemId],
     });
     expect(Number(preserved.rows[0].count)).toBe(1);
+  });
+
+  it("logs source timings while syncing the active snapshot", async () => {
+    const dbClient = await createMigratedDb();
+    const logger = vi.spyOn(console, "log").mockImplementation(() => {});
+    let messages = [];
+
+    try {
+      await syncActiveSnapshot("user-1", {
+        dbClient,
+        loadUserConfigFn: vi.fn(async () => ({ accounts: [], settings: { email_lookback_hours: 16 } })),
+        fetchAllEmailsFn: vi.fn(async () => []),
+        indexEmailsFn: vi.fn(),
+        enqueueEmailTriageForEmailsFn: vi.fn(),
+        processNextEmailTriageJobFn: vi.fn(async () => ({ processed: false })),
+        now: new Date("2026-05-03T16:15:00.000Z"),
+      });
+      messages = logger.mock.calls.map(([message]) => message);
+    } finally {
+      logger.mockRestore();
+    }
+
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.stringContaining('"event":"snapshot-sync-source","source":"config"'),
+      expect.stringContaining('"event":"snapshot-sync-source","source":"emailFetch"'),
+      expect.stringContaining('"event":"snapshot-sync-source","source":"triageLoop"'),
+      expect.stringContaining('"event":"snapshot-sync-source","source":"snapshotView"'),
+    ]));
   });
 });
