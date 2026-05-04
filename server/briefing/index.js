@@ -734,10 +734,6 @@ export async function generateBriefing(userId, { scheduleLabel } = {}) {
       args: [JSON.stringify(briefingJson), elapsed, briefingId],
     });
 
-    // Pins are now sticky (kept visible across briefings + bias the next
-    // triage). We intentionally do not clear them here — the user manages
-    // pin/unpin explicitly, and trashing an email clears its pin server-side.
-
     return { id: briefingId, briefingJson };
   } catch (error) {
     const elapsed = Date.now() - startTime;

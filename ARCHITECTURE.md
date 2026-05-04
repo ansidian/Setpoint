@@ -26,7 +26,6 @@ graph TB
         Todoist[Todoist API]
         Actual[Actual Budget API]
         EmailAI[Email AI<br/>Anthropic or OpenAI]
-        OpenAI[OpenAI Embeddings]
     end
 
     subgraph Storage
@@ -40,7 +39,6 @@ graph TB
     Scheduler -->|cron triggers| Pipeline
     Pipeline --> Gmail & iCloud & GCal & Weather & CTM & Todoist & Actual
     Pipeline --> EmailAI
-    Pipeline --> OpenAI
     Routes --> Turso
     Pipeline --> Turso
     CTM -.->|reads| TursoCTM
@@ -334,13 +332,15 @@ Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in
 
 ## Briefing Pipeline
 
-This is the core of the system. A briefing is a single JSON object containing triaged emails, calendar events, weather, deadlines, tasks, and bills. `aiInsights: []` may remain in stored JSON as a temporary compatibility stub, but always-on AI Insights are retired as an active feature.
+This remains the legacy history and compatibility path. A stored briefing is a single JSON object containing triaged emails, calendar events, weather, deadlines, tasks, and bills. `aiInsights: []` may remain in stored JSON as a temporary compatibility stub, but always-on AI Insights are retired as an active feature.
 
-### Generation Flow
+Production no longer depends on manual/scheduled batch generation for the active email surface. Durable email triage, active snapshot windows, Gmail history-sync jobs, and snapshot boundary ticks are the production path going forward. Legacy batch generation/status routes are retained for development compatibility and old history reads; production guards return retired responses before generation can write `ea_briefings`.
+
+### Legacy Generation Flow
 
 ```mermaid
 flowchart TD
-    Trigger["Trigger<br/>(manual legacy POST)"]
+    Trigger["Trigger<br/>(manual legacy POST, dev only)"]
     Config["loadUserConfig()<br/>accounts + settings from DB"]
     
     subgraph Parallel["Parallel Fetch"]
@@ -628,9 +628,9 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 
 ## Key Patterns
 
-### Async Generation with Polling
+### Legacy Batch Generation Guard
 
-Briefing generation is fire-and-forget. The API returns a briefing ID immediately. The frontend polls `/api/briefing/status/:id` every 2 seconds, reading `progress` messages and completion percentage until status flips to `ready` or `error`.
+Manual batch generation and status polling are retired in production. `server/briefing/lifecycle-service.js` rejects production `triggerGeneration`, `refresh`, and `getStatus` calls with 410 before they can write or inspect legacy `ea_briefings` generation rows. `getInProgress` returns `{ generating: false, retired: true }` in production. The routes remain for development compatibility and legacy history access.
 
 ### Encryption at Rest
 
@@ -685,14 +685,14 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/briefing/generate` | Trigger async AI generation |
-| GET | `/api/briefing/in-progress` | Check if generation is running |
-| GET | `/api/briefing/status/:id` | Poll generation progress/status |
+| POST | `/api/briefing/generate` | Legacy dev-only batch generation; 410 in production |
+| GET | `/api/briefing/in-progress` | Legacy generation status hint; returns retired state in production |
+| GET | `/api/briefing/status/:id` | Legacy dev-only generation progress/status; 410 in production |
 | GET | `/api/briefing/latest` | Fetch latest ready briefing |
 | GET | `/api/briefing/history` | Last 20 briefings with metadata |
 | GET | `/api/briefing/:id` | Fetch specific briefing |
 | DELETE | `/api/briefing/:id` | Soft-delete briefing |
-| POST | `/api/briefing/refresh` | Quick refresh (no email re-triage) |
+| POST | `/api/briefing/refresh` | Legacy dev-only quick refresh; 410 in production |
 | GET | `/api/briefing/scenarios` | List dev scenarios |
 
 ### Email Search
