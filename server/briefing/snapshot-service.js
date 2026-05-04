@@ -3,6 +3,7 @@ import { loadUserConfig, fetchAllEmails } from "./index.js";
 import { indexEmails } from "./email-index.js";
 import { enqueueEmailTriageForEmails } from "./gmail-sync.js";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
+import { getElapsedMs, logTiming } from "../timing.js";
 
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 const TRIAGE_LANES = new Set(["needs_attention", "fyi", "noise"]);
@@ -466,6 +467,31 @@ async function defaultProcessNextEmailTriageJob(options) {
   return processNextEmailTriageJob(options);
 }
 
+async function timeSnapshotSyncSource(source, work, extra = {}) {
+  const startedAt = performance.now();
+  try {
+    const result = await work();
+    logTiming({
+      event: "snapshot-sync-source",
+      source,
+      ms: getElapsedMs(startedAt),
+      status: "ok",
+      ...(typeof extra === "function" ? extra(result) : extra),
+    });
+    return result;
+  } catch (err) {
+    logTiming({
+      event: "snapshot-sync-source",
+      source,
+      ms: getElapsedMs(startedAt),
+      status: "error",
+      error: err?.message || String(err),
+      ...(typeof extra === "function" ? extra(null, err) : extra),
+    }, console.error);
+    throw err;
+  }
+}
+
 function buildFilters(items) {
   const accountMap = new Map();
   const categoryMap = new Map();
@@ -551,21 +577,48 @@ export async function syncActiveSnapshot(userId, {
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
 } = {}) {
-  const { accounts, settings } = await loadUserConfigFn(userId);
+  const { accounts, settings } = await timeSnapshotSyncSource("config", () => loadUserConfigFn(userId), (result) => ({
+    accounts: result?.accounts?.length || 0,
+  }));
   const hoursBack = Number(settings?.email_lookback_hours) || 16;
-  const emails = await fetchAllEmailsFn(accounts, hoursBack);
+  const emails = await timeSnapshotSyncSource("emailFetch", () => fetchAllEmailsFn(accounts, hoursBack), (result) => ({
+    accounts: accounts.length,
+    emails: result?.length || 0,
+    hoursBack,
+  }));
 
   if (emails.length) {
-    await indexEmailsFn(userId, emails);
-    await enqueueEmailTriageForEmailsFn(userId, emails, { dbClient });
+    await timeSnapshotSyncSource("indexAndEnqueue", async () => {
+      await indexEmailsFn(userId, emails);
+      await enqueueEmailTriageForEmailsFn(userId, emails, { dbClient });
+    }, {
+      emails: emails.length,
+    });
   }
 
-  for (let i = 0; i < 25; i++) {
-    const result = await processNextEmailTriageJobFn({ dbClient, now });
-    if (result?.paused || !result?.processed) break;
-  }
+  await timeSnapshotSyncSource("triageLoop", async () => {
+    let processed = 0;
+    let paused = false;
+    for (let i = 0; i < 25; i++) {
+      const result = await processNextEmailTriageJobFn({ dbClient, now });
+      if (result?.paused) {
+        paused = true;
+        break;
+      }
+      if (!result?.processed) break;
+      processed++;
+    }
+    return { processed, paused };
+  }, (result) => ({
+    processed: result?.processed || 0,
+    paused: !!result?.paused,
+    limit: 25,
+  }));
 
-  return getActiveSnapshotView(userId, { dbClient, now, timeZone });
+  return timeSnapshotSyncSource("snapshotView", () => getActiveSnapshotView(userId, { dbClient, now, timeZone }), (result) => ({
+    items: Object.values(result?.laneCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0),
+    processingActive: !!result?.processing?.active,
+  }));
 }
 
 export async function moveSnapshotItemLane(userId, itemId, lane, {

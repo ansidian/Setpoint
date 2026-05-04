@@ -14,7 +14,7 @@ router.get("/snapshot/active", timeRoute("/api/briefing/snapshot/active"), async
   }
 });
 
-router.post("/snapshot/sync", async (_req, res) => {
+router.post("/snapshot/sync", timeRoute("/api/briefing/snapshot/sync"), async (_req, res) => {
   try {
     res.json(await snapshotService.syncActiveSnapshot(EA_USER_ID));
   } catch (err) {

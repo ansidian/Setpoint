@@ -62,6 +62,7 @@ export default function Dashboard() {
   useNotifications(liveData);
   const bd = useBriefingData({ liveData, isMock });
   const [currentSyncing, setCurrentSyncing] = useState(false);
+  const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);
   const refreshCalendarDomainsRef = useRef(null);
   const calendarWorkspaceRef = useRef({ open: false, view: "events", eventsRange: null });
   const calendarBillsRefreshRequestedRef = useRef(false);
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   const handleTimerQuickRefresh = useCallback(() => {
     if (currentSyncing) return Promise.resolve();
+    setLastQuickRefreshAt(Date.now());
     setCurrentSyncing(true);
     return withSyncWatchdog(Promise.all([
       liveData.refreshNow?.(),
@@ -77,6 +79,7 @@ export default function Dashboard() {
   }, [activeSnapshot, currentSyncing, liveData]);
   const handleExplicitQuickRefresh = useCallback(() => {
     if (currentSyncing) return Promise.resolve();
+    setLastQuickRefreshAt(Date.now());
     setCurrentSyncing(true);
     const calendarWorkspace = calendarWorkspaceRef.current;
     if (calendarWorkspace.open && calendarWorkspace.view === "events" && calendarWorkspace.eventsRange) {
@@ -95,7 +98,7 @@ export default function Dashboard() {
   }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, liveData, markCalendarRangeStale, refreshCalendarRangeInPlace]);
   useAutoRefresh({
     disabled: isMock,
-    lastQuickRefreshAt: bd.lastQuickRefreshAt,
+    lastQuickRefreshAt,
     onQuickRefresh: handleTimerQuickRefresh,
   });
 
