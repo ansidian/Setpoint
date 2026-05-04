@@ -293,6 +293,39 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
   });
 
+  it("reports Todoist health check failures as unavailable, not unconfigured", async () => {
+    await seedCache("weather_current", { temp: 64, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    testState.getTodoistSyncHealth.mockRejectedValueOnce(new Error("Todoist OAuth refresh failed"));
+
+    const res = await request(makeApp())
+      .get("/api/dashboard/health")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.providerHealth.todoist).toMatchObject({
+      state: "unavailable",
+      configured: null,
+      lastError: "Todoist OAuth refresh failed",
+    });
+    expect(res.body.systemStatus.sources).toEqual([
+      expect.objectContaining({ key: "currentData", state: "current" }),
+      expect.objectContaining({
+        key: "todoist",
+        state: "unavailable",
+        message: "Todoist mirror is unavailable.",
+      }),
+    ]);
+  });
+
   it("refreshes missing current rows per domain and stores them for later reads", async () => {
     testState.fetchWeather.mockResolvedValueOnce({ temp: 72, summary: "Clear" });
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-2", title: "Planning" }]);
