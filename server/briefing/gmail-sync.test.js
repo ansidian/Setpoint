@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmailIndexTestDb,
   seedEmailAccount,
+  seedIndexedEmail,
 } from "./test-utils/email-index-db.js";
 
 const testState = vi.hoisted(() => ({
@@ -36,6 +37,44 @@ function pubsubBody(payload, overrides = {}) {
     },
     subscription: "projects/ea/subscriptions/gmail-push",
   };
+}
+
+async function seedTriagedIndexedEmail({
+  uid = "gmail-gmail-work-msg-1",
+  accountId = "gmail-work",
+  providerState = "available",
+} = {}) {
+  await seedIndexedEmail(testState.db.current, {
+    uid,
+    account_id: accountId,
+  });
+  const triage = await testState.db.current.execute({
+    sql: `INSERT INTO ea_email_triage
+            (user_id, account_id, email_id, triage_status, lane, provider_state)
+          VALUES (?, ?, ?, 'complete', 'needs_attention', ?)
+          RETURNING id`,
+    args: ["user-1", accountId, uid, providerState],
+  });
+  return Number(triage.rows[0].id);
+}
+
+async function seedActiveSnapshotItem(triageId, {
+  uid = "gmail-gmail-work-msg-1",
+  accountId = "gmail-work",
+} = {}) {
+  const snapshot = await testState.db.current.execute({
+    sql: `INSERT INTO ea_briefing_snapshots
+            (user_id, start_at, end_at, timezone, status)
+          VALUES (?, ?, ?, 'America/Los_Angeles', 'active')
+          RETURNING id`,
+    args: ["user-1", "2026-05-03T00:00:00.000Z", "2026-05-04T00:00:00.000Z"],
+  });
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_briefing_snapshot_items
+            (snapshot_id, triage_id, user_id, account_id, email_id, lane_at_snapshot)
+          VALUES (?, ?, ?, ?, ?, 'needs_attention')`,
+    args: [Number(snapshot.rows[0].id), triageId, "user-1", accountId, uid],
+  });
 }
 
 describe("Gmail Pub/Sub sync ingestion", () => {
@@ -152,6 +191,33 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     ]);
   });
 
+  it("fetches Gmail history broadly while watch registration remains INBOX scoped", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ historyId: "101", history: [] }),
+    }));
+
+    await gmailSync.fetchGmailHistoryPage({
+      account: {
+        id: "gmail-work",
+        user_id: "user-1",
+        email: "work@example.com",
+      },
+      startHistoryId: "100",
+      fetchImpl,
+      token: "access-token",
+    });
+
+    const url = fetchImpl.mock.calls[0][0];
+    expect(url.searchParams.get("labelId")).toBeNull();
+    expect(url.searchParams.getAll("historyTypes")).toEqual([
+      "messageAdded",
+      "labelAdded",
+      "labelRemoved",
+      "messageDeleted",
+    ]);
+  });
+
   it("syncs Gmail history into indexed mail and idempotent message triage jobs", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
@@ -230,6 +296,8 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       last_history_id: "105",
       indexed: 2,
       queued: 2,
+      read_state_reconciled: 0,
+      provider_removed: 0,
     });
 
     const indexed = await testState.db.current.execute({
@@ -301,5 +369,452 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       last_sync_at: "2026-05-03T12:15:00.000Z",
       last_error: "",
     });
+  });
+
+  it("reconciles Gmail unread label changes for already indexed mail without queueing triage", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "200"],
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-work-msg-1",
+      account_id: "gmail-work",
+      read: 1,
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, lane, provider_state)
+            VALUES (?, ?, ?, 'complete', 'action', 'active')`,
+      args: ["user-1", "gmail-work", "gmail-gmail-work-msg-1"],
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "205",
+      history: [
+        {
+          labelsAdded: [
+            { message: { id: "msg-1", labelIds: ["INBOX", "UNREAD"] }, labelIds: ["UNREAD"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+    const fetchEmailsByIdsFn = vi.fn(async () => []);
+    const fetchMessageReadStateFn = vi.fn(async () => false);
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn,
+      fetchMessageReadStateFn,
+      targetHistoryId: "205",
+      now: new Date("2026-05-03T12:30:00.000Z"),
+    });
+
+    expect(fetchEmailsByIdsFn).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-work" }),
+      [],
+    );
+    expect(fetchMessageReadStateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-work" }),
+      "msg-1",
+    );
+    expect(result).toEqual({
+      account_id: "gmail-work",
+      start_history_id: "200",
+      last_history_id: "205",
+      indexed: 0,
+      queued: 0,
+      read_state_reconciled: 1,
+      provider_removed: 0,
+    });
+
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT read
+            FROM ea_email_index
+            WHERE uid = ?`,
+      args: ["gmail-gmail-work-msg-1"],
+    });
+    expect(indexed.rows[0].read).toBe(0);
+
+    const triageRows = await testState.db.current.execute({
+      sql: `SELECT triage_status, lane, provider_state
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["gmail-gmail-work-msg-1"],
+    });
+    expect(triageRows.rows).toEqual([
+      { triage_status: "complete", lane: "action", provider_state: "active" },
+    ]);
+
+    const jobs = await testState.db.current.execute({
+      sql: `SELECT email_id, job_type
+            FROM ea_triage_jobs
+            WHERE job_type = 'email_triage'`,
+      args: [],
+    });
+    expect(jobs.rows).toEqual([]);
+
+    const watchState = await testState.db.current.execute({
+      sql: `SELECT last_history_id, last_error
+            FROM ea_gmail_watch_state
+            WHERE account_id = ?`,
+      args: ["gmail-work"],
+    });
+    expect(watchState.rows[0]).toEqual({
+      last_history_id: "205",
+      last_error: "",
+    });
+  });
+
+  it("reconciles Gmail read label removals from current metadata", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "300"],
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-work-msg-2",
+      account_id: "gmail-work",
+      read: 0,
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "305",
+      history: [
+        {
+          labelsRemoved: [
+            { message: { id: "msg-2", labelIds: ["INBOX"] }, labelIds: ["UNREAD"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+    const fetchMessageReadStateFn = vi.fn(async () => true);
+
+    await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageReadStateFn,
+      targetHistoryId: "305",
+      now: new Date("2026-05-03T12:45:00.000Z"),
+    });
+
+    expect(fetchMessageReadStateFn).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-work" }),
+      "msg-2",
+    );
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT read
+            FROM ea_email_index
+            WHERE uid = ?`,
+      args: ["gmail-gmail-work-msg-2"],
+    });
+    expect(indexed.rows[0].read).toBe(1);
+  });
+
+  it("skips unread label events for unknown old Gmail messages", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "400"],
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "405",
+      history: [
+        {
+          labelsAdded: [
+            { message: { id: "old-msg", labelIds: ["INBOX", "UNREAD"] }, labelIds: ["UNREAD"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+    const fetchEmailsByIdsFn = vi.fn(async () => []);
+    const fetchMessageReadStateFn = vi.fn(async () => false);
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn,
+      fetchMessageReadStateFn,
+      targetHistoryId: "405",
+      now: new Date("2026-05-03T13:00:00.000Z"),
+    });
+
+    expect(fetchEmailsByIdsFn).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-work" }),
+      [],
+    );
+    expect(fetchMessageReadStateFn).not.toHaveBeenCalled();
+    expect(result.read_state_reconciled).toBe(0);
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT COUNT(*) AS count FROM ea_email_index",
+      args: [],
+    });
+    expect(indexed.rows[0].count).toBe(0);
+  });
+
+  it("logs read-state failures but still advances the Gmail history cursor", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "500"],
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-work-msg-5",
+      account_id: "gmail-work",
+      read: 1,
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "505",
+      history: [
+        {
+          labelsAdded: [
+            { message: { id: "msg-5", labelIds: ["INBOX", "UNREAD"] }, labelIds: ["UNREAD"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageReadStateFn: vi.fn(async () => {
+        throw new Error("metadata unavailable");
+      }),
+      targetHistoryId: "505",
+      now: new Date("2026-05-03T13:15:00.000Z"),
+    });
+
+    expect(result.read_state_reconciled).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[Gmail Sync] Failed to reconcile read state for work@example.com/msg-5: metadata unavailable",
+    );
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT read
+            FROM ea_email_index
+            WHERE uid = ?`,
+      args: ["gmail-gmail-work-msg-5"],
+    });
+    expect(indexed.rows[0].read).toBe(1);
+    const watchState = await testState.db.current.execute({
+      sql: `SELECT last_history_id, last_error
+            FROM ea_gmail_watch_state
+            WHERE account_id = ?`,
+      args: ["gmail-work"],
+    });
+    expect(watchState.rows[0]).toEqual({
+      last_history_id: "505",
+      last_error: "",
+    });
+
+    warnSpy.mockRestore();
+  });
+
+  it("marks an externally archived Gmail message provider-removed without queueing triage", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "600"],
+    });
+    const triageId = await seedTriagedIndexedEmail();
+    await seedActiveSnapshotItem(triageId);
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "605",
+      history: [
+        {
+          labelsRemoved: [
+            { message: { id: "msg-1", labelIds: [] }, labelIds: ["INBOX"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+    const fetchMessageMetadataFn = vi.fn(async () => ({ labelIds: [] }));
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageMetadataFn,
+      targetHistoryId: "605",
+      now: new Date("2026-05-03T14:00:00.000Z"),
+    });
+
+    expect(fetchMessageMetadataFn).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-work" }),
+      "msg-1",
+    );
+    expect(result.provider_removed).toBe(1);
+    const triage = await testState.db.current.execute({
+      sql: `SELECT provider_state
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["gmail-gmail-work-msg-1"],
+    });
+    expect(triage.rows[0].provider_state).toBe("archived");
+    const item = await testState.db.current.execute({
+      sql: `SELECT provider_removed_at
+            FROM ea_briefing_snapshot_items
+            WHERE email_id = ?`,
+      args: ["gmail-gmail-work-msg-1"],
+    });
+    expect(item.rows[0].provider_removed_at).toBe("2026-05-03T14:00:00.000Z");
+    const jobs = await testState.db.current.execute({
+      sql: `SELECT email_id, job_type
+            FROM ea_triage_jobs
+            WHERE job_type = 'email_triage'`,
+      args: [],
+    });
+    expect(jobs.rows).toEqual([]);
+  });
+
+  it("marks external Gmail trash and delete events as trashed for known rows only", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "700"],
+    });
+    await seedTriagedIndexedEmail({ uid: "gmail-gmail-work-trash-msg" });
+    await seedTriagedIndexedEmail({ uid: "gmail-gmail-work-deleted-msg" });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "705",
+      history: [
+        {
+          labelsRemoved: [
+            { message: { id: "trash-msg", labelIds: ["TRASH"] }, labelIds: ["INBOX"] },
+            { message: { id: "unknown-msg", labelIds: ["TRASH"] }, labelIds: ["INBOX"] },
+          ],
+          messagesDeleted: [
+            { message: { id: "deleted-msg" } },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+    const fetchMessageMetadataFn = vi.fn(async (_account, messageId) => {
+      if (messageId === "trash-msg") return { labelIds: ["TRASH"] };
+      if (messageId === "deleted-msg") return null;
+      throw new Error(`unexpected metadata fetch ${messageId}`);
+    });
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageMetadataFn,
+      targetHistoryId: "705",
+      now: new Date("2026-05-03T14:30:00.000Z"),
+    });
+
+    expect(result.provider_removed).toBe(2);
+    expect(fetchMessageMetadataFn).toHaveBeenCalledTimes(2);
+    const triage = await testState.db.current.execute({
+      sql: `SELECT email_id, provider_state
+            FROM ea_email_triage
+            ORDER BY email_id`,
+      args: [],
+    });
+    expect(triage.rows).toEqual([
+      { email_id: "gmail-gmail-work-deleted-msg", provider_state: "trashed" },
+      { email_id: "gmail-gmail-work-trash-msg", provider_state: "trashed" },
+    ]);
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT uid FROM ea_email_index WHERE uid LIKE '%unknown-msg'",
+      args: [],
+    });
+    expect(indexed.rows).toEqual([]);
+  });
+
+  it("matches Gmail read-state reconciliation through legacy UID account IDs for the same mailbox", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-fresh", "work@example.com", "800"],
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-legacy-msg-1",
+      account_id: "gmail-legacy",
+      account_email: "work@example.com",
+      read: 1,
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-other-msg-1",
+      account_id: "gmail-other",
+      account_email: "other@example.com",
+      read: 1,
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "805",
+      history: [
+        {
+          labelsAdded: [
+            { message: { id: "msg-1", labelIds: ["UNREAD"] }, labelIds: ["UNREAD"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-fresh",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageReadStateFn: vi.fn(async () => false),
+      targetHistoryId: "805",
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    expect(result.read_state_reconciled).toBe(1);
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT uid, read
+            FROM ea_email_index
+            ORDER BY uid`,
+      args: [],
+    });
+    expect(indexed.rows).toEqual([
+      { uid: "gmail-gmail-legacy-msg-1", read: 0 },
+      { uid: "gmail-gmail-other-msg-1", read: 1 },
+    ]);
   });
 });

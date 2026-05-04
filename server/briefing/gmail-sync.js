@@ -1,6 +1,7 @@
 import db from "../db/connection.js";
-import { getAccessToken, fetchEmailsByIds } from "./gmail.js";
+import { getAccessToken, fetchEmailsByIds, isMessageRead } from "./gmail.js";
 import { indexEmails } from "./email-index.js";
+import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
@@ -210,6 +211,45 @@ function collectInboxMessageIds(history = []) {
   return [...ids];
 }
 
+function eventLabelIds(entry) {
+  return entry.labelIds || entry.message?.labelIds || [];
+}
+
+function collectUnreadLabelMessageIds(history = []) {
+  const ids = new Set();
+  for (const record of history) {
+    for (const entry of record.labelsAdded || []) {
+      if (entry.message?.id && eventLabelIds(entry).includes("UNREAD")) ids.add(entry.message.id);
+    }
+    for (const entry of record.labelsRemoved || []) {
+      if (entry.message?.id && eventLabelIds(entry).includes("UNREAD")) ids.add(entry.message.id);
+    }
+  }
+  return [...ids];
+}
+
+function collectProviderRemovalEvents(history = []) {
+  const events = new Map();
+  const addEvent = (messageId, eventType) => {
+    if (!messageId) return;
+    const current = events.get(messageId) || new Set();
+    current.add(eventType);
+    events.set(messageId, current);
+  };
+
+  for (const record of history) {
+    for (const entry of record.labelsRemoved || []) {
+      if (entry.message?.id && eventLabelIds(entry).includes("INBOX")) {
+        addEvent(entry.message.id, "inbox_removed");
+      }
+    }
+    for (const entry of record.messagesDeleted || []) {
+      addEvent(entry.message?.id, "message_deleted");
+    }
+  }
+  return events;
+}
+
 export async function fetchGmailHistoryPage({
   account,
   startHistoryId,
@@ -222,13 +262,27 @@ export async function fetchGmailHistoryPage({
   url.searchParams.set("startHistoryId", startHistoryId);
   url.searchParams.append("historyTypes", "messageAdded");
   url.searchParams.append("historyTypes", "labelAdded");
-  url.searchParams.set("labelId", "INBOX");
+  url.searchParams.append("historyTypes", "labelRemoved");
+  url.searchParams.append("historyTypes", "messageDeleted");
   if (pageToken) url.searchParams.set("pageToken", pageToken);
 
   const res = await fetchImpl(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Gmail history.list failed for ${account.email}: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchGmailMessageMetadata(account, messageId, {
+  fetchImpl = fetch,
+  token,
+} = {}) {
+  const accessToken = token || await getAccessToken(account);
+  const res = await fetchImpl(
+    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata&fields=labelIds`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) return null;
   return res.json();
 }
 
@@ -267,10 +321,123 @@ function triageStatementsForEmail(userId, accountId, email) {
   ];
 }
 
+async function findExistingGmailRowsForMessageIds(account, messageIds, dbClient) {
+  const uniqueMessageIds = [...new Set(messageIds)].filter(Boolean);
+  if (!uniqueMessageIds.length) return new Map();
+
+  const result = await dbClient.execute({
+    sql: `SELECT uid, account_id, account_email
+          FROM ea_email_index
+          WHERE user_id = ?
+            AND uid LIKE 'gmail-%'
+            AND (
+              account_id = ?
+              OR lower(account_email) = lower(?)
+            )`,
+    args: [account.user_id, account.id, account.email || ""],
+  });
+  const rowsByMessageId = new Map();
+  for (const messageId of uniqueMessageIds) {
+    const suffix = `-${messageId}`;
+    const candidates = result.rows.filter((row) => String(row.uid || "").endsWith(suffix));
+    if (!candidates.length) continue;
+    const currentAccountRow = candidates.find((row) => row.account_id === account.id);
+    rowsByMessageId.set(messageId, currentAccountRow || candidates[0]);
+  }
+  return rowsByMessageId;
+}
+
+async function reconcileReadStateForExistingMessages(account, messageIds, {
+  dbClient,
+  fetchMessageReadStateFn,
+} = {}) {
+  const uniqueMessageIds = [...new Set(messageIds)].filter(Boolean);
+  if (!uniqueMessageIds.length) return 0;
+
+  const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, uniqueMessageIds, dbClient);
+  const statements = [];
+  for (const messageId of uniqueMessageIds) {
+    const row = rowsByMessageId.get(messageId);
+    if (!row) continue;
+    try {
+      const read = await fetchMessageReadStateFn(account, messageId);
+      if (read == null) {
+        console.warn(`[Gmail Sync] Could not confirm read state for ${account.email}/${messageId}`);
+        continue;
+      }
+      statements.push({
+        sql: `UPDATE ea_email_index
+              SET read = ?
+              WHERE user_id = ?
+                AND account_id = ?
+                AND uid = ?`,
+        args: [read ? 1 : 0, account.user_id, row.account_id, row.uid],
+      });
+    } catch (err) {
+      console.warn(
+        `[Gmail Sync] Failed to reconcile read state for ${account.email}/${messageId}: ${err.message}`,
+      );
+    }
+  }
+  if (statements.length) await dbClient.batch(statements);
+  return statements.length;
+}
+
+function providerStateFromMetadata(metadata) {
+  if (!metadata) return null;
+  const labels = metadata?.labelIds || [];
+  if (labels.includes("TRASH")) return "trashed";
+  if (!labels.includes("INBOX")) return "archived";
+  return null;
+}
+
+async function reconcileProviderRemovalForExistingMessages(account, removalEvents, {
+  dbClient,
+  fetchMessageMetadataFn,
+  now,
+} = {}) {
+  const messageIds = [...removalEvents.keys()];
+  if (!messageIds.length) return 0;
+
+  const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, messageIds, dbClient);
+  let removed = 0;
+  for (const messageId of messageIds) {
+    const row = rowsByMessageId.get(messageId);
+    if (!row) continue;
+    const eventTypes = removalEvents.get(messageId) || new Set();
+    try {
+      const metadata = await fetchMessageMetadataFn(account, messageId);
+      let providerState = providerStateFromMetadata(metadata);
+      if (!providerState && eventTypes.has("message_deleted")) providerState = "trashed";
+      if (!providerState) {
+        if (metadata == null) {
+          console.warn(`[Gmail Sync] Could not confirm provider state for ${account.email}/${messageId}`);
+        }
+        continue;
+      }
+      await markProviderRemovedFromActiveSnapshots(
+        account.user_id,
+        row.account_id,
+        row.uid,
+        providerState,
+        { dbClient, now },
+      );
+      removed++;
+    } catch (err) {
+      console.warn(
+        `[Gmail Sync] Failed to reconcile provider removal for ${account.email}/${messageId}: ${err.message}`,
+      );
+    }
+  }
+  return removed;
+}
+
 export async function syncGmailHistoryForAccount(account, {
   dbClient = db,
   fetchHistoryPage = fetchGmailHistoryPage,
   fetchEmailsByIdsFn = fetchEmailsByIds,
+  fetchMessageReadStateFn = isMessageRead,
+  fetchMessageMetadataFn = fetchGmailMessageMetadata,
   indexEmailsFn = indexEmails,
   targetHistoryId = null,
   now = new Date(),
@@ -296,16 +463,26 @@ export async function syncGmailHistoryForAccount(account, {
       last_history_id: targetHistoryId,
       indexed: 0,
       queued: 0,
+      read_state_reconciled: 0,
+      provider_removed: 0,
     };
   }
 
   const messageIds = new Set();
+  const readStateMessageIds = new Set();
+  const providerRemovalEvents = new Map();
   let pageToken = null;
   let pages = 0;
   let lastHistoryId = targetHistoryId || startHistoryId;
   do {
     const page = await fetchHistoryPage({ account, startHistoryId, pageToken });
     for (const id of collectInboxMessageIds(page.history || [])) messageIds.add(id);
+    for (const id of collectUnreadLabelMessageIds(page.history || [])) readStateMessageIds.add(id);
+    for (const [messageId, eventTypes] of collectProviderRemovalEvents(page.history || [])) {
+      const current = providerRemovalEvents.get(messageId) || new Set();
+      for (const eventType of eventTypes) current.add(eventType);
+      providerRemovalEvents.set(messageId, current);
+    }
     lastHistoryId = String(page.historyId || lastHistoryId);
     pageToken = page.nextPageToken || null;
     pages++;
@@ -316,6 +493,25 @@ export async function syncGmailHistoryForAccount(account, {
 
   const emails = await fetchEmailsByIdsFn(account, [...messageIds]);
   if (emails.length) await indexEmailsFn(account.user_id, emails);
+  let readStateReconciled = 0;
+  try {
+    readStateReconciled = await reconcileReadStateForExistingMessages(account, [...readStateMessageIds], {
+      dbClient,
+      fetchMessageReadStateFn,
+    });
+  } catch (err) {
+    console.warn(`[Gmail Sync] Read-state reconciliation failed for ${account.email}: ${err.message}`);
+  }
+  let providerRemoved = 0;
+  try {
+    providerRemoved = await reconcileProviderRemovalForExistingMessages(account, providerRemovalEvents, {
+      dbClient,
+      fetchMessageMetadataFn,
+      now,
+    });
+  } catch (err) {
+    console.warn(`[Gmail Sync] Provider-removal reconciliation failed for ${account.email}: ${err.message}`);
+  }
 
   const statements = emails.flatMap((email) =>
     triageStatementsForEmail(account.user_id, account.id, email),
@@ -337,6 +533,8 @@ export async function syncGmailHistoryForAccount(account, {
     last_history_id: lastHistoryId,
     indexed: emails.length,
     queued: emails.length,
+    read_state_reconciled: readStateReconciled,
+    provider_removed: providerRemoved,
   };
 }
 
