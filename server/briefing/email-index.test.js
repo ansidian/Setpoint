@@ -17,6 +17,7 @@ vi.mock("../db/connection.js", () => ({
 }));
 
 const emailIndex = await import("./email-index.js");
+const { EMAIL_INDEX_BODY_TEXT_MAX_CHARS } = emailIndex;
 
 beforeEach(async () => {
   testState.db.current = await createEmailIndexTestDb();
@@ -166,6 +167,117 @@ describe("email indexing", () => {
         body_text: "Updated body",
       },
     ]);
+  });
+
+  it("caps oversized body text before writing index and FTS rows", async () => {
+    const bodyText = "x".repeat(EMAIL_INDEX_BODY_TEXT_MAX_CHARS + 25);
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-large",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Large body",
+        body_preview: "Large preview",
+        body_text: bodyText,
+        date: "2026-05-01T12:00:00Z",
+        read: false,
+      },
+    ]);
+
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT length(body_text) AS body_length
+            FROM ea_email_index
+            WHERE uid = ?`,
+      args: ["gmail-work-msg-large"],
+    });
+    const fts = await testState.db.current.execute({
+      sql: `SELECT length(body_text) AS body_length
+            FROM ea_email_fts
+            WHERE uid = ?`,
+      args: ["gmail-work-msg-large"],
+    });
+
+    expect(Number(indexed.rows[0].body_length)).toBe(EMAIL_INDEX_BODY_TEXT_MAX_CHARS);
+    expect(Number(fts.rows[0].body_length)).toBe(EMAIL_INDEX_BODY_TEXT_MAX_CHARS);
+  });
+
+  it("skips DB writes when refetched email index content is unchanged", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-unchanged",
+      subject: "Same subject",
+      body_snippet: "Same preview",
+      body_text: "Same body",
+      read: 1,
+    });
+    const dbClient = {
+      execute: (...args) => testState.db.current.execute(...args),
+      batch: vi.fn((...args) => testState.db.current.batch(...args)),
+    };
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-unchanged",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Same subject",
+        body_preview: "Same preview",
+        body_text: "Same body",
+        date: "2026-05-01T12:00:00Z",
+        read: true,
+      },
+    ], { dbClient });
+
+    expect(dbClient.batch).not.toHaveBeenCalled();
+  });
+
+  it("updates read state without rewriting unchanged FTS content", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-read-only",
+      subject: "Same subject",
+      body_snippet: "Same preview",
+      body_text: "Same body",
+      read: 0,
+    });
+    const dbClient = {
+      execute: (...args) => testState.db.current.execute(...args),
+      batch: vi.fn((...args) => testState.db.current.batch(...args)),
+    };
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-read-only",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Same subject",
+        body_preview: "Same preview",
+        body_text: "Same body",
+        date: "2026-05-01T12:00:00Z",
+        read: true,
+      },
+    ], { dbClient });
+
+    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].sql).toContain("UPDATE ea_email_index");
+    expect(statements[0].sql).not.toContain("ea_email_fts");
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT read FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-read-only"],
+    });
+    expect(indexed.rows[0].read).toBe(1);
   });
 
   it("logs indexing with a scoped current-system prefix", async () => {

@@ -1,5 +1,8 @@
 import db from "../db/connection.js";
 
+export const EMAIL_INDEX_BODY_TEXT_MAX_CHARS = 20_000;
+const EMAIL_INDEX_LOOKUP_CHUNK_SIZE = 500;
+
 // split Gmail's "Display Name <addr>" into components
 // iCloud already provides from_email separately
 export function parseFrom(email) {
@@ -201,21 +204,58 @@ export async function queueEmailIndexBackfill(userId, {
   };
 }
 
-export async function indexEmails(userId, emails) {
+async function loadExistingIndexRows(userId, uids, { dbClient }) {
+  const rows = [];
+  for (let i = 0; i < uids.length; i += EMAIL_INDEX_LOOKUP_CHUNK_SIZE) {
+    const chunk = uids.slice(i, i + EMAIL_INDEX_LOOKUP_CHUNK_SIZE);
+    const result = await dbClient.execute({
+      sql: `SELECT uid, subject, body_snippet, body_text, read
+            FROM ea_email_index
+            WHERE user_id = ?
+              AND uid IN (${chunk.map(() => "?").join(",")})`,
+      args: [userId, ...chunk],
+    });
+    rows.push(...result.rows);
+  }
+  return new Map(rows.map((row) => [row.uid, row]));
+}
+
+export async function indexEmails(userId, emails, { dbClient = db } = {}) {
   if (!emails.length) return;
 
+  const existingRows = await loadExistingIndexRows(
+    userId,
+    [...new Set(emails.map((email) => email.uid).filter(Boolean))],
+    { dbClient },
+  );
   const stmts = emails.flatMap((email) => {
     const { fromName, fromAddress } = parseFrom(email);
     const uid = email.uid;
     const subject = email.subject || "";
     const bodySnippet = email.body_preview || "";
-    const bodyText = email.body_text || "";
+    const bodyText = String(email.body_text || "").slice(0, EMAIL_INDEX_BODY_TEXT_MAX_CHARS);
+    const read = email.read ? 1 : 0;
+    const existing = existingRows.get(uid);
+    const searchableChanged = !existing
+      || existing.subject !== subject
+      || existing.body_snippet !== bodySnippet
+      || existing.body_text !== bodyText;
+    if (!searchableChanged) {
+      if (Number(existing.read) === read) return [];
+      return [{
+        sql: `UPDATE ea_email_index
+              SET read = ?
+              WHERE uid = ? AND user_id = ?`,
+        args: [read, uid, userId],
+      }];
+    }
+
     const args = [
       uid, userId, email.account_id, email.account_label,
       email.account_email, email.account_color || "#818cf8",
       email.account_icon || "Mail", fromName, fromAddress,
       subject, bodySnippet, bodyText,
-      email.date || "", email.read ? 1 : 0,
+      email.date || "", read,
     ];
     return [
       // Upsert: insert new rows and refresh provider-derived presentation state
@@ -248,6 +288,6 @@ export async function indexEmails(userId, emails) {
     ];
   });
 
-  await db.batch(stmts);
+  if (stmts.length) await dbClient.batch(stmts);
   console.log(`[EA Index] Indexed ${emails.length} email(s)`);
 }
