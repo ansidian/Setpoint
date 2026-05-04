@@ -22,6 +22,8 @@ import { migrate } from "./db/migrate.js";
 import { migrateLegacyEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
 import { getMissingRequiredEnv } from "./env.js";
+import { buildStartupWorkerDelays } from "./startup-delays.js";
+import { logTiming, timeAsync } from "./timing.js";
 
 
 // fail fast if critical env vars are missing
@@ -36,6 +38,7 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const bootStartedAt = performance.now();
 
 app.set("trust proxy", getTrustProxySetting());
 
@@ -82,17 +85,44 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-migrate().then(() => migrateLegacyEncryption()).then(() => {
-  app.listen(PORT, () => {
-    console.log(`EA Dashboard running on http://localhost:${PORT}`);
-    initScheduler().catch((err) =>
-      console.error("[EA Scheduler] Init failed:", err.message),
-    );
-    startBackgroundIndexer();
-    startEmailBackfillWorker();
-    startSnoozeWaker();
+function scheduleStartupWorker(worker, delayMs, fn) {
+  logTiming({
+    event: "startup-worker-scheduled",
+    worker,
+    delayMs,
   });
-}).catch((err) => {
-  console.error("Migration failed:", err);
-  process.exit(1);
-});
+  const start = () => {
+    timeAsync(`startup:${worker}`, async () => fn(), { worker }).catch((err) =>
+      console.error(`[EA ${worker}] Startup failed:`, err.message),
+    );
+  };
+  if (delayMs <= 0) {
+    start();
+    return;
+  }
+  const timer = setTimeout(start, delayMs);
+  timer.unref?.();
+}
+
+timeAsync("migrations", () => migrate())
+  .then(() => timeAsync("legacy-encryption-rewrite", () => migrateLegacyEncryption()))
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`EA Dashboard running on http://localhost:${PORT}`);
+      logTiming({
+        event: "boot",
+        phase: "listen",
+        ms: performance.now() - bootStartedAt,
+        status: "ok",
+        port: PORT,
+      });
+      const startupDelays = buildStartupWorkerDelays();
+      scheduleStartupWorker("scheduler", startupDelays.scheduler, () => initScheduler());
+      scheduleStartupWorker("indexer", startupDelays.indexer, () => startBackgroundIndexer());
+      scheduleStartupWorker("backfill", startupDelays.backfill, () => startEmailBackfillWorker());
+      scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
+    });
+  }).catch((err) => {
+    console.error("Migration failed:", err);
+    process.exit(1);
+  });

@@ -3,8 +3,12 @@ import { getLiveData } from "../api";
 
 const LIVE_POLL_INTERVAL_MS = 2 * 60 * 1000;
 const LIVE_FOCUS_COOLDOWN_MS = 15 * 1000;
+const INITIAL_FETCH_DELAY_MS = 750;
 
-export default function useLiveData({ disabled = false } = {}) {
+export default function useLiveData({
+  disabled = false,
+  initialFetchDelayMs = INITIAL_FETCH_DELAY_MS,
+} = {}) {
   const [liveEmails, setLiveEmails] = useState([]);
   const [liveCalendar, setLiveCalendar] = useState(null);
   const [liveNextWeekCalendar, setLiveNextWeekCalendar] = useState(null);
@@ -27,8 +31,13 @@ export default function useLiveData({ disabled = false } = {}) {
   const mountedRef = useRef(true);
   const fetchingRef = useRef(false);
   const lastFetchStartedAtRef = useRef(0);
+  const initialFetchTimerRef = useRef(null);
 
   const fetchLive = useCallback(async () => {
+    if (initialFetchTimerRef.current) {
+      clearTimeout(initialFetchTimerRef.current);
+      initialFetchTimerRef.current = null;
+    }
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     lastFetchStartedAtRef.current = Date.now();
@@ -68,29 +77,46 @@ export default function useLiveData({ disabled = false } = {}) {
   useEffect(() => {
     mountedRef.current = true;
     if (disabled) {
+      if (initialFetchTimerRef.current) {
+        clearTimeout(initialFetchTimerRef.current);
+        initialFetchTimerRef.current = null;
+      }
       setLiveBills([]);
       setRecentTransactions([]);
       setBillsLoading(true);
       setActualConfigured(true);
       return;
     }
-    fetchLive();
+    if (initialFetchDelayMs <= 0) {
+      fetchLive();
+    } else {
+      initialFetchTimerRef.current = setTimeout(() => {
+        initialFetchTimerRef.current = null;
+        fetchLive();
+      }, initialFetchDelayMs);
+    }
 
     return () => {
       mountedRef.current = false;
+      if (initialFetchTimerRef.current) {
+        clearTimeout(initialFetchTimerRef.current);
+        initialFetchTimerRef.current = null;
+      }
     };
-  }, [fetchLive, disabled]);
+  }, [fetchLive, disabled, initialFetchDelayMs]);
 
   useEffect(() => {
     if (disabled) return;
 
     const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
+      if (initialFetchTimerRef.current) return;
       fetchLive();
     };
 
     const refreshOnReturn = () => {
       if (document.visibilityState !== "visible") return;
+      if (initialFetchTimerRef.current) return;
       if (Date.now() - lastFetchStartedAtRef.current < LIVE_FOCUS_COOLDOWN_MS) return;
       fetchLive();
     };

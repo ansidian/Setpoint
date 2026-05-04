@@ -9,6 +9,11 @@ const testState = vi.hoisted(() => ({
   db: { current: null },
   gmailFetchEmails: vi.fn(),
   icloudFetchEmails: vi.fn(),
+  calendarFetch: vi.fn(),
+  weatherFetch: vi.fn(),
+  actualBills: vi.fn(),
+  actualRecentTransactions: vi.fn(),
+  actualMetadata: vi.fn(),
   isGmailMessageRead: vi.fn(),
   isIcloudMessageRead: vi.fn(),
 }));
@@ -28,17 +33,17 @@ vi.mock("../briefing/icloud.js", () => ({
   isMessageRead: (...args) => testState.isIcloudMessageRead(...args),
 }));
 vi.mock("../briefing/calendar.js", () => ({
-  fetchCalendar: async () => [],
+  fetchCalendar: (...args) => testState.calendarFetch(...args),
   getNextWeekRange: () => [0, 0],
   getTomorrowRange: () => [0, 0],
 }));
 vi.mock("../briefing/weather.js", () => ({
-  fetchWeather: async () => ({ temp: 0, high: 0, low: 0, summary: "", hourly: [] }),
+  fetchWeather: (...args) => testState.weatherFetch(...args),
 }));
 vi.mock("../briefing/actual.js", () => ({
-  getUpcomingBills: async () => [],
-  getRecentTransactions: async () => [],
-  getMetadata: async () => ({ schedules: [], payeeMap: {}, recentTransactions: [] }),
+  getUpcomingBills: (...args) => testState.actualBills(...args),
+  getRecentTransactions: (...args) => testState.actualRecentTransactions(...args),
+  getMetadata: (...args) => testState.actualMetadata(...args),
   isSchedulePaid: () => false,
 }));
 vi.mock("../briefing/index.js", () => ({
@@ -120,8 +125,14 @@ describe("GET /api/live/all", () => {
     testState.db.current = await createMigratedDb();
     testState.gmailFetchEmails.mockReset().mockResolvedValue([]);
     testState.icloudFetchEmails.mockReset().mockResolvedValue([]);
+    testState.calendarFetch.mockReset().mockResolvedValue([]);
+    testState.weatherFetch.mockReset().mockResolvedValue({ temp: 0, high: 0, low: 0, summary: "", hourly: [] });
+    testState.actualBills.mockReset().mockResolvedValue([]);
+    testState.actualRecentTransactions.mockReset().mockResolvedValue([]);
+    testState.actualMetadata.mockReset().mockResolvedValue({ schedules: [], payeeMap: {}, recentTransactions: [] });
     testState.isGmailMessageRead.mockReset().mockResolvedValue(null);
     testState.isIcloudMessageRead.mockReset().mockResolvedValue(null);
+    delete process.env.EA_LIVE_TIMEOUT_WEATHER_MS;
   });
 
   afterEach(async () => {
@@ -217,5 +228,36 @@ describe("GET /api/live/all", () => {
       expect.objectContaining({ id: "gmail-a" }),
       "gmail-resurfaced",
     );
+  });
+
+  it("returns degraded fallback data when a live provider times out", async () => {
+    process.env.EA_LIVE_TIMEOUT_WEATHER_MS = "20";
+    testState.weatherFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+    const startedAt = Date.now();
+    const res = await request(makeApp())
+      .get("/api/live/all")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(res.status).toBe(200);
+    expect(res.body.weather).toMatchObject({
+      temp: 0,
+      high: 0,
+      low: 0,
+      summary: "Weather unavailable",
+      hourly: [],
+      location: "El Monte, CA",
+    });
+    expect(res.body.degraded).toEqual({
+      any: true,
+      sources: [
+        expect.objectContaining({
+          source: "weather",
+          reason: "timeout",
+          timeoutMs: 20,
+        }),
+      ],
+    });
   });
 });

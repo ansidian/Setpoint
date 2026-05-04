@@ -47,8 +47,39 @@ describe("useLiveData", () => {
     vi.clearAllMocks();
   });
 
+  it("defers the initial live data fetch but keeps manual refresh available", async () => {
+    const { result, unmount } = renderHook(() =>
+      useLiveData({ disabled: false, initialFetchDelayMs: 250 }),
+    );
+
+    await act(async () => {});
+    expect(getLiveData).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(getLiveData).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.refreshNow();
+    });
+    expect(getLiveData).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(249);
+    });
+    expect(getLiveData).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(getLiveData).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
   it("polls while visible and throttles focus refreshes", async () => {
-    const { unmount } = renderHook(() => useLiveData({ disabled: false }));
+    const { unmount } = renderHook(() => useLiveData({ disabled: false, initialFetchDelayMs: 0 }));
 
     await act(async () => {});
     expect(getLiveData).toHaveBeenCalledTimes(1);
@@ -72,7 +103,7 @@ describe("useLiveData", () => {
   });
 
   it("skips background interval fetches and refreshes when the tab becomes visible", async () => {
-    const { unmount } = renderHook(() => useLiveData({ disabled: false }));
+    const { unmount } = renderHook(() => useLiveData({ disabled: false, initialFetchDelayMs: 0 }));
 
     await act(async () => {});
     expect(getLiveData).toHaveBeenCalledTimes(1);
