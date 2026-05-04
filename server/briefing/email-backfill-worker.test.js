@@ -246,3 +246,59 @@ describe("resumeInterruptedBackfills", () => {
     ]);
   });
 });
+
+describe("prepareEmailBackfillStartup", () => {
+  it("resumes interrupted jobs without queuing a broad backfill by default", async () => {
+    await seedEmailAccount(testState.db.current, {
+      user_id: "user-1",
+      id: "gmail-work",
+      type: "gmail",
+    });
+    await seedBackfillState({
+      account_id: "gmail-work",
+      status: "running",
+    });
+
+    const result = await worker.prepareEmailBackfillStartup();
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT account_id, status, target_days
+            FROM ea_email_backfill_state
+            ORDER BY account_id`,
+      args: [],
+    });
+    expect(result).toEqual({ resumed: true, queued: false });
+    expect(rows.rows).toEqual([
+      {
+        account_id: "gmail-work",
+        status: "retry",
+        target_days: 365,
+      },
+    ]);
+  });
+
+  it("can explicitly queue startup backfill when requested", async () => {
+    await seedEmailAccount(testState.db.current, {
+      user_id: "user-1",
+      id: "gmail-work",
+      type: "gmail",
+    });
+
+    const result = await worker.prepareEmailBackfillStartup({ queueOnStartup: true, targetDays: 30 });
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT account_id, status, target_days
+            FROM ea_email_backfill_state
+            ORDER BY account_id`,
+      args: [],
+    });
+    expect(result).toEqual({ resumed: true, queued: true });
+    expect(rows.rows).toEqual([
+      {
+        account_id: "gmail-work",
+        status: "queued",
+        target_days: 30,
+      },
+    ]);
+  });
+});

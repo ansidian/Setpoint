@@ -89,7 +89,22 @@ PIRATE_WEATHER_API_KEY=
 # Render (auto-suspend to save costs — optional)
 RENDER_API_KEY=
 RENDER_SERVICE_ID=
+
+# Startup workers (optional)
+EA_STARTUP_WORKER_DELAY_MS=
+EA_STARTUP_WORKER_JITTER_MS=
+EA_STARTUP_INDEXER_OFFSET_MS=
+EA_STARTUP_BACKFILL_OFFSET_MS=
+EA_STARTUP_TODOIST_SYNC_OFFSET_MS=
+EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=
 ```
+
+In production, startup workers are delayed so the web server can accept the
+first dashboard requests before catch-up jobs start. The default worker delay is
+60-120 seconds, with an extra 2 minutes before the passive email indexer and an
+extra 10 minutes before email backfill. Backfill only resumes interrupted jobs
+on startup by default; set `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` to queue a
+new broad backfill automatically.
 
 ### Todoist OAuth and webhook setup
 

@@ -255,6 +255,22 @@ export async function enqueueBackfillForAllUsers({ targetDays = DEFAULT_TARGET_D
   }
 }
 
+function parseBooleanEnv(value) {
+  return /^(1|true|yes)$/i.test(String(value || "").trim());
+}
+
+export async function prepareEmailBackfillStartup({
+  queueOnStartup = parseBooleanEnv(process.env.EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP),
+  targetDays = DEFAULT_TARGET_DAYS,
+} = {}) {
+  await resumeInterruptedBackfills();
+  if (!queueOnStartup) {
+    return { resumed: true, queued: false };
+  }
+  await enqueueBackfillForAllUsers({ targetDays });
+  return { resumed: true, queued: true };
+}
+
 async function drainBackfillQueue({ pauseMs = DEFAULT_PAUSE_MS } = {}) {
   if (workerRunning) return;
   workerRunning = true;
@@ -287,9 +303,9 @@ export function startEmailBackfillWorker({
   initialDelayMs = 5000,
   pauseMs = DEFAULT_PAUSE_MS,
   targetDays = DEFAULT_TARGET_DAYS,
+  queueOnStartup = parseBooleanEnv(process.env.EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP),
 } = {}) {
-  resumeInterruptedBackfills()
-    .then(() => enqueueBackfillForAllUsers({ targetDays }))
+  prepareEmailBackfillStartup({ queueOnStartup, targetDays })
     .then(() => wakeEmailBackfillWorker({ delayMs: initialDelayMs, pauseMs }))
     .catch((err) => console.error("[EA Backfill] Startup failed:", err.message));
 }
