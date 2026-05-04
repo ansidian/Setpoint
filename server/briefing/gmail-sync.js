@@ -1,11 +1,12 @@
 import db from "../db/connection.js";
-import { getAccessToken, fetchEmailsByIds, isMessageRead } from "./gmail.js";
+import { getAccessToken, fetchEmails, fetchEmailsByIds, isMessageRead } from "./gmail.js";
 import { indexEmails } from "./email-index.js";
 import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_PAGES = 20;
+const GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS = 14 * 24;
 
 function decodeBase64UrlJson(value) {
   if (!value || typeof value !== "string") {
@@ -243,6 +244,11 @@ function collectProviderRemovalEvents(history = []) {
         addEvent(entry.message.id, "inbox_removed");
       }
     }
+    for (const entry of record.labelsAdded || []) {
+      if (entry.message?.id && eventLabelIds(entry).includes("TRASH")) {
+        addEvent(entry.message.id, "trash_added");
+      }
+    }
     for (const entry of record.messagesDeleted || []) {
       addEvent(entry.message?.id, "message_deleted");
     }
@@ -269,7 +275,11 @@ export async function fetchGmailHistoryPage({
   const res = await fetchImpl(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) throw new Error(`Gmail history.list failed for ${account.email}: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`Gmail history.list failed for ${account.email}: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
@@ -282,7 +292,8 @@ export async function fetchGmailMessageMetadata(account, messageId, {
     `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata&fields=labelIds`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
-  if (!res.ok) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Gmail message metadata failed for ${account.email}/${messageId}: ${res.status}`);
   return res.json();
 }
 
@@ -341,8 +352,7 @@ async function findExistingGmailRowsForMessageIds(account, messageIds, dbClient)
     const suffix = `-${messageId}`;
     const candidates = result.rows.filter((row) => String(row.uid || "").endsWith(suffix));
     if (!candidates.length) continue;
-    const currentAccountRow = candidates.find((row) => row.account_id === account.id);
-    rowsByMessageId.set(messageId, currentAccountRow || candidates[0]);
+    rowsByMessageId.set(messageId, candidates);
   }
   return rowsByMessageId;
 }
@@ -357,22 +367,24 @@ async function reconcileReadStateForExistingMessages(account, messageIds, {
   const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, uniqueMessageIds, dbClient);
   const statements = [];
   for (const messageId of uniqueMessageIds) {
-    const row = rowsByMessageId.get(messageId);
-    if (!row) continue;
+    const rows = rowsByMessageId.get(messageId) || [];
+    if (!rows.length) continue;
     try {
       const read = await fetchMessageReadStateFn(account, messageId);
       if (read == null) {
         console.warn(`[Gmail Sync] Could not confirm read state for ${account.email}/${messageId}`);
         continue;
       }
-      statements.push({
-        sql: `UPDATE ea_email_index
-              SET read = ?
-              WHERE user_id = ?
-                AND account_id = ?
-                AND uid = ?`,
-        args: [read ? 1 : 0, account.user_id, row.account_id, row.uid],
-      });
+      for (const row of rows) {
+        statements.push({
+          sql: `UPDATE ea_email_index
+                SET read = ?
+                WHERE user_id = ?
+                  AND account_id = ?
+                  AND uid = ?`,
+          args: [read ? 1 : 0, account.user_id, row.account_id, row.uid],
+        });
+      }
     } catch (err) {
       console.warn(
         `[Gmail Sync] Failed to reconcile read state for ${account.email}/${messageId}: ${err.message}`,
@@ -402,27 +414,31 @@ async function reconcileProviderRemovalForExistingMessages(account, removalEvent
   const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, messageIds, dbClient);
   let removed = 0;
   for (const messageId of messageIds) {
-    const row = rowsByMessageId.get(messageId);
-    if (!row) continue;
+    const rows = rowsByMessageId.get(messageId) || [];
+    if (!rows.length) continue;
     const eventTypes = removalEvents.get(messageId) || new Set();
     try {
       const metadata = await fetchMessageMetadataFn(account, messageId);
       let providerState = providerStateFromMetadata(metadata);
       if (!providerState && eventTypes.has("message_deleted")) providerState = "trashed";
+      if (!providerState && eventTypes.has("trash_added")) providerState = "trashed";
+      if (!providerState && metadata == null && eventTypes.has("inbox_removed")) providerState = "archived";
       if (!providerState) {
         if (metadata == null) {
           console.warn(`[Gmail Sync] Could not confirm provider state for ${account.email}/${messageId}`);
         }
         continue;
       }
-      await markProviderRemovedFromActiveSnapshots(
-        account.user_id,
-        row.account_id,
-        row.uid,
-        providerState,
-        { dbClient, now },
-      );
-      removed++;
+      for (const row of rows) {
+        await markProviderRemovedFromActiveSnapshots(
+          account.user_id,
+          row.account_id,
+          row.uid,
+          providerState,
+          { dbClient, now },
+        );
+        removed++;
+      }
     } catch (err) {
       console.warn(
         `[Gmail Sync] Failed to reconcile provider removal for ${account.email}/${messageId}: ${err.message}`,
@@ -435,6 +451,7 @@ async function reconcileProviderRemovalForExistingMessages(account, removalEvent
 export async function syncGmailHistoryForAccount(account, {
   dbClient = db,
   fetchHistoryPage = fetchGmailHistoryPage,
+  fetchEmailsFn = fetchEmails,
   fetchEmailsByIdsFn = fetchEmailsByIds,
   fetchMessageReadStateFn = isMessageRead,
   fetchMessageMetadataFn = fetchGmailMessageMetadata,
@@ -474,22 +491,51 @@ export async function syncGmailHistoryForAccount(account, {
   let pageToken = null;
   let pages = 0;
   let lastHistoryId = targetHistoryId || startHistoryId;
-  do {
-    const page = await fetchHistoryPage({ account, startHistoryId, pageToken });
-    for (const id of collectInboxMessageIds(page.history || [])) messageIds.add(id);
-    for (const id of collectUnreadLabelMessageIds(page.history || [])) readStateMessageIds.add(id);
-    for (const [messageId, eventTypes] of collectProviderRemovalEvents(page.history || [])) {
-      const current = providerRemovalEvents.get(messageId) || new Set();
-      for (const eventType of eventTypes) current.add(eventType);
-      providerRemovalEvents.set(messageId, current);
-    }
-    lastHistoryId = String(page.historyId || lastHistoryId);
-    pageToken = page.nextPageToken || null;
-    pages++;
-    if (pages >= MAX_HISTORY_PAGES && pageToken) {
-      throw new Error(`Gmail history sync hit page cap for ${account.email}`);
-    }
-  } while (pageToken);
+  try {
+    do {
+      const page = await fetchHistoryPage({ account, startHistoryId, pageToken });
+      for (const id of collectInboxMessageIds(page.history || [])) messageIds.add(id);
+      for (const id of collectUnreadLabelMessageIds(page.history || [])) readStateMessageIds.add(id);
+      for (const [messageId, eventTypes] of collectProviderRemovalEvents(page.history || [])) {
+        const current = providerRemovalEvents.get(messageId) || new Set();
+        for (const eventType of eventTypes) current.add(eventType);
+        providerRemovalEvents.set(messageId, current);
+      }
+      lastHistoryId = String(page.historyId || lastHistoryId);
+      pageToken = page.nextPageToken || null;
+      pages++;
+      if (pages >= MAX_HISTORY_PAGES && pageToken) {
+        throw new Error(`Gmail history sync hit page cap for ${account.email}`);
+      }
+    } while (pageToken);
+  } catch (err) {
+    if (err.status !== 404) throw err;
+    const emails = await fetchEmailsFn(account, GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS);
+    if (emails.length) await indexEmailsFn(account.user_id, emails);
+    const statements = emails.flatMap((email) =>
+      triageStatementsForEmail(account.user_id, account.id, email),
+    );
+    statements.push({
+      sql: `UPDATE ea_gmail_watch_state
+            SET last_history_id = ?,
+                last_sync_at = ?,
+                last_error = ?,
+                updated_at = datetime('now')
+            WHERE user_id = ? AND account_id = ?`,
+      args: [lastHistoryId, now.toISOString(), "", account.user_id, account.id],
+    });
+    await dbClient.batch(statements);
+    return {
+      account_id: account.id,
+      start_history_id: startHistoryId,
+      last_history_id: lastHistoryId,
+      indexed: emails.length,
+      queued: emails.length,
+      read_state_reconciled: 0,
+      provider_removed: 0,
+      history_recovered: true,
+    };
+  }
 
   const emails = await fetchEmailsByIdsFn(account, [...messageIds]);
   if (emails.length) await indexEmailsFn(account.user_id, emails);

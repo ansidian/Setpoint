@@ -218,6 +218,76 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     ]);
   });
 
+  it("recovers an expired Gmail history cursor by indexing current inbox and advancing the target cursor", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "stale-history"],
+    });
+    const expired = new Error("Gmail history.list failed for work@example.com: 404");
+    expired.status = 404;
+    const fetchHistoryPage = vi.fn(async () => {
+      throw expired;
+    });
+    const fetchEmailsFn = vi.fn(async () => [
+      {
+        uid: "gmail-gmail-work-current-msg",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        from: "Current Sender <current@example.com>",
+        subject: "Current inbox message",
+        body_preview: "Current preview",
+        body_text: "Current body",
+        date: "2026-05-03T12:05:00.000Z",
+        read: false,
+      },
+    ]);
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsFn,
+      targetHistoryId: "900",
+      now: new Date("2026-05-03T15:30:00.000Z"),
+    });
+
+    expect(fetchEmailsFn).toHaveBeenCalledWith(expect.objectContaining({ id: "gmail-work" }), 336);
+    expect(result).toMatchObject({
+      account_id: "gmail-work",
+      start_history_id: "stale-history",
+      last_history_id: "900",
+      indexed: 1,
+      queued: 1,
+      history_recovered: true,
+    });
+    const watchState = await testState.db.current.execute({
+      sql: `SELECT last_history_id, last_sync_at, last_error
+            FROM ea_gmail_watch_state
+            WHERE account_id = ?`,
+      args: ["gmail-work"],
+    });
+    expect(watchState.rows[0]).toEqual({
+      last_history_id: "900",
+      last_sync_at: "2026-05-03T15:30:00.000Z",
+      last_error: "",
+    });
+    const jobs = await testState.db.current.execute({
+      sql: `SELECT email_id, job_type
+            FROM ea_triage_jobs
+            WHERE job_type = 'email_triage'`,
+      args: [],
+    });
+    expect(jobs.rows).toEqual([
+      { email_id: "gmail-gmail-work-current-msg", job_type: "email_triage" },
+    ]);
+  });
+
   it("syncs Gmail history into indexed mail and idempotent message triage jobs", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
@@ -761,6 +831,92 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     expect(indexed.rows).toEqual([]);
   });
 
+  it("treats Gmail TRASH label additions as provider removal", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "720"],
+    });
+    await seedTriagedIndexedEmail({ uid: "gmail-gmail-work-trash-added-msg" });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "725",
+      history: [
+        {
+          labelsAdded: [
+            { message: { id: "trash-added-msg", labelIds: ["TRASH"] }, labelIds: ["TRASH"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageMetadataFn: vi.fn(async () => ({ labelIds: ["TRASH"] })),
+      targetHistoryId: "725",
+      now: new Date("2026-05-03T14:45:00.000Z"),
+    });
+
+    expect(result.provider_removed).toBe(1);
+    const triage = await testState.db.current.execute({
+      sql: `SELECT provider_state
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["gmail-gmail-work-trash-added-msg"],
+    });
+    expect(triage.rows[0].provider_state).toBe("trashed");
+  });
+
+  it("falls back to archived for known INBOX removals when metadata no longer exists", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "730"],
+    });
+    await seedTriagedIndexedEmail({ uid: "gmail-gmail-work-archive-gone-msg" });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "735",
+      history: [
+        {
+          labelsRemoved: [
+            { message: { id: "archive-gone-msg" }, labelIds: ["INBOX"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageMetadataFn: vi.fn(async () => null),
+      targetHistoryId: "735",
+      now: new Date("2026-05-03T14:50:00.000Z"),
+    });
+
+    expect(result.provider_removed).toBe(1);
+    const triage = await testState.db.current.execute({
+      sql: `SELECT provider_state
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["gmail-gmail-work-archive-gone-msg"],
+    });
+    expect(triage.rows[0].provider_state).toBe("archived");
+  });
+
   it("matches Gmail read-state reconciliation through legacy UID account IDs for the same mailbox", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
@@ -815,6 +971,63 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     expect(indexed.rows).toEqual([
       { uid: "gmail-gmail-legacy-msg-1", read: 0 },
       { uid: "gmail-gmail-other-msg-1", read: 1 },
+    ]);
+  });
+
+  it("updates duplicate legacy Gmail rows for the same mailbox during reconciliation", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-fresh", "work@example.com", "810"],
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-legacy-a-msg-2",
+      account_id: "gmail-legacy-a",
+      account_email: "work@example.com",
+      read: 1,
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-gmail-legacy-b-msg-2",
+      account_id: "gmail-legacy-b",
+      account_email: "work@example.com",
+      read: 1,
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "815",
+      history: [
+        {
+          labelsAdded: [
+            { message: { id: "msg-2", labelIds: ["UNREAD"] }, labelIds: ["UNREAD"] },
+          ],
+        },
+      ],
+      nextPageToken: null,
+    }));
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-fresh",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      fetchMessageReadStateFn: vi.fn(async () => false),
+      targetHistoryId: "815",
+      now: new Date("2026-05-03T15:05:00.000Z"),
+    });
+
+    expect(result.read_state_reconciled).toBe(2);
+    const indexed = await testState.db.current.execute({
+      sql: `SELECT uid, read
+            FROM ea_email_index
+            ORDER BY uid`,
+      args: [],
+    });
+    expect(indexed.rows).toEqual([
+      { uid: "gmail-gmail-legacy-a-msg-2", read: 0 },
+      { uid: "gmail-gmail-legacy-b-msg-2", read: 0 },
     ]);
   });
 });
