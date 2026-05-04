@@ -198,7 +198,11 @@ export async function fetchEmailBody(email, password, uid) {
       envelope: true,
     }, { uid: true });
 
-    if (!msg) throw new Error(`Message UID ${imapUid} not found`);
+    if (!msg) {
+      const err = new Error(`Message UID ${imapUid} not found`);
+      err.status = 404;
+      throw err;
+    }
 
     const parsed = await simpleParser(msg.source);
 

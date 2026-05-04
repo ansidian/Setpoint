@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter } from "react-router-dom";
 import Dashboard from "./Dashboard.jsx";
@@ -13,6 +13,7 @@ vi.mock("../api", () => ({
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
   deleteBriefing: vi.fn(),
+  getDevScenarios: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../hooks/useLiveData", () => ({
@@ -81,6 +82,7 @@ vi.mock("../hooks/useActiveSnapshot", () => ({
 
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
 vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
+vi.mock("../components/dev/DevPanel.jsx", () => ({ default: () => null }));
 vi.mock("../components/dashboard/RedesignShell", () => ({
   RedesignShell: ({ bd, onQuickRefresh }) => (
     <div>
@@ -99,6 +101,7 @@ describe("Dashboard sync animation state", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("marks the shell as refreshing while current Sync now is in flight", async () => {
@@ -126,5 +129,29 @@ describe("Dashboard sync animation state", () => {
     await waitFor(() => {
       expect(screen.getByTestId("sync-state").textContent).toBe("idle");
     });
+  });
+
+  it("clears the shell refreshing state if Sync now never settles", async () => {
+    vi.useFakeTimers();
+    mocks.activeSnapshotSync.mockImplementation(() => new Promise(() => {}));
+    mocks.liveRefreshNow.mockResolvedValue({});
+
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /sync now/i }));
+    });
+
+    expect(screen.getByTestId("sync-state").textContent).toBe("syncing");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+    });
+
+    expect(screen.getByTestId("sync-state").textContent).toBe("idle");
   });
 });

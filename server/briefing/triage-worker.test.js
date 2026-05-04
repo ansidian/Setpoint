@@ -38,7 +38,8 @@ async function createMigratedDb() {
       claude_model TEXT DEFAULT NULL,
       bill_extract_provider TEXT DEFAULT 'anthropic',
       bill_extract_model TEXT DEFAULT 'claude-haiku-4-5',
-      email_triage_mode TEXT DEFAULT 'auto'
+      email_triage_mode TEXT DEFAULT 'auto',
+      email_interests_json TEXT
     );
   `);
   await db.executeMultiple(triageMigrationSql);
@@ -373,6 +374,49 @@ describe("email triage worker", () => {
         from_address_at_snapshot: "deals@example.com",
       }),
     ]);
+  });
+
+  it("keeps configured email interests out of noise", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Anthropic",
+      from_address: "news@anthropic.com",
+      subject: "Weekend sale - 40% off",
+      body_snippet: "Unsubscribe any time.",
+      body_text: "Sale ends soon. Unsubscribe any time.",
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_settings SET email_interests_json = ? WHERE user_id = ?",
+      args: [JSON.stringify(["Anthropic"]), "user-1"],
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:15:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "fyi",
+      source: "rule",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: "SELECT lane, category, triage_source, summary, action FROM ea_email_triage WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "fyi",
+      category: "updates",
+      triage_source: "rule",
+      summary: "Matched email interest: Anthropic.",
+      action: "Review when convenient",
+    });
   });
 
   it("finalizes one-time verification codes without model calls", async () => {

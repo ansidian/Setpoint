@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
-import { dismissEmail, trashEmail } from "../../api";
+import { dismissEmail, markSnapshotItemHandled, trashEmail } from "../../api";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -274,5 +274,143 @@ describe("InboxView session state", () => {
 
     expect(trashEmail).toHaveBeenCalledWith("gmail-a-msg-1");
     expect(dismissEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back to legacy briefing mail while controlled active snapshot is loading", () => {
+    const activeSnapshot = {
+      snapshot: null,
+      loading: true,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: makeAccounts(true) } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={makeAccounts(true)}
+          briefingSummary="Legacy summary"
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: null,
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    expect(screen.queryByText("Project budget sign-off")).toBeNull();
+    expect(screen.queryByText("Checking live mail")).toBeNull();
+  });
+
+  it("refreshes active snapshot when a stale handled action is rejected", async () => {
+    const refreshSnapshot = vi.fn().mockResolvedValue({});
+    markSnapshotItemHandled.mockRejectedValueOnce(
+      Object.assign(new Error("Active snapshot item not found"), { status: 404 }),
+    );
+    const activeSnapshot = {
+      snapshot: {
+        snapshot: { id: 77, updated_at: "2026-05-03T15:00:00.000Z" },
+        filters: {
+          accounts: [{
+            account_id: "gmail-a",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        carryover: [],
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      },
+      loading: false,
+      error: null,
+      refresh: refreshSnapshot,
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "gmail-a-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /mark handled/i }));
+
+    await waitFor(() => {
+      expect(refreshSnapshot).toHaveBeenCalled();
+    });
   });
 });
