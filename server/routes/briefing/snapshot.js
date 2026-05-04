@@ -1,10 +1,11 @@
 import { Router } from "express";
 import * as snapshotService from "../../briefing/snapshot-service.js";
+import { timeRoute } from "../../timing.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
 
-router.get("/snapshot/active", async (_req, res) => {
+router.get("/snapshot/active", timeRoute("/api/briefing/snapshot/active"), async (_req, res) => {
   try {
     res.json(await snapshotService.getActiveSnapshotView(EA_USER_ID));
   } catch (err) {

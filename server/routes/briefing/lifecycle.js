@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as lifecycleService from "../../briefing/lifecycle-service.js";
+import { timeRoute } from "../../timing.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
@@ -31,7 +32,7 @@ router.post("/refresh", async (_req, res) => {
   }
 });
 
-router.get("/latest", async (req, res) => {
+router.get("/latest", timeRoute("/api/briefing/latest"), async (req, res) => {
   const mock = !!req.query.mock;
   const scenarios = req.query.scenario
     ? req.query.scenario.split(",").map((s) => s.trim())

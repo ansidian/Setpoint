@@ -9,6 +9,7 @@ import {
   requireCookieSession,
 } from "../middleware/auth.js";
 import db from "../db/connection.js";
+import { timeRoute } from "../timing.js";
 
 const router = Router();
 const EA_PASSWORD_HASH = process.env.EA_PASSWORD_HASH;
@@ -35,7 +36,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-router.post("/login", loginLimiter, async (req, res) => {
+router.post("/login", timeRoute("/api/auth/login"), loginLimiter, async (req, res) => {
   const { password } = req.body;
 
   if (!EA_PASSWORD_HASH || !password) {
@@ -58,7 +59,7 @@ router.post("/login", loginLimiter, async (req, res) => {
   res.json({ authenticated: true });
 });
 
-router.get("/check", async (req, res) => {
+router.get("/check", timeRoute("/api/auth/check"), async (req, res) => {
   const token = req.cookies?.ea_session;
   res.json({ authenticated: await validateSession(token) });
 });
