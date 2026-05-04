@@ -133,6 +133,13 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     });
   }, [itemScrollTopOffset, scrollElementIntoView]);
 
+  const activateItem = useCallback((itemId, dateKey) => {
+    const anchor = findRowAnchor(rowRefs, itemId, dateKey);
+    if (!anchor) return false;
+    anchor.click();
+    return true;
+  }, []);
+
   useImperativeHandle(ref, () => ({
     scrollToDate(dateKey) {
       return scrollElementIntoView(headerRefs.current.get(dateKey), { block: "start" });
@@ -146,13 +153,16 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     getItemAnchor(itemId, dateKey) {
       return findRowAnchor(rowRefs, itemId, dateKey);
     },
+    activateItem(itemId, dateKey) {
+      return activateItem(itemId, dateKey);
+    },
     scrollToToday() {
       return scrollToDateContent(todayKey, { contentAware: true });
     },
     scrollToFirst() {
       return scrollElementIntoView(headerRefs.current.get(firstVisibleDateKey), { block: "start" });
     },
-  }), [firstVisibleDateKey, scrollElementIntoView, scrollToDateContent, scrollToItem, todayKey]);
+  }), [activateItem, firstVisibleDateKey, scrollElementIntoView, scrollToDateContent, scrollToItem, todayKey]);
 
   useEffect(() => {
     if (!scrollCommand || isLoading) return undefined;

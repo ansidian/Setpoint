@@ -313,7 +313,7 @@ export function deriveFocusWindows({ events = [], deadlines = [], now = Date.now
   };
 }
 
-export function focusPressureDate(deadlines = [], now = Date.now()) {
+export function focusPressureTarget(deadlines = [], now = Date.now()) {
   const relevant = deadlines
     .map((deadline) => ({
       deadline,
@@ -324,10 +324,21 @@ export function focusPressureDate(deadlines = [], now = Date.now()) {
 
   if (!relevant.length) return null;
 
-  return new Intl.DateTimeFormat("en-CA", {
+  const entry = relevant[0];
+  const date = new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date(relevant[0].dueAtMs));
+  }).format(new Date(entry.dueAtMs));
+
+  return {
+    date,
+    id: entry.deadline?.id != null ? String(entry.deadline.id) : null,
+    deadline: entry.deadline,
+  };
+}
+
+export function focusPressureDate(deadlines = [], now = Date.now()) {
+  return focusPressureTarget(deadlines, now)?.date || null;
 }

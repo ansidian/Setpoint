@@ -23,6 +23,7 @@ export default function DashboardHero({
   briefing,
   liveWeather,
   liveCalendar,
+  liveDeadlines,
   liveBills,
   userName = "",
   onJump,
@@ -43,10 +44,11 @@ export default function DashboardHero({
     [liveCalendar, briefing?.calendar],
   );
   const deadlines = useMemo(() => {
+    if (liveDeadlines) return liveDeadlines;
     const ctm = briefing?.ctm?.upcoming || [];
     const todoist = briefing?.todoist?.upcoming || [];
     return [...ctm, ...todoist];
-  }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming]);
+  }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming, liveDeadlines]);
   const bills = useMemo(() => liveBills || [], [liveBills]);
 
   const theCallouts = useMemo(

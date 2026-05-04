@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { deriveFocusWindows, focusPressureDate } from "./focus-windows";
+import { deriveFocusWindows, focusPressureDate, focusPressureTarget } from "./focus-windows";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -139,5 +139,31 @@ describe("deriveFocusWindows", () => {
     ], now);
 
     expect(result).toBe("2026-04-19");
+  });
+
+  it("finds the nearest relevant pressure target with its item id", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const result = focusPressureTarget([
+      {
+        id: "soon",
+        due_date: "2026-04-21",
+        due_time: "9:00 AM",
+        status: "open",
+      },
+      {
+        id: "today",
+        due_date: "2026-04-19",
+        due_time: "6:00 PM",
+        status: "open",
+      },
+    ], now);
+
+    expect(result).toMatchObject({
+      date: "2026-04-19",
+      id: "today",
+    });
   });
 });
