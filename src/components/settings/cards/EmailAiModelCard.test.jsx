@@ -143,7 +143,6 @@ describe("EmailAiModelCard", () => {
       expect(patch).toHaveBeenLastCalledWith({
         email_ai_provider: "openai",
         email_ai_model: "gpt-5.5",
-        claude_model: "gpt-5.5",
       });
     });
 

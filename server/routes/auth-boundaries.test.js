@@ -158,7 +158,6 @@ async function createMigratedDb() {
       todoist_oauth_token_type TEXT,
       schedules_json TEXT,
       email_interests_json TEXT,
-      claude_model TEXT,
       email_ai_provider TEXT,
       email_ai_model TEXT,
       bill_extract_provider TEXT,

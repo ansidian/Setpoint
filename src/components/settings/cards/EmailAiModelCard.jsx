@@ -53,12 +53,10 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
     return () => { cancelled = true; };
   }, []);
 
-  const legacyModel = settings?.claude_model;
   const selectedProvider = settings?.email_ai_provider
-    || inferProvider(settings?.email_ai_model || legacyModel);
+    || inferProvider(settings?.email_ai_model);
   const providerEntry = providers.find((entry) => entry.provider === selectedProvider) || providers[0];
   const selectedModel = settings?.email_ai_model
-    || legacyModel
     || providerEntry?.defaultModel
     || "claude-sonnet-4-6";
 
@@ -69,12 +67,10 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
       ...(current || {}),
       email_ai_provider: nextProvider,
       email_ai_model: model,
-      claude_model: model,
     }));
     patch({
       email_ai_provider: nextProvider,
       email_ai_model: model,
-      claude_model: model,
     });
   }
 

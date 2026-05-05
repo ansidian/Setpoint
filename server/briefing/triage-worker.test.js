@@ -44,7 +44,6 @@ async function createMigratedDb() {
       user_id TEXT PRIMARY KEY,
       email_ai_provider TEXT DEFAULT 'anthropic',
       email_ai_model TEXT DEFAULT NULL,
-      claude_model TEXT DEFAULT NULL,
       bill_extract_provider TEXT DEFAULT 'anthropic',
       bill_extract_model TEXT DEFAULT 'claude-haiku-4-5',
       email_triage_mode TEXT DEFAULT 'auto',

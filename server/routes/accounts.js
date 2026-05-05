@@ -382,11 +382,9 @@ router.get("/settings", async (req, res) => {
     const emailAiModel = resolveEmailAiModelConfig({
       provider: safe.email_ai_provider,
       model: safe.email_ai_model,
-      legacyModel: safe.claude_model,
     });
     safe.email_ai_provider = emailAiModel.provider;
     safe.email_ai_model = emailAiModel.model;
-    safe.claude_model = safe.claude_model || emailAiModel.model;
     safe.bill_extract_provider = safe.bill_extract_provider || DEFAULT_BILL_EXTRACT_PROVIDER;
     safe.bill_extract_model = safe.bill_extract_model || DEFAULT_BILL_EXTRACT_MODEL;
     const triageMode = await getEmailTriageModeForUser(userId);
@@ -417,7 +415,7 @@ router.get("/triage/cache-stats", async (_req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, claude_model, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode } = req.body;
 
   try {
     if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
@@ -435,24 +433,18 @@ router.put("/settings", async (req, res) => {
     if (actual_budget_url !== undefined) { updates.push("actual_budget_url = ?"); args.push(actual_budget_url); }
     if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
     if (actual_budget_sync_id !== undefined) { updates.push("actual_budget_sync_id = ?"); args.push(actual_budget_sync_id); }
-    if (claude_model !== undefined) { updates.push("claude_model = ?"); args.push(claude_model || null); }
-    if (email_ai_provider !== undefined || email_ai_model !== undefined || claude_model !== undefined) {
+    if (email_ai_provider !== undefined || email_ai_model !== undefined) {
       const resolved = resolveEmailAiModelConfig({
         provider: email_ai_provider,
         model: email_ai_model,
-        legacyModel: claude_model,
       });
       if (!isAllowedEmailAiModel(resolved.provider, resolved.model)) {
         return res.status(400).json({ message: "Invalid email_ai_provider/model combination" });
       }
-      if (email_ai_provider !== undefined || email_ai_model !== undefined || claude_model !== undefined) {
-        updates.push("email_ai_provider = ?");
-        args.push(resolved.provider);
-      }
-      if (email_ai_provider !== undefined || email_ai_model !== undefined || claude_model !== undefined) {
-        updates.push("email_ai_model = ?");
-        args.push(resolved.model);
-      }
+      updates.push("email_ai_provider = ?");
+      args.push(resolved.provider);
+      updates.push("email_ai_model = ?");
+      args.push(resolved.model);
     }
     if (email_interests_json !== undefined) { updates.push("email_interests_json = ?"); args.push(typeof email_interests_json === "string" ? email_interests_json : JSON.stringify(email_interests_json)); }
     if (todoist_api_token !== undefined) {
