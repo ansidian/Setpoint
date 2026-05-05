@@ -58,6 +58,24 @@ describe("ShellHeader system status", () => {
     expect(within(panel).getByText("Todoist mirror is current.")).toBeTruthy();
   });
 
+  it("animates the system status close button on hover and keyboard focus", () => {
+    renderHeader();
+
+    fireEvent.click(screen.getByRole("button", { name: /system status: current/i }));
+
+    const panel = screen.getByRole("dialog", { name: /system status/i });
+    const closeButton = within(panel).getByRole("button", { name: /close system status/i });
+
+    fireEvent.mouseEnter(closeButton);
+    expect(closeButton.style.transform).toBe("translateY(-1px)");
+
+    fireEvent.mouseLeave(closeButton);
+    expect(closeButton.style.transform).toBe("translateY(0)");
+
+    fireEvent.focus(closeButton);
+    expect(closeButton.style.transform).toBe("translateY(-1px)");
+  });
+
   it("uses an attention label when system health needs sync", () => {
     renderHeader({
       systemStatus: {

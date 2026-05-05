@@ -96,9 +96,13 @@ function usePanelPosition(open, triggerRef) {
 }
 
 function StatusPanel({ status, onClose, panelRef, position }) {
+  const [closeHover, setCloseHover] = useState(false);
+  const [closeFocus, setCloseFocus] = useState(false);
+  const [closePressed, setClosePressed] = useState(false);
   const sources = status.sources?.length
     ? status.sources
     : [{ key: "system", label: "System", state: status.state, message: "System status is current." }];
+  const closeActive = (closeHover || closeFocus) && !closePressed;
 
   return createPortal(
     <div
@@ -148,16 +152,30 @@ function StatusPanel({ status, onClose, panelRef, position }) {
         <button
           type="button"
           onClick={onClose}
+          onMouseEnter={() => setCloseHover(true)}
+          onMouseLeave={() => {
+            setCloseHover(false);
+            setClosePressed(false);
+          }}
+          onFocus={() => setCloseFocus(true)}
+          onBlur={() => {
+            setCloseFocus(false);
+            setClosePressed(false);
+          }}
+          onPointerDown={() => setClosePressed(true)}
+          onPointerUp={() => setClosePressed(false)}
           aria-label="Close system status"
           style={{
             border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(255,255,255,0.03)",
-            color: "rgba(205,214,244,0.74)",
+            background: closeActive ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
+            color: closeActive ? "#cdd6f4" : "rgba(205,214,244,0.74)",
             borderRadius: 7,
             cursor: "pointer",
             fontSize: 11,
             padding: "3px 7px",
-            transition: "background 150ms, border-color 150ms, color 150ms",
+            transform: closeActive ? "translateY(-1px)" : "translateY(0)",
+            boxShadow: closeFocus ? "0 0 0 2px rgba(203,166,218,0.24)" : "none",
+            transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms, box-shadow 150ms",
           }}
         >
           Close
