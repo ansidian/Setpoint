@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it, vi } from "vitest";
+import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.js";
 import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -12,6 +13,10 @@ const triageMigrationSql = readFileSync(
 );
 const sourceMetadataMigrationSql = readFileSync(
   join(__dirname, "../db/migrations/036_snapshot_item_source_metadata.sql"),
+  "utf8",
+);
+const decisionMetadataMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/043_email_triage_decision_metadata.sql"),
   "utf8",
 );
 
@@ -48,6 +53,7 @@ async function createMigratedDb() {
   `);
   await db.executeMultiple(triageMigrationSql);
   await db.executeMultiple(sourceMetadataMigrationSql);
+  await db.executeMultiple(decisionMetadataMigrationSql);
   return db;
 }
 
@@ -115,6 +121,194 @@ async function queueEmail(dbClient, email = {}) {
 }
 
 describe("email triage worker", () => {
+  it("delays weak-risk security once and exposes pending snapshot metadata", async () => {
+    __resetCurrentDashboardEventsForTests();
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Account Security",
+      from_address: "security@example.com",
+      subject: "New sign-in to your account",
+      body_snippet: "We noticed a sign-in from Chrome on macOS.",
+      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
+    });
+    const events = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      delayed: true,
+      source: "weak_security_grace",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const jobs = await dbClient.execute({
+      sql: `SELECT status, attempts, locked_at, scheduled_for, completed_at
+            FROM ea_triage_jobs
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(jobs.rows[0]).toMatchObject({
+      status: "queued",
+      attempts: 1,
+      locked_at: null,
+      scheduled_for: "2026-05-03T12:10:00.000Z",
+      completed_at: null,
+    });
+
+    const triage = await dbClient.execute({
+      sql: `SELECT triage_status, triage_source, decision_metadata_json
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(triage.rows[0]).toMatchObject({
+      triage_status: "pending",
+      triage_source: "weak_security_grace",
+    });
+    expect(JSON.parse(triage.rows[0].decision_metadata_json)).toMatchObject({
+      preflight: {
+        action: "grace",
+        reasonCode: "weak_security_grace",
+      },
+    });
+
+    const items = await dbClient.execute({
+      sql: `SELECT lane_at_snapshot, source, source_at, summary_at_snapshot
+            FROM ea_briefing_snapshot_items
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(items.rows[0]).toMatchObject({
+      lane_at_snapshot: "needs_attention",
+      source: "pending_security_grace",
+      source_at: "2026-05-03T12:10:00.000Z",
+      summary_at_snapshot: "Security triage pending.",
+    });
+    expect(events).toEqual([
+      expect.objectContaining({
+        source: "email_triage",
+        reason: "weak_security_grace_delayed",
+      }),
+    ]);
+    unsubscribe();
+    await dbClient.close();
+  });
+
+  it("finalizes read weak-security grace rows as FYI on the second run without model calls", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Account Security",
+      from_address: "security@example.com",
+      subject: "New sign-in to your account",
+      body_snippet: "We noticed a sign-in from Chrome on macOS.",
+      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
+    });
+    const modelClient = { classify: vi.fn() };
+
+    await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:00:00.000Z"),
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_email_index SET read = 1 WHERE uid = ?",
+      args: ["msg-1"],
+    });
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:11:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "fyi",
+      source: "weak_security_grace_read",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: "SELECT lane, triage_status, triage_source FROM ea_email_triage WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "fyi",
+      triage_status: "complete",
+      triage_source: "weak_security_grace_read",
+    });
+  });
+
+  it("classifies unread weak-security grace rows on the second run without delaying again", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Account Security",
+      from_address: "security@example.com",
+      subject: "New sign-in to your account",
+      body_snippet: "We noticed a sign-in from Chrome on macOS.",
+      body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
+    });
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "fyi",
+          category: "security",
+          urgency: "normal",
+          escalation_badge: null,
+          summary: "Routine sign-in confirmation.",
+          action: "No action needed.",
+          deadline_at: null,
+          confidence: 0.9,
+          bill_candidate: null,
+        },
+        usage: { input_tokens: 80, output_tokens: 20 },
+        tier,
+      })),
+    };
+
+    await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:00:00.000Z"),
+    });
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:11:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "fyi",
+      source: "cheap_model",
+      model_calls: ["cheap"],
+    });
+    expect(modelClient.classify).toHaveBeenCalledTimes(1);
+
+    const jobs = await dbClient.execute({
+      sql: "SELECT status, attempts, scheduled_for FROM ea_triage_jobs WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    expect(jobs.rows[0]).toMatchObject({
+      status: "complete",
+      attempts: 2,
+      scheduled_for: null,
+    });
+  });
+
   it("recovers stale running email triage and Gmail history jobs without resetting attempts", async () => {
     const dbClient = await createMigratedDb();
     await dbClient.batch([
@@ -412,7 +606,8 @@ describe("email triage worker", () => {
     expect(modelClient.classify).not.toHaveBeenCalled();
 
     const rows = await dbClient.execute({
-      sql: "SELECT lane, category, triage_source, summary, action FROM ea_email_triage WHERE email_id = ?",
+      sql: `SELECT lane, category, triage_source, summary, action, decision_metadata_json
+            FROM ea_email_triage WHERE email_id = ?`,
       args: ["msg-1"],
     });
     expect(rows.rows[0]).toMatchObject({
@@ -421,6 +616,16 @@ describe("email triage worker", () => {
       triage_source: "rule",
       summary: "Matched email interest: Anthropic.",
       action: "Review when convenient",
+    });
+    expect(JSON.parse(rows.rows[0].decision_metadata_json)).toMatchObject({
+      preflight: {
+        reasonCode: "email_interest_promoted_noise_to_fyi",
+        matchedInterest: "Anthropic",
+        interestPromotion: {
+          originalLane: "noise",
+          originalReasonCode: "marketing_noise",
+        },
+      },
     });
   });
 
@@ -502,8 +707,54 @@ describe("email triage worker", () => {
       lane: "noise",
       category: "marketing",
       triage_source: "rule",
-      summary: "Promotional subject line.",
+      summary: "Promotional or bulk email.",
       action: "Ignore",
+    });
+  });
+
+  it("stores preflight reason metadata for no-model rule finalization", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "USPS Informed Delivery",
+      from_address: "informeddelivery@usps.com",
+      subject: "Your Daily Digest for May 5",
+      body_snippet: "Mail and packages arriving soon.",
+      body_text: "This digest includes an unsubscribe footer.",
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:18:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "fyi",
+      source: "rule",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: `SELECT lane, category, decision_metadata_json
+            FROM ea_email_triage
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "fyi",
+      category: "delivery",
+    });
+    expect(JSON.parse(rows.rows[0].decision_metadata_json)).toMatchObject({
+      preflight: {
+        action: "finalize",
+        reasonCode: "delivery_digest_fyi",
+        matchedRuleKey: "default_delivery_digest_fyi",
+        modelSaved: true,
+      },
     });
   });
 
@@ -825,7 +1076,7 @@ describe("email triage worker", () => {
     });
   });
 
-  it("keeps high-confidence FYI finance confirmations on the cheap model", async () => {
+  it("finalizes routine finance confirmations without model calls", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment confirmation",
@@ -862,10 +1113,10 @@ describe("email triage worker", () => {
 
     expect(result).toMatchObject({
       lane: "fyi",
-      source: "cheap_model",
-      model_calls: ["cheap"],
+      source: "rule",
+      model_calls: [],
     });
-    expect(modelClient.classify.mock.calls.map(([call]) => call.tier)).toEqual(["cheap"]);
+    expect(modelClient.classify).not.toHaveBeenCalled();
 
     const rows = await dbClient.execute({
       sql: `SELECT lane, category, triage_source, model_usage_json,
@@ -878,18 +1129,38 @@ describe("email triage worker", () => {
     expect(rows.rows[0]).toMatchObject({
       lane: "fyi",
       category: "finance",
-      triage_source: "cheap_model",
+      triage_source: "rule",
       strong_model_result_json: null,
-      estimated_cost_usd: 0.001,
-      latency_ms: 120,
+      estimated_cost_usd: null,
+      latency_ms: null,
     });
-    expect(JSON.parse(rows.rows[0].model_usage_json)).toEqual({
-      cheap: { input_tokens: 80, output_tokens: 20 },
+    expect(JSON.parse(rows.rows[0].model_usage_json)).toEqual({});
+    expect(rows.rows[0].cheap_model_result_json).toBeNull();
+  });
+
+  it("finalizes routine autopay scheduled notices without treating soft review as action", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "An autopay is coming up soon for your card",
+      body_snippet: "Autopay of $162.00 is scheduled. Review your statement if interested.",
+      body_text: "Autopay of $162.00 is scheduled. Review your statement if interested. No action is needed.",
+      from_name: "Card Services",
+      from_address: "alerts@card.example",
     });
-    expect(JSON.parse(rows.rows[0].cheap_model_result_json)).toMatchObject({
-      decision: { category: "finance", confidence: 0.93 },
-      tier: "cheap",
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:29:30.000Z"),
     });
+
+    expect(result).toMatchObject({
+      lane: "fyi",
+      source: "rule",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
   });
 
   it("uses the configured bill extraction model for cheap triage", async () => {

@@ -127,7 +127,7 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
                   boxShadow: "0 0 5px #89b4fa",
                 }}
               />
-              Live
+              {email._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live"}
             </span>
           )}
           {!untriaged && email.urgentFlag && email._lane !== "noise" && (

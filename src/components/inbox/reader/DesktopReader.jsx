@@ -23,7 +23,11 @@ import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 
-function LiveEmailNotice() {
+function LiveEmailNotice({ email }) {
+  const status = email?._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live · not yet triaged";
+  const detail = email?._pendingSecurityGrace
+    ? "Security triage is delayed briefly before classification."
+    : "Arrived after your last briefing. Not yet triaged.";
   return (
     <div
       style={{
@@ -81,7 +85,7 @@ function LiveEmailNotice() {
             color: "#89b4fa",
           }}
         >
-          Live · not yet triaged
+          {status}
         </div>
         <div
           className="ea-display"
@@ -92,7 +96,7 @@ function LiveEmailNotice() {
             fontStyle: "italic",
           }}
         >
-          Arrived after your last briefing. Not yet triaged.
+          {detail}
         </div>
       </div>
     </div>
@@ -425,7 +429,7 @@ export default function DesktopReader({
           </div>
         )}
 
-        {email._untriaged && <LiveEmailNotice />}
+        {email._untriaged && <LiveEmailNotice email={email} />}
 
         <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>

@@ -60,7 +60,16 @@ export function collectBriefingEmails(emailAccounts) {
   return out;
 }
 
-export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = {}) {
+export function pendingSecurityGraceLabel(classifyAtMs, nowMs = Date.now()) {
+  if (!Number.isFinite(classifyAtMs)) return "Triage delayed";
+  const remainingMs = classifyAtMs - nowMs;
+  if (remainingMs <= 0) return "Classifying";
+  if (remainingMs <= 60_000) return "Classifying in <1m";
+  if (remainingMs <= 2 * 60_000) return "Classifying soon";
+  return "Triage delayed";
+}
+
+export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = {}, { nowMs = Date.now() } = {}) {
   if (!activeSnapshot?.snapshot) return [];
   const accountMap = new Map((activeSnapshot.filters?.accounts || []).map((account) => [
     account.account_id,
@@ -86,7 +95,9 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
   return rows.map((item) => {
     const uid = item.uid || item.email_id || item.id;
     const resurfaced = item.source === "resurfaced_snooze" || item._resurfaced;
+    const pendingSecurityGrace = item.source === "pending_security_grace";
     const resurfacedAt = item.resurfaced_at || item._resurfacedAt || (item.source_at ? Date.parse(item.source_at) : null);
+    const pendingSecurityGraceAt = pendingSecurityGrace && item.source_at ? Date.parse(item.source_at) : null;
     const account = accountMap.get(item.account_id) || {
       id: item.account_id,
       account_id: item.account_id,
@@ -98,6 +109,7 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       noise: [],
     };
     const lane = resurfaced
+      || pendingSecurityGrace
       ? null
       : item._snapshotCarryover
       ? "carryover"
@@ -125,12 +137,17 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       _accountKey: account.id || account.name,
       _account: account,
       _lane: lane,
-      _untriaged: resurfaced,
+      _untriaged: resurfaced || pendingSecurityGrace,
       _live: false,
       _activeSnapshot: true,
       _carryover: lane === "carryover",
       _resurfaced: resurfaced,
       _resurfacedAt: resurfacedAt,
+      _pendingSecurityGrace: pendingSecurityGrace,
+      _pendingSecurityGraceAt: pendingSecurityGraceAt,
+      _pendingSecurityGraceLabel: pendingSecurityGrace
+        ? pendingSecurityGraceLabel(pendingSecurityGraceAt, nowMs)
+        : null,
       urgentFlag: item.escalation_badge
         ? { label: item.escalation_badge }
         : item.urgency === "high"
