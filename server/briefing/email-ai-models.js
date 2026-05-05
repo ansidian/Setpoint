@@ -47,9 +47,8 @@ export function isAllowedEmailAiModel(provider, model) {
 export function resolveEmailAiModelConfig({
   provider,
   model,
-  legacyModel,
 } = {}) {
-  const rawModel = model || legacyModel || null;
+  const rawModel = model || null;
   const resolvedProvider = provider
     || inferEmailAiProviderFromModel(rawModel)
     || DEFAULT_EMAIL_AI_PROVIDER;

@@ -181,6 +181,14 @@ npm start          # Express serves dist/ + API routes
 
 Database migrations run automatically on server start.
 
+Before deploying migration `044_legacy_briefing_cleanup.sql`, take a rollback-only
+Turso export immediately before the deploy:
+
+```bash
+mkdir -p backups
+turso db export eadashboard --output-file "backups/eadashboard-pre-legacy-briefing-cleanup-$(date +%Y%m%d%H%M%S).db"
+```
+
 ## License
 
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — free to use and adapt for non-commercial purposes with attribution.

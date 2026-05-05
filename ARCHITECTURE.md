@@ -325,79 +325,37 @@ Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in
 
 ## Briefing Pipeline
 
-This remains the legacy history and compatibility path. A stored briefing is a single JSON object containing triaged emails, calendar events, weather, deadlines, tasks, and bills. `aiInsights: []` may remain in stored JSON as a temporary compatibility stub, but always-on AI Insights are retired as an active feature.
-
-Production no longer depends on manual/scheduled batch generation for the active email surface. Durable email triage, active snapshot windows, Gmail history-sync jobs, and snapshot boundary ticks are the production path going forward. Legacy batch generation/status routes are retained for development compatibility and old history reads; production guards return retired responses before generation can write `ea_briefings`.
-
-### Legacy Generation Flow
+The current dashboard no longer stores batch briefing JSON. Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, CTM, Todoist, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
 
 ```mermaid
 flowchart TD
-    Trigger["Trigger<br/>(manual legacy POST, dev only)"]
-    Config["loadUserConfig()<br/>accounts + settings from DB"]
-    
-    subgraph Parallel["Parallel Fetch"]
-        Emails["fetchAllEmails()<br/>Gmail + iCloud"]
-        Live["fetchLiveData()<br/>Calendar, Weather, CTM, Todoist, Bills"]
-        Prev["loadPreviousTriage()<br/>Last briefing + dismissed IDs"]
-    end
+    Fetch["Provider fetch or push sync"]
+    Index["ea_email_index + ea_email_fts"]
+    Jobs["ea_triage_jobs"]
+    Triage["ea_email_triage"]
+    Snapshot["ea_briefing_snapshots + items"]
+    Cache["ea_current_data_cache"]
+    Dashboard["/api/dashboard/current"]
 
-    Filter["Filter new emails<br/>(not in previous triage, not dismissed)"]
-    
-    Skip{"Skip AI?<br/>No new unread +<br/>calendar unchanged +<br/>last AI < 16h ago"}
-    
-    Clone["Clone previous briefing<br/>Update weather/calendar/CTM/Todoist only<br/>Set skippedAI: true"]
-    
-    Delta{"Delta generation?<br/>New unread < total emails +<br/>previous triage exists"}
-
-    EmailAiFull["callEmailAiModel(ALL emails)<br/>Full triage"]
-    EmailAiDelta["callEmailAiModel(NEW emails only)<br/>Partial triage"]
-    
-    Merge["mergeDeltaBriefing()<br/>New triage + carried-forward emails<br/>(seenCount < 3, still in inbox, not dismissed)"]
-
-    PostProcess["Post-Processing<br/>1. fixEmailAccounts() — regroup by account<br/>2. deduplicateBills() — suppress processor dupes<br/>3. Overwrite calendar/weather/CTM with server data<br/>4. Sync email read status from source"]
-
-    Index["indexEmails()<br/>(async, fire-and-forget)<br/>FTS5 full-text index"]
-
-    Store["Store in ea_briefings<br/>status: ready"]
-    Trigger --> Config --> Parallel
-    Parallel --> Index
-    Parallel --> Filter
-    Filter --> Skip
-    Skip -->|Yes| Clone --> Store
-    Skip -->|No| Delta
-    Delta -->|Full| EmailAiFull --> PostProcess
-    Delta -->|Delta| EmailAiDelta --> Merge --> PostProcess
-    PostProcess --> Store
+    Fetch --> Index --> Jobs --> Triage --> Snapshot --> Dashboard
+    Cache --> Dashboard
 ```
 
 ### Email AI Integration
 
-Email AI is called through the selected provider in `server/briefing/email-ai.js`. Anthropic uses forced tool use with `submit_briefing`; OpenAI uses Responses API function calling with the same shape. Required fields and types are enforced at decode time instead of JSON-from-text parsing.
+Email AI is called through the selected provider in `server/briefing/email-ai.js`. Anthropic uses forced tool use and OpenAI uses Responses API function calling. Required fields and types are enforced at decode time instead of JSON-from-text parsing.
 
-System prompt (~120 lines) instructs the model to:
-- **Triage emails**: actionable (needs response), fyi (real activity), noise (marketing/automated)
-- **Detect bills**: extract payee, amount, due_date, type, category
-- **Flag urgency**: set `urgentFlag: { label, date }` for hard deadlines
-- **Return no insights**: keep `aiInsights: []` for compatibility only
-
-Email interests from settings override noise classification. Scheduled payments from Actual Budget are cross-referenced to suppress duplicate bill detections.
+Email interests from settings influence classification. Scheduled payments from Actual Budget are cross-referenced to suppress duplicate bill detections.
 
 Model selection: user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence and retries 3x with exponential backoff on 429/529.
 
-### Retired AI Insights
-
-AI Insights no longer render in the dashboard. Stored briefing JSON and email-AI output may still carry `aiInsights: []` as a compatibility stub, but resolver/validator code and dev insight fixtures have been removed.
-
 ### Key Optimizations
 
-**Delta Generation** — When new unread emails are a subset of total, only send new emails to email AI. Merge results with previous triage. Carried-forward emails increment `seenCount` and expire after 3 appearances.
-
-**Skip AI** — If inbox is clean (no new unread), calendar hasn't changed, and last AI call was <16 hours ago, clone the previous briefing and only update weather/calendar/CTM/Todoist. No email AI API call.
+**Durable Triage Queue** — Provider sync creates pending triage rows and deduped jobs. Workers can resume from durable rows after process restarts.
 
 **Email Indexing & Push Ingestion** — All fetched emails (read + unread) are persisted to `ea_email_index` with an FTS5 virtual table for cross-account keyword search. Gmail accounts can register an INBOX Pub/Sub watch through `GMAIL_PUBSUB_TOPIC`; `/api/gmail/push` decodes the Pub/Sub envelope, queues an account-level `gmail_history_sync` job, and returns quickly. The history-sync worker uses the stored Gmail `last_history_id` cursor to fetch new INBOX messages, index them, create pending durable triage rows, and enqueue message-level `email_triage` jobs. The 2-hour background indexer remains a reconciliation path for missed push events, downtime, watch expiry, and iCloud polling. Historical completeness is handled separately by the resumable INBOX backfill worker, which defaults to 365 days, scans fixed 7-day windows newest-to-oldest, and records per-account state in `ea_email_backfill_state`.
 
-**Post-Processing** — Server always overwrites AI-generated calendar, weather, CTM, and Todoist data with fresh server-fetched values. This prevents hallucinations. Email accounts are regrouped by `account_label` to fix potential model misclassification. Duplicate bills from payment processors (PayPal, Venmo, etc.) are detected and suppressed.
+**Current Data Cache** — Non-email boot-critical data is cached by user and cache key, with health metadata exposed in the current dashboard envelope.
 
 ## Data Sources
 
@@ -432,17 +390,6 @@ erDiagram
         datetime updated_at
     }
 
-    ea_briefings {
-        int id PK
-        text user_id
-        text status "generating | ready | error"
-        text progress "step message for polling"
-        text briefing_json "full briefing object"
-        text error_message
-        int generation_time_ms
-        datetime generated_at
-    }
-
     ea_settings {
         text user_id PK
         text schedules_json "cron schedule array"
@@ -453,7 +400,8 @@ erDiagram
         text actual_budget_url
         text actual_budget_password_encrypted
         text actual_budget_sync_id
-        text claude_model
+        text email_ai_provider
+        text email_ai_model
         text email_interests_json
         text todoist_api_token_encrypted
         text important_senders_json
@@ -587,10 +535,10 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 
 | # | File | Purpose |
 |---|------|---------|
-| 1 | `001_ea_tables.sql` | Core tables: accounts, briefings, settings |
+| 1 | `001_ea_tables.sql` | Core tables: accounts, legacy briefings, settings |
 | 2 | `002_account_calendar_flag.sql` | `calendar_enabled` on accounts |
 | 3 | `003_account_icon.sql` | `icon` column on accounts |
-| 4 | `004_claude_model.sql` | `claude_model` on settings |
+| 4 | `004_claude_model.sql` | Retired `claude_model` setting added for older databases |
 | 5 | `005_briefing_progress.sql` | `progress` column for polling |
 | 6 | `006_email_interests.sql` | `email_interests_json` on settings |
 | 7 | `007_dismissed_emails.sql` | `ea_dismissed_emails` table |
@@ -618,12 +566,25 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 | 29 | `029_email_backfill_state.sql` | Durable per-account email backfill state |
 | 30 | `030_triage_snapshots.sql` | Durable email triage, snapshot windows/items, triage jobs/rules/feedback |
 | 31 | `031_gmail_watch_state.sql` | Gmail Pub/Sub watch state and history cursor |
+| 32 | `032_email_ai_model.sql` | Current email AI provider/model settings |
+| 33 | `033_email_triage_mode.sql` | Email triage mode setting |
+| 34 | `034_current_data_cache.sql` | Durable current data cache |
+| 35 | `035_todoist_mirror.sql` | Todoist mirror tables |
+| 36 | `036_snapshot_item_source_metadata.sql` | Snapshot item source metadata |
+| 37 | `037_todoist_webhook_deliveries.sql` | Todoist webhook delivery ledger |
+| 38 | `038_todoist_oauth_tokens.sql` | Todoist OAuth token fields |
+| 39 | `039_align_email_fts_rowids.sql` | Align email FTS rowids with indexed email rows |
+| 40 | `040_todoist_health_correctness.sql` | Todoist health metadata |
+| 41 | `041_current_data_health_correctness.sql` | Current data health metadata |
+| 42 | `042_snapshot_history_labels.sql` | Snapshot schedule labels |
+| 43 | `043_email_triage_decision_metadata.sql` | Email triage decision metadata |
+| 44 | `044_legacy_briefing_cleanup.sql` | Drop legacy briefing storage and retired settings column |
 
 ## Key Patterns
 
-### Legacy Batch Generation Guard
+### Current Dashboard Runtime
 
-Manual batch generation and status polling are retired in production. `server/briefing/lifecycle-service.js` rejects production `triggerGeneration`, `refresh`, and `getStatus` calls with 410 before they can write or inspect legacy `ea_briefings` generation rows. `getInProgress` returns `{ generating: false, retired: true }` in production. The routes remain for development compatibility and legacy history access.
+Manual batch generation and status polling are retired. The active dashboard is served from current snapshot, triage, cache, and provider-domain tables; migration `044_legacy_briefing_cleanup.sql` removes the old `ea_briefings`, `ea_embeddings`, and `ea_pinned_emails` storage after a rollback-only Turso export.
 
 ### Encryption at Rest
 

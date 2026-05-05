@@ -417,7 +417,7 @@ async function loadTriageModelConfig(userId, dbClient = db) {
   let row = {};
   try {
     const result = await dbClient.execute({
-      sql: `SELECT email_ai_provider, email_ai_model, claude_model,
+      sql: `SELECT email_ai_provider, email_ai_model,
                    bill_extract_provider, bill_extract_model
             FROM ea_settings WHERE user_id = ?`,
       args: [userId],
@@ -431,7 +431,6 @@ async function loadTriageModelConfig(userId, dbClient = db) {
   const strong = resolveEmailAiModelConfig({
     provider: row.email_ai_provider,
     model: row.email_ai_model,
-    legacyModel: row.claude_model || DEFAULT_STRONG_MODEL,
   });
 
   return {
