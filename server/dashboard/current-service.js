@@ -5,9 +5,9 @@ import { fetchCTMDeadlines } from "../briefing/ctm.js";
 import {
   computeDeadlineStats,
   loadCompletedTaskIds,
-  loadUserConfig,
   separateDeadlines,
-} from "../briefing/index.js";
+} from "../briefing/deadline-helpers.js";
+import { loadUserConfig } from "../briefing/config-service.js";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../briefing/snapshot-service.js";
 import { fetchTodoistTasks, getTodoistSyncHealth } from "../briefing/todoist.js";
 import { hydrateRecurringTombstones } from "../briefing/tombstones.js";

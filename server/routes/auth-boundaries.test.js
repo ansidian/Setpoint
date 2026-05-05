@@ -26,16 +26,6 @@ vi.mock("../briefing/bills-service.js", () => ({
   createQuickTxn: vi.fn(async () => ({ success: true, account: "Checking" })),
   extractBill: vi.fn(async () => ({ payee: "Power", amount: 42 })),
 }));
-vi.mock("../briefing/lifecycle-service.js", () => ({
-  triggerGeneration: vi.fn(),
-  getInProgress: vi.fn(async () => ({ generating: false })),
-  refresh: vi.fn(),
-  getLatest: vi.fn(async () => ({ briefing: { id: "latest" } })),
-  getHistory: vi.fn(),
-  getStatus: vi.fn(),
-  deleteBriefing: vi.fn(),
-  getById: vi.fn(),
-}));
 vi.mock("../briefing/email-service.js", () => ({
   getEmailBody: vi.fn(),
   dismiss: vi.fn(),
@@ -66,9 +56,6 @@ vi.mock("../briefing/email-index.js", () => ({
 }));
 vi.mock("../briefing/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: vi.fn(),
-}));
-vi.mock("../briefing/index.js", () => ({
-  loadUserConfig: vi.fn(async () => ({ accounts: [], settings: {} })),
 }));
 vi.mock("../briefing/gmail.js", () => ({
   fetchEmails: vi.fn(async () => []),
@@ -247,7 +234,7 @@ describe("auth boundaries", () => {
     expect(res.status).toBe(401);
   });
 
-  it("blocks bearer auth on briefing latest route", async () => {
+  it("blocks bearer auth on removed legacy briefing lifecycle routes", async () => {
     await seedBearer();
     const res = await request(makeApp())
       .get("/api/briefing/latest")
@@ -552,14 +539,26 @@ describe("auth boundaries", () => {
     expect(sendBill).not.toHaveBeenCalled();
   });
 
-  it("keeps normal cookie session access on protected routes", async () => {
+  it("does not expose legacy briefing lifecycle or history routes to cookie sessions", async () => {
     await seedSession();
-    const res = await request(makeApp())
-      .get("/api/briefing/latest")
-      .set("Cookie", ["ea_session=cookie-session"]);
+    const cases = [
+      ["post", "/api/briefing/generate"],
+      ["get", "/api/briefing/in-progress"],
+      ["post", "/api/briefing/refresh"],
+      ["get", "/api/briefing/latest"],
+      ["get", "/api/briefing/history"],
+      ["get", "/api/briefing/status/123"],
+      ["get", "/api/briefing/123"],
+      ["delete", "/api/briefing/123"],
+    ];
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ briefing: { id: "latest" } });
+    for (const [method, path] of cases) {
+      const agent = request(makeApp());
+      const res = await agent[method](path)
+        .set("Cookie", ["ea_session=cookie-session"]);
+
+      expect(res.status).toBe(404);
+    }
   });
 
   it("rejects bearer auth on non-quick-txn bills endpoints", async () => {

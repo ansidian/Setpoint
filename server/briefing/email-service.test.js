@@ -30,16 +30,10 @@ vi.mock("./icloud.js", () => ({
   trashMessage: vi.fn(),
   batchMarkAsRead: vi.fn(),
 }));
-vi.mock("./stored-briefing-service.js", () => ({
-  markEmailsRead: vi.fn(),
-  markEmailsUnread: vi.fn(),
-  removeDismissedEmailFromBriefing: vi.fn(),
-}));
-vi.mock("./index.js", () => ({ loadUserConfig: vi.fn() }));
+vi.mock("./config-service.js", () => ({ loadUserConfig: vi.fn() }));
 
 const gmail = await import("./gmail.js");
 const icloud = await import("./icloud.js");
-const storedBriefingService = await import("./stored-briefing-service.js");
 const emailService = await import("./email-service.js");
 const { __testing__ } = emailService;
 
@@ -335,7 +329,6 @@ describe("markAllRead", () => {
         message: "iCloud batch failed",
       }],
     });
-    expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenLastCalledWith({
       sql: "UPDATE ea_email_index SET read = 1 WHERE user_id = ? AND uid IN (?)",
       args: ["u1", gmailUid],
@@ -354,7 +347,6 @@ describe("markAllRead", () => {
       code: "email_mark_all_read_failed",
       status: 502,
     });
-    expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
   });
 
   it("routes legacy Gmail UID prefixes through the canonical account for batch updates", async () => {
@@ -378,6 +370,5 @@ describe("markAllRead", () => {
       }),
       [gmailUid],
     );
-    expect(storedBriefingService.markEmailsRead).not.toHaveBeenCalled();
   });
 });

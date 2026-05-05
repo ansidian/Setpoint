@@ -2,11 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockDb = { execute: vi.fn() };
 const cronApi = vi.hoisted(() => ({ schedule: vi.fn() }));
-const briefingApi = vi.hoisted(() => ({
-  generateBriefing: vi.fn(),
-  loadUserConfig: vi.fn(),
-  fetchAllEmails: vi.fn(),
-}));
+const configApi = vi.hoisted(() => ({ loadUserConfig: vi.fn() }));
+const emailFetchApi = vi.hoisted(() => ({ fetchAllEmails: vi.fn() }));
 const snapshotApi = vi.hoisted(() => ({
   advanceSnapshotBoundary: vi.fn(async () => ({ snapshot: { id: 42, status: "active" } })),
 }));
@@ -22,7 +19,8 @@ const triageWorkerApi = vi.hoisted(() => ({
 
 vi.mock("node-cron", () => ({ default: cronApi }));
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
-vi.mock("./index.js", () => briefingApi);
+vi.mock("./config-service.js", () => configApi);
+vi.mock("./email-fetch.js", () => emailFetchApi);
 vi.mock("./snapshot-service.js", () => snapshotApi);
 vi.mock("./email-index.js", () => ({ indexEmails: vi.fn() }));
 vi.mock("./gmail-sync.js", () => gmailSyncApi);
@@ -71,7 +69,7 @@ describe("initScheduler", () => {
         scheduleLabel: "Morning",
       }),
     );
-    expect(briefingApi.generateBriefing).not.toHaveBeenCalled();
+    expect(snapshotApi.advanceSnapshotBoundary).toHaveBeenCalledTimes(1);
   });
 });
 

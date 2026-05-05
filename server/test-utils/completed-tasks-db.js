@@ -1,35 +1,17 @@
 import { createClient } from "@libsql/client";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../db/migrations");
-
-const migrationFiles = [
-  "001_ea_tables.sql",
-  "014_completed_tasks.sql",
-  "025_completed_tasks_metadata.sql",
-];
-
-const migrationSql = migrationFiles.map((file) =>
-  readFileSync(join(migrationsDir, file), "utf8"),
-);
-
 export async function createCompletedTasksTestDb() {
   const db = createClient({ url: "file::memory:" });
-  for (const sql of migrationSql) {
-    await db.executeMultiple(sql);
-  }
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS ea_completed_tasks (
+      user_id TEXT NOT NULL,
+      todoist_id TEXT NOT NULL,
+      completed_at TEXT DEFAULT (datetime('now')),
+      due_date TEXT,
+      snapshot_json TEXT,
+      PRIMARY KEY (user_id, todoist_id, due_date)
+    );
+  `);
   return db;
-}
-
-export async function seedReadyBriefing(db, userId, briefingJson, generatedAt = "2026-04-18T12:00:00Z") {
-  await db.execute({
-    sql: `INSERT INTO ea_briefings (user_id, status, briefing_json, generated_at)
-          VALUES (?, 'ready', ?, ?)`,
-    args: [userId, JSON.stringify(briefingJson), generatedAt],
-  });
 }
 
 export async function seedCompletedTask(db, task = {}) {

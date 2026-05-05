@@ -1,5 +1,6 @@
 import { indexEmails } from "./email-index.js";
-import { loadUserConfig, fetchAllEmails } from "./index.js";
+import { loadUserConfig } from "./config-service.js";
+import { fetchAllEmails } from "./email-fetch.js";
 
 export async function reindexEmails(userId, hoursBack) {
   const { accounts } = await loadUserConfig(userId);

@@ -10,9 +10,6 @@ import {
 } from "./todoist.js";
 import { fetchCTMDeadlinesAll, updateCTMEventStatus } from "./ctm.js";
 import { buildSnapshot } from "./tombstones.js";
-// Keeps old stored briefings coherent for history/dev compatibility; current
-// dashboard task visibility comes from domain sources and current endpoint data.
-import * as storedBriefingService from "./stored-briefing-service.js";
 
 function findCtmTask(tasks, taskId) {
   return (tasks || []).find((task) =>
@@ -103,8 +100,6 @@ export async function updateCTMStatus(userId, taskId, status) {
       );
       await persistCompletedTodoistTask(userId, ctmTask.todoist_id, null);
     }
-  } else {
-    await storedBriefingService.applyCTMStatusChange(userId, taskId, status);
   }
 }
 
@@ -125,17 +120,14 @@ export async function listLabels(userId) {
 
 export async function createTask(userId, body) {
   const task = await createTodoistTask(userId, body);
-  await storedBriefingService.upsertTodoistTask(userId, task, { replace: false });
   return task;
 }
 
 export async function updateTask(userId, id, body) {
   const task = await updateTodoistTask(userId, id, body);
-  await storedBriefingService.upsertTodoistTask(userId, task, { replace: true });
   return task;
 }
 
 export async function deleteTask(userId, id) {
   await deleteTodoistTask(userId, id);
-  await storedBriefingService.removeTodoistTask(userId, id);
 }

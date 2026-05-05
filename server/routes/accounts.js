@@ -491,27 +491,12 @@ router.put("/settings", async (req, res) => {
       await storeTodoistOAuthTokenResponse(userId, response);
     }
 
-    // Purge Todoist items from legacy stored briefing history/dev views and
-    // completed-task snapshots on disconnect. Current runtime reads domain data.
+    // Purge completed-task snapshots on disconnect. Current runtime reads domain data.
     if (todoist_api_token !== undefined && !todoist_api_token) {
       await db.execute({
         sql: "DELETE FROM ea_completed_tasks WHERE user_id = ?",
         args: [userId],
       });
-      const latest = await db.execute({
-        sql: `SELECT id, briefing_json FROM ea_briefings
-              WHERE user_id = ? AND status = 'ready'
-              ORDER BY generated_at DESC LIMIT 1`,
-        args: [userId],
-      });
-      if (latest.rows.length) {
-        const briefing = JSON.parse(latest.rows[0].briefing_json);
-        briefing.todoist = { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
-        await db.execute({
-          sql: "UPDATE ea_briefings SET briefing_json = ? WHERE id = ?",
-          args: [JSON.stringify(briefing), latest.rows[0].id],
-        });
-      }
     }
 
     // Hot-reload cron jobs when schedules change (no server restart needed)

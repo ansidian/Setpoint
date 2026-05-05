@@ -14,16 +14,8 @@ vi.mock("../db/connection.js", () => ({
     execute: (...args) => testState.db.current.execute(...args),
   },
 }));
-vi.mock("./encryption.js", () => ({ decrypt: () => "mocked" }));
-vi.mock("./gmail.js", () => ({ fetchEmails: async () => [] }));
-vi.mock("./icloud.js", () => ({ fetchEmails: async () => [] }));
-vi.mock("./calendar.js", () => ({ fetchCalendar: async () => [] }));
-vi.mock("./weather.js", () => ({ fetchWeather: async () => ({}) }));
-vi.mock("./ctm.js", () => ({ fetchCTMDeadlines: async () => [] }));
-vi.mock("./email-ai.js", () => ({ callEmailAiModel: async () => ({}) }));
-vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 
-const { loadCompletedTaskIds } = await import("./index.js");
+const { loadCompletedTaskIds } = await import("./deadline-helpers.js");
 
 describe("loadCompletedTaskIds", () => {
   beforeEach(async () => {
