@@ -7,6 +7,8 @@ const OPENAI_PRICE_PER_MILLION = {
   "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.50 },
   "gpt-5.4-nano": { input: 0.20, cachedInput: 0.02, output: 1.25 },
 };
+const OPENAI_PRICE_MODEL_KEYS = Object.keys(OPENAI_PRICE_PER_MILLION)
+  .sort((left, right) => right.length - left.length);
 
 function safeJson(value, fallback = null) {
   if (!value) return fallback;
@@ -53,6 +55,14 @@ function openAIModelResult(row, tier) {
   return result?.provider === "openai" ? result : null;
 }
 
+function priceForOpenAIModel(model) {
+  const modelId = String(model || "");
+  const exact = OPENAI_PRICE_PER_MILLION[modelId];
+  if (exact) return exact;
+  const baseModel = OPENAI_PRICE_MODEL_KEYS.find((key) => modelId.startsWith(`${key}-`));
+  return baseModel ? OPENAI_PRICE_PER_MILLION[baseModel] : null;
+}
+
 function collectTier(row, tier) {
   const result = openAIModelResult(row, tier);
   if (!result) return null;
@@ -70,7 +80,7 @@ function collectTier(row, tier) {
 
 function addCall(summary, call) {
   const tierStats = summary.byTier[call.tier];
-  const price = OPENAI_PRICE_PER_MILLION[call.model] || null;
+  const price = priceForOpenAIModel(call.model);
   const savings = price
     ? (call.cachedInputTokens / 1_000_000) * (price.input - price.cachedInput)
     : 0;

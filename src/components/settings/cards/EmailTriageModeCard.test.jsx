@@ -127,4 +127,28 @@ describe("EmailTriageModeCard", () => {
     expect(screen.getByText("2 OpenAI calls in 7 days")).toBeTruthy();
     expect(screen.getByText(/Last: May 4/)).toBeTruthy();
   });
+
+  it("does not round tiny nonzero cache savings down to zero", async () => {
+    getTriageCacheStats.mockResolvedValueOnce({
+      windowDays: 7,
+      openaiCalls: 1,
+      inputTokens: 1100,
+      cachedInputTokens: 100,
+      outputTokens: 20,
+      estimatedSavingsUsd: 0.000018,
+      hitRate: 0.0909,
+      lastTriagedAt: null,
+      models: ["gpt-5.4-nano"],
+      byTier: {
+        cheap: { calls: 1, inputTokens: 1100, cachedInputTokens: 100, outputTokens: 20, estimatedSavingsUsd: 0.000018 },
+        strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedSavingsUsd: 0 },
+      },
+    });
+
+    renderCard();
+
+    await waitFor(() => {
+      expect(screen.getByText("<$0.0001")).toBeTruthy();
+    });
+  });
 });
