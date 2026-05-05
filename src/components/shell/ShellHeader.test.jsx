@@ -58,7 +58,28 @@ describe("ShellHeader system status", () => {
     expect(within(panel).getByText("Todoist mirror is current.")).toBeTruthy();
   });
 
-  it("uses an attention label when system health is stale", () => {
+  it("uses an attention label when system health needs sync", () => {
+    renderHeader({
+      systemStatus: {
+        ...currentStatus,
+        state: "needs_sync",
+        sources: [
+          { ...currentStatus.sources[0], state: "refreshing", severity: "info", message: "Current data is refreshing." },
+          { ...currentStatus.sources[1], state: "needs_sync", severity: "warning", message: "Todoist mirror needs sync." },
+        ],
+      },
+    });
+
+    const button = screen.getByRole("button", { name: /system status: needs_sync/i });
+    expect(button).toBeTruthy();
+
+    fireEvent.click(button);
+    const panel = screen.getByRole("dialog", { name: /system status/i });
+    expect(within(panel).getByText("Needs sync")).toBeTruthy();
+    expect(within(panel).getByText("Refreshing")).toBeTruthy();
+  });
+
+  it("treats legacy stale status as needs sync during migration", () => {
     renderHeader({
       systemStatus: {
         ...currentStatus,
@@ -70,6 +91,6 @@ describe("ShellHeader system status", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: /system status: stale/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /system status: needs_sync/i })).toBeTruthy();
   });
 });

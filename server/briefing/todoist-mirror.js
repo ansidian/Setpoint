@@ -1,12 +1,12 @@
 import db from "../db/connection.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import {
   fetchTodoistSyncResources,
   TODOIST_MIRROR_RESOURCE_TYPES,
 } from "./todoist-api.js";
 import { getTodoistApiToken } from "./todoist-token.js";
 
-const HEALTH_CURRENT_MS = 60 * 1000;
-const HEALTH_UNAVAILABLE_MS = 15 * 60 * 1000;
+const HEALTH_DEGRADED_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function iso(now) {
   return now.toISOString();
@@ -70,6 +70,32 @@ async function loadSyncState(userId, dbClient) {
     args: [userId],
   });
   return result.rows[0] || null;
+}
+
+export async function recordTodoistSyncRequest(userId, {
+  dbClient = db,
+  reason = "manual",
+  now = new Date(),
+} = {}) {
+  if (!userId) return { recorded: false };
+  const timestamp = iso(now);
+  await dbClient.execute({
+    sql: `INSERT INTO ea_todoist_sync_state
+            (user_id, status, sync_requested_at, sync_request_reason, updated_at)
+          VALUES (?, 'idle', ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            sync_requested_at = excluded.sync_requested_at,
+            sync_request_reason = excluded.sync_request_reason,
+            updated_at = excluded.updated_at`,
+    args: [userId, timestamp, reason, timestamp],
+  });
+  publishCurrentDashboardEvent(userId, {
+    source: "todoist",
+    reason,
+    state: "needs_sync",
+    occurredAt: timestamp,
+  });
+  return { recorded: true, syncRequestedAt: timestamp, reason };
 }
 
 export async function listTodoistMirrorActiveTasks(userId, {
@@ -149,13 +175,23 @@ export async function listTodoistMirrorLabels(userId, {
 export async function upsertTodoistMirrorItem(userId, item, {
   dbClient = db,
   now = new Date(),
+  recordPendingSync = true,
 } = {}) {
-  await dbClient.execute(itemStatement(userId, item, iso(now)));
+  const timestamp = iso(now);
+  await dbClient.execute(itemStatement(userId, item, timestamp));
+  if (recordPendingSync) {
+    await recordTodoistSyncRequest(userId, {
+      dbClient,
+      reason: "todoist-write",
+      now,
+    });
+  }
 }
 
 export async function markTodoistMirrorItemCompleted(userId, itemId, {
   dbClient = db,
   now = new Date(),
+  recordPendingSync = true,
 } = {}) {
   const timestamp = iso(now);
   await dbClient.execute({
@@ -168,11 +204,19 @@ export async function markTodoistMirrorItemCompleted(userId, itemId, {
             updated_at = excluded.updated_at`,
     args: [userId, normalizeId(itemId), timestamp, timestamp],
   });
+  if (recordPendingSync) {
+    await recordTodoistSyncRequest(userId, {
+      dbClient,
+      reason: "todoist-write",
+      now,
+    });
+  }
 }
 
 export async function markTodoistMirrorItemDeleted(userId, itemId, {
   dbClient = db,
   now = new Date(),
+  recordPendingSync = true,
 } = {}) {
   const timestamp = iso(now);
   await dbClient.execute({
@@ -186,6 +230,13 @@ export async function markTodoistMirrorItemDeleted(userId, itemId, {
             updated_at = excluded.updated_at`,
     args: [userId, normalizeId(itemId), timestamp, timestamp, timestamp],
   });
+  if (recordPendingSync) {
+    await recordTodoistSyncRequest(userId, {
+      dbClient,
+      reason: "todoist-write",
+      now,
+    });
+  }
 }
 
 async function markSyncing(userId, dbClient, timestamp) {
@@ -205,14 +256,17 @@ async function markSyncing(userId, dbClient, timestamp) {
 async function markSyncFailed(userId, dbClient, timestamp, err) {
   await dbClient.execute({
     sql: `INSERT INTO ea_todoist_sync_state
-            (user_id, status, last_error, sync_started_at, updated_at)
-          VALUES (?, 'idle', ?, NULL, ?)
+            (user_id, status, last_error, sync_started_at, last_check_failed_at,
+             failed_check_count, updated_at)
+          VALUES (?, 'idle', ?, NULL, ?, 1, ?)
           ON CONFLICT(user_id) DO UPDATE SET
             status = 'idle',
             last_error = excluded.last_error,
             sync_started_at = NULL,
+            last_check_failed_at = excluded.last_check_failed_at,
+            failed_check_count = COALESCE(ea_todoist_sync_state.failed_check_count, 0) + 1,
             updated_at = excluded.updated_at`,
-    args: [userId, String(err?.message || err || "Todoist sync failed").slice(0, 500), timestamp],
+    args: [userId, String(err?.message || err || "Todoist sync failed").slice(0, 500), timestamp, timestamp],
   });
 }
 
@@ -357,8 +411,10 @@ function stateSuccessStatement(userId, response, timestamp, isFullSync) {
   return {
     sql: `INSERT INTO ea_todoist_sync_state
             (user_id, sync_token, status, last_sync_at, last_success_at,
-             last_full_sync_at, last_incremental_sync_at, last_error, sync_started_at, updated_at)
-          VALUES (?, ?, 'idle', ?, ?, ?, ?, NULL, NULL, ?)
+             last_full_sync_at, last_incremental_sync_at, last_error, sync_started_at,
+             sync_requested_at, sync_request_reason, last_check_failed_at,
+             failed_check_count, updated_at)
+          VALUES (?, ?, 'idle', ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 0, ?)
           ON CONFLICT(user_id) DO UPDATE SET
             sync_token = excluded.sync_token,
             status = 'idle',
@@ -368,6 +424,10 @@ function stateSuccessStatement(userId, response, timestamp, isFullSync) {
             last_incremental_sync_at = COALESCE(excluded.last_incremental_sync_at, ea_todoist_sync_state.last_incremental_sync_at),
             last_error = NULL,
             sync_started_at = NULL,
+            sync_requested_at = NULL,
+            sync_request_reason = NULL,
+            last_check_failed_at = NULL,
+            failed_check_count = 0,
             updated_at = excluded.updated_at`,
     args: [
       userId,
@@ -379,6 +439,22 @@ function stateSuccessStatement(userId, response, timestamp, isFullSync) {
       timestamp,
     ],
   };
+}
+
+function isAfter(left, right) {
+  if (!left) return false;
+  if (!right) return true;
+  return new Date(left).getTime() > new Date(right).getTime();
+}
+
+function hasPendingSyncEvidence(state) {
+  return isAfter(state.sync_requested_at, state.last_success_at);
+}
+
+function failureAgeMs(state, now) {
+  const since = state.last_success_at || state.last_check_failed_at;
+  if (!since) return null;
+  return Math.max(0, now.getTime() - new Date(since).getTime());
 }
 
 async function applySyncResponse(userId, response, {
@@ -461,9 +537,14 @@ export async function getTodoistMirrorHealth(userId, {
     return {
       state: "unconfigured",
       configured: false,
+      severity: "none",
       lastSuccessAt: null,
       lastError: null,
       syncStartedAt: null,
+      syncRequestedAt: null,
+      syncRequestReason: null,
+      lastCheckFailedAt: null,
+      failedCheckCount: 0,
       ageMs: null,
     };
   }
@@ -473,9 +554,14 @@ export async function getTodoistMirrorHealth(userId, {
     return {
       state: "unavailable",
       configured: true,
+      severity: "error",
       lastSuccessAt: null,
       lastError: null,
       syncStartedAt: null,
+      syncRequestedAt: null,
+      syncRequestReason: null,
+      lastCheckFailedAt: null,
+      failedCheckCount: 0,
       ageMs: null,
     };
   }
@@ -484,23 +570,43 @@ export async function getTodoistMirrorHealth(userId, {
   const ageMs = lastSuccessAt
     ? Math.max(0, now.getTime() - new Date(lastSuccessAt).getTime())
     : null;
+  const pendingEvidence = hasPendingSyncEvidence(state);
+  const failedCheckCount = Number(state.failed_check_count || 0);
+  const degradedByFailedChecks = !pendingEvidence
+    && failedCheckCount > 0
+    && failureAgeMs(state, now) != null
+    && failureAgeMs(state, now) >= HEALTH_DEGRADED_AFTER_MS;
+
   let nextState;
+  let severity;
   if (state.status === "syncing") {
     nextState = "syncing";
-  } else if (ageMs == null || ageMs > HEALTH_UNAVAILABLE_MS) {
+    severity = pendingEvidence ? "warning" : "info";
+  } else if (!lastSuccessAt) {
     nextState = "unavailable";
-  } else if (ageMs > HEALTH_CURRENT_MS) {
-    nextState = "stale";
+    severity = "error";
+  } else if (pendingEvidence) {
+    nextState = "needs_sync";
+    severity = "warning";
+  } else if (degradedByFailedChecks) {
+    nextState = "degraded";
+    severity = "warning";
   } else {
     nextState = "current";
+    severity = "none";
   }
 
   return {
     state: nextState,
     configured: true,
+    severity,
     lastSuccessAt,
     lastError: state.last_error || null,
     syncStartedAt: state.sync_started_at || null,
+    syncRequestedAt: state.sync_requested_at || null,
+    syncRequestReason: state.sync_request_reason || null,
+    lastCheckFailedAt: state.last_check_failed_at || null,
+    failedCheckCount,
     ageMs,
   };
 }

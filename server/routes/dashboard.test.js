@@ -84,12 +84,26 @@ const EMPTY_DEADLINES_FOR_TEST = {
 };
 
 const { default: router } = await import("./dashboard.js");
+const { __resetCurrentDashboardRefreshStateForTests } = await import("../dashboard/current-service.js");
+const { __resetCurrentDashboardEventsForTests } = await import("../dashboard/current-events.js");
 
 function makeApp() {
   const app = express();
   app.use(cookieParser());
   app.use("/api/dashboard", router);
   return app;
+}
+
+function listen(app) {
+  return new Promise((resolve) => {
+    const server = app.listen(0, () => resolve(server));
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolve, reject) => {
+    server.close((err) => (err ? reject(err) : resolve()));
+  });
 }
 
 function hashSessionToken(raw) {
@@ -113,6 +127,9 @@ async function createMigratedDb() {
       status TEXT NOT NULL DEFAULT 'current',
       error_message TEXT,
       refresh_started_at TEXT,
+      last_refresh_failed_at TEXT,
+      last_refresh_error TEXT,
+      refresh_failure_count INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, cache_key)
     );
@@ -139,6 +156,51 @@ async function seedCache(cacheKey, payload, { fetchedAt, expiresAt } = {}) {
     ],
   });
 }
+
+describe("GET /api/dashboard/current/events", () => {
+  beforeEach(async () => {
+    testState.db.current = await createMigratedDb();
+    __resetCurrentDashboardEventsForTests();
+  });
+
+  afterEach(async () => {
+    __resetCurrentDashboardEventsForTests();
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+  });
+
+  it("requires a cookie session before opening the current-dashboard event stream", async () => {
+    const res = await request(makeApp()).get("/api/dashboard/current/events");
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ message: "Not authenticated" });
+  });
+
+  it("opens an authenticated SSE stream with a connected event", async () => {
+    const server = await listen(makeApp());
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/dashboard/current/events`, {
+      headers: { cookie: "ea_session=cookie-session" },
+    });
+
+    try {
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/event-stream");
+      expect(response.headers.get("cache-control")).toContain("no-cache");
+
+      const reader = response.body.getReader();
+      const { value } = await reader.read();
+      const chunk = new TextDecoder().decode(value);
+
+      expect(chunk).toContain("retry: 5000\n");
+      expect(chunk).toContain("event: dashboard-current-connected\n");
+      expect(chunk).toContain("\"type\":\"dashboard_current_connected\"");
+      await reader.cancel();
+    } finally {
+      await closeServer(server);
+    }
+  });
+});
 
 describe("GET /api/dashboard/current", () => {
   beforeEach(async () => {
@@ -174,6 +236,7 @@ describe("GET /api/dashboard/current", () => {
   });
 
   afterEach(async () => {
+    __resetCurrentDashboardRefreshStateForTests();
     await testState.db.current?.close?.();
     testState.db.current = null;
   });
@@ -244,7 +307,121 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.getTodoistSyncHealth).toHaveBeenCalledWith("u1");
   });
 
-  it("returns authenticated dashboard health without refreshing current data", async () => {
+  it("rolls Todoist needs_sync into system status and schedules deadlines refresh", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    testState.getTodoistSyncHealth.mockResolvedValueOnce({
+      state: "needs_sync",
+      severity: "warning",
+      configured: true,
+      lastSuccessAt: "2026-05-04T12:00:00.000Z",
+      lastError: null,
+      syncStartedAt: null,
+      ageMs: 30_000,
+    });
+
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.systemStatus.state).toBe("needs_sync");
+    expect(res.body.systemStatus.sources).toEqual([
+      expect.objectContaining({ key: "currentData", state: "current", severity: "none" }),
+      expect.objectContaining({ key: "todoist", state: "needs_sync", severity: "warning" }),
+    ]);
+    expect(res.body.refresh).toMatchObject({
+      mode: "passive",
+      scheduled: expect.arrayContaining([
+        expect.objectContaining({ key: "deadlines_current", reason: "needs_sync" }),
+      ]),
+    });
+  });
+
+  it("manual refresh skips fresh current-data sources", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+
+    const res = await request(makeApp())
+      .post("/api/dashboard/current/refresh")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.refresh).toMatchObject({
+      mode: "manual",
+      scheduled: [
+        expect.objectContaining({ key: "active_snapshot", reason: "manual_retry" }),
+      ],
+      skipped: expect.arrayContaining([
+        expect.objectContaining({ key: "weather_current", reason: "fresh" }),
+        expect.objectContaining({ key: "calendar_current", reason: "fresh" }),
+        expect.objectContaining({ key: "deadlines_current", reason: "fresh" }),
+        expect.objectContaining({ key: "bills_current", reason: "fresh" }),
+      ]),
+    });
+    expect(testState.fetchWeather).not.toHaveBeenCalled();
+    expect(testState.fetchCalendar).not.toHaveBeenCalled();
+    expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
+    expect(testState.getUpcomingBills).not.toHaveBeenCalled();
+  });
+
+  it("refreshes deadlines when the Todoist mirror is newer than the deadlines cache", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST, {
+      fetchedAt: "2026-05-05T00:22:00.000Z",
+      expiresAt: "2026-05-05T00:37:00.000Z",
+    });
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    testState.getTodoistSyncHealth.mockResolvedValueOnce({
+      state: "current",
+      severity: "none",
+      configured: true,
+      lastSuccessAt: "2026-05-05T00:35:00.000Z",
+      lastError: null,
+      syncStartedAt: null,
+      ageMs: 30_000,
+    });
+
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.providerHealth.currentData.state).toBe("current");
+    expect(res.body.refresh).toMatchObject({
+      mode: "passive",
+      scheduled: expect.arrayContaining([
+        expect.objectContaining({ key: "deadlines_current", reason: "needs_sync" }),
+      ]),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: false });
+  });
+
+  it("returns authenticated dashboard health without treating normal TTL expiry as unhealthy", async () => {
     const expiredAt = new Date(Date.now() - 60_000).toISOString();
     await seedCache("weather_current", { temp: 64, location: "El Monte, CA" }, { expiresAt: expiredAt });
     await seedCache("calendar_current", [], { expiresAt: expiredAt });
@@ -271,19 +448,26 @@ describe("GET /api/dashboard/current", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.providerHealth).toMatchObject({
-      currentData: { state: "stale" },
+      currentData: {
+        state: "current",
+        sources: expect.arrayContaining([
+          expect.objectContaining({ key: "weather_current", state: "current", severity: "none" }),
+        ]),
+      },
       todoist: { state: "syncing", configured: true },
     });
     expect(res.body.systemStatus.sources).toEqual([
       expect.objectContaining({
         key: "currentData",
-        state: "stale",
+        state: "current",
+        severity: "none",
         lastSuccessAt: expect.any(String),
-        message: expect.stringMatching(/stale/i),
+        message: expect.stringMatching(/usable/i),
       }),
       expect.objectContaining({
         key: "todoist",
         state: "syncing",
+        severity: "info",
         lastSuccessAt: "2026-05-04T12:00:00.000Z",
         message: expect.stringMatching(/sync/i),
       }),
@@ -327,16 +511,17 @@ describe("GET /api/dashboard/current", () => {
   });
 
   it("starts a background current refresh and returns cached rows without waiting for providers", async () => {
-    await seedCache("weather_current", { temp: 64, location: "El Monte, CA" });
-    await seedCache("calendar_current", [{ id: "cached-event" }]);
-    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    const expiredAt = new Date(Date.now() - 60_000).toISOString();
+    await seedCache("weather_current", { temp: 64, location: "El Monte, CA" }, { expiresAt: expiredAt });
+    await seedCache("calendar_current", [{ id: "cached-event" }], { expiresAt: expiredAt });
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST, { expiresAt: expiredAt });
     await seedCache("bills_current", {
       bills: [{ id: "cached-bill" }],
       allSchedules: [],
       payeeMap: {},
       actualConfigured: true,
       actualBudgetUrl: "https://actual.example.test",
-    });
+    }, { expiresAt: expiredAt });
     const pending = new Promise(() => {});
     testState.fetchWeather.mockReturnValueOnce(pending);
     testState.fetchCalendar.mockReturnValueOnce(pending);
@@ -358,11 +543,18 @@ describe("GET /api/dashboard/current", () => {
       bills: [{ id: "cached-bill" }],
       activeSnapshot: { snapshot: { id: 42 } },
       providerHealth: {
-        currentData: { state: "refreshing" },
+        currentData: { state: "current" },
         activeSnapshot: { state: "syncing", reason: "background" },
       },
       systemStatus: {
-        state: "refreshing",
+        state: "current",
+      },
+      refresh: {
+        mode: "manual",
+        scheduled: expect.arrayContaining([
+          expect.objectContaining({ key: "weather_current", reason: "ttl_due" }),
+          expect.objectContaining({ key: "active_snapshot", reason: "manual_retry" }),
+        ]),
       },
     });
 
@@ -483,7 +675,24 @@ describe("GET /api/dashboard/current", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.weather).toEqual({ temp: 64, location: "El Monte, CA" });
-    expect(res.body.providerHealth.currentData.state).toBe("stale");
+    expect(res.body.providerHealth.currentData.state).toBe("current");
+    expect(res.body.providerHealth.currentData.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "weather_current",
+          state: "refreshing",
+          severity: "info",
+        }),
+      ]),
+    );
+    expect(res.body.systemStatus.state).toBe("current");
+    expect(res.body.refresh).toMatchObject({
+      mode: "passive",
+      scheduled: expect.arrayContaining([
+        expect.objectContaining({ key: "weather_current", reason: "ttl_due" }),
+      ]),
+    });
+    await Promise.resolve();
     expect(testState.fetchWeather).toHaveBeenCalledTimes(1);
 
     resolveWeather({ temp: 75, summary: "Refreshed" });
@@ -524,6 +733,57 @@ describe("GET /api/dashboard/current", () => {
       ]),
     );
   });
+
+  it("preserves cached payload when a background refresh fails", async () => {
+    const expiredAt = new Date(Date.now() - 60_000).toISOString();
+    const fetchedAt = new Date(Date.now() - 10 * 60_000).toISOString();
+    await seedCache("weather_current", { temp: 64, location: "El Monte, CA" }, { fetchedAt, expiresAt: expiredAt });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    testState.fetchWeather.mockRejectedValueOnce(new Error("weather down"));
+
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Cookie", ["ea_session=cookie-session"]);
+    expect(res.status).toBe(200);
+    expect(res.body.weather).toEqual({ temp: 64, location: "El Monte, CA" });
+    expect(res.body.providerHealth.currentData.state).toBe("current");
+
+    await Promise.resolve();
+    const row = await testState.db.current.execute({
+      sql: "SELECT payload_json, status, last_refresh_error, refresh_failure_count FROM ea_current_data_cache WHERE user_id = ? AND cache_key = ?",
+      args: ["u1", "weather_current"],
+    });
+    expect(row.rows[0]).toMatchObject({
+      payload_json: JSON.stringify({ temp: 64, location: "El Monte, CA" }),
+      status: "degraded",
+      last_refresh_error: "weather down",
+      refresh_failure_count: 1,
+    });
+
+    const health = await request(makeApp())
+      .get("/api/dashboard/health")
+      .set("Cookie", ["ea_session=cookie-session"]);
+    expect(health.body.providerHealth.currentData).toMatchObject({
+      state: "current",
+      sources: expect.arrayContaining([
+        expect.objectContaining({
+          key: "weather_current",
+          state: "degraded",
+          severity: "none",
+          errorMessage: "weather down",
+          failureCount: 1,
+        }),
+      ]),
+    });
+  });
 });
 
 describe("POST /api/dashboard/current/sync", () => {
@@ -546,6 +806,7 @@ describe("POST /api/dashboard/current/sync", () => {
   });
 
   afterEach(async () => {
+    __resetCurrentDashboardRefreshStateForTests();
     await testState.db.current?.close?.();
     testState.db.current = null;
   });
