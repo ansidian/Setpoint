@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
-import { dismissEmail, markSnapshotItemHandled, snoozeEmail, trashEmail } from "../../api";
+import {
+  dismissEmail,
+  dismissSnapshotItemForToday,
+  markSnapshotItemHandled,
+  moveSnapshotItemLane,
+  snoozeEmail,
+  trashEmail,
+} from "../../api";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
 
 vi.mock("../../api", async () => {
@@ -433,6 +440,231 @@ describe("InboxView session state", () => {
     await waitFor(() => {
       expect(refreshSnapshot).toHaveBeenCalled();
     });
+  });
+
+  it("moves an active snapshot row to another lane immediately and refreshes afterward", async () => {
+    let resolveMove;
+    moveSnapshotItemLane.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveMove = resolve;
+    }));
+    const refreshSnapshot = vi.fn().mockResolvedValue({});
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot({
+        filters: {
+          accounts: [{
+            account_id: "gmail-a",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: refreshSnapshot,
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "gmail-a-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /move to fyi/i }));
+
+    expect(moveSnapshotItemLane).toHaveBeenCalledWith(42, "fyi");
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /move to needs attention/i })).toBeTruthy();
+
+    resolveMove({});
+    await waitFor(() => {
+      expect(refreshSnapshot).toHaveBeenCalled();
+    });
+  });
+
+  it("hides an active snapshot row immediately when dismissed", async () => {
+    dismissSnapshotItemForToday.mockImplementationOnce(() => new Promise(() => {}));
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-work",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "gmail-a-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /dismiss from today/i }));
+
+    expect(dismissSnapshotItemForToday).toHaveBeenCalledWith(42);
+    await waitFor(() => {
+      expect(screen.getByText("Select an email")).toBeTruthy();
+    });
+    expect(screen.queryByText("Review the lease")).toBeNull();
+  });
+
+  it("hides handled active snapshot rows immediately and suppresses duplicate clicks while pending", async () => {
+    markSnapshotItemHandled.mockImplementationOnce(() => new Promise(() => {}));
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "snapshot-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    const handledButton = await screen.findByRole("button", { name: /mark handled/i });
+    fireEvent.click(handledButton);
+    fireEvent.click(handledButton);
+
+    expect(markSnapshotItemHandled).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.getByText("Select an email")).toBeTruthy();
+    });
+    expect(screen.queryByText("Snapshot action")).toBeNull();
   });
 
   it("suppresses read-only frozen snapshot mutations", async () => {

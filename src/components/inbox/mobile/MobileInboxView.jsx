@@ -182,7 +182,6 @@ export default function MobileInboxView({
   showDraft,
   showPreview,
   density,
-  briefingAgoLabel,
   scopedAccount,
   liveEmailsLoading = false,
   activeSnapshotMode = false,
@@ -252,11 +251,6 @@ export default function MobileInboxView({
                   {activeSnapshotMode ? "Active snapshot" : "Inbox snapshot"}
                 </span>
                 <span style={{ flex: 1 }} />
-                {briefingAgoLabel && (
-                  <span style={{ fontSize: 10, color: "rgba(205,214,244,0.5)" }}>
-                    {briefingAgoLabel}
-                  </span>
-                )}
               </div>
               {snapshotSummary && (
                 <div
@@ -401,20 +395,6 @@ export default function MobileInboxView({
           </div>
 
           <div style={{ padding: "6px 0 20px" }}>
-            {indexedSearchLoading && (
-              <div
-                style={{
-                  margin: "8px 16px",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255,255,255,0.06)",
-                  color: "rgba(205,214,244,0.62)",
-                  fontSize: 11,
-                }}
-              >
-                Searching persisted mail index...
-              </div>
-            )}
             {indexedSearchError && (
               <div
                 style={{
@@ -430,10 +410,14 @@ export default function MobileInboxView({
                 {indexedSearchError}
               </div>
             )}
-            {liveEmailsLoading && visibleEmails.length > 0 && (
+            {!indexedSearchActive && liveEmailsLoading && visibleEmails.length > 0 && (
               <MobileLiveLoadingBlock compact activeSnapshotMode={activeSnapshotMode} />
             )}
-            {liveEmailsLoading && visibleEmails.length === 0 ? (
+            {indexedSearchActive && indexedSearchLoading ? (
+              <div data-testid="inbox-mobile-search-skeleton">
+                <MobileLiveSkeletonRows count={5} />
+              </div>
+            ) : !indexedSearchActive && liveEmailsLoading && visibleEmails.length === 0 ? (
               <MobileLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
             ) : visibleEmails.length > 0 ? (
               visibleEmails.map((email) => (
@@ -457,7 +441,7 @@ export default function MobileInboxView({
                   fontSize: 12,
                 }}
               >
-                No emails match this view.
+                {indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
               </div>
             )}
           </div>

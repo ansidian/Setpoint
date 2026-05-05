@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Mail, Search, CheckCheck, RefreshCw,
-  Sparkles, ChevronRight, ChevronDown, X,
+  ChevronRight, ChevronDown, X,
 } from "lucide-react";
 import { LANE, briefingPhaseLabel } from "../../lib/redesign-helpers";
 import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
@@ -9,6 +9,7 @@ import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
+import InboxCategoryFilterChips from "./InboxCategoryFilterChips";
 
 /* ======================================================================
  * LIST (swimlane or flat)
@@ -61,11 +62,19 @@ function InboxLiveLoadingBlock({ compact = false }) {
   );
 }
 
+function InboxSearchSkeletonRows() {
+  return (
+    <div data-testid="inbox-search-skeleton">
+      <InboxLiveSkeletonRows count={5} />
+    </div>
+  );
+}
+
 export default function InboxList({
   accent, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
-  totalCount, unreadCount, briefingAgoLabel, briefingGeneratedAt, searchRef,
+  totalCount, unreadCount, briefingGeneratedAt, searchRef,
   liveEmailsLoading = false,
   indexedSearchActive = false,
   indexedSearchLoading = false,
@@ -82,6 +91,7 @@ export default function InboxList({
   const effectiveCollapsed = activeSnapshotMode ? { noise: true, ...collapsed } : collapsed;
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
+  const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 
   const grouped = useMemo(() => {
     const g = { live: [], carryover: [], needs_attention: [], action: [], fyi: [], noise: [] };
@@ -236,89 +246,16 @@ export default function InboxList({
           </span>
         </span>
         <span style={{ flex: 1 }} />
-        {briefingAgoLabel && (
-          <span
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              fontSize: 10, color: `${accent}cc`,
-            }}
-          >
-            <Sparkles size={10} color={accent} />
-            {briefingAgoLabel}
-          </span>
-        )}
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         {activeSnapshotMode && snapshotCategories.length > 0 && !indexedSearchActive && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 12px",
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-              overflowX: "auto",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => onCategoryFilterChange?.("__all")}
-              style={{
-                flexShrink: 0,
-                borderRadius: 999,
-                border: `1px solid ${categoryFilter === "__all" ? `${accent}44` : "rgba(255,255,255,0.08)"}`,
-                background: categoryFilter === "__all" ? `${accent}16` : "rgba(255,255,255,0.03)",
-                color: categoryFilter === "__all" ? "#fff" : "rgba(205,214,244,0.66)",
-                padding: "5px 9px",
-                fontFamily: "inherit",
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "background 150ms, border-color 150ms, color 150ms",
-              }}
-            >
-              All categories
-            </button>
-            {snapshotCategories.map((entry) => (
-              <button
-                key={entry.category}
-                type="button"
-                onClick={() => onCategoryFilterChange?.(entry.category)}
-                style={{
-                  flexShrink: 0,
-                  borderRadius: 999,
-                  border: `1px solid ${categoryFilter === entry.category ? `${accent}44` : "rgba(255,255,255,0.08)"}`,
-                  background: categoryFilter === entry.category ? `${accent}16` : "rgba(255,255,255,0.03)",
-                  color: categoryFilter === entry.category ? "#fff" : "rgba(205,214,244,0.66)",
-                  padding: "5px 9px",
-                  fontFamily: "inherit",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  textTransform: "capitalize",
-                  transition: "background 150ms, border-color 150ms, color 150ms",
-                }}
-              >
-                {entry.category.replace(/_/g, " ")}
-                <span style={{ marginLeft: 5, color: categoryFilter === entry.category ? accent : "rgba(205,214,244,0.42)" }}>
-                  {entry.count}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-        {indexedSearchLoading && (
-          <div
-            style={{
-              padding: "10px 14px",
-              fontSize: 11,
-              color: "rgba(205,214,244,0.62)",
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-            }}
-          >
-            Searching persisted mail index...
-          </div>
+          <InboxCategoryFilterChips
+            accent={accent}
+            categories={snapshotCategories}
+            activeCategory={categoryFilter}
+            onChange={onCategoryFilterChange}
+          />
         )}
         {indexedSearchError && (
           <div
@@ -374,7 +311,9 @@ export default function InboxList({
           </div>
         )}
         {!activeSnapshotMode && liveEmailsLoading && emails.length > 0 && <InboxLiveLoadingBlock compact />}
-        {showSkeletonRows ? (
+        {showSearchSkeletonRows ? (
+          <InboxSearchSkeletonRows />
+        ) : showSkeletonRows ? (
           <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
           <>
@@ -511,7 +450,7 @@ export default function InboxList({
             {renderRows(emails)}
           </div>
         )}
-        {emails.length === 0 && !showSkeletonRows && (
+        {emails.length === 0 && !showSkeletonRows && !showSearchSkeletonRows && (
           <div
             style={{
               padding: "20px 20px 0",
@@ -530,8 +469,10 @@ export default function InboxList({
               <EmptyStateSplash
                 icon={<Mail size={26} strokeWidth={1.8} />}
                 eyebrow="Inbox"
-                title={searchQuery ? "No emails match this view" : "No emails available"}
-                message={searchQuery
+                title={indexedSearchActive ? "No indexed mail matches" : searchQuery ? "No emails match this view" : "No emails available"}
+                message={indexedSearchActive
+                  ? "Try another sender, subject, or phrase from indexed INBOX mail."
+                  : searchQuery
                   ? "Try a sender, subject word, or another account. Search covers indexed INBOX mail only."
                   : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
                 compact
