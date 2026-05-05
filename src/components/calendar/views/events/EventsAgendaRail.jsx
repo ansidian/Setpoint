@@ -403,7 +403,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
         const expanded = expandedDays.has(group.dateKey);
         const visibleAllDay = expanded ? group.allDay : group.allDay.slice(0, 2);
         const hiddenAllDayCount = group.allDay.length - visibleAllDay.length;
-        const showNoEvents = !group.hasEvents && (group.isFallback || selectedDateKey === group.dateKey);
+        const showNoEvents = !group.hasEvents && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey);
         return (
           <>
             {group.allDay.length ? (

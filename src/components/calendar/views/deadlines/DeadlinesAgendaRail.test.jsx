@@ -116,4 +116,15 @@ describe("DeadlinesAgendaRail", () => {
 
     expect(onFilteredSelectedDeadlineHidden).toHaveBeenCalledTimes(1);
   });
+
+  it("renders today's header and empty target when today has no deadlines", () => {
+    renderRail({
+      todayDate: 2,
+      selectedDateKey: "2026-05-05",
+    });
+
+    expect(screen.getByRole("button", { name: /select saturday, may 2/i })).toBeTruthy();
+    expect(screen.getByText("TODAY 5/2/26")).toBeTruthy();
+    expect(screen.getByText("No Deadlines")).toBeTruthy();
+  });
 });

@@ -29,7 +29,7 @@ describe("events agenda model", () => {
       ],
     });
 
-    expect(agenda.visibleGroups.map((group) => group.dateKey)).toEqual(["2026-05-01", "2026-05-02"]);
+    expect(agenda.visibleGroups.map((group) => group.dateKey)).toEqual(["2026-05-01", "2026-05-02", "2026-05-10"]);
     expect(agenda.visibleGroups[0]).toMatchObject({ dateKey: "2026-05-01", hasEvents: false, isFallback: false });
   });
 
@@ -47,8 +47,8 @@ describe("events agenda model", () => {
       },
     });
 
-    expect(agenda.visibleGroups.map((group) => group.dateKey)).toEqual(["2026-05-01", "2026-05-11"]);
-    expect(agenda.visibleGroups[1].weather.high).toBe(72);
+    expect(agenda.visibleGroups.map((group) => group.dateKey)).toEqual(["2026-05-01", "2026-05-10", "2026-05-11"]);
+    expect(agenda.visibleGroups[2].weather.high).toBe(72);
   });
 
   it("renders a first-day fallback when the month has no visible rows", () => {
