@@ -13,7 +13,6 @@ vi.mock("../api", () => ({
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
   deleteBriefing: vi.fn(),
-  getDevScenarios: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({
@@ -31,40 +30,6 @@ vi.mock("../hooks/useCalendarDomainRange", () => ({
     markStale: vi.fn(),
     loading: false,
     error: null,
-  }),
-}));
-
-vi.mock("../hooks/useBriefingData", () => ({
-  default: () => ({
-    loading: false,
-    error: null,
-    briefing: {
-      emails: { summary: "", accounts: [] },
-      ctm: { upcoming: [], stats: null },
-      todoist: { upcoming: [], stats: null },
-      calendar: [],
-      aiInsights: [],
-    },
-    setBriefing: vi.fn(),
-    refreshing: false,
-    generating: false,
-    genProgress: null,
-    latestId: null,
-    schedules: [],
-    viewingPast: null,
-    lastQuickRefreshAt: null,
-    handleQuickRefresh: vi.fn(),
-    selectHistory: vi.fn(),
-  }),
-}));
-
-vi.mock("../hooks/useActiveSnapshot", () => ({
-  default: () => ({
-    snapshot: null,
-    loading: false,
-    error: null,
-    refresh: vi.fn(),
-    sync: mocks.activeSnapshotSync,
   }),
 }));
 
@@ -112,7 +77,6 @@ vi.mock("../hooks/useCurrentDashboard", () => ({
 
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
 vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
-vi.mock("../components/dev/DevPanel.jsx", () => ({ default: () => null }));
 vi.mock("../components/dashboard/RedesignShell", () => ({
   RedesignShell: ({ bd, onQuickRefresh }) => (
     <div>

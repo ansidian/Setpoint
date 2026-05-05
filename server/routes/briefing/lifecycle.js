@@ -33,12 +33,8 @@ router.post("/refresh", async (_req, res) => {
 });
 
 router.get("/latest", timeRoute("/api/briefing/latest"), async (req, res) => {
-  const mock = !!req.query.mock;
-  const scenarios = req.query.scenario
-    ? req.query.scenario.split(",").map((s) => s.trim())
-    : [];
   try {
-    res.json(await lifecycleService.getLatest(EA_USER_ID, { mock, scenarios }));
+    res.json(await lifecycleService.getLatest(EA_USER_ID));
   } catch (err) {
     console.error("Error fetching latest briefing:", err);
     res.status(err.status || 500).json({ message: "Failed to fetch latest briefing" });

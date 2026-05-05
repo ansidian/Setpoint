@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
@@ -8,10 +8,8 @@ import { Link } from "react-router-dom";
 import { DashboardProvider } from "../context/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import useBriefingData from "../hooks/useBriefingData";
 import useCurrentDashboard from "../hooks/useCurrentDashboard";
 import useAutoRefresh from "../hooks/useAutoRefresh";
-import useActiveSnapshot from "../hooks/useActiveSnapshot";
 import useNotifications from "../hooks/useNotifications";
 import useCalendarDomainRange from "../hooks/useCalendarDomainRange";
 import useCalendarRange from "../hooks/useCalendarRange";
@@ -20,33 +18,8 @@ import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 
-const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
 const SYNC_WATCHDOG_MS = 45_000;
-const MOCK_LIVE_DATA = {
-  liveEmails: [],
-  liveCalendar: null,
-  liveNextWeekCalendar: null,
-  liveTomorrowCalendar: null,
-  liveWeather: null,
-  liveBills: [],
-  recentTransactions: [],
-  allSchedules: [],
-  payeeMap: {},
-  importantSenders: [],
-  briefingGeneratedAt: null,
-  briefingReadStatus: {},
-  lastFetched: null,
-  isPolling: false,
-  billsLoading: true,
-  actualConfigured: true,
-  actualBudgetUrl: null,
-  snoozedEntries: [],
-  resurfacedEntries: [],
-  providerHealth: null,
-  systemStatus: null,
-  refreshNow: () => Promise.resolve(null),
-};
 
 function isCalendarDomainCacheStale(fetchedAt) {
   return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
@@ -60,34 +33,20 @@ function withSyncWatchdog(promise) {
 }
 
 export default function Dashboard() {
-  const [isMock, setIsMock] = useState(() =>
-    new URLSearchParams(window.location.search).has("mock"),
-  );
-
-  useEffect(() => {
-    const handler = (e) => setIsMock(e.detail.scenarios != null);
-    window.addEventListener("devpanel:apply", handler);
-    return () => window.removeEventListener("devpanel:apply", handler);
-  }, []);
-
-  const legacyActiveSnapshot = useActiveSnapshot({ disabled: true });
-  const currentDashboard = useCurrentDashboard({ disabled: isMock });
-  const liveData = isMock ? MOCK_LIVE_DATA : currentDashboard.liveData;
-  const activeSnapshot = isMock ? legacyActiveSnapshot : currentDashboard.activeSnapshot;
-  const calendarRange = useCalendarRange({ disabled: isMock });
+  const currentDashboard = useCurrentDashboard();
+  const liveData = currentDashboard.liveData;
+  const activeSnapshot = currentDashboard.activeSnapshot;
+  const calendarRange = useCalendarRange();
   const calendarDeadlineRange = useCalendarDomainRange({
-    disabled: isMock,
     fetchRange: getCalendarDeadlinesRange,
     emptyData: null,
   });
   const calendarBillRange = useCalendarDomainRange({
-    disabled: isMock,
     fetchRange: getCalendarBillsRange,
     emptyData: null,
   });
   useNotifications(liveData);
-  const legacyBd = useBriefingData({ liveData: MOCK_LIVE_DATA, isMock, disabled: !isMock });
-  const bd = isMock ? legacyBd : currentDashboard.briefingData;
+  const bd = currentDashboard.briefingData;
   const [currentSyncing, setCurrentSyncing] = useState(false);
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);
   const refreshCalendarDomainsRef = useRef(null);
@@ -118,7 +77,6 @@ export default function Dashboard() {
     return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
   }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, markCalendarRangeStale, refreshCalendarRangeInPlace]);
   useAutoRefresh({
-    disabled: isMock,
     lastQuickRefreshAt,
     onQuickRefresh: handleTimerQuickRefresh,
   });
@@ -275,7 +233,6 @@ export default function Dashboard() {
           liveData={liveData}
           activeSnapshot={activeSnapshot}
           calendarRange={calendarRange}
-          isMock={isMock}
           onQuickRefresh={handleExplicitQuickRefresh}
           historyOpen={historyOpen}
           setHistoryOpen={setHistoryOpen}
@@ -290,11 +247,6 @@ export default function Dashboard() {
           loadCalendarBills={loadCalendarBills}
           onCalendarWorkspaceChange={updateCalendarWorkspace}
         />
-        {DevPanel && (
-          <Suspense fallback={null}>
-            <DevPanel />
-          </Suspense>
-        )}
       </DashboardProvider>
     </TooltipProvider>
   );

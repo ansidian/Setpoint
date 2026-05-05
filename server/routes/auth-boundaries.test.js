@@ -67,9 +67,6 @@ vi.mock("../briefing/email-index.js", () => ({
 vi.mock("../briefing/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: vi.fn(),
 }));
-vi.mock("../db/scenarios/index.js", () => ({
-  listScenarios: vi.fn(() => []),
-}));
 vi.mock("../briefing/index.js", () => ({
   loadUserConfig: vi.fn(async () => ({ accounts: [], settings: {} })),
 }));
