@@ -10,7 +10,7 @@ vi.mock("./ctm.js", () => ({ fetchCTMDeadlines: async () => [] }));
 vi.mock("./email-ai.js", () => ({ callEmailAiModel: async () => ({}) }));
 vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 
-const { carryForwardCompletedTodoist } = await import("./index.js");
+const { carryForwardCompletedTodoist } = await import("./deadline-helpers.js");
 
 describe("carryForwardCompletedTodoist", () => {
   it("carries completed rows forward when their due_date >= boundary", () => {

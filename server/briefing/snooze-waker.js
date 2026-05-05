@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import db from "../db/connection.js";
-import { loadUserConfig } from "./index.js";
+import { loadUserConfig } from "./config-service.js";
 import { wakeAtGmail } from "./gmail.js";
 import { attachResurfacedSnoozeToActiveSnapshot } from "./snapshot-service.js";
 

@@ -6,19 +6,16 @@ import email from "./email.js";
 import emailIndex from "./email-index.js";
 import tasks from "./tasks.js";
 import snapshot from "./snapshot.js";
-import lifecycle from "./lifecycle.js";
 
 const router = Router();
 router.use(quickTxnRouter);
 router.use(requireCookieSession);
 
-// More-specific sub-routers first; lifecycle mounts LAST because /:id is a greedy one-segment catch-all.
 router.use(dev);
 router.use(email);
 router.use(emailIndex);
 router.use(tasks);
 router.use(bills);
 router.use(snapshot);
-router.use(lifecycle);
 
 export default router;

@@ -1,5 +1,6 @@
 import db from "../db/connection.js";
-import { loadUserConfig, fetchAllEmails } from "./index.js";
+import { loadUserConfig } from "./config-service.js";
+import { fetchAllEmails } from "./email-fetch.js";
 import { indexEmails } from "./email-index.js";
 import { enqueueEmailTriageForEmails } from "./gmail-sync.js";
 import { getEmailTriageModeForUser } from "./triage-mode.js";

@@ -34,7 +34,7 @@ vi.mock("../db/connection.js", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../briefing/index.js", () => ({
+vi.mock("../briefing/config-service.js", () => ({
   loadUserConfig: vi.fn(async () => ({
     accounts: [
       { id: "gmail-a", type: "gmail", calendar_enabled: true, label: "Work" },
@@ -46,6 +46,8 @@ vi.mock("../briefing/index.js", () => ({
       actual_budget_url: "https://actual.example.test",
     },
   })),
+}));
+vi.mock("../briefing/deadline-helpers.js", () => ({
   loadCompletedTaskIds: vi.fn(async () => new Set()),
   separateDeadlines: vi.fn((ctm, todoist) => ({ ctm, todoist })),
   computeDeadlineStats: vi.fn((items) => ({ total: items.length })),

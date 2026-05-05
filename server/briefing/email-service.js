@@ -16,11 +16,8 @@ import {
   trashMessage as icloudTrash,
   batchMarkAsRead as icloudBatchMarkAsRead,
 } from "./icloud.js";
-// Keeps old stored briefings coherent for history/dev compatibility; current
-// inbox state comes from provider/domain rows and the active snapshot.
-import * as storedBriefingService from "./stored-briefing-service.js";
 import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
-import { loadUserConfig } from "./index.js";
+import { loadUserConfig } from "./config-service.js";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "./account-canonical.js";
 
 // --- Private helpers ---
@@ -601,7 +598,6 @@ export async function dismiss(userId, emailId) {
     sql: "INSERT OR IGNORE INTO ea_dismissed_emails (user_id, email_id) VALUES (?, ?)",
     args: [userId, emailId],
   });
-  await storedBriefingService.removeDismissedEmailFromBriefing(userId, emailId);
 }
 
 // Exposed for unit testing only

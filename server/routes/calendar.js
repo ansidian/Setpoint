@@ -4,11 +4,11 @@ import { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } from "../briefing/ctm.js
 import { fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } from "../briefing/todoist.js";
 import { getCalendarBillsRange } from "../briefing/actual.js";
 import {
-  loadUserConfig,
+  loadCompletedTaskIds,
   separateDeadlines,
   computeDeadlineStats,
-  loadCompletedTaskIds,
-} from "../briefing/index.js";
+} from "../briefing/deadline-helpers.js";
+import { loadUserConfig } from "../briefing/config-service.js";
 import {
   fetchCalendar,
   pacificDayBoundaries,

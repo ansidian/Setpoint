@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import db from "../db/connection.js";
-import { loadUserConfig, fetchAllEmails } from "./index.js";
+import { loadUserConfig } from "./config-service.js";
+import { fetchAllEmails } from "./email-fetch.js";
 import { indexEmails } from "./email-index.js";
 import { advanceSnapshotBoundary } from "./snapshot-service.js";
 import {

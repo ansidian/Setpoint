@@ -10,7 +10,7 @@ vi.mock("./ctm.js", () => ({ fetchCTMDeadlines: async () => [] }));
 vi.mock("./email-ai.js", () => ({ callEmailAiModel: async () => ({}) }));
 vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 
-const { separateDeadlines } = await import("./index.js");
+const { separateDeadlines } = await import("./deadline-helpers.js");
 
 describe("separateDeadlines", () => {
   it("keeps native CTM tasks regardless of completion status", () => {

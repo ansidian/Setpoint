@@ -67,14 +67,6 @@ async function createMigratedDb() {
       expires_at INTEGER NOT NULL
     );
 
-    CREATE TABLE ea_briefings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      status TEXT NOT NULL,
-      generated_at TEXT NOT NULL,
-      briefing_json TEXT NOT NULL
-    );
-
     CREATE TABLE ea_completed_tasks (
       user_id TEXT NOT NULL,
       todoist_id TEXT NOT NULL,
@@ -89,22 +81,6 @@ async function createMigratedDb() {
     args: [hashSessionToken("cookie-session"), Date.now() + 60_000],
   });
   return db;
-}
-
-async function seedBriefing(briefing) {
-  await testState.db.current.execute({
-    sql: `INSERT INTO ea_briefings (user_id, status, generated_at, briefing_json)
-          VALUES (?, 'ready', ?, ?)`,
-    args: ["user-1", "2026-05-03T12:00:00.000Z", JSON.stringify(briefing)],
-  });
-}
-
-async function latestBriefing() {
-  const result = await testState.db.current.execute({
-    sql: "SELECT briefing_json FROM ea_briefings WHERE user_id = ? ORDER BY generated_at DESC LIMIT 1",
-    args: ["user-1"],
-  });
-  return JSON.parse(result.rows[0].briefing_json);
 }
 
 async function completedTaskRows() {
@@ -162,11 +138,6 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       status: "incomplete",
     };
     testState.fetchTodoistTasksAll.mockResolvedValueOnce([task]);
-    await seedBriefing({
-      todoist: { upcoming: [task], stats: {} },
-      ctm: { upcoming: [], stats: {} },
-    });
-
     const res = await request(makeApp())
       .post("/api/briefing/complete-task/td-rec")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -188,12 +159,6 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       is_recurring: true,
     });
 
-    const stored = await latestBriefing();
-    expect(stored.todoist.upcoming).toHaveLength(1);
-    expect(stored.todoist.upcoming[0]).toMatchObject({
-      id: "td-rec",
-      status: "incomplete",
-    });
   });
 
   it("returns 502 without inserting a dedupe row when Todoist close fails", async () => {
@@ -206,21 +171,6 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       is_recurring: false,
       status: "incomplete",
     }]);
-    await seedBriefing({
-      todoist: {
-        upcoming: [{
-          id: "td-fail",
-          title: "One-off",
-          due_date: "2026-04-18",
-          source: "todoist",
-          is_recurring: false,
-          status: "incomplete",
-        }],
-        stats: {},
-      },
-      ctm: { upcoming: [], stats: {} },
-    });
-
     const res = await request(makeApp())
       .post("/api/briefing/complete-task/td-fail")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -229,7 +179,6 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     expect(res.status).toBe(502);
     expect(res.body.message).toBe("Todoist close failed: Todoist API 401: bad token");
     expect(await completedTaskRows()).toHaveLength(0);
-    expect((await latestBriefing()).todoist.upcoming).toHaveLength(1);
   });
 
   it("completes a mirror-backed Todoist task without reading latest briefing JSON", async () => {
@@ -283,18 +232,13 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       is_recurring: false,
     };
     testState.createTodoistTask.mockResolvedValueOnce(createdTask);
-    await seedBriefing({
-      todoist: { upcoming: [], stats: {} },
-      ctm: { upcoming: [], stats: {} },
-    });
-
     const createRes = await request(makeApp())
       .post("/api/briefing/todoist/tasks")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ content: "Pick up milk" });
 
     expect(createRes.status).toBe(200);
-    expect((await latestBriefing()).todoist.upcoming[0]).toMatchObject({ id: "td-new" });
+    expect(createRes.body).toMatchObject({ id: "td-new" });
 
     testState.fetchTodoistTasksAll.mockResolvedValueOnce([createdTask]);
     const completeRes = await request(makeApp())
@@ -320,14 +264,6 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       status: "incomplete",
     };
     testState.fetchTodoistTasksAll.mockResolvedValueOnce([task]);
-    await seedBriefing({
-      todoist: {
-        upcoming: [task],
-        stats: {},
-      },
-      ctm: { upcoming: [], stats: {} },
-    });
-
     const res = await request(makeApp())
       .post("/api/briefing/complete-task/td-one")
       .set("Cookie", ["ea_session=cookie-session"])
@@ -344,11 +280,5 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       is_recurring: false,
     });
 
-    const stored = await latestBriefing();
-    expect(stored.todoist.upcoming).toHaveLength(1);
-    expect(stored.todoist.upcoming[0]).toMatchObject({
-      id: "td-one",
-      status: "incomplete",
-    });
   });
 });

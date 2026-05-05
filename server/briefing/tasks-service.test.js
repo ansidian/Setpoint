@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createCompletedTasksTestDb,
   listCompletedTasks,
-  seedReadyBriefing,
 } from "../test-utils/completed-tasks-db.js";
 
 const testState = vi.hoisted(() => ({
@@ -28,17 +27,9 @@ vi.mock("./ctm.js", () => ({
   fetchCTMDeadlinesAll: vi.fn(),
   updateCTMEventStatus: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("./stored-briefing-service.js", () => ({
-  applyTaskCompletion: vi.fn(),
-  applyCTMStatusChange: vi.fn(),
-  applyCTMCompletionAfterTodoistClose: vi.fn(),
-  upsertTodoistTask: vi.fn(),
-  removeTodoistTask: vi.fn(),
-}));
 
 const todoist = await import("./todoist.js");
 const ctm = await import("./ctm.js");
-const storedBriefing = await import("./stored-briefing-service.js");
 const { completeTask } = await import("./tasks-service.js");
 
 beforeEach(async () => {
@@ -47,7 +38,6 @@ beforeEach(async () => {
   ctm.fetchCTMDeadlinesAll.mockReset().mockResolvedValue([]);
   ctm.updateCTMEventStatus.mockClear();
   todoist.fetchTodoistTasksAll.mockResolvedValue([]);
-  Object.values(storedBriefing).forEach((fn) => fn.mockReset?.());
 });
 
 afterEach(async () => {
@@ -58,16 +48,10 @@ afterEach(async () => {
 describe("completeTask", () => {
   it("CTM-only: calls updateCTMEventStatus from the domain source", async () => {
     ctm.fetchCTMDeadlinesAll.mockResolvedValueOnce([{ id: 42 }]);
-    await seedReadyBriefing(testState.db.current, "u1", {
-      ctm: { upcoming: [{ id: 42 }] },
-      todoist: { upcoming: [] },
-    });
-
     await completeTask("u1", "42");
 
     expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith(42, "complete");
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
-    expect(storedBriefing.applyTaskCompletion).not.toHaveBeenCalled();
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
   });
 
@@ -75,11 +59,6 @@ describe("completeTask", () => {
     todoist.fetchTodoistTasksAll.mockResolvedValueOnce([
       { id: "td-1", title: "One off", is_recurring: false, due_date: "2026-04-18", source: "todoist" },
     ]);
-    await seedReadyBriefing(testState.db.current, "u1", {
-      ctm: { upcoming: [] },
-      todoist: { upcoming: [{ id: "td-1", is_recurring: false, due_date: "2026-04-18" }] },
-    });
-
     await completeTask("u1", "td-1");
 
     const rows = await listCompletedTasks(testState.db.current, "u1");
@@ -92,7 +71,6 @@ describe("completeTask", () => {
       due_date: "2026-04-18",
     });
     expect(JSON.parse(rows[0].snapshot_json)).toMatchObject({ id: "td-1", title: "One off", is_recurring: false });
-    expect(storedBriefing.applyTaskCompletion).not.toHaveBeenCalled();
   });
 
   it("Todoist-only recurring: writes completed-task snapshot row", async () => {
@@ -104,20 +82,6 @@ describe("completeTask", () => {
       due_time: "8:00 AM",
       _completing: true,
     }]);
-    await seedReadyBriefing(testState.db.current, "u1", {
-      ctm: { upcoming: [] },
-      todoist: {
-        upcoming: [{
-          id: "td-1",
-          title: "Empty dishwasher",
-          is_recurring: true,
-          due_date: "2026-04-18",
-          due_time: "8:00 AM",
-          _completing: true,
-        }],
-      },
-    });
-
     await completeTask("u1", "td-1");
 
     const rows = await listCompletedTasks(testState.db.current, "u1");
@@ -136,16 +100,10 @@ describe("completeTask", () => {
       is_recurring: true,
     });
     expect(snapshot._completing).toBeUndefined();
-    expect(storedBriefing.applyTaskCompletion).not.toHaveBeenCalled();
   });
 
   it("CTM with todoist_id: closes in Todoist, updates CTM, and records dedupe state", async () => {
     ctm.fetchCTMDeadlinesAll.mockResolvedValueOnce([{ id: 42, todoist_id: "td-1" }]);
-    await seedReadyBriefing(testState.db.current, "u1", {
-      ctm: { upcoming: [{ id: 42, todoist_id: "td-1" }] },
-      todoist: { upcoming: [] },
-    });
-
     await completeTask("u1", "42");
 
     const rows = await listCompletedTasks(testState.db.current, "u1");
@@ -158,22 +116,13 @@ describe("completeTask", () => {
       due_date: null,
       snapshot_json: null,
     });
-    expect(storedBriefing.applyTaskCompletion).not.toHaveBeenCalled();
   });
 
   it("skips tombstone row when matching a Todoist-only completion", async () => {
-    await seedReadyBriefing(testState.db.current, "u1", {
-      ctm: { upcoming: [] },
-      todoist: {
-        upcoming: [{ id: "td-1", _tombstone: true, due_date: "2026-04-18" }],
-      },
-    });
-
     await completeTask("u1", "td-1");
 
     // No live row → no Todoist close call
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
-    expect(storedBriefing.applyTaskCompletion).not.toHaveBeenCalled();
   });
 });

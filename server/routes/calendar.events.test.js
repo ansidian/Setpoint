@@ -5,12 +5,13 @@ import request from "supertest";
 vi.mock("../middleware/auth.js", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../briefing/index.js", () => ({
+vi.mock("../briefing/config-service.js", () => ({
   loadUserConfig: vi.fn(),
+}));
+vi.mock("../briefing/deadline-helpers.js", () => ({
   separateDeadlines: vi.fn(),
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
-  carryForwardCompletedTodoist: vi.fn(),
 }));
 vi.mock("../briefing/calendar.js", () => ({
   fetchCalendar: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock("../briefing/tombstones.js", () => ({
 }));
 vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
 
-const { loadUserConfig } = await import("../briefing/index.js");
+const { loadUserConfig } = await import("../briefing/config-service.js");
 const {
   getCalendarSourceGroups,
   createCalendarEvent,
