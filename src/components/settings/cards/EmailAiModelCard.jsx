@@ -80,9 +80,9 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
 
   return (
     <SettingsCard
-      title="Email Summary AI"
+      title="Email Snapshot AI"
       icon={<Bot size={14} />}
-      description="Model used for briefing email summaries, bill detection context, and inbox triage."
+      description="Model used for email snapshot summaries and triage context. Bill extraction uses its own model."
     >
       <div className="flex flex-col gap-3">
         <ProviderModelSelect

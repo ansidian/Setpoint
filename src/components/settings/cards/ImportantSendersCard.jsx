@@ -32,7 +32,7 @@ export default function ImportantSendersCard() {
     <SettingsCard
       title="Important Senders"
       icon={<BellRing size={14} />}
-      description="Send browser notifications for these senders. Auto-detected entries are learned from briefing urgency."
+      description="Send browser notifications for these senders. Auto-detected entries are learned from triage urgency."
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2">
@@ -73,7 +73,7 @@ export default function ImportantSendersCard() {
 
           {importantSenders.length === 0 ? (
             <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] italic text-muted-foreground/55">
-              No important senders yet. Add one below or let future briefings learn them automatically.
+              No important senders yet. Add one below or let future triage runs learn them automatically.
             </div>
           ) : null}
         </div>

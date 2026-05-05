@@ -65,7 +65,7 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }) {
     <SettingsCard
       title="Bill Extraction AI"
       icon={<Receipt size={14} />}
-      description="Model used to extract payee, amount, due date, and category from bill emails. Independent of the briefing model."
+      description="Model used to extract payee, amount, due date, and category from bill emails. Runs separately from the email snapshot model."
     >
       <div className="flex flex-col gap-3">
         <ProviderModelSelect
