@@ -324,7 +324,7 @@ describe("auth boundaries", () => {
               prompt_tokens_details: { cached_tokens: 600 },
             },
           }),
-          JSON.stringify({ provider: "openai", model: "gpt-5.4-nano", tier: "cheap" }),
+          JSON.stringify({ provider: "openai", model: "gpt-5.4-nano-2026-05-04", tier: "cheap" }),
         ],
       },
       {

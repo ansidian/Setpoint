@@ -61,6 +61,7 @@ function formatCompactNumber(value) {
 
 function formatSavings(value) {
   const number = Number(value || 0);
+  if (number > 0 && number < 0.0001) return "<$0.0001";
   if (number > 0 && number < 0.01) return `$${number.toFixed(4)}`;
   return new Intl.NumberFormat(undefined, {
     style: "currency",
