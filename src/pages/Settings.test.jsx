@@ -19,9 +19,9 @@ vi.mock("@/components/settings/sections/AccountsSettingsSection", () => ({
   },
 }));
 
-vi.mock("@/components/settings/sections/BriefingSettingsSection", () => ({
-  default: function BriefingSettingsSectionMock() {
-    return <div data-testid="settings-briefing-section">briefing section</div>;
+vi.mock("@/components/settings/sections/EmailAutomationSettingsSection", () => ({
+  default: function EmailAutomationSettingsSectionMock() {
+    return <div data-testid="settings-briefing-section">email automation section</div>;
   },
 }));
 
@@ -91,7 +91,7 @@ describe("Settings page", () => {
 
     expect(await screen.findByTestId("settings-accounts-section")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Briefing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Email Automation" }));
     await waitFor(() => {
       expect(screen.getByTestId("settings-briefing-section")).toBeTruthy();
     });

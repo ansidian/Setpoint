@@ -1,5 +1,5 @@
 import AccountsSettingsSection from "@/components/settings/sections/AccountsSettingsSection";
-import BriefingSettingsSection from "@/components/settings/sections/BriefingSettingsSection";
+import EmailAutomationSettingsSection from "@/components/settings/sections/EmailAutomationSettingsSection";
 import SystemSettingsSection from "@/components/settings/sections/SystemSettingsSection";
 import {
   SaveStatus,
@@ -42,7 +42,7 @@ export default function Settings() {
       );
     } else if (tab === "briefing") {
       content = (
-        <BriefingSettingsSection
+        <EmailAutomationSettingsSection
           settings={settings}
           setSettings={setSettings}
           patch={patch}

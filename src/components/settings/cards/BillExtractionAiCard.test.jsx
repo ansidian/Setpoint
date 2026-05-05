@@ -123,6 +123,7 @@ describe("BillExtractionAiCard", () => {
 
     expect(screen.getByText("Provider")).toBeTruthy();
     expect(screen.getByText("Model")).toBeTruthy();
+    expect(screen.getByText("Model used to extract payee, amount, due date, and category from bill emails. Runs separately from the email snapshot model.")).toBeTruthy();
     expect(screen.getByLabelText("Bill extraction provider")).toBeTruthy();
     expect(screen.getByLabelText("Bill extraction model")).toBeTruthy();
   });

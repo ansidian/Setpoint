@@ -185,7 +185,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
       <SettingsCard
         title="Connected Accounts"
         icon={<Mail size={14} />}
-        description="Inbox and calendar connections that feed the dashboard and briefing pipeline."
+        description="Inbox and calendar connections that feed the dashboard and email snapshot pipeline."
       >
         <div className="flex flex-col gap-4">
           {accounts.length > 0 ? (
@@ -347,7 +347,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
       <SettingsCard
         title="Todoist"
         icon={<SiTodoist size={14} title="" aria-hidden="true" />}
-        description="Optional task sync used when briefings create Todoist follow-ups."
+        description="Optional task sync used when email automation creates Todoist follow-ups."
       >
         <div className="flex flex-col gap-4">
           <div>
@@ -401,7 +401,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
       <SettingsCard
         title="Weather Location"
         icon={<MapPin size={14} />}
-        description="Set the location used for dashboard weather snapshots and daily briefing context."
+        description="Set the location used for dashboard weather snapshots and daily context."
       >
         <div className="flex flex-col gap-4">
           <div>

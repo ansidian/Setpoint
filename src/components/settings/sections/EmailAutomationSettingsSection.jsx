@@ -6,21 +6,25 @@ import {
   SettingsCard,
 } from "@/components/settings/settings-ui";
 import { SETTINGS_PRIMARY_BUTTON_CLASS } from "@/components/settings/settings-core";
+import EmailTriageModeCard from "@/components/settings/cards/EmailTriageModeCard";
 import EmailAiModelCard from "@/components/settings/cards/EmailAiModelCard";
+import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
 import ImportantSendersCard from "@/components/settings/cards/ImportantSendersCard";
 
-export default function BriefingSettingsSection({ settings, setSettings, patch }) {
+export default function EmailAutomationSettingsSection({ settings, setSettings, patch }) {
   const emailInterests = settings?.email_interests || [];
 
   return (
     <>
+      <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
       <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />
+      <BillExtractionAiCard settings={settings} setSettings={setSettings} patch={patch} />
 
       <SettingsCard
         title="Email Lookback"
         icon={<Clock size={14} />}
-        description="Controls how far back briefing generation looks when gathering email context."
+        description="Controls how far back the email snapshot looks when gathering context."
       >
         <div className="flex flex-wrap items-center gap-3">
           <SectionLabel className="mb-0 whitespace-nowrap">Fetch emails from the last</SectionLabel>

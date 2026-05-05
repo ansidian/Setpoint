@@ -121,7 +121,8 @@ describe("EmailAiModelCard", () => {
       expect(mockApi.getModels).toHaveBeenCalled();
     });
 
-    expect(screen.getByText("Email Summary AI")).toBeTruthy();
+    expect(screen.getByText("Email Snapshot AI")).toBeTruthy();
+    expect(screen.getByText("Model used for email snapshot summaries and triage context. Bill extraction uses its own model.")).toBeTruthy();
     expect(screen.getByLabelText("Email summary provider")).toBeTruthy();
     expect(screen.getByLabelText("Email summary model")).toBeTruthy();
   });

@@ -9,7 +9,7 @@ export const SETTINGS_GHOST_BUTTON_CLASS =
 
 export const TABS = [
   { id: "accounts", label: "Accounts & Integrations" },
-  { id: "briefing", label: "Briefing" },
+  { id: "briefing", label: "Email Automation" },
   { id: "system", label: "System" },
 ];
 
