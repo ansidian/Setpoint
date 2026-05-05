@@ -2,8 +2,9 @@ import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { typeHints, typeLabels } from "./helpers";
 
-function ExtractButton({ extractState, onClick, className, variant = "pill" }) {
+function ExtractButton({ extractState, onClick, disabled = false, className, variant = "pill" }) {
   const isBlock = variant === "block";
+  const isDisabled = disabled || extractState === "extracting";
   const label = extractState === "extracting"
     ? "Extracting…"
     : extractState === "error"
@@ -13,13 +14,14 @@ function ExtractButton({ extractState, onClick, className, variant = "pill" }) {
   return (
     <button
       onClick={onClick}
-      disabled={extractState === "extracting"}
+      disabled={isDisabled}
       className={cn(
         "group cursor-pointer inline-flex items-center justify-center gap-1.5",
         "font-bold tracking-wider uppercase rounded-md",
         "transition-all duration-200 ease-out",
         "hover:-translate-y-px active:translate-y-0 active:scale-[0.98]",
         "disabled:cursor-wait disabled:hover:translate-y-0",
+        disabled && "disabled:cursor-not-allowed opacity-55",
         isBlock ? "text-[11px] px-4 py-2 w-full" : "text-[10px] px-2.5 py-1 shrink-0",
         className,
       )}
@@ -45,13 +47,13 @@ function ExtractButton({ extractState, onClick, className, variant = "pill" }) {
           }
       }
       onMouseEnter={(event) => {
-        if (extractState === "extracting" || extractState === "error") return;
+        if (isDisabled || extractState === "error") return;
         event.currentTarget.style.boxShadow =
           "0 2px 12px rgba(168,155,196,0.4), 0 0 20px rgba(143,184,200,0.2)";
         event.currentTarget.style.animationDuration = "4s";
       }}
       onMouseLeave={(event) => {
-        if (extractState === "extracting" || extractState === "error") return;
+        if (isDisabled || extractState === "error") return;
         event.currentTarget.style.boxShadow = "0 1px 6px rgba(168,155,196,0.2)";
         event.currentTarget.style.animationDuration = "7s";
       }}
@@ -75,7 +77,8 @@ export default function BillBadgeHeader({
   editType,
   effectiveModel,
   modelDisplayName,
-  canExtract,
+  showExtract,
+  extractDisabled,
   extractState,
   onExtract,
   onTypeChange,
@@ -117,8 +120,13 @@ export default function BillBadgeHeader({
           <span className="text-[10px] text-muted-foreground/40 ml-auto shrink-0">
             detected by {modelDisplayName}
           </span>
-        ) : !usesStackedLayout && canExtract ? (
-          <ExtractButton extractState={extractState} onClick={onExtract} className="ml-auto" />
+        ) : !usesStackedLayout && showExtract ? (
+          <ExtractButton
+            extractState={extractState}
+            disabled={extractDisabled}
+            onClick={onExtract}
+            className="ml-auto"
+          />
         ) : null}
       </div>
       {usesStackedLayout && (
@@ -131,10 +139,11 @@ export default function BillBadgeHeader({
           <div className={cn("text-muted-foreground/40 text-right", isMobile ? "text-[11px] mt-2.5" : "text-[10px] mt-2")}>
             detected by {modelDisplayName}
           </div>
-        ) : canExtract ? (
+        ) : showExtract ? (
           <div className={cn(isMobile ? "mt-3.5" : "mt-3")}>
             <ExtractButton
               extractState={extractState}
+              disabled={extractDisabled}
               onClick={onExtract}
               className="w-full justify-center"
               variant="block"

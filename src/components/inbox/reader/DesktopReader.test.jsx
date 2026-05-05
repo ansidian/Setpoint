@@ -2,8 +2,18 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DesktopReader from "./DesktopReader.jsx";
 
+const billBadgeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../bills/BillBadge", () => ({
+  default: function BillBadgeMock(props) {
+    billBadgeMock(props);
+    return <div data-testid="bill-badge" />;
+  },
+}));
+
 afterEach(() => {
   cleanup();
+  billBadgeMock.mockClear();
 });
 
 function renderReader(overrides = {}) {
@@ -28,15 +38,15 @@ function renderReader(overrides = {}) {
       onClose={() => {}}
       showTriage={false}
       showDraft={false}
-      billOpen={false}
-      billMounted={false}
+      billOpen={overrides.billOpen || false}
+      billMounted={overrides.billMounted || false}
       setBillOpen={() => {}}
       trashHoldProgress={0}
       snoozeHoldProgress={0}
       snoozeBtnRef={{ current: null }}
       snoozeOpen={false}
       setSnoozeOpen={() => {}}
-      bodyState={{ loading: false, error: null, body: "" }}
+      bodyState={overrides.bodyState || { loading: false, error: null, body: "" }}
       drafting={false}
       setDrafting={() => {}}
       readOnly={overrides.readOnly || false}
@@ -57,6 +67,31 @@ describe("DesktopReader snapshot actions", () => {
     });
 
     expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
+  });
+
+  it("passes the loaded provider body to bill extraction instead of the row preview", () => {
+    renderReader({
+      billOpen: true,
+      billMounted: true,
+      email: {
+        subject: "Card payment due",
+        preview: "Short preview without the full statement.",
+        body: "Old row body summary.",
+        hasBill: true,
+      },
+      bodyState: {
+        loading: false,
+        error: null,
+        body: "<html><body>Full provider statement with amount $132.14 due May 10.</body></html>",
+      },
+    });
+
+    expect(screen.getByTestId("bill-badge")).toBeTruthy();
+    expect(billBadgeMock).toHaveBeenCalledWith(expect.objectContaining({
+      emailBody: "<html><body>Full provider statement with amount $132.14 due May 10.</body></html>",
+      emailBodyLoading: false,
+      emailBodySource: "loaded",
+    }));
   });
 
   it("shows manual correction controls for active snapshot rows", () => {

@@ -7,6 +7,9 @@ export default function BillBadge({
   emailSubject,
   emailFrom,
   emailBody,
+  emailBodyLoading,
+  emailBodySource,
+  emailBodyError,
   layout = "inline",
 }) {
   const isDrawer = layout === "drawer";
@@ -19,6 +22,9 @@ export default function BillBadge({
     emailSubject,
     emailFrom,
     emailBody,
+    emailBodyLoading,
+    emailBodySource,
+    emailBodyError,
   });
 
   return (

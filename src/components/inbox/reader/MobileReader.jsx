@@ -24,6 +24,7 @@ import BillBadge from "../../bills/BillBadge";
 import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
+import { resolveBillExtractionBody } from "./billExtractionBody";
 
 function MobileStatusPill({ color, label, subtle = false }) {
   return (
@@ -155,6 +156,7 @@ export default function MobileReader({
   const [billExpanded, setBillExpanded] = useState(false);
   const actionsBtnRef = useRef(null);
   const actionsPanelRef = useRef(null);
+  const extractionBody = resolveBillExtractionBody(bodyState);
 
   const billPanelHeight = billExpanded ? "52%" : "38%";
   const handleAction = (kind, payload) => {
@@ -493,7 +495,10 @@ export default function MobileReader({
                 model={email.billModel}
                 emailSubject={email.subject}
                 emailFrom={email.from}
-                emailBody={email.body || email.preview}
+                emailBody={extractionBody.body}
+                emailBodyLoading={extractionBody.loading}
+                emailBodySource={extractionBody.source}
+                emailBodyError={extractionBody.error}
               />
             </div>
           </div>

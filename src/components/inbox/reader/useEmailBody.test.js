@@ -29,5 +29,6 @@ describe("useEmailBody", () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.body).toBe("Cached preview from the active snapshot.");
+    expect(result.current.source).toBe("fallback");
   });
 });

@@ -22,6 +22,7 @@ import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
+import { resolveBillExtractionBody } from "./billExtractionBody";
 
 function LiveEmailNotice({ email }) {
   const status = email?._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live · not yet triaged";
@@ -103,7 +104,9 @@ function LiveEmailNotice({ email }) {
   );
 }
 
-function BillDrawer({ billOpen, billMounted, setBillOpen, email }) {
+function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState }) {
+  const extractionBody = resolveBillExtractionBody(bodyState);
+
   return (
     <div
       style={{
@@ -180,7 +183,10 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email }) {
               model={email.billModel}
               emailSubject={email.subject}
               emailFrom={email.from}
-              emailBody={email.body || email.preview}
+              emailBody={extractionBody.body}
+              emailBodyLoading={extractionBody.loading}
+              emailBodySource={extractionBody.source}
+              emailBodyError={extractionBody.error}
             />
           </div>
         </aside>
@@ -440,6 +446,7 @@ export default function DesktopReader({
             billMounted={billMounted}
             setBillOpen={setBillOpen}
             email={email}
+            bodyState={bodyState}
           />
         </div>
 

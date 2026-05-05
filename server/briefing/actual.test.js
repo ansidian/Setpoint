@@ -259,6 +259,40 @@ describe("actual.js sendBill mutex", () => {
     // Both inits sequential — mutex was acquired by each
     expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
   });
+
+  it("sends an explicit empty note for one-time bill pay transactions when notes are blank", async () => {
+    const { sendBill } = await import("./actual.js");
+    const actualApi = (await import("@actual-app/api")).default;
+
+    await sendBill({
+      type: "expense",
+      payee: "U.S. Bank",
+      amount: 42.25,
+      due_date: "2026-05-10",
+      account_id: "a1",
+      notes: "",
+    }, "user1");
+
+    const [txn] = actualApi.__getTransactions();
+    expect(txn.notes).toBe("");
+  });
+
+  it("preserves user-entered notes for one-time bill pay transactions", async () => {
+    const { sendBill } = await import("./actual.js");
+    const actualApi = (await import("@actual-app/api")).default;
+
+    await sendBill({
+      type: "expense",
+      payee: "U.S. Bank",
+      amount: 42.25,
+      due_date: "2026-05-10",
+      account_id: "a1",
+      notes: "Autopay scheduled from checking",
+    }, "user1");
+
+    const [txn] = actualApi.__getTransactions();
+    expect(txn.notes).toBe("Autopay scheduled from checking");
+  });
 });
 
 describe("actual.js testConnection mutex", () => {

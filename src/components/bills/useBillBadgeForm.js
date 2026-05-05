@@ -14,17 +14,32 @@ export default function useBillBadgeForm({
   emailSubject,
   emailFrom,
   emailBody,
+  emailBodyLoading = false,
+  emailBodySource = "loaded",
+  emailBodyError = null,
 }) {
   const [extractModel, setExtractModel] = useState(null);
   const effectiveModel = model || extractModel;
   const modelDisplayName = formatModelName(effectiveModel);
-  const canExtract = !model && !!emailBody && !!emailSubject;
+  const extractionBodyUnavailable = emailBodyLoading
+    || !!emailBodyError
+    || !emailBody
+    || ["fallback", "error", "loading", "unavailable", "empty"].includes(emailBodySource);
+  const showExtract = !model && !!emailSubject;
+  const extractDisabled = showExtract && extractionBodyUnavailable;
+  const canExtract = showExtract && !extractDisabled;
   const [extractState, setExtractState] = useState("idle");
   const [state, setState] = useState("idle");
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [editPayee, setEditPayee] = useState(bill.payee || "");
-  const [editAmount, setEditAmount] = useState(bill.amount != null ? String(bill.amount) : "");
+  const initialAmount = bill.amount != null ? String(bill.amount) : "";
+  const initialDetectedFee = detectFee(bill.payee);
+  const initialBaseAmount = parseFloat(initialAmount) || 0;
+  const initialFeeNote = !bill.notes && initialDetectedFee && initialBaseAmount > 0
+    ? `$${initialBaseAmount.toFixed(2)} + $${initialDetectedFee.fee.toFixed(2)} CC fee`
+    : "";
+  const [editAmount, setEditAmount] = useState(initialAmount);
   const [editDue, setEditDue] = useState(bill.due_date || "");
   const [editType, setEditType] = useState(bill.type || "expense");
   const [accounts, setAccounts] = useState(_metadataCache?.accounts || []);
@@ -35,6 +50,9 @@ export default function useBillBadgeForm({
   const [editFromAccount, setEditFromAccount] = useState("");
   const [editToAccount, setEditToAccount] = useState("");
   const [editScheduleName, setEditScheduleName] = useState("");
+  const [editNotes, setEditNotesValue] = useState(bill.notes || initialFeeNote);
+  const [notesTouched, setNotesTouched] = useState(false);
+  const [autoNoteValue, setAutoNoteValue] = useState(initialFeeNote);
   const [actualReady, setActualReady] = useState(!!_metadataCache);
   const [feeOverride, setFeeOverride] = useState(null);
   const [customFee, setCustomFee] = useState("");
@@ -59,6 +77,40 @@ export default function useBillBadgeForm({
   const parsedFee = feeEnabled ? (parseFloat(activeFee) || 0) : 0;
   const baseAmount = parseFloat(editAmount) || 0;
   const totalAmount = baseAmount + parsedFee;
+
+  const setEditNotes = (value) => {
+    setNotesTouched(true);
+    setAutoNoteValue("");
+    setEditNotesValue(value);
+  };
+
+  const maybeSetAutoFeeNote = (nextFeeNote) => {
+    if (notesTouched) return;
+    if (nextFeeNote && (!editNotes || editNotes === autoNoteValue)) {
+      setEditNotesValue(nextFeeNote);
+      setAutoNoteValue(nextFeeNote);
+      return;
+    }
+    if (!nextFeeNote && autoNoteValue && editNotes === autoNoteValue) {
+      setEditNotesValue("");
+      setAutoNoteValue("");
+    }
+  };
+
+  const handleFeeOverrideChange = (nextValue) => {
+    const nextFee = nextValue ? (parseFloat(activeFee) || 0) : 0;
+    const nextFeeNote = nextFee > 0 ? `$${baseAmount.toFixed(2)} + $${nextFee.toFixed(2)} CC fee` : "";
+    setFeeOverride(nextValue);
+    maybeSetAutoFeeNote(nextFeeNote);
+  };
+
+  const handleCustomFeeChange = (value) => {
+    setCustomFee(value);
+    if (detectedFee || !feeEnabled) return;
+    const nextFee = parseFloat(value) || 0;
+    const nextFeeNote = nextFee > 0 ? `$${baseAmount.toFixed(2)} + $${nextFee.toFixed(2)} CC fee` : "";
+    maybeSetAutoFeeNote(nextFeeNote);
+  };
 
   useEffect(() => {
     ensureMetadataLoaded((data) => {
@@ -114,6 +166,7 @@ export default function useBillBadgeForm({
 
   const handleExtract = async (event) => {
     event.stopPropagation();
+    if (!canExtract) return;
     setExtractState("extracting");
     try {
       const result = await extractBillFromEmail({
@@ -163,10 +216,8 @@ export default function useBillBadgeForm({
       amount: totalAmount,
       due_date: editDue,
       type: editType,
+      notes: editNotes.trim() === "" ? "" : editNotes,
     };
-    if (parsedFee > 0) {
-      edited.notes = `$${baseAmount.toFixed(2)} + $${parsedFee.toFixed(2)} CC fee`;
-    }
     if (isTransfer) {
       edited.from_account_id = editFromAccount;
       edited.to_account_id = editToAccount;
@@ -195,6 +246,8 @@ export default function useBillBadgeForm({
     effectiveModel,
     modelDisplayName,
     canExtract,
+    showExtract,
+    extractDisabled,
     extractState,
     state,
     successMessage,
@@ -220,11 +273,13 @@ export default function useBillBadgeForm({
     setEditToAccount,
     editScheduleName,
     setEditScheduleName,
+    editNotes,
+    setEditNotes,
     actualReady,
     feeOverride,
-    setFeeOverride,
+    setFeeOverride: handleFeeOverrideChange,
     customFee,
-    setCustomFee,
+    setCustomFee: handleCustomFeeChange,
     isTransfer,
     detectedFee,
     feeEnabled,
