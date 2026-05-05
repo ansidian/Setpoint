@@ -3,10 +3,16 @@ import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "./email-ai-models.js";
 import {
+  evaluateTriagePreflight,
+  preflightDecisionMetadata,
+  triageDecisionFromPreflight,
+} from "./triage-preflight.js";
+import {
   DEFAULT_BILL_EXTRACT_PROVIDER,
   DEFAULT_BILL_EXTRACT_MODEL,
   isAllowedBillExtractModel,
 } from "./bill-extractors/catalog.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 
 const CHEAP_CONFIDENCE_FLOOR = 0.72;
 const RISK_CATEGORIES = new Set(["finance", "security", "legal", "school"]);
@@ -14,6 +20,7 @@ const DEFAULT_CHEAP_MODEL = DEFAULT_BILL_EXTRACT_MODEL;
 const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
 const STALE_RUNNING_JOB_TYPES = ["email_triage", "gmail_history_sync"];
 const DEFAULT_STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
+const WEAK_SECURITY_GRACE_MS = 10 * 60 * 1000;
 
 const TRIAGE_TOOL = {
   name: "submit_email_triage",
@@ -32,9 +39,13 @@ const TRIAGE_TOOL = {
           "personal",
           "work",
           "delivery",
+          "infra",
           "updates",
           "marketing",
+          "product",
+          "social",
           "uncategorized",
+          "utilities",
         ],
       },
       urgency: { type: "string", enum: ["high", "medium", "normal", "low"] },
@@ -70,147 +81,21 @@ const TRIAGE_TOOL = {
 const TRIAGE_SYSTEM_PROMPT = `Classify one email for a personal executive-assistant dashboard.
 
 Return a durable triage decision. Optimize for dangerous-miss prevention:
-- needs_attention: requires a user response, decision, payment, deadline handling, security/legal/school/finance review, or any risky ambiguity.
-- fyi: useful real account activity, confirmations, receipts, statements, shipping, or context that does not require action.
+- needs_attention: real consequence, required reply, required decision, payment issue, hard deadline, school/legal/security/finance risk, service interruption risk, or risky ambiguity.
+- fyi: useful real account activity, confirmations, receipts, statements, shipping, routine payment/autopay notices, routine security confirmations, or context that does not require action.
 - noise: promotions, newsletters, surveys, coupons, generic marketing, and low-value bulk mail.
 
 Rules:
 - Use exactly one lane: needs_attention, fyi, noise.
 - Categories are metadata, not lanes.
 - Escalation is a badge/status, not a lane.
+- Optional soft actions do not create needs_attention. Soft actions include review, track, check, read, browse, consider, look at, review if interested, and monitor.
+- Routine shipped/delivered notices, successful payment confirmations, scheduled autopay notices, and ordinary receipts are fyi unless there is a real consequence or unresolved risk.
+- Marketing, recommendations, coupons, surveys, and generic newsletters are noise unless the sender/content matches a configured user interest or another real risk is present.
+- Payment due ambiguity, low balance, failed payment, card expiration, service interruption, legal/school deadlines, and suspicious security events must stay needs_attention or escalate.
 - If a specific deadline or due date exists, set deadline_at as an ISO timestamp or null if uncertain.
 - Finance/payment bill candidates must require confirmation; never imply an Actual Budget write.
 - Be compact. Summary and action should each be short enough for a dense dashboard row.`;
-
-const DEFAULT_RULES = [
-  {
-    name: "High-risk finance and security direct strong",
-    priority: 10,
-    rule_type: "default_high_risk",
-    match_json: {
-      any_includes: [
-        "payment due",
-        "past due",
-        "overdue",
-        "security alert",
-        "password reset",
-        "account recovery",
-        "password changed",
-        "new sign-in",
-        "new login",
-        "new device registration",
-        "unrecognized sign-in",
-        "suspicious sign-in",
-        "third-party oauth application",
-        "legal notice",
-        "tax document",
-        "tuition",
-        "registration deadline",
-        "canvas assignment",
-      ],
-    },
-    route_to_model: "strong",
-    category: "finance",
-    urgency: "high",
-    escalation_badge: "High Risk",
-    confidence: 0.9,
-    reason: "High-risk sender or content requires strong-model review.",
-  },
-  {
-    name: "Low-risk FYI confirmations",
-    priority: 40,
-    rule_type: "default_fyi",
-    match_json: {
-      any_includes: [
-        "statement available",
-        "receipt",
-        "order confirmation",
-        "delivered",
-        "shipped",
-        "appointment confirmed",
-      ],
-    },
-    lane: "fyi",
-    category: "updates",
-    urgency: "low",
-    confidence: 0.86,
-    reason: "Low-risk confirmation or account update.",
-  },
-  {
-    name: "Ephemeral verification codes",
-    priority: 60,
-    rule_type: "default_verification_code_noise",
-    match_json: {
-      any_includes: [
-        "verification code",
-        "one-time code",
-        "one time code",
-        "one-time passcode",
-        "one time passcode",
-        "authentication code",
-        "sign-in code",
-        "login code",
-        "2fa code",
-        "mfa code",
-        "enter the following code",
-        "code will expire",
-        "e-mail verification",
-      ],
-    },
-    lane: "noise",
-    category: "security",
-    urgency: "low",
-    confidence: 0.96,
-    reason: "One-time authentication code.",
-  },
-  {
-    name: "Promotional subject lines",
-    priority: 70,
-    rule_type: "default_subject_marketing_noise",
-    match_json: {
-      subject_includes: [
-        "promo code",
-        "coupon",
-        "deal of the day",
-        "free shipping",
-        "clearance",
-        "bogo",
-        "buy one, get one",
-        "flash sale",
-        "earn points",
-        "bonus points",
-        "rewards offer",
-      ],
-    },
-    lane: "noise",
-    category: "marketing",
-    urgency: "low",
-    confidence: 0.94,
-    reason: "Promotional subject line.",
-  },
-  {
-    name: "Obvious promotional noise",
-    priority: 80,
-    rule_type: "default_noise",
-    match_json: {
-      any_includes: [
-        "unsubscribe",
-        "sale",
-        "discount",
-        "% off",
-        "newsletter",
-        "survey",
-        "promotion",
-        "limited time offer",
-      ],
-    },
-    lane: "noise",
-    category: "marketing",
-    urgency: "low",
-    confidence: 0.94,
-    reason: "Promotional or bulk email.",
-  },
-];
 
 function safeJson(value, fallback = {}) {
   if (!value) return fallback;
@@ -260,48 +145,6 @@ function emailSearchText(email) {
   ].map(toText).join("\n");
 }
 
-function includesAny(text, needles = []) {
-  return needles.some((needle) => text.includes(toText(needle)));
-}
-
-function domainFromAddress(address) {
-  const [, domain = ""] = String(address || "").toLowerCase().split("@");
-  return domain;
-}
-
-function matchesRule(email, rule) {
-  const match = typeof rule.match_json === "string"
-    ? safeJson(rule.match_json)
-    : rule.match_json || {};
-  const allText = emailSearchText(email);
-  const fromAddress = toText(email.from_address);
-  const fromDomain = domainFromAddress(email.from_address);
-
-  if (match.from_addresses?.length && !match.from_addresses.map(toText).includes(fromAddress)) {
-    return false;
-  }
-  if (match.from_domains?.length && !match.from_domains.map(toText).includes(fromDomain)) {
-    return false;
-  }
-  if (match.subject_includes?.length && !includesAny(toText(email.subject), match.subject_includes)) {
-    return false;
-  }
-  if (match.body_includes?.length && !includesAny(toText(`${email.body_snippet}\n${email.body_text}`), match.body_includes)) {
-    return false;
-  }
-  if (match.any_includes?.length && !includesAny(allText, match.any_includes)) {
-    return false;
-  }
-
-  return Boolean(
-    match.from_addresses?.length
-    || match.from_domains?.length
-    || match.subject_includes?.length
-    || match.body_includes?.length
-    || match.any_includes?.length
-  );
-}
-
 function normalizeLane(value) {
   if (value === "actionable") return "needs_attention";
   if (["needs_attention", "fyi", "noise"].includes(value)) return value;
@@ -324,90 +167,12 @@ function normalizeEscalationBadge(value, lane) {
   return badge;
 }
 
-function ruleDecision(rule) {
-  const lane = normalizeLane(rule.lane);
-  if (lane === "needs_attention") {
-    return {
-      route: "strong",
-      reason: rule.reason || "Rule matched Needs Attention; routing to strong model.",
-    };
-  }
-  return {
-    route: "rule",
-    decision: {
-      lane,
-      category: normalizeCategory(rule.category),
-      urgency: normalizeUrgency(rule.urgency),
-      escalation_badge: rule.escalation_badge || null,
-      summary: rule.reason || "Matched triage rule.",
-      action: lane === "noise" ? "Ignore" : "Review when convenient",
-      deadline_at: null,
-      confidence: Number(rule.confidence || 0.8),
-      triage_source: "rule",
-      rule_id: rule.id || null,
-      model_usage: {},
-      estimated_cost_usd: null,
-      latency_ms: null,
-      cheap_model_result: null,
-      strong_model_result: null,
-      bill_candidate: null,
-    },
-  };
-}
-
-function routeFromRules(email, rules) {
-  for (const rule of rules) {
-    if (!matchesRule(email, rule)) continue;
-    const routeToModel = rule.route_to_model === "strong" ? "strong" : null;
-    if (routeToModel) {
-      return {
-        route: routeToModel,
-        rule,
-        reason: rule.reason || "Rule matched high-risk routing.",
-      };
-    }
-    const decision = ruleDecision(rule);
-    return { ...decision, rule };
-  }
-  return { route: "cheap", reason: "No deterministic rule matched." };
-}
-
 function normalizeEmailInterests(raw) {
   const parsed = typeof raw === "string" ? safeJson(raw, []) : raw;
   if (!Array.isArray(parsed)) return [];
   return parsed
     .map((interest) => String(interest || "").trim())
     .filter(Boolean);
-}
-
-function matchEmailInterest(email, interests = []) {
-  if (!interests.length) return null;
-  const text = emailSearchText(email);
-  return interests.find((interest) => text.includes(toText(interest))) || null;
-}
-
-function interestDecision(interest) {
-  return {
-    route: "rule",
-    decision: {
-      lane: "fyi",
-      category: "updates",
-      urgency: "normal",
-      escalation_badge: null,
-      summary: `Matched email interest: ${interest}.`,
-      action: "Review when convenient",
-      deadline_at: null,
-      confidence: 0.95,
-      triage_source: "rule",
-      rule_id: null,
-      model_usage: {},
-      estimated_cost_usd: null,
-      latency_ms: null,
-      cheap_model_result: null,
-      strong_model_result: null,
-      bill_candidate: null,
-    },
-  };
 }
 
 async function loadRules(userId, dbClient) {
@@ -418,10 +183,7 @@ async function loadRules(userId, dbClient) {
           ORDER BY priority ASC, id ASC`,
     args: [userId],
   });
-  return [
-    ...result.rows,
-    ...DEFAULT_RULES,
-  ].sort((a, b) => Number(a.priority || 100) - Number(b.priority || 100));
+  return result.rows;
 }
 
 async function loadEmailInterests(userId, dbClient) {
@@ -748,12 +510,11 @@ export async function routeEmailForTriage(email, {
     loadRules(email.user_id, dbClient),
     loadEmailInterests(email.user_id, dbClient),
   ]);
-  const routed = routeFromRules(email, rules);
-  const matchedInterest = matchEmailInterest(email, interests);
-  const interestRouted = matchedInterest && routed.route !== "strong"
-    ? interestDecision(matchedInterest)
-    : null;
-  const effectiveRouted = interestRouted || routed;
+  const preflight = evaluateTriagePreflight(email, {
+    rules,
+    emailInterests: interests,
+    graceAlreadyUsed: email.triage_source === "weak_security_grace",
+  });
   const modelCalls = [];
   let resolvedModelClient = modelClient;
   const getModelClient = async () => {
@@ -765,32 +526,45 @@ export async function routeEmailForTriage(email, {
     return resolvedModelClient;
   };
 
-  if (effectiveRouted.route === "rule") {
+  const preflightDecision = triageDecisionFromPreflight(preflight);
+  if (preflightDecision) {
+    return { decision: preflightDecision, modelCalls };
+  }
+
+  if (preflight.action === "grace") {
     return {
-      decision: {
-        ...effectiveRouted.decision,
-        rule_id: effectiveRouted.rule?.id || null,
-      },
+      grace: true,
+      preflight,
+      decision: null,
       modelCalls,
     };
   }
 
-  if (effectiveRouted.route === "strong") {
-    const strong = await classifyWithModel(getModelClient, "strong", email, effectiveRouted.reason);
+  const metadata = preflightDecisionMetadata(preflight);
+  const routeTier = preflight.modelTier === "strong" ? "strong" : "cheap";
+  if (routeTier === "strong") {
+    const strong = await classifyWithModel(getModelClient, "strong", email, preflight.reasonCode);
     modelCalls.push("strong");
     return {
       decision: {
         ...strong,
-        rule_id: effectiveRouted.rule?.id || null,
+        rule_id: preflight.ruleId || null,
+        decision_metadata: metadata,
       },
       modelCalls,
     };
   }
 
-  const cheap = await classifyWithModel(getModelClient, "cheap", email, effectiveRouted.reason);
+  const cheap = await classifyWithModel(getModelClient, "cheap", email, preflight.reasonCode);
   modelCalls.push("cheap");
   if (!shouldEscalateCheap(cheap)) {
-    return { decision: cheap, modelCalls };
+    return {
+      decision: {
+        ...cheap,
+        decision_metadata: metadata,
+      },
+      modelCalls,
+    };
   }
 
   const strong = await classifyWithModel(getModelClient, "strong", email, "Cheap model confidence or risk required escalation.");
@@ -804,6 +578,7 @@ export async function routeEmailForTriage(email, {
       strong_model_result: strong.strong_model_result,
       estimated_cost_usd: Number(cheap.estimated_cost_usd || 0) + Number(strong.estimated_cost_usd || 0),
       latency_ms: Number(cheap.latency_ms || 0) + Number(strong.latency_ms || 0),
+      decision_metadata: metadata,
     },
     modelCalls,
   };
@@ -852,7 +627,9 @@ async function loadEmailForJob(job, dbClient) {
   const result = await dbClient.execute({
     sql: `SELECT t.id AS triage_id,
                  t.triage_status,
+                 t.triage_source,
                  t.last_triaged_at,
+                 t.provider_state,
                  t.user_id,
                  t.account_id,
                  t.email_id,
@@ -908,6 +685,7 @@ async function updateTriageRow(email, decision, {
               estimated_cost_usd = ?,
               latency_ms = ?,
               bill_candidate_json = ?,
+              decision_metadata_json = ?,
               last_triaged_at = ?,
               updated_at = datetime('now')
           WHERE id = ?`,
@@ -929,6 +707,7 @@ async function updateTriageRow(email, decision, {
       decision.estimated_cost_usd,
       decision.latency_ms,
       billCandidate ? JSON.stringify(billCandidate) : null,
+      decision.decision_metadata ? JSON.stringify(decision.decision_metadata) : null,
       nowIso(now),
       email.triage_id,
     ],
@@ -945,8 +724,9 @@ async function attachToActiveSnapshot(email, decision, { dbClient, now }) {
              escalation_badge_at_snapshot, subject_at_snapshot,
              from_name_at_snapshot, from_address_at_snapshot, email_date_at_snapshot,
              account_label_at_snapshot, account_email_at_snapshot,
-             account_color_at_snapshot, account_icon_at_snapshot, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             account_color_at_snapshot, account_icon_at_snapshot, sort_order,
+             source, source_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(snapshot_id, triage_id) DO UPDATE SET
             lane_at_snapshot = excluded.lane_at_snapshot,
             summary_at_snapshot = excluded.summary_at_snapshot,
@@ -959,6 +739,8 @@ async function attachToActiveSnapshot(email, decision, { dbClient, now }) {
             from_name_at_snapshot = excluded.from_name_at_snapshot,
             from_address_at_snapshot = excluded.from_address_at_snapshot,
             email_date_at_snapshot = excluded.email_date_at_snapshot,
+            source = excluded.source,
+            source_at = excluded.source_at,
             updated_at = datetime('now')`,
     args: [
       snapshot.id,
@@ -982,8 +764,88 @@ async function attachToActiveSnapshot(email, decision, { dbClient, now }) {
       email.account_color || "#818cf8",
       email.account_icon || "Mail",
       0,
+      decision.snapshot_source || null,
+      decision.snapshot_source_at || null,
     ],
   });
+}
+
+async function delayWeakSecurityGrace(job, email, preflight, { dbClient, now }) {
+  const classifyAfter = new Date(now.getTime() + WEAK_SECURITY_GRACE_MS).toISOString();
+  const decisionMetadata = preflightDecisionMetadata(preflight);
+  await dbClient.execute({
+    sql: `UPDATE ea_email_triage
+          SET triage_status = 'pending',
+              triage_source = 'weak_security_grace',
+              category = 'security',
+              urgency = 'normal',
+              summary = 'Security triage pending.',
+              action = 'Classifying soon',
+              decision_metadata_json = ?,
+              updated_at = datetime('now')
+          WHERE id = ?`,
+    args: [JSON.stringify(decisionMetadata), email.triage_id],
+  });
+
+  await attachToActiveSnapshot(email, {
+    lane: "needs_attention",
+    category: "security",
+    urgency: "normal",
+    escalation_badge: null,
+    summary: "Security triage pending.",
+    action: "Classifying soon",
+    deadline_at: null,
+    snapshot_source: "pending_security_grace",
+    snapshot_source_at: classifyAfter,
+  }, { dbClient, now });
+
+  await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'queued',
+              locked_at = NULL,
+              scheduled_for = ?,
+              completed_at = NULL,
+              last_error = '',
+              updated_at = datetime('now')
+          WHERE id = ?`,
+    args: [classifyAfter, job.id],
+  });
+
+  publishCurrentDashboardEvent(email.user_id, {
+    source: "email_triage",
+    reason: "weak_security_grace_delayed",
+    state: "current",
+    occurredAt: nowIso(now),
+  });
+
+  return classifyAfter;
+}
+
+function weakSecurityReadDecision() {
+  return {
+    lane: "fyi",
+    category: "security",
+    urgency: "low",
+    escalation_badge: null,
+    summary: "Security notification was read during the grace window.",
+    action: "No action needed.",
+    deadline_at: null,
+    confidence: 0.86,
+    triage_source: "weak_security_grace_read",
+    rule_id: null,
+    model_usage: {},
+    estimated_cost_usd: null,
+    latency_ms: null,
+    cheap_model_result: null,
+    strong_model_result: null,
+    bill_candidate: null,
+    decision_metadata: {
+      weakSecurityGrace: {
+        outcome: "read_in_inbox",
+        modelSaved: true,
+      },
+    },
+  };
 }
 
 async function completeJob(job, dbClient, now, lastError = "") {
@@ -991,6 +853,8 @@ async function completeJob(job, dbClient, now, lastError = "") {
     sql: `UPDATE ea_triage_jobs
           SET status = 'complete',
               completed_at = ?,
+              locked_at = NULL,
+              scheduled_for = NULL,
               last_error = ?,
               updated_at = datetime('now')
           WHERE id = ?`,
@@ -1038,11 +902,46 @@ export async function processNextEmailTriageJob({
   let modelCalls = [];
   let status = "complete";
   try {
-    if (mode.effective_email_triage_mode === "no_model") {
+    if (email.triage_source === "weak_security_grace" && email.provider_state !== "available") {
+      await completeJob(job, dbClient, now, `Skipped weak-security grace; provider state ${email.provider_state}`);
+      publishCurrentDashboardEvent(email.user_id, {
+        source: "email_triage",
+        reason: "weak_security_grace_skipped",
+        state: "current",
+        occurredAt: nowIso(now),
+      });
+      return {
+        processed: true,
+        job_id: Number(job.id),
+        email_id: email.email_id,
+        skipped: true,
+        source: "weak_security_grace_skip",
+        model_calls: [],
+      };
+    }
+    if (email.triage_source === "weak_security_grace" && email.read) {
+      decision = weakSecurityReadDecision();
+      modelCalls = [];
+    } else if (mode.effective_email_triage_mode === "no_model") {
       decision = noModelDecision(email);
       modelCalls = [];
     } else {
       const routed = await routeEmailForTriage(email, { dbClient, modelClient });
+      if (routed.grace) {
+        const classifyAfter = await delayWeakSecurityGrace(job, email, routed.preflight, {
+          dbClient,
+          now,
+        });
+        return {
+          processed: true,
+          job_id: Number(job.id),
+          email_id: email.email_id,
+          delayed: true,
+          scheduled_for: classifyAfter,
+          source: "weak_security_grace",
+          model_calls: [],
+        };
+      }
       decision = routed.decision;
       modelCalls = routed.modelCalls;
     }
@@ -1059,6 +958,12 @@ export async function processNextEmailTriageJob({
   });
   await attachToActiveSnapshot(email, decision, { dbClient, now });
   await completeJob(job, dbClient, now, status === "failed" ? decision.error : "");
+  publishCurrentDashboardEvent(email.user_id, {
+    source: "email_triage",
+    reason: status === "failed" ? "email_triage_failed" : "email_triage_finalized",
+    state: "current",
+    occurredAt: nowIso(now),
+  });
 
   return {
     processed: true,

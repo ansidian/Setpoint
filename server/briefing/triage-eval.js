@@ -3,6 +3,7 @@ import { routeEmailForTriage } from "./triage-worker.js";
 
 const VALID_LANES = new Set(["needs_attention", "fyi", "noise"]);
 const VALID_URGENCIES = new Set(["high", "medium", "normal", "low"]);
+const VALID_PREFLIGHT_ACTIONS = new Set(["finalize", "audit", "grace", "route_model"]);
 const VALID_CATEGORIES = new Set([
   "finance",
   "security",
@@ -11,9 +12,13 @@ const VALID_CATEGORIES = new Set([
   "personal",
   "work",
   "delivery",
+  "infra",
   "updates",
   "marketing",
+  "product",
+  "social",
   "uncategorized",
+  "utilities",
 ]);
 
 function normalizeLane(value) {
@@ -65,6 +70,12 @@ function expectedFromRow(row) {
   if (row.expected_escalation || row.expected_should_escalate) {
     expected.escalation_expected = true;
   }
+  if (VALID_PREFLIGHT_ACTIONS.has(row.expected_preflight_action)) {
+    expected.preflight_action = row.expected_preflight_action;
+  }
+  if (row.expected_reason_code) {
+    expected.reason_code = row.expected_reason_code;
+  }
   return expected;
 }
 
@@ -107,9 +118,9 @@ function hasEscalation(decision = {}) {
   return Boolean(decision.escalation_badge || decision.escalation_expected);
 }
 
-function validateDecision(decision = {}) {
+function validateDecision(decision = {}, expected = {}) {
   const failures = [];
-  if (!VALID_LANES.has(decision.lane)) failures.push("invalid_lane");
+  if (!VALID_LANES.has(decision.lane) && expected.preflight_action !== "grace") failures.push("invalid_lane");
   if (!("category" in decision)) {
     failures.push("missing_category");
   } else if (decision.category != null && !VALID_CATEGORIES.has(decision.category)) {
@@ -128,7 +139,7 @@ function validateDecision(decision = {}) {
 function compareEvalResult(result) {
   const expected = result.expected || {};
   const actual = result.actual || {};
-  const schemaFailures = validateDecision(actual);
+  const schemaFailures = validateDecision(actual, expected);
   const problems = [];
 
   if (expected.lane === "needs_attention" && actual.lane !== "needs_attention") {
@@ -146,11 +157,22 @@ function compareEvalResult(result) {
   if (expected.deadline_at && actual.deadline_at !== expected.deadline_at) {
     problems.push("deadline_mismatch");
   }
-  if (expected.lane && actual.lane !== expected.lane && !problems.includes("false_negative_needs_attention")) {
+  if (
+    expected.lane
+    && actual.lane !== expected.lane
+    && expected.preflight_action !== "grace"
+    && !problems.includes("false_negative_needs_attention")
+  ) {
     problems.push("lane_mismatch");
   }
   if (expected.category && actual.category !== expected.category) {
     problems.push("category_mismatch");
+  }
+  if (expected.preflight_action && actual.preflight_action !== expected.preflight_action) {
+    problems.push("preflight_action_mismatch");
+  }
+  if (expected.reason_code && actual.reason_code !== expected.reason_code) {
+    problems.push("reason_code_mismatch");
   }
 
   return { problems, schemaFailures };
@@ -166,6 +188,7 @@ function emptyStats() {
     json_schema_stability_failures: 0,
     exact_lane_matches: 0,
     exact_category_matches: 0,
+    exact_preflight_action_matches: 0,
   };
 }
 
@@ -182,6 +205,9 @@ export function buildTriageEvalReport(results) {
     if (result.actual?.lane === result.expected?.lane) stats.exact_lane_matches += 1;
     if (result.expected?.category && result.actual?.category === result.expected.category) {
       stats.exact_category_matches += 1;
+    }
+    if (result.expected?.preflight_action && result.actual?.preflight_action === result.expected.preflight_action) {
+      stats.exact_preflight_action_matches += 1;
     }
     if (problems.includes("false_negative_needs_attention")) {
       stats.false_negative_needs_attention += 1;
@@ -288,10 +314,25 @@ export async function runTriageEval({
       dbClient,
       modelClient: useRealModels ? undefined : createMockModelClient(example),
     });
+    const actual = routed.grace
+      ? {
+        lane: null,
+        category: routed.preflight.category,
+        urgency: routed.preflight.urgency,
+        escalation_badge: routed.preflight.escalation_badge || null,
+        deadline_at: null,
+        preflight_action: "grace",
+        reason_code: routed.preflight.reasonCode,
+      }
+      : {
+        ...routed.decision,
+        preflight_action: routed.decision?.decision_metadata?.preflight?.action,
+        reason_code: routed.decision?.decision_metadata?.preflight?.reasonCode,
+      };
     results.push({
       id: example.id,
       expected: example.expected,
-      actual: routed.decision,
+      actual,
       modelCalls: routed.modelCalls,
     });
   }

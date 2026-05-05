@@ -40,6 +40,18 @@ describe("triage eval fixtures", () => {
             },
           },
         },
+        {
+          sample_id: "manual-weak-security",
+          sender_display: "Account Security",
+          subject: "New sign-in to your account",
+          summary: "We noticed a sign-in from Chrome on macOS.",
+          expected_lane: "fyi",
+          expected_category: "security",
+          expected_urgency: "normal",
+          expected_preflight_action: "grace",
+          expected_reason_code: "weak_security_grace",
+          labels_verified: true,
+        },
       ],
     });
 
@@ -62,6 +74,15 @@ describe("triage eval fixtures", () => {
         mock_model_outputs: {
           strong: expect.objectContaining({ lane: "fyi" }),
         },
+      }),
+      expect.objectContaining({
+        id: "manual-weak-security",
+        expected: expect.objectContaining({
+          lane: "fyi",
+          category: "security",
+          preflight_action: "grace",
+          reason_code: "weak_security_grace",
+        }),
       }),
     ]);
   });
@@ -134,6 +155,7 @@ describe("triage eval metrics", () => {
       json_schema_stability_failures: 0,
       exact_lane_matches: 1,
       exact_category_matches: 1,
+      exact_preflight_action_matches: 0,
     });
   });
 });
@@ -185,6 +207,7 @@ describe("triage eval runner", () => {
         json_schema_stability_failures: 0,
         exact_lane_matches: 0,
         exact_category_matches: 1,
+        exact_preflight_action_matches: 0,
       },
       dangerous_misses: [
         expect.objectContaining({
@@ -192,6 +215,39 @@ describe("triage eval runner", () => {
           modelCalls: ["strong"],
         }),
       ],
+    });
+  });
+
+  it("reports weak-security grace expectations without requiring model output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "triage-eval-"));
+    const fixturePath = join(dir, "labeled.json");
+    await writeFile(fixturePath, JSON.stringify({
+      eval_seed: [
+        {
+          sample_id: "weak-security-grace",
+          sender_display: "Account Security",
+          from_address: "security@example.com",
+          subject: "New sign-in to your account",
+          summary: "We noticed a sign-in from Chrome on macOS.",
+          expected_lane: "fyi",
+          expected_category: "security",
+          expected_urgency: "normal",
+          expected_preflight_action: "grace",
+          expected_reason_code: "weak_security_grace",
+          labels_verified: true,
+        },
+      ],
+    }));
+
+    const report = await runTriageEval({ fixturePath });
+
+    expect(report).toMatchObject({
+      labeled_examples: 1,
+      stats: expect.objectContaining({
+        exact_preflight_action_matches: 1,
+      }),
+      dangerous_misses: [],
+      mismatches: [],
     });
   });
 });
