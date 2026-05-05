@@ -52,6 +52,7 @@ export default function InboxDesktopPane({
   snapshotCategories = [],
   categoryFilter = "__all",
   setCategoryFilter,
+  readOnly = false,
 }) {
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
@@ -78,6 +79,7 @@ export default function InboxDesktopPane({
         processingCount={processingCount}
         summary={briefingSummary}
         activeSnapshotMode={activeSnapshotMode}
+        readOnly={readOnly}
         accountCount={emailAccounts.length}
         onJumpLane={(key) => setLane(key)}
       />
@@ -134,6 +136,7 @@ export default function InboxDesktopPane({
               onSearchChange={setSearch}
               onMarkAllRead={markAllVisibleRead}
               onRefresh={onRefresh}
+              readOnly={readOnly}
               liveEmailsLoading={liveEmailsLoading}
               processingCount={processingCount}
               activeSnapshotError={activeSnapshotError}
@@ -166,6 +169,7 @@ export default function InboxDesktopPane({
               trashHoldProgress={trashHold.progress}
               snoozeHoldProgress={snoozeHold.progress}
               isMobile={false}
+              readOnly={readOnly}
             />
           )}
         </div>

@@ -39,6 +39,7 @@ export default function useInboxController({
   sessionState,
   onSessionStateChange = () => {},
   onActiveSnapshotRefresh = () => {},
+  readOnly = false,
 }) {
   const accountId = sessionState?.accountId || "__all";
   const lane = sessionState?.lane || "__all";
@@ -333,6 +334,7 @@ export default function useInboxController({
   }, []);
 
   const markAllVisibleRead = useCallback(() => {
+    if (readOnly) return;
     const unread = visibleEmails.filter((email) => !email.read);
     if (unread.length === 0) return;
 
@@ -360,7 +362,7 @@ export default function useInboxController({
       }));
       markAllEmailsAsRead(allUids).catch(() => {});
     }
-  }, [visibleEmails, markEmailRead, onLiveReadOverrideChange]);
+  }, [readOnly, visibleEmails, markEmailRead, onLiveReadOverrideChange]);
 
   const moveBy = useCallback((direction) => {
     const index = visibleEmails.findIndex((email) => email.id === selectedId || email.uid === selectedId);
@@ -413,6 +415,7 @@ export default function useInboxController({
     }
 
     if (kind === "trash") {
+      if (readOnly) return;
       if (selectedEmail._live) {
         setLiveTrashedUids((prev) => {
           const next = new Set(prev);
@@ -439,6 +442,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-move-lane") {
+      if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       moveSnapshotItemLane(selectedEmail.snapshot_item_id, payload)
         .then(() => onActiveSnapshotRefresh())
@@ -447,6 +451,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-dismiss") {
+      if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       dismissSnapshotItemForToday(selectedEmail.snapshot_item_id)
         .then(() => onActiveSnapshotRefresh())
@@ -456,6 +461,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-handled") {
+      if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       markSnapshotItemHandled(selectedEmail.snapshot_item_id)
         .then(() => onActiveSnapshotRefresh())
@@ -465,6 +471,7 @@ export default function useInboxController({
     }
 
     if (kind === "snooze") {
+      if (readOnly) return;
       const untilTs = Number(payload);
       if (!Number.isFinite(untilTs) || untilTs <= Date.now()) return;
       setSnoozedMap((prev) => {
@@ -485,6 +492,7 @@ export default function useInboxController({
     }
 
     if (kind === "toggle-read") {
+      if (readOnly) return;
       const markingUnread = !!selectedEmail.read;
       if (selectedEmail._live) {
         onLiveReadOverrideChange(uid, !markingUnread);
@@ -508,6 +516,7 @@ export default function useInboxController({
 
   }, [
     selectedEmail,
+    readOnly,
     moveBy,
     handleDismiss,
     buildEmailSnapshot,
@@ -522,19 +531,20 @@ export default function useInboxController({
   const trashHold = useKeyHold({
     key: "e",
     durationMs: 750,
-    enabled: !!selectedEmail,
+    enabled: !!selectedEmail && !readOnly,
     onComplete: () => onAction("trash"),
   });
 
   const snoozeHold = useKeyHold({
     key: "s",
     durationMs: 750,
-    enabled: !!selectedEmail,
+    enabled: !!selectedEmail && !readOnly,
     onComplete: () => onAction("snooze", defaultSnoozeTs()),
   });
 
   useEffect(() => {
     if (!selectedId) return undefined;
+    if (readOnly) return undefined;
     const timeout = setTimeout(() => {
       const email = selectedEmail;
       if (!email || email.read) return;
@@ -557,7 +567,7 @@ export default function useInboxController({
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [selectedId, selectedEmail, onLiveReadOverrideChange, updateIndexedSearchRead]);
+  }, [readOnly, selectedId, selectedEmail, onLiveReadOverrideChange, updateIndexedSearchRead]);
 
   useEffect(() => {
     function onKey(event) {

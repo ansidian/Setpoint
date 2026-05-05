@@ -204,10 +204,12 @@ export default function DesktopReader({
   bodyState,
   drafting,
   setDrafting,
+  readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  const showSnapshotActions = email._activeSnapshot;
+  const showSnapshotActions = email._activeSnapshot && !readOnly;
+  const showMutableActions = !readOnly;
 
   return (
     <div
@@ -231,7 +233,7 @@ export default function DesktopReader({
         }}
       >
         <span style={{ flex: 1 }} />
-        {(email._untriaged || email.hasBill) && (
+        {showMutableActions && (email._untriaged || email.hasBill) && (
           <QuickAction
             icon={CreditCard}
             label={billOpen ? "Hide bill" : "Pay bill"}
@@ -286,24 +288,28 @@ export default function DesktopReader({
             accent="#f9e2af"
           />
         )}
-        <QuickAction
-          icon={email.read ? Mail : MailOpen}
-          ariaLabel={email.read ? "Mark unread" : "Mark read"}
-          tooltip={email.read ? "Mark unread" : "Mark read"}
-          onClick={() => onAction("toggle-read")}
-          accent={accent}
-        />
-        <QuickAction
-          icon={Clock}
-          ariaLabel="Snooze email"
-          tooltip="Snooze email"
-          buttonRef={snoozeBtnRef}
-          onClick={() => setSnoozeOpen((value) => !value)}
-          accent={accent}
-          holdProgress={snoozeHoldProgress}
-          holdColor="#f97316"
-        />
-        {snoozeOpen && (
+        {showMutableActions && (
+          <QuickAction
+            icon={email.read ? Mail : MailOpen}
+            ariaLabel={email.read ? "Mark unread" : "Mark read"}
+            tooltip={email.read ? "Mark unread" : "Mark read"}
+            onClick={() => onAction("toggle-read")}
+            accent={accent}
+          />
+        )}
+        {showMutableActions && (
+          <QuickAction
+            icon={Clock}
+            ariaLabel="Snooze email"
+            tooltip="Snooze email"
+            buttonRef={snoozeBtnRef}
+            onClick={() => setSnoozeOpen((value) => !value)}
+            accent={accent}
+            holdProgress={snoozeHoldProgress}
+            holdColor="#f97316"
+          />
+        )}
+        {showMutableActions && snoozeOpen && (
           <SnoozePicker
             anchorRef={snoozeBtnRef}
             onSelect={(untilTs) => onAction("snooze", untilTs)}
@@ -319,16 +325,18 @@ export default function DesktopReader({
             accent={accent}
           />
         )}
-        <QuickAction
-          icon={Trash2}
-          ariaLabel="Trash email"
-          tooltip="Trash email"
-          danger
-          onClick={() => onAction("trash")}
-          accent={accent}
-          holdProgress={trashHoldProgress}
-          holdColor="#f38ba8"
-        />
+        {showMutableActions && (
+          <QuickAction
+            icon={Trash2}
+            ariaLabel="Trash email"
+            tooltip="Trash email"
+            danger
+            onClick={() => onAction("trash")}
+            accent={accent}
+            holdProgress={trashHoldProgress}
+            holdColor="#f38ba8"
+          />
+        )}
         <button
           type="button"
           onClick={onClose}

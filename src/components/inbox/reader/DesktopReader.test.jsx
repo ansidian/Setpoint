@@ -39,6 +39,7 @@ function renderReader(overrides = {}) {
       bodyState={{ loading: false, error: null, body: "" }}
       drafting={false}
       setDrafting={() => {}}
+      readOnly={overrides.readOnly || false}
     />,
   );
   return { onAction };
@@ -81,5 +82,16 @@ describe("DesktopReader snapshot actions", () => {
     expect(onAction).toHaveBeenCalledWith("snapshot-move-lane", "fyi");
     expect(onAction).toHaveBeenCalledWith("snapshot-handled");
     expect(onAction).toHaveBeenCalledWith("snapshot-dismiss");
+  });
+
+  it("hides mutating actions for read-only snapshot rows", () => {
+    renderReader({ readOnly: true });
+
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark read/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
   });
 });

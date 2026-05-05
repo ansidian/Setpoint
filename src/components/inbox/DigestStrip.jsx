@@ -14,6 +14,7 @@ export default function DigestStrip({
   processingCount = 0,
   summary,
   activeSnapshotMode = false,
+  readOnly = false,
   accountCount = 0,
   onJumpLane,
 }) {
@@ -23,20 +24,22 @@ export default function DigestStrip({
     { key: "fyi",    count: counts.fyi,    verb: "for your info", ...LANE.fyi },
     { key: "noise",  count: counts.noise,  verb: "filtered", ...LANE.noise },
   ];
-  const activityActive = liveCount > 0 || liveLoading || processingCount > 0;
-  const headline = activeSnapshotMode ? "Active snapshot" : "Briefing snapshot";
+  const activityActive = !readOnly && (liveCount > 0 || liveLoading || processingCount > 0);
+  const headline = activeSnapshotMode ? readOnly ? "Snapshot" : "Active snapshot" : "Briefing snapshot";
   const resolvedSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(counts, accountCount)
     : summary;
   const statusLabel = activeSnapshotMode
-    ? activityActive ? "Triage · syncing" : "Triage · current"
+    ? readOnly ? "Read-only" : activityActive ? "Triage · syncing" : "Triage · current"
     : liveLoading ? "Live · checking" : liveCount > 0 ? "Live · untriaged" : "Live · quiet";
   const statusDetail = activeSnapshotMode
-    ? activityActive
-      ? processingCount > 0
-        ? `${pluralize(processingCount, "message")} processing`
-        : "Updating active lanes"
-      : "No pending triage"
+    ? readOnly
+      ? "Historical email window"
+      : activityActive
+        ? processingCount > 0
+          ? `${pluralize(processingCount, "message")} processing`
+          : "Updating active lanes"
+        : "No pending triage"
     : liveLoading
       ? "Retrieving live mail"
       : liveCount > 0

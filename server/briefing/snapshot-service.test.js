@@ -15,6 +15,18 @@ import {
 } from "./snapshot-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const baseMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/001_ea_tables.sql"),
+  "utf8",
+);
+const accountSortOrderMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/010_account_sort_order.sql"),
+  "utf8",
+);
+const accountIconMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/003_account_icon.sql"),
+  "utf8",
+);
 const emailIndexMigrationSql = readFileSync(
   join(__dirname, "../db/migrations/016_email_search_index.sql"),
   "utf8",
@@ -27,12 +39,20 @@ const sourceMetadataMigrationSql = readFileSync(
   join(__dirname, "../db/migrations/036_snapshot_item_source_metadata.sql"),
   "utf8",
 );
+const snapshotHistoryLabelsMigrationSql = readFileSync(
+  join(__dirname, "../db/migrations/042_snapshot_history_labels.sql"),
+  "utf8",
+);
 
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
+  await db.executeMultiple(baseMigrationSql);
+  await db.executeMultiple(accountSortOrderMigrationSql);
+  await db.executeMultiple(accountIconMigrationSql);
   await db.executeMultiple(emailIndexMigrationSql);
   await db.executeMultiple(migrationSql);
   await db.executeMultiple(sourceMetadataMigrationSql);
+  await db.executeMultiple(snapshotHistoryLabelsMigrationSql);
   return db;
 }
 
@@ -176,6 +196,98 @@ describe("active briefing snapshots", () => {
     expect(current.id).toBe(result.snapshot.id);
   });
 
+  it("persists schedule labels and lists active before frozen snapshot history", async () => {
+    const dbClient = await createMigratedDb();
+    const initial = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T07:30:00.000Z"),
+    });
+    await advanceSnapshotBoundary("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:30:00.000Z"),
+      scheduleLabel: "Morning",
+    });
+    const current = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T16:00:00.000Z"),
+    });
+
+    await seedSnapshotItem(dbClient, {
+      emailId: "msg-current",
+      lane: "needs_attention",
+      now: new Date("2026-05-03T16:00:00.000Z"),
+    });
+
+    const { getSnapshotHistory } = await import("./snapshot-service.js");
+    const history = await getSnapshotHistory("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T16:00:00.000Z"),
+    });
+
+    expect(history.snapshots.map((snapshot) => snapshot.id)).toEqual([current.id, initial.id]);
+    expect(history.snapshots).toEqual([
+      expect.objectContaining({
+        id: current.id,
+        status: "active",
+        readOnly: false,
+        schedule_label: "Morning",
+        laneCounts: expect.objectContaining({ needs_attention: 1, fyi: 0, noise: 0, carryover: 0 }),
+      }),
+      expect.objectContaining({
+        id: initial.id,
+        status: "frozen",
+        readOnly: true,
+        schedule_label: null,
+      }),
+    ]);
+
+    const rows = await dbClient.execute({
+      sql: "SELECT schedule_label FROM ea_briefing_snapshots WHERE id = ?",
+      args: [current.id],
+    });
+    expect(rows.rows[0].schedule_label).toBe("Morning");
+  });
+
+  it("loads active and frozen snapshot detail with read-only status", async () => {
+    const dbClient = await createMigratedDb();
+    const initial = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T07:30:00.000Z"),
+    });
+    await seedSnapshotItem(dbClient, {
+      emailId: "msg-frozen",
+      lane: "fyi",
+      now: new Date("2026-05-03T07:30:00.000Z"),
+    });
+    await advanceSnapshotBoundary("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:30:00.000Z"),
+      scheduleLabel: "Afternoon",
+    });
+    const active = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T16:00:00.000Z"),
+    });
+
+    const { getSnapshotViewById } = await import("./snapshot-service.js");
+    const frozenView = await getSnapshotViewById("user-1", initial.id, { dbClient });
+    const activeView = await getSnapshotViewById("user-1", active.id, { dbClient });
+
+    expect(frozenView).toMatchObject({
+      readOnly: true,
+      snapshot: expect.objectContaining({ id: initial.id, status: "frozen" }),
+      lanes: expect.objectContaining({ fyi: [expect.objectContaining({ email_id: "msg-frozen" })] }),
+    });
+    expect(activeView).toMatchObject({
+      readOnly: false,
+      snapshot: expect.objectContaining({
+        id: active.id,
+        status: "active",
+        schedule_label: "Afternoon",
+      }),
+    });
+  });
+
   it("keeps the new schema idempotent around triage rows, jobs, and snapshot items", async () => {
     const dbClient = await createMigratedDb();
     await dbClient.executeMultiple(migrationSql);
@@ -236,11 +348,20 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-03T15:00:00.000Z"),
     });
 
+    await dbClient.execute({
+      sql: `INSERT INTO ea_accounts
+              (id, user_id, type, email, label, color, icon, sort_order, created_at)
+            VALUES
+              ('gmail-work', 'user-1', 'gmail', 'work@example.test', 'Work Gmail', '#cba6da', 'Mail', 20, '2026-05-01T10:00:00.000Z'),
+              ('icloud-home', 'user-1', 'icloud', 'home@example.test', 'Home iCloud', '#cba6da', 'Mail', 10, '2026-05-02T10:00:00.000Z')`,
+    });
+
     for (const [emailId, lane, category, accountId, sortOrder, isCarryover] of [
       ["msg-action", "needs_attention", "finance", "gmail-work", 10, 0],
       ["msg-fyi", "fyi", "school", "icloud-home", 20, 0],
       ["msg-noise", "noise", "marketing", "gmail-work", 30, 0],
       ["msg-carry", "needs_attention", "legal", "gmail-work", 5, 1],
+      ["msg-unknown", "fyi", "travel", "unknown-account", 40, 0],
     ]) {
       await dbClient.execute({
         sql: `INSERT INTO ea_email_triage
@@ -272,8 +393,16 @@ describe("active briefing snapshots", () => {
           `Subject ${emailId}`,
           `Sender ${emailId}`,
           `${emailId}@example.test`,
-          accountId === "gmail-work" ? "Work Gmail" : "Home iCloud",
-          accountId === "gmail-work" ? "work@example.test" : "home@example.test",
+          accountId === "gmail-work"
+            ? "Work Gmail"
+            : accountId === "icloud-home"
+              ? "Home iCloud"
+              : "Unknown Account",
+          accountId === "gmail-work"
+            ? "work@example.test"
+            : accountId === "icloud-home"
+              ? "home@example.test"
+              : "unknown@example.test",
           sortOrder,
           isCarryover,
         ],
@@ -321,23 +450,25 @@ describe("active briefing snapshots", () => {
     });
     expect(view.laneCounts).toEqual({
       needs_attention: 1,
-      fyi: 1,
+      fyi: 2,
       noise: 1,
       carryover: 1,
     });
     expect(view.lanes.needs_attention.map((item) => item.email_id)).toEqual(["msg-action"]);
-    expect(view.lanes.fyi.map((item) => item.email_id)).toEqual(["msg-fyi"]);
+    expect(view.lanes.fyi.map((item) => item.email_id)).toEqual(["msg-fyi", "msg-unknown"]);
     expect(view.lanes.noise.map((item) => item.email_id)).toEqual(["msg-noise"]);
     expect(view.carryover.map((item) => item.email_id)).toEqual(["msg-carry"]);
     expect(view.filters.accounts).toEqual([
-      { account_id: "gmail-work", label: "Work Gmail", email: "work@example.test", color: "#cba6da", icon: "Mail", count: 3 },
       { account_id: "icloud-home", label: "Home iCloud", email: "home@example.test", color: "#cba6da", icon: "Mail", count: 1 },
+      { account_id: "gmail-work", label: "Work Gmail", email: "work@example.test", color: "#cba6da", icon: "Mail", count: 3 },
+      { account_id: "unknown-account", label: "Unknown Account", email: "unknown@example.test", color: "#cba6da", icon: "Mail", count: 1 },
     ]);
     expect(view.filters.categories).toEqual([
       { category: "finance", count: 1 },
       { category: "legal", count: 1 },
       { category: "marketing", count: 1 },
       { category: "school", count: 1 },
+      { category: "travel", count: 1 },
     ]);
   });
 
