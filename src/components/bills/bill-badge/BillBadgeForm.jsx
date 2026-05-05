@@ -238,6 +238,29 @@ function BillFields({
   );
 }
 
+function NotesField({
+  isMobile,
+  usesStackedLayout,
+  editNotes,
+  setEditNotes,
+}) {
+  return (
+    <div className={cn(usesStackedLayout ? (isMobile ? "mt-3" : "mt-2.5") : "mt-2")}>
+      <FieldShell label="Notes">
+        <Input
+          value={editNotes}
+          onChange={(event) => setEditNotes(event.target.value)}
+          placeholder="Optional note"
+          className={cn(
+            "bg-input-bg border-white/[0.08] text-foreground font-medium",
+            isMobile ? "text-[14px] h-10" : "text-[13px] h-8",
+          )}
+        />
+      </FieldShell>
+    </div>
+  );
+}
+
 function FeeAndSendRow({
   isMobile,
   usesStackedLayout,
@@ -387,7 +410,8 @@ export default function BillBadgeForm({
   usesStackedLayout,
   effectiveModel,
   modelDisplayName,
-  canExtract,
+  showExtract,
+  extractDisabled,
   extractState,
   state,
   successMessage,
@@ -411,6 +435,8 @@ export default function BillBadgeForm({
   editToAccount,
   editScheduleName,
   setEditScheduleName,
+  editNotes,
+  setEditNotes,
   actualReady,
   setFeeOverride,
   customFee,
@@ -435,7 +461,8 @@ export default function BillBadgeForm({
         editType={editType}
         effectiveModel={effectiveModel}
         modelDisplayName={modelDisplayName}
-        canExtract={canExtract}
+        showExtract={showExtract}
+        extractDisabled={extractDisabled}
         extractState={extractState}
         onExtract={handleExtract}
         onTypeChange={handleTypeChange}
@@ -474,6 +501,13 @@ export default function BillBadgeForm({
             editScheduleName={editScheduleName}
             setEditScheduleName={setEditScheduleName}
             bill={bill}
+          />
+
+          <NotesField
+            isMobile={isMobile}
+            usesStackedLayout={usesStackedLayout}
+            editNotes={editNotes}
+            setEditNotes={setEditNotes}
           />
 
           <FeeAndSendRow
