@@ -5,6 +5,15 @@ import { timeRoute } from "../../timing.js";
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
 
+router.get("/snapshot/history", timeRoute("/api/briefing/snapshot/history"), async (_req, res) => {
+  try {
+    res.json(await snapshotService.getSnapshotHistory(EA_USER_ID));
+  } catch (err) {
+    console.error("Error fetching snapshot history:", err);
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Failed to fetch snapshot history" });
+  }
+});
+
 router.get("/snapshot/active", timeRoute("/api/briefing/snapshot/active"), async (_req, res) => {
   try {
     res.json(await snapshotService.getActiveSnapshotView(EA_USER_ID));
@@ -20,6 +29,15 @@ router.post("/snapshot/sync", timeRoute("/api/briefing/snapshot/sync"), async (_
   } catch (err) {
     console.error("Error syncing active snapshot:", err);
     res.status(err.status || 500).json({ message: "Failed to sync active snapshot" });
+  }
+});
+
+router.get("/snapshot/:id", timeRoute("/api/briefing/snapshot/:id"), async (req, res) => {
+  try {
+    res.json(await snapshotService.getSnapshotViewById(EA_USER_ID, Number(req.params.id)));
+  } catch (err) {
+    console.error("Error fetching snapshot detail:", err);
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Failed to fetch snapshot" });
   }
 });
 

@@ -186,6 +186,7 @@ export default function MobileInboxView({
   scopedAccount,
   liveEmailsLoading = false,
   activeSnapshotMode = false,
+  readOnly = false,
 }) {
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
@@ -221,6 +222,7 @@ export default function MobileInboxView({
           trashHoldProgress={trashHold.progress}
           snoozeHoldProgress={snoozeHold.progress}
           isMobile
+          readOnly={readOnly}
         />
       ) : (
         <div
@@ -337,13 +339,15 @@ export default function MobileInboxView({
                 buttonRef={mobileFilterTriggerRef}
                 testId="inbox-mobile-filter-trigger"
               />
-              <MobileIconButton
-                icon={CheckCheck}
-                label="Mark all read"
-                onClick={markAllVisibleRead}
-                accent={accent}
-                tinted={unreadInView > 0}
-              />
+              {!readOnly && (
+                <MobileIconButton
+                  icon={CheckCheck}
+                  label="Mark all read"
+                  onClick={markAllVisibleRead}
+                  accent={accent}
+                  tinted={unreadInView > 0}
+                />
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 8, overflowX: "auto" }}>
               <InboxSearchFlagChips

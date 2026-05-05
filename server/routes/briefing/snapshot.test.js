@@ -8,6 +8,13 @@ const mockDb = { execute: vi.fn() };
 
 vi.mock("../../db/connection.js", () => ({ default: mockDb }));
 vi.mock("../../briefing/snapshot-service.js", () => ({
+  getSnapshotHistory: vi.fn(async () => ({
+    snapshots: [{ id: 1, status: "active", readOnly: false }],
+  })),
+  getSnapshotViewById: vi.fn(async (_userId, id) => ({
+    snapshot: { id, status: "frozen" },
+    readOnly: true,
+  })),
 	  getActiveSnapshotView: vi.fn(async () => ({
     snapshot: { id: 1, status: "active" },
     lanes: { needs_attention: [], fyi: [], noise: [] },
@@ -52,6 +59,26 @@ beforeEach(() => {
 });
 
 describe("snapshot routes", () => {
+  it("returns snapshot history through briefing cookie auth before snapshot id routes", async () => {
+    const res = await request(makeApp())
+      .get("/api/briefing/snapshot/history")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.snapshots).toEqual([{ id: 1, status: "active", readOnly: false }]);
+    expect(snapshotService.getSnapshotHistory).toHaveBeenCalledWith("user-1");
+  });
+
+  it("returns snapshot detail by id through briefing cookie auth", async () => {
+    const res = await request(makeApp())
+      .get("/api/briefing/snapshot/42")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ snapshot: { id: 42, status: "frozen" }, readOnly: true });
+    expect(snapshotService.getSnapshotViewById).toHaveBeenCalledWith("user-1", 42);
+  });
+
   it("returns the active snapshot through briefing cookie auth before greedy briefing id routes", async () => {
     const res = await request(makeApp())
       .get("/api/briefing/snapshot/active")

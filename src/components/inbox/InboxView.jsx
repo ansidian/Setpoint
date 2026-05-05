@@ -64,6 +64,7 @@ export default function InboxView({
   const activeSnapshot = controlledActiveSnapshot || localActiveSnapshot;
   const snapshotInboxMode = !!controlledActiveSnapshot || !!activeSnapshot.snapshot?.snapshot;
   const activeSnapshotView = activeSnapshot.snapshot || (snapshotInboxMode ? EMPTY_ACTIVE_SNAPSHOT_VIEW : null);
+  const readOnly = !!activeSnapshotView?.readOnly;
   const snapshotAccounts = useMemo(() => (
     activeSnapshotView?.filters?.accounts || []
   ).map((account) => ({
@@ -82,6 +83,7 @@ export default function InboxView({
   const processingCount = activeSnapshotView?.processing?.total || 0;
 
   const handleRefresh = async () => {
+    if (readOnly) return;
     await onRefresh?.();
     if (!controlledActiveSnapshot) await (activeSnapshot.sync?.() || activeSnapshot.refresh());
   };
@@ -100,6 +102,7 @@ export default function InboxView({
     sessionState: normalizedSessionState,
     onSessionStateChange: setResolvedSessionState,
     onActiveSnapshotRefresh: activeSnapshot.refresh,
+    readOnly,
   });
 
   const sharedProps = {
@@ -114,6 +117,7 @@ export default function InboxView({
     activeSnapshotError: activeSnapshot.error,
     onOpenDashboard,
     onRefresh: handleRefresh,
+    readOnly,
     ...controller,
   };
 

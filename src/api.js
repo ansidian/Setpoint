@@ -45,6 +45,8 @@ export const revokeApiToken = (id) => apiFetch(`/api/auth/api-tokens/${id}`, { m
 // Briefings
 export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
 export const syncActiveSnapshot = () => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
+export const getSnapshotHistory = () => apiFetch("/api/briefing/snapshot/history");
+export const getSnapshotById = (id) => apiFetch(`/api/briefing/snapshot/${encodeURIComponent(id)}`);
 export const moveSnapshotItemLane = (itemId, lane) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/lane`, {
     method: "PATCH",

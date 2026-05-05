@@ -76,6 +76,7 @@ export default function InboxList({
   snapshotCategories = [],
   categoryFilter = "__all",
   onCategoryFilterChange,
+  readOnly = false,
 }) {
   const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { noise: true } : {}));
   const effectiveCollapsed = activeSnapshotMode ? { noise: true, ...collapsed } : collapsed;
@@ -198,15 +199,17 @@ export default function InboxList({
           onChange={onSearchChange}
           accent={accent}
         />
-        <IconBtn
-          onClick={onMarkAllRead}
-          title="Mark all read"
-          tinted={unreadCount > 0}
-          accent={accent}
-        >
-          <CheckCheck size={11} />
-        </IconBtn>
-        <IconBtn onClick={onRefresh} title="Sync now"><RefreshCw size={11} /></IconBtn>
+        {!readOnly && (
+          <IconBtn
+            onClick={onMarkAllRead}
+            title="Mark all read"
+            tinted={unreadCount > 0}
+            accent={accent}
+          >
+            <CheckCheck size={11} />
+          </IconBtn>
+        )}
+        {!readOnly && <IconBtn onClick={onRefresh} title="Sync now"><RefreshCw size={11} /></IconBtn>}
       </div>
 
       <div

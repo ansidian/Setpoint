@@ -141,11 +141,13 @@ export default function MobileReader({
   bodyState,
   drafting,
   setDrafting,
+  readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
-  const showBillToggle = email._untriaged || email.hasBill;
+  const showMutableActions = !readOnly;
+  const showBillToggle = showMutableActions && (email._untriaged || email.hasBill);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  const showSnapshotActions = email._activeSnapshot;
+  const showSnapshotActions = email._activeSnapshot && showMutableActions;
   const triageSummary = showTriage
     ? email.claude?.summary || email.aiSummary || null
     : null;
@@ -569,19 +571,23 @@ export default function MobileReader({
                 onClick={() => handleAction("snapshot-dismiss")}
               />
             )}
-            <MobileActionRow
-              icon={email.read ? Mail : MailOpen}
-              label={email.read ? "Mark unread" : "Mark read"}
-              onClick={() => handleAction("toggle-read")}
-            />
-            <MobileActionRow
-              icon={Clock}
-              label="Snooze"
-              onClick={() => {
-                setActionsOpen(false);
-                setSnoozeOpen(true);
-              }}
-            />
+            {showMutableActions && (
+              <MobileActionRow
+                icon={email.read ? Mail : MailOpen}
+                label={email.read ? "Mark unread" : "Mark read"}
+                onClick={() => handleAction("toggle-read")}
+              />
+            )}
+            {showMutableActions && (
+              <MobileActionRow
+                icon={Clock}
+                label="Snooze"
+                onClick={() => {
+                  setActionsOpen(false);
+                  setSnoozeOpen(true);
+                }}
+              />
+            )}
             {gmailUrl && (
               <MobileActionRow
                 icon={ExternalLink}
@@ -592,17 +598,19 @@ export default function MobileReader({
                 }}
               />
             )}
-            <MobileActionRow
-              icon={Trash2}
-              label="Trash"
-              danger
-              onClick={() => handleAction("trash")}
-            />
+            {showMutableActions && (
+              <MobileActionRow
+                icon={Trash2}
+                label="Trash"
+                danger
+                onClick={() => handleAction("trash")}
+              />
+            )}
           </div>
         </AnchoredFloatingPanel>
       )}
 
-      {snoozeOpen && (
+      {showMutableActions && snoozeOpen && (
         <SnoozePicker
           anchorRef={actionsBtnRef}
           onSelect={(untilTs) => onAction("snooze", untilTs)}

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
-import { deleteBriefing } from "../../api";
 import RefreshBanner from "../layout/RefreshBanner";
 import ShellHeader from "../shell/ShellHeader";
 import { useDashboard } from "../../context/DashboardContext";
@@ -68,6 +67,7 @@ export function RedesignShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [liveReadOverrides, setLiveReadOverrides] = useState({});
+  const [historicalSnapshotView, setHistoricalSnapshotView] = useState(null);
   const [inboxSession, setInboxSession] = useState({
     accountId: "__all",
     lane: "__all",
@@ -227,6 +227,7 @@ export function RedesignShell({
 
   // Email click anywhere → switch to inbox and let its state handle selection.
   const openEmailInInbox = useCallback((id) => {
+    setHistoricalSnapshotView(null);
     if (id) {
       setInboxSession((prev) => ({
         ...prev,
@@ -235,6 +236,34 @@ export function RedesignShell({
     }
     setShellTab("inbox");
   }, [setShellTab]);
+
+  const inboxActiveSnapshot = useMemo(() => {
+    if (!historicalSnapshotView) return activeSnapshot;
+    return {
+      snapshot: historicalSnapshotView,
+      loading: false,
+      error: null,
+      refresh: async () => {},
+      sync: async () => {},
+    };
+  }, [activeSnapshot, historicalSnapshotView]);
+
+  const handleSelectSnapshot = useCallback((snapshotView, meta) => {
+    if (meta?.readOnly) {
+      setHistoricalSnapshotView(snapshotView);
+    } else {
+      setHistoricalSnapshotView(null);
+    }
+    setInboxSession((prev) => ({
+      ...prev,
+      accountId: "__all",
+      lane: "__all",
+      search: "",
+      selectedId: null,
+    }));
+    setShellTab("inbox");
+    setHistoryOpen(false);
+  }, [setHistoryOpen, setShellTab]);
 
   // Deadline detail popover (anchored to the clicked row)
   const [deadlinePopover, setDeadlinePopover] = useState(null);
@@ -470,7 +499,7 @@ export function RedesignShell({
               briefingGeneratedAt={liveData.briefingGeneratedAt}
               liveEmails={liveData.liveEmails}
               liveEmailsLoading={liveEmailsLoading}
-              activeSnapshot={activeSnapshot}
+              activeSnapshot={inboxActiveSnapshot}
               liveReadOverrides={liveReadOverrides}
               onLiveReadOverrideChange={handleLiveReadOverrideChange}
               snoozedEntries={liveData.snoozedEntries}
@@ -536,11 +565,10 @@ export function RedesignShell({
       {historyOpen && (
         <Suspense fallback={null}>
           <BriefingHistoryPanel
-            activeId={bd.viewingPast?.id ?? bd.latestId}
+            activeId={historicalSnapshotView?.snapshot?.id ?? activeSnapshot?.snapshot?.snapshot?.id ?? null}
             triggerRef={historyTriggerRef}
-            onSelect={(briefingData, meta) => { bd.selectHistory(briefingData, meta); setHistoryOpen(false); }}
+            onSelectSnapshot={handleSelectSnapshot}
             onClose={() => setHistoryOpen(false)}
-            onDelete={deleteBriefing}
           />
         </Suspense>
       )}

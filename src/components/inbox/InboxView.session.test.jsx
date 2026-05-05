@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
-import { dismissEmail, markSnapshotItemHandled, trashEmail } from "../../api";
+import { dismissEmail, markSnapshotItemHandled, snoozeEmail, trashEmail } from "../../api";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -412,5 +412,100 @@ describe("InboxView session state", () => {
     await waitFor(() => {
       expect(refreshSnapshot).toHaveBeenCalled();
     });
+  });
+
+  it("suppresses read-only frozen snapshot mutations", async () => {
+    const refreshSnapshot = vi.fn().mockResolvedValue({});
+    const activeSnapshot = {
+      snapshot: {
+        readOnly: true,
+        snapshot: { id: 88, status: "frozen", updated_at: "2026-05-03T15:00:00.000Z" },
+        filters: {
+          accounts: [{
+            account_id: "gmail-a",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        carryover: [],
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: false,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      },
+      loading: false,
+      error: null,
+      refresh: refreshSnapshot,
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "gmail-a-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Review the lease").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 650));
+
+    expect(markSnapshotItemHandled).not.toHaveBeenCalled();
+    expect(trashEmail).not.toHaveBeenCalled();
+    expect(snoozeEmail).not.toHaveBeenCalled();
+    expect(refreshSnapshot).not.toHaveBeenCalled();
   });
 });

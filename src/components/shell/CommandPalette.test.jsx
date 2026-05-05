@@ -20,4 +20,18 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Sync now")).toBeTruthy();
     expect(screen.queryByText("Generate fresh briefing")).toBeNull();
   });
+
+  it("labels the history affordance as snapshots", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Snapshots")).toBeTruthy();
+    expect(screen.queryByText("Briefing history")).toBeNull();
+  });
 });

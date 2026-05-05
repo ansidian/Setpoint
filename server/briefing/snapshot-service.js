@@ -302,9 +302,17 @@ export async function advanceSnapshotBoundary(userId, {
   if (!existing) {
     await dbClient.execute({
       sql: `INSERT OR IGNORE INTO ea_briefing_snapshots
-              (user_id, start_at, end_at, timezone, status)
-            VALUES (?, ?, ?, ?, 'active')`,
-      args: [userId, window.start_at, window.end_at, window.timezone],
+              (user_id, start_at, end_at, timezone, status, schedule_label)
+            VALUES (?, ?, ?, ?, 'active', ?)`,
+      args: [userId, window.start_at, window.end_at, window.timezone, scheduleLabel],
+    });
+  } else if (scheduleLabel) {
+    await dbClient.execute({
+      sql: `UPDATE ea_briefing_snapshots
+            SET schedule_label = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [scheduleLabel, existing.id, userId],
     });
   }
 
@@ -665,7 +673,55 @@ async function timeSnapshotSyncSource(source, work, extra = {}) {
   }
 }
 
-function buildFilters(items) {
+function parseSortOrder(value) {
+  const sortOrder = Number(value);
+  return Number.isFinite(sortOrder) ? sortOrder : Number.MAX_SAFE_INTEGER;
+}
+
+function parseCreatedAt(value) {
+  const createdAt = Date.parse(value || "");
+  return Number.isFinite(createdAt) ? createdAt : Number.MAX_SAFE_INTEGER;
+}
+
+async function loadAccountFilterOrder(dbClient, userId) {
+  let result;
+  try {
+    result = await dbClient.execute({
+      sql: `SELECT id, sort_order, created_at
+            FROM ea_accounts
+            WHERE user_id = ?
+            ORDER BY sort_order ASC, created_at ASC, id ASC`,
+      args: [userId],
+    });
+  } catch (err) {
+    if (String(err?.message || "").includes("no such table: ea_accounts")) {
+      return new Map();
+    }
+    throw err;
+  }
+
+  return new Map(result.rows.map((row, index) => [row.id, {
+    index,
+    sort_order: parseSortOrder(row.sort_order),
+    created_at: parseCreatedAt(row.created_at),
+  }]));
+}
+
+function compareAccountFilters(accountOrder, a, b) {
+  const aOrder = accountOrder.get(a.account_id);
+  const bOrder = accountOrder.get(b.account_id);
+  if (aOrder && bOrder) {
+    if (aOrder.sort_order !== bOrder.sort_order) return aOrder.sort_order - bOrder.sort_order;
+    if (aOrder.created_at !== bOrder.created_at) return aOrder.created_at - bOrder.created_at;
+    return aOrder.index - bOrder.index;
+  }
+  if (aOrder) return -1;
+  if (bOrder) return 1;
+
+  return a.label.localeCompare(b.label) || a.account_id.localeCompare(b.account_id);
+}
+
+function buildFilters(items, accountOrder = null) {
   const accountMap = new Map();
   const categoryMap = new Map();
 
@@ -689,7 +745,11 @@ function buildFilters(items) {
   }
 
   return {
-    accounts: [...accountMap.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    accounts: [...accountMap.values()].sort((a, b) => (
+      accountOrder
+        ? compareAccountFilters(accountOrder, a, b)
+        : b.count - a.count || a.label.localeCompare(b.label)
+    )),
     categories: [...categoryMap.entries()]
       .map(([category, count]) => ({ category, count }))
       .sort((a, b) => a.category.localeCompare(b.category)),
@@ -715,18 +775,36 @@ function buildLanes(items) {
   return { lanes, carryover };
 }
 
-export async function getActiveSnapshotView(userId, {
-  dbClient = db,
-  now = new Date(),
-  timeZone = DEFAULT_TIMEZONE,
-} = {}) {
-  const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
-  const items = snapshot ? await loadSnapshotItems(dbClient, snapshot.id) : [];
-  const { lanes, carryover } = buildLanes(items);
-  const processing = await loadProcessingState(dbClient, userId);
+function emptyProcessingState() {
+  return {
+    queued: 0,
+    running: 0,
+    total: 0,
+    active: false,
+    email_triage_mode: "auto",
+    effective_email_triage_mode: "no_model",
+    email_triage: {
+      pending: 0,
+      queued: 0,
+      running: 0,
+      total: 0,
+      active: false,
+    },
+    gmail_history_sync: {
+      pending: 0,
+      queued: 0,
+      running: 0,
+      total: 0,
+      active: false,
+    },
+  };
+}
 
+function buildSnapshotView(snapshot, items, processing = emptyProcessingState(), accountOrder = null) {
+  const { lanes, carryover } = buildLanes(items);
   return {
     snapshot,
+    readOnly: snapshot?.status !== "active",
     lanes,
     carryover,
     laneCounts: {
@@ -736,8 +814,126 @@ export async function getActiveSnapshotView(userId, {
       carryover: carryover.length,
     },
     processing,
-    filters: buildFilters(items),
+    filters: buildFilters(items, accountOrder),
   };
+}
+
+async function loadSnapshotById(dbClient, userId, snapshotId) {
+  const result = await dbClient.execute({
+    sql: `SELECT *
+          FROM ea_briefing_snapshots
+          WHERE user_id = ?
+            AND id = ?
+          LIMIT 1`,
+    args: [userId, snapshotId],
+  });
+  return normalizeSnapshot(result.rows[0]);
+}
+
+async function loadSnapshotHistoryRows(dbClient, userId) {
+  const result = await dbClient.execute({
+    sql: `SELECT *
+          FROM ea_briefing_snapshots
+          WHERE user_id = ?
+          ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,
+                   start_at DESC,
+                   id DESC`,
+    args: [userId],
+  });
+  return result.rows.map(normalizeSnapshot);
+}
+
+async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
+  if (!snapshotIds.length) return new Map();
+  const placeholders = snapshotIds.map(() => "?").join(", ");
+  const result = await dbClient.execute({
+    sql: `SELECT snapshot_id,
+                 lane_at_snapshot,
+                 is_carryover,
+                 COUNT(*) AS count
+          FROM ea_briefing_snapshot_items
+          WHERE snapshot_id IN (${placeholders})
+            AND dismissed_from_today_at IS NULL
+            AND provider_removed_at IS NULL
+            AND handled_at IS NULL
+          GROUP BY snapshot_id, lane_at_snapshot, is_carryover`,
+    args: snapshotIds,
+  });
+
+  const counts = new Map();
+  for (const id of snapshotIds) {
+    counts.set(Number(id), {
+      needs_attention: 0,
+      fyi: 0,
+      noise: 0,
+      carryover: 0,
+    });
+  }
+  for (const row of result.rows) {
+    const snapshotCounts = counts.get(Number(row.snapshot_id));
+    if (!snapshotCounts) continue;
+    if (Number(row.is_carryover)) {
+      snapshotCounts.carryover += normalizeCount(row.count);
+      continue;
+    }
+    if (TRIAGE_LANES.has(row.lane_at_snapshot)) {
+      snapshotCounts[row.lane_at_snapshot] += normalizeCount(row.count);
+    }
+  }
+  return counts;
+}
+
+export async function getSnapshotHistory(userId, {
+  dbClient = db,
+  now = new Date(),
+  timeZone = DEFAULT_TIMEZONE,
+} = {}) {
+  await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
+  const snapshots = await loadSnapshotHistoryRows(dbClient, userId);
+  const countsBySnapshot = await loadSnapshotHistoryCounts(dbClient, snapshots.map((snapshot) => snapshot.id));
+
+  return {
+    snapshots: snapshots.map((snapshot) => {
+      const laneCounts = countsBySnapshot.get(snapshot.id) || {
+        needs_attention: 0,
+        fyi: 0,
+        noise: 0,
+        carryover: 0,
+      };
+      return {
+        ...snapshot,
+        readOnly: snapshot.status !== "active",
+        laneCounts,
+        item_count: Object.values(laneCounts).reduce((sum, count) => sum + count, 0),
+      };
+    }),
+  };
+}
+
+export async function getSnapshotViewById(userId, snapshotId, {
+  dbClient = db,
+} = {}) {
+  const snapshot = await loadSnapshotById(dbClient, userId, snapshotId);
+  if (!snapshot) {
+    throw makeHttpError("Snapshot not found", 404);
+  }
+  const items = await loadSnapshotItems(dbClient, snapshot.id);
+  const processing = snapshot.status === "active"
+    ? await loadProcessingState(dbClient, userId)
+    : emptyProcessingState();
+  return buildSnapshotView(snapshot, items, processing);
+}
+
+export async function getActiveSnapshotView(userId, {
+  dbClient = db,
+  now = new Date(),
+  timeZone = DEFAULT_TIMEZONE,
+} = {}) {
+  const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
+  const items = snapshot ? await loadSnapshotItems(dbClient, snapshot.id) : [];
+  const accountOrder = await loadAccountFilterOrder(dbClient, userId);
+  const processing = await loadProcessingState(dbClient, userId);
+  return buildSnapshotView(snapshot, items, processing, accountOrder);
 }
 
 async function runActiveSnapshotSync(userId, {

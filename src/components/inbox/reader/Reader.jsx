@@ -17,6 +17,7 @@ export default function Reader({
   trashHoldProgress = 0,
   snoozeHoldProgress = 0,
   isMobile = false,
+  readOnly = false,
 }) {
   const snoozeBtnRef = useRef(null);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -49,6 +50,7 @@ export default function Reader({
     bodyState,
     drafting,
     setDrafting,
+    readOnly,
   };
 
   if (isMobile) return <MobileReader {...sharedProps} />;
