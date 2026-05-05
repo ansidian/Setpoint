@@ -54,6 +54,60 @@ function StatusIcon({ state, ...props }) {
   return <Info {...props} />;
 }
 
+function StatusSignalDot({ active, attention, busy, color, isMobile }) {
+  const rgb = hexToRgb(color);
+  const glow = active ? 0.84 : attention ? 0.76 : 0.66;
+  const aura = active ? 0.3 : attention ? 0.26 : 0.22;
+  const size = isMobile ? 7 : 7.5;
+
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="system-status-signal"
+      className={
+        busy
+          ? "system-status-signal system-status-signal--busy"
+          : "system-status-signal"
+      }
+      style={{
+        "--system-status-signal-color": color,
+        "--system-status-signal-rgb": rgb,
+        width: isMobile ? 18 : 20,
+        height: isMobile ? 18 : 20,
+        borderRadius: "9999px",
+        background: `radial-gradient(circle, rgba(${rgb}, ${aura}) 0 18%, rgba(${rgb}, ${aura * 0.55}) 34%, rgba(${rgb}, 0) 68%)`,
+        display: "inline-grid",
+        placeItems: "center",
+      }}
+    >
+      <span
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "9999px",
+          background: color,
+          boxShadow: `0 0 10px rgba(${rgb}, ${glow}), 0 0 13px rgba(${rgb}, ${glow * 0.72}), 0 0 24px rgba(${rgb}, ${glow * 0.42})`,
+          display: "block",
+        }}
+      />
+    </span>
+  );
+}
+
+function hexToRgb(hex) {
+  const normalized = hex.replace("#", "");
+  const value = Number.parseInt(normalized, 16);
+
+  if (Number.isNaN(value) || normalized.length !== 6) {
+    return "166, 227, 161";
+  }
+
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `${red}, ${green}, ${blue}`;
+}
+
 function formatTimestamp(value) {
   if (!value) return "No recent success";
   const date = new Date(value);
@@ -234,12 +288,13 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
   const panelRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [pressed, setPressed] = useState(false);
   const status = systemStatus || FALLBACK_STATUS;
   const state = normalizeState(status.state);
   const color = STATE_COLOR[state];
   const position = usePanelPosition(open, triggerRef);
-  const active = hover || open;
+  const active = hover || open || focused;
   const attention = isAttentionState(state);
   const busy = isBusyState(state);
 
@@ -272,7 +327,6 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
         aria-label={`System status: ${state}`}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title="System status"
         onClick={() => setOpen((value) => !value)}
         onPointerDown={() => setPressed(true)}
         onPointerUp={() => setPressed(false)}
@@ -281,30 +335,34 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
           setHover(false);
         }}
         onMouseEnter={() => setHover(true)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={{
           minWidth: isMobile ? 30 : 34,
           height: isMobile ? 30 : 28,
           padding: isMobile ? 6 : "5px 8px",
           borderRadius: 8,
-          border: `1px solid ${attention ? `${color}66` : active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
+          border: "none",
           background: attention
-            ? `${color}14`
+            ? `${color}0f`
             : active
-              ? "rgba(255,255,255,0.06)"
-              : "rgba(255,255,255,0.03)",
-          color,
+              ? "rgba(255,255,255,0.045)"
+              : "transparent",
+          boxShadow: focused ? "0 0 0 2px rgba(203,166,218,0.24)" : "none",
           cursor: "pointer",
           display: "inline-grid",
           placeItems: "center",
           transform: hover && !pressed ? "translateY(-1px)" : "translateY(0)",
-          transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
+          transition:
+            "transform 150ms, background 150ms, box-shadow 150ms, color 150ms",
         }}
       >
-        <StatusIcon
-          state={state}
-          size={isMobile ? 13 : 14}
-          aria-hidden="true"
-          style={{ animation: busy ? "spin 0.8s linear infinite" : "none" }}
+        <StatusSignalDot
+          active={active}
+          attention={attention}
+          busy={busy}
+          color={color}
+          isMobile={isMobile}
         />
       </button>
       {open && (

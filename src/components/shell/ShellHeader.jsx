@@ -78,12 +78,12 @@ export default function ShellHeader({
       />
       <div style={{ flex: 1 }} />
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
-      <SystemStatusButton isMobile={isMobile} systemStatus={systemStatus} />
       <RefreshButton
         isMobile={isMobile}
         refreshing={refreshing}
         onQuickRefresh={onQuickRefresh}
       />
+      <SystemStatusButton isMobile={isMobile} systemStatus={systemStatus} />
       <div ref={menuRef} style={{ position: "relative" }}>
         <OverflowMenu
           isMobile={isMobile}

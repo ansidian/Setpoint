@@ -51,7 +51,6 @@ export function RefreshButton({
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
       }}
-      title={isMobile ? "Sync current dashboard data" : "Sync current dashboard data · R"}
     >
       <RefreshCw
         size={isMobile ? 10 : 11}
