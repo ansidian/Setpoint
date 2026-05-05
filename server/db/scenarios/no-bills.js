@@ -1,5 +1,5 @@
 // Strips all bill emails so the Bills & Payments section has no content.
-// In mock mode, liveBills is always [] (useLiveData disabled), so this
+// In mock mode, liveBills is always [] from the static mock live-data adapter, so this
 // tests the loading shimmer state and the fade-out when no bills arrive.
 
 export default function noBills(briefing) {

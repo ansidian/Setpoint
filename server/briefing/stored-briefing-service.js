@@ -3,6 +3,8 @@ import { canonicalizeConfiguredAccounts } from "./account-canonical.js";
 
 // --- Core primitives ---
 
+// Legacy stored-briefing compatibility only. Normal dashboard current runtime
+// uses `/api/dashboard/current`, current-data cache rows, and the active snapshot.
 async function loadLatest(userId) {
   const result = await db.execute({
     sql: `SELECT id, briefing_json FROM ea_briefings

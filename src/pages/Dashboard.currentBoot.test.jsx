@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   getCurrentDashboard: vi.fn(),
   syncCurrentDashboard: vi.fn(),
   getLatestBriefing: vi.fn(),
-  getLiveData: vi.fn(),
   getActiveSnapshot: vi.fn(),
   syncActiveSnapshot: vi.fn(),
   getSettings: vi.fn(),
@@ -18,7 +17,6 @@ vi.mock("../api", () => ({
   getCurrentDashboard: mocks.getCurrentDashboard,
   syncCurrentDashboard: mocks.syncCurrentDashboard,
   getLatestBriefing: mocks.getLatestBriefing,
-  getLiveData: mocks.getLiveData,
   getActiveSnapshot: mocks.getActiveSnapshot,
   syncActiveSnapshot: mocks.syncActiveSnapshot,
   getSettings: mocks.getSettings,
@@ -89,7 +87,6 @@ describe("Dashboard current boot", () => {
     mocks.getCurrentDashboard.mockReset().mockResolvedValue(currentPayload);
     mocks.syncCurrentDashboard.mockReset().mockResolvedValue(currentPayload);
     mocks.getLatestBriefing.mockReset().mockRejectedValue(new Error("legacy briefing should not load"));
-    mocks.getLiveData.mockReset().mockRejectedValue(new Error("live data should not load"));
     mocks.getActiveSnapshot.mockReset().mockRejectedValue(new Error("snapshot route should not load separately"));
     mocks.syncActiveSnapshot.mockReset().mockRejectedValue(new Error("snapshot sync route should not load separately"));
     mocks.getSettings.mockReset().mockResolvedValue({});
@@ -115,7 +112,6 @@ describe("Dashboard current boot", () => {
     expect(screen.getByTestId("snapshot-id").textContent).toBe("42");
     expect(mocks.getCurrentDashboard).toHaveBeenCalledTimes(1);
     expect(mocks.getLatestBriefing).not.toHaveBeenCalled();
-    expect(mocks.getLiveData).not.toHaveBeenCalled();
     expect(mocks.getActiveSnapshot).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,6 @@ import { Link } from "react-router-dom";
 import { DashboardProvider } from "../context/DashboardContext";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import useLiveData from "../hooks/useLiveData";
 import useBriefingData from "../hooks/useBriefingData";
 import useCurrentDashboard from "../hooks/useCurrentDashboard";
 import useAutoRefresh from "../hooks/useAutoRefresh";
@@ -24,6 +23,30 @@ import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 const DevPanel = import.meta.env.DEV ? lazy(() => import("../components/dev/DevPanel.jsx")) : null;
 const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
 const SYNC_WATCHDOG_MS = 45_000;
+const MOCK_LIVE_DATA = {
+  liveEmails: [],
+  liveCalendar: null,
+  liveNextWeekCalendar: null,
+  liveTomorrowCalendar: null,
+  liveWeather: null,
+  liveBills: [],
+  recentTransactions: [],
+  allSchedules: [],
+  payeeMap: {},
+  importantSenders: [],
+  briefingGeneratedAt: null,
+  briefingReadStatus: {},
+  lastFetched: null,
+  isPolling: false,
+  billsLoading: true,
+  actualConfigured: true,
+  actualBudgetUrl: null,
+  snoozedEntries: [],
+  resurfacedEntries: [],
+  providerHealth: null,
+  systemStatus: null,
+  refreshNow: () => Promise.resolve(null),
+};
 
 function isCalendarDomainCacheStale(fetchedAt) {
   return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
@@ -47,10 +70,9 @@ export default function Dashboard() {
     return () => window.removeEventListener("devpanel:apply", handler);
   }, []);
 
-  const legacyLiveData = useLiveData({ disabled: true });
   const legacyActiveSnapshot = useActiveSnapshot({ disabled: true });
   const currentDashboard = useCurrentDashboard({ disabled: isMock });
-  const liveData = isMock ? legacyLiveData : currentDashboard.liveData;
+  const liveData = isMock ? MOCK_LIVE_DATA : currentDashboard.liveData;
   const activeSnapshot = isMock ? legacyActiveSnapshot : currentDashboard.activeSnapshot;
   const calendarRange = useCalendarRange({ disabled: isMock });
   const calendarDeadlineRange = useCalendarDomainRange({
@@ -64,7 +86,7 @@ export default function Dashboard() {
     emptyData: null,
   });
   useNotifications(liveData);
-  const legacyBd = useBriefingData({ liveData: legacyLiveData, isMock, disabled: !isMock });
+  const legacyBd = useBriefingData({ liveData: MOCK_LIVE_DATA, isMock, disabled: !isMock });
   const bd = isMock ? legacyBd : currentDashboard.briefingData;
   const [currentSyncing, setCurrentSyncing] = useState(false);
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);

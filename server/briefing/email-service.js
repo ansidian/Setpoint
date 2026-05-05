@@ -16,6 +16,8 @@ import {
   trashMessage as icloudTrash,
   batchMarkAsRead as icloudBatchMarkAsRead,
 } from "./icloud.js";
+// Keeps old stored briefings coherent for history/dev compatibility; current
+// inbox state comes from provider/domain rows and the active snapshot.
 import * as storedBriefingService from "./stored-briefing-service.js";
 import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
 import { loadUserConfig } from "./index.js";

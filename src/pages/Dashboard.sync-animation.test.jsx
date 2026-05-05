@@ -16,18 +16,6 @@ vi.mock("../api", () => ({
   getDevScenarios: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../hooks/useLiveData", () => ({
-  default: () => ({
-    liveEmails: [],
-    allSchedules: [],
-    recentTransactions: [],
-    payeeMap: {},
-    actualBudgetUrl: "",
-    actualConfigured: false,
-    refreshNow: mocks.liveRefreshNow,
-  }),
-}));
-
 vi.mock("../hooks/useCalendarRange", () => ({
   default: () => ({
     ensureRange: vi.fn().mockResolvedValue([]),

@@ -480,7 +480,8 @@ router.put("/settings", async (req, res) => {
       await storeTodoistOAuthTokenResponse(userId, response);
     }
 
-    // Purge Todoist items from latest briefing and completed tasks on disconnect
+    // Purge Todoist items from legacy stored briefing history/dev views and
+    // completed-task snapshots on disconnect. Current runtime reads domain data.
     if (todoist_api_token !== undefined && !todoist_api_token) {
       await db.execute({
         sql: "DELETE FROM ea_completed_tasks WHERE user_id = ?",

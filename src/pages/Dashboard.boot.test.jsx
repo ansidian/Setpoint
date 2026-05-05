@@ -31,18 +31,6 @@ vi.mock("../api", () => ({
   deleteBriefing: vi.fn(),
 }));
 
-vi.mock("../hooks/useLiveData", () => ({
-  default: () => ({
-    liveEmails: [],
-    allSchedules: [],
-    recentTransactions: [],
-    payeeMap: {},
-    actualBudgetUrl: "",
-    actualConfigured: false,
-    refreshNow: vi.fn(),
-  }),
-}));
-
 vi.mock("../hooks/useCalendarRange", () => ({
   default: () => ({
     ensureRange: vi.fn().mockResolvedValue([]),
