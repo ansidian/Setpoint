@@ -21,6 +21,7 @@ const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
 const STALE_RUNNING_JOB_TYPES = ["email_triage", "gmail_history_sync"];
 const DEFAULT_STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 const WEAK_SECURITY_GRACE_MS = 10 * 60 * 1000;
+const TRIAGE_PROMPT_CACHE_VERSION = "v1";
 
 const TRIAGE_TOOL = {
   name: "submit_email_triage",
@@ -340,6 +341,55 @@ function extractOpenAIToolInput(data) {
   throw new Error("Triage model returned no tool decision");
 }
 
+function openAITriagePromptCacheKey(tier, model) {
+  return `ea-email-triage:${TRIAGE_PROMPT_CACHE_VERSION}:${tier}:${model}`;
+}
+
+function cachedTokensFromOpenAIUsage(usage = {}) {
+  return Number(
+    usage.prompt_tokens_details?.cached_tokens
+      ?? usage.input_tokens_details?.cached_tokens
+      ?? 0,
+  ) || 0;
+}
+
+function logOpenAITriageCacheUsage({ tier, model, usage, cacheKey }) {
+  console.log(
+    `[Email Triage] OpenAI cache tier=${tier} model=${model} `
+    + `input=${usage?.input_tokens ?? "?"} output=${usage?.output_tokens ?? "?"} `
+    + `cached=${cachedTokensFromOpenAIUsage(usage)} key=${cacheKey}`,
+  );
+}
+
+function isOpenAICacheParameterError(status, text) {
+  return Number(status) === 400 && /prompt_cache_(key|retention)/i.test(String(text || ""));
+}
+
+function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeCacheFields = true }) {
+  return {
+    model,
+    store: false,
+    ...(includeCacheFields
+      ? {
+          prompt_cache_key: cacheKey,
+          prompt_cache_retention: "24h",
+        }
+      : {}),
+    instructions: TRIAGE_SYSTEM_PROMPT,
+    input: compactEmailForPrompt(email, reason),
+    max_output_tokens: 500,
+    reasoning: { effort: "low" },
+    tools: [{
+      type: "function",
+      name: TRIAGE_TOOL.name,
+      description: TRIAGE_TOOL.description,
+      parameters: TRIAGE_TOOL.input_schema,
+      strict: false,
+    }],
+    tool_choice: { type: "function", name: TRIAGE_TOOL.name },
+  };
+}
+
 function modelChoiceFromEnv(tier, fallback) {
   const envModel = tier === "cheap"
     ? process.env.EA_TRIAGE_CHEAP_MODEL
@@ -408,33 +458,67 @@ export function createTriageModelClient({
           throw err;
         }
         const started = Date.now();
-        const res = await fetchImpl("https://api.openai.com/v1/responses", {
+        const cacheKey = openAITriagePromptCacheKey(tier, choice.model);
+        const requestOptions = {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({
+          body: JSON.stringify(buildOpenAITriageRequestBody({
             model: choice.model,
-            instructions: TRIAGE_SYSTEM_PROMPT,
-            input: compactEmailForPrompt(email, reason),
-            max_output_tokens: 500,
-            reasoning: { effort: "low" },
-            tools: [{
-              type: "function",
-              name: TRIAGE_TOOL.name,
-              description: TRIAGE_TOOL.description,
-              parameters: TRIAGE_TOOL.input_schema,
-              strict: false,
-            }],
-            tool_choice: { type: "function", name: TRIAGE_TOOL.name },
-          }),
-        });
+            email,
+            reason,
+            cacheKey,
+          })),
+        };
+        let res = await fetchImpl("https://api.openai.com/v1/responses", requestOptions);
         if (!res.ok) {
           const text = await res.text?.();
+          if (isOpenAICacheParameterError(res.status, text)) {
+            console.warn(
+              `[Email Triage] OpenAI cache fields rejected for tier=${tier} model=${choice.model}; `
+              + "retrying without cache-only fields",
+            );
+            res = await fetchImpl("https://api.openai.com/v1/responses", {
+              ...requestOptions,
+              body: JSON.stringify(buildOpenAITriageRequestBody({
+                model: choice.model,
+                email,
+                reason,
+                cacheKey,
+                includeCacheFields: false,
+              })),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              logOpenAITriageCacheUsage({
+                tier,
+                model: data.model || choice.model,
+                usage: data.usage || {},
+                cacheKey,
+              });
+              return {
+                decision: extractOpenAIToolInput(data),
+                usage: data.usage || {},
+                provider: "openai",
+                model: data.model || choice.model,
+                tier,
+                latency_ms: Date.now() - started,
+              };
+            }
+            const retryText = await res.text?.();
+            throw new Error(`OpenAI triage API error (${res.status})${retryText ? `: ${retryText}` : ""}`);
+          }
           throw new Error(`OpenAI triage API error (${res.status})${text ? `: ${text}` : ""}`);
         }
         const data = await res.json();
+        logOpenAITriageCacheUsage({
+          tier,
+          model: data.model || choice.model,
+          usage: data.usage || {},
+          cacheKey,
+        });
         return {
           decision: extractOpenAIToolInput(data),
           usage: data.usage || {},

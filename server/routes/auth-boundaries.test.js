@@ -179,6 +179,17 @@ async function createMigratedDb() {
       email_triage_mode TEXT DEFAULT 'auto'
     );
 
+    CREATE TABLE ea_email_triage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      email_id TEXT NOT NULL,
+      triage_source TEXT,
+      last_triaged_at TEXT,
+      model_usage_json TEXT,
+      cheap_model_result_json TEXT,
+      strong_model_result_json TEXT
+    );
+
     CREATE TABLE ea_notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
@@ -292,6 +303,93 @@ describe("auth boundaries", () => {
     expect(res.status).toBe(200);
     expect(res.body.email_triage_mode).toBe("auto");
     expect(res.body.email_triage_effective_mode).toBe("no_model");
+  });
+
+  it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
+    await seedSession();
+    await testState.db.current.batch([
+      {
+        sql: `INSERT INTO ea_email_triage
+                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, cheap_model_result_json)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          "user-1",
+          "cheap-1",
+          "cheap_model",
+          "2026-05-04T12:00:00.000Z",
+          JSON.stringify({
+            cheap: {
+              input_tokens: 1000,
+              output_tokens: 100,
+              prompt_tokens_details: { cached_tokens: 600 },
+            },
+          }),
+          JSON.stringify({ provider: "openai", model: "gpt-5.4-nano", tier: "cheap" }),
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_email_triage
+                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, strong_model_result_json)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          "user-1",
+          "strong-1",
+          "strong_model",
+          "2026-05-04T12:05:00.000Z",
+          JSON.stringify({
+            strong: {
+              input_tokens: 2000,
+              output_tokens: 200,
+              input_tokens_details: { cached_tokens: 1000 },
+            },
+          }),
+          JSON.stringify({ provider: "openai", model: "gpt-5.4", tier: "strong" }),
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_email_triage
+                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, cheap_model_result_json)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          "user-1",
+          "anthropic-1",
+          "cheap_model",
+          "2026-05-04T12:10:00.000Z",
+          JSON.stringify({ cheap: { input_tokens: 999, output_tokens: 99 } }),
+          JSON.stringify({ provider: "anthropic", model: "claude-haiku-4-5-20251001", tier: "cheap" }),
+        ],
+      },
+    ]);
+
+    const res = await request(makeApp())
+      .get("/api/ea/triage/cache-stats")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      windowDays: 7,
+      openaiCalls: 2,
+      inputTokens: 3000,
+      cachedInputTokens: 1600,
+      outputTokens: 300,
+      hitRate: 0.5333,
+      lastTriagedAt: "2026-05-04T12:05:00.000Z",
+      byTier: {
+        cheap: {
+          calls: 1,
+          inputTokens: 1000,
+          cachedInputTokens: 600,
+          outputTokens: 100,
+        },
+        strong: {
+          calls: 1,
+          inputTokens: 2000,
+          cachedInputTokens: 1000,
+          outputTokens: 200,
+        },
+      },
+    });
+    expect(res.body.estimatedSavingsUsd).toBeCloseTo(0.002358, 6);
   });
 
   it("rejects invalid email triage mode writes", async () => {

@@ -25,6 +25,7 @@ import {
   isAllowedStoredEmailTriageMode,
   normalizeStoredEmailTriageMode,
 } from "../briefing/triage-mode.js";
+import { getTriageCacheStats } from "../briefing/triage-cache-stats.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 import { storeTodoistOAuthTokenResponse } from "../briefing/todoist-token.js";
 
@@ -401,6 +402,16 @@ router.get("/settings", async (req, res) => {
   } catch (err) {
     console.error("Error fetching EA settings:", err);
     res.status(500).json({ message: "Failed to fetch settings" });
+  }
+});
+
+router.get("/triage/cache-stats", async (_req, res) => {
+  const userId = process.env.EA_USER_ID;
+  try {
+    res.json(await getTriageCacheStats(userId));
+  } catch (err) {
+    console.error("Error fetching triage cache stats:", err.message);
+    res.status(500).json({ message: "Failed to fetch triage cache stats" });
   }
 });
 
