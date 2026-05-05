@@ -222,6 +222,13 @@ body {
 .calendar-pending-update-icon { animation: spin 1.8s linear infinite; }
 @keyframes shimmerSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(260%); } }
 @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 8px rgba(166,227,161,0.1); } 50% { box-shadow: 0 0 16px rgba(166,227,161,0.25); } }
+@keyframes systemStatusSignalPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px var(--system-status-signal-color)); }
+  50% { filter: drop-shadow(0 0 11px var(--system-status-signal-color)); }
+}
+.system-status-signal--busy {
+  animation: systemStatusSignalPulse 1.35s ease-in-out infinite;
+}
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
@@ -230,6 +237,9 @@ body {
     animation: none !important;
   }
   .calendar-pending-update-icon {
+    animation: none !important;
+  }
+  .system-status-signal--busy {
     animation: none !important;
   }
 }

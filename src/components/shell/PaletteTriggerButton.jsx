@@ -19,7 +19,6 @@ export function PaletteTriggerButton({ onOpenPalette }) {
       }}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
-      title="Command palette (⌘K)"
       style={{
         display: "inline-flex",
         alignItems: "center",

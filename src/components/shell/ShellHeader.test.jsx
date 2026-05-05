@@ -48,6 +48,7 @@ describe("ShellHeader system status", () => {
 
     const button = screen.getByRole("button", { name: /system status: current/i });
     expect(button).toBeTruthy();
+    expect(within(button).getByTestId("system-status-signal")).toBeTruthy();
 
     fireEvent.click(button);
 
@@ -110,5 +111,24 @@ describe("ShellHeader system status", () => {
     });
 
     expect(screen.getByRole("button", { name: /system status: needs_sync/i })).toBeTruthy();
+  });
+
+  it("keeps shell controls accessible without native hover tooltips", () => {
+    renderHeader();
+
+    expect(screen.getByRole("button", { name: /open command palette/i }).getAttribute("title")).toBe(null);
+    expect(screen.getByRole("button", { name: /system status: current/i }).getAttribute("title")).toBe(null);
+    expect(screen.getByRole("button", { name: /sync now/i }).getAttribute("title")).toBe(null);
+  });
+
+  it("places system status after sync controls in the shell action cluster", () => {
+    renderHeader();
+
+    const header = screen.getByTestId("shell-header-desktop");
+    const controls = within(header).getAllByRole("button");
+    const labels = controls.map((control) => control.getAttribute("aria-label") || control.textContent);
+
+    expect(labels.indexOf("Open command palette")).toBeLessThan(labels.indexOf("Sync now"));
+    expect(labels.indexOf("Sync now")).toBeLessThan(labels.indexOf("System status: current"));
   });
 });
