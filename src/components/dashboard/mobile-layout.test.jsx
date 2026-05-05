@@ -95,7 +95,7 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
 }
 
 describe("mobile dashboard layout", () => {
-  it("forces the mobile dashboard body into paper mode without the retired insights section", () => {
+  it("forces the mobile dashboard body into paper mode without the insights section", () => {
     const layoutPlan = resolveDashboardBodyLayout({
       isMobile: true,
       dashboardLayout: "command",
@@ -158,7 +158,7 @@ describe("mobile dashboard layout", () => {
 });
 
 describe("DashboardHero mobile layout", () => {
-  it("keeps mobile callouts available without the retired insight copy", () => {
+  it("keeps mobile callouts available without the insight copy", () => {
     render(
       <DashboardHero
         accent="#cba6da"
@@ -177,7 +177,7 @@ describe("DashboardHero mobile layout", () => {
     expect(screen.queryByText("You have a heavier deadline cluster than usual.")).toBeNull();
   });
 
-  it("does not render legacy briefing email summary or ready status in the hero", () => {
+  it("does not render batch briefing email summary or ready status in the hero", () => {
     render(
       <DashboardHero
         accent="#cba6da"

@@ -101,13 +101,13 @@ describe("findAccountByUid", () => {
         rows: [{ id: "gmail-fresh", email: "dup@example.com", updated_at: "2026-04-20T10:00:00Z" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ account_id: "gmail-legacy", account_email: "dup@example.com" }],
+        rows: [{ account_id: "gmail-indexed", account_email: "dup@example.com" }],
       });
 
-    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-legacy-msg123");
+    const out = await __testing__.findAccountByUid("u1", "gmail-gmail-indexed-msg123");
 
     expect(out.account.id).toBe("gmail-fresh");
-    expect(out.account.uid_account_id).toBe("gmail-legacy");
+    expect(out.account.uid_account_id).toBe("gmail-indexed");
   });
 
   it("returns null for unknown prefix", async () => {
@@ -349,7 +349,7 @@ describe("markAllRead", () => {
     });
   });
 
-  it("routes legacy Gmail UID prefixes through the canonical account for batch updates", async () => {
+  it("routes stale Gmail UID prefixes through the canonical account for batch updates", async () => {
     const gmailUid = "gmail-gmail-old-msg1";
     mockDb.execute.mockResolvedValueOnce({
       rows: [

@@ -7,52 +7,14 @@ import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents 
 import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const triageMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/030_triage_snapshots.sql"),
-  "utf8",
-);
-const sourceMetadataMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/036_snapshot_item_source_metadata.sql"),
-  "utf8",
-);
-const decisionMetadataMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/043_email_triage_decision_metadata.sql"),
+const migrationSql = readFileSync(
+  join(__dirname, "../db/migrations/001_ea_tables.sql"),
   "utf8",
 );
 
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(`
-    CREATE TABLE ea_email_index (
-      uid TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      account_id TEXT NOT NULL,
-      account_label TEXT NOT NULL DEFAULT '',
-      account_email TEXT NOT NULL DEFAULT '',
-      account_color TEXT DEFAULT '#818cf8',
-      account_icon TEXT DEFAULT 'Mail',
-      from_name TEXT NOT NULL DEFAULT '',
-      from_address TEXT NOT NULL DEFAULT '',
-      subject TEXT NOT NULL DEFAULT '',
-      body_snippet TEXT NOT NULL DEFAULT '',
-      body_text TEXT NOT NULL DEFAULT '',
-      email_date TEXT NOT NULL DEFAULT '',
-      read INTEGER NOT NULL DEFAULT 0,
-      indexed_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE TABLE ea_settings (
-      user_id TEXT PRIMARY KEY,
-      email_ai_provider TEXT DEFAULT 'anthropic',
-      email_ai_model TEXT DEFAULT NULL,
-      bill_extract_provider TEXT DEFAULT 'anthropic',
-      bill_extract_model TEXT DEFAULT 'claude-haiku-4-5',
-      email_triage_mode TEXT DEFAULT 'auto',
-      email_interests_json TEXT
-    );
-  `);
-  await db.executeMultiple(triageMigrationSql);
-  await db.executeMultiple(sourceMetadataMigrationSql);
-  await db.executeMultiple(decisionMetadataMigrationSql);
+  await db.executeMultiple(migrationSql);
   return db;
 }
 
@@ -409,7 +371,7 @@ describe("email triage worker", () => {
     await dbClient.close();
   });
 
-  it("finalizes queued mail with no-model fallback without model calls or bill candidates", async () => {
+  it("finalizes queued mail with no-model local rules without model calls or bill candidates", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due tomorrow",

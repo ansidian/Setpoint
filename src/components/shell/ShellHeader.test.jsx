@@ -97,7 +97,7 @@ describe("ShellHeader system status", () => {
     expect(within(panel).getByText("Refreshing")).toBeTruthy();
   });
 
-  it("treats legacy stale status as needs sync during migration", () => {
+  it("treats stale status as needs sync", () => {
     renderHeader({
       systemStatus: {
         ...currentStatus,

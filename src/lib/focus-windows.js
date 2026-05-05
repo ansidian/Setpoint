@@ -285,7 +285,7 @@ export function deriveFocusWindows({ events = [], deadlines = [], now = Date.now
       pressure,
       primaryWindow,
       backupWindow,
-      fallback: null,
+      openWindowStatus: null,
     };
   }
 
@@ -295,7 +295,7 @@ export function deriveFocusWindows({ events = [], deadlines = [], now = Date.now
       pressure,
       primaryWindow: null,
       backupWindow: null,
-      fallback: {
+      openWindowStatus: {
         kind: "short-window",
         timeRangeLabel: formatRange(shortGap.startMs, shortGap.endMs),
         durationLabel: formatDuration(shortGap.durationMin),
@@ -307,7 +307,7 @@ export function deriveFocusWindows({ events = [], deadlines = [], now = Date.now
     pressure,
     primaryWindow: null,
     backupWindow: null,
-    fallback: {
+    openWindowStatus: {
       kind: remainingEvents === 0 ? "open-day" : "none",
     },
   };

@@ -1,1 +1,0 @@
-ALTER TABLE ea_accounts ADD COLUMN icon TEXT DEFAULT NULL;

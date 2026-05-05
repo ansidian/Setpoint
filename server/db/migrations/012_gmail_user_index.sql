@@ -1,1 +1,0 @@
-ALTER TABLE ea_accounts ADD COLUMN gmail_index INTEGER DEFAULT 0;

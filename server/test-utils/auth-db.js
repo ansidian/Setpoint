@@ -7,15 +7,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../db/migrations");
 
-const migrationFiles = [
-  "001_ea_tables.sql",
-  "002_account_calendar_flag.sql",
-  "003_account_icon.sql",
-  "008_sessions.sql",
-  "010_account_sort_order.sql",
-  "021_api_tokens.sql",
-  "028_csrf_browser_bind.sql",
-];
+const migrationFiles = ["001_ea_tables.sql"];
 
 const migrationSql = migrationFiles.map((file) =>
   readFileSync(join(migrationsDir, file), "utf8"),

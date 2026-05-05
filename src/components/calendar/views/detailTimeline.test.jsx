@@ -474,7 +474,7 @@ describe("calendar detail timeline", () => {
     );
   });
 
-  it("omits the fallback access fact card when the selected event has no location or attendees", () => {
+  it("omits the access fact card when the selected event has no location or attendees", () => {
     render(
       eventsView.renderDetail({
         selectedDay: 19,

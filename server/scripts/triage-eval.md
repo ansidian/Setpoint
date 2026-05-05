@@ -1,6 +1,6 @@
 # Triage Eval Runner
 
-PER-47 adds a local, privacy-conscious eval path for durable email triage. The prod seed artifact under `docs/triage-redesign/prod-triage-seed-candidates.json` contains weak legacy labels only. Do not treat those labels as truth until a row has been manually reviewed.
+PER-47 adds a local, privacy-conscious eval path for durable email triage. The prod seed artifact under `docs/triage-redesign/prod-triage-seed-candidates.json` contains weak seed labels only. Do not treat those labels as truth until a row has been manually reviewed.
 
 Create a local labeled fixture at `docs/triage-redesign/labeled-triage-eval.json`. `docs/` is gitignored, so private email samples stay local.
 

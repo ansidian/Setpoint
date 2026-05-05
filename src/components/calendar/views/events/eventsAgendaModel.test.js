@@ -51,7 +51,7 @@ describe("events agenda model", () => {
     expect(agenda.visibleGroups[2].weather.high).toBe(72);
   });
 
-  it("renders a first-day fallback when the month has no visible rows", () => {
+  it("renders a first-day placeholder when the month has no visible rows", () => {
     const agenda = buildEventsAgendaGroups({
       viewYear: 2026,
       viewMonth: 6,

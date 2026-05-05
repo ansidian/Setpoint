@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeWeatherPayload } from "./weather.js";
 
 describe("normalizeWeatherPayload", () => {
-  it("preserves legacy fields and adds current icon, timezone, and daily forecast", () => {
+  it("preserves provider fields and adds current icon, timezone, and daily forecast", () => {
     const weather = normalizeWeatherPayload({
       timezone: "America/Los_Angeles",
       currently: {

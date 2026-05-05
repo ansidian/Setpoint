@@ -917,7 +917,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     expect(triage.rows[0].provider_state).toBe("archived");
   });
 
-  it("matches Gmail read-state reconciliation through legacy UID account IDs for the same mailbox", async () => {
+  it("matches Gmail read-state reconciliation through stale UID account IDs for the same mailbox", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
               (user_id, account_id, email_address, last_history_id, watch_status)
@@ -925,8 +925,8 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       args: ["user-1", "gmail-fresh", "work@example.com", "800"],
     });
     await seedIndexedEmail(testState.db.current, {
-      uid: "gmail-gmail-legacy-msg-1",
-      account_id: "gmail-legacy",
+      uid: "gmail-gmail-previous-msg-1",
+      account_id: "gmail-previous",
       account_email: "work@example.com",
       read: 1,
     });
@@ -969,12 +969,12 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       args: [],
     });
     expect(indexed.rows).toEqual([
-      { uid: "gmail-gmail-legacy-msg-1", read: 0 },
       { uid: "gmail-gmail-other-msg-1", read: 1 },
+      { uid: "gmail-gmail-previous-msg-1", read: 0 },
     ]);
   });
 
-  it("updates duplicate legacy Gmail rows for the same mailbox during reconciliation", async () => {
+  it("updates duplicate Gmail rows for the same mailbox during reconciliation", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state
               (user_id, account_id, email_address, last_history_id, watch_status)
@@ -982,14 +982,14 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       args: ["user-1", "gmail-fresh", "work@example.com", "810"],
     });
     await seedIndexedEmail(testState.db.current, {
-      uid: "gmail-gmail-legacy-a-msg-2",
-      account_id: "gmail-legacy-a",
+      uid: "gmail-gmail-previous-a-msg-2",
+      account_id: "gmail-previous-a",
       account_email: "work@example.com",
       read: 1,
     });
     await seedIndexedEmail(testState.db.current, {
-      uid: "gmail-gmail-legacy-b-msg-2",
-      account_id: "gmail-legacy-b",
+      uid: "gmail-gmail-previous-b-msg-2",
+      account_id: "gmail-previous-b",
       account_email: "work@example.com",
       read: 1,
     });
@@ -1026,8 +1026,8 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       args: [],
     });
     expect(indexed.rows).toEqual([
-      { uid: "gmail-gmail-legacy-a-msg-2", read: 0 },
-      { uid: "gmail-gmail-legacy-b-msg-2", read: 0 },
+      { uid: "gmail-gmail-previous-a-msg-2", read: 0 },
+      { uid: "gmail-gmail-previous-b-msg-2", read: 0 },
     ]);
   });
 });

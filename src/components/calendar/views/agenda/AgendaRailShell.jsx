@@ -120,15 +120,6 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     return true;
   }, []);
 
-  const scrollToDateContent = useCallback((dateKey, { contentAware = false } = {}) => {
-    const contentCandidates = contentAware ? [...(contentRefs.current.get(dateKey) || [])] : [];
-    const content = contentCandidates.find((element) => element?.isConnected) || null;
-    return scrollElementIntoView(content || headerRefs.current.get(dateKey), {
-      block: content ? "nearest" : "start",
-      offsetTop: content ? itemScrollTopOffset : 0,
-    });
-  }, [itemScrollTopOffset, scrollElementIntoView]);
-
   const scrollToDateHeader = useCallback((dateKey) => (
     scrollElementIntoView(headerRefs.current.get(dateKey), { block: "start" })
   ), [scrollElementIntoView]);

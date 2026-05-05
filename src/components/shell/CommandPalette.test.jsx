@@ -7,7 +7,7 @@ describe("CommandPalette", () => {
     cleanup();
   });
 
-  it("offers Sync now without a retired generation action", () => {
+  it("offers Sync now without a generation action", () => {
     render(
       <CommandPalette
         open

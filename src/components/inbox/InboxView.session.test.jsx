@@ -208,7 +208,7 @@ describe("InboxView session state", () => {
     });
   });
 
-  it("trashes active snapshot email through provider removal without legacy dismiss", async () => {
+  it("trashes active snapshot email through provider removal without dismissing locally", async () => {
     const refreshSnapshot = vi.fn().mockResolvedValue({});
     const activeSnapshot = {
       snapshot: {
@@ -297,7 +297,7 @@ describe("InboxView session state", () => {
     expect(dismissEmail).not.toHaveBeenCalled();
   });
 
-  it("does not fall back to legacy briefing mail while controlled active snapshot is loading", () => {
+  it("does not render briefing mail while controlled active snapshot is loading", () => {
     const activeSnapshot = {
       snapshot: null,
       loading: true,
@@ -323,7 +323,7 @@ describe("InboxView session state", () => {
             inboxGrouping: "swimlanes",
           }}
           emailAccounts={[]}
-          briefingSummary="Legacy summary"
+          briefingSummary="Prior summary"
           briefingGeneratedAt="2026-05-03 15:00:00"
           activeSnapshot={activeSnapshot}
           liveEmails={[]}

@@ -84,7 +84,7 @@ describe("deriveFocusWindows", () => {
     });
 
     expect(result.primaryWindow).toBeNull();
-    expect(result.fallback?.kind).toBe("none");
+    expect(result.openWindowStatus?.kind).toBe("none");
   });
 
   it("uses deadline pressure in the explanation context", () => {

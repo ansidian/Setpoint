@@ -8,8 +8,8 @@ process.env.EA_ENCRYPTION_KEY = TEST_KEY;
 
 const { encrypt, decrypt } = await import("./encryption.js");
 
-// Helper: encrypt using the OLD CBC algorithm to generate legacy test fixtures
-function legacyCbcEncrypt(plaintext) {
+// Helper: encrypt using the CBC algorithm to generate compatibility test fixtures.
+function cbcEncrypt(plaintext) {
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(
     "aes-256-cbc",
@@ -42,10 +42,10 @@ describe("encryption", () => {
     });
   });
 
-  describe("Legacy CBC decrypt", () => {
+  describe("CBC decrypt", () => {
     it("decrypts a value encrypted with old CBC format", () => {
-      const original = "legacy-secret-value";
-      const cbcEncrypted = legacyCbcEncrypt(original);
+      const original = "cbc-secret-value";
+      const cbcEncrypted = cbcEncrypt(original);
       // CBC format has no prefix, just iv:ciphertext
       expect(cbcEncrypted).not.toMatch(/^gcm:/);
       expect(decrypt(cbcEncrypted)).toBe(original);

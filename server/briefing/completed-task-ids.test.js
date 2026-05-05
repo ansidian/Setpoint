@@ -27,9 +27,9 @@ describe("loadCompletedTaskIds", () => {
     testState.db.current = null;
   });
 
-  it("returns only ids from legacy dedupe rows", async () => {
-    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-1" });
-    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-2" });
+  it("returns only ids from undated completion rows", async () => {
+    await seedCompletedTask(testState.db.current, { todoist_id: "open-1" });
+    await seedCompletedTask(testState.db.current, { todoist_id: "open-2" });
     await seedCompletedTask(testState.db.current, {
       todoist_id: "tombstone-1",
       due_date: "2026-04-18",
@@ -38,12 +38,12 @@ describe("loadCompletedTaskIds", () => {
 
     const ids = await loadCompletedTaskIds("user-1", []);
 
-    expect(ids).toEqual(new Set(["legacy-1", "legacy-2"]));
+    expect(ids).toEqual(new Set(["open-1", "open-2"]));
   });
 
-  it("reconciles un-completed tasks by removing only legacy rows, not tombstones", async () => {
-    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-a" });
-    await seedCompletedTask(testState.db.current, { todoist_id: "legacy-b" });
+  it("reconciles un-completed tasks by removing only undated rows, not tombstones", async () => {
+    await seedCompletedTask(testState.db.current, { todoist_id: "open-a" });
+    await seedCompletedTask(testState.db.current, { todoist_id: "open-b" });
     await seedCompletedTask(testState.db.current, {
       todoist_id: "tombstone-a",
       due_date: "2026-04-18",
@@ -51,13 +51,13 @@ describe("loadCompletedTaskIds", () => {
     });
 
     const ids = await loadCompletedTaskIds("user-1", [
-      { id: "legacy-a" },
+      { id: "open-a" },
       { id: "tombstone-a" },
     ]);
     const rows = await listCompletedTasks(testState.db.current);
 
-    expect(ids).toEqual(new Set(["legacy-b"]));
-    expect(rows.map((row) => row.todoist_id)).toEqual(["legacy-b", "tombstone-a"]);
+    expect(ids).toEqual(new Set(["open-b"]));
+    expect(rows.map((row) => row.todoist_id)).toEqual(["open-b", "tombstone-a"]);
     expect(rows.find((row) => row.todoist_id === "tombstone-a").due_date).toBe("2026-04-18");
   });
 });
