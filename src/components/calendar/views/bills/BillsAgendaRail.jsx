@@ -221,7 +221,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
               />
             </span>
           ))}
-          {!group.hasBills && (group.isFallback || selectedDateKey === group.dateKey) ? (
+          {!group.hasBills && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
             <div ref={(node) => registerContent(group.dateKey, node)}>
               <EmptyBillDay fallback={group.isFallback} />
             </div>

@@ -337,7 +337,7 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
                 />
               </span>
             ))}
-            {!group.hasDeadlines && (group.isFallback || selectedDateKey === group.dateKey) ? (
+            {!group.hasDeadlines && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
               <div ref={(node) => registerContent(group.dateKey, node)}>
                 <EmptyDeadlineDay fallback={group.isFallback} />
               </div>

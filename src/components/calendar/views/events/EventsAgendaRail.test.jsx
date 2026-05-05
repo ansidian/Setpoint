@@ -120,6 +120,17 @@ describe("EventsAgendaRail", () => {
     expect(screen.queryByRole("button", { name: /create event/i })).toBeNull();
   });
 
+  it("renders today's header and empty target when today has no events", () => {
+    renderRail({
+      todayDate: 2,
+      selectedDateKey: "2026-05-04",
+    });
+
+    expect(screen.getByRole("button", { name: /select saturday, may 2/i })).toBeTruthy();
+    expect(screen.getByText("TODAY 5/2/26")).toBeTruthy();
+    expect(screen.getByText("No Events")).toBeTruthy();
+  });
+
   it("renders weather-only forecast days and collapsed all-day overflow", () => {
     renderRail({
       events: [

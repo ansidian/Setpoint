@@ -94,7 +94,7 @@ describe("AgendaRailShell", () => {
     }));
   });
 
-  it("does not restart the today scroll when the first content is already visible", async () => {
+  it("recenters today's first content under the sticky date header", async () => {
     const renderGroup = ({ group, registerContent }) => (
       group.dateKey === "2026-05-01" ? (
         <span
@@ -138,7 +138,134 @@ describe("AgendaRailShell", () => {
     );
     await flushRailEffects();
 
-    expect(scrollTo).not.toHaveBeenCalled();
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: 104,
+      behavior: "smooth",
+    }));
+  });
+
+  it("scrolls back to today's first content when the sticky header is already pinned", async () => {
+    const renderGroup = ({ group, registerRow }) => (
+      group.dateKey === "2026-05-01" ? (
+        <span
+          ref={(node) => registerRow(`first-${group.dateKey}`, node, group.dateKey)}
+          data-testid="today-first-row"
+        >
+          First row
+        </span>
+      ) : null
+    );
+    const { rerender } = renderShell({ renderGroup });
+    await flushRailEffects();
+
+    const rail = screen.getByTestId("agenda-shell");
+    const row = screen.getByTestId("today-first-row");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 700;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    row.getBoundingClientRect = () => ({ top: -72, bottom: -28, left: 0, right: 280, width: 280, height: 44 });
+
+    rerender(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        scrollCommand={{ type: "today", id: "today-3" }}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: 584,
+      behavior: "smooth",
+    }));
+  });
+
+  it("does not replay a command already handled through the imperative rail ref", async () => {
+    const railRef = createRef();
+    const renderGroup = ({ group, registerRow }) => (
+      group.dateKey === "2026-05-01" ? (
+        <span
+          ref={(node) => registerRow(`first-${group.dateKey}`, node, group.dateKey)}
+          data-testid="today-first-row"
+        >
+          First row
+        </span>
+      ) : null
+    );
+
+    const { rerender } = render(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    const rail = screen.getByTestId("agenda-shell");
+    const row = screen.getByTestId("today-first-row");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 0;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    row.getBoundingClientRect = () => ({ top: 420, bottom: 464, left: 0, right: 280, width: 280, height: 44 });
+
+    expect(railRef.current.scrollToToday("today-command")).toBe(true);
+
+    rerender(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        scrollCommand={{ type: "today", id: "today-command" }}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: expect.any(Number),
+    }));
   });
 
   it("does not dirty-block passive scroll sync while an editor is open", async () => {

@@ -1816,6 +1816,198 @@ describe("CalendarModal responsive layout", () => {
     }
   });
 
+  it("scrolls the agenda rail to today when pressing t from an earlier date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          focusDate="2026-04-10"
+          eventsData={{
+            getEvents: () => ([
+              {
+                id: "event-today",
+                title: "Today planning",
+                startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+                endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+                allDay: false,
+                color: "#89b4fa",
+              },
+            ]),
+          }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const agendaRail = screen.getByTestId("events-agenda-rail");
+      const todayRow = within(agendaRail).getByTestId("calendar-agenda-event-row");
+      const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']");
+      const todayContent = todayRow.parentElement;
+      const scrollTo = vi.fn();
+      agendaRail.scrollTop = 0;
+      agendaRail.scrollTo = scrollTo;
+      agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+      todayRow.getBoundingClientRect = () => ({ top: 464, bottom: 508, left: 0, right: 280, width: 280, height: 44 });
+      todayContent.getBoundingClientRect = () => ({ top: 464, bottom: 508, left: 0, right: 280, width: 280, height: 44 });
+      todayHeader.getBoundingClientRect = () => ({ top: 420, bottom: 454, left: 0, right: 280, width: 280, height: 34 });
+
+      fireEvent.keyDown(document, { key: "t" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.runOnlyPendingTimers();
+      });
+
+      expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+        top: expect.any(Number),
+      }));
+      expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(true);
+      expect(agendaRail.scrollTop).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("scrolls the visible events agenda to today even while adjacent month data is loading", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          focusDate="2026-04-10"
+          eventsData={{
+            getEvents: (year, month) => (
+              year === 2026 && month === 3 ? [
+                {
+                  id: "event-today",
+                  title: "Today planning",
+                  startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+                  endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+                  allDay: false,
+                  color: "#89b4fa",
+                },
+              ] : []
+            ),
+            isMonthLoading: (year, month) => year === 2026 && month === 4,
+          }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const agendaRail = screen.getByTestId("events-agenda-rail");
+      const todayRow = within(agendaRail).getByTestId("calendar-agenda-event-row");
+      const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']");
+      const todayContent = todayRow.parentElement;
+      const scrollTo = vi.fn();
+      agendaRail.scrollTop = 0;
+      agendaRail.scrollTo = scrollTo;
+      agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+      todayRow.getBoundingClientRect = () => ({ top: 464, bottom: 508, left: 0, right: 280, width: 280, height: 44 });
+      todayContent.getBoundingClientRect = () => ({ top: 464, bottom: 508, left: 0, right: 280, width: 280, height: 44 });
+      todayHeader.getBoundingClientRect = () => ({ top: 420, bottom: 454, left: 0, right: 280, width: 280, height: 34 });
+
+      fireEvent.keyDown(document, { key: "t" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.runOnlyPendingTimers();
+      });
+
+      expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+      expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(true);
+      expect(agendaRail.scrollTop).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("scrolls from day one to today's agenda header when pressing t", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-04T19:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          focusDate="2026-05-01"
+          eventsData={{
+            getEvents: () => ([
+              {
+                id: "event-one",
+                title: "Month start",
+                startMs: new Date("2026-05-01T17:00:00.000Z").getTime(),
+                endMs: new Date("2026-05-01T18:00:00.000Z").getTime(),
+                allDay: false,
+                color: "#89b4fa",
+              },
+              {
+                id: "event-today",
+                title: "Today planning",
+                startMs: new Date("2026-05-04T17:00:00.000Z").getTime(),
+                endMs: new Date("2026-05-04T18:00:00.000Z").getTime(),
+                allDay: false,
+                color: "#f9e2af",
+              },
+            ]),
+          }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const agendaRail = screen.getByTestId("events-agenda-rail");
+      const todayRow = within(agendaRail).getAllByTestId("calendar-agenda-event-row")[1];
+      const todayContent = todayRow.parentElement;
+      const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-05-04']");
+      const scrollTo = vi.fn();
+      agendaRail.scrollTop = 0;
+      agendaRail.scrollTo = scrollTo;
+      agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 260, left: 0, right: 280, width: 280, height: 260 });
+      todayContent.getBoundingClientRect = () => ({ top: 654, bottom: 698, left: 0, right: 280, width: 280, height: 44 });
+      todayHeader.getBoundingClientRect = () => ({ top: 620, bottom: 654, left: 0, right: 280, width: 280, height: 34 });
+
+      expect(screen.getByTestId("calendar-cell-1").getAttribute("aria-selected")).toBe("true");
+
+      fireEvent.keyDown(document, { key: "t" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.runOnlyPendingTimers();
+      });
+
+      expect(screen.getByTestId("calendar-cell-4").getAttribute("aria-selected")).toBe("true");
+      expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(true);
+      expect(agendaRail.scrollTop).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("consumes modal hotkeys without leaving selected items in focus-ring mode", async () => {
     window.innerWidth = 1900;
 

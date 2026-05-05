@@ -105,9 +105,13 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     const distance = Math.abs(nextScrollTop - scroller.scrollTop);
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const behavior = reduceMotion || distance > scrollerRect.height * 1.7 ? "auto" : "smooth";
+    const previousScrollTop = scroller.scrollTop;
     if (typeof scroller.scrollTo === "function") {
       scroller.scrollTo({ top: nextScrollTop, behavior });
     } else {
+      scroller.scrollTop = nextScrollTop;
+    }
+    if (Math.abs(scroller.scrollTop - previousScrollTop) < 0.5 && distance > 0.5) {
       scroller.scrollTop = nextScrollTop;
     }
     window.setTimeout(() => {
@@ -125,6 +129,22 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     });
   }, [itemScrollTopOffset, scrollElementIntoView]);
 
+  const scrollToDateHeader = useCallback((dateKey) => (
+    scrollElementIntoView(headerRefs.current.get(dateKey), { block: "start" })
+  ), [scrollElementIntoView]);
+
+  const scrollToDateStart = useCallback((dateKey) => {
+    const contentCandidates = [...(contentRefs.current.get(dateKey) || [])];
+    const content = contentCandidates.find((element) => element?.isConnected) || null;
+    if (content) {
+      return scrollElementIntoView(content, {
+        block: "start",
+        offsetTop: itemScrollTopOffset,
+      });
+    }
+    return scrollToDateHeader(dateKey);
+  }, [itemScrollTopOffset, scrollElementIntoView, scrollToDateHeader]);
+
   const scrollToItem = useCallback((itemId, dateKey) => {
     const row = findRow(rowRefs, itemId, dateKey);
     return scrollElementIntoView(row || headerRefs.current.get(dateKey), {
@@ -141,14 +161,20 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
   }, []);
 
   useImperativeHandle(ref, () => ({
-    scrollToDate(dateKey) {
-      return scrollElementIntoView(headerRefs.current.get(dateKey), { block: "start" });
+    scrollToDate(dateKey, commandId = null) {
+      const handled = scrollToDateHeader(dateKey);
+      if (handled && commandId) handledScrollCommandIdRef.current = commandId;
+      return handled;
     },
-    scrollToEvent(itemId, dateKey) {
-      return scrollToItem(itemId, dateKey);
+    scrollToEvent(itemId, dateKey, commandId = null) {
+      const handled = scrollToItem(itemId, dateKey);
+      if (handled && commandId) handledScrollCommandIdRef.current = commandId;
+      return handled;
     },
-    scrollToItem(itemId, dateKey) {
-      return scrollToItem(itemId, dateKey);
+    scrollToItem(itemId, dateKey, commandId = null) {
+      const handled = scrollToItem(itemId, dateKey);
+      if (handled && commandId) handledScrollCommandIdRef.current = commandId;
+      return handled;
     },
     getItemAnchor(itemId, dateKey) {
       return findRowAnchor(rowRefs, itemId, dateKey);
@@ -156,23 +182,25 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     activateItem(itemId, dateKey) {
       return activateItem(itemId, dateKey);
     },
-    scrollToToday() {
-      return scrollToDateContent(todayKey, { contentAware: true });
+    scrollToToday(commandId = null) {
+      const handled = scrollToDateStart(todayKey);
+      if (handled && commandId) handledScrollCommandIdRef.current = commandId;
+      return handled;
     },
     scrollToFirst() {
       return scrollElementIntoView(headerRefs.current.get(firstVisibleDateKey), { block: "start" });
     },
-  }), [activateItem, firstVisibleDateKey, scrollElementIntoView, scrollToDateContent, scrollToItem, todayKey]);
+  }), [activateItem, firstVisibleDateKey, scrollElementIntoView, scrollToDateHeader, scrollToDateStart, scrollToItem, todayKey]);
 
   useEffect(() => {
-    if (!scrollCommand || isLoading) return undefined;
+    if (!scrollCommand || showSkeleton) return undefined;
     if (scrollCommand.id && handledScrollCommandIdRef.current === scrollCommand.id) return undefined;
     const id = window.requestAnimationFrame(() => {
       let handled = false;
       if (scrollCommand.type === "today") {
-        handled = scrollToDateContent(todayKey, { contentAware: true });
+        handled = scrollToDateStart(todayKey);
       } else if (scrollCommand.type === "date") {
-        handled = scrollElementIntoView(headerRefs.current.get(scrollCommand.dateKey), { block: "start" });
+        handled = scrollToDateHeader(scrollCommand.dateKey);
       } else if (scrollCommand.type === "event" || scrollCommand.type === "item") {
         handled = scrollToItem(scrollCommand.itemId, scrollCommand.dateKey);
       }
@@ -181,7 +209,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       }
     });
     return () => window.cancelAnimationFrame(id);
-  }, [groups, isLoading, scrollCommand, scrollElementIntoView, scrollToDateContent, scrollToItem, todayKey]);
+  }, [groups, scrollCommand, scrollToDateHeader, scrollToDateStart, scrollToItem, showSkeleton, todayKey]);
 
   useEffect(() => {
     if (isLoading) return undefined;

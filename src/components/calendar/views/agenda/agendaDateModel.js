@@ -59,6 +59,7 @@ export function buildDisplayedMonthGroups({
       day: index + 1,
       headerLabel: formatAgendaHeaderLabel(dateKey, todayKey),
       hasItems: false,
+      forceVisible: dateKey === todayKey,
       isFallback: false,
       ...(createGroup?.({ dateKey, day: index + 1 }) || {}),
     };
@@ -79,6 +80,7 @@ export function sparseVisibleGroups({
 } = {}) {
   let visibleGroups = groups.filter((group) => (
     (forceVisibleDateKey && group.dateKey === forceVisibleDateKey)
+    || group.forceVisible
     || hasVisibleItems(group)
   ));
 

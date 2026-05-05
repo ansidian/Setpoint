@@ -493,9 +493,21 @@ export default function useCalendarModalController({
   const requestAgendaScroll = useCallback((command) => {
     if (!command) return;
     suppressAgendaPassiveSync();
-    setAgendaScrollCommand({
+    const scrollCommand = {
       ...command,
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    };
+    setAgendaScrollCommand(scrollCommand);
+    window.requestAnimationFrame(() => {
+      const rail = agendaRailRef.current;
+      if (!rail) return;
+      if (scrollCommand.type === "today") {
+        rail.scrollToToday?.(scrollCommand.id);
+      } else if (scrollCommand.type === "date") {
+        rail.scrollToDate?.(scrollCommand.dateKey, scrollCommand.id);
+      } else if (scrollCommand.type === "event" || scrollCommand.type === "item") {
+        rail.scrollToItem?.(scrollCommand.itemId, scrollCommand.dateKey, scrollCommand.id);
+      }
     });
   }, [suppressAgendaPassiveSync]);
 
