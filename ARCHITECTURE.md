@@ -72,7 +72,7 @@ ea-dashboard/
 │   ├── index.js                    # Express entry: middleware, routes, migrations, scheduler
 │   ├── briefing/
 │   │   ├── index.js                # Orchestrator: generateBriefing, quickRefresh, delta merge
-│   │   ├── stored-briefing-service.js # Sole funnel for `briefing_json` mutations (email reads, task completion, Todoist mirror)
+│   │   ├── stored-briefing-service.js # Legacy/history compatibility funnel for `briefing_json` mutations
 │   │   ├── lifecycle-service.js    # Briefing lifecycle: trigger, poll, refresh, latest/history/by-id, delete
 │   │   ├── email-service.js        # Email read/unread/trash/snooze/dismiss, FTS search, body fetch
 │   │   ├── tasks-service.js        # Complete task (CTM+Todoist), CTM status, tombstone dismiss, Todoist CRUD
@@ -95,12 +95,16 @@ ea-dashboard/
 │   │   ├── email-index.js          # FTS5 email indexing for cross-account search
 │   │   ├── encryption.js           # AES-256-GCM encrypt/decrypt (legacy CBC migration)
 │   │   └── scheduler.js            # Cron job management with hot reload
+│   ├── dashboard/
+│   │   ├── current-service.js      # Current dashboard envelope from durable current cache + active snapshot
+│   │   └── current-events.js       # SSE notifications for current dashboard changes
 │   ├── routes/
 │   │   ├── auth.js                 # Login, session check, logout (rate-limited)
 │   │   ├── briefing/               # Thin HTTP handlers split by domain (index, lifecycle, email, tasks, bills, dev)
+│   │   ├── dashboard.js            # Current dashboard, current sync/refresh, health, SSE events
 │   │   ├── accounts.js             # Account CRUD, Gmail OAuth, settings, schedules, API tokens
 │   │   ├── calendar.js             # Read-only calendar endpoints (mounted at /api/calendar)
-│   │   └── live.js                 # Real-time data: new emails, calendar, weather, bills
+│   │   └── live.js                 # Retired `/api/live/all` compatibility response
 │   ├── middleware/
 │   │   └── auth.js                 # Session + Bearer-token validation, requireAuth middleware
 │   └── db/
@@ -123,8 +127,8 @@ ea-dashboard/
 │   ├── context/
 │   │   └── DashboardContext.jsx    # Email/task state, computed values, action handlers
 │   ├── hooks/
-│   │   ├── useBriefingData.js      # Briefing lifecycle: fetch, poll, generate, history
-│   │   ├── useLiveData.js          # 5-min polling: live emails, calendar, weather, bills
+│   │   ├── useCurrentDashboard.js  # Normal boot/runtime data from `/api/dashboard/current`
+│   │   ├── useBriefingData.js      # Legacy briefing history/dev scenario compatibility
 │   │   ├── useLiveEmailState.js    # Derived read/snoozed state for live email rows
 │   │   ├── useNotifications.js     # Browser notifications for events, bills, emails
 │   │   ├── useAutoRefresh.js       # Visibility-aware auto refresh of briefing data
@@ -213,8 +217,8 @@ No global state library. Three layers:
 ```mermaid
 graph LR
     subgraph Hooks["Custom Hooks (data fetching)"]
+        UCD[useCurrentDashboard]
         UBD[useBriefingData]
-        ULD[useLiveData]
         UN[useNotifications]
     end
 
@@ -229,26 +233,25 @@ graph LR
         Sections[Section Components]
     end
 
-    UBD -->|briefing, generating, refreshing| Context
-    ULD -->|liveEmails, liveCalendar, liveWeather| Context
+    UCD -->|briefing adapter, liveData adapter, activeSnapshot| Context
+    UBD -.->|mock/dev scenarios and history selection| Context
     UN -->|monitors liveData| Browser[Browser Notifications]
     Context --> Sections
 ```
 
-**`useBriefingData`** — Briefing lifecycle: initial fetch, generation polling (2s interval), quick refresh, history navigation. Manages `briefing`, `loading`, `generating`, `genProgress`, `viewingPast` state.
+**`useCurrentDashboard`** — Normal dashboard boot/runtime hook. Fetches `/api/dashboard/current`, listens to `/api/dashboard/current/events`, and exposes stable `briefingData`, `liveData`, and `activeSnapshot` adapters for the existing dashboard component tree.
 
-**`useLiveData`** — 5-minute polling loop for real-time updates. Pauses when tab is hidden (visibility API). Returns live emails, calendar (3 ranges), weather, bills, read status. Dashboard merges: `liveData.liveCalendar || briefing.calendar`.
+**`useBriefingData`** — Legacy briefing history/dev scenario compatibility. It can still fetch `/api/briefing/latest` for mock scenarios and historical navigation, but it is disabled for normal dashboard boot.
 
 **`DashboardContext`** — Shared across all dashboard sections. Derives `emailAccounts`, `billEmails`, `totalBills`, `totalNoiseCount` via `useMemo`. Provides action handlers that update both API and local state.
 
 ### Data Flow
 
 ```
-API fetch (apiFetch wrapper)
-  → JSON response
-  → transformBriefing() normalizes shape (camelCase/snake_case, weather icons, stats)
-  → setBriefing() updates hook state
-  → DashboardContext derives computed values
+GET /api/dashboard/current
+  → current-service reads durable current rows + active snapshot view
+  → useCurrentDashboard adapts the envelope into briefingData/liveData/activeSnapshot
+  → DashboardContext derives computed values and action handlers
   → Section components render via useDashboard()
 ```
 
@@ -300,8 +303,9 @@ graph LR
 |-------|-------|-----------|---------------------|
 | Auth | `/api/auth` | 3 | Login (rate-limited 5/15min), session check, logout |
 | Briefing | `/api/briefing` | ~38 | Generate, poll, refresh, email ops (read/trash/snooze/dismiss), FTS email search, task ops, Actual Budget, scenarios |
+| Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
-| Live | `/api/live` | 1 | Combined real-time data (emails, calendar, weather, bills) |
+| Live | `/api/live` | 1 | Retired `/api/live/all` compatibility response |
 | Calendar | `/api/calendar` | 1 | Read-only calendar slice exposed separately from briefing |
 
 ### Authentication
@@ -317,10 +321,10 @@ sequenceDiagram
     S->>DB: INSERT ea_sessions (token, expires_at)
     S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
 
-    B->>S: GET /api/briefing/latest (cookie)
+    B->>S: GET /api/dashboard/current (cookie)
     S->>DB: SELECT FROM ea_sessions WHERE token = ?
     S->>S: Check expires_at > now
-    S->>B: 200 briefing data (or 401 if expired)
+    S->>B: 200 current dashboard envelope (or 401 if expired)
 ```
 
 Two auth paths exist, but they no longer feed a single shared "any auth works" guard:
@@ -688,12 +692,24 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 | POST | `/api/briefing/generate` | Legacy dev-only batch generation; 410 in production |
 | GET | `/api/briefing/in-progress` | Legacy generation status hint; returns retired state in production |
 | GET | `/api/briefing/status/:id` | Legacy dev-only generation progress/status; 410 in production |
-| GET | `/api/briefing/latest` | Fetch latest ready briefing |
+| GET | `/api/briefing/latest` | Legacy latest briefing for history/dev compatibility, not active dashboard boot |
 | GET | `/api/briefing/history` | Last 20 briefings with metadata |
 | GET | `/api/briefing/:id` | Fetch specific briefing |
 | DELETE | `/api/briefing/:id` | Soft-delete briefing |
 | POST | `/api/briefing/refresh` | Legacy dev-only quick refresh; 410 in production |
 | GET | `/api/briefing/scenarios` | List dev scenarios |
+
+### Current Dashboard
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/dashboard/current` | Normal dashboard boot/runtime envelope from durable current-data cache plus active snapshot |
+| POST | `/api/dashboard/current/refresh` | Light background refresh of current rows |
+| POST | `/api/dashboard/current/sync` | Explicit bounded sync of current rows plus active snapshot fallback |
+| GET | `/api/dashboard/health` | Authenticated system/provider health shape |
+| GET | `/api/dashboard/current/events` | SSE notifications when current dashboard data changes |
+
+The current dashboard envelope is the production runtime contract. It includes weather, calendar, deadlines, bills, `providerHealth`/`systemStatus`, and the active snapshot inbox view. Non-email boot-critical data is stored in the durable current-data cache keyed by `user_id` and cache key; email rows come from active snapshot/domain tables, not from `ea_briefings.briefing_json`.
 
 ### Email Search
 
@@ -745,7 +761,7 @@ Health responses intentionally avoid email bodies. Use `indexed_count`, `oldest_
 | POST | `/api/briefing/email/:uid/snooze` | Snooze email until `until_ts` |
 | DELETE | `/api/briefing/email/:uid/snooze` | Cancel snooze and resurface |
 
-Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `lifecycle.js`, `email.js`, `tasks.js`, `bills.js`, `dev.js`, all composed by `index.js`). Route handlers stay thin — business logic + DB live in `server/briefing/*-service.js` (every `briefing_json` mutation funnels through `stored-briefing-service.js`).
+Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `lifecycle.js`, `email.js`, `tasks.js`, `bills.js`, `dev.js`, all composed by `index.js`). Route handlers stay thin — business logic + DB live in `server/briefing/*-service.js`. Remaining `briefing_json` mutations are legacy/history/dev compatibility work and funnel through `stored-briefing-service.js`; normal current dashboard runtime does not read or mutate briefing JSON.
 
 ### Tasks
 
@@ -796,7 +812,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/live/all` | Real-time: new emails, calendar, weather, bills |
+| GET | `/api/live/all` | Retired; authenticated callers receive 410 and should use `/api/dashboard/current` |
 
 ### Calendar
 

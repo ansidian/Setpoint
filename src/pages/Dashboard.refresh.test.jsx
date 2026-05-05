@@ -26,16 +26,6 @@ vi.mock("../api", () => ({
   deleteBriefing: vi.fn(),
 }));
 
-vi.mock("../hooks/useLiveData", () => ({
-  default: () => ({
-    allSchedules: [],
-    recentTransactions: [],
-    payeeMap: {},
-    actualBudgetUrl: "",
-    refreshNow: vi.fn(),
-  }),
-}));
-
 vi.mock("../hooks/useCalendarRange", () => ({
   default: () => ({
     invalidate: mocks.invalidateCalendarRange,

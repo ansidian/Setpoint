@@ -116,6 +116,109 @@ function defaultLiveData(overrides = {}) {
   };
 }
 
+function buildActiveSnapshotFixture({ emailAccounts = [], liveEmails = [] } = {}) {
+  const accounts = emailAccounts.map((account) => ({
+    account_id: account.id || account.account_id || account.name,
+    label: account.name || account.label || account.email,
+    email: account.email || "",
+    color: account.color || "#cba6da",
+    icon: account.icon || "Mail",
+    count: account.unread || 0,
+  }));
+  const accountById = new Map(accounts.map((account) => [account.account_id, account]));
+  const toSnapshotItem = (email, account, lane, index) => ({
+    id: email.snapshot_item_id || `${lane}-${email.uid || email.id || index}`,
+    snapshot_item_id: email.snapshot_item_id || `${lane}-${email.uid || email.id || index}`,
+    uid: email.uid || email.id,
+    email_id: email.uid || email.id,
+    account_id: account.account_id,
+    lane,
+    subject: email.subject || "",
+    from_name: email.from || email.fromName || email.from_email || email.fromEmail || "Unknown",
+    from_address: email.from_email || email.fromEmail || "",
+    summary: email.preview || email.body_preview || email.summary || "",
+    body_preview: email.body_preview || email.preview || email.summary || "",
+    date: email.date || new Date().toISOString(),
+    read: !!email.read,
+    urgency: email.urgency,
+    urgentFlag: email.urgentFlag,
+    hasBill: email.hasBill,
+    extractedBill: email.extractedBill,
+    claude: email.claude,
+  });
+  const lanes = { needs_attention: [], fyi: [], noise: [] };
+
+  emailAccounts.forEach((account, accountIndex) => {
+    const accountId = account.id || account.account_id || account.name || `account-${accountIndex}`;
+    const snapshotAccount = accountById.get(accountId) || {
+      account_id: accountId,
+      label: account.name || account.label || account.email,
+      email: account.email || "",
+      color: account.color || "#cba6da",
+      icon: "Mail",
+      count: account.unread || 0,
+    };
+    for (const email of account.important || []) {
+      lanes.needs_attention.push(toSnapshotItem(email, snapshotAccount, "needs_attention", lanes.needs_attention.length));
+    }
+    for (const email of account.noise || []) {
+      lanes.noise.push(toSnapshotItem(email, snapshotAccount, "noise", lanes.noise.length));
+    }
+  });
+
+  const liveAccount = accounts[0] || {
+    account_id: "live",
+    label: "Live",
+    email: "",
+    color: "#89dceb",
+    icon: "Mail",
+    count: liveEmails.length,
+  };
+  if (!accounts.length && liveEmails.length) accounts.push(liveAccount);
+  for (const email of liveEmails) {
+    lanes.needs_attention.push(toSnapshotItem(email, liveAccount, "needs_attention", lanes.needs_attention.length));
+  }
+
+  return {
+    snapshot: { id: 9001, updated_at: new Date().toISOString() },
+    filters: { accounts, categories: [] },
+    lanes,
+    carryover: [],
+    laneCounts: {
+      needs_attention: lanes.needs_attention.length,
+      fyi: lanes.fyi.length,
+      noise: lanes.noise.length,
+      carryover: 0,
+    },
+    processing: { active: false, queued: 0, running: 0, total: 0 },
+  };
+}
+
+function buildCurrentDashboardFixture({ events = [], emailAccounts = [], briefing = {}, liveData = {} } = {}) {
+  const latest = buildBriefing({ events, emailAccounts, briefing });
+  const live = defaultLiveData(liveData);
+  return {
+    weather: latest.weather,
+    calendar: latest.calendar,
+    deadlines: {
+      ctm: latest.ctm,
+      todoist: latest.todoist,
+    },
+    bills: live.bills || [],
+    allSchedules: live.allSchedules || [],
+    payeeMap: live.payeeMap || {},
+    actualConfigured: !!live.actualConfigured,
+    actualBudgetUrl: live.actualBudgetUrl || null,
+    activeSnapshot: buildActiveSnapshotFixture({
+      emailAccounts,
+      liveEmails: live.emails || [],
+    }),
+    providerHealth: { currentData: { state: "current", sources: [] } },
+    systemStatus: { state: "current", sources: [] },
+    fetchedAt: live.fetchedAt || new Date().toISOString(),
+  };
+}
+
 function buildCalendarSourcesFixture() {
   return {
     accounts: [
@@ -292,8 +395,24 @@ async function installBaseDashboardFixtures(page, {
     json(route, { ...defaultSettings(), ...settings }),
   );
 
-  await page.route("**/api/live/all", async (route) =>
-    json(route, defaultLiveData(liveData)),
+  await page.route("**/api/dashboard/current", async (route) =>
+    json(route, buildCurrentDashboardFixture({ events, emailAccounts, briefing, liveData })),
+  );
+
+  await page.route("**/api/dashboard/current/refresh", async (route) =>
+    json(route, buildCurrentDashboardFixture({ events, emailAccounts, briefing, liveData })),
+  );
+
+  await page.route("**/api/dashboard/current/sync", async (route) =>
+    json(route, buildCurrentDashboardFixture({ events, emailAccounts, briefing, liveData })),
+  );
+
+  await page.route("**/api/dashboard/current/events", async (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+      body: "",
+    }),
   );
 
   await page.route("**/api/calendar/deadlines", async (route) => {

@@ -10,6 +10,8 @@ import {
 } from "./todoist.js";
 import { fetchCTMDeadlinesAll, updateCTMEventStatus } from "./ctm.js";
 import { buildSnapshot } from "./tombstones.js";
+// Keeps old stored briefings coherent for history/dev compatibility; current
+// dashboard task visibility comes from domain sources and current endpoint data.
 import * as storedBriefingService from "./stored-briefing-service.js";
 
 function findCtmTask(tasks, taskId) {
