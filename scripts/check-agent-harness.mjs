@@ -12,7 +12,6 @@ const componentSizeBaseline = {
     'src/components/todoist/add-task-panel/AddTaskPanelView.jsx': 1162,
     'src/components/calendar/modal/CalendarGrid.jsx': 650,
     'src/components/inbox/reader/MobileReader.jsx': 625,
-    'src/components/dashboard/RedesignShell.jsx': 619,
     'src/components/calendar/modal/CalendarModalShell.jsx': 616,
   },
 }

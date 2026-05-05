@@ -30,17 +30,10 @@ function hasActiveRefreshWork(current) {
 function currentToBriefing(current) {
   const deadlines = current?.deadlines || EMPTY_DEADLINES;
   return {
-    generatedAt: "",
-    dataUpdatedAt: current?.fetchedAt || null,
-    aiGeneratedAt: null,
-    skippedAI: false,
-    nonAiGenerationCount: 0,
     weather: current?.weather || null,
-    aiInsights: [],
     calendar: current?.calendar || [],
     ctm: deadlines.ctm || EMPTY_DEADLINES.ctm,
     todoist: deadlines.todoist || EMPTY_DEADLINES.todoist,
-    model: null,
     emails: { summary: "", accounts: [] },
   };
 }
@@ -49,6 +42,7 @@ function currentToLiveData(current, { refreshNow, isPolling }) {
   return {
     liveEmails: [],
     liveCalendar: current?.calendar || null,
+    liveDeadlines: current?.deadlines || EMPTY_DEADLINES,
     liveNextWeekCalendar: null,
     liveTomorrowCalendar: null,
     liveWeather: current?.weather || null,
@@ -57,7 +51,6 @@ function currentToLiveData(current, { refreshNow, isPolling }) {
     allSchedules: current?.allSchedules || [],
     payeeMap: current?.payeeMap || {},
     importantSenders: [],
-    briefingGeneratedAt: null,
     briefingReadStatus: {},
     lastFetched: current?.fetchedAt || null,
     isPolling,
@@ -75,7 +68,6 @@ function currentToLiveData(current, { refreshNow, isPolling }) {
 export default function useCurrentDashboard({ disabled = false } = {}) {
   const [current, setCurrent] = useState(null);
   const [selectedBriefing, setSelectedBriefing] = useState(null);
-  const [viewingPast, setViewingPast] = useState(null);
   const [loading, setLoading] = useState(!disabled);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -90,7 +82,6 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
     if (!mountedRef.current) return data;
     setCurrent(data);
     setSelectedBriefing(null);
-    setViewingPast(null);
     setError(null);
     setLoaded(true);
     return data;
@@ -196,7 +187,6 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
     if (disabled) {
       setCurrent(null);
       setSelectedBriefing(null);
-      setViewingPast(null);
       setLoading(false);
       setRefreshing(false);
       setError(null);
@@ -243,33 +233,10 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
     setBriefing: setSelectedBriefing,
     loading,
     refreshing,
-    generating: false,
     error,
     loaded,
-    modelLabel: "AI",
-    genProgress: null,
-    viewingPast,
-    latestId: null,
-    schedules: [],
-    setSchedules: () => {},
-    renderConfigured: false,
-    lastQuickRefreshAt: null,
     handleQuickRefresh: refreshNow,
-    handleFullGeneration: () => {},
-    selectHistory: (briefingData, meta) => {
-      setSelectedBriefing(briefingData);
-      setViewingPast(meta);
-    },
-    backToLatest: () => {
-      setSelectedBriefing(null);
-      setViewingPast(null);
-    },
-    navigateToEmail: ({ briefing: navBriefing, briefingId, generated_at, emailId, accountName }) => {
-      setSelectedBriefing(navBriefing);
-      setViewingPast({ id: briefingId, generated_at });
-      return { navBriefing, emailId, accountName };
-    },
-  }), [briefing, error, loaded, loading, refreshNow, refreshing, viewingPast]);
+  }), [briefing, error, loaded, loading, refreshNow, refreshing]);
 
   const liveData = useMemo(
     () => currentToLiveData(current, { refreshNow, isPolling: loading || refreshing }),

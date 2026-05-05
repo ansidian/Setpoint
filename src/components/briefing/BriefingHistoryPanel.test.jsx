@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import BriefingHistoryPanel from "./BriefingHistoryPanel.jsx";
-import { getBriefingHistory, getSnapshotById, getSnapshotHistory } from "../../api";
+import { getSnapshotById, getSnapshotHistory } from "../../api";
 
 vi.mock("../../hooks/useIsMobile", () => ({ default: () => false }));
 
@@ -9,7 +9,6 @@ vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
   return {
     ...actual,
-    getBriefingHistory: vi.fn(),
     getSnapshotHistory: vi.fn(),
     getSnapshotById: vi.fn(),
   };
@@ -82,7 +81,6 @@ describe("BriefingHistoryPanel snapshots", () => {
     expect(screen.getByText("Active")).toBeTruthy();
     expect(screen.getByText("Read-only")).toBeTruthy();
     expect(getSnapshotHistory).toHaveBeenCalledTimes(1);
-    expect(getBriefingHistory).not.toHaveBeenCalled();
   });
 
   it("loads frozen snapshot detail for read-only inbox selection", async () => {

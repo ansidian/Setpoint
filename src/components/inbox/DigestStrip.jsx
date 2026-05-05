@@ -25,7 +25,7 @@ export default function DigestStrip({
     { key: "noise",  count: counts.noise,  verb: "filtered", ...LANE.noise },
   ];
   const activityActive = !readOnly && (liveCount > 0 || liveLoading || processingCount > 0);
-  const headline = activeSnapshotMode ? readOnly ? "Snapshot" : "Active snapshot" : "Briefing snapshot";
+  const headline = activeSnapshotMode ? readOnly ? "Snapshot" : "Active snapshot" : "Inbox snapshot";
   const resolvedSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(counts, accountCount)
     : summary;
@@ -53,7 +53,7 @@ export default function DigestStrip({
             >
               {liveCount}
             </span>{" "}
-            new since briefing
+            not yet triaged
           </>
         )
         : "No new live mail";

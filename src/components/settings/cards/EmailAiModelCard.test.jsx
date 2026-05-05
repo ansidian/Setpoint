@@ -123,8 +123,8 @@ describe("EmailAiModelCard", () => {
 
     expect(screen.getByText("Email Snapshot AI")).toBeTruthy();
     expect(screen.getByText("Model used for email snapshot summaries and triage context. Bill extraction uses its own model.")).toBeTruthy();
-    expect(screen.getByLabelText("Email summary provider")).toBeTruthy();
-    expect(screen.getByLabelText("Email summary model")).toBeTruthy();
+    expect(screen.getByLabelText("Email snapshot provider")).toBeTruthy();
+    expect(screen.getByLabelText("Email snapshot model")).toBeTruthy();
   });
 
   it("switches OpenAI to the current GPT-5.5 default", async () => {
@@ -135,7 +135,7 @@ describe("EmailAiModelCard", () => {
       expect(mockApi.getModels).toHaveBeenCalled();
     });
 
-    fireEvent.change(screen.getByLabelText("Email summary provider"), {
+    fireEvent.change(screen.getByLabelText("Email snapshot provider"), {
       target: { value: "openai" },
     });
 
@@ -146,6 +146,6 @@ describe("EmailAiModelCard", () => {
       });
     });
 
-    expect(screen.getByLabelText("Email summary model").value).toBe("gpt-5.5");
+    expect(screen.getByLabelText("Email snapshot model").value).toBe("gpt-5.5");
   });
 });

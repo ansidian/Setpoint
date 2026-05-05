@@ -1,8 +1,6 @@
-import { deriveLane } from "../../lib/redesign-helpers";
-
-// Build a `synthAccount(source)` function bound to the briefing's emailAccounts.
+// Build a `synthAccount(source)` function bound to the inbox account list.
 // Matches a live/resurfaced/pin-snapshot entry's account_label to an existing
-// briefing account so the sidebar groups them correctly, else synthesizes a
+// inbox account so the sidebar groups them correctly, else synthesizes a
 // minimal account record. Built once per flatEmails recompute so the inner
 // lookup can be a Map get.
 export function makeSynthAccount(emailAccounts) {
@@ -29,35 +27,6 @@ export function readOverrideForUid(readOverrides, uid) {
 export function mergeReadState(read, uid, readOverrides) {
   const override = readOverrideForUid(readOverrides, uid);
   return override == null ? !!read : !!override;
-}
-
-// Flatten briefing emailAccounts into email entries tagged with account
-// reference and lane. Important is iterated before noise so a uid appearing
-// in both wins the important lane (dedup is handled by the caller).
-export function collectBriefingEmails(emailAccounts) {
-  const out = [];
-  for (const acc of emailAccounts) {
-    const accountKey = acc.id || acc.name;
-    for (const e of acc.important || []) {
-      out.push({
-        ...e,
-        _accountKey: accountKey,
-        _account: acc,
-        _lane: deriveLane(e),
-        _untriaged: false,
-      });
-    }
-    for (const e of acc.noise || []) {
-      out.push({
-        ...e,
-        _accountKey: accountKey,
-        _account: acc,
-        _lane: "noise",
-        _untriaged: false,
-      });
-    }
-  }
-  return out;
 }
 
 export function pendingSecurityGraceLabel(classifyAtMs, nowMs = Date.now()) {
@@ -157,8 +126,8 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
   });
 }
 
-// Build entries for live-polled emails (arrived after last briefing, not yet
-// triaged by the latest briefing). Merges resurfaced metadata when a live uid is also
+// Build entries for live-polled emails that are not yet attached to the active
+// snapshot. Merges resurfaced metadata when a live uid is also
 // present in resurfacedMap — Gmail's `newer_than:Nh` poll re-fetches
 // recently-woken snoozes on its own; without this merge the live entry wins
 // dedup and the Snoozed badge / wake-time sort would be lost.

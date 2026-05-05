@@ -27,7 +27,7 @@ export function DashboardBody({
   const effectiveLayout = layoutPlan.layoutMode;
   const ctx = useDashboard();
 
-  const seededEvents = useMemo(() => briefing?.calendar || [], [briefing?.calendar]);
+  const seededEvents = useMemo(() => liveData.liveCalendar || [], [liveData.liveCalendar]);
   const [events, setEvents] = useState([]);
   const [liveEventsReady, setLiveEventsReady] = useState(false);
   const today = useMemo(
@@ -58,20 +58,21 @@ export function DashboardBody({
     return () => { cancelled = true; };
   }, [ensureCalendarRange, today, seededEvents, calendarRevision]);
   const calendarDeadlinesReady = calendarDeadlines != null;
-  const allowBriefingDeadlineFallback = calendarDeadlines === undefined || calendarDeadlinesError;
+  const allowCurrentDeadlineFallback = calendarDeadlines === undefined || calendarDeadlinesError;
+  const currentDeadlines = liveData.liveDeadlines || {};
   const ctm = useMemo(
     () => {
       if (calendarDeadlinesReady) return calendarDeadlines?.ctm?.upcoming || [];
-      return allowBriefingDeadlineFallback ? briefing?.ctm?.upcoming || [] : [];
+      return allowCurrentDeadlineFallback ? currentDeadlines.ctm?.upcoming || [] : [];
     },
-    [allowBriefingDeadlineFallback, briefing?.ctm?.upcoming, calendarDeadlines?.ctm?.upcoming, calendarDeadlinesReady],
+    [allowCurrentDeadlineFallback, calendarDeadlines?.ctm?.upcoming, calendarDeadlinesReady, currentDeadlines.ctm?.upcoming],
   );
   const todoist = useMemo(
     () => {
       if (calendarDeadlinesReady) return calendarDeadlines?.todoist?.upcoming || [];
-      return allowBriefingDeadlineFallback ? briefing?.todoist?.upcoming || [] : [];
+      return allowCurrentDeadlineFallback ? currentDeadlines.todoist?.upcoming || [] : [];
     },
-    [allowBriefingDeadlineFallback, briefing?.todoist?.upcoming, calendarDeadlines?.todoist?.upcoming, calendarDeadlinesReady],
+    [allowCurrentDeadlineFallback, calendarDeadlines?.todoist?.upcoming, calendarDeadlinesReady, currentDeadlines.todoist?.upcoming],
   );
   const deadlines = useMemo(() => [...ctm, ...todoist], [ctm, todoist]);
   const bills = liveData.liveBills || [];
@@ -139,7 +140,7 @@ export function DashboardBody({
   const billsLoadingState = liveData.actualConfigured && liveData.billsLoading && !bills.length
     ? "empty_loading"
     : "ready";
-  const deadlinesLoadingState = !calendarDeadlinesReady && !allowBriefingDeadlineFallback && (calendarDeadlinesLoading || calendarDeadlines === null)
+  const deadlinesLoadingState = !calendarDeadlinesReady && !allowCurrentDeadlineFallback && (calendarDeadlinesLoading || calendarDeadlines === null)
     ? "empty_loading"
     : "ready";
   const pressureFocusTarget = useMemo(

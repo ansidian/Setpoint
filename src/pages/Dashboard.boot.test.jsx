@@ -28,7 +28,6 @@ vi.mock("../api", () => ({
   getCalendarDeadlines: mocks.getCalendarDeadlines,
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
-  deleteBriefing: vi.fn(),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({
@@ -75,14 +74,10 @@ vi.mock("../hooks/useCurrentDashboard", () => ({
       briefing: null,
       setBriefing: vi.fn(),
       refreshing: false,
-      generating: false,
-      genProgress: null,
       latestId: null,
       schedules: [],
-      viewingPast: null,
       lastQuickRefreshAt: null,
       handleQuickRefresh: vi.fn(),
-      selectHistory: vi.fn(),
     },
   }),
 }));
@@ -120,7 +115,7 @@ describe("Dashboard boot", () => {
     });
 
     expect(bootState.view).toBe("dashboard");
-    expect(bootState.effectiveBriefing.emails.accounts).toEqual([]);
+    expect(bootState.effectiveBriefing).toBeNull();
 
     render(
       <BrowserRouter>

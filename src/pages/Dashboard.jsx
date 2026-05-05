@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getCalendarBillsRange, getCalendarDeadlines, getCalendarDeadlinesRange } from "../api";
 import LoadingSkeleton from "../components/layout/LoadingSkeleton";
 import ErrorState from "../components/layout/ErrorState";
-import RefreshBanner from "../components/layout/RefreshBanner";
 import { Sun } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DashboardProvider } from "../context/DashboardContext";
@@ -86,12 +85,12 @@ export default function Dashboard() {
     function onKeyDown(e) {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.repeat || e.key !== "r") return;
-      if (bd.refreshing || bd.generating || currentSyncing) return;
+      if (bd.refreshing || currentSyncing) return;
       handleExplicitQuickRefresh();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [bd.refreshing, bd.generating, currentSyncing, handleExplicitQuickRefresh]);
+  }, [bd.refreshing, currentSyncing, handleExplicitQuickRefresh]);
 
   // Reconcile briefing read status from live data (kept from original)
   useEffect(() => {
@@ -204,8 +203,8 @@ export default function Dashboard() {
         <div className="w-full max-w-[880px]">
           <EmptyStateSplash
             icon={<Sun size={46} className="text-[#f9e2af]" />}
-            eyebrow="Briefings"
-            title="No briefings yet"
+            eyebrow="Current dashboard"
+            title="No current snapshot yet"
             message="Connect the inboxes and services that feed the dashboard, then sync current data to seed the workspace."
             actions={(
               <>
@@ -215,7 +214,6 @@ export default function Dashboard() {
             )}
             minHeight={360}
           />
-          {bd.generating && <div className="mt-4"><RefreshBanner progress={bd.genProgress} /></div>}
         </div>
       </div>
     );

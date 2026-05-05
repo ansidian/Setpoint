@@ -115,7 +115,6 @@ ea-dashboard/
 │   ├── main.jsx                    # React entry point
 │   ├── App.jsx                     # Router + auth guard (3 routes)
 │   ├── api.js                      # API client: apiFetch wrapper + 40 endpoint functions
-│   ├── transform.js                # Briefing normalization (camelCase/snake_case, stats)
 │   ├── index.css                   # Tailwind v4 + CSS tokens (oklch, Catppuccin Mocha)
 │   ├── pages/
 │   │   ├── Dashboard.jsx           # Main page: briefing display, refresh gestures

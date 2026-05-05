@@ -35,23 +35,23 @@ describe("phaseIndex", () => {
 
 describe("briefingPhaseLabel", () => {
   it("returns fallback when ts is nullish", () => {
-    expect(briefingPhaseLabel(null)).toBe("Since last briefing");
-    expect(briefingPhaseLabel(undefined)).toBe("Since last briefing");
+    expect(briefingPhaseLabel(null)).toBe("Since current snapshot");
+    expect(briefingPhaseLabel(undefined)).toBe("Since current snapshot");
   });
-  it("morning briefing → 'Since this morning's briefing'", () => {
-    expect(briefingPhaseLabel(atHourPacific(8).getTime())).toBe("Since this morning's briefing");
+  it("morning snapshot → 'Since this morning's snapshot'", () => {
+    expect(briefingPhaseLabel(atHourPacific(8).getTime())).toBe("Since this morning's snapshot");
   });
-  it("afternoon briefing → 'Since this afternoon's briefing'", () => {
-    expect(briefingPhaseLabel(atHourPacific(14).getTime())).toBe("Since this afternoon's briefing");
+  it("afternoon snapshot → 'Since this afternoon's snapshot'", () => {
+    expect(briefingPhaseLabel(atHourPacific(14).getTime())).toBe("Since this afternoon's snapshot");
   });
-  it("evening briefing → 'Since this evening's briefing'", () => {
-    expect(briefingPhaseLabel(atHourPacific(19).getTime())).toBe("Since this evening's briefing");
+  it("evening snapshot → 'Since this evening's snapshot'", () => {
+    expect(briefingPhaseLabel(atHourPacific(19).getTime())).toBe("Since this evening's snapshot");
   });
-  it("late-night briefing → 'Since last night's briefing'", () => {
-    expect(briefingPhaseLabel(atHourPacific(3).getTime())).toBe("Since last night's briefing");
+  it("late-night snapshot → 'Since last night's snapshot'", () => {
+    expect(briefingPhaseLabel(atHourPacific(3).getTime())).toBe("Since last night's snapshot");
   });
-  it("night briefing → 'Since tonight's briefing'", () => {
-    expect(briefingPhaseLabel(atHourPacific(22).getTime())).toBe("Since tonight's briefing");
+  it("night snapshot → 'Since tonight's snapshot'", () => {
+    expect(briefingPhaseLabel(atHourPacific(22).getTime())).toBe("Since tonight's snapshot");
   });
 });
 

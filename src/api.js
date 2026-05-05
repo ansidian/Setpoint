@@ -42,7 +42,7 @@ export const listApiTokens = () => apiFetch("/api/auth/api-tokens");
 export const createApiToken = (label, scopes) => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
 export const revokeApiToken = (id) => apiFetch(`/api/auth/api-tokens/${id}`, { method: "DELETE" });
 
-// Briefings
+// Current snapshot and operational dashboard data
 export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
 export const syncActiveSnapshot = () => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
 export const getSnapshotHistory = () => apiFetch("/api/briefing/snapshot/history");
@@ -56,8 +56,6 @@ export const dismissSnapshotItemForToday = (itemId) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/dismiss`, { method: "POST" });
 export const markSnapshotItemHandled = (itemId) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/handled`, { method: "POST" });
-export const getBriefingHistory = () => apiFetch("/api/briefing/history");
-export const getBriefingById = (id) => apiFetch(`/api/briefing/${id}`);
 
 // Current Dashboard
 export const getCurrentDashboard = () => apiFetch("/api/dashboard/current");
@@ -107,8 +105,6 @@ export const markEmailAsRead = (uid) => apiFetch(`/api/briefing/email/${encodeUR
 export const markEmailAsUnread = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-unread`, { method: "POST" });
 export const trashEmail = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/trash`, { method: "POST" });
 export const markAllEmailsAsRead = (uids) => apiFetch("/api/briefing/email/mark-all-read", { method: "POST", body: JSON.stringify({ uids }) });
-export const deleteBriefing = (id) => apiFetch(`/api/briefing/${id}`, { method: "DELETE" });
-
 // Calendar
 export const getCalendarDeadlines = () => apiFetch("/api/calendar/deadlines");
 export const getCalendarDeadlinesRange = (start, end) =>

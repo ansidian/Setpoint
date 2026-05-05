@@ -23,7 +23,6 @@ export default function ShellHeader({
   onOpenCalendar,
   liveUnreadCount = 0,
   refreshing,
-  generating,
   onQuickRefresh,
   systemStatus,
 }) {
@@ -83,7 +82,6 @@ export default function ShellHeader({
       <RefreshButton
         isMobile={isMobile}
         refreshing={refreshing}
-        generating={generating}
         onQuickRefresh={onQuickRefresh}
       />
       <div ref={menuRef} style={{ position: "relative" }}>

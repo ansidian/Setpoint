@@ -27,7 +27,7 @@ function LiveEmailNotice({ email }) {
   const status = email?._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live · not yet triaged";
   const detail = email?._pendingSecurityGrace
     ? "Security triage is delayed briefly before classification."
-    : "Arrived after your last briefing. Not yet triaged.";
+    : "Arrived after the current snapshot. Not yet triaged.";
   return (
     <div
       style={{

@@ -30,8 +30,10 @@ describe("DigestStrip", () => {
   it("shows live counts without changing the slot structure", () => {
     renderStrip(4);
 
+    expect(screen.getByText("Inbox snapshot")).toBeTruthy();
     expect(screen.getByTestId("digest-live-slot").textContent).toContain("4");
     expect(screen.getByTestId("digest-live-slot").textContent).toContain("Live");
+    expect(screen.getByTestId("digest-live-slot").textContent).toContain("not yet triaged");
   });
 
   it("shows the live retrieval state while the poll is in flight", () => {

@@ -86,8 +86,8 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
           provider={selectedProvider}
           model={selectedModel}
           onChange={applyChange}
-          providerAriaLabel="Email summary provider"
-          modelAriaLabel="Email summary model"
+          providerAriaLabel="Email snapshot provider"
+          modelAriaLabel="Email snapshot model"
         />
 
         <div className="flex items-center gap-2">

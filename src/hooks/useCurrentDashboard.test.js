@@ -145,6 +145,12 @@ describe("useCurrentDashboard", () => {
     });
     expect(result.current.activeSnapshot.snapshot).toEqual(currentPayload.activeSnapshot);
     expect(result.current.systemStatus).toEqual(currentPayload.systemStatus);
+    expect(result.current.briefingData.briefing).not.toHaveProperty("aiInsights");
+    expect(result.current.briefingData).not.toHaveProperty("generating");
+    expect(result.current.briefingData).not.toHaveProperty("genProgress");
+    expect(result.current.briefingData).not.toHaveProperty("handleFullGeneration");
+    expect(result.current.briefingData).not.toHaveProperty("selectHistory");
+    expect(result.current.briefingData).not.toHaveProperty("navigateToEmail");
 
     unmount();
   });

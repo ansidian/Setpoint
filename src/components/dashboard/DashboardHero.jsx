@@ -40,15 +40,13 @@ export default function DashboardHero({
   const greet = greetingFor(new Date(now), userName);
   const weather = liveWeather || briefing?.weather;
   const events = useMemo(
-    () => liveCalendar || briefing?.calendar || [],
-    [liveCalendar, briefing?.calendar],
+    () => liveCalendar || [],
+    [liveCalendar],
   );
   const deadlines = useMemo(() => {
     if (liveDeadlines) return liveDeadlines;
-    const ctm = briefing?.ctm?.upcoming || [];
-    const todoist = briefing?.todoist?.upcoming || [];
-    return [...ctm, ...todoist];
-  }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming, liveDeadlines]);
+    return [];
+  }, [liveDeadlines]);
   const bills = useMemo(() => liveBills || [], [liveBills]);
 
   const theCallouts = useMemo(
@@ -60,8 +58,8 @@ export default function DashboardHero({
     [events, deadlines, now],
   );
   const openDaySummary = useMemo(
-    () => deriveOpenDaySummary({ deadlines, bills, emails: briefing?.emails, now }),
-    [deadlines, bills, briefing?.emails, now],
+    () => deriveOpenDaySummary({ deadlines, bills, emails: null, now }),
+    [deadlines, bills, now],
   );
 
   const compact = density === "compact";

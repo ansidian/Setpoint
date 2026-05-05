@@ -88,8 +88,8 @@ export function makeLiveInboxEmail(overrides = {}) {
     account_email: "work@example.com",
     account_color: "#89dceb",
     date: "2026-04-19T16:15:00.000Z",
-    preview: "Just arrived after the briefing.",
-    body_preview: "Just arrived after the briefing.",
+    preview: "Just arrived after the current snapshot.",
+    body_preview: "Just arrived after the current snapshot.",
     read: false,
     ...overrides,
   };
