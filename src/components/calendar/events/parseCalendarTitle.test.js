@@ -20,7 +20,7 @@ describe("parseCalendarTitle", () => {
     expect(parsed.preview).toMatch(/Tue, Apr 21, 2026/i);
   });
 
-  it("uses the selected day as the fallback date for bare times", () => {
+  it("uses the selected day as the default date for bare times", () => {
     const parsed = parseCalendarTitle("Dinner 5pm", {
       now: new Date("2026-04-20T19:00:00.000Z").getTime(),
       baseDate: "2026-04-29",

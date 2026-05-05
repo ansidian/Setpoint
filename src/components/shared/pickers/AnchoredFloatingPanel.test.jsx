@@ -53,7 +53,7 @@ describe("AnchoredFloatingPanel", () => {
     alternateAnchor?.remove();
   });
 
-  it("does not render a fallback top-left panel before an anchor exists", () => {
+  it("does not render a top-left panel before an anchor exists", () => {
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: null }}

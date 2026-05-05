@@ -15,44 +15,14 @@ import {
 } from "./snapshot-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const baseMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/001_ea_tables.sql"),
-  "utf8",
-);
-const accountSortOrderMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/010_account_sort_order.sql"),
-  "utf8",
-);
-const accountIconMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/003_account_icon.sql"),
-  "utf8",
-);
-const emailIndexMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/016_email_search_index.sql"),
-  "utf8",
-);
 const migrationSql = readFileSync(
-  join(__dirname, "../db/migrations/030_triage_snapshots.sql"),
-  "utf8",
-);
-const sourceMetadataMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/036_snapshot_item_source_metadata.sql"),
-  "utf8",
-);
-const snapshotHistoryLabelsMigrationSql = readFileSync(
-  join(__dirname, "../db/migrations/042_snapshot_history_labels.sql"),
+  join(__dirname, "../db/migrations/001_ea_tables.sql"),
   "utf8",
 );
 
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(baseMigrationSql);
-  await db.executeMultiple(accountSortOrderMigrationSql);
-  await db.executeMultiple(accountIconMigrationSql);
-  await db.executeMultiple(emailIndexMigrationSql);
   await db.executeMultiple(migrationSql);
-  await db.executeMultiple(sourceMetadataMigrationSql);
-  await db.executeMultiple(snapshotHistoryLabelsMigrationSql);
   return db;
 }
 

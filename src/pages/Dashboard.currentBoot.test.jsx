@@ -93,7 +93,7 @@ describe("Dashboard current boot", () => {
     cleanup();
   });
 
-  it("boots from the current dashboard endpoint without legacy briefing, live, or separate snapshot calls", async () => {
+  it("boots from the current dashboard endpoint without separate snapshot calls", async () => {
     render(
       <BrowserRouter>
         <Dashboard />

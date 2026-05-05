@@ -33,8 +33,8 @@ export function decrypt(ciphertext) {
     return decrypted;
   }
 
-  // Legacy CBC format: iv_hex:ciphertext_hex — re-encrypt to GCM on next write
-  console.warn("[Encryption] Decrypting legacy CBC data — should be migrated to GCM");
+  // CBC format: iv_hex:ciphertext_hex. Rewrite to GCM on the next startup pass.
+  console.warn("[Encryption] Decrypting CBC data; rewrite to GCM is pending");
   const [ivHex, encryptedHex] = ciphertext.split(":");
   const decipher = crypto.createDecipheriv(
     "aes-256-cbc",

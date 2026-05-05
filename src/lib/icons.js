@@ -75,7 +75,7 @@ export const EMOJI_TO_LUCIDE = {
 };
 
 // Options shown in Settings account-icon picker (order matters — first two
-// match legacy Gmail/iCloud defaults).
+// match stored Gmail/iCloud defaults).
 export const ACCOUNT_ICON_OPTIONS = [
   "Mail", "Apple", "Briefcase", "School", "GraduationCap", "Home",
   "DollarSign", "ShoppingCart", "Bell", "Gamepad2", "Music", "Smartphone",

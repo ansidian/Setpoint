@@ -112,7 +112,6 @@ process.env.EA_USER_ID = "user-1";
 const { createQuickTxn, sendBill } = await import("../briefing/bills-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
-const liveRoutes = (await import("./live.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
 const notesRoutes = (await import("./notes.js")).default;
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
@@ -124,7 +123,6 @@ function makeApp() {
   app.use(cookieParser());
   app.use("/api/briefing", briefingRoutes);
   app.use("/api/dashboard", dashboardRoutes);
-  app.use("/api/live", liveRoutes);
   app.use("/api/ea", accountsRoutes);
   app.use("/api/notes", notesRoutes);
   return app;
@@ -224,15 +222,6 @@ afterEach(async () => {
 });
 
 describe("auth boundaries", () => {
-  it("blocks bearer auth on live route", async () => {
-    await seedBearer();
-    const res = await request(makeApp())
-      .get("/api/live/all")
-      .set("Authorization", "Bearer scoped-token");
-
-    expect(res.status).toBe(401);
-  });
-
   it("blocks bearer auth on operational briefing routes", async () => {
     await seedBearer();
     const res = await request(makeApp())
@@ -251,7 +240,7 @@ describe("auth boundaries", () => {
     expect(res.status).toBe(401);
   });
 
-  it("does not expose retired briefing pin routes", async () => {
+  it("does not expose briefing pin routes", async () => {
     await seedSession();
     const res = await request(makeApp())
       .post("/api/briefing/pin/msg-1")
@@ -269,7 +258,7 @@ describe("auth boundaries", () => {
     expect(res.status).toBe(401);
   });
 
-  it("omits retired embedding status from settings", async () => {
+  it("omits embedding status from settings", async () => {
     await seedSession();
     const res = await request(makeApp())
       .get("/api/ea/settings")
@@ -538,7 +527,7 @@ describe("auth boundaries", () => {
     expect(sendBill).not.toHaveBeenCalled();
   });
 
-  it("does not expose legacy briefing lifecycle or history routes to cookie sessions", async () => {
+  it("does not expose briefing lifecycle or history routes to cookie sessions", async () => {
     await seedSession();
     const cases = [
       ["post", "/api/briefing/generate"],

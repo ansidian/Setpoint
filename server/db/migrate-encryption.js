@@ -1,10 +1,9 @@
 import db from "./connection.js";
 import { encrypt, decrypt } from "../briefing/encryption.js";
 
-// One-shot rewrite of legacy CBC-encrypted column values into GCM format.
-// `decrypt()` is backwards-compatible, but the legacy path warns on every
-// call — walking these columns at startup turns that recurring warn into a
-// single migration log line.
+// One-shot rewrite of CBC-encrypted column values into GCM format.
+// `decrypt()` accepts CBC values, but that path warns on every call. Walking
+// these columns at startup turns recurring warns into a single migration log.
 const TARGETS = [
   { table: "ea_accounts", idCol: "id", valCol: "credentials_encrypted" },
   { table: "ea_settings", idCol: "user_id", valCol: "actual_budget_password_encrypted" },
@@ -28,7 +27,7 @@ async function rewriteColumn({ table, idCol, valCol }) {
   return rows.length;
 }
 
-export async function migrateLegacyEncryption() {
+export async function migrateCbcEncryption() {
   if (!process.env.EA_ENCRYPTION_KEY) return;
   let total = 0;
   for (const target of TARGETS) {
@@ -38,12 +37,12 @@ export async function migrateLegacyEncryption() {
       // A missing column (schema older than expected) shouldn't block startup.
       if (/no such column|no such table/i.test(err.message)) continue;
       console.error(
-        `[Encryption] Legacy rewrite failed for ${target.table}.${target.valCol}:`,
+        `[Encryption] CBC rewrite failed for ${target.table}.${target.valCol}:`,
         err.message,
       );
     }
   }
   if (total > 0) {
-    console.log(`[Encryption] Rewrote ${total} legacy CBC value(s) to GCM.`);
+    console.log(`[Encryption] Rewrote ${total} CBC value(s) to GCM.`);
   }
 }

@@ -34,7 +34,7 @@ describe("phaseIndex", () => {
 });
 
 describe("briefingPhaseLabel", () => {
-  it("returns fallback when ts is nullish", () => {
+  it("returns the default label when ts is nullish", () => {
     expect(briefingPhaseLabel(null)).toBe("Since current snapshot");
     expect(briefingPhaseLabel(undefined)).toBe("Since current snapshot");
   });

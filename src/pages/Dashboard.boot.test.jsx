@@ -106,7 +106,7 @@ describe("Dashboard boot", () => {
     cleanup();
   });
 
-  it("mounts the active dashboard when snapshot data exists without a current legacy briefing", () => {
+  it("mounts the active dashboard when snapshot data exists without a batch briefing", () => {
     const bootState = resolveDashboardBriefingState({
       loading: false,
       error: null,

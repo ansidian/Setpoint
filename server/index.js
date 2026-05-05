@@ -12,7 +12,6 @@ import authRoutes from "./routes/auth.js";
 import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.js";
 import dashboardRoutes from "./routes/dashboard.js";
-import liveRoutes from "./routes/live.js";
 import calendarRoutes from "./routes/calendar.js";
 import notesRoutes from "./routes/notes.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
@@ -22,7 +21,7 @@ import { startSnoozeWaker } from "./briefing/snooze-waker.js";
 import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker } from "./briefing/todoist-webhook.js";
 import { migrate } from "./db/migrate.js";
-import { migrateLegacyEncryption } from "./db/migrate-encryption.js";
+import { migrateCbcEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
 import { getMissingRequiredEnv } from "./env.js";
 import { buildStartupWorkerDelays } from "./startup-delays.js";
@@ -71,7 +70,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/briefing", briefingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ea", accountsRoutes);
-app.use("/api/live", liveRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/gmail", gmailPushRoutes);
@@ -81,7 +79,7 @@ if (process.env.NODE_ENV === "production") {
   // Static assets are public — they're just the built frontend bundle
   app.use(express.static(join(__dirname, "../dist")));
 
-  // SPA fallback — serve index.html for all non-API routes
+  // Serve index.html for client-side routes.
   app.get("*", (req, res) => {
     if (req.path.startsWith("/api/")) {
       return res.status(404).json({ message: "Not found" });
@@ -110,7 +108,7 @@ function scheduleStartupWorker(worker, delayMs, fn) {
 }
 
 timeAsync("migrations", () => migrate())
-  .then(() => timeAsync("legacy-encryption-rewrite", () => migrateLegacyEncryption()))
+  .then(() => timeAsync("encryption-rewrite", () => migrateCbcEncryption()))
   .then(() => {
     app.listen(PORT, () => {
       console.log(`EA Dashboard running on http://localhost:${PORT}`);

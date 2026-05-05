@@ -114,7 +114,7 @@
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
 
-  /* Legacy EA token aliases mapped to Catppuccin Mocha */
+  /* EA token aliases mapped to Catppuccin Mocha */
   --color-accent-light: oklch(0.8467 0.0833 210.2545);
   --color-accent-lighter: oklch(0.8787 0.0426 272.2767);
   --color-accent-lightest: oklch(0.7510 0.0396 273.9320);

@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe("SystemSettingsSection", () => {
-  it("does not render retired embedding or vector-search status", () => {
+  it("does not render embedding or vector-search status", () => {
     render(
       <SystemSettingsSection
         settings={{ openai_available: false, embedding_count: 12 }}

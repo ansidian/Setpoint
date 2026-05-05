@@ -11,15 +11,7 @@ const migrationsDir = join(__dirname, "../db/migrations");
 
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
-  for (const file of [
-    "016_email_search_index.sql",
-    "023_snoozed_emails.sql",
-    "024_snoozed_resurfaced.sql",
-    "030_triage_snapshots.sql",
-    "036_snapshot_item_source_metadata.sql",
-  ]) {
-    await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
-  }
+  await db.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
   return db;
 }
 

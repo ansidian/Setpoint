@@ -49,7 +49,7 @@ function renderPanel(props = {}) {
 }
 
 describe("BriefingHistoryPanel snapshots", () => {
-  it("renders active and frozen snapshot history without legacy briefing history", async () => {
+  it("renders active and frozen snapshot history", async () => {
     getSnapshotHistory.mockResolvedValue({
       snapshots: [
         {

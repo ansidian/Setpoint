@@ -91,7 +91,7 @@ ea-dashboard/
 │   │   ├── actual.js               # Actual Budget: metadata, bills, send transactions
 │   │   ├── html-to-text.js         # HTML email body → plain text for indexing/snippets
 │   │   ├── email-index.js          # FTS5 email indexing for cross-account search
-│   │   ├── encryption.js           # AES-256-GCM encrypt/decrypt (legacy CBC migration)
+│   │   ├── encryption.js           # AES-256-GCM encrypt/decrypt
 │   │   └── scheduler.js            # Cron job management with hot reload
 │   ├── dashboard/
 │   │   ├── current-service.js      # Current dashboard envelope from durable current cache + active snapshot
@@ -102,7 +102,7 @@ ea-dashboard/
 │   │   ├── dashboard.js            # Current dashboard, current sync/refresh, health, SSE events
 │   │   ├── accounts.js             # Account CRUD, Gmail OAuth, settings, schedules, API tokens
 │   │   ├── calendar.js             # Read-only calendar endpoints (mounted at /api/calendar)
-│   │   └── live.js                 # Retired `/api/live/all` compatibility response
+│   │   └── notes.js                # Local notes endpoints
 │   ├── middleware/
 │   │   └── auth.js                 # Session + Bearer-token validation, requireAuth middleware
 │   └── db/
@@ -273,12 +273,10 @@ graph LR
     Route --> Auth["/api/auth"]
     Route --> Briefing["/api/briefing"]
     Route --> EA["/api/ea"]
-    Route --> Live["/api/live"]
     Route --> Cal["/api/calendar"]
 
     Briefing --> ReqAuth[requireAuth middleware]
     EA --> ReqAuth
-    Live --> ReqAuth
     Cal --> ReqAuth
     ReqAuth --> Handler[Route Handler]
 ```
@@ -291,7 +289,6 @@ graph LR
 | Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
-| Live | `/api/live` | 1 | Retired `/api/live/all` compatibility response |
 | Calendar | `/api/calendar` | 1 | Read-only calendar slice exposed separately from briefing |
 
 ### Authentication
@@ -315,14 +312,14 @@ sequenceDiagram
 
 Two auth paths exist, but they no longer feed a single shared "any auth works" guard:
 
-1. **Cookie session** — browser receives raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Validation supports lazy migration of any legacy raw rows still present. Used by the browser SPA and required by normal dashboard routes.
+1. **Cookie session** — browser receives raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the browser SPA and required by normal dashboard routes.
 2. **Bearer API token** — `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check — they carry their own unforgeable secret.
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
 
 ## Current Dashboard Pipeline
 
-The current dashboard no longer stores legacy briefing JSON. Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, CTM, Todoist, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
+Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, CTM, Todoist, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
 
 ```mermaid
 flowchart TD
@@ -356,7 +353,7 @@ Model selection is user-configurable through `/api/ea/models`, defaults to Anthr
 
 ## Data Sources
 
-| Source | Module | API | Auth | Error Fallback |
+| Source | Module | API | Auth | Failure Behavior |
 |--------|--------|-----|------|----------------|
 | Gmail | `server/briefing/gmail.js` | Gmail REST API | OAuth 2.0 (auto-refresh tokens) | Empty array, continue |
 | iCloud | `server/briefing/icloud.js` | IMAP (imap.mail.me.com:993) | App-specific password | Empty array, continue |
@@ -529,64 +526,21 @@ erDiagram
 
 ### Migrations
 
-Sequential SQL files in `server/db/migrations/`, auto-run on server start:
+`server/db/migrations/001_ea_tables.sql` is the current-schema baseline and is auto-run on server start for a new database.
 
 | # | File | Purpose |
 |---|------|---------|
-| 1 | `001_ea_tables.sql` | Core tables: accounts, legacy briefings, settings |
-| 2 | `002_account_calendar_flag.sql` | `calendar_enabled` on accounts |
-| 3 | `003_account_icon.sql` | `icon` column on accounts |
-| 4 | `004_claude_model.sql` | Retired `claude_model` setting added for older databases |
-| 5 | `005_briefing_progress.sql` | `progress` column for polling |
-| 6 | `006_email_interests.sql` | `email_interests_json` on settings |
-| 7 | `007_dismissed_emails.sql` | `ea_dismissed_emails` table |
-| 8 | `008_sessions.sql` | `ea_sessions` + `ea_csrf_tokens` tables |
-| 9 | `009_embeddings.sql` | Legacy retired embeddings table; no active routes or writes |
-| 10 | `010_account_sort_order.sql` | `sort_order` on accounts |
-| 11 | `011_important_senders.sql` | `important_senders_json` on settings |
-| 12 | `012_gmail_user_index.sql` | `gmail_index` on accounts |
-| 13 | `013_todoist_settings.sql` | `todoist_api_token_encrypted` on settings |
-| 14 | `014_completed_tasks.sql` | `ea_completed_tasks` table |
-| 15 | `015_account_user_index.sql` | Index `ea_accounts(user_id)` |
-| 16 | `016_email_search_index.sql` | `ea_email_index` + `ea_email_fts` (FTS5) |
-| 17 | `017_drop_gmail_index.sql` | Drop obsolete `gmail_index` column (Gmail now uses `?authuser=`) |
-| 18 | `018_dedupe_email_fts.sql` | Clean up duplicate rows in `ea_email_fts` |
-| 19 | `019_email_body_text.sql` | Add `body_text` to index + rebuild FTS with new column |
-| 20 | `020_pinned_emails.sql` | Legacy retired pin table; no active routes or writes |
-| 21 | `021_api_tokens.sql` | `ea_api_tokens` table — Bearer-auth for external integrations |
-| 22 | `022_pinned_emails_snapshot.sql` | Legacy retired pin snapshot column; migration retained for existing databases |
-| 23 | `023_snoozed_emails.sql` | `ea_snoozed_emails` + index on `(user_id, until_ts)` |
-| 24 | `024_snoozed_resurfaced.sql` | Track snooze resurface state |
-| 25 | `025_completed_tasks_metadata.sql` | Add `due_date` + `snapshot_json` to `ea_completed_tasks` |
-| 26 | `026_bill_extract_model.sql` | Configurable bill extraction provider/model |
-| 27 | `027_notes.sql` | Local notes table |
-| 28 | `028_csrf_browser_bind.sql` | OAuth browser-binding metadata |
-| 29 | `029_email_backfill_state.sql` | Durable per-account email backfill state |
-| 30 | `030_triage_snapshots.sql` | Durable email triage, snapshot windows/items, triage jobs/rules/feedback |
-| 31 | `031_gmail_watch_state.sql` | Gmail Pub/Sub watch state and history cursor |
-| 32 | `032_email_ai_model.sql` | Current email AI provider/model settings |
-| 33 | `033_email_triage_mode.sql` | Email triage mode setting |
-| 34 | `034_current_data_cache.sql` | Durable current data cache |
-| 35 | `035_todoist_mirror.sql` | Todoist mirror tables |
-| 36 | `036_snapshot_item_source_metadata.sql` | Snapshot item source metadata |
-| 37 | `037_todoist_webhook_deliveries.sql` | Todoist webhook delivery ledger |
-| 38 | `038_todoist_oauth_tokens.sql` | Todoist OAuth token fields |
-| 39 | `039_align_email_fts_rowids.sql` | Align email FTS rowids with indexed email rows |
-| 40 | `040_todoist_health_correctness.sql` | Todoist health metadata |
-| 41 | `041_current_data_health_correctness.sql` | Current data health metadata |
-| 42 | `042_snapshot_history_labels.sql` | Snapshot schedule labels |
-| 43 | `043_email_triage_decision_metadata.sql` | Email triage decision metadata |
-| 44 | `044_legacy_briefing_cleanup.sql` | Drop legacy briefing storage and retired settings column |
+| 1 | `001_ea_tables.sql` | Accounts, settings, auth, email index/FTS, snapshot, triage, current-data cache, Todoist mirror, notes, and Actual helper tables |
 
 ## Key Patterns
 
 ### Current Dashboard Runtime
 
-Manual generation and status polling are retired. The active dashboard is served from current snapshot, triage, cache, and provider-domain tables; migration `044_legacy_briefing_cleanup.sql` removes the old `ea_briefings`, `ea_embeddings`, and `ea_pinned_emails` storage after a rollback-only Turso export.
+The active dashboard is served from current snapshot, triage, cache, and provider-domain tables.
 
 ### Encryption at Rest
 
-All stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY`. Format: `gcm:iv:ciphertext:authTag`. Legacy CBC-encrypted values (`iv:ciphertext`) are transparently decrypted and re-encrypted as GCM on next write.
+All stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY`. Format: `gcm:iv:ciphertext:authTag`.
 
 ### Graceful Degradation
 
@@ -635,7 +589,7 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 
 ### Briefing Namespace
 
-The `/api/briefing` namespace now contains operational subroutes for inbox, snapshot, task, bill, and dev-reindex actions. Retired lifecycle routes such as `/api/briefing/latest`, `/api/briefing/history`, `/api/briefing/generate`, `/api/briefing/status/:id`, and `/api/briefing/:id` are not mounted.
+The `/api/briefing` namespace contains operational subroutes for inbox, snapshot, task, bill, and dev-reindex actions.
 
 ### Current Dashboard
 
@@ -643,11 +597,11 @@ The `/api/briefing` namespace now contains operational subroutes for inbox, snap
 |--------|------|---------|
 | GET | `/api/dashboard/current` | Normal dashboard boot/runtime envelope from durable current-data cache plus active snapshot |
 | POST | `/api/dashboard/current/refresh` | Light background refresh of current rows |
-| POST | `/api/dashboard/current/sync` | Explicit bounded sync of current rows plus active snapshot fallback |
+| POST | `/api/dashboard/current/sync` | Explicit bounded sync of current rows plus active snapshot |
 | GET | `/api/dashboard/health` | Authenticated system/provider health shape |
 | GET | `/api/dashboard/current/events` | SSE notifications when current dashboard data changes |
 
-The current dashboard envelope is the production runtime contract. It includes weather, calendar, deadlines, bills, `providerHealth`/`systemStatus`, and the active snapshot inbox view. Non-email boot-critical data is stored in the durable current-data cache keyed by `user_id` and cache key; email rows come from active snapshot/domain tables, not from `ea_briefings.briefing_json`.
+The current dashboard envelope is the production runtime contract. It includes weather, calendar, deadlines, bills, `providerHealth`/`systemStatus`, and the active snapshot inbox view. Non-email boot-critical data is stored in the durable current-data cache keyed by `user_id` and cache key; email rows come from active snapshot/domain tables.
 
 ### Email Search
 
@@ -746,12 +700,6 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 | GET | `/api/ea/important-senders` | Get important senders |
 | PUT | `/api/ea/important-senders` | Update important senders |
 
-### Live Data
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/live/all` | Retired; authenticated callers receive 410 and should use `/api/dashboard/current` |
-
 ### Calendar
 
 | Method | Path | Purpose |
@@ -768,7 +716,7 @@ Token management endpoints live under `/api/auth`. Bearer tokens authenticate by
 
 **Build flow:**
 1. `npm run build` → Vite produces `dist/`
-2. `npm start` → Express serves `dist/` as static files with SPA fallback
+2. `npm start` → Express serves `dist/` as static files with client-side route handoff
 3. API routes served on same process/port
 
 **Dev flow:**

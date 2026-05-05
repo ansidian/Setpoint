@@ -209,7 +209,7 @@ export default function HeroFocusCard({
       : "Low pressure";
   const primary = focusWindows.primaryWindow;
   const backup = focusWindows.backupWindow;
-  const fallback = focusWindows.fallback;
+  const openWindowStatus = focusWindows.openWindowStatus;
   const isOpenDay = primary?.quality === "Rest of day open";
   const pressureActive = pressureHover || pressureFocus;
   const showSkeletons = eventLoadingState === "empty_loading";
@@ -358,16 +358,16 @@ export default function HeroFocusCard({
             </div>
           )}
         </div>
-      ) : fallback?.kind === "short-window" ? (
+      ) : openWindowStatus?.kind === "short-window" ? (
         <div style={{ fontSize: isMobile ? 11 : 11.5, color: "#cdd6f4", lineHeight: 1.45 }}>
           <div style={{ fontWeight: 500 }}>No protected block left today.</div>
           <div style={{ marginTop: 4, color: "rgba(205,214,244,0.62)" }}>
-            Next short opening: {fallback.timeRangeLabel} · {fallback.durationLabel}.
+            Next short opening: {openWindowStatus.timeRangeLabel} · {openWindowStatus.durationLabel}.
           </div>
         </div>
       ) : (
         <div style={{ fontSize: isMobile ? 11 : 11.5, color: "#cdd6f4", lineHeight: 1.45 }}>
-          {focusWindows.fallback?.kind === "open-day"
+          {focusWindows.openWindowStatus?.kind === "open-day"
             ? "Rest of day looks open. Pick the block that matters most."
             : "No protected block left today."}
         </div>

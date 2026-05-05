@@ -10,7 +10,7 @@ Built with the help of Claude Opus 4.6.
 
 The dashboard fetches data from multiple sources, continuously indexes incoming email, and maintains active inbox snapshots that surface what actually matters:
 
-- **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local fallback, or pauses job draining.
+- **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local rules, or pauses job draining.
 - **Bill & transaction detection** — Extracts financial data (payee, amount, due date) from emails with optional one-click logging to Actual Budget
 - **Calendar consolidation** — Aggregates Google Calendar events across all connected accounts with color coding, conflict detection, and a live now-marker timeline
 - **Academic deadlines** — Fetches Canvas LMS assignments via [Canvas-LMS-Task-Manager](https://github.com/ansidian/Canvas-LMS-Task-Manager), with status tracking (incomplete/in-progress/complete)
@@ -20,7 +20,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 - **Current data cache** — Boot-critical weather, calendar, deadline, bill, and provider-health data is cached for graceful degradation
 - **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without running a batch generator
 - **Inbox search** — The Inbox tab searches the persisted email index (FTS5) across indexed INBOX mail for every account, with a resumable 365-day default backfill for historical coverage
-- **Snapshot history** — Browse prior inbox snapshot windows without depending on legacy briefing JSON
+- **Snapshot history** — Browse prior inbox snapshot windows from the current snapshot store
 - **Important senders** — Configure priority senders for real-time browser notifications
 - **Multi-account support** — Multiple Gmail (OAuth) and iCloud (app passwords) accounts with custom labels, colors, and icons
 
@@ -157,8 +157,8 @@ JSON
 ```
 
 Existing long-lived personal Todoist tokens still work. Setting a personal token
-through the Settings UI clears OAuth refresh metadata and returns to the legacy
-single-token path.
+through the Settings UI clears OAuth refresh metadata and uses personal-token
+mode.
 
 ### Running locally
 
@@ -178,15 +178,9 @@ npm run build      # Vite build → dist/
 npm start          # Express serves dist/ + API routes
 ```
 
-Database migrations run automatically on server start.
-
-Before deploying migration `044_legacy_briefing_cleanup.sql`, take a rollback-only
-Turso export immediately before the deploy:
-
-```bash
-mkdir -p backups
-turso db export eadashboard --output-file "backups/eadashboard-pre-legacy-briefing-cleanup-$(date +%Y%m%d%H%M%S).db"
-```
+Database migrations run automatically on server start. The checked-in migration
+set is a current-schema baseline for fresh databases; existing production
+databases are expected to already contain the same current snapshot schema.
 
 ## License
 

@@ -58,20 +58,20 @@ describe("auth middleware session storage", () => {
     expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("cookie-session")]);
   });
 
-  it("accepts legacy raw session rows and migrates them to hashed storage", async () => {
+  it("accepts raw session rows and migrates them to hashed storage", async () => {
     await testState.db.current.execute({
       sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
-      args: ["legacy-session", Date.now() + 60_000],
+      args: ["raw-session", Date.now() + 60_000],
     });
 
-    const ok = await validateSession("legacy-session");
+    const ok = await validateSession("raw-session");
 
     const result = await testState.db.current.execute({
       sql: "SELECT token FROM ea_sessions ORDER BY token",
       args: [],
     });
     expect(ok).toBe(true);
-    expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("legacy-session")]);
+    expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("raw-session")]);
   });
 
   it("deletes both raw and hashed token forms on logout", async () => {

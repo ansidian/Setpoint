@@ -160,8 +160,8 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 ## 3. Typography
 
-**Display Font:** Instrument Serif, Fraunces, or IBM Plex Serif via `--serif-choice`, with Georgia fallback.
-**Body Font:** Montserrat, with sans-serif fallback.
+**Display Font:** Instrument Serif, Fraunces, or IBM Plex Serif via `--serif-choice`, with Georgia as the backup face.
+**Body Font:** Montserrat, with the system sans-serif stack as backup.
 **Label/Mono Font:** Fira Code for keyboard hints and tabular technical labels.
 
 **Character:** The type pairing gives assistant summaries a human voice while leaving operational UI exact and compact. Serif type should feel like the assistant speaking; sans-serif type should feel like the workspace operating.
@@ -184,7 +184,6 @@ Depth is border-first. Inline cards and list items should rely on 1px borders, t
 
 ### Shadow Vocabulary
 - **Floating Panel** (`0 20px 60px rgba(0,0,0,0.7)`): Standard shadow for portaled dropdowns, menus, popovers, and modals.
-- **Legacy Floating Panel** (`0 8px 40px rgba(0,0,0,0.55), 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)`): Older history/search panels. Prefer the standard modal shadow for new portals.
 - **Accent Glow** (`0 0 6px {color}30` to `0 0 8px {color}60`): Timeline dots, active indicators, and focused accents.
 
 ### Named Rules

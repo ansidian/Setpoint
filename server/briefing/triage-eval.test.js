@@ -15,7 +15,7 @@ describe("triage eval fixtures", () => {
       eval_seed: [
         {
           sample_id: "weak-unlabeled",
-          subject: "Weak legacy row",
+          subject: "Weak seed row",
           expected_lane: null,
         },
         {
