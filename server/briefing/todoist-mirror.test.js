@@ -17,6 +17,7 @@ const {
   getTodoistMirrorHealth,
   listTodoistMirrorActiveTaskIds,
   listTodoistMirrorActiveTasks,
+  listTodoistMirrorCompletedTasks,
   listTodoistMirrorLabels,
   listTodoistMirrorProjects,
   markTodoistMirrorItemCompleted,
@@ -612,6 +613,38 @@ describe("optimistic Todoist write mirror updates", () => {
           }),
         ],
       });
+  });
+
+  it("lists checked due tasks separately for completed dashboard visibility", async () => {
+    await upsertTodoistMirrorItem("u1", {
+      id: "done-today",
+      content: "Check-in IHSS",
+      checked: true,
+      due: { date: "2026-05-05T09:00:00", is_recurring: false },
+    }, { dbClient: testState.db.current });
+    await upsertTodoistMirrorItem("u1", {
+      id: "done-old",
+      content: "Old completed",
+      checked: true,
+      due: { date: "2026-05-04" },
+    }, { dbClient: testState.db.current });
+    await upsertTodoistMirrorItem("u1", {
+      id: "active-next",
+      content: "Check-in IHSS",
+      checked: false,
+      due: { date: "2026-05-07T09:00:00", is_recurring: true },
+    }, { dbClient: testState.db.current });
+
+    await expect(listTodoistMirrorCompletedTasks("u1", {
+      dbClient: testState.db.current,
+      start: "2026-05-05",
+    })).resolves.toEqual([
+      expect.objectContaining({
+        id: "done-today",
+        content: "Check-in IHSS",
+        due: { date: "2026-05-05T09:00:00", timezone: null, is_recurring: false },
+      }),
+    ]);
   });
 });
 

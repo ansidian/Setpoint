@@ -645,7 +645,7 @@ describe("GET /api/dashboard/current", () => {
     expect(res.status).toBe(200);
     expect(testState.hydrateRecurringTombstones).toHaveBeenCalledWith(
       "u1",
-      new Set(["todo-open"]),
+      null,
       { viewBoundary: "today" },
     );
     expect(res.body.deadlines.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
