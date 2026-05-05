@@ -419,10 +419,6 @@ async function installBaseDashboardFixtures(page, {
     });
   });
 
-  await page.route("**/api/briefing/latest**", async (route) =>
-    json(route, { id: 9001, briefing: buildBriefing({ events, emailAccounts, briefing }) }),
-  );
-
   await page.route("**/api/calendar/range**", async (route) => {
     const url = new URL(route.request().url());
     const start = new Date(`${url.searchParams.get("start")}T00:00:00`).getTime();

@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 
 describe("initScheduler", () => {
-  it("treats saved schedules as snapshot boundaries instead of batch briefing generation", async () => {
+  it("treats saved schedules as snapshot boundaries instead of batch generation", async () => {
     mockDb.execute.mockResolvedValueOnce({
       rows: [{
         user_id: "user-1",

@@ -12,9 +12,9 @@ The user is not browsing a public product, comparing plans, or exploring a marke
 
 ## Product Purpose
 
-EA Dashboard consolidates scattered personal systems into AI-generated briefings and focused work surfaces. It fetches mail, calendars, Canvas deadlines, tasks, weather, and finances, then turns them into actionable sections: what is urgent, what changed, what is due, what can wait, and what should be logged or dismissed.
+EA Dashboard consolidates scattered personal systems into current snapshots and focused work surfaces. It fetches mail, calendars, Canvas deadlines, tasks, weather, and finances, then turns them into actionable sections: what is urgent, what changed, what is due, what can wait, and what should be logged or dismissed.
 
-Success means the user can trust the dashboard as the first place to look. Important emails surface without scanning every inbox, deadlines appear before they become problems, bills and transactions are ready to act on, and the briefing stays useful as live data changes throughout the day.
+Success means the user can trust the dashboard as the first place to look. Important emails surface without scanning every inbox, deadlines appear before they become problems, bills and transactions are ready to act on, and the current snapshot stays useful as live data changes throughout the day.
 
 ## Brand Personality
 
@@ -26,7 +26,7 @@ The product should feel like a private workroom with excellent instrumentation: 
 
 This should not look like a public SaaS landing page, a multi-tenant admin console, or a generic productivity template. Avoid big marketing hero compositions, repeated identical card grids, decorative metrics, glassmorphism, neon cyberpunk styling, gamified task treatment, finance-dashboard navy-and-gold cliches, and AI-chat novelty.
 
-Avoid interfaces that make every feed feel equally loud. Avoid visual polish that competes with the briefing, and avoid decorative density that makes the user parse styling before meaning.
+Avoid interfaces that make every feed feel equally loud. Avoid visual polish that competes with the operational signal, and avoid decorative density that makes the user parse styling before meaning.
 
 ## Design Principles
 

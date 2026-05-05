@@ -1,6 +1,6 @@
 ---
 name: "EA Dashboard"
-description: "A private executive-assistant workspace for daily briefings, inbox triage, schedule awareness, deadlines, and finances."
+description: "A private executive-assistant workspace for current snapshots, inbox triage, schedule awareness, deadlines, and finances."
 colors:
   page: "#1e1e2e"
   page-deep: "#0b0b13"
@@ -123,7 +123,7 @@ The visual system is compact, border-led, and data-first. Purple is the default 
 - Dense operational surfaces with stable scan paths.
 - Muted tinted neutrals with one primary accent and domain status colors.
 - Portaled panels that feel solid, opaque, and separate from page scroll.
-- Serif display moments reserved for briefing voice, not routine UI chrome.
+- Serif display moments reserved for assistant voice, not routine UI chrome.
 - Subtle motion for orientation only.
 
 ## 2. Colors
@@ -164,10 +164,10 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 **Body Font:** Montserrat, with sans-serif fallback.
 **Label/Mono Font:** Fira Code for keyboard hints and tabular technical labels.
 
-**Character:** The type pairing gives the briefing a human voice while leaving operational UI exact and compact. Serif type should feel like the assistant speaking; sans-serif type should feel like the workspace operating.
+**Character:** The type pairing gives assistant summaries a human voice while leaving operational UI exact and compact. Serif type should feel like the assistant speaking; sans-serif type should feel like the workspace operating.
 
 ### Hierarchy
-- **Display** (400, 48px, 1 line-height): Hero greeting, briefing summary, triage summary, and email-reader subjects.
+- **Display** (400, 48px, 1 line-height): Hero greeting, snapshot summary, triage summary, and email-reader subjects.
 - **Headline** (600, 28px, 1.12 line-height): Page-level headings such as settings and major empty states.
 - **Title** (500, 13px, 1.35 line-height): Card titles, row titles, input text, and dense primary labels.
 - **Body** (400, 12px, 1.5 line-height): Summaries, descriptions, previews, and readable supporting copy. Cap long body text at 65 to 75 characters.
@@ -231,7 +231,7 @@ Floating panels must be portaled to `document.body`, fixed-positioned from the t
 
 ### Timeline And Rails
 
-Timeline rows, rail cards, and briefing sections should emphasize time, urgency, source, and action. Use stable row heights and compact metadata so live updates do not disrupt reading.
+Timeline rows, rail cards, and dashboard sections should emphasize time, urgency, source, and action. Use stable row heights and compact metadata so live updates do not disrupt reading.
 
 ## 6. Do's and Don'ts
 

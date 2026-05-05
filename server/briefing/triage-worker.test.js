@@ -839,7 +839,7 @@ describe("email triage worker", () => {
     });
   });
 
-  it("uses the configured email summary model for direct strong triage", async () => {
+  it("uses the configured inbox triage model for direct strong triage", async () => {
     const dbClient = await createMigratedDb();
     await dbClient.execute({
       sql: `INSERT INTO ea_settings

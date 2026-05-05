@@ -26,7 +26,7 @@
     "typographyMeta": {
       "display": {
         "displayName": "Assistant Voice",
-        "purpose": "Hero greeting, briefing summary, Claude triage summary, and email reader subjects."
+        "purpose": "Hero greeting, snapshot summary, email triage summary, and email reader subjects."
       },
       "body": {
         "displayName": "Operational Body",

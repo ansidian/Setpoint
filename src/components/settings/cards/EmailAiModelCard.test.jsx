@@ -114,17 +114,17 @@ beforeEach(() => {
 });
 
 describe("EmailAiModelCard", () => {
-  it("renders provider-aware email summary model controls", async () => {
+  it("renders provider-aware inbox triage model controls", async () => {
     renderCard();
 
     await waitFor(() => {
       expect(mockApi.getModels).toHaveBeenCalled();
     });
 
-    expect(screen.getByText("Email Snapshot AI")).toBeTruthy();
-    expect(screen.getByText("Model used for email snapshot summaries and triage context. Bill extraction uses its own model.")).toBeTruthy();
-    expect(screen.getByLabelText("Email snapshot provider")).toBeTruthy();
-    expect(screen.getByLabelText("Email snapshot model")).toBeTruthy();
+    expect(screen.getByText("Inbox Triage AI")).toBeTruthy();
+    expect(screen.getByText("Model used for durable inbox triage. Bill extraction uses its own model.")).toBeTruthy();
+    expect(screen.getByLabelText("Inbox triage provider")).toBeTruthy();
+    expect(screen.getByLabelText("Inbox triage model")).toBeTruthy();
   });
 
   it("switches OpenAI to the current GPT-5.5 default", async () => {
@@ -135,7 +135,7 @@ describe("EmailAiModelCard", () => {
       expect(mockApi.getModels).toHaveBeenCalled();
     });
 
-    fireEvent.change(screen.getByLabelText("Email snapshot provider"), {
+    fireEvent.change(screen.getByLabelText("Inbox triage provider"), {
       target: { value: "openai" },
     });
 
@@ -146,6 +146,6 @@ describe("EmailAiModelCard", () => {
       });
     });
 
-    expect(screen.getByLabelText("Email snapshot model").value).toBe("gpt-5.5");
+    expect(screen.getByLabelText("Inbox triage model").value).toBe("gpt-5.5");
   });
 });
