@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
 import { dismissEmail, markSnapshotItemHandled, snoozeEmail, trashEmail } from "../../api";
+import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -40,57 +41,69 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeAccounts(includeAction = true) {
-  return [
-    {
-      id: "acc-work",
-      name: "Work",
-      email: "work@example.com",
-      color: "#89dceb",
-      unread: includeAction ? 1 : 0,
-      important: includeAction
-        ? [
-            {
-              id: "email-action",
-              uid: "email-action",
-              subject: "Project budget sign-off",
-              from: "Dana",
-              fromEmail: "dana@example.com",
-              date: "2026-04-19T15:30:00.000Z",
-              preview: "Need your approval on the revised budget today.",
-              read: false,
-            },
-          ]
-        : [],
-      noise: [],
-    },
-    {
-      id: "acc-personal",
-      name: "Personal",
-      email: "personal@example.com",
-      color: "#cba6da",
-      unread: 1,
-      important: [
+function makeSessionSnapshot(includeAction = true) {
+  return makeActiveSnapshot({
+    filters: {
+      accounts: [
         {
-          id: "email-fyi",
-          uid: "email-fyi",
-          subject: "Budget dinner plans",
-          from: "Chris",
-          fromEmail: "chris@example.com",
-          date: "2026-04-19T14:00:00.000Z",
-          preview: "Checking whether Sunday still works.",
-          read: false,
+          account_id: "acc-work",
+          label: "Work",
+          email: "work@example.com",
+          color: "#89dceb",
+          icon: "Mail",
+          count: includeAction ? 1 : 0,
+        },
+        {
+          account_id: "acc-personal",
+          label: "Personal",
+          email: "personal@example.com",
+          color: "#cba6da",
+          icon: "Mail",
+          count: 1,
         },
       ],
+      categories: [],
+    },
+    lanes: {
+      needs_attention: includeAction
+        ? [{
+            id: 11,
+            snapshot_item_id: 11,
+            uid: "email-action",
+            email_id: "email-action",
+            account_id: "acc-work",
+            lane: "needs_attention",
+            subject: "Project budget sign-off",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Need your approval on the revised budget today.",
+            date: "2026-04-19T15:30:00.000Z",
+            read: false,
+          }]
+        : [],
+      fyi: [{
+        id: 12,
+        snapshot_item_id: 12,
+        uid: "email-fyi",
+        email_id: "email-fyi",
+        account_id: "acc-personal",
+        lane: "fyi",
+        subject: "Budget dinner plans",
+        from_name: "Chris",
+        from_address: "chris@example.com",
+        summary: "Checking whether Sunday still works.",
+        date: "2026-04-19T14:00:00.000Z",
+        read: false,
+      }],
       noise: [],
     },
-  ];
+  });
 }
 
 function InboxSessionHarness({ initialSelectedId = null }) {
   const [showInbox, setShowInbox] = useState(true);
   const [seedSelectedId, setSeedSelectedId] = useState(null);
-  const [accounts, setAccounts] = useState(() => makeAccounts(true));
+  const [snapshot, setSnapshot] = useState(() => makeSessionSnapshot(true));
   const [sessionState, setSessionState] = useState({
     accountId: "__all",
     lane: "__all",
@@ -101,8 +114,15 @@ function InboxSessionHarness({ initialSelectedId = null }) {
   const briefing = {
     emails: {
       summary: "Handle the approval first, then everything else can wait.",
-      accounts,
+      accounts: [],
     },
+  };
+  const activeSnapshot = {
+    snapshot,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+    sync: vi.fn(),
   };
 
   return (
@@ -113,7 +133,7 @@ function InboxSessionHarness({ initialSelectedId = null }) {
       <button type="button" onClick={() => setSeedSelectedId("email-action")}>
         Seed action email
       </button>
-      <button type="button" onClick={() => setAccounts(makeAccounts(false))}>
+      <button type="button" onClick={() => setSnapshot(makeSessionSnapshot(false))}>
         Remove action email
       </button>
       {showInbox ? (
@@ -127,9 +147,10 @@ function InboxSessionHarness({ initialSelectedId = null }) {
             inboxLayout: "two-pane",
             inboxGrouping: "swimlanes",
           }}
-          emailAccounts={accounts}
+          emailAccounts={[]}
           briefingSummary={briefing.emails.summary}
           briefingGeneratedAt="2026-04-19 15:00:00"
+          activeSnapshot={activeSnapshot}
           liveEmails={[]}
           snoozedEntries={[]}
           resurfacedEntries={[]}
@@ -287,7 +308,7 @@ describe("InboxView session state", () => {
 
     render(
       <DashboardProvider
-        briefing={{ emails: { accounts: makeAccounts(true) } }}
+        briefing={{ emails: { accounts: [] } }}
         setBriefing={() => {}}
         setCalendarDeadlines={() => {}}
       >
@@ -301,7 +322,7 @@ describe("InboxView session state", () => {
             inboxLayout: "two-pane",
             inboxGrouping: "swimlanes",
           }}
-          emailAccounts={makeAccounts(true)}
+          emailAccounts={[]}
           briefingSummary="Legacy summary"
           briefingGeneratedAt="2026-05-03 15:00:00"
           activeSnapshot={activeSnapshot}

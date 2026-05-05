@@ -5,12 +5,11 @@ import { Kbd } from "./Kbd.jsx";
 export function RefreshButton({
   isMobile = false,
   refreshing,
-  generating,
   onQuickRefresh,
 }) {
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const busy = refreshing || generating;
+  const busy = refreshing;
   const lifted = hover && !pressed && !busy;
 
   return (

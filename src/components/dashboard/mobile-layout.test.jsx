@@ -13,8 +13,6 @@ afterEach(() => {
 
 function makeBriefing(overrides = {}) {
   return {
-    model: "Claude",
-    aiInsights: [{ id: "ins-1", text: "You have a heavier deadline cluster than usual." }],
     weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
     calendar: [],
     ctm: {
@@ -48,11 +46,20 @@ function makeBriefing(overrides = {}) {
   };
 }
 
+const currentDeadlineFixture = [
+  { id: "ctm-1", title: "Finalize deck", due_date: "2026-04-20", source: "canvas", class_name: "Ops", status: "open" },
+];
+
 function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", showInsights = true } = {}) {
   const briefing = makeBriefing();
   const liveData = {
     liveBills: [{ id: "bill-1", name: "Rent", amount: 1800, next_date: "2026-04-21", payee: "Landlord", paid: false }],
     liveWeather: briefing.weather,
+    liveCalendar: briefing.calendar,
+    liveDeadlines: {
+      ctm: briefing.ctm,
+      todoist: briefing.todoist,
+    },
     liveEmails: [],
   };
 
@@ -183,6 +190,7 @@ describe("DashboardHero mobile layout", () => {
         })}
         liveBills={[]}
         liveCalendar={[]}
+        liveDeadlines={currentDeadlineFixture}
         liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
         onJump={() => {}}
       />,
@@ -234,6 +242,7 @@ describe("DashboardHero mobile layout", () => {
         })}
         liveBills={[]}
         liveCalendar={[]}
+        liveDeadlines={currentDeadlineFixture}
         liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
         onJump={() => {}}
       />,
@@ -261,8 +270,6 @@ describe("DashboardHero mobile layout", () => {
         accent="#cba6da"
         density="comfortable"
         briefing={{
-          model: "Claude",
-          aiInsights: [],
           weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
           calendar: [],
           ctm: { upcoming: [] },
@@ -271,6 +278,7 @@ describe("DashboardHero mobile layout", () => {
         }}
         liveBills={[]}
         liveCalendar={[]}
+        liveDeadlines={[]}
         liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
         onJump={() => {}}
       />,
@@ -301,6 +309,7 @@ describe("DashboardHero mobile layout", () => {
         })}
         liveBills={[]}
         liveCalendar={[]}
+        liveDeadlines={currentDeadlineFixture}
         liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
         onJump={() => {}}
         onOpenPressure={() => {}}

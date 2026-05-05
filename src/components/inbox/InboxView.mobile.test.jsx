@@ -106,6 +106,47 @@ function renderInbox({
   );
 }
 
+function activateBudgetSnapshot() {
+  activeSnapshotMock.state = {
+    snapshot: makeActiveSnapshot({
+      filters: {
+        accounts: [
+          {
+            account_id: "acc-work",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          },
+        ],
+        categories: [],
+      },
+      lanes: {
+        needs_attention: [{
+          id: 11,
+          snapshot_item_id: 11,
+          uid: "email-action",
+          email_id: "email-action",
+          account_id: "acc-work",
+          lane: "needs_attention",
+          subject: "Project budget sign-off",
+          from_name: "Dana",
+          from_address: "dana@example.com",
+          summary: "Need your approval on the revised budget today.",
+          date: "2026-04-19T15:30:00.000Z",
+          read: false,
+        }],
+        fyi: [],
+        noise: [],
+      },
+    }),
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  };
+}
+
 describe("InboxView mobile", () => {
   it("uses the persisted FTS email search instead of local inbox filtering", async () => {
     searchEmails.mockResolvedValueOnce({
@@ -147,6 +188,8 @@ describe("InboxView mobile", () => {
   });
 
   it("respects a seedSelectedId on mobile", () => {
+    activateBudgetSnapshot();
+
     renderInbox({ isMobile: true, seedSelectedId: "email-action" });
 
     expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
@@ -167,8 +210,8 @@ describe("InboxView mobile", () => {
           account_email: "work@example.com",
           account_color: "#89dceb",
           date: "2026-04-19T16:15:00.000Z",
-          preview: "Just arrived after the briefing.",
-          body_preview: "Just arrived after the briefing.",
+          preview: "Just arrived after the current snapshot.",
+          body_preview: "Just arrived after the current snapshot.",
           read: true,
         },
       ],
@@ -251,11 +294,13 @@ describe("InboxView mobile", () => {
     expect(screen.queryByTestId("inbox-mobile-list")).toBeNull();
   });
 
-  it("deselects the active desktop email on browser back", () => {
+  it("deselects the active desktop email on browser back", async () => {
+    activateBudgetSnapshot();
+
     renderInbox({ isMobile: false });
 
     fireEvent.click(screen.getByText("Project budget sign-off"));
-    expect(screen.getByText("Please approve the revised budget.")).toBeTruthy();
+    expect(await screen.findByText("Loaded email body")).toBeTruthy();
 
     const sessionId = window.history.state.eaInboxNav.sessionId;
     act(() => {

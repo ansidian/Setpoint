@@ -12,7 +12,6 @@ vi.mock("../api", () => ({
   getCalendarDeadlines: vi.fn().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } }),
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
-  deleteBriefing: vi.fn(),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({
@@ -59,18 +58,10 @@ vi.mock("../hooks/useCurrentDashboard", () => ({
         ctm: { upcoming: [], stats: null },
         todoist: { upcoming: [], stats: null },
         calendar: [],
-        aiInsights: [],
       },
       setBriefing: vi.fn(),
       refreshing: false,
-      generating: false,
-      genProgress: null,
-      latestId: null,
-      schedules: [],
-      viewingPast: null,
-      lastQuickRefreshAt: null,
       handleQuickRefresh: vi.fn(),
-      selectHistory: vi.fn(),
     },
   }),
 }));

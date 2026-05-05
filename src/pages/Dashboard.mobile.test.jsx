@@ -90,9 +90,6 @@ beforeEach(() => {
 
 function makeBriefing() {
   return {
-    aiInsights: [],
-    aiGeneratedAt: "2026-04-19T15:00:00.000Z",
-    dataUpdatedAt: "2026-04-19T15:04:00.000Z",
     emails: {
       summary: "Brief summary",
       accounts: [
@@ -122,13 +119,9 @@ function makeProps() {
       briefing: makeBriefing(),
       schedules: [{ enabled: true, time: "09:00", label: "Morning Briefing" }],
       refreshing: false,
-      generating: false,
-      genProgress: null,
-      viewingPast: null,
       latestId: "latest",
       lastQuickRefreshAt: null,
       handleQuickRefresh: vi.fn(),
-      selectHistory: vi.fn(),
     },
     liveData: {
       actualConfigured: true,

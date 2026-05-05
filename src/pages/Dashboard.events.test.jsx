@@ -22,8 +22,6 @@ function makeEvent(now, title) {
 
 function makeBriefing(events = []) {
   return {
-    model: "Claude",
-    aiInsights: [],
     weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
     calendar: events,
     ctm: { upcoming: [{ id: "ctm-1", title: "Essay", due_date: "2026-04-20", source: "canvas", status: "open" }] },
@@ -49,9 +47,14 @@ function renderDashboardBody({
       <DashboardBody
         briefing={briefing}
         liveData={{
-          liveBills: [],
-          liveWeather: briefing.weather,
-          liveEmails: [],
+        liveBills: [],
+        liveWeather: briefing.weather,
+        liveCalendar: briefing.calendar,
+        liveDeadlines: {
+          ctm: briefing.ctm,
+          todoist: briefing.todoist,
+        },
+        liveEmails: [],
           billsLoading: false,
           actualConfigured: false,
           isPolling: false,

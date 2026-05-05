@@ -18,7 +18,6 @@ import {
   timeSince,
   defaultSnoozeTs,
   makeSynthAccount,
-  collectBriefingEmails,
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
@@ -153,7 +152,6 @@ export default function useInboxController({
       if (key) seenUids.add(key);
       out.push(entry);
     };
-    for (const entry of collectBriefingEmails(emailAccounts)) pushEmail(entry);
     for (const entry of collectLiveEmails(
       liveEmails,
       synthAccount,
@@ -610,8 +608,8 @@ export default function useInboxController({
     ? accountsById[selectedEmail._accountKey] || selectedEmail._account
     : null;
 
-  const briefingAgoLabel = briefingGeneratedAt
-    ? `Triaged ${timeSince(briefingGeneratedAt.endsWith("Z") ? briefingGeneratedAt : `${briefingGeneratedAt}Z`)}`
+  const triageWindowLabel = briefingGeneratedAt
+    ? `Snapshot updated ${timeSince(briefingGeneratedAt.endsWith("Z") ? briefingGeneratedAt : `${briefingGeneratedAt}Z`)}`
     : null;
 
   const scopedAccount = accountId === "__all"
@@ -663,7 +661,7 @@ export default function useInboxController({
     snapshotCategories,
     categoryFilter,
     setCategoryFilter,
-    briefingAgoLabel,
+    briefingAgoLabel: triageWindowLabel,
     scopedAccount: indexedSearchActive ? null : scopedAccount,
   };
 }

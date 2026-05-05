@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
-import RefreshBanner from "../layout/RefreshBanner";
 import ShellHeader from "../shell/ShellHeader";
 import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import { collectActiveSnapshotEmails, collectBriefingEmails, mergeReadState } from "../inbox/helpers";
+import { collectActiveSnapshotEmails, mergeReadState } from "../inbox/helpers";
 import { DashboardBody } from "./DashboardBody";
 import { makeCalendarBillsData } from "./calendarBillsData";
 export { DashboardBody };
@@ -337,7 +336,7 @@ export function RedesignShell({
     });
   }, []);
 
-  // Include current snapshot/briefing mail plus live-polled mail in the Inbox badge.
+  // Include current snapshot plus live-polled mail in the Inbox badge.
   const liveUnreadCount = useMemo(() => {
     const seen = new Set();
     let unread = 0;
@@ -353,10 +352,11 @@ export function RedesignShell({
     };
 
     const usingSnapshot = !!activeSnapshot?.snapshot?.snapshot;
-    const baseEmails = usingSnapshot
-      ? collectActiveSnapshotEmails(activeSnapshot.snapshot, liveReadOverrides)
-      : collectBriefingEmails(briefing?.emails?.accounts || []);
-    for (const email of baseEmails) addEmail(email, usingSnapshot);
+    if (usingSnapshot) {
+      for (const email of collectActiveSnapshotEmails(activeSnapshot.snapshot, liveReadOverrides)) {
+        addEmail(email, true);
+      }
+    }
 
     for (const email of liveData.liveEmails || []) {
       addEmail(email, true);
@@ -367,7 +367,7 @@ export function RedesignShell({
     }
 
     return unread;
-  }, [activeSnapshot?.snapshot, briefing?.emails?.accounts, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
+  }, [activeSnapshot?.snapshot, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
 
   const liveEmailsLoading = liveData.isPolling;
   const queueCalendarDeadlineRefresh = useCallback(() => {
@@ -415,8 +415,6 @@ export function RedesignShell({
         overflow: "hidden",
       }}
     >
-      {bd.generating && <RefreshBanner progress={bd.genProgress} />}
-
       <ShellHeader
         isMobile={isMobile}
         tab={tab}
@@ -427,7 +425,6 @@ export function RedesignShell({
         onOpenCalendar={() => openCalendar()}
         liveUnreadCount={liveUnreadCount}
         refreshing={bd.refreshing}
-        generating={bd.generating}
         onQuickRefresh={onQuickRefresh}
         systemStatus={liveData.systemStatus}
       />
@@ -458,7 +455,6 @@ export function RedesignShell({
             calendarDeadlines={dashboardCalendarDeadlines}
             calendarDeadlinesLoading={calendarDeadlinesLoading}
             calendarDeadlinesError={!!calendarDeadlinesError}
-            viewingPast={bd.viewingPast}
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {
               if (!isMobile) {
@@ -494,8 +490,8 @@ export function RedesignShell({
             <InboxView
               accent={accent}
               customize={customize}
-              emailAccounts={briefing?.emails?.accounts || []}
-              briefingSummary={briefing?.emails?.summary}
+              emailAccounts={[]}
+              briefingSummary=""
               briefingGeneratedAt={liveData.briefingGeneratedAt}
               liveEmails={liveData.liveEmails}
               liveEmailsLoading={liveEmailsLoading}

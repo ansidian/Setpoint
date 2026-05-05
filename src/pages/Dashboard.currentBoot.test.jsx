@@ -21,7 +21,6 @@ vi.mock("../api", () => ({
   getCalendarDeadlines: mocks.getCalendarDeadlines,
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
-  deleteBriefing: vi.fn(),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({

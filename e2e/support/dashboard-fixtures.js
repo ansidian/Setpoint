@@ -29,15 +29,11 @@ function formatYmd(date) {
 }
 
 function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) {
-  const nowIso = new Date().toISOString();
   const unreadCount = emailAccounts.reduce(
     (count, account) => count + (account.unread || 0),
     0,
   );
   const baseBriefing = {
-    generatedAt: "9:00 AM · Wednesday, April 22, 2026",
-    dataUpdatedAt: nowIso,
-    aiGeneratedAt: nowIso,
     weather: {
       temp: 68,
       high: 72,
@@ -46,7 +42,6 @@ function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) 
       hourly: [],
       location: "Los Angeles, CA",
     },
-    aiInsights: [],
     calendar: events,
     ctm: {
       upcoming: [],
@@ -87,7 +82,8 @@ function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) 
 
 function defaultSettings() {
   return {
-    claude_model: "claude-haiku-4-5-20251001",
+    email_ai_provider: "anthropic",
+    email_ai_model: "claude-haiku-4-5-20251001",
     schedules: [],
     render_configured: false,
   };
@@ -375,8 +371,8 @@ function buildInboxFixtureLiveEmails() {
       account_email: "work@example.com",
       account_color: "#89dceb",
       date: "2026-04-19T16:15:00.000Z",
-      preview: "Just arrived after the briefing.",
-      body_preview: "Just arrived after the briefing.",
+      preview: "Just arrived after the current snapshot.",
+      body_preview: "Just arrived after the current snapshot.",
       read: false,
     },
   ];

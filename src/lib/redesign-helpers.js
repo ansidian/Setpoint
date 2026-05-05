@@ -53,17 +53,17 @@ export function phaseIndex(date = new Date()) {
   return 4;                // night
 }
 
-const BRIEFING_PHASE_PHRASES = [
-  "Since last night's briefing",
-  "Since this morning's briefing",
-  "Since this afternoon's briefing",
-  "Since this evening's briefing",
-  "Since tonight's briefing",
+const SNAPSHOT_PHASE_PHRASES = [
+  "Since last night's snapshot",
+  "Since this morning's snapshot",
+  "Since this afternoon's snapshot",
+  "Since this evening's snapshot",
+  "Since tonight's snapshot",
 ];
 
 export function briefingPhaseLabel(ts) {
-  if (ts == null) return "Since last briefing";
-  return BRIEFING_PHASE_PHRASES[phaseIndex(new Date(ts))];
+  if (ts == null) return "Since current snapshot";
+  return SNAPSHOT_PHASE_PHRASES[phaseIndex(new Date(ts))];
 }
 
 function stableIndex(date, len) {

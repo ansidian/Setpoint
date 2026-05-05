@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   markCalendarDomainRangeStale: vi.fn(),
   currentRefreshNow: vi.fn(),
   handleQuickRefresh: vi.fn(),
-  handleFullGeneration: vi.fn(),
   activeSnapshotRefresh: vi.fn(),
   activeSnapshotSync: vi.fn(),
   getCalendarDeadlines: vi.fn(),
@@ -23,7 +22,6 @@ vi.mock("../api", () => ({
   getCalendarDeadlines: mocks.getCalendarDeadlines,
   getCalendarDeadlinesRange: mocks.getCalendarDeadlinesRange,
   getCalendarBillsRange: mocks.getCalendarBillsRange,
-  deleteBriefing: vi.fn(),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({
@@ -65,11 +63,8 @@ vi.mock("../hooks/useCurrentDashboard", () => ({
       loading: false,
       error: null,
       briefing: null,
-      generating: false,
-      genProgress: null,
       lastQuickRefreshAt: null,
       handleQuickRefresh: mocks.handleQuickRefresh,
-      handleFullGeneration: mocks.handleFullGeneration,
     },
   }),
 }));
@@ -102,7 +97,6 @@ describe("Dashboard refresh wiring", () => {
     mocks.currentRefreshNow.mockReset();
     mocks.currentRefreshNow.mockResolvedValue(null);
     mocks.handleQuickRefresh.mockReset();
-    mocks.handleFullGeneration.mockReset();
     mocks.activeSnapshotRefresh.mockReset();
     mocks.activeSnapshotSync.mockReset();
     mocks.getCalendarDeadlines.mockReset();
@@ -143,7 +137,7 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(2);
   });
 
-  it("maps the R hotkey to Sync now without invoking briefing generation", () => {
+  it("maps the R hotkey to Sync now", () => {
     render(
       <BrowserRouter>
         <Dashboard />
@@ -154,7 +148,6 @@ describe("Dashboard refresh wiring", () => {
 
     expect(mocks.handleQuickRefresh).not.toHaveBeenCalled();
     expect(mocks.activeSnapshotSync).toHaveBeenCalledTimes(1);
-    expect(mocks.handleFullGeneration).not.toHaveBeenCalled();
   });
 
   it("updates the auto-refresh cooldown timestamp after timer sync", async () => {
