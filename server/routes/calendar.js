@@ -80,8 +80,7 @@ router.get("/deadlines", async (_req, res) => {
 
     const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
     const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
-    const liveTodoistIds = new Set(todoistTasks.map((task) => String(task.id)));
-    const tombstones = await hydrateRecurringTombstones(userId, liveTodoistIds, {
+    const tombstones = await hydrateRecurringTombstones(userId, null, {
       viewBoundary: "yesterday",
     });
 
@@ -211,12 +210,7 @@ router.get("/deadlines/range", async (req, res) => {
     if (ctmResult.status === "rejected") errors.push(quietSourceError("ctm", ctmResult.reason));
     if (todoistResult.status === "rejected") errors.push(quietSourceError("todoist", todoistResult.reason));
 
-    const liveTodoistIds = new Set(
-      todoistTasks
-        .filter((task) => task.status !== "complete")
-        .map((task) => String(task.id)),
-    );
-    const tombstones = await hydrateRecurringTombstones(userId, liveTodoistIds.size ? liveTodoistIds : null, {
+    const tombstones = await hydrateRecurringTombstones(userId, null, {
       viewBoundary: "yesterday",
     }).catch((err) => {
       errors.push(quietSourceError("todoist", err));

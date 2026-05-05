@@ -7,6 +7,7 @@ const testState = vi.hoisted(() => ({
     getTodoistMirrorHealth: vi.fn(),
     listTodoistMirrorActiveTaskIds: vi.fn(),
     listTodoistMirrorActiveTasks: vi.fn(),
+    listTodoistMirrorCompletedTasks: vi.fn(),
     listTodoistMirrorProjects: vi.fn(),
     listTodoistMirrorLabels: vi.fn(),
     markTodoistMirrorItemCompleted: vi.fn(),
@@ -52,6 +53,7 @@ beforeEach(() => {
   ]);
   testState.mirror.listTodoistMirrorActiveTaskIds.mockResolvedValue(new Set());
   testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValue([]);
+  testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValue([]);
 });
 
 describe("mapTodoistTask", () => {
@@ -294,6 +296,84 @@ describe("Todoist mirror-backed facade", () => {
         is_recurring: true,
       }),
     ]);
+  });
+
+  it("keeps checked mirror tasks due today visible as completed dashboard deadlines", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-05T18:00:00.000Z"));
+    testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
+      {
+        id: "recurring-next",
+        content: "Check-in IHSS",
+        project_id: "p1",
+        due: { date: "2026-05-07T09:00:00", is_recurring: true },
+        priority: 1,
+        labels: [],
+      },
+    ]);
+    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+      {
+        id: "single-done",
+        content: "Check-in IHSS",
+        checked: true,
+        project_id: "p1",
+        due: { date: "2026-05-05T09:00:00", is_recurring: false },
+        priority: 1,
+        labels: [],
+      },
+    ]);
+    const { fetchTodoistTasks } = await import("./todoist.js");
+
+    const tasks = await fetchTodoistTasks("u1");
+
+    expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
+      start: "2026-05-05",
+      end: null,
+    });
+    expect(tasks.map((task) => [task.id, task.status, task.due_date, task.is_recurring])).toEqual([
+      ["recurring-next", "incomplete", "2026-05-07", true],
+      ["single-done", "complete", "2026-05-05", false],
+    ]);
+    vi.useRealTimers();
+  });
+
+  it("keeps checked mirror tasks due today visible in full calendar deadline reads", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-05T18:00:00.000Z"));
+    testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
+      {
+        id: "recurring-next",
+        content: "Check-in IHSS",
+        project_id: "p1",
+        due: { date: "2026-05-07T09:00:00", is_recurring: true },
+        priority: 1,
+        labels: [],
+      },
+    ]);
+    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+      {
+        id: "single-done",
+        content: "Check-in IHSS",
+        checked: true,
+        project_id: "p1",
+        due: { date: "2026-05-05T09:00:00", is_recurring: false },
+        priority: 1,
+        labels: [],
+      },
+    ]);
+    const { fetchTodoistTasksAll } = await import("./todoist.js");
+
+    const tasks = await fetchTodoistTasksAll("u1");
+
+    expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
+      start: "2026-05-05",
+      end: null,
+    });
+    expect(tasks.map((task) => [task.id, task.status, task.due_date, task.is_recurring])).toEqual([
+      ["recurring-next", "incomplete", "2026-05-07", true],
+      ["single-done", "complete", "2026-05-05", false],
+    ]);
+    vi.useRealTimers();
   });
 
   it("derives mapped tasks and active id set from one mirror task read", async () => {

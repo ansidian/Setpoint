@@ -119,6 +119,27 @@ export async function listTodoistMirrorActiveTasks(userId, {
   return result.rows.map(mirrorItemToTodoistTask);
 }
 
+export async function listTodoistMirrorCompletedTasks(userId, {
+  dbClient = db,
+  start = null,
+  end = null,
+} = {}) {
+  const lowerSql = start ? " AND due_date >= ?" : "";
+  const upperSql = end ? " AND due_date <= ?" : "";
+  const result = await dbClient.execute({
+    sql: `SELECT item_id, project_id, content, description, checked, is_deleted,
+                 due_date, due_datetime, due_timezone, due_is_recurring, priority, labels_json
+          FROM ea_todoist_items
+          WHERE user_id = ?
+            AND checked = 1
+            AND is_deleted = 0
+            AND due_date IS NOT NULL${lowerSql}${upperSql}
+          ORDER BY due_date ASC, due_datetime ASC, item_id ASC`,
+    args: [userId, ...(start ? [start] : []), ...(end ? [end] : [])],
+  });
+  return result.rows.map(mirrorItemToTodoistTask);
+}
+
 export async function listTodoistMirrorActiveTaskIds(userId, {
   dbClient = db,
 } = {}) {

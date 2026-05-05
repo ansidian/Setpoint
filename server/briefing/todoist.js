@@ -2,6 +2,7 @@ import {
   getTodoistMirrorHealth,
   listTodoistMirrorActiveTaskIds,
   listTodoistMirrorActiveTasks,
+  listTodoistMirrorCompletedTasks,
   listTodoistMirrorLabels,
   listTodoistMirrorProjects,
   markTodoistMirrorItemCompleted,
@@ -178,6 +179,23 @@ async function fetchMirrorMappedTasks(userId, {
   };
 }
 
+async function fetchMirrorMappedCompletedTasks(userId, {
+  start = null,
+  end = null,
+} = {}) {
+  const health = await prepareTodoistMirrorRead(userId);
+  if (!health.configured) return { tasks: [], health };
+
+  const [projects, tasks] = await Promise.all([
+    fetchMirrorProjectMap(userId),
+    listTodoistMirrorCompletedTasks(userId, { start, end }),
+  ]);
+  return {
+    tasks: tasks.map((task) => mapTodoistTask(task, projects)),
+    health,
+  };
+}
+
 // Map Todoist color names to hex (subset of Todoist palette)
 const TODOIST_COLORS = {
   berry_red: "#b8255f", red: "#db4035", orange: "#ff9933",
@@ -221,6 +239,10 @@ function extractDate(due) {
   return due.date.split("T")[0];
 }
 
+function todayPacific() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
+}
+
 function mapTodoistTask(t, projects) {
   const proj = projects.get(t.project_id);
   return {
@@ -231,7 +253,7 @@ function mapTodoistTask(t, projects) {
     class_name: proj?.name || "Todoist",
     class_color: proj ? mapColor(proj.color) : "#cba6da",
     points_possible: null,
-    status: "incomplete",
+    status: t.checked ? "complete" : "incomplete",
     source: "todoist",
     description: t.description || "",
     url: todoistTaskUrl(t.content, t.id),
@@ -325,14 +347,21 @@ async function fetchTodoistCompletedByDueDateWithFallback(token, { start, end })
 }
 
 export async function fetchTodoistTasks(userId, options = {}) {
-  const { tasks } = await fetchMirrorMappedTasks(userId, options);
-  return tasks;
+  return fetchMirrorMappedTasksWithVisibleCompleted(userId, options);
 }
 
-// Full-horizon fetch for the calendar modal: overdue + future incomplete.
+async function fetchMirrorMappedTasksWithVisibleCompleted(userId, options = {}) {
+  const [{ tasks: active }, { tasks: completed }] = await Promise.all([
+    fetchMirrorMappedTasks(userId, options),
+    fetchMirrorMappedCompletedTasks(userId, { start: todayPacific() }),
+  ]);
+  return dedupeTodoistRangeTasks([...active, ...completed]);
+}
+
+// Full-horizon fetch for the calendar modal: overdue + future incomplete,
+// plus checked tasks that remain visible through their due date.
 export async function fetchTodoistTasksAll(userId, options = {}) {
-  const { tasks } = await fetchMirrorMappedTasks(userId, options);
-  return tasks;
+  return fetchMirrorMappedTasksWithVisibleCompleted(userId, options);
 }
 
 export async function fetchTodoistTasksRange(userId, { start, end, refresh = false }) {

@@ -368,8 +368,7 @@ async function refreshDeadlinesCurrent(userId, _config, options) {
   ]);
   const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
   const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
-  const liveTodoistIds = new Set(todoistTasks.map((task) => String(task.id)));
-  const tombstones = await hydrateRecurringTombstones(userId, liveTodoistIds, {
+  const tombstones = await hydrateRecurringTombstones(userId, null, {
     viewBoundary: "today",
   });
   const todoistWithCompleted = [...separated.todoist, ...tombstones];
