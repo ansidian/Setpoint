@@ -1,8 +1,6 @@
 import db from "../db/connection.js";
 import { generateBriefing, quickRefresh } from "./index.js";
 import * as storedBriefingService from "./stored-briefing-service.js";
-import { generateEnrichedMock, generateMockHistory } from "../db/dev-fixture.js";
-import { applyScenarios } from "../db/scenarios/index.js";
 
 function legacyRuntimeRetired(message) {
   const err = new Error(message);
@@ -52,7 +50,7 @@ export async function refresh(userId) {
   return result;
 }
 
-export async function getLatest(userId, { mock, scenarios }) {
+export async function getLatest(userId) {
   const result = await db.execute({
     sql: `SELECT id, status, briefing_json, generated_at, generation_time_ms
           FROM ea_briefings
@@ -61,30 +59,7 @@ export async function getLatest(userId, { mock, scenarios }) {
     args: [userId],
   });
 
-  if (mock && process.env.NODE_ENV !== "production") {
-    const mockBriefing = await generateEnrichedMock(userId);
-    applyScenarios(mockBriefing, scenarios || []);
-    return {
-      id: 0,
-      status: "ready",
-      briefing: mockBriefing,
-      generated_at: new Date().toISOString(),
-      generation_time_ms: 0,
-    };
-  }
-
   if (!result.rows.length) {
-    if (process.env.NODE_ENV !== "production") {
-      const mockBriefing = await generateEnrichedMock(userId);
-      applyScenarios(mockBriefing, scenarios || []);
-      return {
-        id: 0,
-        status: "ready",
-        briefing: mockBriefing,
-        generated_at: new Date().toISOString(),
-        generation_time_ms: 0,
-      };
-    }
     return { briefing: null };
   }
 
@@ -110,9 +85,6 @@ export async function getHistory(userId, { limit = 20 } = {}) {
           ORDER BY generated_at DESC LIMIT ?`,
     args: [userId, limit],
   });
-  if (!result.rows.length && process.env.NODE_ENV !== "production") {
-    return generateMockHistory();
-  }
   return result.rows;
 }
 
@@ -140,20 +112,6 @@ export async function getById(userId, id) {
     args: [id, userId],
   });
   if (!result.rows.length) {
-    if (process.env.NODE_ENV !== "production") {
-      const mockHistory = generateMockHistory();
-      const match = mockHistory.find((h) => h.id === Number(id));
-      if (match) {
-        const mockBriefing = await generateEnrichedMock(userId);
-        return {
-          id: match.id,
-          status: "ready",
-          briefing: mockBriefing,
-          generated_at: match.generated_at,
-          generation_time_ms: match.generation_time_ms,
-        };
-      }
-    }
     const err = new Error("Briefing not found");
     err.status = 404;
     throw err;

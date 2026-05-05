@@ -80,7 +80,6 @@ ea-dashboard/
 │   │   ├── dev-service.js          # Dev-only helpers (reindex emails)
 │   │   ├── email-ai.js             # Provider-backed email summary, triage, and bill-signal extraction
 │   │   ├── email-ai-models.js      # Email AI provider/model catalog and validation
-│   │   ├── insight-validator.js    # Legacy insight compatibility for old briefing history
 │   │   ├── gmail.js                # Gmail OAuth, fetch, mark-read, trash
 │   │   ├── icloud.js               # IMAP connection pool, fetch, mark-read, trash
 │   │   ├── calendar.js             # Google Calendar: today/tomorrow/next-week ranges
@@ -111,9 +110,7 @@ ea-dashboard/
 │       ├── connection.js           # Turso client (remote prod, local dev file)
 │       ├── ctm-connection.js       # Read-only CTM database client
 │       ├── migrate.js              # Sequential SQL migration runner
-│       ├── migrations/             # Numbered SQL files auto-run in order
-│       ├── dev-fixture.js          # Mock briefing generator for dev mode
-│       └── scenarios/              # Composable test fixtures (urgent-flags, bills, tombstones, etc.)
+│       └── migrations/             # Numbered SQL files auto-run in order
 ├── src/
 │   ├── main.jsx                    # React entry point
 │   ├── App.jsx                     # Router + auth guard (3 routes)
@@ -128,7 +125,6 @@ ea-dashboard/
 │   │   └── DashboardContext.jsx    # Email/task state, computed values, action handlers
 │   ├── hooks/
 │   │   ├── useCurrentDashboard.js  # Normal boot/runtime data from `/api/dashboard/current`
-│   │   ├── useBriefingData.js      # Legacy briefing history/dev scenario compatibility
 │   │   ├── useLiveEmailState.js    # Derived read/snoozed state for live email rows
 │   │   ├── useNotifications.js     # Browser notifications for events, bills, emails
 │   │   ├── useAutoRefresh.js       # Visibility-aware auto refresh of briefing data
@@ -153,7 +149,6 @@ ea-dashboard/
 │   │   ├── bills/                  # BillsPaymentsSection, BillBadge (Actual Budget send)
 │   │   ├── settings/               # Settings page sub-components
 │   │   ├── shared/                 # SearchableDropdown, Tooltip, WeatherTooltip
-│   │   ├── dev/                    # DevPanel (Ctrl+Shift+D, scenario switcher)
 │   │   └── ui/                     # shadcn primitives + MotionWrappers, BottomSheet
 │   └── lib/
 │       ├── utils.ts                # cn() — clsx + tailwind-merge
@@ -162,8 +157,7 @@ ea-dashboard/
 │       ├── redesign-helpers.js     # Layout/measurement helpers for the shell redesign
 │       ├── bill-utils.js           # Bill normalization and dedupe helpers
 │       ├── email-links.js          # Parse/transform email links for safe rendering
-│       ├── icons.js / icons.jsx    # Icon registry shared across components
-│       └── insight-resolver.js     # Legacy typed date slot renderer for old insight history
+│       └── icons.js / icons.jsx    # Icon registry shared across components
 └── docs/                           # Local gitignored working docs, plans, references, generated snapshots
 ```
 
@@ -218,7 +212,6 @@ No global state library. Three layers:
 graph LR
     subgraph Hooks["Custom Hooks (data fetching)"]
         UCD[useCurrentDashboard]
-        UBD[useBriefingData]
         UN[useNotifications]
     end
 
@@ -234,14 +227,11 @@ graph LR
     end
 
     UCD -->|briefing adapter, liveData adapter, activeSnapshot| Context
-    UBD -.->|mock/dev scenarios and history selection| Context
     UN -->|monitors liveData| Browser[Browser Notifications]
     Context --> Sections
 ```
 
 **`useCurrentDashboard`** — Normal dashboard boot/runtime hook. Fetches `/api/dashboard/current`, listens to `/api/dashboard/current/events`, and exposes stable `briefingData`, `liveData`, and `activeSnapshot` adapters for the existing dashboard component tree.
-
-**`useBriefingData`** — Legacy briefing history/dev scenario compatibility. It can still fetch `/api/briefing/latest` for mock scenarios and historical navigation, but it is disabled for normal dashboard boot.
 
 **`DashboardContext`** — Shared across all dashboard sections. Derives `emailAccounts`, `billEmails`, `totalBills`, `totalNoiseCount` via `useMemo`. Provides action handlers that update both API and local state.
 
@@ -267,7 +257,6 @@ GET /api/dashboard/current
 | Click email | Expand EmailBody panel (iframe with sanitized HTML) |
 | Click task status dot | Cycle task status (incomplete → in_progress → complete) |
 | Type in Inbox search | FTS5 email keyword search across indexed INBOX mail |
-| Ctrl+Shift+D | Dev panel (dev mode only) |
 
 ## Backend Architecture
 
@@ -302,7 +291,7 @@ graph LR
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
 | Auth | `/api/auth` | 3 | Login (rate-limited 5/15min), session check, logout |
-| Briefing | `/api/briefing` | ~38 | Generate, poll, refresh, email ops (read/trash/snooze/dismiss), FTS email search, task ops, Actual Budget, scenarios |
+| Briefing | `/api/briefing` | ~37 | Generate, poll, refresh, email ops (read/trash/snooze/dismiss), FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
 | Live | `/api/live` | 1 | Retired `/api/live/all` compatibility response |
@@ -396,9 +385,9 @@ Email interests from settings override noise classification. Scheduled payments 
 
 Model selection: user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence and retries 3x with exponential backoff on 429/529.
 
-### Legacy Insight Compatibility
+### Retired AI Insights
 
-Typed-date insight resolver and validator modules remain for old `ea_briefings` history and dev scenarios, but new generation does not inject historical context or write visible insight items. Dashboard surfaces no longer render the Insights rail.
+AI Insights no longer render in the dashboard. Stored briefing JSON and email-AI output may still carry `aiInsights: []` as a compatibility stub, but resolver/validator code and dev insight fixtures have been removed.
 
 ### Key Optimizations
 
@@ -697,7 +686,6 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 | GET | `/api/briefing/:id` | Fetch specific briefing |
 | DELETE | `/api/briefing/:id` | Soft-delete briefing |
 | POST | `/api/briefing/refresh` | Legacy dev-only quick refresh; 410 in production |
-| GET | `/api/briefing/scenarios` | List dev scenarios |
 
 ### Current Dashboard
 
@@ -836,7 +824,6 @@ Token management endpoints live under `/api/auth`. Bearer tokens authenticate by
 **Dev flow:**
 1. `npm run dev` → concurrently runs Vite (HMR) + Express (--watch)
 2. Vite proxies `/api/*` to Express on port 3001
-3. `?mock=1&scenario=name` on `/api/briefing/latest` for dev fixtures
 
 **Environment variables:** See `.env.example` for full reference. Key secrets: `EA_PASSWORD_HASH` (bcrypt), `EA_ENCRYPTION_KEY` (AES-256), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`/`SECRET`, database tokens.
 

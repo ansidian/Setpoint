@@ -44,29 +44,6 @@ vi.mock("../hooks/useCalendarDomainRange", () => ({
   }),
 }));
 
-vi.mock("../hooks/useBriefingData", () => ({
-  default: () => ({
-    loading: false,
-    error: null,
-    briefing: null,
-    generating: false,
-    genProgress: null,
-    lastQuickRefreshAt: null,
-    handleQuickRefresh: mocks.handleQuickRefresh,
-    handleFullGeneration: mocks.handleFullGeneration,
-  }),
-}));
-
-vi.mock("../hooks/useActiveSnapshot", () => ({
-  default: () => ({
-    snapshot: null,
-    loading: false,
-    error: null,
-    refresh: mocks.activeSnapshotRefresh,
-    sync: mocks.activeSnapshotSync,
-  }),
-}));
-
 vi.mock("../hooks/useCurrentDashboard", () => ({
   default: () => ({
     liveData: {

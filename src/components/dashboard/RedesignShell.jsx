@@ -19,7 +19,7 @@ const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
 
 export function RedesignShell({
-  bd, liveData, calendarRange, isMock = false,
+  bd, liveData, calendarRange,
   activeSnapshot,
   onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef,
@@ -214,12 +214,7 @@ export function RedesignShell({
 
   const { accent } = customize;
   const briefing = bd.briefing;
-  const dashboardCalendarDeadlines = isMock
-    ? {
-        ctm: briefing?.ctm || { upcoming: [], stats: null },
-        todoist: briefing?.todoist || { upcoming: [], stats: null },
-      }
-    : calendarDeadlines;
+  const dashboardCalendarDeadlines = calendarDeadlines;
 
   // Scroll/jump to data-sect targets within the dashboard tab
   const jumpToSection = useCallback((slug) => {
@@ -270,7 +265,7 @@ export function RedesignShell({
     staleRefreshPending: calendarRange.staleRefreshPending,
     error: calendarRange.error,
     revision: calendarRange.revision,
-    editable: !isMock,
+    editable: true,
   }), [
     calendarRange.ensureRange,
     calendarRange.refreshRange,
@@ -284,7 +279,6 @@ export function RedesignShell({
     calendarRange.staleRefreshPending,
     calendarRange.error,
     calendarRange.revision,
-    isMock,
   ]);
 
   useEffect(() => {

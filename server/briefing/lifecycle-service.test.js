@@ -9,12 +9,6 @@ vi.mock("./index.js", () => ({
 vi.mock("./stored-briefing-service.js", () => ({
   mergeAccountPrefs: vi.fn((b) => b),
 }));
-vi.mock("../db/dev-fixture.js", () => ({
-  generateEnrichedMock: vi.fn(async () => ({ mock: true })),
-  generateMockHistory: vi.fn(() => [{ id: 1, generated_at: "x", generation_time_ms: 0 }]),
-}));
-vi.mock("../db/scenarios/index.js", () => ({ applyScenarios: vi.fn() }));
-
 const originalEnv = process.env.NODE_ENV;
 
 beforeEach(() => {
@@ -52,14 +46,13 @@ describe("getLatest", () => {
     expect(out.briefing).toEqual({ hello: "world" });
   });
 
-  it("returns mock briefing when mock=true in dev", async () => {
+  it("returns { briefing: null } when no row in development", async () => {
     process.env.NODE_ENV = "development";
     mockDb.execute.mockResolvedValueOnce({ rows: [] });
 
-    const out = await getLatest("u1", { mock: true, scenarios: [] });
+    const out = await getLatest("u1");
 
-    expect(out.id).toBe(0);
-    expect(out.briefing).toEqual({ mock: true });
+    expect(out).toEqual({ briefing: null });
   });
 
   it("returns { briefing: null } when no row in production", async () => {

@@ -315,19 +315,6 @@ function extractToolUseInput(data, toolName) {
   return block.input;
 }
 
-// --- Slot resolution and validation pipeline ---
-
-// A new_cal_*/new_nwcal_* slot is a fabrication — the prompts forbid minting
-// calendar slots, so if one appears the iso/time/weekday was invented by the
-// model rather than derived from real calendar data. Dropping these is
-// cheaper than letting a wrong weekday reach the user (see the "Mon class
-// rendered as Tue" bug that motivated this check).
-const FABRICATED_CAL_SLOT_REGEX = /^new_(?:cal|nwcal)_/;
-
-export function fabricatedCalendarSlotKeys(insight) {
-  return Object.keys(insight?.slots || {}).filter(k => FABRICATED_CAL_SLOT_REGEX.test(k));
-}
-
 // --- Main entry point ---
 
 function buildEmailAiRequestContext({

@@ -43,15 +43,6 @@ export const createApiToken = (label, scopes) => apiFetch("/api/auth/api-tokens"
 export const revokeApiToken = (id) => apiFetch(`/api/auth/api-tokens/${id}`, { method: "DELETE" });
 
 // Briefings
-export const getLatestBriefing = (scenarioOverride) => {
-  const params = new URLSearchParams(window.location.search);
-  const mock = params.get("mock");
-  if (scenarioOverride) return apiFetch(`/api/briefing/latest?mock=1&scenario=${scenarioOverride}`);
-  const scenario = params.get("scenario");
-  const qs = mock ? `?mock=1${scenario ? `&scenario=${scenario}` : ""}` : "";
-  return apiFetch(`/api/briefing/latest${qs}`);
-};
-export const getDevScenarios = () => apiFetch("/api/briefing/scenarios");
 export const getActiveSnapshot = () => apiFetch("/api/briefing/snapshot/active");
 export const syncActiveSnapshot = () => apiFetch("/api/briefing/snapshot/sync", { method: "POST" });
 export const moveSnapshotItemLane = (itemId, lane) =>
