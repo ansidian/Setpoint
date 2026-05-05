@@ -47,7 +47,6 @@ export default function InboxDesktopPane({
   sidebarCompact,
   layout,
   grouping,
-  briefingAgoLabel,
   activeSnapshotMode = false,
   snapshotCategories = [],
   categoryFilter = "__all",
@@ -145,7 +144,6 @@ export default function InboxDesktopPane({
               indexedSearchError={indexedSearchError}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
-              briefingAgoLabel={briefingAgoLabel}
               briefingGeneratedAt={briefingGeneratedAt}
               searchRef={searchRef}
               activeSnapshotMode={activeSnapshotMode}

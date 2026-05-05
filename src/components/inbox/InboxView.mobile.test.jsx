@@ -187,6 +187,40 @@ describe("InboxView mobile", () => {
     expect(screen.queryByText("Budget dinner plans")).toBeNull();
   });
 
+  it("shows skeleton rows instead of search chrome or empty copy while mobile indexed search is loading", async () => {
+    searchEmails.mockResolvedValueOnce({ accounts: [], total: 0, query: "tuition" });
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: "tuition" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("inbox-mobile-search-skeleton")).toBeTruthy();
+    });
+    expect(screen.queryByText("Searching persisted mail index...")).toBeNull();
+    expect(screen.queryByText("No emails match this view.")).toBeNull();
+  });
+
+  it("shows mobile indexed-search empty copy only after search resolves with no results", async () => {
+    searchEmails.mockResolvedValueOnce({ accounts: [], total: 0, query: "tuition" });
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: "tuition" },
+    });
+
+    await waitFor(() => {
+      expect(searchEmails).toHaveBeenCalledWith("tuition");
+    });
+    await waitFor(() => {
+      expect(screen.getByText("No indexed mail matches")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("inbox-mobile-search-skeleton")).toBeNull();
+  });
+
   it("respects a seedSelectedId on mobile", () => {
     activateBudgetSnapshot();
 
@@ -325,6 +359,7 @@ describe("InboxView mobile", () => {
     expect(screen.getByText("Active snapshot")).toBeTruthy();
     expect(screen.getByText(/1 email across 1 account/i)).toBeTruthy();
     expect(screen.queryByText("Handle the approval first, then everything else can wait.")).toBeNull();
+    expect(screen.queryByText(/Snapshot updated/i)).toBeNull();
   });
 
   it("shows resurfaced snoozes as fresh live rows in active snapshot mode", () => {

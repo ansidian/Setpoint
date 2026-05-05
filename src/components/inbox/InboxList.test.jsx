@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import InboxList from "./InboxList.jsx";
 import { makeInboxEmail } from "./test-utils/inboxFixtures.js";
@@ -109,10 +109,111 @@ describe("InboxList", () => {
     expect(screen.getByText("Needs Attention")).toBeTruthy();
     expect(screen.getByText("FYI")).toBeTruthy();
     expect(screen.getByText("Noise")).toBeTruthy();
-    expect(screen.getByText("finance")).toBeTruthy();
+    expect(screen.getByText("Finance")).toBeTruthy();
     expect(screen.getByText("Carryover contract")).toBeTruthy();
     expect(screen.getByText("Needs attention deck")).toBeTruthy();
     expect(screen.getByText("FYI launch note")).toBeTruthy();
     expect(screen.queryByText("Not yet triaged")).toBeNull();
+  });
+
+  it("collapses low-priority active snapshot categories into a More menu", () => {
+    const onCategoryFilterChange = vi.fn();
+
+    renderInboxList({
+      activeSnapshotMode: true,
+      snapshotCategories: [
+        { category: "marketing", count: 20 },
+        { category: "finance", count: 1 },
+        { category: "security", count: 2 },
+        { category: "legal", count: 3 },
+        { category: "school", count: 8 },
+        { category: "work", count: 9 },
+      ],
+      onCategoryFilterChange,
+    });
+
+    const strip = screen.getByTestId("inbox-category-filter-strip");
+    expect(strip.style.overflowX).toBe("hidden");
+    expect(within(strip).getByRole("button", { name: /^All$/i })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /Security 2/i })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /Legal 3/i })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /Finance 1/i })).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /Work 9/i })).toBeTruthy();
+    expect(within(strip).queryByRole("button", { name: /Marketing 20/i })).toBeNull();
+
+    fireEvent.click(within(strip).getByRole("button", { name: /More 2/i }));
+
+    const menu = screen.getByRole("menu", { name: /more inbox categories/i });
+    expect(within(menu).getByRole("menuitemradio", { name: /School 8/i })).toBeTruthy();
+    expect(within(menu).getByRole("menuitemradio", { name: /Marketing 20/i })).toBeTruthy();
+    expect(within(menu).queryByRole("menuitemradio", { name: /Security 2/i })).toBeNull();
+
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Marketing 20/i }));
+    expect(onCategoryFilterChange).toHaveBeenCalledWith("marketing");
+    expect(screen.queryByRole("menu", { name: /more inbox categories/i })).toBeNull();
+  });
+
+  it("marks a hidden active category through the More trigger and only All clears it", () => {
+    const onCategoryFilterChange = vi.fn();
+
+    renderInboxList({
+      activeSnapshotMode: true,
+      categoryFilter: "marketing",
+      snapshotCategories: [
+        { category: "finance", count: 1 },
+        { category: "security", count: 2 },
+        { category: "legal", count: 3 },
+        { category: "school", count: 8 },
+        { category: "marketing", count: 20 },
+      ],
+      onCategoryFilterChange,
+    });
+
+    const strip = screen.getByTestId("inbox-category-filter-strip");
+    expect(within(strip).getByRole("button", { name: /Marketing · More/i }).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(within(strip).getByRole("button", { name: /Marketing · More/i }));
+    const menu = screen.getByRole("menu", { name: /more inbox categories/i });
+    const activeMenuItem = within(menu).getByRole("menuitemradio", { name: /Marketing 20/i });
+    expect(activeMenuItem.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(activeMenuItem);
+    expect(onCategoryFilterChange).not.toHaveBeenCalledWith("marketing");
+
+    fireEvent.click(within(strip).getByRole("button", { name: /^All$/i }));
+    expect(onCategoryFilterChange).toHaveBeenCalledWith("__all");
+  });
+
+  it("shows indexed-search skeleton rows while a desktop search is unresolved", () => {
+    renderInboxList({
+      indexedSearchActive: true,
+      indexedSearchLoading: true,
+      searchQuery: "tuition",
+      emails: [],
+    });
+
+    expect(screen.getByTestId("inbox-search-skeleton")).toBeTruthy();
+    expect(screen.queryByText("Searching persisted mail index...")).toBeNull();
+    expect(screen.queryByTestId("inbox-list-empty-state-card")).toBeNull();
+  });
+
+  it("does not render the snapshot age label on desktop", () => {
+    renderInboxList({
+      briefingAgoLabel: "Snapshot updated 2h ago",
+    });
+
+    expect(screen.queryByText("Snapshot updated 2h ago")).toBeNull();
+  });
+
+  it("shows a quiet indexed-search empty state only after loading settles", () => {
+    renderInboxList({
+      indexedSearchActive: true,
+      indexedSearchLoading: false,
+      searchQuery: "tuition",
+      emails: [],
+    });
+
+    expect(screen.queryByTestId("inbox-search-skeleton")).toBeNull();
+    expect(screen.getByText("No indexed mail matches")).toBeTruthy();
   });
 });
