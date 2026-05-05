@@ -17,7 +17,8 @@ const STATE_COPY = {
   current: "Current",
   refreshing: "Refreshing",
   syncing: "Syncing",
-  stale: "Stale",
+  needs_sync: "Needs sync",
+  degraded: "Degraded",
   unavailable: "Unavailable",
   unconfigured: "Unconfigured",
 };
@@ -26,17 +27,19 @@ const STATE_COLOR = {
   current: "#a6e3a1",
   refreshing: "#89b4fa",
   syncing: "#89b4fa",
-  stale: "#f9e2af",
+  needs_sync: "#f9e2af",
+  degraded: "#f9e2af",
   unavailable: "#f38ba8",
   unconfigured: "#a6adc8",
 };
 
 function normalizeState(state) {
+  if (state === "stale") return "needs_sync";
   return STATE_COPY[state] ? state : "unavailable";
 }
 
 function isAttentionState(state) {
-  return state === "stale" || state === "unavailable";
+  return state === "needs_sync" || state === "degraded" || state === "unavailable";
 }
 
 function isBusyState(state) {
@@ -46,7 +49,7 @@ function isBusyState(state) {
 function StatusIcon({ state, ...props }) {
   if (state === "current") return <CheckCircle2 {...props} />;
   if (state === "refreshing" || state === "syncing") return <LoaderCircle {...props} />;
-  if (state === "stale" || state === "unavailable") return <AlertTriangle {...props} />;
+  if (state === "needs_sync" || state === "degraded" || state === "unavailable") return <AlertTriangle {...props} />;
   if (state === "unconfigured") return <CircleDashed {...props} />;
   return <Info {...props} />;
 }

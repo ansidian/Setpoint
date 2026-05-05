@@ -24,9 +24,21 @@ const EMPTY_DEADLINES = {
   ctm: { upcoming: [], stats: null },
   todoist: { upcoming: [], stats: null },
 };
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CURRENT_CACHE_TTL_MS = {
+  weather_current: 30 * 60 * 1000,
+  calendar_current: 5 * 60 * 1000,
+  deadlines_current: 15 * 60 * 1000,
+  bills_current: 60 * 60 * 1000,
+};
+const REFRESH_TIMEOUT_MS = 2 * 60 * 1000;
+const REFRESH_FAILURE_GRACE_MS = 15 * 60 * 1000;
+const PASSIVE_FAILURE_BACKOFF_MS = [2 * 60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000];
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
 const BACKGROUND_REFRESH_IN_FLIGHT = new Map();
+
+export function __resetCurrentDashboardRefreshStateForTests() {
+  BACKGROUND_REFRESH_IN_FLIGHT.clear();
+}
 
 function parsePayload(row, fallback) {
   if (!row?.payload_json) return fallback;
@@ -42,11 +54,49 @@ function isFresh(row, now = new Date()) {
   return new Date(row.expires_at).getTime() > now.getTime();
 }
 
-function rowHealthState(row, now) {
-  if (!row) return "unavailable";
-  if (row.status === "unavailable") return "unavailable";
-  if (row.status === "refreshing" || row.refresh_started_at) return "refreshing";
-  return isFresh(row, now) ? "current" : "stale";
+function isRefreshTimedOut(row, now) {
+  if (row?.status !== "refreshing" || !row.refresh_started_at) return false;
+  return now.getTime() - new Date(row.refresh_started_at).getTime() > REFRESH_TIMEOUT_MS;
+}
+
+function hasUsablePayload(key, row) {
+  const payload = parsePayload(row, undefined);
+  if (payload == null) return false;
+  if (key === "weather_current") return Boolean(payload.temp != null || payload.summary);
+  if (key === "calendar_current") return Array.isArray(payload);
+  if (key === "deadlines_current") return Boolean(payload.ctm && payload.todoist);
+  if (key === "bills_current") {
+    return Boolean(Array.isArray(payload.bills) && Array.isArray(payload.allSchedules) && payload.payeeMap);
+  }
+  return true;
+}
+
+function refreshFailureAgeMs(row, now) {
+  if (!row?.last_refresh_failed_at) return null;
+  return Math.max(0, now.getTime() - new Date(row.last_refresh_failed_at).getTime());
+}
+
+function sourceHealthForRow(key, row, now) {
+  if (!row) return { state: "unavailable", severity: "error" };
+  const usable = hasUsablePayload(key, row);
+  if (isRefreshTimedOut(row, now)) {
+    return usable ? { state: "degraded", severity: "warning" } : { state: "unavailable", severity: "error" };
+  }
+  if (row.status === "refreshing" || row.refresh_started_at) {
+    return usable ? { state: "refreshing", severity: "info" } : { state: "unavailable", severity: "error" };
+  }
+  if (row.status === "unavailable") {
+    return usable ? { state: "degraded", severity: "none" } : { state: "unavailable", severity: "error" };
+  }
+  if (row.status === "degraded") {
+    const ageMs = refreshFailureAgeMs(row, now);
+    return {
+      state: "degraded",
+      severity: ageMs != null && ageMs < REFRESH_FAILURE_GRACE_MS ? "none" : "warning",
+    };
+  }
+  if (!usable) return { state: "unavailable", severity: "error" };
+  return { state: "current", severity: "none" };
 }
 
 function maxIso(values) {
@@ -60,35 +110,39 @@ function maxIso(values) {
 
 function summarizeCurrentDataHealth(rows, now) {
   const sourceRows = CURRENT_CACHE_KEYS.map((key) => rows[key]).filter(Boolean);
-  const sourceStates = CURRENT_CACHE_KEYS.map((key) => rowHealthState(rows[key], now));
-
-  const state = sourceStates.includes("unavailable")
+  const sources = CURRENT_CACHE_KEYS.map((key) => {
+    const row = rows[key];
+    const health = sourceHealthForRow(key, row, now);
+    return {
+      key,
+      state: health.state,
+      severity: health.severity,
+      fetchedAt: row?.fetched_at || null,
+      expiresAt: row?.expires_at || null,
+      errorMessage: row?.last_refresh_error || row?.error_message || null,
+      failedAt: row?.last_refresh_failed_at || null,
+      failureCount: Number(row?.refresh_failure_count || 0),
+      refreshStartedAt: row?.refresh_started_at || null,
+    };
+  });
+  const severities = sources.map((source) => source.severity);
+  const state = severities.includes("error")
     ? "unavailable"
-    : sourceStates.includes("stale")
-      ? "stale"
-      : sourceStates.includes("refreshing")
-        ? "refreshing"
-        : "current";
+    : severities.includes("warning")
+      ? "degraded"
+      : "current";
 
   return {
     state,
     lastSuccessAt: maxIso(sourceRows.map((row) => row.fetched_at)),
-    sources: CURRENT_CACHE_KEYS.map((key) => {
-      const row = rows[key];
-      return {
-        key,
-        state: rowHealthState(row, now),
-        fetchedAt: row?.fetched_at || null,
-        expiresAt: row?.expires_at || null,
-        errorMessage: row?.error_message || null,
-      };
-    }),
+    sources,
   };
 }
 
 async function loadCacheRows(userId, { dbClient = db } = {}) {
   const result = await dbClient.execute({
-    sql: `SELECT user_id, cache_key, payload_json, fetched_at, expires_at, status, error_message, refresh_started_at
+    sql: `SELECT user_id, cache_key, payload_json, fetched_at, expires_at, status, error_message,
+                 refresh_started_at, last_refresh_failed_at, last_refresh_error, refresh_failure_count
           FROM ea_current_data_cache
           WHERE user_id = ?
             AND cache_key IN (${CURRENT_CACHE_KEYS.map(() => "?").join(",")})`,
@@ -102,6 +156,7 @@ function unavailableTodoistHealth(err) {
   return {
     state: "unavailable",
     configured: null,
+    severity: "error",
     lastSuccessAt: null,
     lastError: err?.message || "Todoist sync health unavailable",
     syncStartedAt: null,
@@ -109,16 +164,15 @@ function unavailableTodoistHealth(err) {
   };
 }
 
-async function loadProviderHealth(userId, rows, { now = new Date() } = {}) {
+async function loadProviderHealth(userId, rows, { now = new Date(), todoistHealth = null } = {}) {
   const currentData = summarizeCurrentDataHealth(rows, now);
-  const todoist = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
+  const todoist = todoistHealth || await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
   return { currentData, todoist };
 }
 
 function currentDataMessage(state) {
-  if (state === "current") return "Current dashboard data is fresh.";
-  if (state === "refreshing") return "Current dashboard data is refreshing.";
-  if (state === "stale") return "Some current dashboard data is stale.";
+  if (state === "current") return "Current dashboard data is usable.";
+  if (state === "degraded") return "Some current dashboard data needs attention.";
   return "Some current dashboard data is unavailable.";
 }
 
@@ -126,17 +180,17 @@ function todoistMessage(health) {
   if (health?.configured === false || health?.state === "unconfigured") return "Todoist is not configured.";
   if (health.state === "current") return "Todoist mirror is current.";
   if (health.state === "syncing") return "Todoist mirror is syncing.";
-  if (health.state === "stale") return "Todoist mirror is stale.";
+  if (health.state === "needs_sync" || health.state === "stale") return "Todoist mirror needs sync.";
+  if (health.state === "degraded") return "Todoist mirror checks are degraded.";
   return "Todoist mirror is unavailable.";
 }
 
 function summarizeSystemState(sources) {
-  const configuredSources = sources.filter((source) => source.state !== "unconfigured");
-  const states = configuredSources.map((source) => source.state);
-  if (states.includes("unavailable")) return "unavailable";
-  if (states.includes("stale")) return "stale";
-  if (states.includes("syncing")) return "syncing";
-  if (states.includes("refreshing")) return "refreshing";
+  const configuredSources = sources.filter((source) => source.state !== "unconfigured" && source.severity !== "none");
+  const severities = configuredSources.map((source) => source.severity);
+  if (severities.includes("error")) return "unavailable";
+  if (severities.includes("warning") && configuredSources.some((source) => source.state === "needs_sync")) return "needs_sync";
+  if (severities.includes("warning")) return "degraded";
   return "current";
 }
 
@@ -147,13 +201,21 @@ function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOStr
       key: "currentData",
       label: "Current data",
       state: providerHealth.currentData.state,
+      severity: providerHealth.currentData.state === "unavailable"
+        ? "error"
+        : providerHealth.currentData.state === "degraded"
+          ? "warning"
+          : "none",
       lastSuccessAt: providerHealth.currentData.lastSuccessAt || null,
       message: currentDataMessage(providerHealth.currentData.state),
     },
     {
       key: "todoist",
       label: "Todoist",
-      state: todoistState,
+      state: todoistState === "stale" ? "needs_sync" : todoistState,
+      severity: providerHealth.todoist?.severity || (
+        todoistState === "unavailable" ? "error" : todoistState === "syncing" ? "info" : "none"
+      ),
       lastSuccessAt: providerHealth.todoist?.lastSuccessAt || null,
       message: todoistMessage(providerHealth.todoist),
     },
@@ -166,8 +228,8 @@ function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOStr
   };
 }
 
-function expiresAtFor(now) {
-  return new Date(now.getTime() + CACHE_TTL_MS).toISOString();
+function expiresAtFor(cacheKey, now) {
+  return new Date(now.getTime() + (CURRENT_CACHE_TTL_MS[cacheKey] || 5 * 60 * 1000)).toISOString();
 }
 
 function fallbackPayloadForKey(key) {
@@ -200,18 +262,78 @@ async function saveCacheRow(userId, cacheKey, payload, {
             status = excluded.status,
             error_message = excluded.error_message,
             refresh_started_at = NULL,
+            last_refresh_failed_at = NULL,
+            last_refresh_error = NULL,
+            refresh_failure_count = 0,
             updated_at = excluded.updated_at`,
     args: [
       userId,
       cacheKey,
       JSON.stringify(payload),
       timestamp,
-      expiresAtFor(now),
+      expiresAtFor(cacheKey, now),
       status,
       errorMessage,
       timestamp,
     ],
   });
+}
+
+async function markCacheRowRefreshFailed(userId, cacheKey, err, {
+  dbClient = db,
+  now = new Date(),
+  existingRow = null,
+} = {}) {
+  const timestamp = now.toISOString();
+  const message = String(err?.message || err || "Current data refresh failed").slice(0, 500);
+  const usable = hasUsablePayload(cacheKey, existingRow);
+  const payload = usable ? parsePayload(existingRow, fallbackPayloadForKey(cacheKey)) : fallbackPayloadForKey(cacheKey);
+  const fetchedAt = usable ? existingRow.fetched_at : timestamp;
+  const expiresAt = usable ? existingRow.expires_at : expiresAtFor(cacheKey, now);
+  const status = usable ? "degraded" : "unavailable";
+  const failureCount = Number(existingRow?.refresh_failure_count || 0) + 1;
+  await dbClient.execute({
+    sql: `INSERT INTO ea_current_data_cache
+            (user_id, cache_key, payload_json, fetched_at, expires_at, status, error_message,
+             refresh_started_at, last_refresh_failed_at, last_refresh_error,
+             refresh_failure_count, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1, ?)
+          ON CONFLICT(user_id, cache_key) DO UPDATE SET
+            payload_json = excluded.payload_json,
+            fetched_at = excluded.fetched_at,
+            expires_at = excluded.expires_at,
+            status = excluded.status,
+            error_message = excluded.error_message,
+            refresh_started_at = NULL,
+            last_refresh_failed_at = excluded.last_refresh_failed_at,
+            last_refresh_error = excluded.last_refresh_error,
+            refresh_failure_count = COALESCE(ea_current_data_cache.refresh_failure_count, 0) + 1,
+            updated_at = excluded.updated_at`,
+    args: [
+      userId,
+      cacheKey,
+      JSON.stringify(payload),
+      fetchedAt,
+      expiresAt,
+      status,
+      message,
+      timestamp,
+      message,
+      timestamp,
+    ],
+  });
+  return {
+    user_id: userId,
+    cache_key: cacheKey,
+    payload_json: JSON.stringify(payload),
+    fetched_at: fetchedAt,
+    expires_at: expiresAt,
+    status,
+    error_message: message,
+    last_refresh_failed_at: timestamp,
+    last_refresh_error: message,
+    refresh_failure_count: failureCount,
+  };
 }
 
 async function refreshWeatherCurrent(userId, config, options) {
@@ -321,40 +443,33 @@ async function refreshRows(userId, rows, refreshKeys, {
         cache_key: key,
         payload_json: JSON.stringify(payload),
         fetched_at: now.toISOString(),
-        expires_at: expiresAtFor(now),
+        expires_at: expiresAtFor(key, now),
         status: "current",
         error_message: null,
+        last_refresh_failed_at: null,
+        last_refresh_error: null,
+        refresh_failure_count: 0,
       };
     } catch (err) {
-      const fallback = fallbackPayloadForKey(key);
       console.error(`[Dashboard] ${key} refresh failed:`, err.message);
-      await saveCacheRow(userId, key, fallback, {
+      refreshedRows[key] = await markCacheRowRefreshFailed(userId, key, err, {
         dbClient,
         now,
-        status: "unavailable",
-        errorMessage: err.message,
+        existingRow: rows[key],
       });
-      refreshedRows[key] = {
-        user_id: userId,
-        cache_key: key,
-        payload_json: JSON.stringify(fallback),
-        fetched_at: now.toISOString(),
-        expires_at: expiresAtFor(now),
-        status: "unavailable",
-        error_message: err.message,
-      };
     }
   }));
   return refreshedRows;
 }
 
-async function markRowsRefreshing(userId, rows, {
+async function markRowsRefreshing(userId, rows, refreshKeys, {
   dbClient = db,
   now = new Date(),
 } = {}) {
   const timestamp = now.toISOString();
   const nextRows = { ...rows };
-  await dbClient.batch(CURRENT_CACHE_KEYS.map((key) => {
+  if (!refreshKeys.length) return nextRows;
+  await dbClient.batch(refreshKeys.map((key) => {
     const currentPayload = rows[key]?.payload_json || JSON.stringify(fallbackPayloadForKey(key));
     const fetchedAt = rows[key]?.fetched_at || null;
     const expiresAt = rows[key]?.expires_at || timestamp;
@@ -384,27 +499,28 @@ async function markRowsRefreshing(userId, rows, {
   return nextRows;
 }
 
-function scheduleBackgroundCurrentRefresh(userId, rows, {
+function refreshMapKey(userId, cacheKey) {
+  return `${userId}:${cacheKey}`;
+}
+
+function scheduleBackgroundCurrentRefresh(userId, rows, refreshKeys, {
   dbClient = db,
   now = new Date(),
+  force = false,
 } = {}) {
-  const key = String(userId || "");
-  if (BACKGROUND_REFRESH_IN_FLIGHT.has(key)) return;
-  BACKGROUND_REFRESH_IN_FLIGHT.set(key, { scheduled: true });
-  const timer = setTimeout(() => {
-    const promise = Promise.allSettled([
-      refreshRows(userId, rows, CURRENT_CACHE_KEYS, { dbClient, now, force: true }),
-      syncActiveSnapshot(userId),
-    ]).catch((err) => {
-      console.error("[Dashboard] background current refresh failed:", err.message);
-    }).finally(() => {
-      if (BACKGROUND_REFRESH_IN_FLIGHT.get(key) === promise) {
-        BACKGROUND_REFRESH_IN_FLIGHT.delete(key);
-      }
-    });
+  for (const cacheKey of refreshKeys) {
+    const key = refreshMapKey(userId, cacheKey);
+    if (BACKGROUND_REFRESH_IN_FLIGHT.has(key)) continue;
+    const promise = Promise.resolve()
+      .then(() => refreshRows(userId, rows, [cacheKey], { dbClient, now, force }))
+      .catch((err) => console.error("[Dashboard] background current refresh failed:", err.message))
+      .finally(() => {
+        if (BACKGROUND_REFRESH_IN_FLIGHT.get(key) === promise) {
+          BACKGROUND_REFRESH_IN_FLIGHT.delete(key);
+        }
+      });
     BACKGROUND_REFRESH_IN_FLIGHT.set(key, promise);
-  }, 0);
-  timer.unref?.();
+  }
 }
 
 async function refreshMissingRows(userId, rows, options) {
@@ -412,18 +528,91 @@ async function refreshMissingRows(userId, rows, options) {
   return refreshRows(userId, rows, missingKeys, options);
 }
 
-function refreshStaleRowsInBackground(userId, rows, options) {
-  const staleKeys = CURRENT_CACHE_KEYS.filter((key) => rows[key] && !isFresh(rows[key], options.now));
-  if (!staleKeys.length) return;
-  Promise.resolve()
-    .then(() => refreshRows(userId, rows, staleKeys, options))
-    .catch((err) => console.error("[Dashboard] background current refresh failed:", err.message));
+function skippedEntry(key, reason) {
+  return { key, reason };
+}
+
+function scheduledEntry(key, reason) {
+  return { key, reason };
+}
+
+function passiveBackoffMs(failureCount) {
+  if (failureCount <= 1) return PASSIVE_FAILURE_BACKOFF_MS[0];
+  if (failureCount === 2) return PASSIVE_FAILURE_BACKOFF_MS[1];
+  return PASSIVE_FAILURE_BACKOFF_MS[2];
+}
+
+function isInPassiveBackoff(row, now) {
+  const failedAt = row?.last_refresh_failed_at;
+  const count = Number(row?.refresh_failure_count || 0);
+  if (!failedAt || count <= 0) return false;
+  return now.getTime() - new Date(failedAt).getTime() < passiveBackoffMs(count);
+}
+
+function refreshReasonForSource(key, row, mode, now) {
+  if (!row) return "missing";
+  const health = sourceHealthForRow(key, row, now);
+  if (!hasUsablePayload(key, row)) return "no_usable_payload";
+  if (health.state === "unavailable") return "unavailable";
+  if (health.state === "degraded") return mode === "manual" ? "manual_retry" : "degraded";
+  if (!isFresh(row, now)) return "ttl_due";
+  return null;
+}
+
+function hasTodoistNeedsSync(todoistHealth) {
+  return todoistHealth?.state === "needs_sync" || todoistHealth?.state === "stale";
+}
+
+function isTodoistMirrorNewerThanDeadlines(todoistHealth, row) {
+  if (!todoistHealth?.lastSuccessAt || !row?.fetched_at) return false;
+  return new Date(todoistHealth.lastSuccessAt).getTime() > new Date(row.fetched_at).getTime();
+}
+
+function planCurrentDataRefresh(rows, {
+  mode,
+  now,
+  force = false,
+  todoistHealth = null,
+} = {}) {
+  const scheduled = [];
+  const skipped = [];
+  for (const key of CURRENT_CACHE_KEYS) {
+    const row = rows[key];
+    if (force) {
+      scheduled.push(scheduledEntry(key, "force"));
+      continue;
+    }
+    if (row?.status === "refreshing" || row?.refresh_started_at) {
+      if (isRefreshTimedOut(row, now)) scheduled.push(scheduledEntry(key, "degraded"));
+      else skipped.push(skippedEntry(key, "already_refreshing"));
+      continue;
+    }
+    if (
+      key === "deadlines_current"
+      && (hasTodoistNeedsSync(todoistHealth) || isTodoistMirrorNewerThanDeadlines(todoistHealth, row))
+    ) {
+      scheduled.push(scheduledEntry(key, "needs_sync"));
+      continue;
+    }
+    const reason = refreshReasonForSource(key, row, mode, now);
+    if (!reason) {
+      skipped.push(skippedEntry(key, isFresh(row, now) ? "fresh" : "not_due"));
+      continue;
+    }
+    if (mode === "passive" && isInPassiveBackoff(row, now)) {
+      skipped.push(skippedEntry(key, "backoff"));
+      continue;
+    }
+    scheduled.push(scheduledEntry(key, reason));
+  }
+  return { scheduled, skipped };
 }
 
 function composeCurrentDashboardResponse(rows, {
   activeSnapshot,
   activeSnapshotHealth = null,
   providerHealth,
+  refresh = { mode: "passive", scheduled: [], skipped: [] },
 } = {}) {
   const billsPayload = parsePayload(rows.bills_current, {
     bills: [],
@@ -449,6 +638,7 @@ function composeCurrentDashboardResponse(rows, {
     activeSnapshot,
     providerHealth: nextProviderHealth,
     systemStatus: composeSystemStatus(nextProviderHealth, { generatedAt: fetchedAt }),
+    refresh,
     fetchedAt,
   };
 }
@@ -462,10 +652,15 @@ export async function getCurrentDashboard(userId, {
     await loadCacheRows(userId, { dbClient }),
     { dbClient, now },
   );
-  refreshStaleRowsInBackground(userId, rows, { dbClient, now });
+  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
+  const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, todoistHealth });
+  const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
+  const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
+  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now });
   return composeCurrentDashboardResponse(rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
-    providerHealth: await loadProviderHealth(userId, rows, { now }),
+    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
+    refresh: { mode: "passive", ...refreshPlan },
   });
 }
 
@@ -473,6 +668,7 @@ export async function syncCurrentDashboard(userId, {
   dbClient = db,
   now = new Date(),
 } = {}) {
+  const refreshPlan = planCurrentDataRefresh({}, { mode: "force", now, force: true });
   const rows = await refreshRows(userId, {}, CURRENT_CACHE_KEYS, { dbClient, now, force: true });
   let timer = null;
   const timeoutMs = snapshotSyncTimeoutMs();
@@ -491,6 +687,7 @@ export async function syncCurrentDashboard(userId, {
   return composeCurrentDashboardResponse(rows, {
     activeSnapshot,
     providerHealth: await loadProviderHealth(userId, rows, { now }),
+    refresh: { mode: "force", ...refreshPlan },
     activeSnapshotHealth: {
       state: snapshotResult.state,
       reason: snapshotResult.reason || null,
@@ -504,17 +701,30 @@ export async function requestCurrentDashboardRefresh(userId, {
   dbClient = db,
   now = new Date(),
 } = {}) {
-  const rows = await markRowsRefreshing(
-    userId,
-    await loadCacheRows(userId, { dbClient }),
-    { dbClient, now },
-  );
-  scheduleBackgroundCurrentRefresh(userId, rows, { dbClient, now });
+  const rows = await loadCacheRows(userId, { dbClient });
+  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
+  const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, todoistHealth });
+  const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
+  const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
+  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now });
+  const shouldSyncSnapshot = true;
+  if (shouldSyncSnapshot) {
+    syncActiveSnapshot(userId)
+      .catch((err) => console.error("[Dashboard] active snapshot background sync failed:", err.message));
+  }
+  const refresh = {
+    mode: "manual",
+    scheduled: shouldSyncSnapshot
+      ? [...refreshPlan.scheduled, scheduledEntry("active_snapshot", "manual_retry")]
+      : refreshPlan.scheduled,
+    skipped: refreshPlan.skipped,
+  };
   return composeCurrentDashboardResponse(rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
-    providerHealth: await loadProviderHealth(userId, rows, { now }),
+    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
+    refresh,
     activeSnapshotHealth: {
-      state: "syncing",
+      state: shouldSyncSnapshot ? "syncing" : "current",
       reason: "background",
       timeoutMs: null,
       errorMessage: null,

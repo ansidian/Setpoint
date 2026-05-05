@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.js";
 import {
+  formatCurrentDashboardSse,
+  subscribeCurrentDashboardEvents,
+} from "../dashboard/current-events.js";
+import {
   getCurrentDashboard,
   getDashboardSystemHealth,
   requestCurrentDashboardRefresh,
@@ -11,6 +15,36 @@ import { timeRoute } from "../timing.js";
 const router = Router();
 
 router.use(requireCookieSession);
+
+router.get("/current/events", (_req, res) => {
+  const userId = process.env.EA_USER_ID;
+  res.status(200);
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders?.();
+  res.write("retry: 5000\n");
+  res.write(`event: dashboard-current-connected\ndata: ${JSON.stringify({
+    type: "dashboard_current_connected",
+    occurredAt: new Date().toISOString(),
+  })}\n\n`);
+
+  const unsubscribe = subscribeCurrentDashboardEvents(userId, (event) => {
+    res.write(formatCurrentDashboardSse(event));
+  });
+  const keepalive = setInterval(() => {
+    res.write(": keepalive\n\n");
+  }, 25_000);
+  keepalive.unref?.();
+
+  _req.on("close", () => {
+    clearInterval(keepalive);
+    unsubscribe();
+  });
+});
 
 router.get("/current", timeRoute("/api/dashboard/current"), async (_req, res) => {
   try {

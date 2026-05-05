@@ -10,6 +10,10 @@ const {
   stopTodoistMirrorSyncWorker,
   startTodoistMirrorSyncWorker,
 } = await import("./todoist-webhook.js");
+const {
+  __resetCurrentDashboardEventsForTests,
+  subscribeCurrentDashboardEvents,
+} = await import("../dashboard/current-events.js");
 
 function signPayload(rawBody, secret) {
   return crypto.createHmac("sha256", secret).update(rawBody).digest("base64");
@@ -25,6 +29,23 @@ async function createTodoistWebhookTestDb() {
       payload_json TEXT NOT NULL DEFAULT '{}',
       received_at TEXT NOT NULL
     );
+
+    CREATE TABLE ea_todoist_sync_state (
+      user_id TEXT PRIMARY KEY,
+      sync_token TEXT,
+      status TEXT NOT NULL DEFAULT 'idle',
+      last_sync_at TEXT,
+      last_success_at TEXT,
+      last_full_sync_at TEXT,
+      last_incremental_sync_at TEXT,
+      last_error TEXT,
+      sync_started_at TEXT,
+      sync_requested_at TEXT,
+      sync_request_reason TEXT,
+      last_check_failed_at TEXT,
+      failed_check_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   return db;
 }
@@ -37,6 +58,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   stopTodoistMirrorSyncWorker();
+  __resetCurrentDashboardEventsForTests();
   vi.useRealTimers();
   await testDb?.close?.();
   testDb = null;
@@ -76,6 +98,13 @@ describe("handleTodoistWebhookDelivery", () => {
         event_name: "item:updated",
         payload_json: rawBody.toString("utf8"),
         received_at: "2026-05-04T18:00:00.000Z",
+      }),
+    ]);
+    const syncState = await testDb.execute("SELECT sync_requested_at, sync_request_reason FROM ea_todoist_sync_state WHERE user_id = 'u1'");
+    expect(syncState.rows).toEqual([
+      expect.objectContaining({
+        sync_requested_at: "2026-05-04T18:00:00.000Z",
+        sync_request_reason: "todoist-webhook",
       }),
     ]);
   });
@@ -204,6 +233,44 @@ describe("requestTodoistMirrorSync", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(syncFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("publishes a current-dashboard refetch hint when requested sync settles", async () => {
+    vi.useFakeTimers();
+    const listener = vi.fn();
+    const syncFn = vi.fn(async () => ({ status: "current" }));
+    subscribeCurrentDashboardEvents("u1", listener);
+
+    requestTodoistMirrorSync("u1", { debounceMs: 0, syncFn });
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+      type: "dashboard_current_changed",
+      source: "todoist",
+      reason: "sync_settled",
+      state: "current",
+    }));
+  });
+
+  it("publishes a degraded refetch hint when requested sync fails", async () => {
+    vi.useFakeTimers();
+    const listener = vi.fn();
+    const syncFn = vi.fn(async () => {
+      throw new Error("Todoist unavailable");
+    });
+    subscribeCurrentDashboardEvents("u1", listener);
+
+    requestTodoistMirrorSync("u1", { debounceMs: 0, syncFn });
+    await vi.advanceTimersByTimeAsync(0);
+    await Promise.resolve();
+
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+      type: "dashboard_current_changed",
+      source: "todoist",
+      reason: "sync_settled",
+      state: "degraded",
+    }));
   });
 });
 

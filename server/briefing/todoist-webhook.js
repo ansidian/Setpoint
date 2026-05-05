@@ -1,7 +1,9 @@
 import crypto from "crypto";
 import db from "../db/connection.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import {
   getTodoistMirrorHealth,
+  recordTodoistSyncRequest,
   syncTodoistMirror,
 } from "./todoist-mirror.js";
 
@@ -93,13 +95,24 @@ async function runRequestedSync(userId, {
   if (!requested || activeSyncs.has(userId)) return;
 
   pendingSyncs.delete(userId);
+  let settledState = "current";
   const active = Promise.resolve()
     .then(() => sync(userId, { forceFull: !!requested.forceFull }))
+    .then((result) => {
+      settledState = result?.status || "current";
+      return result;
+    })
     .catch((err) => {
       console.error("[Todoist] requested mirror sync failed:", err.message);
+      settledState = "degraded";
       return null;
     })
     .finally(() => {
+      publishCurrentDashboardEvent(userId, {
+        source: "todoist",
+        reason: "sync_settled",
+        state: settledState,
+      });
       activeSyncs.delete(userId);
       if (pendingSyncs.has(userId)) {
         scheduleRequestedSync(userId, { delayMs: 0, syncFn: sync });
@@ -183,6 +196,11 @@ export async function handleTodoistWebhookDelivery({
     return { accepted: true, duplicate: true };
   }
 
+  await recordTodoistSyncRequest(userId, {
+    dbClient,
+    reason: "todoist-webhook",
+    now,
+  });
   requestSync(userId, { reason: "todoist-webhook" });
   return { accepted: true, duplicate: false };
 }

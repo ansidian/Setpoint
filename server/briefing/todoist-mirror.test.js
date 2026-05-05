@@ -21,9 +21,14 @@ const {
   listTodoistMirrorProjects,
   markTodoistMirrorItemCompleted,
   markTodoistMirrorItemDeleted,
+  recordTodoistSyncRequest,
   syncTodoistMirror,
   upsertTodoistMirrorItem,
 } = await import("./todoist-mirror.js");
+const {
+  __resetCurrentDashboardEventsForTests,
+  subscribeCurrentDashboardEvents,
+} = await import("../dashboard/current-events.js");
 
 async function createTodoistMirrorTestDb() {
   const db = createClient({ url: "file::memory:" });
@@ -43,6 +48,10 @@ async function createTodoistMirrorTestDb() {
       last_incremental_sync_at TEXT,
       last_error TEXT,
       sync_started_at TEXT,
+      sync_requested_at TEXT,
+      sync_request_reason TEXT,
+      last_check_failed_at TEXT,
+      failed_check_count INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -109,8 +118,9 @@ async function seedTodoistToken(userId = "u1", token = "todoist-token") {
 async function seedSyncState(fields) {
   await testState.db.current.execute({
     sql: `INSERT INTO ea_todoist_sync_state
-            (user_id, sync_token, status, last_success_at, last_error, sync_started_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            (user_id, sync_token, status, last_success_at, last_error, sync_started_at,
+             sync_requested_at, sync_request_reason, last_check_failed_at, failed_check_count, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       fields.userId || "u1",
       fields.syncToken || "sync-token",
@@ -118,6 +128,10 @@ async function seedSyncState(fields) {
       fields.lastSuccessAt || null,
       fields.lastError || null,
       fields.syncStartedAt || null,
+      fields.syncRequestedAt || null,
+      fields.syncRequestReason || null,
+      fields.lastCheckFailedAt || null,
+      fields.failedCheckCount || 0,
       fields.updatedAt || fields.lastSuccessAt || "2026-05-04T15:00:00.000Z",
     ],
   });
@@ -128,8 +142,30 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  __resetCurrentDashboardEventsForTests();
   await testState.db.current?.close?.();
   testState.db.current = null;
+});
+
+describe("recordTodoistSyncRequest", () => {
+  it("publishes a current-dashboard refetch hint when pending Todoist work is recorded", async () => {
+    const listener = vi.fn();
+    subscribeCurrentDashboardEvents("u1", listener);
+
+    await recordTodoistSyncRequest("u1", {
+      dbClient: testState.db.current,
+      reason: "todoist-webhook",
+      now: new Date("2026-05-05T00:10:00.000Z"),
+    });
+
+    expect(listener).toHaveBeenCalledWith({
+      type: "dashboard_current_changed",
+      source: "todoist",
+      reason: "todoist-webhook",
+      state: "needs_sync",
+      occurredAt: "2026-05-05T00:10:00.000Z",
+    });
+  });
 });
 
 describe("syncTodoistMirror", () => {
@@ -393,6 +429,17 @@ describe("syncTodoistMirror", () => {
       last_success_at: "2026-05-04T15:00:00.000Z",
       last_error: "Todoist API 502: upstream",
       sync_started_at: null,
+      last_check_failed_at: "2026-05-04T15:15:00.000Z",
+      failed_check_count: 1,
+    });
+    await expect(getTodoistMirrorHealth("u1", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:16:00.000Z"),
+    })).resolves.toMatchObject({
+      state: "current",
+      severity: "none",
+      lastError: "Todoist API 502: upstream",
+      failedCheckCount: 1,
     });
 
     const items = await testState.db.current.execute("SELECT item_id, content, is_deleted FROM ea_todoist_items WHERE user_id = 'u1'");
@@ -403,6 +450,75 @@ describe("syncTodoistMirror", () => {
         is_deleted: 0,
       }),
     ]);
+  });
+
+  it("clears pending evidence and check failures after a zero-change sync succeeds", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "sync-token-1",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+      syncRequestedAt: "2026-05-04T15:04:00.000Z",
+      syncRequestReason: "todoist-webhook",
+      lastCheckFailedAt: "2026-05-04T15:05:00.000Z",
+      failedCheckCount: 2,
+      lastError: "Todoist API 502: upstream",
+    });
+    const syncApiClient = vi.fn(async () => ({
+      full_sync: false,
+      sync_token: "sync-token-2",
+      items: [],
+      projects: [],
+      labels: [],
+    }));
+
+    await expect(syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:10:00.000Z"),
+    })).resolves.toMatchObject({
+      status: "current",
+      counts: { items: 0, projects: 0, labels: 0 },
+    });
+
+    const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
+    expect(state.rows[0]).toMatchObject({
+      sync_token: "sync-token-2",
+      sync_requested_at: null,
+      sync_request_reason: null,
+      last_check_failed_at: null,
+      failed_check_count: 0,
+      last_error: null,
+    });
+  });
+
+  it("leaves pending evidence visible after a requested sync fails", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "sync-token-1",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+      syncRequestedAt: "2026-05-04T15:04:00.000Z",
+      syncRequestReason: "todoist-write",
+    });
+    const failure = new Error("Todoist API 503: unavailable");
+
+    await expect(syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient: vi.fn().mockRejectedValue(failure),
+      now: new Date("2026-05-04T15:05:00.000Z"),
+    })).rejects.toThrow("Todoist API 503");
+
+    await expect(getTodoistMirrorHealth("u1", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:06:00.000Z"),
+    })).resolves.toMatchObject({
+      state: "needs_sync",
+      severity: "warning",
+      syncRequestedAt: "2026-05-04T15:04:00.000Z",
+      syncRequestReason: "todoist-write",
+      lastError: "Todoist API 503: unavailable",
+      lastCheckFailedAt: "2026-05-04T15:05:00.000Z",
+      failedCheckCount: 1,
+    });
   });
 });
 
@@ -430,6 +546,15 @@ describe("optimistic Todoist write mirror updates", () => {
         labels: ["writing"],
       }),
     ]);
+    await expect(testState.db.current.execute("SELECT sync_requested_at, sync_request_reason FROM ea_todoist_sync_state WHERE user_id = 'u1'"))
+      .resolves.toMatchObject({
+        rows: [
+          expect.objectContaining({
+            sync_requested_at: "2026-05-04T18:00:00.000Z",
+            sync_request_reason: "todoist-write",
+          }),
+        ],
+      });
 
     await upsertTodoistMirrorItem("u1", {
       id: "task-1",
@@ -478,10 +603,36 @@ describe("optimistic Todoist write mirror updates", () => {
 
     expect(await listTodoistMirrorActiveTasks("u1", { dbClient: testState.db.current })).toEqual([]);
     expect(await listTodoistMirrorActiveTaskIds("u1", { dbClient: testState.db.current })).toEqual(new Set());
+    await expect(testState.db.current.execute("SELECT sync_requested_at, sync_request_reason FROM ea_todoist_sync_state WHERE user_id = 'u1'"))
+      .resolves.toMatchObject({
+        rows: [
+          expect.objectContaining({
+            sync_requested_at: "2026-05-04T18:03:00.000Z",
+            sync_request_reason: "todoist-write",
+          }),
+        ],
+      });
   });
 });
 
 describe("getTodoistMirrorHealth", () => {
+  it("keeps old successful mirrors current when there is no pending evidence", async () => {
+    await seedTodoistToken("quiet-user", "todoist-token");
+    await seedSyncState({
+      userId: "quiet-user",
+      lastSuccessAt: "2026-05-04T12:00:00.000Z",
+    });
+
+    await expect(getTodoistMirrorHealth("quiet-user", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:00:30.000Z"),
+    })).resolves.toMatchObject({
+      state: "current",
+      severity: "none",
+      ageMs: 10_830_000,
+    });
+  });
+
   it("derives configured mirror health from sync state freshness", async () => {
     await expect(getTodoistMirrorHealth("u1", {
       dbClient: testState.db.current,
@@ -489,6 +640,7 @@ describe("getTodoistMirrorHealth", () => {
     })).resolves.toMatchObject({
       state: "unconfigured",
       configured: false,
+      severity: "none",
     });
 
     await seedTodoistToken("u1", "todoist-token");
@@ -498,6 +650,7 @@ describe("getTodoistMirrorHealth", () => {
     })).resolves.toMatchObject({
       state: "unavailable",
       configured: true,
+      severity: "error",
     });
 
     await seedSyncState({
@@ -512,6 +665,7 @@ describe("getTodoistMirrorHealth", () => {
       now: new Date("2026-05-04T15:00:30.000Z"),
     })).resolves.toMatchObject({
       state: "syncing",
+      severity: "info",
       configured: true,
       lastSuccessAt: "2026-05-04T14:59:00.000Z",
       syncStartedAt: "2026-05-04T15:00:10.000Z",
@@ -527,6 +681,7 @@ describe("getTodoistMirrorHealth", () => {
       now: new Date("2026-05-04T15:00:30.000Z"),
     })).resolves.toMatchObject({
       state: "current",
+      severity: "none",
       ageMs: 30_000,
     });
 
@@ -539,14 +694,15 @@ describe("getTodoistMirrorHealth", () => {
       dbClient: testState.db.current,
       now: new Date("2026-05-04T15:00:30.000Z"),
     })).resolves.toMatchObject({
-      state: "stale",
+      state: "current",
+      severity: "none",
       ageMs: 150_000,
     });
 
     await seedTodoistToken("unavailable-user", "todoist-token");
     await seedSyncState({
       userId: "unavailable-user",
-      lastSuccessAt: "2026-05-04T14:40:00.000Z",
+      lastSuccessAt: null,
       lastError: "Todoist API 502: upstream",
     });
     await expect(getTodoistMirrorHealth("unavailable-user", {
@@ -554,8 +710,64 @@ describe("getTodoistMirrorHealth", () => {
       now: new Date("2026-05-04T15:00:30.000Z"),
     })).resolves.toMatchObject({
       state: "unavailable",
-      ageMs: 1_230_000,
+      severity: "error",
+      ageMs: null,
       lastError: "Todoist API 502: upstream",
+    });
+  });
+
+  it("reports pending, syncing, and degraded correctness states with severity", async () => {
+    await seedTodoistToken("pending-user", "todoist-token");
+    await seedSyncState({
+      userId: "pending-user",
+      lastSuccessAt: "2026-05-04T14:59:00.000Z",
+      syncRequestedAt: "2026-05-04T15:00:00.000Z",
+      syncRequestReason: "todoist-webhook",
+    });
+    await expect(getTodoistMirrorHealth("pending-user", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:00:30.000Z"),
+    })).resolves.toMatchObject({
+      state: "needs_sync",
+      severity: "warning",
+      syncRequestedAt: "2026-05-04T15:00:00.000Z",
+      syncRequestReason: "todoist-webhook",
+    });
+
+    await seedTodoistToken("syncing-pending-user", "todoist-token");
+    await seedSyncState({
+      userId: "syncing-pending-user",
+      status: "syncing",
+      lastSuccessAt: "2026-05-04T14:59:00.000Z",
+      syncStartedAt: "2026-05-04T15:00:10.000Z",
+      syncRequestedAt: "2026-05-04T15:00:00.000Z",
+      syncRequestReason: "todoist-write",
+    });
+    await expect(getTodoistMirrorHealth("syncing-pending-user", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:00:30.000Z"),
+    })).resolves.toMatchObject({
+      state: "syncing",
+      severity: "warning",
+      syncRequestReason: "todoist-write",
+    });
+
+    await seedTodoistToken("degraded-user", "todoist-token");
+    await seedSyncState({
+      userId: "degraded-user",
+      lastSuccessAt: "2026-05-03T14:00:00.000Z",
+      lastCheckFailedAt: "2026-05-04T14:55:00.000Z",
+      failedCheckCount: 3,
+      lastError: "Todoist API 502: upstream",
+    });
+    await expect(getTodoistMirrorHealth("degraded-user", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:00:30.000Z"),
+    })).resolves.toMatchObject({
+      state: "degraded",
+      severity: "warning",
+      lastCheckFailedAt: "2026-05-04T14:55:00.000Z",
+      failedCheckCount: 3,
     });
   });
 });
