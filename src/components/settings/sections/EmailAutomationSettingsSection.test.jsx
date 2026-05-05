@@ -66,6 +66,6 @@ describe("EmailAutomationSettingsSection", () => {
     }
 
     expect(screen.getByText("Controls how far back the email snapshot looks when gathering context.")).toBeTruthy();
-    expect(screen.queryByText(/briefing generation/i)).toBeNull();
+    expect(screen.queryByText(/generation/i)).toBeNull();
   });
 });

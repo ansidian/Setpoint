@@ -1,6 +1,6 @@
 # EA Dashboard
 
-A personal executive assistant dashboard that consolidates emails, calendars, weather, academic deadlines, tasks, and finances into a single AI-powered daily briefing. Built to solve the problem of managing multiple email accounts and calendar events where things often get lost in the noise.
+A personal executive assistant dashboard that consolidates emails, calendars, weather, academic deadlines, tasks, and finances into one current operational view. Built to solve the problem of managing multiple email accounts and calendar events where things often get lost in the noise.
 
 This is a work-in-progress personal project — not built with public use in mind. If you want to run it yourself, it's a BYOK (bring your own key) system via Anthropic and/or OpenAI.
 
@@ -8,7 +8,7 @@ Built with the help of Claude Opus 4.6.
 
 ## What it does
 
-The dashboard fetches data from multiple sources, continuously indexes incoming email, and produces a structured briefing that surfaces what actually matters:
+The dashboard fetches data from multiple sources, continuously indexes incoming email, and maintains active inbox snapshots that surface what actually matters:
 
 - **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local fallback, or pauses job draining.
 - **Bill & transaction detection** — Extracts financial data (payee, amount, due date) from emails with optional one-click logging to Actual Budget
@@ -17,11 +17,10 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 - **Todoist integration** — Personal tasks merged and deduplicated with academic deadlines
 - **Weather** — Current conditions and hourly forecasts via Pirate Weather
 - **Continuous snapshots** — Incoming mail is indexed and attached to active snapshot windows so the Inbox can update between scheduled boundaries
-- **Skip AI** — When inbox is clean and calendar unchanged, clones the previous briefing without an API call
-- **Live data** — 5-minute background polling for new emails, calendar changes, and weather updates between briefings
-- **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without triggering batch briefing generation
+- **Current data cache** — Boot-critical weather, calendar, deadline, bill, and provider-health data is cached for graceful degradation
+- **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without running a batch generator
 - **Inbox search** — The Inbox tab searches the persisted email index (FTS5) across indexed INBOX mail for every account, with a resumable 365-day default backfill for historical coverage
-- **Briefing history** — Browse and compare past briefings
+- **Snapshot history** — Browse prior inbox snapshot windows without depending on legacy briefing JSON
 - **Important senders** — Configure priority senders for real-time browser notifications
 - **Multi-account support** — Multiple Gmail (OAuth) and iCloud (app passwords) accounts with custom labels, colors, and icons
 
@@ -33,7 +32,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 | UI | shadcn/ui, Radix, Framer Motion |
 | Backend | Express.js (Node.js 24.x) |
 | Database | Turso (LibSQL) |
-| AI | Anthropic and OpenAI providers for email triage, summaries, and bill signals |
+| AI | Anthropic and OpenAI providers for email triage and bill signals |
 | Search | SQLite FTS5 email index |
 | Email | Gmail (OAuth 2.0), iCloud (IMAP) |
 | Calendar | Google Calendar API |

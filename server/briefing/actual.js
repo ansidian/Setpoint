@@ -167,7 +167,7 @@ async function getMetadataInner(userId) {
     }
 }
 
-// Individual accessors (used by briefing generation where only one is needed)
+// Individual accessors for routes/services that only need one metadata slice.
 export async function getAccounts(userId) {
   const { accounts } = await getMetadata(userId);
   return accounts;

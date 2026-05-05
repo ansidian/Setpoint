@@ -76,9 +76,9 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
 
   return (
     <SettingsCard
-      title="Email Snapshot AI"
+      title="Inbox Triage AI"
       icon={<Bot size={14} />}
-      description="Model used for email snapshot summaries and triage context. Bill extraction uses its own model."
+      description="Model used for durable inbox triage. Bill extraction uses its own model."
     >
       <div className="flex flex-col gap-3">
         <ProviderModelSelect
@@ -86,8 +86,8 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
           provider={selectedProvider}
           model={selectedModel}
           onChange={applyChange}
-          providerAriaLabel="Email snapshot provider"
-          modelAriaLabel="Email snapshot model"
+          providerAriaLabel="Inbox triage provider"
+          modelAriaLabel="Inbox triage model"
         />
 
         <div className="flex items-center gap-2">

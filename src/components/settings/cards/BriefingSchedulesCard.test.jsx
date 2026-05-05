@@ -36,12 +36,12 @@ beforeEach(() => {
 });
 
 describe("BriefingSchedulesCard", () => {
-  it("presents schedules as snapshot boundaries instead of briefing generation", () => {
+  it("presents schedules as snapshot boundaries instead of a generator", () => {
     renderCard();
 
     expect(screen.getByText("Snapshot Boundaries")).toBeTruthy();
     expect(screen.getByText("Schedule times for rolling the active email snapshot window.")).toBeTruthy();
-    expect(screen.queryByText(/briefing generation/i)).toBeNull();
+    expect(screen.queryByText(/generation/i)).toBeNull();
   });
 
   it("adds and removes snapshot boundaries while persisting the updated payload", async () => {

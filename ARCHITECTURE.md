@@ -1,6 +1,6 @@
 # Architecture
 
-Personal executive assistant dashboard that consolidates emails, calendars, weather, Canvas LMS deadlines, Todoist tasks, and finances into AI-powered daily briefings. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and provider-backed email AI. Deployed on Render.
+Personal executive assistant dashboard that consolidates emails, calendars, weather, Canvas LMS deadlines, Todoist tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and provider-backed email triage. Deployed on Render.
 
 ## System Overview
 
@@ -13,7 +13,7 @@ graph TB
     subgraph Server["Express.js (port 3001)"]
         MW[Middleware Stack]
         Routes[Route Handlers]
-        Pipeline[Briefing Pipeline]
+        Pipeline[Current Dashboard Pipeline]
         Scheduler[node-cron Scheduler]
     end
 
@@ -53,7 +53,7 @@ graph TB
 | UI | shadcn/ui, Radix, Framer Motion | Component primitives, animations |
 | Backend | Express 4 | HTTP API server |
 | Database | Turso (LibSQL) | SQLite-compatible cloud DB |
-| AI | Anthropic Messages API, OpenAI Responses API | Email triage, summaries, and bill signals |
+| AI | Anthropic Messages API, OpenAI Responses API | Email triage and bill signals |
 | Search | SQLite FTS5 | Full-text email search |
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
 | Calendar | Google Calendar API | Event sync (reuses Gmail OAuth) |
@@ -71,14 +71,14 @@ ea-dashboard/
 ├── server/
 │   ├── index.js                    # Express entry: middleware, routes, migrations, scheduler
 │   ├── briefing/
-│   │   ├── index.js                # Orchestrator: generateBriefing, quickRefresh, delta merge
-│   │   ├── stored-briefing-service.js # Legacy/history compatibility funnel for `briefing_json` mutations
-│   │   ├── lifecycle-service.js    # Briefing lifecycle: trigger, poll, refresh, latest/history/by-id, delete
 │   │   ├── email-service.js        # Email read/unread/trash/snooze/dismiss, FTS search, body fetch
 │   │   ├── tasks-service.js        # Complete task (CTM+Todoist), CTM status, tombstone dismiss, Todoist CRUD
 │   │   ├── bills-service.js        # Actual Budget wrappers + provider-backed bill extraction
 │   │   ├── dev-service.js          # Dev-only helpers (reindex emails)
-│   │   ├── email-ai.js             # Provider-backed email summary, triage, and bill-signal extraction
+│   │   ├── triage-worker.js        # Durable incoming-email triage worker
+│   │   ├── triage-preflight.js     # Deterministic preflight routing before provider calls
+│   │   ├── snapshot-service.js     # Active snapshot windows/items and history views
+│   │   ├── bill-extract.js         # Provider-backed bill extraction from email text
 │   │   ├── email-ai-models.js      # Email AI provider/model catalog and validation
 │   │   ├── gmail.js                # Gmail OAuth, fetch, mark-read, trash
 │   │   ├── icloud.js               # IMAP connection pool, fetch, mark-read, trash
@@ -89,7 +89,6 @@ ea-dashboard/
 │   │   ├── tombstones.js           # Hydrate completed-but-visible recurring Todoist rows
 │   │   ├── snooze-waker.js         # Periodic unsnoozer: resurfaces emails past their until_ts
 │   │   ├── actual.js               # Actual Budget: metadata, bills, send transactions
-│   │   ├── bill-extract.js         # Heuristic bill extraction from email text
 │   │   ├── html-to-text.js         # HTML email body → plain text for indexing/snippets
 │   │   ├── email-index.js          # FTS5 email indexing for cross-account search
 │   │   ├── encryption.js           # AES-256-GCM encrypt/decrypt (legacy CBC migration)
@@ -99,7 +98,7 @@ ea-dashboard/
 │   │   └── current-events.js       # SSE notifications for current dashboard changes
 │   ├── routes/
 │   │   ├── auth.js                 # Login, session check, logout (rate-limited)
-│   │   ├── briefing/               # Thin HTTP handlers split by domain (index, lifecycle, email, tasks, bills, dev)
+│   │   ├── briefing/               # Thin HTTP handlers for email, snapshot, tasks, bills, and dev reindexing
 │   │   ├── dashboard.js            # Current dashboard, current sync/refresh, health, SSE events
 │   │   ├── accounts.js             # Account CRUD, Gmail OAuth, settings, schedules, API tokens
 │   │   ├── calendar.js             # Read-only calendar endpoints (mounted at /api/calendar)
@@ -117,7 +116,7 @@ ea-dashboard/
 │   ├── api.js                      # API client: apiFetch wrapper + 40 endpoint functions
 │   ├── index.css                   # Tailwind v4 + CSS tokens (oklch, Catppuccin Mocha)
 │   ├── pages/
-│   │   ├── Dashboard.jsx           # Main page: briefing display, refresh gestures
+│   │   ├── Dashboard.jsx           # Main page: current dashboard display, refresh gestures
 │   │   ├── Settings.jsx            # Account management, config, integrations
 │   │   └── Login.jsx               # Password auth with lockout
 │   ├── context/
@@ -126,19 +125,19 @@ ea-dashboard/
 │   │   ├── useCurrentDashboard.js  # Normal boot/runtime data from `/api/dashboard/current`
 │   │   ├── useLiveEmailState.js    # Derived read/snoozed state for live email rows
 │   │   ├── useNotifications.js     # Browser notifications for events, bills, emails
-│   │   ├── useAutoRefresh.js       # Visibility-aware auto refresh of briefing data
+│   │   ├── useAutoRefresh.js       # Visibility-aware auto refresh helpers
 │   │   ├── useHoldGesture.js       # Long-press detection (1.5s) for refresh/suspend
 │   │   ├── useKeyHold.js           # Keyboard-hold state machine (powers hold gestures)
 │   │   ├── useCustomize.js         # Customize-panel drag/reorder state
 │   │   ├── useIsMobile.js          # Responsive breakpoint hook
 │   │   ├── useMediaQuery.js        # Generic media-query matcher
-│   │   ├── briefing/               # Smaller briefing-specific hooks
+│   │   ├── briefing/               # Snapshot/history compatibility hooks
 │   │   └── email/                  # Smaller email-specific hooks
 │   ├── components/
 │   │   ├── layout/                 # Header, SummaryBar, Section, Loading, Error
 │   │   ├── shell/                  # ShellHeader, CommandPalette, CustomizePanel
 │   │   ├── dashboard/              # TodayTimeline and other dashboard-root pieces
-│   │   ├── briefing/               # Legacy briefing history/search components
+│   │   ├── briefing/               # Snapshot history components
 │   │   ├── email/                  # EmailTabSection, EmailSection, LiveEmail, EmailRow, Body
 │   │   ├── inbox/                  # Inbox-style grouped email views
 │   │   ├── calendar/               # ScheduleSection (today/tomorrow/next-week, NowMarker)
@@ -250,8 +249,7 @@ GET /api/dashboard/current
 
 | Gesture | Action |
 |---------|--------|
-| Tap R key | Quick refresh (calendar/weather/CTM only, no email re-triage) |
-| Hold R 1.5s | Full AI generation with confirmation button |
+| Tap R key | Sync current dashboard data and active snapshot |
 | Hold Suspend 1.5s | Suspend Render service |
 | Click email | Expand EmailBody panel (iframe with sanitized HTML) |
 | Click task status dot | Cycle task status (incomplete → in_progress → complete) |
@@ -290,7 +288,7 @@ graph LR
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
 | Auth | `/api/auth` | 3 | Login (rate-limited 5/15min), session check, logout |
-| Briefing | `/api/briefing` | ~37 | Generate, poll, refresh, email ops (read/trash/snooze/dismiss), FTS email search, task ops, Actual Budget |
+| Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
 | Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
 | Live | `/api/live` | 1 | Retired `/api/live/all` compatibility response |
@@ -322,9 +320,9 @@ Two auth paths exist, but they no longer feed a single shared "any auth works" g
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
 
-## Briefing Pipeline
+## Current Dashboard Pipeline
 
-The current dashboard no longer stores batch briefing JSON. Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, CTM, Todoist, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
+The current dashboard no longer stores legacy briefing JSON. Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, CTM, Todoist, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
 
 ```mermaid
 flowchart TD
@@ -340,13 +338,13 @@ flowchart TD
     Cache --> Dashboard
 ```
 
-### Email AI Integration
+### Durable Email AI
 
-Email AI is called through the selected provider in `server/briefing/email-ai.js`. Anthropic uses forced tool use and OpenAI uses Responses API function calling. Required fields and types are enforced at decode time instead of JSON-from-text parsing.
+Incoming email classification is handled by `server/briefing/triage-worker.js` against durable `ea_email_triage` rows and `ea_triage_jobs`. Deterministic preflight in `triage-preflight.js` can resolve no-model, trusted-sender, weak-security, pending-security, and obvious-noise cases before provider calls. Provider-backed calls use the selected email AI provider/model from `email-ai-models.js`; bill extraction uses `bill-extract.js` and the bill extraction provider/model settings.
 
-Email interests from settings influence classification. Scheduled payments from Actual Budget are cross-referenced to suppress duplicate bill detections.
+Email interests from settings influence classification. Scheduled payments from Actual Budget are cross-referenced during bill extraction to suppress duplicate bill detections.
 
-Model selection: user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence and retries 3x with exponential backoff on 429/529.
+Model selection is user-configurable through `/api/ea/models`, defaults to Anthropic `claude-sonnet-4-6`, and can use OpenAI `gpt-5.5`. Anthropic uses temperature `0` for format adherence; OpenAI triage uses structured Responses API output with cache-key hints where supported.
 
 ### Key Optimizations
 
@@ -367,8 +365,9 @@ Model selection: user-configurable through `/api/ea/models`, defaults to Anthrop
 | CTM | `server/briefing/ctm.js` | Custom REST API | Bearer token | Empty array, continue |
 | Todoist | `server/briefing/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/briefing/actual.js` | @actual-app/api SDK | Server URL + password (encrypted) | Empty array, continue |
-| Email AI | `server/briefing/email-ai.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Generation fails (status: error) |
-All data source failures are caught individually — one source going down never blocks the briefing. Email AI is the exception: if it fails, the generation is marked as `error`.
+| Email triage AI | `server/briefing/triage-worker.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
+| Bill extraction AI | `server/briefing/bill-extract.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
+All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage and bill extraction failures are isolated to durable jobs or the specific bill-signal request.
 
 ## Database Schema
 
@@ -583,7 +582,7 @@ Sequential SQL files in `server/db/migrations/`, auto-run on server start:
 
 ### Current Dashboard Runtime
 
-Manual batch generation and status polling are retired. The active dashboard is served from current snapshot, triage, cache, and provider-domain tables; migration `044_legacy_briefing_cleanup.sql` removes the old `ea_briefings`, `ea_embeddings`, and `ea_pinned_emails` storage after a rollback-only Turso export.
+Manual generation and status polling are retired. The active dashboard is served from current snapshot, triage, cache, and provider-domain tables; migration `044_legacy_briefing_cleanup.sql` removes the old `ea_briefings`, `ea_embeddings`, and `ea_pinned_emails` storage after a rollback-only Turso export.
 
 ### Encryption at Rest
 
@@ -591,7 +590,7 @@ All stored credentials use AES-256-GCM with a single `EA_ENCRYPTION_KEY`. Format
 
 ### Graceful Degradation
 
-Each data source is wrapped in `.catch()` within `Promise.all`. A Gmail outage returns an empty email array but the briefing still generates with calendar, weather, and tasks. Only email AI failure stops generation.
+Current-data fetches degrade independently. A Gmail outage can leave the snapshot stale or empty while calendar, weather, deadlines, bills, and provider health still render from live fetches or cache. Email triage and bill extraction failures are isolated to their durable job/request paths and do not block dashboard boot.
 
 ### Connection Pooling
 
@@ -612,7 +611,7 @@ Reference implementations: `BriefingHistoryPanel.jsx`, `src/components/shared/pi
 
 ### Scheduler
 
-Database-driven cron jobs via `node-cron`. Schedules stored as JSON array in `ea_settings.schedules_json`. Each entry: `{ label, time, tz, enabled, skipped_until? }`. Hot-reloaded on settings update (all jobs cleared and recreated). Schedule ticks advance the active email snapshot boundary through `snapshot-service`; they do not trigger legacy batch briefing generation. Skip functionality sets `skipped_until` to midnight tomorrow in the schedule's timezone.
+Database-driven cron jobs via `node-cron`. Schedules stored as JSON array in `ea_settings.schedules_json`. Each entry: `{ label, time, tz, enabled, skipped_until? }`. Hot-reloaded on settings update (all jobs cleared and recreated). Schedule ticks advance the active email snapshot boundary through `snapshot-service`; they do not run a batch generator. Skip functionality sets `skipped_until` to midnight tomorrow in the schedule's timezone.
 
 ### Recurring Todoist Tombstones
 
@@ -634,18 +633,9 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 | GET | `/api/auth/check` | Cookie | Session validation |
 | POST | `/api/auth/logout` | Cookie | Destroy session |
 
-### Briefing
+### Briefing Namespace
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/briefing/generate` | Legacy dev-only batch generation; 410 in production |
-| GET | `/api/briefing/in-progress` | Legacy generation status hint; returns retired state in production |
-| GET | `/api/briefing/status/:id` | Legacy dev-only generation progress/status; 410 in production |
-| GET | `/api/briefing/latest` | Legacy latest briefing for history/dev compatibility, not active dashboard boot |
-| GET | `/api/briefing/history` | Last 20 briefings with metadata |
-| GET | `/api/briefing/:id` | Fetch specific briefing |
-| DELETE | `/api/briefing/:id` | Soft-delete briefing |
-| POST | `/api/briefing/refresh` | Legacy dev-only quick refresh; 410 in production |
+The `/api/briefing` namespace now contains operational subroutes for inbox, snapshot, task, bill, and dev-reindex actions. Retired lifecycle routes such as `/api/briefing/latest`, `/api/briefing/history`, `/api/briefing/generate`, `/api/briefing/status/:id`, and `/api/briefing/:id` are not mounted.
 
 ### Current Dashboard
 
@@ -709,7 +699,7 @@ Health responses intentionally avoid email bodies. Use `indexed_count`, `oldest_
 | POST | `/api/briefing/email/:uid/snooze` | Snooze email until `until_ts` |
 | DELETE | `/api/briefing/email/:uid/snooze` | Cancel snooze and resurface |
 
-Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `lifecycle.js`, `email.js`, `tasks.js`, `bills.js`, `dev.js`, all composed by `index.js`). Route handlers stay thin — business logic + DB live in `server/briefing/*-service.js`. Remaining `briefing_json` mutations are legacy/history/dev compatibility work and funnel through `stored-briefing-service.js`; normal current dashboard runtime does not read or mutate briefing JSON.
+Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-domain sub-routers: `email.js`, `email-index.js`, `snapshot.js`, `tasks.js`, `bills.js`, and `dev.js`, all composed by `index.js`). Route handlers stay thin; business logic and DB access live in `server/briefing/*-service.js` and current worker modules.
 
 ### Tasks
 

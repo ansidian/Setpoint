@@ -233,10 +233,10 @@ describe("auth boundaries", () => {
     expect(res.status).toBe(401);
   });
 
-  it("blocks bearer auth on removed legacy briefing lifecycle routes", async () => {
+  it("blocks bearer auth on operational briefing routes", async () => {
     await seedBearer();
     const res = await request(makeApp())
-      .get("/api/briefing/latest")
+      .get("/api/briefing/email-index/health")
       .set("Authorization", "Bearer scoped-token");
 
     expect(res.status).toBe(401);
