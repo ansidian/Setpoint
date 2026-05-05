@@ -64,6 +64,7 @@ export const getCurrentDashboard = () => apiFetch("/api/dashboard/current");
 export const getDashboardHealth = () => apiFetch("/api/dashboard/health");
 export const requestCurrentDashboardRefresh = () => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = () => apiFetch("/api/dashboard/current/sync", { method: "POST" });
+export const getTriageCacheStats = () => apiFetch("/api/ea/triage/cache-stats");
 // 5-minute in-memory TTL cache for email bodies. Bodies don't mutate
 // server-side once delivered; the cache eliminates the loading flicker on
 // re-selection and dedupes concurrent fetches for the same uid.

@@ -858,6 +858,7 @@ describe("email triage worker", () => {
 
     const originalOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "test-openai-key";
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -877,7 +878,11 @@ describe("email triage worker", () => {
             bill_candidate: null,
           }),
         }],
-        usage: { input_tokens: 90, output_tokens: 30 },
+        usage: {
+          input_tokens: 90,
+          output_tokens: 30,
+          prompt_tokens_details: { cached_tokens: 48 },
+        },
       }),
     });
 
@@ -895,10 +900,18 @@ describe("email triage worker", () => {
       });
       const [url, options] = global.fetch.mock.calls[0];
       expect(url).toBe("https://api.openai.com/v1/responses");
-      expect(JSON.parse(options.body).model).toBe("gpt-5.4");
+      const body = JSON.parse(options.body);
+      expect(body.model).toBe("gpt-5.4");
+      expect(body.store).toBe(false);
+      expect(body.prompt_cache_key).toBe("ea-email-triage:v1:strong:gpt-5.4");
+      expect(body.prompt_cache_retention).toBe("24h");
+      expect(consoleLog).toHaveBeenCalledWith(
+        "[Email Triage] OpenAI cache tier=strong model=gpt-5.4 input=90 output=30 cached=48 key=ea-email-triage:v1:strong:gpt-5.4",
+      );
     } finally {
       process.env.OPENAI_API_KEY = originalOpenAiKey;
       global.fetch = undefined;
+      consoleLog.mockRestore();
     }
   });
 
@@ -989,6 +1002,86 @@ describe("email triage worker", () => {
       triage_source: "rule",
       rule_id: 1,
     });
+  });
+
+  it("retries OpenAI triage without cache-only fields when a model rejects them", async () => {
+    const dbClient = await createMigratedDb();
+    await dbClient.execute({
+      sql: `INSERT INTO ea_settings
+              (user_id, email_ai_provider, email_ai_model, bill_extract_provider, bill_extract_model, email_triage_mode)
+            VALUES (?, 'openai', 'gpt-5.4', 'anthropic', 'claude-haiku-4-5', 'real')`,
+      args: ["user-1"],
+    });
+    await queueEmail(dbClient, {
+      subject: "Security alert: payment due",
+      body_snippet: "Review this payment due security alert.",
+      body_text: "Your account has a security alert and a payment due. Review now.",
+      from_name: "Bank Security",
+      from_address: "security@bank.example",
+    });
+
+    const originalOpenAiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => "Unknown parameter: prompt_cache_retention",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          model: "gpt-5.4",
+          output: [{
+            type: "function_call",
+            name: "submit_email_triage",
+            arguments: JSON.stringify({
+              lane: "needs_attention",
+              category: "security",
+              urgency: "high",
+              escalation_badge: "High Risk",
+              summary: "Security payment alert needs review.",
+              action: "Review account",
+              deadline_at: null,
+              confidence: 0.91,
+              bill_candidate: null,
+            }),
+          }],
+          usage: { input_tokens: 90, output_tokens: 30 },
+        }),
+      });
+
+    try {
+      const result = await processNextEmailTriageJob({
+        dbClient,
+        now: new Date("2026-05-03T12:22:00.000Z"),
+      });
+
+      expect(result).toMatchObject({
+        processed: true,
+        lane: "needs_attention",
+        source: "strong_model",
+        model_calls: ["strong"],
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      const firstBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+      const retryBody = JSON.parse(global.fetch.mock.calls[1][1].body);
+      expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v1:strong:gpt-5.4");
+      expect(firstBody.prompt_cache_retention).toBe("24h");
+      expect(retryBody.store).toBe(false);
+      expect(retryBody.prompt_cache_key).toBeUndefined();
+      expect(retryBody.prompt_cache_retention).toBeUndefined();
+      expect(consoleWarn).toHaveBeenCalledWith(
+        "[Email Triage] OpenAI cache fields rejected for tier=strong model=gpt-5.4; retrying without cache-only fields",
+      );
+    } finally {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+      global.fetch = undefined;
+      consoleLog.mockRestore();
+      consoleWarn.mockRestore();
+    }
   });
 
   it("escalates low-confidence cheap results and stores both model results", async () => {
@@ -1181,6 +1274,7 @@ describe("email triage worker", () => {
 
     const originalOpenAiKey = process.env.OPENAI_API_KEY;
     process.env.OPENAI_API_KEY = "test-openai-key";
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -1218,10 +1312,15 @@ describe("email triage worker", () => {
       });
       const [url, options] = global.fetch.mock.calls[0];
       expect(url).toBe("https://api.openai.com/v1/responses");
-      expect(JSON.parse(options.body).model).toBe("gpt-5.4-nano");
+      const body = JSON.parse(options.body);
+      expect(body.model).toBe("gpt-5.4-nano");
+      expect(body.store).toBe(false);
+      expect(body.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
+      expect(body.prompt_cache_retention).toBe("24h");
     } finally {
       process.env.OPENAI_API_KEY = originalOpenAiKey;
       global.fetch = undefined;
+      consoleLog.mockRestore();
     }
   });
 

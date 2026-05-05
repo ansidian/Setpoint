@@ -1,10 +1,31 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EmailTriageModeCard from "./EmailTriageModeCard.jsx";
 
+vi.mock("@/api", () => ({
+  getTriageCacheStats: vi.fn(async () => ({
+    windowDays: 7,
+    openaiCalls: 0,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    estimatedSavingsUsd: 0,
+    hitRate: 0,
+    lastTriagedAt: null,
+    models: [],
+    byTier: {
+      cheap: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedSavingsUsd: 0 },
+      strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedSavingsUsd: 0 },
+    },
+  })),
+}));
+
+const { getTriageCacheStats } = await import("@/api");
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 function renderCard(initialSettings = {}) {
@@ -77,5 +98,33 @@ describe("EmailTriageModeCard", () => {
 
     expect(screen.getByText("Stored: Auto")).toBeTruthy();
     expect(screen.getByText("Effective: No model")).toBeTruthy();
+  });
+
+  it("shows recent OpenAI triage cache savings", async () => {
+    getTriageCacheStats.mockResolvedValueOnce({
+      windowDays: 7,
+      openaiCalls: 2,
+      inputTokens: 3000,
+      cachedInputTokens: 1600,
+      outputTokens: 300,
+      estimatedSavingsUsd: 0.002358,
+      hitRate: 0.5333,
+      lastTriagedAt: "2026-05-04T12:05:00.000Z",
+      models: ["gpt-5.4", "gpt-5.4-nano"],
+      byTier: {
+        cheap: { calls: 1, inputTokens: 1000, cachedInputTokens: 600, outputTokens: 100, estimatedSavingsUsd: 0.000108 },
+        strong: { calls: 1, inputTokens: 2000, cachedInputTokens: 1000, outputTokens: 200, estimatedSavingsUsd: 0.00225 },
+      },
+    });
+
+    renderCard();
+
+    await waitFor(() => {
+      expect(screen.getByText("53.3%")).toBeTruthy();
+    });
+    expect(screen.getByText("1.6k")).toBeTruthy();
+    expect(screen.getByText("$0.0024")).toBeTruthy();
+    expect(screen.getByText("2 OpenAI calls in 7 days")).toBeTruthy();
+    expect(screen.getByText(/Last: May 4/)).toBeTruthy();
   });
 });
