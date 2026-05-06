@@ -884,6 +884,118 @@ describe("CalendarModal responsive layout", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Seeded task")).toBeTruthy();
   });
 
+  it("uses dashboard deadline data as an Events overlay seed while the range request is pending", () => {
+    window.innerWidth = 1900;
+    const ensureDeadlines = vi.fn(() => new Promise(() => {}));
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          ensureRange: vi.fn().mockResolvedValue([]),
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          ctm: { upcoming: [] },
+          todoist: {
+            upcoming: [
+              { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
+          },
+        }}
+        deadlinesRangeData={{
+          loading: true,
+          error: null,
+          data: null,
+          dataRange: null,
+          ensureRange: ensureDeadlines,
+        }}
+      />,
+    ));
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Current dashboard task")).toBeTruthy();
+  });
+
+  it("replaces dashboard deadline overlay seeds when the matching range payload arrives", async () => {
+    window.innerWidth = 1900;
+    const ensureDeadlines = vi.fn().mockResolvedValue(null);
+    const eventsData = {
+      editable: true,
+      ensureRange: vi.fn().mockResolvedValue([]),
+      getEvents: () => [],
+    };
+    const seededDeadlines = {
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", source: "todoist", status: "open" },
+        ],
+      },
+    };
+    const rangeDeadlines = {
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          { id: "todo-range", title: "Range task", due_date: "2026-04-20", source: "todoist", status: "open" },
+        ],
+      },
+    };
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={eventsData}
+        billsData={{}}
+        deadlinesData={seededDeadlines}
+        deadlinesRangeData={{
+          loading: true,
+          error: null,
+          data: null,
+          dataRange: null,
+          ensureRange: ensureDeadlines,
+        }}
+      />,
+    ));
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Current dashboard task")).toBeTruthy();
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={eventsData}
+        billsData={{}}
+        deadlinesData={seededDeadlines}
+        deadlinesRangeData={{
+          loading: false,
+          error: null,
+          data: rangeDeadlines,
+          dataRange: { start: "2026-03-29", end: "2026-05-02" },
+          ensureRange: ensureDeadlines,
+          revision: 1,
+        }}
+      />,
+    ));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).getByText("Range task")).toBeTruthy();
+    });
+    expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Current dashboard task")).toBeNull();
+  });
+
   it("uses D and Shift+D for Events deadline overlay preferences", async () => {
     window.innerWidth = 1900;
 
