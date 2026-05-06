@@ -194,6 +194,7 @@ export default function useCalendarDomainRange({
   const activeKeyRef = useRef(null);
   const activeRangeRef = useRef(null);
   const [data, setData] = useState(emptyData);
+  const [dataRange, setDataRange] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [revision, setRevision] = useState(0);
@@ -211,11 +212,19 @@ export default function useCalendarDomainRange({
     const promise = fetchRange(start, end)
       .then((value) => {
         const fetchedAt = Date.now();
+        const targetKeySet = new Set(targetKeys);
         for (const key of targetKeys) {
           cacheRef.current.set(key, {
             data: filterDataForMonth(value, key),
             fetchedAt,
           });
+        }
+        const active = activeRangeRef.current;
+        const updatesActiveRange = active?.keys?.some((key) => targetKeySet.has(key));
+        const activeRangeReady = active?.keys?.every((key) => cacheRef.current.has(key));
+        if (updatesActiveRange && activeRangeReady) {
+          setData(combineDataForRange(cacheRef.current, active.keys, active.start, active.end, emptyData));
+          setDataRange({ start: active.start, end: active.end, keys: active.keys });
         }
         setRevision((current) => current + 1);
         return true;
@@ -231,7 +240,7 @@ export default function useCalendarDomainRange({
       inFlightRef.current.set(key, promise);
     }
     return promise;
-  }, [fetchRange]);
+  }, [emptyData, fetchRange]);
 
   const prefetchMonths = useCallback((visibleKeys) => {
     if (disabled || !fetchRange || cacheMode !== "month" || prefetchMonthRadius <= 0) return;
@@ -248,6 +257,7 @@ export default function useCalendarDomainRange({
   const ensureMonthRange = useCallback(async (start, end) => {
     if (disabled || !fetchRange) {
       setData(emptyData);
+      setDataRange(null);
       return emptyData;
     }
 
@@ -280,21 +290,27 @@ export default function useCalendarDomainRange({
     }
 
     const staleKeys = visibleKeys.filter((key) => cacheRef.current.has(key) && !fresh(cacheRef.current.get(key)));
-    if (staleKeys.length && !missingKeys.length) {
+    if (staleKeys.length) {
       for (const group of groupMonthKeys(staleKeys)) {
         fetchMonthGroup(group, { force: true }).catch((err) => setError(err));
       }
     }
 
     const next = combineDataForRange(cacheRef.current, visibleKeys, start, end, emptyData);
-    setData(next);
-    prefetchMonths(visibleKeys);
+    const active = activeRangeRef.current;
+    const isActiveRange = active?.start === start && active?.end === end;
+    if (isActiveRange) {
+      setData(next);
+      setDataRange({ start, end, keys: visibleKeys });
+      prefetchMonths(visibleKeys);
+    }
     return next;
   }, [disabled, emptyData, fetchMonthGroup, fetchRange, prefetchMonths]);
 
   const ensureExactRange = useCallback(async (start, end) => {
     if (disabled || !fetchRange) {
       setData(emptyData);
+      setDataRange(null);
       return emptyData;
     }
 
@@ -303,13 +319,17 @@ export default function useCalendarDomainRange({
     const cached = cacheRef.current.get(key);
     if (fresh(cached)) {
       setData(cached.data);
+      setDataRange({ start, end, key });
       return cached.data;
     }
 
     const existing = inFlightRef.current.get(key);
     if (existing) {
       const value = await existing;
-      setData(value);
+      if (activeKeyRef.current === key) {
+        setData(value);
+        setDataRange({ start, end, key });
+      }
       return value;
     }
 
@@ -318,7 +338,10 @@ export default function useCalendarDomainRange({
     const promise = fetchRange(start, end)
       .then((value) => {
         cacheRef.current.set(key, { data: value, fetchedAt: Date.now() });
-        setData(value);
+        if (activeKeyRef.current === key) {
+          setData(value);
+          setDataRange({ start, end, key });
+        }
         setRevision((current) => current + 1);
         return value;
       })
@@ -328,7 +351,7 @@ export default function useCalendarDomainRange({
       })
       .finally(() => {
         inFlightRef.current.delete(key);
-        setLoading(false);
+        if (activeKeyRef.current === key) setLoading(false);
       });
     inFlightRef.current.set(key, promise);
     return promise;
@@ -343,6 +366,7 @@ export default function useCalendarDomainRange({
   const invalidate = useCallback(() => {
     cacheRef.current.clear();
     inFlightRef.current.clear();
+    setDataRange(null);
     setRevision((current) => current + 1);
   }, []);
 
@@ -356,6 +380,7 @@ export default function useCalendarDomainRange({
   const updateData = useCallback((updater) => {
     if (disabled) return;
     if (cacheMode === "month") {
+      const active = activeRangeRef.current;
       setData((current) => {
         for (const [key, entry] of cacheRef.current.entries()) {
           const updated = typeof updater === "function" ? updater(entry.data) : updater;
@@ -364,27 +389,31 @@ export default function useCalendarDomainRange({
             data: filterDataForMonth(updated, key),
           });
         }
-        const active = activeRangeRef.current;
         if (active) {
           return combineDataForRange(cacheRef.current, active.keys, active.start, active.end, emptyData);
         }
         return typeof updater === "function" ? updater(current) : updater;
       });
+      setDataRange(active ? { start: active.start, end: active.end, keys: active.keys } : null);
       setRevision((current) => current + 1);
       return;
     }
+    const activeKey = activeKeyRef.current;
     setData((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
-      const key = activeKeyRef.current;
-      if (key && cacheRef.current.has(key)) {
-        const entry = cacheRef.current.get(key);
-        cacheRef.current.set(key, {
+      if (activeKey && cacheRef.current.has(activeKey)) {
+        const entry = cacheRef.current.get(activeKey);
+        cacheRef.current.set(activeKey, {
           ...entry,
           data: next,
         });
       }
       return next;
     });
+    if (activeKey) {
+      const [start, end] = activeKey.split(":");
+      setDataRange({ start, end, key: activeKey });
+    }
     setRevision((current) => current + 1);
   }, [cacheMode, disabled, emptyData]);
 
@@ -394,6 +423,7 @@ export default function useCalendarDomainRange({
     if (cacheMode === "month") {
       const keys = monthKeysFromData(data);
       for (const key of keys) {
+        if (stale && cacheRef.current.has(key)) continue;
         cacheRef.current.set(key, {
           data: filterDataForMonth(data, key),
           fetchedAt,
@@ -403,6 +433,7 @@ export default function useCalendarDomainRange({
       setData(active && keys.length
         ? combineDataForRange(cacheRef.current, active.keys, active.start, active.end, data)
         : clone(data));
+      setDataRange(active && keys.length ? { start: active.start, end: active.end, keys: active.keys } : null);
       setRevision((current) => current + 1);
       return;
     }
@@ -412,11 +443,13 @@ export default function useCalendarDomainRange({
       cacheRef.current.set(key, { data: next, fetchedAt });
     }
     setData(next);
+    setDataRange(key ? { start: key.split(":")[0], end: key.split(":")[1], key } : null);
     setRevision((current) => current + 1);
   }, [cacheMode, disabled]);
 
   return {
     data,
+    dataRange,
     ensureRange,
     invalidate,
     markStale,

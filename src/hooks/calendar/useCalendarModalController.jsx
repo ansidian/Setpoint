@@ -90,6 +90,20 @@ function itemDueDate(item) {
   return item?.agendaDateKey || item?.due_date || item?.next_date || null;
 }
 
+function rangeMatches(a, b) {
+  return !!a && !!b && a.start === b.start && a.end === b.end;
+}
+
+function makeDeadlineOverlayRecord(data, range) {
+  return data && range ? { data, range } : null;
+}
+
+function deadlineOverlayRecordData(record, visibleRange) {
+  if (!record) return null;
+  if (record.range && !rangeMatches(record.range, visibleRange)) return null;
+  return record.data || record;
+}
+
 function resolvePendingFocusItem({ activeView, computed, dateKey, itemId }) {
   const getItemId = activeView?.getItemId || ((item) => item?.id);
   const matches = (item) => (
@@ -235,10 +249,18 @@ export default function useCalendarModalController({
     if (view === "events") {
       const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
       const nextMonth = addMonthOffset(viewYear, viewMonth, 1);
-      const seededOverlayData = planningReadiness.deadlinesDelayed ? null : deadlinesRangeData?.data;
-      const overlayData = committedDeadlineOverlayData
+      const visibleRange = getVisibleGridRange(viewYear, viewMonth);
+      const committedOverlayData = deadlineOverlayRecordData(committedDeadlineOverlayData, visibleRange);
+      const seededOverlayData = !planningReadiness.deadlinesDelayed
+        && (!deadlinesRangeData?.dataRange || rangeMatches(deadlinesRangeData.dataRange, visibleRange))
+        ? deadlinesRangeData?.data
+        : null;
+      const overlayData = committedOverlayData
         || seededOverlayData
         || (!deadlinesRangeData?.ensureRange ? deadlinesData : null);
+      const lateRecord = deadlineOverlayRecordData(lateDeadlineOverlayData, visibleRange)
+        ? lateDeadlineOverlayData
+        : null;
       return {
         events: dedupeEvents([
           ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
@@ -250,9 +272,9 @@ export default function useCalendarModalController({
           showCompleted: completedDeadlineOverlayVisible,
           data: deadlineOverlayVisible ? overlayData : null,
           readiness: planningReadiness,
-          onApplyLateDeadlines: lateDeadlineOverlayData
+          onApplyLateDeadlines: lateRecord
             ? () => {
-                setCommittedDeadlineOverlayData(lateDeadlineOverlayData);
+                setCommittedDeadlineOverlayData(lateRecord);
                 setLateDeadlineOverlayData(null);
                 setPlanningReadiness((current) => ({
                   ...current,
@@ -297,6 +319,7 @@ export default function useCalendarModalController({
     committedDeadlineOverlayData,
     deadlinesRangeData?.ensureRange,
     deadlinesRangeData?.data,
+    deadlinesRangeData?.dataRange,
     planningReadiness,
     lateDeadlineOverlayData,
     deadlinesData,
@@ -311,11 +334,16 @@ export default function useCalendarModalController({
 
   useEffect(() => {
     if (view !== "events" || !deadlineOverlayVisible || !deadlinesRangeData?.data) return;
-    setCommittedDeadlineOverlayData(deadlinesRangeData.data);
+    const visibleRange = getVisibleGridRange(viewYear, viewMonth);
+    if (!rangeMatches(deadlinesRangeData?.dataRange, visibleRange)) return;
+    setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(deadlinesRangeData.data, deadlinesRangeData.dataRange));
   }, [
     view,
+    viewYear,
+    viewMonth,
     deadlineOverlayVisible,
     deadlinesRangeData?.data,
+    deadlinesRangeData?.dataRange,
     deadlinesRangeData?.revision,
   ]);
 
@@ -944,7 +972,7 @@ export default function useCalendarModalController({
             deadlinesDone = true;
             if (canceled) return;
             if (deadlinesTimedOut) {
-              setLateDeadlineOverlayData(data);
+              setLateDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
               setPlanningReadiness((current) => ({
                 ...current,
                 deadlinesReadyAt: performance.now(),
@@ -953,7 +981,7 @@ export default function useCalendarModalController({
               return;
             }
             if (eventsDone) {
-              setCommittedDeadlineOverlayData(data);
+              setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
               setLateDeadlineOverlayData(null);
               setPlanningReadiness((current) => ({
                 ...current,
@@ -963,7 +991,7 @@ export default function useCalendarModalController({
                 deadlinesReadyAt: performance.now(),
               }));
             } else {
-              setCommittedDeadlineOverlayData(data);
+              setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
               setPlanningReadiness((current) => ({ ...current, deadlinesReadyAt: performance.now() }));
             }
           })
@@ -995,7 +1023,7 @@ export default function useCalendarModalController({
         if (canceled || !deadlineOverlayVisible || !data) return;
         setPlanningReadiness((current) => {
           if (!current.deadlinesDelayed) return current;
-          setLateDeadlineOverlayData(data);
+          setLateDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
           return { ...current, lateDeadlinesReady: true };
         });
       }).catch(() => {});
