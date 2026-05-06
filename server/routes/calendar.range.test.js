@@ -29,8 +29,12 @@ vi.mock("../briefing/todoist.js", () => ({
   getTodoistSyncHealth: vi.fn(),
 }));
 vi.mock("../briefing/bills-service.js", () => ({
+  isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
   scheduleBillsMirrorRefresh: vi.fn(),
+}));
+vi.mock("../dashboard/current-service.js", () => ({
+  requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
 vi.mock("../briefing/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
@@ -47,7 +51,8 @@ const { loadUserConfig } = await import("../briefing/config-service.js");
 const { fetchCalendar } = await import("../briefing/calendar.js");
 const { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } = await import("../briefing/ctm.js");
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../briefing/todoist.js");
-const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../briefing/bills-service.js");
+const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../briefing/bills-service.js");
+const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js");
 const { hydrateRecurringTombstones } = await import("../briefing/tombstones.js");
 const db = (await import("../db/connection.js")).default;
 const calendarRoutes = (await import("./calendar.js")).default;
@@ -284,6 +289,8 @@ describe("GET /api/calendar/bills/range", () => {
       syncHealth: { state: "current", configured: true },
     });
     scheduleBillsMirrorRefresh.mockResolvedValue({ pendingRefreshAt: "2026-05-03T19:00:00.000Z" });
+    isBillsMirrorMaintenanceDue.mockReturnValue(false);
+    requestBillsCurrentMaintenanceRefresh.mockResolvedValue({ scheduled: false, due: false });
   });
 
   afterEach(() => {
@@ -305,6 +312,34 @@ describe("GET /api/calendar/bills/range", () => {
     expect(res.body.errors).toEqual([]);
     expect(res.body.fetchedAt).toBe("2026-05-03T19:00:00.000Z");
     expect(scheduleBillsMirrorRefresh).not.toHaveBeenCalled();
+    expect(requestBillsCurrentMaintenanceRefresh).not.toHaveBeenCalled();
+  });
+
+  it("returns existing bills range and requests quiet maintenance when mirror success is old", async () => {
+    readBillsMirrorRange.mockResolvedValueOnce({
+      schedules: [{ id: "sched-1:2026-05-10", name: "Mortgage", next_date: "2026-05-10", paid: false }],
+      recentTransactions: [],
+      payeeMap: { p1: "Mortgage" },
+      actualBudgetUrl: "http://actual.local",
+      syncHealth: {
+        state: "current",
+        configured: true,
+        lastSuccessAt: "2026-05-03T18:40:00.000Z",
+      },
+    });
+    isBillsMirrorMaintenanceDue.mockReturnValueOnce(true);
+
+    const res = await request(makeApp()).get(
+      "/api/calendar/bills/range?start=2026-04-26&end=2026-06-06",
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.schedules).toHaveLength(1);
+    expect(res.body.syncHealth.state).toBe("current");
+    expect(scheduleBillsMirrorRefresh).not.toHaveBeenCalled();
+    expect(requestBillsCurrentMaintenanceRefresh).toHaveBeenCalledWith(process.env.EA_USER_ID, expect.objectContaining({
+      now: expect.any(Date),
+    }));
   });
 
   it("returns empty mirror data and schedules a background refresh when the mirror needs sync", async () => {

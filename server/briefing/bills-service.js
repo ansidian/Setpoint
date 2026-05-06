@@ -24,6 +24,7 @@ const PROVIDERS = {
   [OPENAI_PROVIDER.id]: OPENAI_PROVIDER,
 };
 const BILL_MIRROR_REFRESH_RANGE = { start: "1900-01-01", end: "9999-12-31" };
+export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 15 * 60 * 1000;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map();
 let billsMirrorRefreshWorkerTimer = null;
 
@@ -56,6 +57,16 @@ function mirrorStateFromRow(row) {
     pendingRefreshAt: row.pending_refresh_at || null,
     refreshStartedAt: row.refresh_started_at || null,
   };
+}
+
+export function isBillsMirrorMaintenanceDue(syncHealth, { now = new Date() } = {}) {
+  if (!syncHealth) return false;
+  if (syncHealth.configured !== true) return false;
+  if (syncHealth.pendingRefreshAt || syncHealth.refreshStartedAt) return false;
+  if (syncHealth.state !== "current" && syncHealth.state !== "degraded") return false;
+  const lastSuccess = new Date(syncHealth.lastSuccessAt || "").getTime();
+  if (!Number.isFinite(lastSuccess)) return false;
+  return now.getTime() - lastSuccess >= BILLS_MIRROR_MAINTENANCE_TTL_MS;
 }
 
 function occurrenceFromRow(row) {

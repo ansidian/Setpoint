@@ -34,8 +34,9 @@ function withSyncWatchdog(promise) {
 
 export default function Dashboard() {
   const triageNotificationSounds = useTriageNotificationSounds();
+  const dashboardEventHandlerRef = useRef(null);
   const currentDashboard = useCurrentDashboard({
-    onDashboardEvent: triageNotificationSounds.handleDashboardEvent,
+    onDashboardEvent: (event) => dashboardEventHandlerRef.current?.(event),
   });
   const liveData = currentDashboard.liveData;
   const activeSnapshot = currentDashboard.activeSnapshot;
@@ -65,6 +66,13 @@ export default function Dashboard() {
   const refreshCalendarDomainsRef = useRef(null);
   const calendarWorkspaceRef = useRef({ open: false, view: "events", eventsRange: null });
   const calendarBillsRefreshRequestedRef = useRef(false);
+  dashboardEventHandlerRef.current = (event) => {
+    triageNotificationSounds.handleDashboardEvent(event);
+    if (event?.source === "bills") {
+      calendarBillsRefreshRequestedRef.current = true;
+      calendarBillRange.markStale?.();
+    }
+  };
   const markCalendarRangeStale = calendarRange.markStale;
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   const handleTimerQuickRefresh = useCallback(() => {
@@ -162,6 +170,9 @@ export default function Dashboard() {
   const [calendarBillsData, setCalendarBillsData] = useState(null);
   const [calendarBillsFetchedAt, setCalendarBillsFetchedAt] = useState(0);
   const refreshLiveDataNow = liveData.refreshNow;
+  const billsCurrentRefreshing = liveData.providerHealth?.currentData?.sources?.some((source) =>
+    source.key === "bills_current" && source.state === "refreshing",
+  );
   const snapshotCalendarBills = useCallback(() => {
     setCalendarBillsData({
       schedules: (liveData.allSchedules || []).map((schedule) => ({ ...schedule })),
@@ -169,9 +180,10 @@ export default function Dashboard() {
       payeeMap: liveData.payeeMap || {},
       actualBudgetUrl: liveData.actualBudgetUrl,
       syncHealth: liveData.billsSyncHealth || null,
+      pendingUpdate: !!billsCurrentRefreshing,
     });
     setCalendarBillsFetchedAt(Date.now());
-  }, [liveData.actualBudgetUrl, liveData.allSchedules, liveData.billsSyncHealth, liveData.payeeMap]);
+  }, [billsCurrentRefreshing, liveData.actualBudgetUrl, liveData.allSchedules, liveData.billsSyncHealth, liveData.payeeMap]);
   const loadCalendarBills = useCallback((opts) => {
     const force = !!opts?.force;
     const stale = isCalendarDomainCacheStale(calendarBillsFetchedAt);
@@ -188,6 +200,11 @@ export default function Dashboard() {
     calendarBillsRefreshRequestedRef.current = false;
     snapshotCalendarBills();
   }, [liveData.lastFetched, snapshotCalendarBills]);
+
+  useEffect(() => {
+    if (!calendarBillsData?.pendingUpdate || billsCurrentRefreshing) return;
+    snapshotCalendarBills();
+  }, [billsCurrentRefreshing, calendarBillsData?.pendingUpdate, snapshotCalendarBills]);
 
   useEffect(() => {
     refreshCalendarDomainsRef.current = ({ force = false } = {}) => {

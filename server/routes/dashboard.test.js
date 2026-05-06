@@ -77,6 +77,13 @@ vi.mock("../briefing/bills-service.js", () => ({
   readBillsMirrorCurrent: (...args) => testState.readBillsMirrorCurrent(...args),
   refreshBillsMirror: (...args) => testState.refreshBillsMirror(...args),
   getBillsMirrorState: (...args) => testState.getBillsMirrorState(...args),
+  isBillsMirrorMaintenanceDue: (health, { now = new Date() } = {}) => {
+    if (!health || health.configured !== true) return false;
+    if (health.pendingRefreshAt || health.refreshStartedAt) return false;
+    if (health.state !== "current" && health.state !== "degraded") return false;
+    const lastSuccess = new Date(health.lastSuccessAt || "").getTime();
+    return Number.isFinite(lastSuccess) && now.getTime() - lastSuccess >= 15 * 60 * 1000;
+  },
   consumeDueBillsMirrorRefresh: (...args) => testState.consumeDueBillsMirrorRefresh(...args),
   clearPendingBillsMirrorRefresh: (...args) => testState.clearPendingBillsMirrorRefresh(...args),
   scheduleBillsMirrorRefresh: (...args) => testState.scheduleBillsMirrorRefresh(...args),
@@ -95,7 +102,10 @@ const EMPTY_DEADLINES_FOR_TEST = {
 
 const { default: router } = await import("./dashboard.js");
 const { __resetCurrentDashboardRefreshStateForTests } = await import("../dashboard/current-service.js");
-const { __resetCurrentDashboardEventsForTests } = await import("../dashboard/current-events.js");
+const {
+  __resetCurrentDashboardEventsForTests,
+  subscribeCurrentDashboardEvents,
+} = await import("../dashboard/current-events.js");
 
 function makeApp() {
   const app = express();
@@ -335,6 +345,81 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.getTodoistSyncHealth).toHaveBeenCalledWith("u1");
   });
 
+  it("schedules a quiet Bills mirror maintenance refresh when the mirror success is old", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [{ id: "cached-bill", payee: "Power" }],
+      allSchedules: [{ id: "cached-bill", payee: "Power" }],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: {
+        state: "current",
+        configured: true,
+        lastSuccessAt: "2026-05-04T11:40:00.000Z",
+      },
+    });
+    testState.getBillsMirrorState.mockResolvedValueOnce({
+      syncHealth: {
+        state: "current",
+        configured: true,
+        lastSuccessAt: "2026-05-04T11:40:00.000Z",
+        pendingRefreshAt: null,
+      },
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    testState.refreshBillsMirror.mockResolvedValueOnce({
+      bills: [{ id: "new-bill", payee: "Water" }],
+      allSchedules: [{ id: "new-bill", payee: "Water" }],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: {
+        state: "current",
+        configured: true,
+        lastSuccessAt: "2026-05-04T12:01:00.000Z",
+      },
+    });
+    const listener = vi.fn();
+    const unsubscribe = subscribeCurrentDashboardEvents("u1", listener);
+
+    try {
+      const res = await request(makeApp())
+        .get("/api/dashboard/current")
+        .set("Cookie", ["ea_session=cookie-session"]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.bills).toEqual([{ id: "cached-bill", payee: "Power" }]);
+      expect(res.body.systemStatus.state).toBe("current");
+      expect(res.body.systemStatus.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "bills", state: "current", severity: "none" }),
+        ]),
+      );
+      expect(res.body.refresh).toMatchObject({
+        mode: "passive",
+        scheduled: expect.arrayContaining([
+          expect.objectContaining({ key: "bills_current", reason: "bills_mirror_maintenance_due" }),
+        ]),
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
+        actualBudgetUrl: "https://actual.example.test",
+        force: true,
+      }));
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+        source: "bills",
+        reason: "maintenance_refreshed",
+        state: "current",
+      }));
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("rolls Todoist needs_sync into system status and schedules deadlines refresh", async () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", []);
@@ -375,7 +460,7 @@ describe("GET /api/dashboard/current", () => {
     });
   });
 
-  it("manual refresh skips fresh current-data sources", async () => {
+  it("manual refresh skips fresh non-Bills current-data sources and forces Bills ground truth", async () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", []);
     await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
@@ -394,20 +479,24 @@ describe("GET /api/dashboard/current", () => {
     expect(res.status).toBe(200);
     expect(res.body.refresh).toMatchObject({
       mode: "manual",
-      scheduled: [
+      scheduled: expect.arrayContaining([
+        expect.objectContaining({ key: "bills_current", reason: "manual_bills_sync" }),
         expect.objectContaining({ key: "active_snapshot", reason: "manual_retry" }),
-      ],
+      ]),
       skipped: expect.arrayContaining([
         expect.objectContaining({ key: "weather_current", reason: "fresh" }),
         expect.objectContaining({ key: "calendar_current", reason: "fresh" }),
         expect.objectContaining({ key: "deadlines_current", reason: "fresh" }),
-        expect.objectContaining({ key: "bills_current", reason: "fresh" }),
       ]),
     });
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
-    expect(testState.readBillsMirrorCurrent).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
+      actualBudgetUrl: "https://actual.example.test",
+      force: true,
+    }));
   });
 
   it("manual refresh forces a pending Bills mirror refresh even when current cache is fresh", async () => {
@@ -608,7 +697,7 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchCalendar.mockReturnValueOnce(pending);
     testState.fetchCTMDeadlines.mockReturnValueOnce(pending);
     testState.fetchTodoistTasks.mockReturnValueOnce(pending);
-    testState.readBillsMirrorCurrent.mockReturnValueOnce(pending);
+    testState.refreshBillsMirror.mockReturnValueOnce(pending);
 
     const startedAt = Date.now();
     const res = await request(makeApp())
@@ -633,6 +722,7 @@ describe("GET /api/dashboard/current", () => {
         mode: "manual",
         scheduled: expect.arrayContaining([
           expect.objectContaining({ key: "weather_current", reason: "ttl_due" }),
+          expect.objectContaining({ key: "bills_current", reason: "ttl_due" }),
           expect.objectContaining({ key: "active_snapshot", reason: "manual_retry" }),
         ]),
       },

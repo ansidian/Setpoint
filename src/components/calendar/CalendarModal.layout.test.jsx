@@ -2899,6 +2899,106 @@ describe("CalendarModal responsive layout", () => {
     expect(indicator.querySelector(".calendar-pending-update-icon")).toBeTruthy();
   });
 
+  it("shows the pending-update indicator for background Bills refreshes with visible data", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={{
+          loading: true,
+          data: {
+            schedules: [
+              {
+                id: "bill-1:2026-04-20",
+                scheduleId: "bill-1",
+                name: "Rent",
+                next_date: "2026-04-20",
+                amount: 1800,
+                paid: false,
+                type: "bill",
+              },
+            ],
+            recentTransactions: [],
+            payeeMap: {},
+          },
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const indicator = screen.getByTestId("calendar-pending-update");
+    expect(indicator.textContent).toBe("");
+    expect(indicator.getAttribute("aria-label")).toBe("Calendar updates pending");
+    expect(indicator.querySelector(".calendar-pending-update-icon")).toBeTruthy();
+  });
+
+  it("hides the Bills pending-update indicator during initial no-data loading", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={{ loading: true, data: null }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    expect(screen.queryByTestId("calendar-pending-update")).toBeNull();
+  });
+
+  it("refetches the visible Bills range when range data is marked stale", async () => {
+    window.innerWidth = 1900;
+    const ensureRange = vi.fn().mockResolvedValue({});
+    const renderModal = (revision) => wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={{
+          revision,
+          ensureRange,
+          data: {
+            schedules: [
+              {
+                id: "bill-1:2026-04-20",
+                scheduleId: "bill-1",
+                name: "Rent",
+                next_date: "2026-04-20",
+                amount: 1800,
+                paid: false,
+                type: "bill",
+              },
+            ],
+          },
+        }}
+        deadlinesData={{}}
+      />,
+    );
+
+    const { rerender } = render(renderModal(0));
+    await waitFor(() => expect(ensureRange).toHaveBeenCalledTimes(1));
+
+    rerender(renderModal(1));
+    await waitFor(() => expect(ensureRange).toHaveBeenCalledTimes(2));
+  });
+
   it("switches the selected deadline in-place when a different agenda row is clicked", async () => {
     window.innerWidth = 1900;
 

@@ -345,11 +345,15 @@ export default function useCalendarModalController({
       };
     }
     const rangeData = billsRangeData?.data;
+    const activeBillsData = rangeData || billsData;
+    const visibleBillsCount = (activeBillsData?.schedules || activeBillsData?.allSchedules || []).length;
     return {
-      ...(rangeData || billsData),
+      ...activeBillsData,
       isLoading: !!billsRangeData?.loading || billsData?.isLoading,
+      pendingUpdate: !!visibleBillsCount && (!!billsRangeData?.loading || !!billsData?.pendingUpdate || !!rangeData?.pendingUpdate),
       rangeError: billsRangeData?.error || null,
       ensureRange: billsRangeData?.ensureRange,
+      revision: billsRangeData?.revision,
     };
   }, [
     view,
@@ -372,6 +376,7 @@ export default function useCalendarModalController({
     billsRangeData?.loading,
     billsRangeData?.error,
     billsRangeData?.ensureRange,
+    billsRangeData?.revision,
   ]);
 
   useEffect(() => {
@@ -1192,13 +1197,14 @@ export default function useCalendarModalController({
   }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
 
   const domainEnsureRange = viewData?.ensureRange;
+  const domainRevision = viewData?.revision;
   useEffect(() => {
     if (!open || view === "events" || !domainEnsureRange) return;
     const { start, end } = getVisibleGridRange(viewYear, viewMonth);
     domainEnsureRange(start, end).catch((err) => {
       console.error(`[Calendar] ${view} range fetch failed:`, err);
     });
-  }, [domainEnsureRange, open, view, viewYear, viewMonth]);
+  }, [domainEnsureRange, domainRevision, open, view, viewYear, viewMonth]);
 
   useEffect(() => {
     const current = floatingDetailRef.current;
