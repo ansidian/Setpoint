@@ -8,8 +8,8 @@ const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
   snapshot: { id: "loading" },
   filters: { accounts: [], categories: [] },
   carryover: [],
-  lanes: { needs_attention: [], fyi: [], noise: [] },
-  laneCounts: { needs_attention: 0, fyi: 0, noise: 0, carryover: 0 },
+  lanes: { needs_attention: [], fyi: [], handled: [], noise: [] },
+  laneCounts: { needs_attention: 0, fyi: 0, handled: 0, noise: 0, carryover: 0 },
   processing: { total: 0, active: false },
 };
 

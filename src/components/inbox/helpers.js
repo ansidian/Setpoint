@@ -58,6 +58,7 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
     ...(activeSnapshot.carryover || []).map((item) => ({ ...item, _snapshotCarryover: true })),
     ...(activeSnapshot.lanes?.needs_attention || []),
     ...(activeSnapshot.lanes?.fyi || []),
+    ...(activeSnapshot.lanes?.handled || []),
     ...(activeSnapshot.lanes?.noise || []),
   ];
 
@@ -77,7 +78,9 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       important: [],
       noise: [],
     };
-    const lane = resurfaced
+    const lane = item.handled_at
+      ? "handled"
+      : resurfaced
       || pendingSecurityGrace
       ? null
       : item._snapshotCarryover

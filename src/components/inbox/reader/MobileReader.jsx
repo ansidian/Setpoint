@@ -25,6 +25,7 @@ import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 import { resolveBillExtractionBody } from "./billExtractionBody";
+import MobileActionRow from "./MobileActionRow";
 
 function MobileStatusPill({ color, label, subtle = false }) {
   return (
@@ -89,45 +90,6 @@ function InlineControlButton({ icon, label, active = false, onClick, buttonRef }
   );
 }
 
-function MobileActionRow({
-  icon,
-  label,
-  onClick,
-  active = false,
-  danger = false,
-}) {
-  const IconComponent = icon;
-  const tint = danger ? "#f38ba8" : active ? "#fff" : "rgba(205,214,244,0.8)";
-  const background = danger ? "rgba(243,139,168,0.08)" : active ? "rgba(255,255,255,0.08)" : "transparent";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        width: "100%",
-        minWidth: 0,
-        padding: "11px 12px",
-        borderRadius: 10,
-        border: `1px solid ${danger ? "rgba(243,139,168,0.18)" : active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
-        background,
-        color: tint,
-        cursor: "pointer",
-        fontFamily: "inherit",
-        textAlign: "left",
-      }}
-    >
-      <IconComponent size={14} style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 600 }}>
-        {label}
-      </span>
-    </button>
-  );
-}
-
 export default function MobileReader({
   email,
   account,
@@ -149,6 +111,7 @@ export default function MobileReader({
   const showBillToggle = showMutableActions && (email._untriaged || email.hasBill);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
   const showSnapshotActions = email._activeSnapshot && showMutableActions;
+  const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
   const triageSummary = showTriage
     ? email.claude?.summary || email.aiSummary || null
     : null;
@@ -541,35 +504,42 @@ export default function MobileReader({
                 }}
               />
             )}
-            {showSnapshotActions && snapshotLane !== "needs_attention" && (
+            {isHandledSnapshot && (
+              <MobileActionRow
+                icon={Check}
+                label="Reopen"
+                onClick={() => handleAction("snapshot-reopen")}
+              />
+            )}
+            {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
               <MobileActionRow
                 icon={Zap}
                 label="Move to Needs"
                 onClick={() => handleAction("snapshot-move-lane", "needs_attention")}
               />
             )}
-            {showSnapshotActions && snapshotLane !== "fyi" && (
+            {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
               <MobileActionRow
                 icon={FileText}
                 label="Move to FYI"
                 onClick={() => handleAction("snapshot-move-lane", "fyi")}
               />
             )}
-            {showSnapshotActions && snapshotLane !== "noise" && (
+            {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "noise" && (
               <MobileActionRow
                 icon={BellOff}
                 label="Move to Noise"
                 onClick={() => handleAction("snapshot-move-lane", "noise")}
               />
             )}
-            {showSnapshotActions && snapshotLane === "needs_attention" && (
+            {showSnapshotActions && !isHandledSnapshot && snapshotLane === "needs_attention" && (
               <MobileActionRow
                 icon={Check}
                 label="Handled"
                 onClick={() => handleAction("snapshot-handled")}
               />
             )}
-            {showSnapshotActions && (
+            {showSnapshotActions && !isHandledSnapshot && (
               <MobileActionRow
                 icon={XCircle}
                 label="Dismiss"
