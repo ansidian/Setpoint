@@ -409,7 +409,7 @@ describe("Todoist mirror-backed facade", () => {
     expect(ids).toEqual(new Set(["active-1", "completed-1"]));
   });
 
-  it("reads range rows from active and completed mirror tables without live Todoist lookup", async () => {
+  it("reads historical range rows from active and completed mirror tables without live Todoist lookup", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-05T18:00:00.000Z"));
     testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
@@ -427,7 +427,7 @@ describe("Todoist mirror-backed facade", () => {
         task_id: "completed-1",
         content: "Completed deadline",
         project_id: "p1",
-        due: { date: "2026-05-06" },
+        due: { date: "2026-05-02" },
         priority: 1,
         labels: [],
       },
@@ -442,7 +442,7 @@ describe("Todoist mirror-backed facade", () => {
       end: "2026-05-10",
     });
     expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
-      start: "2026-05-05",
+      start: "2026-05-01",
       end: "2026-05-10",
     });
     expect(testState.fetchFn).not.toHaveBeenCalledWith(

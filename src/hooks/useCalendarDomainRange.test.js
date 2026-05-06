@@ -266,8 +266,150 @@ describe("useCalendarDomainRange", () => {
     });
 
     expect(ensured.todoist.upcoming.map((item) => item.id)).toEqual(["todo-seeded"]);
-    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-seeded"]);
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-fresh"]);
     expect(fetchRange).toHaveBeenCalledWith("2026-05-01", "2026-05-31");
+  });
+
+  it("publishes the refreshed active month after a stale first-paint seed", async () => {
+    let resolveRange;
+    const fetchRange = vi.fn(() => new Promise((resolve) => {
+      resolveRange = resolve;
+    }));
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 0,
+    }));
+
+    act(() => {
+      result.current.seedData({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-open", title: "Open task", due_date: "2026-05-12", source: "todoist" },
+          ],
+        },
+      });
+    });
+
+    let ensured;
+    await act(async () => {
+      ensured = await result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+
+    expect(ensured.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open"]);
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open"]);
+    expect(fetchRange).toHaveBeenCalledWith("2026-05-01", "2026-05-31");
+
+    await act(async () => {
+      resolveRange({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-open", title: "Open task", due_date: "2026-05-12", source: "todoist" },
+            { id: "todo-complete", title: "Completed task", due_date: "2026-05-12", source: "todoist", status: "complete" },
+          ],
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-complete"]);
+  });
+
+  it("refreshes stale seeded months even when adjacent visible months are missing", async () => {
+    let resolveMay;
+    const fetchRange = vi.fn((start) => {
+      if (start === "2026-05-01") {
+        return new Promise((resolve) => {
+          resolveMay = resolve;
+        });
+      }
+      return Promise.resolve({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 0,
+    }));
+
+    act(() => {
+      result.current.seedData({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-open", title: "Open task", due_date: "2026-05-12", source: "todoist" },
+          ],
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-26", "2026-06-06");
+    });
+
+    expect(fetchRange).toHaveBeenCalledWith("2026-04-01", "2026-04-30");
+    expect(fetchRange).toHaveBeenCalledWith("2026-06-01", "2026-06-30");
+    expect(fetchRange).toHaveBeenCalledWith("2026-05-01", "2026-05-31");
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open"]);
+
+    await act(async () => {
+      resolveMay({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-open", title: "Open task", due_date: "2026-05-12", source: "todoist" },
+            { id: "todo-complete", title: "Completed task", due_date: "2026-05-12", source: "todoist", status: "complete" },
+          ],
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-complete"]);
+  });
+
+  it("does not let stale live deadline seeds replace an existing range month", async () => {
+    const fetchRange = vi.fn().mockResolvedValue({
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          { id: "todo-open", title: "Open task", due_date: "2026-05-12", source: "todoist" },
+          { id: "todo-complete", title: "Completed task", due_date: "2026-05-12", source: "todoist", status: "complete" },
+        ],
+      },
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 0,
+    }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-complete"]);
+
+    act(() => {
+      result.current.markStale();
+    });
+
+    act(() => {
+      result.current.seedData({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-open", title: "Open task", due_date: "2026-05-12", source: "todoist" },
+          ],
+        },
+      });
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-complete"]);
   });
 
   it("applies updater mutations across every cached deadline month bucket", async () => {
@@ -324,5 +466,58 @@ describe("useCalendarDomainRange", () => {
     expect(result.current.data.todoist.upcoming).toEqual([
       { id: "todo-move", title: "Move me", due_date: "2026-05-05", source: "todoist" },
     ]);
+  });
+
+  it("does not publish a stale month-range response after a newer active range wins", async () => {
+    let resolveApril;
+    let resolveMay;
+    const fetchRange = vi.fn((start) => new Promise((resolve) => {
+      if (start === "2026-04-01") resolveApril = resolve;
+      if (start === "2026-05-01") resolveMay = resolve;
+    }));
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+    }));
+
+    let aprilPromise;
+    await act(async () => {
+      aprilPromise = result.current.ensureRange("2026-04-01", "2026-04-30");
+    });
+    let mayPromise;
+    await act(async () => {
+      mayPromise = result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+
+    await act(async () => {
+      resolveMay({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-may", title: "May task", due_date: "2026-05-05", source: "todoist" },
+          ],
+        },
+      });
+      await mayPromise;
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-may"]);
+    expect(result.current.dataRange).toMatchObject({ start: "2026-05-01", end: "2026-05-31" });
+
+    await act(async () => {
+      resolveApril({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-april", title: "April task", due_date: "2026-04-05", source: "todoist" },
+          ],
+        },
+      });
+      await aprilPromise;
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-may"]);
+    expect(result.current.dataRange).toMatchObject({ start: "2026-05-01", end: "2026-05-31" });
   });
 });

@@ -338,10 +338,9 @@ export async function fetchTodoistTasksAll(userId, options = {}) {
 }
 
 export async function fetchTodoistTasksRange(userId, { start, end, refresh = false }) {
-  const completedStart = start && start > todayPacific() ? start : todayPacific();
   const [{ tasks: active }, { tasks: completed }] = await Promise.all([
     fetchMirrorMappedTasks(userId, { start, end, refresh }),
-    fetchMirrorMappedCompletedTasks(userId, { start: completedStart, end }),
+    fetchMirrorMappedCompletedTasks(userId, { start, end }),
   ]);
   return dedupeTodoistRangeTasks([...active, ...completed]);
 }
