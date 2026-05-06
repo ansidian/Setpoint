@@ -790,7 +790,7 @@ describe("active briefing snapshots", () => {
     expect(view.lanes.handled.map((item) => item.email_id)).toEqual(["msg-handled"]);
   });
 
-  it("reopens an active handled item into Needs Attention and clears canonical handled state", async () => {
+  it("reopens an active handled FYI item back into FYI and clears canonical handled state", async () => {
     const dbClient = await createMigratedDb();
     const { itemId, triageId } = await seedSnapshotItem(dbClient, {
       emailId: "msg-reopen",
@@ -809,8 +809,8 @@ describe("active briefing snapshots", () => {
     expect(reopened).toMatchObject({
       id: itemId,
       triage_id: triageId,
-      lane: "needs_attention",
-      lane_at_snapshot: "needs_attention",
+      lane: "fyi",
+      lane_at_snapshot: "fyi",
       handled_at: null,
     });
 
@@ -829,8 +829,8 @@ describe("active briefing snapshots", () => {
       expect.objectContaining({
         item_handled_at: null,
         triage_handled_at: null,
-        lane_at_snapshot: "needs_attention",
-        lane: "needs_attention",
+        lane_at_snapshot: "fyi",
+        lane: "fyi",
         feedback_type: "mark_handled",
         from_value: "unhandled",
         to_value: "handled",
@@ -838,11 +838,11 @@ describe("active briefing snapshots", () => {
       {
         item_handled_at: null,
         triage_handled_at: null,
-        lane_at_snapshot: "needs_attention",
-        lane: "needs_attention",
+        lane_at_snapshot: "fyi",
+        lane: "fyi",
         feedback_type: "reopen",
         from_value: "handled",
-        to_value: "needs_attention",
+        to_value: "fyi",
       },
     ]);
 
@@ -851,10 +851,10 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-03T16:12:00.000Z"),
     });
     expect(view.laneCounts).toMatchObject({
-      needs_attention: 1,
+      fyi: 1,
       handled: 0,
     });
-    expect(view.lanes.needs_attention.map((item) => item.email_id)).toEqual(["msg-reopen"]);
+    expect(view.lanes.fyi.map((item) => item.email_id)).toEqual(["msg-reopen"]);
     expect(view.lanes.handled).toHaveLength(0);
   });
 

@@ -936,6 +936,87 @@ describe("InboxView session state", () => {
 	    expect(reopenSnapshotItem).not.toHaveBeenCalled();
 	  });
 
+  it("undoes marking an FYI snapshot row handled back into FYI", async () => {
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [],
+          fyi: [{
+            id: 12,
+            snapshot_item_id: 12,
+            uid: "snapshot-fyi-1",
+            email_id: "snapshot-fyi-1",
+            account_id: "gmail-work",
+            lane: "fyi",
+            subject: "Snapshot FYI",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "For awareness.",
+            date: "2026-05-03T15:00:00.000Z",
+            read: false,
+          }],
+          handled: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "snapshot-fyi-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /mark handled/i }));
+    expect(markSnapshotItemHandled).toHaveBeenCalledWith(12);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^undo$/i }));
+
+    expect(reopenSnapshotItem).toHaveBeenCalledWith(12);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /move to needs attention/i })).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
+  });
+
 	  it("reopens handled active snapshot rows through the controller", async () => {
 	    const activeSnapshot = {
 	      snapshot: makeActiveSnapshot({

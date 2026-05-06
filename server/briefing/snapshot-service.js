@@ -1414,25 +1414,28 @@ export async function reopenSnapshotItem(userId, itemId, {
   if (!item) {
     throw makeHttpError("Active handled snapshot item not found", 404);
   }
+  const restoredLane = TRIAGE_LANES.has(item.lane_at_snapshot)
+    ? item.lane_at_snapshot
+    : "needs_attention";
 
   await dbClient.execute({
     sql: `UPDATE ea_briefing_snapshot_items
           SET handled_at = NULL,
-              lane_at_snapshot = 'needs_attention',
+              lane_at_snapshot = ?,
               is_carryover = 0,
               updated_at = datetime('now')
           WHERE id = ? AND user_id = ?`,
-    args: [itemId, userId],
+    args: [restoredLane, itemId, userId],
   });
   await dbClient.execute({
     sql: `UPDATE ea_email_triage
           SET handled_at = NULL,
-              lane = 'needs_attention',
+              lane = ?,
               updated_at = datetime('now')
           WHERE id = ? AND user_id = ?`,
-    args: [item.triage_id, userId],
+    args: [restoredLane, item.triage_id, userId],
   });
-  await insertFeedback(dbClient, item, "reopen", "handled", "needs_attention");
+  await insertFeedback(dbClient, item, "reopen", "handled", restoredLane);
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
   return normalizeSnapshotItem(updated);
