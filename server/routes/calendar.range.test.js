@@ -203,16 +203,16 @@ describe("GET /api/calendar/deadlines/range", () => {
     }));
     computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
     fetchCTMDeadlinesRange.mockResolvedValue([
-      { id: "ctm-1", title: "Canvas item", due_date: "2026-05-04", status: "complete", todoist_id: "dupe" },
+      { id: "ctm-1", title: "Canvas item", due_date: "2026-05-04", status: "incomplete", todoist_id: "dupe" },
     ]);
     fetchTodoistTasksRange.mockResolvedValue([
-      { id: "dupe", title: "Mirrored item", due_date: "2026-05-04", source: "todoist", status: "complete" },
-      { id: "todo-1", title: "Standalone item", due_date: "2026-05-05", source: "todoist", status: "complete" },
+      { id: "dupe", title: "Mirrored item", due_date: "2026-05-04", source: "todoist", status: "incomplete" },
+      { id: "todo-1", title: "Standalone item", due_date: "2026-05-05", source: "todoist", status: "incomplete" },
     ]);
     getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
   });
 
-  it("returns range-backed CTM, Todoist, tombstones, stats, and fetchedAt", async () => {
+  it("returns range-backed CTM, active mirrored Todoist rows, local tombstones, stats, and fetchedAt", async () => {
     const res = await request(makeApp()).get(
       "/api/calendar/deadlines/range?start=2026-04-26&end=2026-06-06",
     );
@@ -220,6 +220,9 @@ describe("GET /api/calendar/deadlines/range", () => {
     expect(res.status).toBe(200);
     expect(fetchCTMDeadlinesRange).toHaveBeenCalledWith({ start: "2026-04-26", end: "2026-06-06" });
     expect(fetchTodoistTasksRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
+    expect(hydrateRecurringTombstones).toHaveBeenCalledWith(process.env.EA_USER_ID, null, {
+      viewBoundary: "yesterday",
+    });
     expect(res.body.ctm.upcoming.map((item) => item.id)).toEqual([]);
     expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["dupe", "todo-1", "todo-recurring"]);
     expect(res.body.ctm.stats).toEqual({ total: 0 });

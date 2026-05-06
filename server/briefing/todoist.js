@@ -34,7 +34,6 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 let projectCache = { data: null, ts: 0 };
 const MIRROR_BOOTSTRAP_TIMEOUT_MS = 10_000;
 const MIRROR_REFRESH_TIMEOUT_MS = 2_000;
-const TODOIST_COMPLETED_RANGE_TIMEOUT_MS = 5_000;
 const backgroundSyncs = new Map();
 
 async function getToken(userId) {
@@ -307,10 +306,6 @@ function mapCompletedTodoistTask(t, projects) {
   };
 }
 
-function isWithinDateRange(date, start, end) {
-  return !!date && date >= start && date <= end;
-}
-
 function dedupeTodoistRangeTasks(tasks) {
   const seen = new Set();
   const result = [];
@@ -321,29 +316,6 @@ function dedupeTodoistRangeTasks(tasks) {
     result.push(task);
   }
   return result;
-}
-
-async function fetchTodoistCompletedByDueDate(token, { start, end }) {
-  const params = new URLSearchParams({ since: start, until: end, limit: "200" });
-  const allTasks = [];
-  let cursor = null;
-  do {
-    if (cursor) params.set("cursor", cursor);
-    const data = await todoistFetch(token, `/tasks/completed/by_due_date?${params}`);
-    allTasks.push(...(data.results || data.items || []));
-    cursor = data.next_cursor || null;
-  } while (cursor);
-  return allTasks;
-}
-
-async function fetchTodoistCompletedByDueDateWithFallback(token, { start, end }) {
-  if (!token) return [];
-  try {
-    return await withTimeout(fetchTodoistCompletedByDueDate(token, { start, end }), TODOIST_COMPLETED_RANGE_TIMEOUT_MS) || [];
-  } catch (err) {
-    console.error("[Todoist] completed-by-due-date fetch failed:", err.message);
-    return [];
-  }
 }
 
 export async function fetchTodoistTasks(userId, options = {}) {
@@ -365,19 +337,8 @@ export async function fetchTodoistTasksAll(userId, options = {}) {
 }
 
 export async function fetchTodoistTasksRange(userId, { start, end, refresh = false }) {
-  const token = await getToken(userId);
-  const [{ tasks: active }, completedTasks] = await Promise.all([
-    fetchMirrorMappedTasks(userId, { start, end, refresh }),
-    fetchTodoistCompletedByDueDateWithFallback(token, { start, end }),
-  ]);
-  if (!active.length && !token) return [];
-
-  const projects = token && completedTasks.length ? await fetchProjects(token) : new Map();
-  const completed = completedTasks
-    .map(t => mapCompletedTodoistTask(t, projects))
-    .filter(t => t.id && isWithinDateRange(t.due_date, start, end));
-
-  return dedupeTodoistRangeTasks([...active, ...completed]);
+  const { tasks } = await fetchMirrorMappedTasks(userId, { start, end, refresh });
+  return tasks;
 }
 
 // Lean full-horizon id probe used by tombstone orphan detection. Returns a

@@ -397,7 +397,7 @@ describe("Todoist mirror-backed facade", () => {
     expect(result.idSet).toEqual(new Set(["t1"]));
   });
 
-  it("keeps range reads hybrid with active tasks from mirror and completed rows from Todoist", async () => {
+  it("reads range rows from the active mirror without live completed Todoist lookup", async () => {
     testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
       {
         id: "active-1",
@@ -408,30 +408,7 @@ describe("Todoist mirror-backed facade", () => {
         labels: [],
       },
     ]);
-    testState.fetchFn.mockImplementation(async (url) => {
-      if (url.includes("/projects")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ results: [{ id: "p1", name: "School", color: "blue" }] }),
-        };
-      }
-      if (url.includes("/tasks/completed/by_due_date")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            results: [{
-              task_id: "done-1",
-              content: "Completed deadline",
-              project_id: "p1",
-              due: { date: "2026-05-06" },
-            }],
-          }),
-        };
-      }
-      throw new Error(`Unexpected fetch ${url}`);
-    });
+    testState.fetchFn.mockRejectedValue(new Error("network should not be used"));
     const { fetchTodoistTasksRange } = await import("./todoist.js");
 
     const tasks = await fetchTodoistTasksRange("u1", { start: "2026-05-01", end: "2026-05-10" });
@@ -444,9 +421,12 @@ describe("Todoist mirror-backed facade", () => {
       expect.stringContaining("/tasks/filter"),
       expect.anything(),
     );
+    expect(testState.fetchFn).not.toHaveBeenCalledWith(
+      expect.stringContaining("/tasks/completed/by_due_date"),
+      expect.anything(),
+    );
     expect(tasks.map((task) => [task.id, task.status])).toEqual([
       ["active-1", "incomplete"],
-      ["done-1", "complete"],
     ]);
   });
 
@@ -484,7 +464,7 @@ describe("Todoist mirror-backed facade", () => {
     expect(testState.mirror.syncTodoistMirror).toHaveBeenCalledWith("u1", { forceFull: true });
   });
 
-  it("keeps active range rows when completed-by-due-date fails", async () => {
+  it("does not require the live completed endpoint for range reads", async () => {
     testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
       {
         id: "active-1",
@@ -495,16 +475,12 @@ describe("Todoist mirror-backed facade", () => {
         labels: [],
       },
     ]);
-    testState.fetchFn.mockImplementation(async (url) => {
-      if (url.includes("/tasks/completed/by_due_date")) {
-        return { ok: false, status: 502, text: async () => "upstream" };
-      }
-      throw new Error(`Unexpected fetch ${url}`);
-    });
+    testState.fetchFn.mockRejectedValue(new Error("Todoist live API unavailable"));
     const { fetchTodoistTasksRange } = await import("./todoist.js");
 
     const tasks = await fetchTodoistTasksRange("u1", { start: "2026-05-01", end: "2026-05-10" });
 
+    expect(testState.fetchFn).not.toHaveBeenCalled();
     expect(tasks.map((task) => [task.id, task.status])).toEqual([
       ["active-1", "incomplete"],
     ]);
