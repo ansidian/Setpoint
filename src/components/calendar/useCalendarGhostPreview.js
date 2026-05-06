@@ -6,6 +6,19 @@ import {
   monthFromYmd,
 } from "./ghostPreview.js";
 
+function combineGhostPreviews(eventGhostPreview, deadlineGhostPreview) {
+  if (!eventGhostPreview) return deadlineGhostPreview;
+  if (!deadlineGhostPreview) return eventGhostPreview;
+  return {
+    kind: "mixed",
+    targetDate: deadlineGhostPreview.targetDate || eventGhostPreview.targetDate,
+    ghosts: [
+      ...(eventGhostPreview.ghosts || []),
+      ...(deadlineGhostPreview.ghosts || []),
+    ],
+  };
+}
+
 export default function useCalendarGhostPreview({
   open,
   view,
@@ -31,13 +44,15 @@ export default function useCalendarGhostPreview({
       : null
   ), [eventEditor, view, viewData?.events]);
   const deadlineGhostPreview = useMemo(() => {
-    if (view !== "deadlines" || !deadlineEditor?.mode || !deadlineDraftPreview) return null;
+    if (!["deadlines", "events"].includes(view) || !deadlineEditor?.mode || !deadlineDraftPreview) return null;
     return buildDeadlineGhostPreview({
       draft: deadlineDraftPreview,
       dateItems: computed.itemsByDate?.[deadlineDraftPreview.dueDate],
     });
   }, [computed.itemsByDate, deadlineDraftPreview, deadlineEditor?.mode, view]);
-  const ghostPreview = view === "events" ? eventGhostPreview : deadlineGhostPreview;
+  const ghostPreview = view === "events"
+    ? combineGhostPreviews(eventGhostPreview, deadlineGhostPreview)
+    : deadlineGhostPreview;
   const ghostSignature = useMemo(() => {
     const ghosts = ghostPreview?.ghosts || [];
     return JSON.stringify(ghosts.map((ghost) => ({

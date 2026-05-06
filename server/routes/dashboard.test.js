@@ -10,6 +10,7 @@ const testState = vi.hoisted(() => ({
   fetchWeather: vi.fn(),
   fetchCalendar: vi.fn(),
   fetchCTMDeadlines: vi.fn(),
+  fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasks: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
@@ -62,6 +63,7 @@ vi.mock("../briefing/ctm.js", () => ({
   fetchCTMDeadlines: (...args) => testState.fetchCTMDeadlines(...args),
 }));
 vi.mock("../briefing/todoist.js", () => ({
+  fetchTodoistDueTaskIdSet: (...args) => testState.fetchTodoistDueTaskIdSet(...args),
   fetchTodoistTasks: (...args) => testState.fetchTodoistTasks(...args),
   getTodoistSyncHealth: (...args) => testState.getTodoistSyncHealth(...args),
 }));
@@ -212,6 +214,7 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchCalendar.mockReset().mockResolvedValue([]);
     testState.fetchCTMDeadlines.mockReset().mockResolvedValue([]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
+    testState.fetchTodoistDueTaskIdSet.mockReset().mockResolvedValue(new Set());
     testState.getTodoistSyncHealth.mockReset().mockResolvedValue({
       state: "current",
       configured: true,
@@ -634,6 +637,7 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchTodoistTasks.mockResolvedValueOnce([
       { id: "todo-open", title: "Open task", due_date: "2026-05-04", source: "todoist", status: "incomplete" },
     ]);
+    testState.fetchTodoistDueTaskIdSet.mockResolvedValueOnce(new Set(["todo-open", "todo-done"]));
     testState.hydrateRecurringTombstones.mockResolvedValueOnce([
       { id: "todo-done", title: "Completed task", due_date: "2026-05-04", source: "todoist", status: "complete", _tombstone: true },
     ]);
@@ -645,7 +649,7 @@ describe("GET /api/dashboard/current", () => {
     expect(res.status).toBe(200);
     expect(testState.hydrateRecurringTombstones).toHaveBeenCalledWith(
       "u1",
-      null,
+      new Set(["todo-open", "todo-done"]),
       { viewBoundary: "today" },
     );
     expect(res.body.deadlines.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);

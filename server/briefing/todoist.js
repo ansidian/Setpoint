@@ -3,6 +3,7 @@ import {
   listTodoistMirrorActiveTaskIds,
   listTodoistMirrorActiveTasks,
   listTodoistMirrorCompletedTasks,
+  listTodoistMirrorDueTaskIds,
   listTodoistMirrorLabels,
   listTodoistMirrorProjects,
   markTodoistMirrorItemCompleted,
@@ -190,7 +191,7 @@ async function fetchMirrorMappedCompletedTasks(userId, {
     listTodoistMirrorCompletedTasks(userId, { start, end }),
   ]);
   return {
-    tasks: tasks.map((task) => mapTodoistTask(task, projects)),
+    tasks: tasks.map((task) => mapCompletedTodoistTask(task, projects)),
     health,
   };
 }
@@ -337,8 +338,12 @@ export async function fetchTodoistTasksAll(userId, options = {}) {
 }
 
 export async function fetchTodoistTasksRange(userId, { start, end, refresh = false }) {
-  const { tasks } = await fetchMirrorMappedTasks(userId, { start, end, refresh });
-  return tasks;
+  const completedStart = start && start > todayPacific() ? start : todayPacific();
+  const [{ tasks: active }, { tasks: completed }] = await Promise.all([
+    fetchMirrorMappedTasks(userId, { start, end, refresh }),
+    fetchMirrorMappedCompletedTasks(userId, { start: completedStart, end }),
+  ]);
+  return dedupeTodoistRangeTasks([...active, ...completed]);
 }
 
 // Lean full-horizon id probe used by tombstone orphan detection. Returns a
@@ -349,6 +354,12 @@ export async function fetchTodoistTaskIdSet(userId, options = {}) {
   const health = await prepareTodoistMirrorRead(userId, options);
   if (!health.configured) return null;
   return listTodoistMirrorActiveTaskIds(userId);
+}
+
+export async function fetchTodoistDueTaskIdSet(userId, options = {}) {
+  const health = await prepareTodoistMirrorRead(userId, options);
+  if (!health.configured) return null;
+  return listTodoistMirrorDueTaskIds(userId);
 }
 
 export async function fetchTodoistTasksAndIdSet(userId, options = {}) {

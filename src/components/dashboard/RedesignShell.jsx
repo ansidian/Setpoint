@@ -6,24 +6,19 @@ import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
 import { collectActiveSnapshotEmails, mergeReadState } from "../inbox/helpers";
 import { DashboardBody } from "./DashboardBody";
-import { makeCalendarBillsData } from "./calendarBillsData";
+import DashboardCalendarModalMount from "./DashboardCalendarModalMount";
 export { DashboardBody };
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
-const CalendarModal = lazy(() => import("../calendar/CalendarModal"));
 const CommandPalette = lazy(() => import("../shell/CommandPalette"));
 const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
-
 export function RedesignShell({
-  bd, liveData, calendarRange,
-  activeSnapshot,
-  onQuickRefresh,
-  historyOpen, setHistoryOpen, historyTriggerRef,
-  calendarDeadlines, calendarDeadlinesLoading, calendarDeadlinesError = false, loadCalendarDeadlines = () => {},
-  calendarBillsData, calendarBillRange, calendarDeadlineRange, loadCalendarBills = () => {},
-  onCalendarWorkspaceChange,
+  bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
+  historyOpen, setHistoryOpen, historyTriggerRef, calendarDeadlines, calendarDeadlinesLoading,
+  calendarDeadlinesError = false, loadCalendarDeadlines = () => {},
+  calendarBillsData, calendarBillRange, calendarDeadlineRange, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
 }) {
   const customize = useCustomize();
   const isMobile = useIsMobile();
@@ -80,7 +75,7 @@ export function RedesignShell({
   const [calendarView, setCalendarView] = useState(() => {
     try {
       const saved = localStorage.getItem("calendar:lastView");
-      if (saved === "deadlines" || saved === "bills" || saved === "events") return saved;
+      if (saved === "bills" || saved === "events") return saved;
       return "events";
     } catch { return "events"; }
   });
@@ -88,6 +83,7 @@ export function RedesignShell({
   const [calendarFocus, setCalendarFocus] = useState(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
   const [calendarFocusOpenDetail, setCalendarFocusOpenDetail] = useState(false);
+  const [calendarForceDeadlineOverlay, setCalendarForceDeadlineOverlay] = useState(false);
   const calendarEventsRangeRef = useRef(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const actionChordRef = useRef(null);
@@ -99,18 +95,24 @@ export function RedesignShell({
   });
   const openCalendar = (viewKey, focusDate = null, focusItemId = null, options = {}) => {
     if (isMobile) return;
-    const resolved = viewKey === "bills" && !showBills ? "deadlines" : viewKey || calendarView;
+    const requested = viewKey === "deadlines" ? "events" : viewKey;
+    const resolved = requested === "bills" && !showBills ? "events" : requested || calendarView;
     const nextFocusItemId = focusItemId ? String(focusItemId) : null;
     const shouldOpenDetail = !!options.openDetail && nextFocusItemId && nextFocusItemId !== "new";
+    const forceDeadlineOverlay = !!options.forceDeadlineOverlay;
     setCalendarView(resolved);
     try { localStorage.setItem("calendar:lastView", resolved); } catch { /* ignore */ }
+    if (forceDeadlineOverlay) {
+      try { localStorage.setItem("calendar:eventsDeadlineOverlay", "true"); } catch { /* ignore */ }
+    }
     setCalendarFocus(focusDate || null);
     setCalendarFocusItemId(nextFocusItemId);
     setCalendarFocusOpenDetail(shouldOpenDetail);
+    setCalendarForceDeadlineOverlay(forceDeadlineOverlay);
     setCalendarOpenRequestId((value) => value + 1);
     setCalendarMounted(true);
     setCalendarOpen(true);
-    if (resolved === "deadlines") loadCalendarDeadlines();
+    if (forceDeadlineOverlay) loadCalendarDeadlines();
     if (resolved === "bills") loadCalendarBills({ refreshLive: true });
   };
   const openTodoistCreate = useCallback(() => {
@@ -118,7 +120,7 @@ export function RedesignShell({
       setAddTaskOpen(true);
       return;
     }
-    openCalendar("deadlines", null, "new");
+    openCalendar("events", null, "new", { source: "dashboard", forceDeadlineOverlay: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile]);
   const changeCalendarView = (v) => {
@@ -458,9 +460,10 @@ export function RedesignShell({
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {
               if (!isMobile) {
-                openCalendar("deadlines", task?.due_date || null, task?.id || null, {
+                openCalendar("events", task?.due_date || null, task?.id || null, {
                   source: "dashboard",
                   openDetail: !!task?.id,
+                  forceDeadlineOverlay: true,
                 });
                 return;
               }
@@ -477,9 +480,10 @@ export function RedesignShell({
               source: "dashboard",
               openDetail: !!itemId && itemId !== "new",
             })}
-            onOpenDeadlinesCalendar={(date, itemId) => openCalendar("deadlines", date || null, itemId || null, {
+            onOpenDeadlinesCalendar={(date, itemId) => openCalendar("events", date || null, itemId || null, {
               source: "dashboard",
               openDetail: !!itemId,
+              forceDeadlineOverlay: true,
             })}
             onOpenTodoistCreate={openTodoistCreate}
             onJumpSection={jumpToSection}
@@ -568,33 +572,29 @@ export function RedesignShell({
           />
         </Suspense>
       )}
-
-      {!isMobile && calendarMounted && (
-        <Suspense fallback={null}>
-          <CalendarModal
-            open={calendarOpen}
-            openRequestId={calendarOpenRequestId}
-            onClose={dismissCalendar}
-            view={calendarView}
-            onViewChange={changeCalendarView}
-            focusDate={calendarFocus}
-            focusItemId={calendarFocusItemId}
-            focusOpenDetail={calendarFocusOpenDetail}
-            eventsData={eventsData}
-            onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
-            weatherData={liveData.liveWeather || briefing?.weather || null}
-            billsData={calendarBillsData || makeCalendarBillsData(liveData)}
-            billsRangeData={calendarBillRange}
-            deadlinesData={{
-              ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
-              todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
-              isLoading: calendarDeadlinesLoading && !calendarDeadlines,
-            }}
-            deadlinesRangeData={calendarDeadlineRange}
-            deadlineActions={calendarDeadlineActions}
-          />
-        </Suspense>
-      )}
+      <DashboardCalendarModalMount
+        isMobile={isMobile}
+        calendarMounted={calendarMounted}
+        calendarOpen={calendarOpen}
+        calendarOpenRequestId={calendarOpenRequestId}
+        dismissCalendar={dismissCalendar}
+        calendarView={calendarView}
+        changeCalendarView={changeCalendarView}
+        calendarFocus={calendarFocus}
+        calendarFocusItemId={calendarFocusItemId}
+        calendarFocusOpenDetail={calendarFocusOpenDetail}
+        calendarForceDeadlineOverlay={calendarForceDeadlineOverlay}
+        eventsData={eventsData}
+        handleCalendarEventsRangeChange={handleCalendarEventsRangeChange}
+        liveData={liveData}
+        briefing={briefing}
+        calendarBillsData={calendarBillsData}
+        calendarBillRange={calendarBillRange}
+        calendarDeadlines={calendarDeadlines}
+        calendarDeadlinesLoading={calendarDeadlinesLoading}
+        calendarDeadlineRange={calendarDeadlineRange}
+        calendarDeadlineActions={calendarDeadlineActions}
+      />
     </div>
   );
 }

@@ -47,7 +47,7 @@ function toDeadlineDescriptor(task) {
   };
 }
 
-function toDeadlineGhostDescriptor(ghost) {
+export function toDeadlineGhostDescriptor(ghost) {
   const source = ghost.source || "todoist";
   const accent = SOURCE_COLORS[source] || ghost.color || "#89b4fa";
   return {

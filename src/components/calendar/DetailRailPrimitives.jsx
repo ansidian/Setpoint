@@ -328,6 +328,7 @@ export function RailAction({
       type="button"
       disabled={disabled}
       aria-label={label}
+      aria-busy={loading ? "true" : undefined}
       data-calendar-focus-ring="true"
       {...sharedProps}
     >

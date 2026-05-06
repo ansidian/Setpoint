@@ -156,6 +156,21 @@ export async function listTodoistMirrorActiveTaskIds(userId, {
   return new Set(result.rows.map((row) => String(row.item_id)));
 }
 
+export async function listTodoistMirrorDueTaskIds(userId, {
+  dbClient = db,
+} = {}) {
+  const result = await dbClient.execute({
+    sql: `SELECT item_id
+          FROM ea_todoist_items
+          WHERE user_id = ?
+            AND is_deleted = 0
+            AND due_date IS NOT NULL
+          ORDER BY item_id ASC`,
+    args: [userId],
+  });
+  return new Set(result.rows.map((row) => String(row.item_id)));
+}
+
 export async function listTodoistMirrorProjects(userId, {
   dbClient = db,
 } = {}) {

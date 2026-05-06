@@ -11,6 +11,14 @@ import {
   monthBounds,
   sparseVisibleGroups,
 } from "../agenda/agendaDateModel.js";
+import {
+  deadlinePlanningAccent,
+  deadlinePlanningSubtitle,
+  deadlinePlanningTimeLabel,
+  deadlinePlanningTitle,
+  getDeadlineOverlayComputed,
+  getPlanningItemId,
+} from "./eventsPlanningModel.js";
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles",
@@ -77,6 +85,7 @@ function normalizeCurrentWeather(weatherData, todayKey) {
 
 export function buildEventsAgendaGroups({
   events = [],
+  deadlineOverlay = null,
   viewYear,
   viewMonth,
   weatherData = null,
@@ -90,8 +99,10 @@ export function buildEventsAgendaGroups({
     createGroup: () => ({
       allDay: [],
       timed: [],
+      deadlines: [],
       weather: null,
       hasEvents: false,
+      hasDeadlines: false,
     }),
   });
 
@@ -119,6 +130,30 @@ export function buildEventsAgendaGroups({
     }
   }
 
+  const deadlineOverlayComputed = getDeadlineOverlayComputed({
+    deadlineData: deadlineOverlay?.data,
+    viewYear,
+    viewMonth,
+    showCompleted: !!deadlineOverlay?.showCompleted,
+  });
+  for (const [dateKey, deadlines] of Object.entries(deadlineOverlayComputed?.itemsByDate || {})) {
+    const group = groupMap.get(dateKey);
+    if (!group) continue;
+    group.deadlines = deadlines.map((task) => ({
+      ...task,
+      agendaDateKey: dateKey,
+      agendaItemId: getPlanningItemId(task),
+      agendaTitle: deadlinePlanningTitle(task),
+      agendaSubtitle: deadlinePlanningSubtitle(task),
+      agendaTimeRange: deadlinePlanningTimeLabel(task),
+      agendaSourceColor: deadlinePlanningAccent(task),
+      agendaItemKind: "deadline",
+      agendaComplete: task.status === "complete",
+    }));
+    group.hasDeadlines = group.deadlines.length > 0;
+    group.hasEvents = group.hasEvents || group.hasDeadlines;
+  }
+
   const weatherMap = weatherByDate(weatherData);
   const currentWeather = normalizeCurrentWeather(weatherData, todayKey);
   if (currentWeather) weatherMap.set(todayKey, { ...(weatherMap.get(todayKey) || {}), ...currentWeather });
@@ -132,7 +167,7 @@ export function buildEventsAgendaGroups({
     groups,
     monthStartDateKey,
     forceVisibleDateKey,
-    hasVisibleItems: (group) => group.hasEvents || (group.weather && group.dateKey >= todayKey),
+    hasVisibleItems: (group) => group.hasEvents || group.hasDeadlines || (group.weather && group.dateKey >= todayKey),
   });
 
   return {

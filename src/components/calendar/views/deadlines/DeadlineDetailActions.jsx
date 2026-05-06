@@ -21,11 +21,7 @@ function DeadlinePrimaryActions({
   compact = false,
 }) {
   const size = compact ? "compact" : "default";
-  const completeLabel = isCompleting
-    ? "Completing..."
-    : compact
-      ? "Complete"
-      : "Mark complete";
+  const completeLabel = compact ? "Complete" : "Mark complete";
 
   if (isTodoist) {
     return (
@@ -59,10 +55,12 @@ function DeadlinePrimaryActions({
       {normalizedStatus !== "complete" ? (
         <RailAction
           icon={Check}
-          label={compact ? "Complete" : "Mark complete"}
+          label={completeLabel}
           accent={accent}
           tone="success"
           size={size}
+          disabled={isCompleting}
+          loading={isCompleting}
           onClick={() => onStatusChange(task.id, "complete")}
         />
       ) : null}
@@ -72,6 +70,7 @@ function DeadlinePrimaryActions({
           label="In progress"
           accent={accent}
           size={size}
+          disabled={isCompleting}
           onClick={() => onStatusChange(task.id, "in_progress")}
         />
       ) : null}
@@ -81,6 +80,7 @@ function DeadlinePrimaryActions({
           label="Reopen"
           accent={accent}
           size={size}
+          disabled={isCompleting}
           onClick={() => onStatusChange(task.id, "incomplete")}
         />
       ) : null}

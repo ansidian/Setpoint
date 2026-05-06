@@ -1,12 +1,24 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import eventsView from "./eventsView.jsx";
 import deadlinesView from "./deadlinesView.jsx";
 import billsView from "./billsView.jsx";
 import { DashboardProvider } from "../../../context/DashboardContext.jsx";
 
+const mockCompleteTask = vi.hoisted(() => vi.fn());
+const mockUpdateTaskStatus = vi.hoisted(() => vi.fn());
+
+vi.mock("../../../api", () => ({
+  dismissEmail: vi.fn(),
+  completeTask: (...args) => mockCompleteTask(...args),
+  updateTaskStatus: (...args) => mockUpdateTaskStatus(...args),
+  dismissTombstone: vi.fn(),
+}));
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe("calendar detail timeline", () => {
@@ -651,6 +663,80 @@ describe("calendar detail timeline", () => {
 
     const hero = screen.getByTestId("calendar-selected-deadline-card").firstElementChild;
     expect(hero?.getAttribute("data-accent")).toBe("#e8776a");
+  });
+
+  it("keeps complete text stable and swaps the icon to loading while a deadline is completing", () => {
+    const briefing = {
+      emails: { accounts: [] },
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          {
+            id: "todo-1",
+            title: "Ship report",
+            due_date: "2026-04-22",
+            due_time: "5:00 PM",
+            source: "todoist",
+            class_name: "Inbox",
+            status: "open",
+            _completing: true,
+          },
+        ],
+      },
+    };
+
+    render(
+      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesView.renderFloatingDetail({
+          items: briefing.todoist.upcoming,
+          selectedItemId: "todo-1",
+        })}
+      </DashboardProvider>,
+    );
+
+    const complete = screen.getByRole("button", { name: /^mark complete$/i });
+    expect(complete.getAttribute("aria-busy")).toBe("true");
+    expect(complete.textContent).toContain("Mark complete");
+    expect(screen.queryByText(/completing/i)).toBeNull();
+  });
+
+  it("closes floating deadline detail shortly after complete starts", async () => {
+    vi.useFakeTimers();
+    mockCompleteTask.mockResolvedValueOnce({});
+    const onCloseFloatingDetail = vi.fn();
+    const task = {
+      id: "todo-1",
+      title: "Ship report",
+      due_date: "2026-04-22",
+      due_time: "5:00 PM",
+      source: "todoist",
+      class_name: "Inbox",
+      status: "open",
+    };
+    const briefing = {
+      emails: { accounts: [] },
+      ctm: { upcoming: [] },
+      todoist: { upcoming: [task] },
+    };
+
+    render(
+      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesView.renderFloatingDetail({
+          items: briefing.todoist.upcoming,
+          selectedItemId: "todo-1",
+          onCloseFloatingDetail,
+        })}
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^mark complete$/i }));
+
+    expect(mockCompleteTask).toHaveBeenCalledWith("todo-1");
+    expect(onCloseFloatingDetail).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120);
+    });
+    expect(onCloseFloatingDetail).toHaveBeenCalledTimes(1);
   });
 
   it("shows completed deadlines immediately when a day only has completed items", () => {

@@ -11,6 +11,7 @@ import buildCalendarModalShellProps from "../../components/calendar/modal/buildC
 import {
   getVisibleGridRange,
   parseYmd,
+  ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
 import useCalendarModalEditorRouting from "./useCalendarModalEditorRouting.js";
@@ -26,6 +27,29 @@ const VIEWS = {
   bills: billsView,
   deadlines: deadlinesView,
 };
+const DEADLINE_OVERLAY_STORAGE_KEY = "calendar:eventsDeadlineOverlay";
+const COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY = "calendar:eventsCompletedDeadlines";
+
+function readStoredBoolean(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    if (value === "true") return true;
+    if (value === "false") return false;
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
+function writeStoredBoolean(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value ? "true" : "false");
+  } catch {
+    // localStorage is an enhancement for this modal preference.
+  }
+}
 
 function addMonthOffset(year, month, offset) {
   const date = new Date(year, month + offset, 1);
@@ -108,6 +132,7 @@ export default function useCalendarModalController({
   focusDate,
   focusItemId,
   focusOpenDetail = false,
+  forceDeadlineOverlay = false,
   openRequestId = 0,
   deadlineActions = {},
 }) {
@@ -136,13 +161,39 @@ export default function useCalendarModalController({
     focusItemId,
     openRequestId,
   });
+  const todayDateKey = ymdFromParts(currentYear, currentMonth, todayDate);
+  const isInitialDeadlineCreateRequest = open
+    && focusItemId === "new"
+    && (
+      view === "deadlines"
+      || (view === "events" && forceDeadlineOverlay)
+    );
   const [deadlineEditor, setDeadlineEditor] = useState(() => (
-    open && view === "deadlines" && focusItemId === "new"
-      ? { mode: "create", seedDate: focusDate || null }
+    isInitialDeadlineCreateRequest
+      ? {
+          mode: "create",
+          seedDate: focusDate || (view === "events" && forceDeadlineOverlay ? todayDateKey : null),
+        }
       : null
   ));
   const viewportWidth = useViewportWidth();
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
+  const [deadlineOverlayVisible, setDeadlineOverlayVisible] = useState(() => (
+    readStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, true)
+  ));
+  const [completedDeadlineOverlayVisible, setCompletedDeadlineOverlayVisible] = useState(() => (
+    readStoredBoolean(COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, true)
+  ));
+  const [committedDeadlineOverlayData, setCommittedDeadlineOverlayData] = useState(null);
+  const [lateDeadlineOverlayData, setLateDeadlineOverlayData] = useState(null);
+  const [planningReadiness, setPlanningReadiness] = useState({
+    state: "idle",
+    slowSource: null,
+    deadlinesDelayed: false,
+    lateDeadlinesReady: false,
+    eventsReadyAt: null,
+    deadlinesReadyAt: null,
+  });
   const [manualMonthBrowseKey, setManualMonthBrowseKey] = useState(0);
   const [workspaceTransientCloseToken, setWorkspaceTransientCloseToken] = useState(0);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
@@ -184,12 +235,34 @@ export default function useCalendarModalController({
     if (view === "events") {
       const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
       const nextMonth = addMonthOffset(viewYear, viewMonth, 1);
+      const seededOverlayData = planningReadiness.deadlinesDelayed ? null : deadlinesRangeData?.data;
+      const overlayData = committedDeadlineOverlayData
+        || seededOverlayData
+        || (!deadlinesRangeData?.ensureRange ? deadlinesData : null);
       return {
         events: dedupeEvents([
           ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
           ...(eventsData?.getEvents?.(viewYear, viewMonth) || []),
           ...(eventsData?.getEvents?.(nextMonth.year, nextMonth.month) || []),
         ]),
+        deadlineOverlay: {
+          enabled: deadlineOverlayVisible,
+          showCompleted: completedDeadlineOverlayVisible,
+          data: deadlineOverlayVisible ? overlayData : null,
+          readiness: planningReadiness,
+          onApplyLateDeadlines: lateDeadlineOverlayData
+            ? () => {
+                setCommittedDeadlineOverlayData(lateDeadlineOverlayData);
+                setLateDeadlineOverlayData(null);
+                setPlanningReadiness((current) => ({
+                  ...current,
+                  state: "ready",
+                  deadlinesDelayed: false,
+                  lateDeadlinesReady: false,
+                }));
+              }
+            : null,
+        },
         isLoading: eventsData?.isMonthLoading?.(prevMonth.year, prevMonth.month)
           || eventsData?.isMonthLoading?.(viewYear, viewMonth)
           || eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month)
@@ -219,16 +292,31 @@ export default function useCalendarModalController({
     eventsData,
     viewYear,
     viewMonth,
+    deadlineOverlayVisible,
+    completedDeadlineOverlayVisible,
+    committedDeadlineOverlayData,
+    deadlinesRangeData?.ensureRange,
+    deadlinesRangeData?.data,
+    planningReadiness,
+    lateDeadlineOverlayData,
     deadlinesData,
     billsData,
-    deadlinesRangeData?.data,
     deadlinesRangeData?.loading,
     deadlinesRangeData?.error,
-    deadlinesRangeData?.ensureRange,
     billsRangeData?.data,
     billsRangeData?.loading,
     billsRangeData?.error,
     billsRangeData?.ensureRange,
+  ]);
+
+  useEffect(() => {
+    if (view !== "events" || !deadlineOverlayVisible || !deadlinesRangeData?.data) return;
+    setCommittedDeadlineOverlayData(deadlinesRangeData.data);
+  }, [
+    view,
+    deadlineOverlayVisible,
+    deadlinesRangeData?.data,
+    deadlinesRangeData?.revision,
   ]);
 
   function focusEditorDate(ymd) {
@@ -295,6 +383,22 @@ export default function useCalendarModalController({
     eventEditorRef.current = eventEditor;
   }, [eventEditor]);
 
+  const toggleDeadlineOverlay = useCallback(() => {
+    setDeadlineOverlayVisible((current) => {
+      const next = !current;
+      writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const toggleCompletedDeadlineOverlay = useCallback(() => {
+    setCompletedDeadlineOverlayVisible((current) => {
+      const next = !current;
+      writeStoredBoolean(COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (!eventEditor.editable || typeof window === "undefined") return undefined;
     if (typeof window.requestIdleCallback === "function") {
@@ -306,6 +410,13 @@ export default function useCalendarModalController({
   }, [open, view, eventEditor.editable, prefetchEventSources]);
 
   const closeEventEditor = eventEditor.closeEditor;
+  const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
+
+  useEffect(() => {
+    if (!open || view !== "events" || !forceDeadlineOverlay) return;
+    setDeadlineOverlayVisible(true);
+    writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, true);
+  }, [forceDeadlineOverlay, open, openRequestId, view]);
 
   const eventQuickActions = useCalendarQuickActions({
     editable: !!eventsData?.editable,
@@ -336,7 +447,7 @@ export default function useCalendarModalController({
   });
 
   const deadlineQuickActions = useDeadlineQuickActions({
-    enabled: open && view === "deadlines",
+    enabled: open && (view === "deadlines" || (view === "events" && deadlineOverlayVisible)),
     actions: deadlineActions,
     onEditTask: (task, options = {}) => {
       if (activeLayout.stacked) {
@@ -461,7 +572,7 @@ export default function useCalendarModalController({
     if (view === "deadlines") setDeadlineEditor(null);
   }
 
-  function selectAgendaEvent({ event, item, dateKey, anchorElement, sourceCellElement, anchorKind }) {
+  function selectAgendaEvent({ event, item, dateKey, anchorElement, sourceCellElement, anchorKind, detailView }) {
     const selectedItem = item || event;
     if (!selectedItem) return;
     suppressAgendaPassiveSync();
@@ -479,7 +590,7 @@ export default function useCalendarModalController({
     setSelectedItemId(itemId != null ? String(itemId) : null);
     openFloatingDetail({
       mode: "detail",
-      view,
+      view: detailView || view,
       itemId,
       dateKey,
       day: parsed.day,
@@ -520,22 +631,30 @@ export default function useCalendarModalController({
   }, [requestAgendaScroll]);
 
   useEffect(() => {
-    if (!open || view !== "deadlines" || focusItemId !== "new" || !usesFloatingEditor) return;
+    const shouldOpenDeadlineCreate = focusItemId === "new" && (
+      view === "deadlines"
+      || (view === "events" && forceDeadlineOverlay)
+    );
+    if (!open || !shouldOpenDeadlineCreate || !usesFloatingEditor) return;
     const requestKey = `${openRequestId}:${focusDate || ""}`;
     if (handledInitialDeadlineCreateRef.current === requestKey) return;
     handledInitialDeadlineCreateRef.current = requestKey;
     window.requestAnimationFrame(() => {
       if (!floatingDetailRef.current?.open) {
-        openFloatingDeadlineCreate(focusDate || activeSelectedDateKey || null, {
-          allowSelectionFallback: !!focusDate,
+        openFloatingDeadlineCreate(focusDate || activeSelectedDateKey || todayDateKey, {
+          allowSelectionFallback: true,
         });
       }
     });
     // Initial create focus is keyed by the explicit open request, not every selection update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, view, focusItemId, openRequestId, focusDate, usesFloatingEditor]);
+  }, [open, view, focusItemId, openRequestId, focusDate, forceDeadlineOverlay, usesFloatingEditor]);
 
   const commitSyncSnapshotEffects = useEffectEvent((snapshot) => {
+    const createDeadlineSeedDate = focusDate
+      || snapshot?.nextSelectedDateKey
+      || activeSelectedDateKey
+      || todayDateKey;
     if (snapshot?.didViewChange) {
       closeEventEditor();
       setDeadlineDraftPreview(null);
@@ -544,7 +663,15 @@ export default function useCalendarModalController({
     if (snapshot?.resetDeadlineEditor) {
       setFloatingDetail(null);
     }
-    if (snapshot?.openCreate && view === "events" && eventEditor.editable) {
+    if (snapshot?.openCreate && view === "events" && forceDeadlineOverlay) {
+      if (usesFloatingEditor) {
+        openFloatingDeadlineCreate(createDeadlineSeedDate, {
+          allowSelectionFallback: true,
+        });
+      } else {
+        setDeadlineEditor({ mode: "create", seedDate: createDeadlineSeedDate });
+      }
+    } else if (snapshot?.openCreate && view === "events" && eventEditor.editable) {
       if (usesFloatingEditor) {
         openFloatingEventCreate(focusDate || snapshot.nextSelectedDateKey || null);
       } else {
@@ -755,6 +882,13 @@ export default function useCalendarModalController({
     openFloatingDeadlineEdit,
     openFloatingEventCreate,
     openFloatingDeadlineCreate,
+    deadlineOverlayVisible,
+    toggleDeadlineOverlay,
+    toggleCompletedDeadlineOverlay,
+    setDeadlineOverlayVisible: (value) => {
+      setDeadlineOverlayVisible(value);
+      writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, value);
+    },
     navigateMonthRef,
   });
 
@@ -762,12 +896,129 @@ export default function useCalendarModalController({
     if (!open || view !== "events" || !eventsData?.ensureRange) return;
     const { start, end } = getVisibleGridRange(viewYear, viewMonth);
     onEventsVisibleRangeChange?.({ start, end });
+    const runEnsure = () => {
+      let canceled = false;
+      let eventsDone = false;
+      let deadlinesDone = !deadlineOverlayVisible || !deadlinesEnsureRange;
+      let deadlinesTimedOut = false;
+      const startedAt = performance.now();
+      setPlanningReadiness({
+        state: deadlineOverlayVisible ? "loading" : "ready",
+        slowSource: null,
+        deadlinesDelayed: false,
+        lateDeadlinesReady: false,
+        eventsReadyAt: null,
+        deadlinesReadyAt: deadlinesDone ? startedAt : null,
+      });
+      setLateDeadlineOverlayData(null);
+
+      const softTimer = window.setTimeout(() => {
+        if (canceled || !deadlineOverlayVisible) return;
+        setPlanningReadiness((current) => ({
+          ...current,
+          state: "slow",
+          slowSource: !eventsDone ? "events" : !deadlinesDone ? "deadlines" : null,
+        }));
+      }, 2000);
+      const hardTimer = window.setTimeout(() => {
+        if (canceled || !deadlineOverlayVisible || deadlinesDone || !eventsDone) return;
+        deadlinesTimedOut = true;
+        setCommittedDeadlineOverlayData(null);
+        setPlanningReadiness((current) => ({
+          ...current,
+          state: "degraded",
+          deadlinesDelayed: true,
+          lateDeadlinesReady: false,
+        }));
+      }, 3000);
+
+      const eventsPromise = eventsData.ensureRange(start, end)
+        .then(() => {
+          eventsDone = true;
+          if (canceled) return;
+          setPlanningReadiness((current) => ({ ...current, eventsReadyAt: performance.now() }));
+        });
+      const deadlinesPromise = deadlineOverlayVisible && deadlinesEnsureRange
+        ? deadlinesEnsureRange(start, end)
+          .then((data) => {
+            deadlinesDone = true;
+            if (canceled) return;
+            if (deadlinesTimedOut) {
+              setLateDeadlineOverlayData(data);
+              setPlanningReadiness((current) => ({
+                ...current,
+                deadlinesReadyAt: performance.now(),
+                lateDeadlinesReady: true,
+              }));
+              return;
+            }
+            if (eventsDone) {
+              setCommittedDeadlineOverlayData(data);
+              setLateDeadlineOverlayData(null);
+              setPlanningReadiness((current) => ({
+                ...current,
+                state: "ready",
+                deadlinesDelayed: false,
+                lateDeadlinesReady: false,
+                deadlinesReadyAt: performance.now(),
+              }));
+            } else {
+              setCommittedDeadlineOverlayData(data);
+              setPlanningReadiness((current) => ({ ...current, deadlinesReadyAt: performance.now() }));
+            }
+          })
+        : Promise.resolve(null);
+
+      Promise.allSettled([eventsPromise, deadlinesPromise]).then((results) => {
+        if (canceled) return;
+        const failed = results.find((result) => result.status === "rejected");
+        if (failed) {
+          setPlanningReadiness((current) => ({
+            ...current,
+            state: "error",
+            slowSource: null,
+          }));
+          return;
+        }
+        if (!deadlineOverlayVisible) return;
+        if (deadlinesDone && eventsDone) {
+          setPlanningReadiness((current) => ({
+            ...current,
+            state: "ready",
+            deadlinesDelayed: false,
+            lateDeadlinesReady: false,
+          }));
+        }
+      });
+
+      deadlinesPromise.then((data) => {
+        if (canceled || !deadlineOverlayVisible || !data) return;
+        setPlanningReadiness((current) => {
+          if (!current.deadlinesDelayed) return current;
+          setLateDeadlineOverlayData(data);
+          return { ...current, lateDeadlinesReady: true };
+        });
+      }).catch(() => {});
+
+      return () => {
+        canceled = true;
+        window.clearTimeout(softTimer);
+        window.clearTimeout(hardTimer);
+      };
+    };
+
     if (eventEditor.isEditorOpen) {
-      const id = window.setTimeout(() => eventsData.ensureRange(start, end), 260);
-      return () => window.clearTimeout(id);
+      let cleanup = null;
+      const id = window.setTimeout(() => {
+        cleanup = runEnsure();
+      }, 260);
+      return () => {
+        window.clearTimeout(id);
+        cleanup?.();
+      };
     }
-    eventsData.ensureRange(start, end);
-  }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange]);
+    return runEnsure();
+  }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
 
   const domainEnsureRange = viewData?.ensureRange;
   useEffect(() => {
@@ -808,7 +1059,25 @@ export default function useCalendarModalController({
     data: { activeView, viewData: shellViewData, weatherData },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId },
-    editors: { eventEditor, deadlineEditor, setDeadlineEditor, setDeadlineDraftPreview },
+    editors: {
+      eventEditor: {
+        ...eventEditor,
+        deadlineOverlay: view === "events"
+          ? {
+              enabled: deadlineOverlayVisible,
+              showCompleted: completedDeadlineOverlayVisible,
+              readiness: planningReadiness,
+              lateDeadlinesReady: !!lateDeadlineOverlayData,
+              onToggle: toggleDeadlineOverlay,
+              onToggleCompleted: deadlineOverlayVisible ? toggleCompletedDeadlineOverlay : undefined,
+              onApplyLateDeadlines: viewData?.deadlineOverlay?.onApplyLateDeadlines,
+            }
+          : null,
+      },
+      deadlineEditor,
+      setDeadlineEditor,
+      setDeadlineDraftPreview,
+    },
     quickActions: { eventQuickActions, deadlineQuickActions },
     agenda: {
       agendaScrollCommand,

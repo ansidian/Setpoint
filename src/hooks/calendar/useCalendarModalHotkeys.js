@@ -57,6 +57,10 @@ export default function useCalendarModalHotkeys({
   openFloatingDeadlineEdit,
   openFloatingEventCreate,
   openFloatingDeadlineCreate,
+  deadlineOverlayVisible = false,
+  toggleDeadlineOverlay,
+  toggleCompletedDeadlineOverlay,
+  setDeadlineOverlayVisible,
   navigateMonthRef,
 }) {
   useEffect(() => {
@@ -204,7 +208,19 @@ export default function useCalendarModalHotkeys({
           break;
         case "c":
         case "C":
-          if (view === "events" && eventEditor.editable) {
+          if (event.shiftKey && view === "events") {
+            setDeadlineOverlayVisible?.(true);
+            if (usesFloatingEditor) {
+              openFloatingDeadlineCreate(selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }));
+            } else {
+              setFloatingDetail(null);
+              setDeadlineEditor({
+                mode: "create",
+                seedDate: selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }),
+              });
+              setDeadlineDraftPreview(null);
+            }
+          } else if (view === "events" && eventEditor.editable) {
             if (usesFloatingEditor) {
               openFloatingEventCreate(selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }));
             } else {
@@ -225,16 +241,23 @@ export default function useCalendarModalHotkeys({
           }
           consumeCalendarKey();
           break;
+        case "d":
+        case "D":
+          if (view === "events") {
+            if (event.shiftKey) {
+              if (deadlineOverlayVisible) toggleCompletedDeadlineOverlay?.();
+            } else {
+              toggleDeadlineOverlay?.();
+            }
+          }
+          consumeCalendarKey();
+          break;
         case "1":
           if (view !== "events") handleViewChange("events");
           consumeCalendarKey();
           break;
         case "2":
           if (view !== "bills") handleViewChange("bills");
-          consumeCalendarKey();
-          break;
-        case "3":
-          if (view !== "deadlines") handleViewChange("deadlines");
           consumeCalendarKey();
           break;
         default:

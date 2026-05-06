@@ -8,6 +8,7 @@ const testState = vi.hoisted(() => ({
     listTodoistMirrorActiveTaskIds: vi.fn(),
     listTodoistMirrorActiveTasks: vi.fn(),
     listTodoistMirrorCompletedTasks: vi.fn(),
+    listTodoistMirrorDueTaskIds: vi.fn(),
     listTodoistMirrorProjects: vi.fn(),
     listTodoistMirrorLabels: vi.fn(),
     markTodoistMirrorItemCompleted: vi.fn(),
@@ -52,6 +53,7 @@ beforeEach(() => {
     { id: "l1", name: "writing", color: "grape" },
   ]);
   testState.mirror.listTodoistMirrorActiveTaskIds.mockResolvedValue(new Set());
+  testState.mirror.listTodoistMirrorDueTaskIds.mockResolvedValue(new Set());
   testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValue([]);
   testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValue([]);
 });
@@ -397,13 +399,35 @@ describe("Todoist mirror-backed facade", () => {
     expect(result.idSet).toEqual(new Set(["t1"]));
   });
 
-  it("reads range rows from the active mirror without live completed Todoist lookup", async () => {
+  it("reads non-deleted due Todoist ids for tombstone orphan pruning", async () => {
+    testState.mirror.listTodoistMirrorDueTaskIds.mockResolvedValueOnce(new Set(["active-1", "completed-1"]));
+    const { fetchTodoistDueTaskIdSet } = await import("./todoist.js");
+
+    const ids = await fetchTodoistDueTaskIdSet("u1");
+
+    expect(testState.mirror.listTodoistMirrorDueTaskIds).toHaveBeenCalledWith("u1");
+    expect(ids).toEqual(new Set(["active-1", "completed-1"]));
+  });
+
+  it("reads range rows from active and completed mirror tables without live Todoist lookup", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-05T18:00:00.000Z"));
     testState.mirror.listTodoistMirrorActiveTasks.mockResolvedValueOnce([
       {
         id: "active-1",
         content: "Active deadline",
         project_id: "p1",
         due: { date: "2026-05-05" },
+        priority: 1,
+        labels: [],
+      },
+    ]);
+    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+      {
+        task_id: "completed-1",
+        content: "Completed deadline",
+        project_id: "p1",
+        due: { date: "2026-05-06" },
         priority: 1,
         labels: [],
       },
@@ -417,6 +441,10 @@ describe("Todoist mirror-backed facade", () => {
       start: "2026-05-01",
       end: "2026-05-10",
     });
+    expect(testState.mirror.listTodoistMirrorCompletedTasks).toHaveBeenCalledWith("u1", {
+      start: "2026-05-05",
+      end: "2026-05-10",
+    });
     expect(testState.fetchFn).not.toHaveBeenCalledWith(
       expect.stringContaining("/tasks/filter"),
       expect.anything(),
@@ -427,7 +455,9 @@ describe("Todoist mirror-backed facade", () => {
     );
     expect(tasks.map((task) => [task.id, task.status])).toEqual([
       ["active-1", "incomplete"],
+      ["completed-1", "complete"],
     ]);
+    vi.useRealTimers();
   });
 
   it("reads project and label pickers from mirror tables", async () => {
@@ -475,6 +505,16 @@ describe("Todoist mirror-backed facade", () => {
         labels: [],
       },
     ]);
+    testState.mirror.listTodoistMirrorCompletedTasks.mockResolvedValueOnce([
+      {
+        task_id: "completed-1",
+        content: "Completed deadline",
+        project_id: "p1",
+        due: { date: "2026-05-05" },
+        priority: 1,
+        labels: [],
+      },
+    ]);
     testState.fetchFn.mockRejectedValue(new Error("Todoist live API unavailable"));
     const { fetchTodoistTasksRange } = await import("./todoist.js");
 
@@ -483,6 +523,7 @@ describe("Todoist mirror-backed facade", () => {
     expect(testState.fetchFn).not.toHaveBeenCalled();
     expect(tasks.map((task) => [task.id, task.status])).toEqual([
       ["active-1", "incomplete"],
+      ["completed-1", "complete"],
     ]);
   });
 });

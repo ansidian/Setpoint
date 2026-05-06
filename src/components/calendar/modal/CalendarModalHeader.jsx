@@ -1,9 +1,8 @@
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ListChecks, Receipt, RefreshCw, X } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Receipt, RefreshCw, X } from "lucide-react";
 
 const VIEW_OPTIONS = [
   { key: "events", label: "Events", Icon: CalendarIcon, hint: "1" },
   { key: "bills", label: "Bills", Icon: Receipt, hint: "2" },
-  { key: "deadlines", label: "Deadlines", Icon: ListChecks, hint: "3" },
 ];
 
 function parseDateKey(dateKey) {
@@ -236,7 +235,7 @@ export default function CalendarModalHeader({
           style={{
             gridArea: "views",
             display: "grid",
-            gridTemplateColumns: layout.headerStacked ? "repeat(3, minmax(0, 1fr))" : "repeat(3, auto)",
+            gridTemplateColumns: layout.headerStacked ? "repeat(2, minmax(0, 1fr))" : "repeat(2, auto)",
             alignItems: "center",
             justifySelf: layout.headerStacked ? "stretch" : "center",
             background: "rgba(255,255,255,0.03)",

@@ -231,8 +231,10 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
       const flagCompleting = (root) => {
         if (!root) return root;
         const updated = JSON.parse(JSON.stringify(root));
-        const task = updated.ctm?.upcoming?.find(t => String(t.id) === String(taskId));
-        if (task) task._completing = true;
+        for (const section of ["ctm", "todoist"]) {
+          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId));
+          if (task) task._completing = true;
+        }
         return updated;
       };
       setBriefing(prev => flagCompleting(prev));
@@ -245,8 +247,10 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     const applyStatus = (root) => {
       if (!root) return root;
       const updated = JSON.parse(JSON.stringify(root));
-      const task = updated.ctm?.upcoming?.find(t => String(t.id) === String(taskId));
-      if (task) task.status = status;
+      for (const section of ["ctm", "todoist"]) {
+        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId));
+        if (task) task.status = status;
+      }
       return updated;
     };
     setBriefing(prev => applyStatus(prev));

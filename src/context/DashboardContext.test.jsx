@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider, useDashboard } from "./DashboardContext.jsx";
-import { completeTask } from "../api";
+import { completeTask, updateTaskStatus } from "../api";
 
 vi.mock("../api", () => ({
   dismissEmail: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock("../api", () => ({
 }));
 
 function Probe({ task }) {
-  const { handleAddTask, handleCompleteTask } = useDashboard();
+  const { handleAddTask, handleCompleteTask, handleUpdateTaskStatus } = useDashboard();
   return (
     <>
       <button type="button" onClick={() => handleAddTask(task)}>
@@ -19,6 +19,9 @@ function Probe({ task }) {
       </button>
       <button type="button" onClick={() => handleCompleteTask(task.id, task)}>
         Complete
+      </button>
+      <button type="button" onClick={() => handleUpdateTaskStatus(task.id, "complete")}>
+        Complete status
       </button>
     </>
   );
@@ -28,6 +31,7 @@ describe("DashboardContext Todoist local state", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     completeTask.mockResolvedValue({});
+    updateTaskStatus.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -122,5 +126,55 @@ describe("DashboardContext Todoist local state", () => {
       status: "complete",
     });
     expect(completedDeadlines.todoist.upcoming[0]._completing).toBeUndefined();
+  });
+
+  it("optimistically completes Todoist rows through the generic status action", async () => {
+    const task = {
+      id: "todo-status-only",
+      title: "Status-only task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+      source: "todoist",
+    };
+    const briefing = {
+      emails: { accounts: [] },
+      ctm: { upcoming: [] },
+      todoist: { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
+    };
+    const deadlines = {
+      ctm: { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
+      todoist: { upcoming: [task], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
+    };
+    const setBriefing = vi.fn((updater) => updater(briefing));
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+
+    render(
+      <DashboardProvider
+        briefing={briefing}
+        setBriefing={setBriefing}
+        setCalendarDeadlines={setCalendarDeadlines}
+      >
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(screen.getByText("Complete status"));
+
+    expect(updateTaskStatus).toHaveBeenCalledWith("todo-status-only", "complete");
+    const completingDeadlines = setCalendarDeadlines.mock.results[0].value;
+    expect(completingDeadlines.todoist.upcoming[0]).toMatchObject({
+      id: "todo-status-only",
+      _completing: true,
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+
+    const completedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
+    expect(completedDeadlines.todoist.upcoming[0]).toMatchObject({
+      id: "todo-status-only",
+      status: "complete",
+    });
   });
 });

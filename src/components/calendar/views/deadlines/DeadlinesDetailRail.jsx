@@ -213,6 +213,7 @@ function DeadlinesFloatingDetail({
   selectedItemId,
   selectedDateKey,
   onStartEdit,
+  onCloseFloatingDetail,
   accent = "var(--ea-accent)",
 }) {
   const {
@@ -229,6 +230,20 @@ function DeadlinesFloatingDetail({
 
   if (!selectedTask) return null;
   const sourceAccent = SOURCE_COLORS[sourceOf(selectedTask)] || accent;
+  const closeAfterFeedback = () => {
+    if (!onCloseFloatingDetail) return;
+    window.setTimeout(() => onCloseFloatingDetail(), 120);
+  };
+  const handleFloatingComplete = (taskId, taskSnapshot) => {
+    const result = handleCompleteTask(taskId, taskSnapshot);
+    closeAfterFeedback();
+    return result;
+  };
+  const handleFloatingStatusChange = (taskId, status) => {
+    const result = handleUpdateTaskStatus(taskId, status);
+    closeAfterFeedback();
+    return result;
+  };
 
   return (
     <DeadlineDetailCard
@@ -241,8 +256,8 @@ function DeadlinesFloatingDetail({
           task={selectedTask}
           accent={sourceAccent}
           onEdit={onStartEdit}
-          onComplete={handleCompleteTask}
-          onStatusChange={handleUpdateTaskStatus}
+          onComplete={handleFloatingComplete}
+          onStatusChange={handleFloatingStatusChange}
           compact={effectiveCompactDetail}
         />
       }

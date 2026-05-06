@@ -9,7 +9,7 @@ import {
 } from "../briefing/deadline-helpers.js";
 import { loadUserConfig } from "../briefing/config-service.js";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../briefing/snapshot-service.js";
-import { fetchTodoistTasks, getTodoistSyncHealth } from "../briefing/todoist.js";
+import { fetchTodoistDueTaskIdSet, fetchTodoistTasks, getTodoistSyncHealth } from "../briefing/todoist.js";
 import { hydrateRecurringTombstones } from "../briefing/tombstones.js";
 import { fetchWeather } from "../briefing/weather.js";
 
@@ -356,7 +356,7 @@ async function refreshCalendarCurrent(userId, config, options) {
 }
 
 async function refreshDeadlinesCurrent(userId, _config, options) {
-  const [ctmDeadlines, todoistTasks] = await Promise.all([
+  const [ctmDeadlines, todoistTasks, todoistDueTaskIds] = await Promise.all([
     fetchCTMDeadlines().catch((err) => {
       console.error("[Dashboard] CTM current refresh failed:", err.message);
       return [];
@@ -365,10 +365,14 @@ async function refreshDeadlinesCurrent(userId, _config, options) {
       console.error("[Dashboard] Todoist current refresh failed:", err.message);
       return [];
     }),
+    fetchTodoistDueTaskIdSet(userId, { refresh: !!options.force }).catch((err) => {
+      console.error("[Dashboard] Todoist id-set current refresh failed:", err.message);
+      return null;
+    }),
   ]);
   const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
   const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
-  const tombstones = await hydrateRecurringTombstones(userId, null, {
+  const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
     viewBoundary: "today",
   });
   const todoistWithCompleted = [...separated.todoist, ...tombstones];
