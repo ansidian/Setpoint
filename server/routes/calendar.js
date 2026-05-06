@@ -3,9 +3,11 @@ import { requireCookieSession } from "../middleware/auth.js";
 import { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } from "../briefing/ctm.js";
 import { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } from "../briefing/todoist.js";
 import {
+  isBillsMirrorMaintenanceDue,
   readBillsMirrorRange,
   scheduleBillsMirrorRefresh,
 } from "../briefing/bills-service.js";
+import { requestBillsCurrentMaintenanceRefresh } from "../dashboard/current-service.js";
 import {
   loadCompletedTaskIds,
   separateDeadlines,
@@ -263,6 +265,10 @@ router.get("/bills/range", async (req, res) => {
     if (data.syncHealth?.state === "needs_sync") {
       scheduleBillsMirrorRefresh(userId).catch((err) => {
         console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
+      });
+    } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
+      requestBillsCurrentMaintenanceRefresh(userId, { now: new Date() }).catch((err) => {
+        console.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err.message);
       });
     }
 

@@ -3,10 +3,12 @@ import {
   clearPendingBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
   getBillsMirrorState,
+  isBillsMirrorMaintenanceDue,
   readBillsMirrorCurrent,
   refreshBillsMirror,
   scheduleBillsMirrorRefresh,
 } from "../briefing/bills-service.js";
+import { publishCurrentDashboardEvent } from "./current-events.js";
 import { fetchCalendar } from "../briefing/calendar.js";
 import { fetchCTMDeadlines } from "../briefing/ctm.js";
 import {
@@ -276,6 +278,48 @@ function fallbackPayloadForKey(key) {
   return { bills: [], allSchedules: [], payeeMap: {}, actualConfigured: false, actualBudgetUrl: null };
 }
 
+function billsHealthProjection(health = null) {
+  return {
+    state: health?.state || null,
+    configured: health?.configured ?? null,
+    lastError: health?.lastError || null,
+    pendingRefreshAt: health?.pendingRefreshAt || null,
+    refreshStartedAt: health?.refreshStartedAt || null,
+  };
+}
+
+function billsVisibleProjection(payload = null) {
+  return {
+    bills: payload?.bills || [],
+    allSchedules: payload?.allSchedules || [],
+    payeeMap: payload?.payeeMap || {},
+    actualConfigured: !!payload?.actualConfigured,
+    actualBudgetUrl: payload?.actualBudgetUrl || null,
+    billsSyncHealth: billsHealthProjection(payload?.billsSyncHealth || payload?.syncHealth || null),
+  };
+}
+
+function shouldPublishBillsCurrentChange(previousRow, nextPayload) {
+  const previousPayload = parsePayload(previousRow, null);
+  if (!previousPayload) return true;
+  if (previousRow?.status && previousRow.status !== "current") return true;
+  if (Number(previousRow?.refresh_failure_count || 0) > 0) return true;
+  return JSON.stringify(billsVisibleProjection(previousPayload)) !== JSON.stringify(billsVisibleProjection(nextPayload));
+}
+
+function publishBillsCurrentChange(userId, previousRow, nextPayload, {
+  now = new Date(),
+  reason = "changed",
+} = {}) {
+  if (!shouldPublishBillsCurrentChange(previousRow, nextPayload)) return;
+  publishCurrentDashboardEvent(userId, {
+    source: "bills",
+    reason,
+    state: "current",
+    occurredAt: now.toISOString(),
+  });
+}
+
 function snapshotSyncTimeoutMs() {
   const parsed = Number.parseInt(process.env.EA_DASHBOARD_SYNC_SNAPSHOT_TIMEOUT_MS || "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : SNAPSHOT_SYNC_TIMEOUT_MS;
@@ -468,6 +512,7 @@ async function refreshRows(userId, rows, refreshKeys, {
   dbClient = db,
   now = new Date(),
   force = false,
+  refreshReasons = {},
 } = {}) {
   if (!refreshKeys.length) return rows;
 
@@ -488,6 +533,12 @@ async function refreshRows(userId, rows, refreshKeys, {
         last_refresh_error: null,
         refresh_failure_count: 0,
       };
+      if (key === "bills_current") {
+        publishBillsCurrentChange(userId, rows[key], payload, {
+          now,
+          reason: refreshReasons[key] === "bills_mirror_maintenance_due" ? "maintenance_refreshed" : "changed",
+        });
+      }
     } catch (err) {
       console.error(`[Dashboard] ${key} refresh failed:`, err.message);
       refreshedRows[key] = await markCacheRowRefreshFailed(userId, key, err, {
@@ -546,12 +597,18 @@ function scheduleBackgroundCurrentRefresh(userId, rows, refreshKeys, {
   now = new Date(),
   force = false,
   forceKeys = new Set(),
+  refreshReasons = {},
 } = {}) {
   for (const cacheKey of refreshKeys) {
     const key = refreshMapKey(userId, cacheKey);
     if (BACKGROUND_REFRESH_IN_FLIGHT.has(key)) continue;
     const promise = Promise.resolve()
-      .then(() => refreshRows(userId, rows, [cacheKey], { dbClient, now, force: force || forceKeys.has(cacheKey) }))
+      .then(() => refreshRows(userId, rows, [cacheKey], {
+        dbClient,
+        now,
+        force: force || forceKeys.has(cacheKey),
+        refreshReasons,
+      }))
       .catch((err) => console.error("[Dashboard] background current refresh failed:", err.message))
       .finally(() => {
         if (BACKGROUND_REFRESH_IN_FLIGHT.get(key) === promise) {
@@ -573,6 +630,13 @@ function skippedEntry(key, reason) {
 
 function scheduledEntry(key, reason) {
   return { key, reason };
+}
+
+function ensureScheduled(refreshPlan, key, reason) {
+  refreshPlan.skipped = refreshPlan.skipped.filter((entry) => entry.key !== key);
+  if (!refreshPlan.scheduled.some((entry) => entry.key === key)) {
+    refreshPlan.scheduled.push(scheduledEntry(key, reason));
+  }
 }
 
 function passiveBackoffMs(failureCount) {
@@ -647,6 +711,16 @@ function planCurrentDataRefresh(rows, {
   return { scheduled, skipped };
 }
 
+function applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, {
+  forceKeys,
+  now,
+} = {}) {
+  if (!isBillsMirrorMaintenanceDue(billsMirror?.syncHealth, { now })) return;
+  if (isInPassiveBackoff(rows.bills_current, now)) return;
+  ensureScheduled(refreshPlan, "bills_current", "bills_mirror_maintenance_due");
+  forceKeys?.add("bills_current");
+}
+
 function composeCurrentDashboardResponse(rows, {
   activeSnapshot,
   activeSnapshotHealth = null,
@@ -694,9 +768,13 @@ export async function getCurrentDashboard(userId, {
   );
   const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, todoistHealth });
+  const forceKeys = new Set();
+  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
+  applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, { forceKeys, now });
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
-  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now });
+  const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
+  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
   return composeCurrentDashboardResponse(rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
     providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
@@ -747,15 +825,16 @@ export async function requestCurrentDashboardRefresh(userId, {
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, todoistHealth });
   const forceKeys = new Set();
   if (billsMirror?.syncHealth?.pendingRefreshAt) {
-    refreshPlan.skipped = refreshPlan.skipped.filter((entry) => entry.key !== "bills_current");
-    if (!refreshPlan.scheduled.some((entry) => entry.key === "bills_current")) {
-      refreshPlan.scheduled.push(scheduledEntry("bills_current", "pending_bills_mirror"));
-    }
+    ensureScheduled(refreshPlan, "bills_current", "pending_bills_mirror");
+    forceKeys.add("bills_current");
+  } else {
+    ensureScheduled(refreshPlan, "bills_current", "manual_bills_sync");
     forceKeys.add("bills_current");
   }
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
-  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys });
+  const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
+  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
   const shouldSyncSnapshot = true;
   if (shouldSyncSnapshot) {
     syncActiveSnapshot(userId)
@@ -779,6 +858,23 @@ export async function requestCurrentDashboardRefresh(userId, {
       errorMessage: null,
     },
   });
+}
+
+export async function requestBillsCurrentMaintenanceRefresh(userId, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const rows = await loadCacheRows(userId, { dbClient });
+  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
+  const refreshPlan = { scheduled: [], skipped: [] };
+  const forceKeys = new Set();
+  applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, { forceKeys, now });
+  const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
+  if (!scheduledKeys.length) return { scheduled: false, due: false };
+  await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
+  const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
+  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  return { scheduled: true, due: true, refresh: refreshPlan };
 }
 
 export async function getDashboardSystemHealth(userId, {

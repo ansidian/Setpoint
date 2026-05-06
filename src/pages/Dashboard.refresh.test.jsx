@@ -16,6 +16,13 @@ const mocks = vi.hoisted(() => ({
   getCalendarDeadlines: vi.fn(),
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
+  dashboardEventHandler: null,
+  handleDashboardEvent: vi.fn(),
+  handleCalendarSnapshot: vi.fn(),
+  handleTaskCompleted: vi.fn(),
+  briefing: null,
+  liveData: null,
+  latestShellProps: null,
 }));
 
 vi.mock("../api", () => ({
@@ -43,30 +50,34 @@ vi.mock("../hooks/useCalendarDomainRange", () => ({
 }));
 
 vi.mock("../hooks/useCurrentDashboard", () => ({
-  default: () => ({
-    liveData: {
+  default: (options = {}) => {
+    mocks.dashboardEventHandler = options.onDashboardEvent;
+    const liveData = mocks.liveData || {
       allSchedules: [],
       recentTransactions: [],
       payeeMap: {},
       actualBudgetUrl: "",
       actualConfigured: false,
       refreshNow: mocks.currentRefreshNow,
-    },
-    activeSnapshot: {
-      snapshot: null,
-      loading: false,
-      error: null,
-      refresh: mocks.activeSnapshotRefresh,
-      sync: mocks.activeSnapshotSync,
-    },
-    briefingData: {
-      loading: false,
-      error: null,
-      briefing: null,
-      lastQuickRefreshAt: null,
-      handleQuickRefresh: mocks.handleQuickRefresh,
-    },
-  }),
+    };
+    return {
+      liveData,
+      activeSnapshot: {
+        snapshot: null,
+        loading: false,
+        error: null,
+        refresh: mocks.activeSnapshotRefresh,
+        sync: mocks.activeSnapshotSync,
+      },
+      briefingData: {
+        loading: false,
+        error: null,
+        briefing: mocks.briefing,
+        lastQuickRefreshAt: null,
+        handleQuickRefresh: mocks.handleQuickRefresh,
+      },
+    };
+  },
 }));
 
 vi.mock("../hooks/useAutoRefresh", () => ({
@@ -77,6 +88,27 @@ vi.mock("../hooks/useAutoRefresh", () => ({
 
 vi.mock("../hooks/useNotifications", () => ({
   default: () => {},
+}));
+
+vi.mock("../hooks/useTriageNotificationSounds", () => ({
+  default: () => ({
+    handleDashboardEvent: mocks.handleDashboardEvent,
+    handleCalendarSnapshot: mocks.handleCalendarSnapshot,
+    handleTaskCompleted: mocks.handleTaskCompleted,
+  }),
+}));
+
+vi.mock("../components/dashboard/RedesignShell", () => ({
+  DashboardBody: () => null,
+  RedesignShell: (props) => {
+    mocks.latestShellProps = props;
+    return (
+      <div>
+        <button type="button" onClick={props.onQuickRefresh}>Sync now</button>
+        <div data-testid="bills-pending">{String(!!props.calendarBillsData?.pendingUpdate)}</div>
+      </div>
+    );
+  },
 }));
 
 vi.mock("../components/shared/EmptyStateSplash", () => ({
@@ -101,6 +133,13 @@ describe("Dashboard refresh wiring", () => {
     mocks.activeSnapshotSync.mockReset();
     mocks.getCalendarDeadlines.mockReset();
     mocks.getCalendarDeadlines.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.dashboardEventHandler = null;
+    mocks.handleDashboardEvent.mockReset();
+    mocks.handleCalendarSnapshot.mockReset();
+    mocks.handleTaskCompleted.mockReset();
+    mocks.briefing = null;
+    mocks.liveData = null;
+    mocks.latestShellProps = null;
   });
 
   afterEach(() => {
@@ -164,5 +203,72 @@ describe("Dashboard refresh wiring", () => {
     });
 
     expect(mocks.autoRefreshArgs.lastQuickRefreshAt).toBe(new Date("2026-05-04T12:00:00.000Z").getTime());
+  });
+
+  it("marks Bills range data stale after a Bills dashboard-current event", () => {
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    act(() => {
+      mocks.dashboardEventHandler?.({
+        source: "bills",
+        reason: "maintenance_refreshed",
+        state: "current",
+      });
+    });
+
+    expect(mocks.handleDashboardEvent).toHaveBeenCalledWith(expect.objectContaining({
+      source: "bills",
+      reason: "maintenance_refreshed",
+    }));
+    expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the Bills pending snapshot once current-data refresh settles", () => {
+    mocks.briefing = { weather: null, calendar: [], ctm: {}, todoist: {}, emails: { accounts: [] } };
+    mocks.liveData = {
+      allSchedules: [{ id: "bill-1", payee: "Power" }],
+      recentTransactions: [],
+      payeeMap: {},
+      actualBudgetUrl: "https://actual.example.test",
+      actualConfigured: true,
+      lastFetched: "2026-05-04T12:00:00.000Z",
+      refreshNow: mocks.currentRefreshNow,
+      providerHealth: {
+        currentData: {
+          sources: [{ key: "bills_current", state: "refreshing" }],
+        },
+      },
+    };
+    const { rerender } = render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    act(() => {
+      mocks.latestShellProps.loadCalendarBills({ force: true });
+    });
+    expect(mocks.latestShellProps.calendarBillsData?.pendingUpdate).toBe(true);
+
+    mocks.liveData = {
+      ...mocks.liveData,
+      lastFetched: "2026-05-04T12:00:02.000Z",
+      providerHealth: {
+        currentData: {
+          sources: [{ key: "bills_current", state: "current" }],
+        },
+      },
+    };
+    rerender(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    expect(mocks.latestShellProps.calendarBillsData?.pendingUpdate).toBe(false);
   });
 });

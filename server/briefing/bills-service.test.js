@@ -48,6 +48,7 @@ const {
   refreshBillsMirror,
   scheduleBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
+  isBillsMirrorMaintenanceDue,
 } = await import("./bills-service.js");
 
 function rowResult(rows = []) {
@@ -332,6 +333,30 @@ describe("Bills mirror", () => {
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/pending_refresh_at = NULL/i),
     }));
+  });
+
+  it("flags maintenance due only for old successful configured mirrors", () => {
+    const now = new Date("2026-05-06T12:16:00.000Z");
+
+    expect(isBillsMirrorMaintenanceDue({
+      state: "current",
+      configured: true,
+      lastSuccessAt: "2026-05-06T12:00:00.000Z",
+      pendingRefreshAt: null,
+      refreshStartedAt: null,
+    }, { now })).toBe(true);
+
+    expect(isBillsMirrorMaintenanceDue({
+      state: "current",
+      configured: true,
+      lastSuccessAt: "2026-05-06T12:02:00.000Z",
+    }, { now })).toBe(false);
+
+    expect(isBillsMirrorMaintenanceDue({
+      state: "needs_sync",
+      configured: true,
+      lastSuccessAt: "2026-05-06T11:00:00.000Z",
+    }, { now })).toBe(false);
   });
 });
 
