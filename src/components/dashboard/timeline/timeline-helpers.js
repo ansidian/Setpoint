@@ -67,6 +67,7 @@ export function resolveTimelineNowMarkerTop({
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     if (item.kind !== "event") continue;
+    if (item.data?.allDay) continue;
     if (item.startMs != null && item.endMs != null && item.startMs <= now && now < item.endMs) {
       liveIndex = index;
       break;
