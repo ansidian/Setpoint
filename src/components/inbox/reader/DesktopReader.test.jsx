@@ -107,6 +107,17 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByText("Dismiss")).toBeNull();
   });
 
+  it("allows FYI snapshot rows to be marked handled", () => {
+    const { onAction } = renderReader({ email: { _lane: "fyi" } });
+
+    const handledButton = screen.getByRole("button", { name: /mark handled/i });
+    expect(handledButton.textContent).toContain("H");
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+
+    fireEvent.click(handledButton);
+    expect(onAction).toHaveBeenCalledWith("snapshot-handled");
+  });
+
   it("shows compact desktop key hints for immediate reader actions", () => {
     renderReader();
 

@@ -41,7 +41,7 @@ function isEditableKeyTarget(target) {
 function canHandleSelectedEmail(email, readOnly) {
   if (readOnly || !email?._activeSnapshot || !email.snapshot_item_id) return false;
   const lane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  return lane === "needs_attention";
+  return lane === "needs_attention" || lane === "fyi";
 }
 
 function canReopenSelectedEmail(email, readOnly) {

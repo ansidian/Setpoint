@@ -75,4 +75,22 @@ describe("Sidebar shortcuts", () => {
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Move to Noise")).toBeNull();
   });
+
+  it("shows Mark handled for FYI snapshot rows", () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        selectedEmail={{
+          id: "msg-1",
+          uid: "msg-1",
+          snapshot_item_id: 1,
+          _activeSnapshot: true,
+          _lane: "fyi",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Mark handled")).toBeTruthy();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+  });
 });

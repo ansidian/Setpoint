@@ -112,6 +112,9 @@ export default function MobileReader({
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
   const showSnapshotActions = email._activeSnapshot && showMutableActions;
   const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
+  const canMarkHandledSnapshot = showSnapshotActions
+    && !isHandledSnapshot
+    && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
   const triageSummary = showTriage
     ? email.claude?.summary || email.aiSummary || null
     : null;
@@ -532,7 +535,7 @@ export default function MobileReader({
                 onClick={() => handleAction("snapshot-move-lane", "noise")}
               />
             )}
-            {showSnapshotActions && !isHandledSnapshot && snapshotLane === "needs_attention" && (
+            {canMarkHandledSnapshot && (
               <MobileActionRow
                 icon={Check}
                 label="Handled"
