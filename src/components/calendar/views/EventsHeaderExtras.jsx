@@ -1,5 +1,6 @@
 import { CheckCircle2, ListChecks, Plus } from "lucide-react";
 import { useState } from "react";
+import Tooltip from "@/components/shared/Tooltip";
 
 export default function EventsHeaderExtras({ editor, selectedDateLabel }) {
   const [hovered, setHovered] = useState(null);
@@ -9,6 +10,8 @@ export default function EventsHeaderExtras({ editor, selectedDateLabel }) {
   const overlay = editor.deadlineOverlay;
   const overlayVisible = !!overlay?.enabled;
   const completedVisible = !!overlay?.showCompleted;
+  const deadlinesTooltip = overlayVisible ? "Hide deadlines" : "Show deadlines";
+  const completedTooltip = completedVisible ? "Hide completed deadlines" : "Show completed deadlines";
   const readiness = overlay?.readiness || {};
   const statusLabel = readiness.state === "slow" && readiness.slowSource
     ? `${readiness.slowSource === "deadlines" ? "Deadlines" : "Events"} slow`
@@ -34,34 +37,36 @@ export default function EventsHeaderExtras({ editor, selectedDateLabel }) {
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       {overlay ? (
         <>
-          <button
-            type="button"
-            onClick={overlay.onToggle}
-            aria-label={overlayVisible ? "Hide deadlines in Events" : "Show deadlines in Events"}
-            aria-pressed={overlayVisible}
-            title={overlayVisible ? "Hide deadlines" : "Show deadlines"}
-            data-calendar-focus-ring="true"
-            onMouseEnter={() => setHovered("deadlines")}
-            onMouseLeave={() => setHovered(null)}
-            style={toggleStyle(overlayVisible, "deadlines")}
-          >
-            <ListChecks size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={overlay.onToggleCompleted}
-            aria-label={completedVisible ? "Hide completed deadlines" : "Show completed deadlines"}
-            aria-pressed={completedVisible}
-            aria-disabled={!overlayVisible}
-            disabled={!overlayVisible}
-            title={completedVisible ? "Hide completed deadlines" : "Show completed deadlines"}
-            data-calendar-focus-ring="true"
-            onMouseEnter={() => setHovered("completed")}
-            onMouseLeave={() => setHovered(null)}
-            style={toggleStyle(completedVisible, "completed", !overlayVisible)}
-          >
-            <CheckCircle2 size={14} />
-          </button>
+          <Tooltip text={deadlinesTooltip} side="top" sideOffset={7} delay={350}>
+            <button
+              type="button"
+              onClick={overlay.onToggle}
+              aria-label={overlayVisible ? "Hide deadlines in Events" : "Show deadlines in Events"}
+              aria-pressed={overlayVisible}
+              data-calendar-focus-ring="true"
+              onMouseEnter={() => setHovered("deadlines")}
+              onMouseLeave={() => setHovered(null)}
+              style={toggleStyle(overlayVisible, "deadlines")}
+            >
+              <ListChecks size={14} />
+            </button>
+          </Tooltip>
+          <Tooltip text={completedTooltip} side="top" sideOffset={7} delay={350}>
+            <button
+              type="button"
+              onClick={overlay.onToggleCompleted}
+              aria-label={completedVisible ? "Hide completed deadlines" : "Show completed deadlines"}
+              aria-pressed={completedVisible}
+              aria-disabled={!overlayVisible}
+              disabled={!overlayVisible}
+              data-calendar-focus-ring="true"
+              onMouseEnter={() => setHovered("completed")}
+              onMouseLeave={() => setHovered(null)}
+              style={toggleStyle(completedVisible, "completed", !overlayVisible)}
+            >
+              <CheckCircle2 size={14} />
+            </button>
+          </Tooltip>
           {overlay.lateDeadlinesReady && overlay.onApplyLateDeadlines ? (
             <button
               type="button"

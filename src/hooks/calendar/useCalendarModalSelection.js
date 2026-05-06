@@ -18,16 +18,29 @@ export default function useCalendarModalSelection({
   const currentYear = now.getFullYear();
   const todayDate = now.getDate();
   const initialFocus = open ? parseFocusDate(focusDate) : null;
+  const initialCleanDeadlineCreateRequest = open && view === "deadlines" && focusItemId === "new" && !focusDate;
+  const shouldSeedToday = open && !initialCleanDeadlineCreateRequest;
   const currentViewDate = { month: currentMonth, year: currentYear };
+  const todayDateKey = ymdFromParts(currentYear, currentMonth, todayDate);
 
   const [viewDate, setViewDate] = useState(() => (
     initialFocus
       ? resolveFocusViewDate(initialFocus, currentViewDate)
       : currentViewDate
   ));
-  const [selectedDay, setSelectedDay] = useState(() => (initialFocus ? initialFocus.getDate() : null));
-  const [selectedDateKey, setSelectedDateKey] = useState(() => (initialFocus ? ymdFromParts(initialFocus.getFullYear(), initialFocus.getMonth(), initialFocus.getDate()) : null));
-  const [selectedItemId, setSelectedItemId] = useState(() => (open && focusItemId ? String(focusItemId) : null));
+  const [selectedDay, setSelectedDay] = useState(() => (
+    initialFocus ? initialFocus.getDate() : shouldSeedToday ? todayDate : null
+  ));
+  const [selectedDateKey, setSelectedDateKey] = useState(() => (
+    initialFocus
+      ? ymdFromParts(initialFocus.getFullYear(), initialFocus.getMonth(), initialFocus.getDate())
+      : shouldSeedToday
+        ? todayDateKey
+        : null
+  ));
+  const [selectedItemId, setSelectedItemId] = useState(() => (
+    open && focusItemId && !initialCleanDeadlineCreateRequest ? String(focusItemId) : null
+  ));
   const [pendingFocusDate, setPendingFocusDate] = useState(null);
   const [pendingFocusItemId, setPendingFocusItemId] = useState(null);
   const [prevOpen, setPrevOpen] = useState(open);

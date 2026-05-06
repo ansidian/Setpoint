@@ -657,7 +657,14 @@ describe("CalendarModal responsive layout", () => {
 
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /hide deadlines in events/i }));
+    const deadlineToggle = screen.getByRole("button", { name: /hide deadlines in events/i });
+    const completedToggle = screen.getByRole("button", { name: /hide completed deadlines/i });
+    expect(deadlineToggle.getAttribute("title")).toBeNull();
+    expect(completedToggle.getAttribute("title")).toBeNull();
+    expect(deadlineToggle.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
+    expect(completedToggle.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
+
+    fireEvent.click(deadlineToggle);
 
     await waitFor(() => {
       expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Project due")).toBeNull();
@@ -2171,6 +2178,48 @@ describe("CalendarModal responsive layout", () => {
 
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
       expect(screen.getByTestId("calendar-cell-date-header-2026-04-20")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lands the agenda rail on today's date header when opened without a focus date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={{ getEvents: () => [] }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const agendaRail = screen.getByTestId("events-agenda-rail");
+      const firstHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-01']");
+      const todayHeader = agendaRail.querySelector("[data-agenda-date-header='true'][data-date-key='2026-04-20']");
+      const scrollTo = vi.fn();
+      agendaRail.scrollTop = 0;
+      agendaRail.scrollTo = scrollTo;
+      agendaRail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+      firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+      todayHeader.getBoundingClientRect = () => ({ top: 620, bottom: 654, left: 0, right: 280, width: 280, height: 34 });
+
+      await act(async () => {
+        vi.runOnlyPendingTimers();
+      });
+
+      expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+        top: 620,
+      }));
     } finally {
       vi.useRealTimers();
     }
