@@ -255,9 +255,10 @@ export default function useCalendarModalController({
         && (!deadlinesRangeData?.dataRange || rangeMatches(deadlinesRangeData.dataRange, visibleRange))
         ? deadlinesRangeData?.data
         : null;
+      const currentOverlayData = !planningReadiness.deadlinesDelayed ? deadlinesData : null;
       const overlayData = committedOverlayData
         || seededOverlayData
-        || (!deadlinesRangeData?.ensureRange ? deadlinesData : null);
+        || currentOverlayData;
       const lateRecord = deadlineOverlayRecordData(lateDeadlineOverlayData, visibleRange)
         ? lateDeadlineOverlayData
         : null;

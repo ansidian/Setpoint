@@ -27,6 +27,7 @@ export default function DashboardCalendarModalMount({
   calendarDeadlineActions,
 }) {
   if (isMobile || !calendarMounted) return null;
+  const seededDeadlines = calendarDeadlines ?? liveData?.liveDeadlines ?? {};
 
   return (
     <Suspense fallback={null}>
@@ -46,8 +47,8 @@ export default function DashboardCalendarModalMount({
         billsData={calendarBillsData || makeCalendarBillsData(liveData)}
         billsRangeData={calendarBillRange}
         deadlinesData={{
-          ctm: calendarDeadlines?.ctm || { upcoming: [], stats: null },
-          todoist: calendarDeadlines?.todoist || { upcoming: [], stats: null },
+          ctm: seededDeadlines?.ctm || { upcoming: [], stats: null },
+          todoist: seededDeadlines?.todoist || { upcoming: [], stats: null },
           isLoading: calendarDeadlinesLoading && !calendarDeadlines,
         }}
         deadlinesRangeData={calendarDeadlineRange}
