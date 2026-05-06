@@ -139,6 +139,10 @@ export default function CalendarCellItemStack({
   }, [hiddenCount, inlineOverflowOpen, onCloseInlineOverflow]);
 
   if (!stackItems.length) return null;
+  const itemMatchesSelected = (item) => {
+    if (String(item.id) === String(selectedItemId)) return true;
+    return (item.matchItemIds || []).some((id) => String(id) === String(selectedItemId));
+  };
 
   return (
     <div
@@ -153,10 +157,10 @@ export default function CalendarCellItemStack({
       }}
     >
       {visibleItems.map((item) => {
-        const selected = String(item.id) === String(selectedItemId);
+        const selected = itemMatchesSelected(item);
         return (
           <ItemChip
-            key={item.id}
+            key={item.renderKey || item.id}
             item={item}
             selected={selected}
             active={!item.isGhost && String(item.id) === String(activeChipId)}
@@ -204,10 +208,10 @@ export default function CalendarCellItemStack({
           }}
         >
           {hiddenItems.map((item) => {
-            const selected = String(item.id) === String(selectedItemId);
+            const selected = itemMatchesSelected(item);
             return (
               <ItemChip
-                key={item.id}
+                key={item.renderKey || item.id}
                 item={item}
                 selected={selected}
                 active={!item.isGhost && String(item.id) === String(activeChipId)}

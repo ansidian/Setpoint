@@ -1,5 +1,12 @@
 import db from "../db/connection.js";
-import { getUpcomingBills, getMetadata as getActualMetadata, isSchedulePaid } from "../briefing/actual.js";
+import {
+  clearPendingBillsMirrorRefresh,
+  consumeDueBillsMirrorRefresh,
+  getBillsMirrorState,
+  readBillsMirrorCurrent,
+  refreshBillsMirror,
+  scheduleBillsMirrorRefresh,
+} from "../briefing/bills-service.js";
 import { fetchCalendar } from "../briefing/calendar.js";
 import { fetchCTMDeadlines } from "../briefing/ctm.js";
 import {
@@ -167,7 +174,14 @@ function unavailableTodoistHealth(err) {
 async function loadProviderHealth(userId, rows, { now = new Date(), todoistHealth = null } = {}) {
   const currentData = summarizeCurrentDataHealth(rows, now);
   const todoist = todoistHealth || await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
-  return { currentData, todoist };
+  const billsPayload = parsePayload(rows.bills_current, null);
+  const bills = billsPayload?.billsSyncHealth || {
+    state: billsPayload?.actualConfigured ? "current" : "unconfigured",
+    configured: !!billsPayload?.actualConfigured,
+    lastSuccessAt: rows.bills_current?.fetched_at || null,
+    lastError: null,
+  };
+  return { currentData, todoist, bills };
 }
 
 function currentDataMessage(state) {
@@ -185,6 +199,15 @@ function todoistMessage(health) {
   return "Todoist mirror is unavailable.";
 }
 
+function billsMessage(health) {
+  if (health?.configured === false || health?.state === "unconfigured") return "Bills mirror is not configured.";
+  if (health?.state === "current") return "Bills mirror is current.";
+  if (health?.state === "refreshing" || health?.state === "syncing") return "Bills mirror is syncing.";
+  if (health?.state === "needs_sync" || health?.state === "stale") return "Bills mirror needs sync.";
+  if (health?.state === "degraded") return "Bills mirror checks are degraded.";
+  return "Bills mirror is unavailable.";
+}
+
 function summarizeSystemState(sources) {
   const configuredSources = sources.filter((source) => source.state !== "unconfigured" && source.severity !== "none");
   const severities = configuredSources.map((source) => source.severity);
@@ -196,6 +219,7 @@ function summarizeSystemState(sources) {
 
 function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOString() } = {}) {
   const todoistState = providerHealth.todoist?.state || "unavailable";
+  const billsState = providerHealth.bills?.state || "unavailable";
   const sources = [
     {
       key: "currentData",
@@ -218,6 +242,19 @@ function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOStr
       ),
       lastSuccessAt: providerHealth.todoist?.lastSuccessAt || null,
       message: todoistMessage(providerHealth.todoist),
+    },
+    {
+      key: "bills",
+      label: "Bills",
+      state: billsState === "stale" ? "needs_sync" : billsState,
+      severity: providerHealth.bills?.severity || (
+        billsState === "unavailable" ? "error"
+          : billsState === "needs_sync" || billsState === "degraded" || billsState === "stale" ? "warning"
+            : billsState === "refreshing" || billsState === "syncing" ? "info"
+              : "none"
+      ),
+      lastSuccessAt: providerHealth.bills?.lastSuccessAt || null,
+      message: billsMessage(providerHealth.bills),
     },
   ];
 
@@ -393,31 +430,29 @@ async function refreshDeadlinesCurrent(userId, _config, options) {
 async function refreshBillsCurrent(userId, config, options) {
   const actualBudgetUrl = config.settings?.actual_budget_url || null;
   if (!actualBudgetUrl) {
-    const payload = {
-      bills: [],
-      allSchedules: [],
-      payeeMap: {},
-      actualConfigured: false,
-      actualBudgetUrl: null,
-    };
+    const payload = await refreshBillsMirror(userId, { ...options, actualBudgetUrl: null });
     await saveCacheRow(userId, "bills_current", payload, options);
     return payload;
   }
 
-  const [bills, metadata] = await Promise.all([
-    getUpcomingBills(userId),
-    getActualMetadata(userId),
-  ]);
-  const payload = {
-    bills,
-    allSchedules: (metadata.schedules || []).map((schedule) => ({
-      ...schedule,
-      paid: isSchedulePaid(schedule, metadata.recentTransactions || []),
-    })),
-    payeeMap: metadata.payeeMap || {},
-    actualConfigured: true,
-    actualBudgetUrl,
-  };
+  let payload;
+  const dueRefresh = options.force
+    ? false
+    : await consumeDueBillsMirrorRefresh(userId, options).catch((err) => {
+        console.error("[Dashboard] Bills mirror due-refresh check failed:", err.message);
+        return false;
+      });
+  if (options.force || dueRefresh) {
+    await clearPendingBillsMirrorRefresh(userId, options);
+    payload = await refreshBillsMirror(userId, { ...options, actualBudgetUrl });
+  } else {
+    payload = await readBillsMirrorCurrent(userId, options);
+    if (payload.billsSyncHealth?.state === "needs_sync") {
+      scheduleBillsMirrorRefresh(userId, options).catch((err) => {
+        console.error("[Dashboard] Bills mirror refresh scheduling failed:", err.message);
+      });
+    }
+  }
   await saveCacheRow(userId, "bills_current", payload, options);
   return payload;
 }
@@ -510,12 +545,13 @@ function scheduleBackgroundCurrentRefresh(userId, rows, refreshKeys, {
   dbClient = db,
   now = new Date(),
   force = false,
+  forceKeys = new Set(),
 } = {}) {
   for (const cacheKey of refreshKeys) {
     const key = refreshMapKey(userId, cacheKey);
     if (BACKGROUND_REFRESH_IN_FLIGHT.has(key)) continue;
     const promise = Promise.resolve()
-      .then(() => refreshRows(userId, rows, [cacheKey], { dbClient, now, force }))
+      .then(() => refreshRows(userId, rows, [cacheKey], { dbClient, now, force: force || forceKeys.has(cacheKey) }))
       .catch((err) => console.error("[Dashboard] background current refresh failed:", err.message))
       .finally(() => {
         if (BACKGROUND_REFRESH_IN_FLIGHT.get(key) === promise) {
@@ -638,6 +674,7 @@ function composeCurrentDashboardResponse(rows, {
     payeeMap: billsPayload.payeeMap || {},
     actualConfigured: !!billsPayload.actualConfigured,
     actualBudgetUrl: billsPayload.actualBudgetUrl || null,
+    billsSyncHealth: billsPayload.billsSyncHealth || null,
     activeSnapshot,
     providerHealth: nextProviderHealth,
     systemStatus: composeSystemStatus(nextProviderHealth, { generatedAt: fetchedAt }),
@@ -706,10 +743,19 @@ export async function requestCurrentDashboardRefresh(userId, {
 } = {}) {
   const rows = await loadCacheRows(userId, { dbClient });
   const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
+  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, todoistHealth });
+  const forceKeys = new Set();
+  if (billsMirror?.syncHealth?.pendingRefreshAt) {
+    refreshPlan.skipped = refreshPlan.skipped.filter((entry) => entry.key !== "bills_current");
+    if (!refreshPlan.scheduled.some((entry) => entry.key === "bills_current")) {
+      refreshPlan.scheduled.push(scheduledEntry("bills_current", "pending_bills_mirror"));
+    }
+    forceKeys.add("bills_current");
+  }
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
-  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now });
+  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys });
   const shouldSyncSnapshot = true;
   if (shouldSyncSnapshot) {
     syncActiveSnapshot(userId)

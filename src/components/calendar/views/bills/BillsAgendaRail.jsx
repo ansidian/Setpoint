@@ -68,6 +68,7 @@ function BillRow({ bill, selected, onSelect }) {
       type="button"
       data-testid="calendar-agenda-bill-row"
       data-item-id={bill.agendaItemId}
+      data-calendar-match-item-ids={[bill.id, bill.scheduleId].filter(Boolean).join(" ")}
       onClick={(event) => onSelect(bill, event.currentTarget)}
       style={{
         width: "100%",

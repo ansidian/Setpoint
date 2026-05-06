@@ -3829,6 +3829,174 @@ describe("CalendarModal responsive layout", () => {
     expect(within(panel).getByText("$1,800.00")).toBeTruthy();
   });
 
+  it("keeps floating bill detail open when bills data swaps from schedule id to range instance id", async () => {
+    window.innerWidth = 1900;
+
+    const { rerender } = render(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="bill-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{
+          schedules: [
+            {
+              id: "bill-1",
+              name: "Rent",
+              next_date: "2026-04-20",
+              paid: false,
+              type: "bill",
+              conditions: [
+                { field: "amount", value: { num1: 180000 } },
+                { field: "payee", value: "payee-1" },
+              ],
+            },
+          ],
+          payeeMap: { "payee-1": "Landlord" },
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const initialPanel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(initialPanel).getByText("$1,800.00")).toBeTruthy();
+
+    rerender(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="bill-1"
+        focusOpenDetail
+        eventsData={{ getEvents: () => [] }}
+        billsData={{
+          schedules: [
+            {
+              id: "bill-1",
+              name: "Rent",
+              next_date: "2026-04-20",
+              paid: false,
+              type: "bill",
+              conditions: [
+                { field: "amount", value: { num1: 180000 } },
+                { field: "payee", value: "payee-1" },
+              ],
+            },
+          ],
+          payeeMap: { "payee-1": "Landlord" },
+        }}
+        billsRangeData={{
+          data: {
+            schedules: [
+              {
+                id: "bill-1:2026-04-20",
+                scheduleId: "bill-1",
+                name: "Rent",
+                next_date: "2026-04-20",
+                amount: 1800,
+                paid: false,
+                type: "bill",
+              },
+            ],
+            payeeMap: {},
+          },
+          loading: false,
+          ensureRange: async () => {},
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(within(panel).getAllByText("Rent").length).toBeGreaterThan(0);
+    expect(within(panel).getByText("$1,800.00")).toBeTruthy();
+  });
+
+  it("moves the selected floating bill detail when a mirror refresh changes the occurrence date", async () => {
+    window.innerWidth = 1900;
+
+    const initialBillsRange = {
+      data: {
+        schedules: [
+          {
+            id: "bill-1:2026-04-20",
+            scheduleId: "bill-1",
+            name: "Rent",
+            next_date: "2026-04-20",
+            amount: 1800,
+            paid: false,
+            type: "bill",
+          },
+        ],
+        payeeMap: {},
+      },
+      loading: false,
+      ensureRange: async () => {},
+    };
+    const movedBillsRange = {
+      data: {
+        schedules: [
+          {
+            id: "bill-1:2026-04-22",
+            scheduleId: "bill-1",
+            name: "Rent",
+            next_date: "2026-04-22",
+            amount: 1900,
+            paid: false,
+            type: "bill",
+          },
+        ],
+        payeeMap: {},
+      },
+      loading: false,
+      ensureRange: async () => {},
+    };
+
+    const renderModal = (billsRangeData) => wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{}}
+        billsRangeData={billsRangeData}
+        deadlinesData={{}}
+      />,
+    );
+
+    const { rerender } = render(renderModal(initialBillsRange));
+    const initialCell = await screen.findByTestId("calendar-cell-20");
+    fireEvent.click(within(initialCell).getByTestId("calendar-cell-item-chip"));
+
+    const initialPanel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(initialPanel.getAttribute("data-anchor-kind")).toBe("chip");
+    expect(within(initialPanel).getByText("$1,800.00")).toBeTruthy();
+
+    rerender(renderModal(movedBillsRange));
+
+    await waitFor(() => {
+      const movedCell = screen.getByTestId("calendar-cell-22");
+      const movedChip = within(movedCell).getByTestId("calendar-cell-item-chip");
+      expect(movedChip.getAttribute("data-item-id")).toBe("bill-1");
+      const movedPanel = screen.getByTestId("calendar-floating-detail-panel");
+      expect(movedPanel.getAttribute("data-anchor-kind")).toBe("chip");
+      expect(within(movedPanel).getByText("$1,900.00")).toBeTruthy();
+    });
+  });
+
 
   it("opens dashboard item focus after async deadline data resolves", async () => {
     window.innerWidth = 1900;

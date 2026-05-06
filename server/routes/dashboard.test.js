@@ -14,9 +14,12 @@ const testState = vi.hoisted(() => ({
   fetchTodoistTasks: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
-  getUpcomingBills: vi.fn(),
-  getActualMetadata: vi.fn(),
-  isSchedulePaid: vi.fn(),
+  readBillsMirrorCurrent: vi.fn(),
+  refreshBillsMirror: vi.fn(),
+  getBillsMirrorState: vi.fn(),
+  consumeDueBillsMirrorRefresh: vi.fn(),
+  clearPendingBillsMirrorRefresh: vi.fn(),
+  scheduleBillsMirrorRefresh: vi.fn(),
   getActiveSnapshotView: vi.fn(),
   syncActiveSnapshot: vi.fn(),
 }));
@@ -70,10 +73,13 @@ vi.mock("../briefing/todoist.js", () => ({
 vi.mock("../briefing/tombstones.js", () => ({
   hydrateRecurringTombstones: (...args) => testState.hydrateRecurringTombstones(...args),
 }));
-vi.mock("../briefing/actual.js", () => ({
-  getUpcomingBills: (...args) => testState.getUpcomingBills(...args),
-  getMetadata: (...args) => testState.getActualMetadata(...args),
-  isSchedulePaid: (...args) => testState.isSchedulePaid(...args),
+vi.mock("../briefing/bills-service.js", () => ({
+  readBillsMirrorCurrent: (...args) => testState.readBillsMirrorCurrent(...args),
+  refreshBillsMirror: (...args) => testState.refreshBillsMirror(...args),
+  getBillsMirrorState: (...args) => testState.getBillsMirrorState(...args),
+  consumeDueBillsMirrorRefresh: (...args) => testState.consumeDueBillsMirrorRefresh(...args),
+  clearPendingBillsMirrorRefresh: (...args) => testState.clearPendingBillsMirrorRefresh(...args),
+  scheduleBillsMirrorRefresh: (...args) => testState.scheduleBillsMirrorRefresh(...args),
 }));
 vi.mock("../briefing/snapshot-service.js", () => ({
   getActiveSnapshotView: (...args) => testState.getActiveSnapshotView(...args),
@@ -224,13 +230,29 @@ describe("GET /api/dashboard/current", () => {
       ageMs: 30_000,
     });
     testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
-    testState.getUpcomingBills.mockReset().mockResolvedValue([]);
-    testState.getActualMetadata.mockReset().mockResolvedValue({
-      schedules: [],
+    testState.readBillsMirrorCurrent.mockReset().mockResolvedValue({
+      bills: [],
+      allSchedules: [],
       payeeMap: {},
-      recentTransactions: [],
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
     });
-    testState.isSchedulePaid.mockReset().mockReturnValue(false);
+    testState.refreshBillsMirror.mockReset().mockResolvedValue({
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
+    });
+    testState.getBillsMirrorState.mockReset().mockResolvedValue({
+      syncHealth: { state: "current", configured: true, pendingRefreshAt: null },
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    testState.consumeDueBillsMirrorRefresh.mockReset().mockResolvedValue(false);
+    testState.clearPendingBillsMirrorRefresh.mockReset().mockResolvedValue();
+    testState.scheduleBillsMirrorRefresh.mockReset().mockResolvedValue({ pendingRefreshAt: "2026-05-04T12:00:00.000Z" });
     testState.getActiveSnapshotView.mockReset().mockResolvedValue({
       snapshot: { id: 42 },
       lanes: { needs_attention: [], fyi: [], noise: [] },
@@ -297,17 +319,18 @@ describe("GET /api/dashboard/current", () => {
       },
       systemStatus: {
         state: "current",
-        sources: [
+        sources: expect.arrayContaining([
           expect.objectContaining({ key: "currentData", state: "current" }),
           expect.objectContaining({ key: "todoist", state: "current" }),
-        ],
+          expect.objectContaining({ key: "bills", state: "current" }),
+        ]),
       },
     });
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
     expect(testState.fetchCTMDeadlines).not.toHaveBeenCalled();
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
-    expect(testState.getUpcomingBills).not.toHaveBeenCalled();
+    expect(testState.readBillsMirrorCurrent).not.toHaveBeenCalled();
     expect(testState.getActiveSnapshotView).toHaveBeenCalledWith("u1");
     expect(testState.getTodoistSyncHealth).toHaveBeenCalledWith("u1");
   });
@@ -339,10 +362,11 @@ describe("GET /api/dashboard/current", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.systemStatus.state).toBe("needs_sync");
-    expect(res.body.systemStatus.sources).toEqual([
+    expect(res.body.systemStatus.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "currentData", state: "current", severity: "none" }),
       expect.objectContaining({ key: "todoist", state: "needs_sync", severity: "warning" }),
-    ]);
+      expect.objectContaining({ key: "bills", state: "current", severity: "none" }),
+    ]));
     expect(res.body.refresh).toMatchObject({
       mode: "passive",
       scheduled: expect.arrayContaining([
@@ -383,7 +407,57 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
-    expect(testState.getUpcomingBills).not.toHaveBeenCalled();
+    expect(testState.readBillsMirrorCurrent).not.toHaveBeenCalled();
+  });
+
+  it("manual refresh forces a pending Bills mirror refresh even when current cache is fresh", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [{ id: "cached-bill" }],
+      allSchedules: [{ id: "cached-bill" }],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: {
+        state: "needs_sync",
+        configured: true,
+        pendingRefreshAt: "2026-05-04T12:01:00.000Z",
+      },
+    });
+    testState.getBillsMirrorState.mockResolvedValueOnce({
+      syncHealth: {
+        state: "needs_sync",
+        configured: true,
+        pendingRefreshAt: "2026-05-04T12:01:00.000Z",
+      },
+      actualBudgetUrl: "https://actual.example.test",
+    });
+
+    const res = await request(makeApp())
+      .post("/api/dashboard/current/refresh")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.refresh).toMatchObject({
+      mode: "manual",
+      scheduled: expect.arrayContaining([
+        expect.objectContaining({ key: "bills_current", reason: "pending_bills_mirror" }),
+      ]),
+      skipped: expect.not.arrayContaining([
+        expect.objectContaining({ key: "bills_current" }),
+      ]),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
+      actualBudgetUrl: "https://actual.example.test",
+      force: true,
+    }));
+    expect(testState.clearPendingBillsMirrorRefresh).toHaveBeenCalledWith("u1", expect.objectContaining({
+      force: true,
+    }));
   });
 
   it("refreshes deadlines when the Todoist mirror is newer than the deadlines cache", async () => {
@@ -461,7 +535,7 @@ describe("GET /api/dashboard/current", () => {
       },
       todoist: { state: "syncing", configured: true },
     });
-    expect(res.body.systemStatus.sources).toEqual([
+    expect(res.body.systemStatus.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({
         key: "currentData",
         state: "current",
@@ -476,7 +550,8 @@ describe("GET /api/dashboard/current", () => {
         lastSuccessAt: "2026-05-04T12:00:00.000Z",
         message: expect.stringMatching(/sync/i),
       }),
-    ]);
+      expect.objectContaining({ key: "bills", state: "current" }),
+    ]));
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
@@ -505,14 +580,15 @@ describe("GET /api/dashboard/current", () => {
       configured: null,
       lastError: "Todoist OAuth refresh failed",
     });
-    expect(res.body.systemStatus.sources).toEqual([
+    expect(res.body.systemStatus.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "currentData", state: "current" }),
       expect.objectContaining({
         key: "todoist",
         state: "unavailable",
         message: "Todoist mirror is unavailable.",
       }),
-    ]);
+      expect.objectContaining({ key: "bills", state: "current" }),
+    ]));
   });
 
   it("starts a background current refresh and returns cached rows without waiting for providers", async () => {
@@ -532,8 +608,7 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchCalendar.mockReturnValueOnce(pending);
     testState.fetchCTMDeadlines.mockReturnValueOnce(pending);
     testState.fetchTodoistTasks.mockReturnValueOnce(pending);
-    testState.getUpcomingBills.mockReturnValueOnce(pending);
-    testState.getActualMetadata.mockReturnValueOnce(pending);
+    testState.readBillsMirrorCurrent.mockReturnValueOnce(pending);
 
     const startedAt = Date.now();
     const res = await request(makeApp())
@@ -583,11 +658,13 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-2", title: "Planning" }]);
     testState.fetchCTMDeadlines.mockResolvedValueOnce([{ id: "ctm-2" }]);
     testState.fetchTodoistTasks.mockResolvedValueOnce([{ id: "todoist-1" }]);
-    testState.getUpcomingBills.mockResolvedValueOnce([{ id: "bill-2", payee: "Rent" }]);
-    testState.getActualMetadata.mockResolvedValueOnce({
-      schedules: [{ id: "schedule-1" }],
+    testState.readBillsMirrorCurrent.mockResolvedValueOnce({
+      bills: [{ id: "bill-2", payee: "Rent" }],
+      allSchedules: [{ id: "schedule-1" }],
       payeeMap: { payee_1: "Rent" },
-      recentTransactions: [{ id: "txn-1" }],
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
     });
 
     const res = await request(makeApp())
@@ -603,7 +680,7 @@ describe("GET /api/dashboard/current", () => {
         todoist: { upcoming: [{ id: "todoist-1" }], stats: { total: 1 } },
       },
       bills: [{ id: "bill-2", payee: "Rent" }],
-      allSchedules: [{ id: "schedule-1", paid: false }],
+      allSchedules: [{ id: "schedule-1" }],
       payeeMap: { payee_1: "Rent" },
       providerHealth: {
         currentData: {
@@ -617,8 +694,9 @@ describe("GET /api/dashboard/current", () => {
     ]);
     expect(testState.fetchCTMDeadlines).toHaveBeenCalledTimes(1);
     expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: false });
-    expect(testState.getUpcomingBills).toHaveBeenCalledWith("u1");
-    expect(testState.getActualMetadata).toHaveBeenCalledWith("u1");
+    expect(testState.readBillsMirrorCurrent).toHaveBeenCalledWith("u1", expect.objectContaining({
+      dbClient: expect.any(Object),
+    }));
 
     const cached = await testState.db.current.execute({
       sql: "SELECT cache_key, payload_json, status, error_message FROM ea_current_data_cache WHERE user_id = ? ORDER BY cache_key",
@@ -710,12 +788,6 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-ok" }]);
     testState.fetchCTMDeadlines.mockResolvedValueOnce([]);
     testState.fetchTodoistTasks.mockResolvedValueOnce([]);
-    testState.getUpcomingBills.mockResolvedValueOnce([]);
-    testState.getActualMetadata.mockResolvedValueOnce({
-      schedules: [],
-      payeeMap: {},
-      recentTransactions: [],
-    });
 
     const res = await request(makeApp())
       .get("/api/dashboard/current")
@@ -800,13 +872,25 @@ describe("POST /api/dashboard/current/sync", () => {
     testState.fetchCTMDeadlines.mockReset().mockResolvedValue([]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
     testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
-    testState.getUpcomingBills.mockReset().mockResolvedValue([{ id: "synced-bill" }]);
-    testState.getActualMetadata.mockReset().mockResolvedValue({
-      schedules: [],
+    testState.refreshBillsMirror.mockReset().mockResolvedValue({
+      bills: [{ id: "synced-bill" }],
+      allSchedules: [],
       payeeMap: {},
-      recentTransactions: [],
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
     });
-    testState.isSchedulePaid.mockReset().mockReturnValue(false);
+    testState.readBillsMirrorCurrent.mockReset().mockResolvedValue({
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
+    });
+    testState.consumeDueBillsMirrorRefresh.mockReset().mockResolvedValue(false);
+    testState.clearPendingBillsMirrorRefresh.mockReset().mockResolvedValue();
+    testState.scheduleBillsMirrorRefresh.mockReset().mockResolvedValue({ pendingRefreshAt: "2026-05-04T12:00:00.000Z" });
     testState.getActiveSnapshotView.mockReset().mockResolvedValue({ snapshot: { id: 41 } });
     testState.syncActiveSnapshot.mockReset().mockResolvedValue({ snapshot: { id: 99 } });
   });
@@ -846,7 +930,10 @@ describe("POST /api/dashboard/current/sync", () => {
     expect(testState.fetchWeather).toHaveBeenCalledTimes(1);
     expect(testState.fetchCalendar).toHaveBeenCalledTimes(1);
     expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: true });
-    expect(testState.getUpcomingBills).toHaveBeenCalledTimes(1);
+    expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
+      actualBudgetUrl: "https://actual.example.test",
+      force: true,
+    }));
     expect(testState.syncActiveSnapshot).toHaveBeenCalledWith("u1");
   });
 

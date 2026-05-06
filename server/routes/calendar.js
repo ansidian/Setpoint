@@ -2,7 +2,10 @@ import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.js";
 import { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } from "../briefing/ctm.js";
 import { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } from "../briefing/todoist.js";
-import { getCalendarBillsRange } from "../briefing/actual.js";
+import {
+  readBillsMirrorRange,
+  scheduleBillsMirrorRefresh,
+} from "../briefing/bills-service.js";
 import {
   loadCompletedTaskIds,
   separateDeadlines,
@@ -256,11 +259,12 @@ router.get("/bills/range", async (req, res) => {
   try {
     const userId = process.env.EA_USER_ID;
     const errors = [];
-    const data = await getCalendarBillsRange(userId, { start: range.start, end: range.end })
-      .catch((err) => {
-        errors.push(quietSourceError("actual", err));
-        return { schedules: [], recentTransactions: [], payeeMap: {}, actualBudgetUrl: null };
+    const data = await readBillsMirrorRange(userId, { start: range.start, end: range.end });
+    if (data.syncHealth?.state === "needs_sync") {
+      scheduleBillsMirrorRefresh(userId).catch((err) => {
+        console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
       });
+    }
 
     res.json({
       ...data,

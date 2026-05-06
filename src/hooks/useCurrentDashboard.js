@@ -57,6 +57,7 @@ function currentToLiveData(current, { refreshNow, isPolling }) {
     billsLoading: !!current?.actualConfigured && isPolling && !(current?.bills || []).length,
     actualConfigured: !!current?.actualConfigured,
     actualBudgetUrl: current?.actualBudgetUrl || null,
+    billsSyncHealth: current?.billsSyncHealth || null,
     snoozedEntries: [],
     resurfacedEntries: [],
     providerHealth: current?.providerHealth || null,

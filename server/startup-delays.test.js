@@ -8,6 +8,7 @@ describe("startup worker delays", () => {
       indexer: 0,
       backfill: 0,
       snooze: 0,
+      billsMirror: 0,
     });
     expect(buildStartupWorkerDelays({ NODE_ENV: "test" }, () => 0.9).indexer).toBe(0);
   });
@@ -31,6 +32,7 @@ describe("startup worker delays", () => {
       backfill: 722_500,
       snooze: 122_500,
       todoistSync: 122_500,
+      billsMirror: 152_500,
     });
   });
 
@@ -41,6 +43,7 @@ describe("startup worker delays", () => {
       scheduler: 60_000,
       snooze: 60_000,
       todoistSync: 60_000,
+      billsMirror: 90_000,
       indexer: 180_000,
       backfill: 660_000,
     });
@@ -54,6 +57,7 @@ describe("startup worker delays", () => {
       EA_STARTUP_INDEXER_OFFSET_MS: "2000",
       EA_STARTUP_BACKFILL_OFFSET_MS: "3000",
       EA_STARTUP_TODOIST_SYNC_OFFSET_MS: "4000",
+      EA_STARTUP_BILLS_MIRROR_OFFSET_MS: "5000",
     }, () => 0);
 
     expect(delays).toMatchObject({
@@ -61,6 +65,7 @@ describe("startup worker delays", () => {
       indexer: 3000,
       backfill: 4000,
       todoistSync: 5000,
+      billsMirror: 6000,
     });
   });
 });

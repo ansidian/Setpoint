@@ -93,7 +93,10 @@ export default function useCalendarModalViewModel({
         ? selectedItems
         : selectedDayState.items || [];
     const resolveItemId = activeView.getItemId;
-    const hasSelectedItem = pool.some((item) => String(resolveItemId(item)) === String(activeSelectedItemId));
+    const hasSelectedItem = pool.some((item) => (
+      activeView.matchesItemId?.(item, activeSelectedItemId)
+      || String(resolveItemId(item)) === String(activeSelectedItemId)
+    ));
     return hasSelectedItem ? String(activeSelectedItemId) : null;
   })();
   const hasSelectedDay = activeSelectedDay != null;

@@ -29,7 +29,7 @@ function toAgendaBill(bill, dateKey) {
   return {
     ...bill,
     agendaDateKey: dateKey,
-    agendaItemId: String(bill.id),
+    agendaItemId: String(bill.scheduleId || bill.id),
     agendaKey: `${bill.id}-${dateKey}`,
     agendaTitle: bill.name || bill.payee || "Untitled bill",
     agendaSubtitle: bill.payee && bill.payee !== bill.name ? bill.payee : "",

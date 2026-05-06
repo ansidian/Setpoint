@@ -22,7 +22,7 @@ const billsView = {
   renderFooter: renderBillsFooter,
   HeaderExtras: UtilityStatusButton,
   getDefaultSelectedItemId,
-  getItemId: (bill) => bill?.id,
+  getItemId: (bill) => bill?.scheduleId || bill?.id,
   matchesItemId: billMatchesItemId,
   label: "Bills",
 };

@@ -12,7 +12,7 @@ import {
 } from "../../DetailRailPrimitives.jsx";
 import { useDetailRailMotion } from "../../detailRailMotion.js";
 import { formatAmount, formatDate, daysLabel, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
-import { formatFullDate, getDayState } from "./billsModel.js";
+import { billMatchesItemId, formatFullDate, getDayState } from "./billsModel.js";
 
 function getScheduleUrl(bill, actualBudgetUrl) {
   const scheduleId = bill?.scheduleId || bill?.id;
@@ -182,7 +182,7 @@ function toBillRailItem(bill, selectedBillId, onSelectItem) {
     subtitle: bill.payee && bill.payee !== bill.name ? bill.payee : null,
     meta: bill.type === "transfer" ? "Transfer" : bill.paid ? "Cleared" : "Scheduled",
     complete: bill.paid,
-    selected: String(bill.id) === String(selectedBillId),
+    selected: billMatchesItemId(bill, selectedBillId),
     onClick: onSelectItem ? () => onSelectItem(String(bill.id)) : undefined,
     dotColor: bill.paid ? "#a6e3a1" : bill.type === "transfer" ? "#b4befe" : urgency.accent,
     trailing: (
@@ -216,7 +216,7 @@ function BillsDetail({
   const state = getDayState(items);
   const [showCompleted, setShowCompleted] = useState(state.activeCount === 0 && state.completedCount > 0);
   const allItems = [...state.activeItems, ...state.completedItems];
-  const selectedBill = allItems.find((bill) => String(bill.id) === String(selectedItemId)) || null;
+  const selectedBill = allItems.find((bill) => billMatchesItemId(bill, selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
   const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
   const summary = [
@@ -273,7 +273,7 @@ function BillsFloatingDetail({
   const actualBudgetUrl = data?.actualBudgetUrl;
   const state = getDayState(items);
   const allItems = [...state.activeItems, ...state.completedItems];
-  const selectedBill = allItems.find((bill) => String(bill.id) === String(selectedItemId)) || null;
+  const selectedBill = allItems.find((bill) => billMatchesItemId(bill, selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
   const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
 
