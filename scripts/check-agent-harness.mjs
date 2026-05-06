@@ -5,12 +5,7 @@ import process from 'node:process'
 const root = process.cwd()
 const componentSizeBaseline = {
   threshold: 600,
-  // PER-27 closeout records current oversized component debt so future growth fails loudly.
-  // This file needs focused decomposition work, but that refactor is outside the triage
-  // redesign parent scope and should not be mixed into the closeout.
-  files: {
-    'src/components/todoist/add-task-panel/AddTaskPanelView.jsx': 1162,
-  },
+  files: {},
 }
 
 const failures = []
