@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import useCurrentDashboard from "../hooks/useCurrentDashboard";
 import useAutoRefresh from "../hooks/useAutoRefresh";
 import useNotifications from "../hooks/useNotifications";
+import useTriageNotificationSounds from "../hooks/useTriageNotificationSounds";
 import useCalendarDomainRange from "../hooks/useCalendarDomainRange";
 import useCalendarRange from "../hooks/useCalendarRange";
 import { RedesignShell, DashboardBody } from "../components/dashboard/RedesignShell";
@@ -32,7 +33,10 @@ function withSyncWatchdog(promise) {
 }
 
 export default function Dashboard() {
-  const currentDashboard = useCurrentDashboard();
+  const triageNotificationSounds = useTriageNotificationSounds();
+  const currentDashboard = useCurrentDashboard({
+    onDashboardEvent: triageNotificationSounds.handleDashboardEvent,
+  });
   const liveData = currentDashboard.liveData;
   const activeSnapshot = currentDashboard.activeSnapshot;
   const calendarRange = useCalendarRange();
@@ -47,6 +51,14 @@ export default function Dashboard() {
     emptyData: null,
   });
   useNotifications(liveData);
+  const liveCalendar = liveData.liveCalendar;
+  const liveLastFetched = liveData.lastFetched;
+  useEffect(() => {
+    triageNotificationSounds.handleCalendarSnapshot({
+      liveCalendar,
+      lastFetched: liveLastFetched,
+    });
+  }, [liveCalendar, liveLastFetched, triageNotificationSounds]);
   const bd = currentDashboard.briefingData;
   const [currentSyncing, setCurrentSyncing] = useState(false);
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);
@@ -238,6 +250,7 @@ export default function Dashboard() {
         briefing={effectiveBriefing}
         setBriefing={bd.setBriefing}
         setCalendarDeadlines={updateCalendarDeadlinesLocal}
+        onTaskCompleted={triageNotificationSounds.handleTaskCompleted}
       >
         <RedesignShell
           bd={shellBd}

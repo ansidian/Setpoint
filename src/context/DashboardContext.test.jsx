@@ -93,12 +93,14 @@ describe("DashboardContext Todoist local state", () => {
     };
     const setBriefing = vi.fn((updater) => updater(briefing));
     const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const onTaskCompleted = vi.fn();
 
     render(
       <DashboardProvider
         briefing={briefing}
         setBriefing={setBriefing}
         setCalendarDeadlines={setCalendarDeadlines}
+        onTaskCompleted={onTaskCompleted}
       >
         <Probe task={task} />
       </DashboardProvider>,
@@ -120,6 +122,7 @@ describe("DashboardContext Todoist local state", () => {
       await vi.advanceTimersByTimeAsync(600);
     });
 
+    expect(onTaskCompleted).toHaveBeenCalledWith("todo-range-only");
     const completedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
     expect(completedDeadlines.todoist.upcoming[0]).toMatchObject({
       id: "todo-range-only",
@@ -154,12 +157,14 @@ describe("DashboardContext Todoist local state", () => {
     };
     const setBriefing = vi.fn((updater) => updater(briefing));
     const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const onTaskCompleted = vi.fn();
 
     render(
       <DashboardProvider
         briefing={briefing}
         setBriefing={setBriefing}
         setCalendarDeadlines={setCalendarDeadlines}
+        onTaskCompleted={onTaskCompleted}
       >
         <Probe task={task} />
       </DashboardProvider>,
@@ -176,9 +181,11 @@ describe("DashboardContext Todoist local state", () => {
     expect(completingDeadlines.todoist.upcoming[0]._completing).toBeUndefined();
 
     await act(async () => {
+      await Promise.resolve();
       await vi.advanceTimersByTimeAsync(600);
     });
 
+    expect(onTaskCompleted).toHaveBeenCalledWith("shared-id");
     const completedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
     expect(completedDeadlines.ctm.upcoming[0]).toMatchObject({
       id: "shared-id",

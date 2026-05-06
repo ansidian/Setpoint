@@ -288,6 +288,37 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("passes dashboard-current SSE payloads to event consumers while refetching", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const onDashboardEvent = vi.fn();
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        fetchedAt: "2026-05-05T00:21:00.000Z",
+      });
+
+    const { unmount } = renderHook(() => useCurrentDashboard({ onDashboardEvent }));
+    await act(async () => {});
+
+    const payload = {
+      source: "email_triage",
+      reason: "email_triage_finalized",
+      details: {
+        triggerType: "needs_attention_finalized",
+        eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+      },
+    };
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", payload);
+      await Promise.resolve();
+    });
+
+    expect(onDashboardEvent).toHaveBeenCalledWith(payload);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
   it("closes the dashboard-current event stream on unmount and skips it when disabled", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const { unmount } = renderHook(() => useCurrentDashboard());

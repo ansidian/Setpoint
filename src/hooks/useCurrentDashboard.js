@@ -66,7 +66,7 @@ function currentToLiveData(current, { refreshNow, isPolling }) {
   };
 }
 
-export default function useCurrentDashboard({ disabled = false } = {}) {
+export default function useCurrentDashboard({ disabled = false, onDashboardEvent = null } = {}) {
   const [current, setCurrent] = useState(null);
   const [selectedBriefing, setSelectedBriefing] = useState(null);
   const [loading, setLoading] = useState(!disabled);
@@ -78,6 +78,7 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
   const queuedEventRefetchRef = useRef(false);
   const hiddenEventRefetchRef = useRef(false);
   const runEventRefetchRef = useRef(null);
+  const onDashboardEventRef = useRef(onDashboardEvent);
 
   const applyCurrent = useCallback((data) => {
     if (!mountedRef.current) return data;
@@ -145,6 +146,10 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
     runEventRefetchRef.current = runEventRefetch;
   }, [runEventRefetch]);
 
+  useEffect(() => {
+    onDashboardEventRef.current = onDashboardEvent;
+  }, [onDashboardEvent]);
+
   const loadCurrent = useCallback(async ({ mode = "load" } = {}) => {
     if (disabled) return null;
     const fetcher = mode === "force"
@@ -203,7 +208,14 @@ export default function useCurrentDashboard({ disabled = false } = {}) {
   useEffect(() => {
     if (disabled || typeof EventSource === "undefined") return undefined;
     const source = new EventSource("/api/dashboard/current/events");
-    const handleChanged = () => {
+    const handleChanged = (event) => {
+      if (typeof onDashboardEventRef.current === "function") {
+        try {
+          onDashboardEventRef.current(JSON.parse(event?.data || "{}"));
+        } catch {
+          onDashboardEventRef.current(null);
+        }
+      }
       runEventRefetch();
     };
     source.addEventListener("dashboard-current-changed", handleChanged);

@@ -5,12 +5,25 @@ import { BrowserRouter } from "react-router-dom";
 const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
   getSettings: vi.fn(),
+  updateSettings: vi.fn(),
+  soundSettingsPayload: {
+    laneScope: "needs_attention_and_fyi",
+    volume: 1,
+    triggers: {
+      needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+      fyi_finalized: { enabled: true, soundId: "smooth_modern" },
+      weak_security_grace: { enabled: true, soundId: "low_tone" },
+      triage_failed: { enabled: false, soundId: "low_tone" },
+      event_upcoming: { enabled: true, soundId: "clear_chime" },
+      task_completed: { enabled: true, soundId: "smooth_modern" },
+    },
+  },
 }));
 
 vi.mock("@/api", () => ({
   getAccounts: mockApi.getAccounts,
   getSettings: mockApi.getSettings,
-  updateSettings: vi.fn(),
+  updateSettings: mockApi.updateSettings,
 }));
 
 vi.mock("@/components/settings/sections/AccountsSettingsSection", () => ({
@@ -20,8 +33,18 @@ vi.mock("@/components/settings/sections/AccountsSettingsSection", () => ({
 }));
 
 vi.mock("@/components/settings/sections/EmailAutomationSettingsSection", () => ({
-  default: function EmailAutomationSettingsSectionMock() {
-    return <div data-testid="settings-briefing-section">email automation section</div>;
+  default: function EmailAutomationSettingsSectionMock({ patch }) {
+    return (
+      <div data-testid="settings-briefing-section">
+        email automation section
+        <button
+          type="button"
+          onClick={() => patch({ triage_sound_settings: mockApi.soundSettingsPayload })}
+        >
+          Mock Save Sound Track
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -50,6 +73,7 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/settings");
   mockApi.getAccounts.mockResolvedValue([]);
   mockApi.getSettings.mockResolvedValue({});
+  mockApi.updateSettings.mockResolvedValue({ success: true });
 });
 
 describe("Settings page", () => {
@@ -117,6 +141,22 @@ describe("Settings page", () => {
     });
     await waitFor(() => {
       expect(screen.getByTestId("settings-system-section")).toBeTruthy();
+    });
+  });
+
+  it("flushes pending settings when leaving before the autosave debounce fires", async () => {
+    window.history.replaceState({}, "", "/settings?tab=briefing");
+
+    const { unmount } = renderSettings();
+
+    expect(await screen.findByTestId("settings-briefing-section")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Mock Save Sound Track" }));
+    unmount();
+
+    await waitFor(() => {
+      expect(mockApi.updateSettings).toHaveBeenCalledWith({
+        triage_sound_settings: mockApi.soundSettingsPayload,
+      });
     });
   });
 });

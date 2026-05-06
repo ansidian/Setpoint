@@ -41,6 +41,39 @@ describe("current dashboard events", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves structured event details for typed dashboard consumers", () => {
+    const event = publishCurrentDashboardEvent("u1", {
+      source: "email_triage",
+      reason: "email_triage_finalized",
+      state: "current",
+      occurredAt: "2026-05-05T00:00:02.000Z",
+      details: {
+        triggerType: "needs_attention_finalized",
+        eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+        emailId: "msg-1",
+        lane: "needs_attention",
+        triageSource: "strong_model",
+        reason: "email_triage_finalized",
+      },
+    });
+
+    expect(event).toEqual({
+      type: "dashboard_current_changed",
+      source: "email_triage",
+      reason: "email_triage_finalized",
+      state: "current",
+      occurredAt: "2026-05-05T00:00:02.000Z",
+      details: {
+        triggerType: "needs_attention_finalized",
+        eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+        emailId: "msg-1",
+        lane: "needs_attention",
+        triageSource: "strong_model",
+        reason: "email_triage_finalized",
+      },
+    });
+  });
+
   it("formats dashboard-current SSE events as refetch hints", () => {
     expect(formatCurrentDashboardSse({
       type: "dashboard_current_changed",

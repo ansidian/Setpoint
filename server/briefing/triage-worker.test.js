@@ -158,6 +158,14 @@ describe("email triage worker", () => {
       expect.objectContaining({
         source: "email_triage",
         reason: "weak_security_grace_delayed",
+        details: {
+          triggerType: "weak_security_grace",
+          eventKey: "email_triage:gmail-work:msg-1:weak_security_grace_delayed",
+          emailId: "msg-1",
+          lane: "needs_attention",
+          triageSource: "weak_security_grace",
+          reason: "weak_security_grace_delayed",
+        },
       }),
     ]);
     unsubscribe();
@@ -674,6 +682,7 @@ describe("email triage worker", () => {
   });
 
   it("stores preflight reason metadata for no-model rule finalization", async () => {
+    __resetCurrentDashboardEventsForTests();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       from_name: "USPS Informed Delivery",
@@ -682,6 +691,8 @@ describe("email triage worker", () => {
       body_snippet: "Mail and packages arriving soon.",
       body_text: "This digest includes an unsubscribe footer.",
     });
+    const events = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
     const modelClient = { classify: vi.fn() };
 
     const result = await processNextEmailTriageJob({
@@ -717,9 +728,25 @@ describe("email triage worker", () => {
         modelSaved: true,
       },
     });
+    expect(events).toEqual([
+      expect.objectContaining({
+        source: "email_triage",
+        reason: "email_triage_finalized",
+        details: {
+          triggerType: "fyi_finalized",
+          eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+          emailId: "msg-1",
+          lane: "fyi",
+          triageSource: "rule",
+          reason: "email_triage_finalized",
+        },
+      }),
+    ]);
+    unsubscribe();
   });
 
   it("routes high-risk payment mail directly to the strong model and stores usage", async () => {
+    __resetCurrentDashboardEventsForTests();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due for tuition",
@@ -728,6 +755,8 @@ describe("email triage worker", () => {
       from_name: "University Billing",
       from_address: "billing@school.example",
     });
+    const events = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
     const modelClient = {
       classify: vi.fn(async ({ tier }) => ({
         decision: {
@@ -799,6 +828,21 @@ describe("email triage worker", () => {
       amount: 450,
       requires_confirmation: true,
     });
+    expect(events).toEqual([
+      expect.objectContaining({
+        source: "email_triage",
+        reason: "email_triage_finalized",
+        details: {
+          triggerType: "needs_attention_finalized",
+          eventKey: "email_triage:gmail-work:msg-1:email_triage_finalized",
+          emailId: "msg-1",
+          lane: "needs_attention",
+          triageSource: "strong_model",
+          reason: "email_triage_finalized",
+        },
+      }),
+    ]);
+    unsubscribe();
   });
 
   it("uses the configured inbox triage model for direct strong triage", async () => {
@@ -1339,6 +1383,7 @@ describe("email triage worker", () => {
   });
 
   it("fails open into Needs Attention with Needs Review when model triage fails", async () => {
+    __resetCurrentDashboardEventsForTests();
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Can you review this?",
@@ -1347,6 +1392,8 @@ describe("email triage worker", () => {
       from_name: "Requester",
       from_address: "requester@example.com",
     });
+    const events = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
     const modelClient = {
       classify: vi.fn(async () => {
         throw new Error("model unavailable");
@@ -1388,6 +1435,21 @@ describe("email triage worker", () => {
       status: "complete",
       last_error: "model unavailable",
     });
+    expect(events).toEqual([
+      expect.objectContaining({
+        source: "email_triage",
+        reason: "email_triage_failed",
+        details: {
+          triggerType: "triage_failed",
+          eventKey: "email_triage:gmail-work:msg-1:email_triage_failed",
+          emailId: "msg-1",
+          lane: "needs_attention",
+          triageSource: "failure_fallback",
+          reason: "email_triage_failed",
+        },
+      }),
+    ]);
+    unsubscribe();
   });
 
   it("skips already-finalized triage rows instead of reprocessing them", async () => {

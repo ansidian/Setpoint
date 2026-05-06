@@ -1,0 +1,52 @@
+[
+  {
+    "id": "smooth_modern",
+    "label": "Smooth Modern",
+    "path": "/sounds/notifications/smooth-modern.mp3"
+  },
+  {
+    "id": "clear_chime",
+    "label": "Clear chime",
+    "path": "/sounds/notifications/clear-chime.mp3"
+  },
+  {
+    "id": "hard_pop_click",
+    "label": "Hard pop click",
+    "path": "/sounds/notifications/hard-pop-click.mp3"
+  },
+  {
+    "id": "quick_chime",
+    "label": "Quick chime",
+    "path": "/sounds/notifications/quick-chime.mp3"
+  },
+  {
+    "id": "bells_echo",
+    "label": "Bells echo",
+    "path": "/sounds/notifications/bells-echo.mp3"
+  },
+  {
+    "id": "flute_alert",
+    "label": "Flute alert",
+    "path": "/sounds/notifications/flute-alert.mp3"
+  },
+  {
+    "id": "interface_start",
+    "label": "Interface start",
+    "path": "/sounds/notifications/interface-start.mp3"
+  },
+  {
+    "id": "interface_remove",
+    "label": "Interface remove",
+    "path": "/sounds/notifications/interface-remove.mp3"
+  },
+  {
+    "id": "uplifting_flute",
+    "label": "Uplifting flute",
+    "path": "/sounds/notifications/uplifting-flute.mp3"
+  },
+  {
+    "id": "low_tone",
+    "label": "Low tone",
+    "path": "/sounds/notifications/low-tone.mp3"
+  }
+]

@@ -287,6 +287,27 @@ function noModelDecision(email) {
   };
 }
 
+function triageSoundTriggerType(reason, lane) {
+  if (reason === "weak_security_grace_delayed") return "weak_security_grace";
+  if (reason === "email_triage_failed") return "triage_failed";
+  if (reason === "email_triage_finalized") {
+    if (lane === "needs_attention") return "needs_attention_finalized";
+    if (lane === "fyi") return "fyi_finalized";
+  }
+  return "triage_event";
+}
+
+function emailTriageEventDetails(email, { reason, lane, triageSource }) {
+  return {
+    triggerType: triageSoundTriggerType(reason, lane),
+    eventKey: `email_triage:${email.account_id}:${email.email_id}:${reason}`,
+    emailId: email.email_id,
+    lane,
+    triageSource,
+    reason,
+  };
+}
+
 function maybeBillCandidate(email, decision) {
   if (decision.bill_candidate) return decision.bill_candidate;
   const text = emailSearchText(email);
@@ -905,6 +926,11 @@ async function delayWeakSecurityGrace(job, email, preflight, { dbClient, now }) 
     reason: "weak_security_grace_delayed",
     state: "current",
     occurredAt: nowIso(now),
+    details: emailTriageEventDetails(email, {
+      reason: "weak_security_grace_delayed",
+      lane: "needs_attention",
+      triageSource: "weak_security_grace",
+    }),
   });
 
   return classifyAfter;
@@ -1123,6 +1149,11 @@ export async function processNextEmailTriageJob({
     reason: status === "failed" ? "email_triage_failed" : "email_triage_finalized",
     state: "current",
     occurredAt: nowIso(now),
+    details: emailTriageEventDetails(email, {
+      reason: status === "failed" ? "email_triage_failed" : "email_triage_finalized",
+      lane: decision.lane,
+      triageSource: decision.triage_source,
+    }),
   });
 
   return {
