@@ -61,6 +61,16 @@ router.post("/snapshot/items/:itemId/dismiss", async (req, res) => {
   }
 });
 
+router.post("/snapshot/items/:itemId/restore", async (req, res) => {
+  try {
+    const itemId = Number(req.params.itemId);
+    res.json(await snapshotService.restoreSnapshotItemForToday(EA_USER_ID, itemId));
+  } catch (err) {
+    console.error("Error restoring snapshot item:", err);
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Failed to restore snapshot item" });
+  }
+});
+
 router.post("/snapshot/items/:itemId/handled", async (req, res) => {
   try {
     const itemId = Number(req.params.itemId);

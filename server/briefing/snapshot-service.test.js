@@ -12,6 +12,8 @@ import {
   markSnapshotItemHandled,
   moveSnapshotItemLane,
   reopenSnapshotItem,
+  restorePendingTriageEligibilityForEmail,
+  restoreSnapshotItemForToday,
   syncActiveSnapshot,
 } from "./snapshot-service.js";
 
@@ -538,6 +540,207 @@ describe("active briefing snapshots", () => {
     expect(view.lanes.fyi).toHaveLength(0);
   });
 
+  it("durably skips pending snapshot triage when dismissing pending grace rows", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-03T16:00:00.000Z");
+    const snapshot = await getOrCreateActiveSnapshot("user-1", { dbClient, now });
+    const triageResult = await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, triage_status, triage_source)
+            VALUES (?, ?, ?, 'needs_attention', 'security', 'pending', 'weak_security_grace')
+            RETURNING id`,
+      args: ["user-1", "gmail-work", "msg-pending-grace"],
+    });
+    const triageId = Number(triageResult.rows[0].id);
+    const itemResult = await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               source, source_at)
+            VALUES (?, ?, ?, ?, ?, 'needs_attention', 'Security triage pending.',
+                    'Classifying soon', 'normal', 'security', 'New sign-in',
+                    'pending_security_grace', '2026-05-03T16:10:00.000Z')
+            RETURNING id`,
+      args: [snapshot.id, triageId, "user-1", "gmail-work", "msg-pending-grace"],
+    });
+    const itemId = Number(itemResult.rows[0].id);
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'queued', ?, ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "msg-pending-grace",
+        "2026-05-03T16:10:00.000Z",
+        "email_triage:user-1:gmail-work:msg-pending-grace",
+      ],
+    });
+
+    await dismissSnapshotItemForToday("user-1", itemId, {
+      dbClient,
+      now: new Date("2026-05-03T16:05:00.000Z"),
+    });
+
+    const rows = await dbClient.execute({
+      sql: `SELECT i.dismissed_from_today_at,
+                   t.dismissed_at,
+                   t.triage_status,
+                   t.triage_source,
+                   t.lane,
+                   j.status,
+                   j.completed_at,
+                   j.scheduled_for,
+                   j.last_error
+            FROM ea_briefing_snapshot_items i
+            JOIN ea_email_triage t ON t.id = i.triage_id
+            JOIN ea_triage_jobs j ON j.user_id = i.user_id
+             AND j.account_id = i.account_id
+             AND j.email_id = i.email_id
+             AND j.job_type = 'email_triage'
+            WHERE i.id = ?`,
+      args: [itemId],
+    });
+
+    expect(rows.rows).toEqual([
+      {
+        dismissed_from_today_at: "2026-05-03T16:05:00.000Z",
+        dismissed_at: "2026-05-03T16:05:00.000Z",
+        triage_status: "skipped",
+        triage_source: "user_dismissed_pending",
+        lane: "needs_attention",
+        status: "complete",
+        completed_at: "2026-05-03T16:05:00.000Z",
+        scheduled_for: null,
+        last_error: "Skipped pending triage; user dismissed row",
+      },
+    ]);
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T16:05:00.000Z"),
+    });
+    expect(view.lanes.needs_attention).toHaveLength(0);
+    expect(view.laneCounts.needs_attention).toBe(0);
+  });
+
+  it("restores pending triage eligibility for undo after pending dismissal", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-03T16:00:00.000Z");
+    const snapshot = await getOrCreateActiveSnapshot("user-1", { dbClient, now });
+    const triageResult = await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source, dismissed_at)
+            VALUES (?, ?, ?, 'skipped', 'user_dismissed_pending', ?)
+            RETURNING id`,
+      args: ["user-1", "gmail-work", "msg-undo-pending", "2026-05-03T16:05:00.000Z"],
+    });
+    const triageId = Number(triageResult.rows[0].id);
+    await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               dismissed_from_today_at)
+            VALUES (?, ?, ?, ?, ?, 'needs_attention', 'Pending', 'Review',
+                    'normal', 'uncategorized', 'Pending undo', ?)`,
+      args: [
+        snapshot.id,
+        triageId,
+        "user-1",
+        "gmail-work",
+        "msg-undo-pending",
+        "2026-05-03T16:05:00.000Z",
+      ],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, completed_at, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'complete', ?, ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "msg-undo-pending",
+        "2026-05-03T16:05:00.000Z",
+        "email_triage:user-1:gmail-work:msg-undo-pending",
+      ],
+    });
+
+    const result = await restorePendingTriageEligibilityForEmail(
+      "user-1",
+      "gmail-work",
+      "msg-undo-pending",
+      { dbClient },
+    );
+
+    expect(result).toEqual({ updated: 1, itemsRestored: 1 });
+    const rows = await dbClient.execute({
+      sql: `SELECT t.dismissed_at,
+                   t.triage_status,
+                   t.triage_source,
+                   i.dismissed_from_today_at,
+                   j.status,
+                   j.completed_at,
+                   j.scheduled_for,
+                   j.last_error
+            FROM ea_email_triage t
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            JOIN ea_triage_jobs j ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+             AND j.job_type = 'email_triage'
+            WHERE t.email_id = ?`,
+      args: ["msg-undo-pending"],
+    });
+    expect(rows.rows).toEqual([
+      {
+        dismissed_at: null,
+        triage_status: "pending",
+        triage_source: "undo_restored_pending",
+        dismissed_from_today_at: null,
+        status: "queued",
+        completed_at: null,
+        scheduled_for: null,
+        last_error: "",
+      },
+    ]);
+  });
+
+  it("restores a dismissed active snapshot item without changing completed triage", async () => {
+    const dbClient = await createMigratedDb();
+    const { itemId } = await seedSnapshotItem(dbClient, {
+      emailId: "msg-dismissed-complete",
+    });
+    await dismissSnapshotItemForToday("user-1", itemId, {
+      dbClient,
+      now: new Date("2026-05-03T16:05:00.000Z"),
+    });
+
+    const restored = await restoreSnapshotItemForToday("user-1", itemId, { dbClient });
+
+    expect(restored.dismissed_from_today_at).toBeNull();
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status, t.triage_source, i.dismissed_from_today_at, j.status
+            FROM ea_email_triage t
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            LEFT JOIN ea_triage_jobs j ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+             AND j.job_type = 'email_triage'
+            WHERE i.id = ?`,
+      args: [itemId],
+    });
+    expect(rows.rows).toEqual([
+      {
+        triage_status: "complete",
+        triage_source: "unknown",
+        dismissed_from_today_at: null,
+        status: null,
+      },
+    ]);
+  });
+
   it("marks a Needs Attention item handled on the snapshot and canonical triage row", async () => {
     const dbClient = await createMigratedDb();
     const { itemId } = await seedSnapshotItem(dbClient, {
@@ -790,6 +993,66 @@ describe("active briefing snapshots", () => {
       args: [itemId],
     });
     expect(Number(preserved.rows[0].count)).toBe(1);
+  });
+
+  it("completes pending triage jobs when provider removal hides active rows", async () => {
+    const dbClient = await createMigratedDb();
+    const { itemId } = await seedSnapshotItem(dbClient, {
+      accountId: "gmail-work",
+      emailId: "msg-pending-trash",
+      lane: "needs_attention",
+    });
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET triage_status = 'pending'
+            WHERE email_id = ?`,
+      args: ["msg-pending-trash"],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'queued', ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "msg-pending-trash",
+        "email_triage:user-1:gmail-work:msg-pending-trash",
+      ],
+    });
+
+    await markProviderRemovedFromActiveSnapshots(
+      "user-1",
+      "gmail-work",
+      "msg-pending-trash",
+      "trashed",
+      {
+        dbClient,
+        now: new Date("2026-05-03T16:20:00.000Z"),
+      },
+    );
+
+    const rows = await dbClient.execute({
+      sql: `SELECT i.provider_removed_at,
+                   t.provider_state,
+                   j.status,
+                   j.completed_at,
+                   j.last_error
+            FROM ea_briefing_snapshot_items i
+            JOIN ea_email_triage t ON t.id = i.triage_id
+            JOIN ea_triage_jobs j ON j.email_id = i.email_id
+            WHERE i.id = ?`,
+      args: [itemId],
+    });
+
+    expect(rows.rows).toEqual([
+      {
+        provider_removed_at: "2026-05-03T16:20:00.000Z",
+        provider_state: "trashed",
+        status: "complete",
+        completed_at: "2026-05-03T16:20:00.000Z",
+        last_error: "Skipped pending triage; provider state trashed",
+      },
+    ]);
   });
 
   it("logs source timings while syncing the active snapshot", async () => {

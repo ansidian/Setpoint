@@ -2,15 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useKeyHold from "../../hooks/useKeyHold";
 import useInboxSelectionHistory from "../../hooks/email/useInboxSelectionHistory";
 import { useDashboard } from "../../context/DashboardContext";
+import useInboxUndoSlot from "./useInboxUndoSlot";
 import {
   markEmailAsRead,
   markEmailAsUnread,
   trashEmail,
   snoozeEmail,
+  unsnoozeEmail,
   markAllEmailsAsRead,
   searchEmails,
   moveSnapshotItemLane,
   dismissSnapshotItemForToday,
+  restoreSnapshotItemForToday,
   markSnapshotItemHandled,
   reopenSnapshotItem,
 } from "../../api";
@@ -65,6 +68,12 @@ export default function useInboxController({
     error: null,
   });
   const searchRequestRef = useRef(0);
+  const {
+    undo,
+    undoSlotRef,
+    replaceUndoSlot,
+    onUndo,
+  } = useInboxUndoSlot({ onActiveSnapshotRefresh });
 
   const setSessionField = useCallback((field, value) => {
     onSessionStateChange((prev) => ({
@@ -495,18 +504,73 @@ export default function useInboxController({
 
     if (kind === "trash") {
       if (readOnly) return;
+      const restoreSelectedId = id || uid;
       if (selectedEmail._live) {
         setLiveTrashedUids((prev) => {
           const next = new Set(prev);
           next.add(uid);
           return next;
         });
-        trashEmail(uid).then(() => onActiveSnapshotRefresh()).catch(() => {});
+        replaceUndoSlot({
+          type: "trash",
+          message: "Email moved to trash",
+          commit: async () => {
+            await trashEmail(uid);
+            await onActiveSnapshotRefresh();
+          },
+          undo: async () => {
+            setLiveTrashedUids((prev) => {
+              const next = new Set(prev);
+              next.delete(uid);
+              return next;
+            });
+            setSelectedId(restoreSelectedId);
+          },
+        });
       } else if (selectedEmail._activeSnapshot) {
-        trashEmail(uid).then(() => onActiveSnapshotRefresh()).catch(() => {});
+        const itemId = selectedEmail.snapshot_item_id ? String(selectedEmail.snapshot_item_id) : null;
+        if (itemId) {
+          setSnapshotOptimistic((prev) => {
+            const next = new Map(prev);
+            next.set(itemId, {
+              ...(prev.get(itemId) || {}),
+              hidden: true,
+              pendingAction: "trash",
+              pending: false,
+            });
+            return next;
+          });
+        }
+        replaceUndoSlot({
+          type: "trash",
+          message: "Email moved to trash",
+          commit: async () => {
+            await trashEmail(uid);
+            await onActiveSnapshotRefresh();
+          },
+          undo: async () => {
+            if (itemId) {
+              setSnapshotOptimistic((prev) => {
+                const next = new Map(prev);
+                next.delete(itemId);
+                return next;
+              });
+            }
+            setSelectedId(restoreSelectedId);
+          },
+        });
       } else {
         handleDismiss(id);
-        trashEmail(uid).catch(() => {});
+        replaceUndoSlot({
+          type: "trash",
+          message: "Email moved to trash",
+          commit: async () => {
+            await trashEmail(uid);
+          },
+          undo: async () => {
+            setSelectedId(restoreSelectedId);
+          },
+        });
       }
 
       setSnoozedMap((prev) => {
@@ -525,6 +589,10 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
+      const previousLane = selectedEmail._lane === "carryover"
+        ? "needs_attention"
+        : selectedEmail._lane;
+      const restoreSelectedId = id || uid;
       const requestToken = ++snapshotRequestRef.current;
       snapshotPendingRef.current.add(itemId);
       setSnapshotOptimistic((prev) => {
@@ -562,6 +630,27 @@ export default function useInboxController({
           });
           onActiveSnapshotRefresh();
         });
+      replaceUndoSlot({
+        type: "snapshot-move-lane",
+        message: `Moved to ${formatLaneLabel(payload)}`,
+        undo: async () => {
+          if (!previousLane || previousLane === payload) return;
+          await moveSnapshotItemLane(selectedEmail.snapshot_item_id, previousLane);
+          setSnapshotOptimistic((prev) => {
+            const next = new Map(prev);
+            next.set(itemId, {
+              ...(prev.get(itemId) || {}),
+              laneOverride: previousLane,
+              hidden: false,
+              pendingAction: "undo-move-lane",
+              pending: false,
+            });
+            return next;
+          });
+          setSelectedId(restoreSelectedId);
+          await onActiveSnapshotRefresh();
+        },
+      });
       return;
     }
 
@@ -570,6 +659,7 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
+      const restoreSelectedId = id || uid;
       const requestToken = ++snapshotRequestRef.current;
       snapshotPendingRef.current.add(itemId);
       setSnapshotOptimistic((prev) => {
@@ -606,6 +696,20 @@ export default function useInboxController({
           });
           onActiveSnapshotRefresh();
         });
+      replaceUndoSlot({
+        type: "snapshot-dismiss",
+        message: "Email dismissed",
+        undo: async () => {
+          await restoreSnapshotItemForToday(selectedEmail.snapshot_item_id);
+          setSnapshotOptimistic((prev) => {
+            const next = new Map(prev);
+            next.delete(itemId);
+            return next;
+          });
+          setSelectedId(restoreSelectedId);
+          await onActiveSnapshotRefresh();
+        },
+      });
       moveBy(1);
       return;
     }
@@ -615,6 +719,7 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
+      const restoreSelectedId = id || uid;
       const requestToken = ++snapshotRequestRef.current;
       snapshotPendingRef.current.add(itemId);
       setSnapshotOptimistic((prev) => {
@@ -654,6 +759,28 @@ export default function useInboxController({
           });
           onActiveSnapshotRefresh();
         });
+      replaceUndoSlot({
+        type: "snapshot-handled",
+        message: "Marked handled",
+        undo: async () => {
+          await reopenSnapshotItem(selectedEmail.snapshot_item_id);
+          setSnapshotOptimistic((prev) => {
+            const next = new Map(prev);
+            next.set(itemId, {
+              ...(prev.get(itemId) || {}),
+              hidden: false,
+              laneOverride: "needs_attention",
+              handledAt: null,
+              statusOverride: null,
+              pendingAction: "undo-handled",
+              pending: false,
+            });
+            return next;
+          });
+          setSelectedId(restoreSelectedId);
+          await onActiveSnapshotRefresh();
+        },
+      });
       moveBy(1);
       return;
     }
@@ -663,6 +790,7 @@ export default function useInboxController({
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
+      const restoreSelectedId = id || uid;
       const requestToken = ++snapshotRequestRef.current;
       snapshotPendingRef.current.add(itemId);
       setSnapshotOptimistic((prev) => {
@@ -702,6 +830,28 @@ export default function useInboxController({
           });
           onActiveSnapshotRefresh();
         });
+      replaceUndoSlot({
+        type: "snapshot-reopen",
+        message: "Email reopened",
+        undo: async () => {
+          await markSnapshotItemHandled(selectedEmail.snapshot_item_id);
+          setSnapshotOptimistic((prev) => {
+            const next = new Map(prev);
+            next.set(itemId, {
+              ...(prev.get(itemId) || {}),
+              hidden: false,
+              laneOverride: "handled",
+              handledAt: selectedEmail.handled_at || new Date().toISOString(),
+              statusOverride: "handled",
+              pendingAction: "undo-reopen",
+              pending: false,
+            });
+            return next;
+          });
+          setSelectedId(restoreSelectedId);
+          await onActiveSnapshotRefresh();
+        },
+      });
       return;
     }
 
@@ -715,12 +865,30 @@ export default function useInboxController({
         return next;
       });
       const snapshot = buildEmailSnapshot(selectedEmail);
-      snoozeEmail(uid, untilTs, snapshot).catch(() => {
+      const restoreSelectedId = id || uid;
+      const snoozePromise = snoozeEmail(uid, untilTs, snapshot).catch((err) => {
         setSnoozedMap((prev) => {
           const next = new Map(prev);
           next.delete(uid);
           return next;
         });
+        throw err;
+      });
+      snoozePromise.catch(() => {});
+      replaceUndoSlot({
+        type: "snooze",
+        message: "Email snoozed",
+        undo: async () => {
+          await snoozePromise.catch(() => {});
+          await unsnoozeEmail(uid);
+          setSnoozedMap((prev) => {
+            const next = new Map(prev);
+            next.delete(uid);
+            return next;
+          });
+          setSelectedId(restoreSelectedId);
+          await onActiveSnapshotRefresh();
+        },
       });
       moveBy(1);
       return;
@@ -761,6 +929,8 @@ export default function useInboxController({
     closeSelectedEmail,
     updateIndexedSearchRead,
     onActiveSnapshotRefresh,
+    replaceUndoSlot,
+    setSelectedId,
   ]);
 
   const trashHold = useKeyHold({
@@ -806,6 +976,14 @@ export default function useInboxController({
 
   useEffect(() => {
     function onKey(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        if (!undoSlotRef.current || isEditableKeyTarget(event.target)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onUndo();
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         event.stopPropagation();
@@ -815,9 +993,7 @@ export default function useInboxController({
       }
 
       if (
-        event.target.tagName === "INPUT"
-        || event.target.tagName === "TEXTAREA"
-        || event.target.isContentEditable
+        isEditableKeyTarget(event.target)
       ) {
         return;
       }
@@ -839,7 +1015,7 @@ export default function useInboxController({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moveBy, onAction, selectedEmail]);
+  }, [moveBy, onAction, onUndo, selectedEmail, undoSlotRef]);
 
   const selectedAccount = selectedEmail
     ? accountsById[selectedEmail._accountKey] || selectedEmail._account
@@ -881,6 +1057,8 @@ export default function useInboxController({
     unreadInView,
     markAllVisibleRead,
     onAction,
+    undo,
+    onUndo,
     trashHold,
     snoozeHold,
     showTriage: customize.aiVerbosity !== "minimal",
@@ -900,6 +1078,23 @@ export default function useInboxController({
 
 function stripHighlight(value) {
   return String(value || "").replace(/<\/?mark>/g, "");
+}
+
+function formatLaneLabel(lane) {
+  if (lane === "needs_attention") return "Needs Attention";
+  if (lane === "fyi") return "FYI";
+  if (lane === "noise") return "Noise";
+  if (lane === "handled") return "Handled";
+  return "lane";
+}
+
+function isEditableKeyTarget(target) {
+  if (!target) return false;
+  const tagName = target.tagName;
+  return tagName === "INPUT"
+    || tagName === "TEXTAREA"
+    || tagName === "SELECT"
+    || target.isContentEditable;
 }
 
 function normalizeIndexedSearchResults(data, readOverrides) {

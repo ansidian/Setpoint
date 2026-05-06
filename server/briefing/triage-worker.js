@@ -713,6 +713,7 @@ async function loadEmailForJob(job, dbClient) {
                  t.triage_source,
                  t.last_triaged_at,
                  t.provider_state,
+                 t.dismissed_at,
                  t.user_id,
                  t.account_id,
                  t.email_id,
@@ -727,12 +728,17 @@ async function loadEmailForJob(job, dbClient) {
                  i.body_snippet,
                  i.body_text,
                  i.email_date,
-                 i.read
+                 i.read,
+                 sz.until_ts AS snoozed_until_ts
           FROM ea_email_triage t
           LEFT JOIN ea_email_index i
             ON i.uid = t.email_id
            AND i.user_id = t.user_id
            AND i.account_id = t.account_id
+          LEFT JOIN ea_snoozed_emails sz
+            ON sz.user_id = t.user_id
+           AND sz.email_id = t.email_id
+           AND sz.status = 'snoozed'
           WHERE t.user_id = ?
             AND t.account_id = ?
             AND t.email_id = ?
@@ -945,6 +951,20 @@ async function completeJob(job, dbClient, now, lastError = "") {
   });
 }
 
+async function deferJob(job, dbClient, scheduledFor, lastError = "") {
+  await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'queued',
+              locked_at = NULL,
+              scheduled_for = ?,
+              completed_at = NULL,
+              last_error = ?,
+              updated_at = datetime('now')
+          WHERE id = ?`,
+    args: [scheduledFor, lastError, job.id],
+  });
+}
+
 export async function processNextEmailTriageJob({
   dbClient = db,
   modelClient,
@@ -985,6 +1005,63 @@ export async function processNextEmailTriageJob({
   let modelCalls = [];
   let status = "complete";
   try {
+    if (email.triage_source !== "weak_security_grace" && email.provider_state !== "available") {
+      await completeJob(job, dbClient, now, `Skipped pending triage; provider state ${email.provider_state}`);
+      publishCurrentDashboardEvent(email.user_id, {
+        source: "email_triage",
+        reason: "provider_unavailable_skipped",
+        state: "current",
+        occurredAt: nowIso(now),
+      });
+      return {
+        processed: true,
+        job_id: Number(job.id),
+        email_id: email.email_id,
+        skipped: true,
+        source: "provider_unavailable_skip",
+        model_calls: [],
+      };
+    }
+
+    if (email.dismissed_at) {
+      await completeJob(job, dbClient, now, "Skipped pending triage; user dismissed row");
+      publishCurrentDashboardEvent(email.user_id, {
+        source: "email_triage",
+        reason: "user_dismissed_pending_skipped",
+        state: "current",
+        occurredAt: nowIso(now),
+      });
+      return {
+        processed: true,
+        job_id: Number(job.id),
+        email_id: email.email_id,
+        skipped: true,
+        source: "user_dismissed_pending_skip",
+        model_calls: [],
+      };
+    }
+
+    const snoozedUntilTs = Number(email.snoozed_until_ts);
+    if (Number.isFinite(snoozedUntilTs) && snoozedUntilTs > now.getTime()) {
+      const scheduledFor = new Date(snoozedUntilTs).toISOString();
+      await deferJob(job, dbClient, scheduledFor, "Deferred pending triage while snoozed");
+      publishCurrentDashboardEvent(email.user_id, {
+        source: "email_triage",
+        reason: "snoozed_pending_deferred",
+        state: "current",
+        occurredAt: nowIso(now),
+      });
+      return {
+        processed: true,
+        job_id: Number(job.id),
+        email_id: email.email_id,
+        delayed: true,
+        scheduled_for: scheduledFor,
+        source: "snoozed_pending",
+        model_calls: [],
+      };
+    }
+
     if (email.triage_source === "weak_security_grace" && email.provider_state !== "available") {
       await completeJob(job, dbClient, now, `Skipped weak-security grace; provider state ${email.provider_state}`);
       publishCurrentDashboardEvent(email.user_id, {
