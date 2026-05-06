@@ -27,6 +27,15 @@ import {
 } from "./helpers";
 import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 
+const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
+
+function getSnapshotReopenLane(email) {
+  const lane = email?._lane === "carryover"
+    ? "needs_attention"
+    : email?.lane || email?.lane_at_snapshot || email?._lane;
+  return SNAPSHOT_REOPEN_LANES.has(lane) ? lane : "needs_attention";
+}
+
 export default function useInboxController({
   emailAccounts = [],
   activeSnapshot = null,
@@ -720,6 +729,7 @@ export default function useInboxController({
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
       const restoreSelectedId = id || uid;
+      const restoreLane = getSnapshotReopenLane(selectedEmail);
       const requestToken = ++snapshotRequestRef.current;
       snapshotPendingRef.current.add(itemId);
       setSnapshotOptimistic((prev) => {
@@ -769,7 +779,7 @@ export default function useInboxController({
             next.set(itemId, {
               ...(prev.get(itemId) || {}),
               hidden: false,
-              laneOverride: "needs_attention",
+              laneOverride: restoreLane,
               handledAt: null,
               statusOverride: null,
               pendingAction: "undo-handled",
@@ -791,6 +801,7 @@ export default function useInboxController({
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
       const restoreSelectedId = id || uid;
+      const restoreLane = getSnapshotReopenLane(selectedEmail);
       const requestToken = ++snapshotRequestRef.current;
       snapshotPendingRef.current.add(itemId);
       setSnapshotOptimistic((prev) => {
@@ -798,7 +809,7 @@ export default function useInboxController({
         next.set(itemId, {
           ...(prev.get(itemId) || {}),
           hidden: false,
-          laneOverride: "needs_attention",
+          laneOverride: restoreLane,
           handledAt: null,
           statusOverride: null,
           pendingAction: "reopen",
