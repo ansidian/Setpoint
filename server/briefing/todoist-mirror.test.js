@@ -18,6 +18,7 @@ const {
   listTodoistMirrorActiveTaskIds,
   listTodoistMirrorActiveTasks,
   listTodoistMirrorCompletedTasks,
+  listTodoistMirrorDueTaskIds,
   listTodoistMirrorLabels,
   listTodoistMirrorProjects,
   markTodoistMirrorItemCompleted,
@@ -645,6 +646,28 @@ describe("optimistic Todoist write mirror updates", () => {
         due: { date: "2026-05-05T09:00:00", timezone: null, is_recurring: false },
       }),
     ]);
+  });
+
+  it("excludes deleted checked due tasks from completed mirror reads", async () => {
+    await upsertTodoistMirrorItem("u1", {
+      id: "done-then-deleted",
+      content: "Done then deleted",
+      checked: true,
+      due: { date: "2026-05-05" },
+    }, { dbClient: testState.db.current });
+
+    await markTodoistMirrorItemDeleted("u1", "done-then-deleted", {
+      dbClient: testState.db.current,
+      recordPendingSync: false,
+    });
+
+    await expect(listTodoistMirrorCompletedTasks("u1", {
+      dbClient: testState.db.current,
+      start: "2026-05-05",
+    })).resolves.toEqual([]);
+    await expect(listTodoistMirrorDueTaskIds("u1", {
+      dbClient: testState.db.current,
+    })).resolves.toEqual(new Set());
   });
 });
 

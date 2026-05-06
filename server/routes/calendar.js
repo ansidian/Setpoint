@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.js";
 import { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } from "../briefing/ctm.js";
-import { fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } from "../briefing/todoist.js";
+import { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } from "../briefing/todoist.js";
 import { getCalendarBillsRange } from "../briefing/actual.js";
 import {
   loadCompletedTaskIds,
@@ -66,7 +66,7 @@ router.get("/deadlines", async (_req, res) => {
   try {
     const userId = process.env.EA_USER_ID;
 
-    const [ctmDeadlines, todoistTasks, todoistSyncHealth] = await Promise.all([
+    const [ctmDeadlines, todoistTasks, todoistDueTaskIds, todoistSyncHealth] = await Promise.all([
       fetchCTMDeadlinesAll().catch((err) => {
         console.error("[Calendar] CTM fetch failed:", err.message);
         return [];
@@ -75,12 +75,16 @@ router.get("/deadlines", async (_req, res) => {
         console.error("[Calendar] Todoist fetch failed:", err.message);
         return [];
       }),
+      fetchTodoistDueTaskIdSet(userId).catch((err) => {
+        console.error("[Calendar] Todoist id-set fetch failed:", err.message);
+        return null;
+      }),
       getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
     ]);
 
     const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
     const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
-    const tombstones = await hydrateRecurringTombstones(userId, null, {
+    const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
       viewBoundary: "yesterday",
     });
 
@@ -197,9 +201,10 @@ router.get("/deadlines/range", async (req, res) => {
   try {
     const userId = process.env.EA_USER_ID;
     const errors = [];
-    const [ctmResult, todoistResult, todoistHealthResult] = await Promise.allSettled([
+    const [ctmResult, todoistResult, todoistDueTaskIdsResult, todoistHealthResult] = await Promise.allSettled([
       fetchCTMDeadlinesRange({ start: range.start, end: range.end }),
       fetchTodoistTasksRange(userId, { start: range.start, end: range.end }),
+      fetchTodoistDueTaskIdSet(userId),
       getTodoistSyncHealth(userId),
     ]);
     const ctmDeadlines = ctmResult.status === "fulfilled" ? ctmResult.value : [];
@@ -207,10 +212,12 @@ router.get("/deadlines/range", async (req, res) => {
     const todoistSyncHealth = todoistHealthResult.status === "fulfilled"
       ? todoistHealthResult.value
       : unavailableTodoistHealth(todoistHealthResult.reason);
+    const todoistDueTaskIds = todoistDueTaskIdsResult.status === "fulfilled" ? todoistDueTaskIdsResult.value : null;
     if (ctmResult.status === "rejected") errors.push(quietSourceError("ctm", ctmResult.reason));
     if (todoistResult.status === "rejected") errors.push(quietSourceError("todoist", todoistResult.reason));
+    if (todoistDueTaskIdsResult.status === "rejected") errors.push(quietSourceError("todoist", todoistDueTaskIdsResult.reason));
 
-    const tombstones = await hydrateRecurringTombstones(userId, null, {
+    const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
       viewBoundary: "yesterday",
     }).catch((err) => {
       errors.push(quietSourceError("todoist", err));

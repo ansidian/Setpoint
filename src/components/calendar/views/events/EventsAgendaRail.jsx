@@ -3,6 +3,7 @@ import { ChevronDown, Video } from "lucide-react";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links.js";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
+import EventsAgendaDeadlineRow from "./EventsAgendaDeadlineRow.jsx";
 import { AgendaSkeleton, WeatherHeader } from "./EventsAgendaRailParts.jsx";
 import { colorWithAlpha, contrastText } from "./eventsAgendaColor.js";
 import { buildEventsAgendaGroups } from "./eventsAgendaModel.js";
@@ -302,6 +303,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   viewYear,
   viewMonth,
   events = [],
+  deadlineOverlay = null,
   weatherData = null,
   isLoading = false,
   selectedDateKey,
@@ -322,12 +324,13 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   const [expandedDays, setExpandedDays] = useState(() => new Set());
   const agenda = useMemo(() => buildEventsAgendaGroups({
     events,
+    deadlineOverlay,
     viewYear,
     viewMonth,
     weatherData,
     todayKey,
     forceVisibleDateKey: selectedDateKey,
-  }), [events, selectedDateKey, todayKey, viewMonth, viewYear, weatherData]);
+  }), [deadlineOverlay, events, selectedDateKey, todayKey, viewMonth, viewYear, weatherData]);
 
   const dirtyBlocked = () => {
     if (!floatingEditorDirty) return false;
@@ -348,6 +351,19 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
       anchorElement: element,
       sourceCellElement: element,
       anchorKind,
+    });
+  }
+
+  function handleDeadlineSelect(deadline, element) {
+    if (dirtyBlocked()) return;
+    onEventAction?.({
+      event: deadline,
+      item: deadline,
+      dateKey: deadline.agendaDateKey,
+      anchorElement: element,
+      sourceCellElement: element,
+      anchorKind: "agenda-deadline-row",
+      detailView: "deadlines",
     });
   }
 
@@ -476,6 +492,20 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
                 />
               </span>
             ))}
+            {group.deadlines.map((deadline) => {
+              const selected = String(selectedItemId || "") === String(deadline.agendaItemId || "")
+                && selectedDateKey === group.dateKey;
+              return (
+                <EventsAgendaDeadlineRow
+                  key={`deadline-${deadline.agendaItemId}-${group.dateKey}`}
+                  deadline={deadline}
+                  dateKey={group.dateKey}
+                  selected={selected}
+                  registerRow={registerRow}
+                  onSelect={handleDeadlineSelect}
+                />
+              );
+            })}
             {showNoEvents ? (
               <div
                 ref={(node) => registerContent(group.dateKey, node)}

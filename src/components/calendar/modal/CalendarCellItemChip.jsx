@@ -331,6 +331,7 @@ export function ItemChip({
           sourceCellElement: stackRef?.current?.closest?.("[role='gridcell']") || null,
           dateKey,
           anchorKind: inlineOverflowItem ? "overflow-row" : "chip",
+          detailView: item.detailView || null,
           itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
         });
       }}

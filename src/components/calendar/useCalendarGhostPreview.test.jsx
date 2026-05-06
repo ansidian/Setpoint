@@ -127,4 +127,27 @@ describe("useCalendarGhostPreview manual month browse", () => {
 
     expect(setViewDate).toHaveBeenCalledWith({ year: 2026, month: 3 });
   });
+
+  it("produces deadline ghosts while composing Todoist items in Events view", () => {
+    const { result } = renderHook((props) => useCalendarGhostPreview(props), {
+      initialProps: buildProps({
+        view: "events",
+        computed: {
+          itemsByDate: {
+            "2026-05-02": [{ id: "existing", due_time: "10:00 AM", source: "todoist" }],
+          },
+        },
+      }),
+    });
+
+    expect(result.current?.ghosts).toEqual([
+      expect.objectContaining({
+        kind: "deadline",
+        title: "Plan sprint",
+        startDate: "2026-05-02",
+        endDate: "2026-05-02",
+        dueTime: "9:00 AM",
+      }),
+    ]);
+  });
 });

@@ -18,18 +18,20 @@ vi.mock("../components/calendar/CalendarModal", () => ({
   default: function CalendarModalMock({
     open,
     view = "",
-    focusDate = null,
-    focusItemId = null,
-    focusOpenDetail = false,
-  }) {
+	    focusDate = null,
+	    focusItemId = null,
+	    focusOpenDetail = false,
+	    forceDeadlineOverlay = false,
+	  }) {
     return (
       <div
         data-testid="calendar-modal"
         data-view={view}
         data-focus-date={focusDate || ""}
-        data-focus-item-id={focusItemId || ""}
-        data-focus-open-detail={focusOpenDetail ? "true" : "false"}
-      >
+	        data-focus-item-id={focusItemId || ""}
+	        data-focus-open-detail={focusOpenDetail ? "true" : "false"}
+	        data-force-deadline-overlay={forceDeadlineOverlay ? "true" : "false"}
+	      >
         {open ? "open" : "closed"}
       </div>
     );
@@ -75,6 +77,7 @@ vi.mock("../components/dashboard/DeadlineDetailPopover", () => ({
 const { RedesignShell } = await import("./Dashboard.jsx");
 
 afterEach(() => {
+  window.localStorage.removeItem("calendar:lastView");
   cleanup();
 });
 
@@ -192,6 +195,18 @@ describe("RedesignShell mobile behavior", () => {
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
   });
 
+  it("ignores a stale persisted Deadlines calendar view", async () => {
+    mockIsMobile = false;
+    window.localStorage.setItem("calendar:lastView", "deadlines");
+    renderShell();
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    const modal = await screen.findByTestId("calendar-modal");
+    expect(modal.textContent).toBe("open");
+    expect(modal.getAttribute("data-view")).toBe("events");
+  });
+
   it("opens create surfaces from dashboard action chords", async () => {
     mockIsMobile = false;
     renderShell();
@@ -201,8 +216,9 @@ describe("RedesignShell mobile behavior", () => {
     expect(screen.queryByTestId("add-task-panel")).toBeNull();
     const taskCalendar = await screen.findByTestId("calendar-modal");
     expect(taskCalendar.textContent).toBe("open");
-    expect(taskCalendar.getAttribute("data-view")).toBe("deadlines");
+    expect(taskCalendar.getAttribute("data-view")).toBe("events");
     expect(taskCalendar.getAttribute("data-focus-item-id")).toBe("new");
+    expect(taskCalendar.getAttribute("data-force-deadline-overlay")).toBe("true");
 
     fireEvent.keyDown(window, { key: "g" });
     fireEvent.keyDown(window, { key: "c" });
@@ -279,11 +295,13 @@ describe("RedesignShell mobile behavior", () => {
 
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");
-      expect(modal.textContent).toBe("open");
-      expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
-      expect(modal.getAttribute("data-focus-item-id")).toBe("todo-42");
-      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
-    });
+	      expect(modal.textContent).toBe("open");
+	      expect(modal.getAttribute("data-view")).toBe("events");
+	      expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
+	      expect(modal.getAttribute("data-focus-item-id")).toBe("todo-42");
+	      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
+	      expect(modal.getAttribute("data-force-deadline-overlay")).toBe("true");
+	    });
   });
 
   it("routes desktop bill clicks into the calendar modal with focused item detail state", async () => {

@@ -34,6 +34,7 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         viewYear={viewYear}
         viewMonth={viewMonth}
         events={viewData?.events || []}
+        deadlineOverlay={viewData?.deadlineOverlay || null}
         weatherData={weatherData}
         isLoading={!!viewData?.isLoading}
         selectedDateKey={selectedDateKey}

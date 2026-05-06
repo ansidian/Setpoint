@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import DeadlineQuickActionLayer from "../views/deadlines/DeadlineQuickActionLayer.jsx";
+import deadlinesView from "../views/deadlinesView.jsx";
 import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
@@ -239,7 +240,10 @@ export default function CalendarModalShell({
     && !selectedItemResolves
     && Array.isArray(floatingDetail.itemsSnapshot)
       ? floatingDetail.itemsSnapshot
+      : floatingDetail?.view && floatingDetail.view !== view && !selectedItemResolves && Array.isArray(floatingDetail.itemsSnapshot)
+        ? floatingDetail.itemsSnapshot
       : selectedItems;
+  const floatingDetailView = floatingDetail?.view === "deadlines" ? deadlinesView : activeView;
   const floatingDetailContent = !layout.stacked && floatingDetail?.open
     ? floatingEditorOpen && floatingDetail.view === "events"
       ? (
@@ -260,7 +264,7 @@ export default function CalendarModalShell({
           />
         )
       : floatingEditorOpen && floatingDetail.view === "deadlines"
-        ? activeView.renderDetail?.({
+        ? deadlinesView.renderDetail?.({
             selectedDay,
             selectedDateKey,
             viewYear,
@@ -289,7 +293,7 @@ export default function CalendarModalShell({
             ghostPreview,
             transientCloseToken: workspaceTransientCloseToken,
           })
-        : activeView.renderFloatingDetail?.({
+        : floatingDetailView.renderFloatingDetail?.({
         selectedDay,
         selectedDateKey,
         viewYear,
@@ -313,6 +317,7 @@ export default function CalendarModalShell({
           }
         },
         editorState: null,
+        onCloseFloatingDetail,
         onStartEdit: (task) => {
           if (!layout.stacked) {
             onOpenFloatingDeadlineEdit?.(task, {
@@ -516,7 +521,10 @@ export default function CalendarModalShell({
                   onDirectItemAction={onGridEventAction}
                 />
                 {view === "events" ? (
-                  <CalendarQuickActionLayer quickActions={eventQuickActions} />
+                  <>
+                    <CalendarQuickActionLayer quickActions={eventQuickActions} />
+                    <DeadlineQuickActionLayer quickActions={deadlineQuickActions} />
+                  </>
                 ) : view === "deadlines" ? (
                   <DeadlineQuickActionLayer quickActions={deadlineQuickActions} />
                 ) : null}

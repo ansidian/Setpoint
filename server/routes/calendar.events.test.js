@@ -31,6 +31,7 @@ vi.mock("../briefing/google-places.js", () => ({
 }));
 vi.mock("../briefing/ctm.js", () => ({ fetchCTMDeadlinesAll: vi.fn() }));
 vi.mock("../briefing/todoist.js", () => ({
+  fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasksAll: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
 }));

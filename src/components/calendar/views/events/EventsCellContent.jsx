@@ -4,6 +4,11 @@ import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { getEventSelectionId } from "../../../../lib/redesign-helpers";
 import { formatTime12FromTime24 } from "../../ghostPreview.js";
 import { isPinnedCalendarGhost } from "../../modal/calendarEventSpanLayout.js";
+import { toDeadlineGhostDescriptor } from "../deadlines/DeadlinesCellContent.jsx";
+import {
+  deadlinePlanningDescriptor,
+  isDeadlinePlanningItem,
+} from "./eventsPlanningModel.js";
 
 const LG_EVENT_CHIP_METRICS = {
   itemHeight: 36,
@@ -101,6 +106,11 @@ function toEventGhostDescriptor(ghost) {
 
 function orderEventDescriptors(items) {
   return [...items].sort((a, b) => {
+    if (a.itemKind === "deadline" || b.itemKind === "deadline") {
+      if (a.itemKind !== "deadline") return -1;
+      if (b.itemKind !== "deadline") return 1;
+      if (a.complete !== b.complete) return a.complete ? 1 : -1;
+    }
     if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
     if ((a.sortMs || 0) !== (b.sortMs || 0)) return (a.sortMs || 0) - (b.sortMs || 0);
     return String(a.title || "").localeCompare(String(b.title || ""));
@@ -133,15 +143,22 @@ export function renderEventsCellContents({
   pinnedIds = null,
   reservedLaneCount = 0,
 }) {
-  const singleDayGhosts = ghosts.filter((ghost) => (
+  const singleDayEventGhosts = ghosts.filter((ghost) => (
     ghost?.kind === "event" && ghost.startDate === dateKey && ghost.startDate === ghost.endDate && !isPinnedCalendarGhost(ghost)
   ));
-  if (!items?.length && !singleDayGhosts.length) return null;
+  const singleDayDeadlineGhosts = ghosts.filter((ghost) => (
+    ghost?.kind === "deadline" && ghost.startDate === dateKey
+  ));
+  if (!items?.length && !singleDayEventGhosts.length && !singleDayDeadlineGhosts.length) return null;
   const descriptors = orderEventDescriptors([
     ...(items || [])
-      .filter((item) => !pinnedIds?.has?.(String(getEventSelectionId(item))))
-      .map(toEventDescriptor),
-    ...singleDayGhosts.map(toEventGhostDescriptor),
+      .filter((item) => (
+        isDeadlinePlanningItem(item)
+        || !pinnedIds?.has?.(String(getEventSelectionId(item)))
+      ))
+      .map((item) => (isDeadlinePlanningItem(item) ? deadlinePlanningDescriptor(item) : toEventDescriptor(item))),
+    ...singleDayEventGhosts.map(toEventGhostDescriptor),
+    ...singleDayDeadlineGhosts.map(toDeadlineGhostDescriptor),
   ]);
   if (!descriptors.length) return null;
 

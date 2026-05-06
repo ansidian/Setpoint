@@ -214,18 +214,44 @@ export default function useCalendarRange({ disabled = false } = {}) {
     });
   }, [fetchMonthGroup]);
 
+  const prefetchBackgroundKeys = useCallback((keys) => {
+    const missing = keys.filter((key) =>
+      !cacheRef.current.has(key)
+      && !inFlightRef.current.has(key)
+      && !backgroundInFlightRef.current.has(key),
+    );
+    if (!missing.length) return;
+
+    Promise.allSettled(
+      groupMonthKeys(missing).map((group) => fetchMonthGroup(group, { background: true })),
+    ).then((results) => {
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed) {
+        setError(failed.reason);
+        return;
+      }
+      const changed = results.some((result) => result.status === "fulfilled" && result.value);
+      if (changed) forceUpdate((n) => n + 1);
+    });
+  }, [fetchMonthGroup]);
+
   const ensureRange = useCallback(async (start, end) => {
     if (disabled) return [];
 
     const keys = monthsInRange(start, end);
     const fetchKeys = expandMonthKeys(keys);
+    const visibleKeySet = new Set(keys);
     const pending = [...new Set(
-      fetchKeys
+      keys
         .filter((key) => !cacheRef.current.has(key))
-        .map((key) => inFlightRef.current.get(key))
+        .map((key) => inFlightRef.current.get(key) || backgroundInFlightRef.current.get(key))
         .filter(Boolean),
     )];
-    const missing = fetchKeys.filter((k) => !cacheRef.current.has(k) && !inFlightRef.current.has(k));
+    const missing = keys.filter((k) =>
+      !cacheRef.current.has(k)
+      && !inFlightRef.current.has(k)
+      && !backgroundInFlightRef.current.has(k),
+    );
 
     if (pending.length > 0 || missing.length > 0) {
       setLoading(true);
@@ -245,9 +271,10 @@ export default function useCalendarRange({ disabled = false } = {}) {
       }
     }
     refreshStaleKeys(fetchKeys);
+    prefetchBackgroundKeys(fetchKeys.filter((key) => !visibleKeySet.has(key)));
 
     return eventsForRange(start, end, keys);
-  }, [disabled, eventsForRange, fetchMonthGroup, refreshStaleKeys]);
+  }, [disabled, eventsForRange, fetchMonthGroup, prefetchBackgroundKeys, refreshStaleKeys]);
 
   const refreshRangeInPlace = useCallback(async (start, end) => {
     if (disabled) return [];

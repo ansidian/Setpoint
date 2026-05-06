@@ -110,7 +110,9 @@ export default function Dashboard() {
   const [calendarDeadlinesError, setCalendarDeadlinesError] = useState(false);
   const [calendarDeadlinesFetchedAt, setCalendarDeadlinesFetchedAt] = useState(0);
   const updateCalendarDeadlineRangeData = calendarDeadlineRange.updateData;
+  const seedCalendarDeadlineRangeData = calendarDeadlineRange.seedData;
   const calendarDeadlinesLoadingRef = useRef(false);
+  const seededCalendarDeadlinesRef = useRef(null);
   const loadCalendarDeadlines = useCallback((opts) => {
     const force = !!opts?.force;
     if (calendarDeadlinesLoadingRef.current && !force) return;
@@ -136,6 +138,14 @@ export default function Dashboard() {
     setCalendarDeadlines(updater);
     updateCalendarDeadlineRangeData?.(updater);
   }, [updateCalendarDeadlineRangeData]);
+
+  useEffect(() => {
+    const seed = liveData.liveDeadlines;
+    if (!seed || (!seed.ctm && !seed.todoist)) return;
+    if (seededCalendarDeadlinesRef.current === seed) return;
+    seededCalendarDeadlinesRef.current = seed;
+    seedCalendarDeadlineRangeData?.(seed);
+  }, [liveData.liveDeadlines, seedCalendarDeadlineRangeData]);
 
   const [calendarBillsData, setCalendarBillsData] = useState(null);
   const [calendarBillsFetchedAt, setCalendarBillsFetchedAt] = useState(0);

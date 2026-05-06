@@ -94,11 +94,17 @@ export default function CalendarGrid({
     resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
   const eventDateCells = view === "events";
   const shouldFilterCompletedDeadlines = view === "deadlines" && !showCompletedDeadlines;
-  const itemQuickActions = eventDateCells
-    ? eventQuickActions
-    : view === "deadlines"
-      ? deadlineQuickActions
-      : null;
+  const eventsPlanningQuickActions = useMemo(() => {
+    if (!eventDateCells) return null;
+    return {
+      ...eventQuickActions,
+      openContextMenu: (payload) => {
+        if (payload?.item?.itemKind === "deadline") return deadlineQuickActions?.openContextMenu?.(payload);
+        return eventQuickActions?.openContextMenu?.(payload);
+      },
+    };
+  }, [deadlineQuickActions, eventDateCells, eventQuickActions]);
+  const itemQuickActions = eventDateCells ? eventsPlanningQuickActions : view === "deadlines" ? deadlineQuickActions : null;
   const selectedCellKey = selectedDateKey;
   const floatingEditorOpen = floatingDetailMode === "edit" || floatingDetailMode === "create";
   const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
@@ -244,7 +250,7 @@ export default function CalendarGrid({
     }
     if (!layout.stacked && anchorMeta?.triggerElement) {
       onOpenFloatingDetail?.({
-        view,
+        view: anchorMeta.detailView || view,
         itemId: itemId != null ? String(itemId) : null,
         dateKey: anchorMeta.dateKey || dateKey || null,
         day,

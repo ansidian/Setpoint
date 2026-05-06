@@ -22,12 +22,14 @@ vi.mock("@/api", () => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
-  vi.useRealTimers();
 });
 
 beforeEach(() => {
+  window.localStorage.removeItem("calendar:eventsDeadlineOverlay");
+  window.localStorage.removeItem("calendar:eventsCompletedDeadlines");
   mockGetCalendarSources.mockResolvedValue({
     accounts: [
       {
@@ -623,6 +625,364 @@ describe("CalendarModal responsive layout", () => {
       expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
       expect(getLatestRailContent().getAttribute("data-rail-content-kind")).not.toBe("editor");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows deadline overlay items in Events by default and persists the header toggle", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide deadlines in events/i }));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Project due")).toBeNull();
+    });
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
+  });
+
+  it("opens deadline create from Shift+C in Events and forces the deadline overlay on", async () => {
+    window.innerWidth = 1900;
+    window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-23"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    fireEvent.keyDown(document, { key: "C", shiftKey: true });
+    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("true");
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 23, 2026");
+  });
+
+  it("opens deadline create from an Events deadline-overlay focus request", async () => {
+    window.innerWidth = 1900;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-06T19:00:00.000Z"));
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusItemId="new"
+        forceDeadlineOverlay
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(screen.getByTestId("calendar-floating-detail-caret")).toBeTruthy();
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 6, 2026");
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("true");
+  });
+
+  it("does not expose Deadlines as a standalone calendar view", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    expect(screen.getByRole("button", { name: /events view/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /bills view/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /deadlines view/i })).toBeNull();
+  });
+
+  it("does not route the 3 hotkey to a standalone Deadlines view", () => {
+    window.innerWidth = 1900;
+    const onViewChange = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={onViewChange}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{ todoist: { upcoming: [] } }}
+      />,
+    ));
+
+    fireEvent.keyDown(document, { key: "3" });
+
+    expect(onViewChange).not.toHaveBeenCalledWith("deadlines");
+  });
+
+  it("opens existing deadline detail from an Events overlay chip without changing view", async () => {
+    window.innerWidth = 1900;
+    const onViewChange = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={onViewChange}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByText("Project due"));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  it("opens a dashboard-focused deadline in Events with the deadline overlay forced on", async () => {
+    window.innerWidth = 1900;
+    window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
+    const onViewChange = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="events"
+        onViewChange={onViewChange}
+        focusDate="2026-04-20"
+        focusItemId="todo-1"
+        focusOpenDetail
+        forceDeadlineOverlay
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("true");
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  it("renders seeded deadline overlay data before the range refresh resolves", () => {
+    window.innerWidth = 1900;
+    const ensureDeadlines = vi.fn(() => new Promise(() => {}));
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          ensureRange: vi.fn().mockResolvedValue([]),
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+        deadlinesRangeData={{
+          loading: true,
+          error: null,
+          data: {
+            ctm: { upcoming: [] },
+            todoist: {
+              upcoming: [
+                { id: "todo-seeded", title: "Seeded task", due_date: "2026-04-20", source: "todoist", status: "open" },
+              ],
+            },
+          },
+          ensureRange: ensureDeadlines,
+        }}
+      />,
+    ));
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Seeded task")).toBeTruthy();
+  });
+
+  it("uses D and Shift+D for Events deadline overlay preferences", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-1", title: "Open task", due_date: "2026-04-20", source: "todoist", status: "open" },
+              { id: "todo-2", title: "Done task", due_date: "2026-04-20", source: "todoist", status: "complete" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Done task")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "D", shiftKey: true });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Done task")).toBeNull();
+    });
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
+    expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
+
+    fireEvent.keyDown(document, { key: "d" });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Open task")).toBeNull();
+    });
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
+
+    fireEvent.keyDown(document, { key: "D", shiftKey: true });
+    expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
+  });
+
+  it("marks slow deadline overlay loading, degrades at timeout, and applies late data explicitly", async () => {
+    vi.useFakeTimers();
+    try {
+      window.innerWidth = 1900;
+      let resolveDeadlines;
+      const ensureDeadlines = vi.fn(() => new Promise((resolve) => {
+        resolveDeadlines = resolve;
+      }));
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          focusDate="2026-04-20"
+          eventsData={{
+            editable: true,
+            ensureRange: vi.fn().mockResolvedValue([]),
+            getEvents: () => [],
+          }}
+          billsData={{}}
+          deadlinesData={{ todoist: { upcoming: [] } }}
+          deadlinesRangeData={{
+            loading: true,
+            error: null,
+            data: null,
+            ensureRange: ensureDeadlines,
+          }}
+        />,
+      ));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(ensureDeadlines).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(screen.getByTestId("events-deadline-overlay-status").textContent).toBe("Deadlines slow");
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getByTestId("events-deadline-overlay-status").textContent).toBe("Deadlines delayed");
+
+      await act(async () => {
+        resolveDeadlines({
+          todoist: {
+            upcoming: [
+              { id: "late", title: "Late deadline", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
+          },
+        });
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByText("Late deadline")).toBeNull();
+      fireEvent.click(screen.getByTestId("events-deadline-overlay-apply"));
+      expect(within(screen.getByTestId("calendar-cell-20")).getByText("Late deadline")).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }

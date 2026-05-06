@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   syncActiveSnapshot: vi.fn(),
   getSettings: vi.fn(),
   getCalendarDeadlines: vi.fn(),
+  seedDeadlineRangeData: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
@@ -32,13 +33,17 @@ vi.mock("../hooks/useCalendarRange", () => ({
 }));
 
 vi.mock("../hooks/useCalendarDomainRange", () => ({
-  default: () => ({
-    data: null,
-    ensureRange: vi.fn(),
-    markStale: vi.fn(),
-    loading: false,
-    error: null,
-  }),
+  default: (options = {}) => {
+    const isDeadlineRange = options.cacheMode === "month";
+    return {
+      data: null,
+      ensureRange: vi.fn(),
+      markStale: vi.fn(),
+      seedData: isDeadlineRange ? mocks.seedDeadlineRangeData : vi.fn(),
+      loading: false,
+      error: null,
+    };
+  },
 }));
 
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
@@ -61,7 +66,12 @@ const currentPayload = {
   calendar: [{ id: "event-1", title: "Focus" }],
   deadlines: {
     ctm: { upcoming: [], stats: { total: 0 } },
-    todoist: { upcoming: [], stats: { total: 0 } },
+    todoist: {
+      upcoming: [
+        { id: "todo-seeded", title: "Seeded task", due_date: "2026-05-05", source: "todoist" },
+      ],
+      stats: { total: 1 },
+    },
   },
   bills: [{ id: "bill-1", payee: "Power" }],
   allSchedules: [],
@@ -87,6 +97,7 @@ describe("Dashboard current boot", () => {
     mocks.syncActiveSnapshot.mockReset().mockRejectedValue(new Error("snapshot sync route should not load separately"));
     mocks.getSettings.mockReset().mockResolvedValue({});
     mocks.getCalendarDeadlines.mockReset().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.seedDeadlineRangeData.mockReset();
   });
 
   afterEach(() => {
@@ -108,5 +119,17 @@ describe("Dashboard current boot", () => {
     expect(screen.getByTestId("snapshot-id").textContent).toBe("42");
     expect(mocks.getCurrentDashboard).toHaveBeenCalledTimes(1);
     expect(mocks.getActiveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("seeds the deadline month range from current dashboard data", async () => {
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("dashboard-shell")).toBeTruthy());
+
+    expect(mocks.seedDeadlineRangeData).toHaveBeenCalledWith(currentPayload.deadlines);
   });
 });

@@ -149,7 +149,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
         items={[
           { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
           { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold", detailView: "deadlines" },
         ]}
         metrics={metrics}
         onSelectItem={onSelectItem}
@@ -163,6 +163,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
     expect(onSelectItem).toHaveBeenCalledWith("real-3", expect.objectContaining({
       anchorKind: "overflow-row",
+      detailView: "deadlines",
       triggerElement: expect.any(HTMLElement),
     }));
     expect(onCloseInlineOverflow).not.toHaveBeenCalled();

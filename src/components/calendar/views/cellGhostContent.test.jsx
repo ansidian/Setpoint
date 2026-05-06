@@ -76,4 +76,28 @@ describe("calendar cell ghost content", () => {
     expect(chips).toEqual(["Morning task", "Late task"]);
     expect(screen.getByTestId("calendar-ghost-chip").textContent).toContain("9a");
   });
+
+  it("renders Todoist deadline ghosts in Events cells", () => {
+    render(renderEventsCellContents({
+      items: [],
+      ghosts: [{
+        id: "deadline-ghost",
+        kind: "deadline",
+        title: "Draft Todoist task",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        dueTime: "8:30 AM",
+        dueMinutes: 510,
+        source: "todoist",
+        color: "#e8776a",
+      }],
+      layout,
+      day: 20,
+      dateKey: "2026-04-20",
+    }));
+
+    const chip = screen.getByTestId("calendar-ghost-chip");
+    expect(chip.textContent).toContain("8:30a");
+    expect(chip.textContent).toContain("Draft Todoist task");
+  });
 });

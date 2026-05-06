@@ -231,6 +231,45 @@ describe("useCalendarDomainRange", () => {
     expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-september"]);
   });
 
+  it("seeds month buckets for immediate deadline paint and refreshes them as stale", async () => {
+    const fetchRange = vi.fn().mockResolvedValue({
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          { id: "todo-fresh", title: "Fresh task", due_date: "2026-05-12", source: "todoist" },
+        ],
+      },
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 0,
+    }));
+
+    act(() => {
+      result.current.seedData({
+        ctm: { upcoming: [] },
+        todoist: {
+          upcoming: [
+            { id: "todo-seeded", title: "Seeded task", due_date: "2026-05-10", source: "todoist" },
+          ],
+        },
+      });
+    });
+
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-seeded"]);
+
+    let ensured;
+    await act(async () => {
+      ensured = await result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+
+    expect(ensured.todoist.upcoming.map((item) => item.id)).toEqual(["todo-seeded"]);
+    expect(result.current.data.todoist.upcoming.map((item) => item.id)).toEqual(["todo-seeded"]);
+    expect(fetchRange).toHaveBeenCalledWith("2026-05-01", "2026-05-31");
+  });
+
   it("applies updater mutations across every cached deadline month bucket", async () => {
     const fetchRange = vi.fn(async (start) => {
       if (start === "2026-04-01") {

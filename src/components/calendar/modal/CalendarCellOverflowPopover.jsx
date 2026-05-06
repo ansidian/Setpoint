@@ -2,10 +2,7 @@ import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/reac
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Repeat } from "lucide-react";
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
+import { resolveOverflowPopoverPosition } from "./CalendarCellOverflowPopover.position.js";
 
 function isOverflowTriggerTarget(target) {
   return target instanceof HTMLElement
@@ -25,20 +22,6 @@ function isCalendarGridCellTarget(target) {
 function isCalendarFloatingDetailTarget(target) {
   return target instanceof HTMLElement
     && !!target.closest("[data-calendar-floating-detail='true']");
-}
-
-function resolvePosition(triggerElement) {
-  const viewportPadding = 16;
-  const width = Math.min(320, window.innerWidth - viewportPadding * 2);
-
-  if (!triggerElement?.isConnected) {
-    return { top: viewportPadding, left: viewportPadding, width };
-  }
-
-  const rect = triggerElement.getBoundingClientRect();
-  const left = clamp(rect.left, viewportPadding, window.innerWidth - width - viewportPadding);
-  const top = clamp(rect.bottom + 8, viewportPadding, window.innerHeight - 180);
-  return { top, left, width };
 }
 
 function shellTransition(reducedMotion) {
@@ -154,7 +137,7 @@ export default function CalendarCellOverflowPopover({
   const scrollRef = useRef(null);
   const positionRafRef = useRef(0);
   const [activeItemId, setActiveItemId] = useState(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 300 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 300, maxHeight: 320 });
 
   const updatePosition = useCallback(() => {
     if (!popover?.triggerElement?.isConnected) {
@@ -163,11 +146,12 @@ export default function CalendarCellOverflowPopover({
     }
 
     setPos((current) => {
-      const next = resolvePosition(popover.triggerElement);
+      const next = resolveOverflowPopoverPosition(popover.triggerElement);
       if (
         current.top === next.top
         && current.left === next.left
         && current.width === next.width
+        && current.maxHeight === next.maxHeight
       ) {
         return current;
       }
@@ -299,7 +283,7 @@ export default function CalendarCellOverflowPopover({
         top: pos.top,
         left: pos.left,
         width: pos.width,
-        maxHeight: 320,
+        maxHeight: pos.maxHeight,
         zIndex: 52,
         display: "flex",
         flexDirection: "column",
@@ -389,6 +373,7 @@ export default function CalendarCellOverflowPopover({
                       exclusionElement: popoverRef.current,
                       dateKey: popover.dateKey || null,
                       anchorKind: "overflow-row",
+                      detailView: item.detailView || null,
                       itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
                     });
                   }}

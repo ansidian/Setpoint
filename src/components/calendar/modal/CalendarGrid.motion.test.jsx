@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarGrid from "./CalendarGrid.jsx";
+import { resolveOverflowPopoverPosition } from "./CalendarCellOverflowPopover.position.js";
 import { renderEventsCellContents } from "../views/events/EventsCellContent.jsx";
 
 const VIEW_YEAR = 2026;
@@ -387,6 +388,36 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
   });
 
+  it("opens hidden deadline overlay rows with deadline floating detail metadata", async () => {
+    const onOpenFloatingDetail = vi.fn();
+    const deadline = {
+      id: "todo-hidden",
+      calendarItemKind: "deadline",
+      title: "Hidden Todoist task",
+      due_date: "2026-04-20",
+      due_time: "5:00 PM",
+      source: "todoist",
+      status: "incomplete",
+    };
+
+    renderGrid({
+      20: [
+        ...Array.from({ length: 5 }, (_, index) => buildEvent(20, index)),
+        deadline,
+      ],
+    }, { onOpenFloatingDetail });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
+    const popover = await screen.findByTestId("calendar-cell-overflow-popover");
+    fireEvent.click(within(popover).getByText("Hidden Todoist task"));
+
+    expect(onOpenFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
+      itemId: "todo-hidden",
+      view: "deadlines",
+      itemsSnapshot: [expect.objectContaining({ id: "todo-hidden" })],
+    }));
+  });
+
   it("renders pinned ghost spans as inert aria-hidden chips", () => {
     renderGrid({}, {
       ghostPreview: {
@@ -436,6 +467,35 @@ describe("CalendarGrid overflow motion coverage", () => {
       expect(within(popovers[0]).getByText("Day 16 event 4")).toBeTruthy();
       expect(within(popovers[0]).queryByText("Day 15 event 4")).toBeNull();
     });
+  });
+
+  it("positions fallback overflow popovers inside the viewport when the trigger is on the last row", () => {
+    window.innerHeight = 360;
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    Object.defineProperty(trigger, "isConnected", { configurable: true, value: true });
+    Object.defineProperty(trigger, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 960,
+        y: 310,
+        left: 960,
+        top: 310,
+        right: 1020,
+        bottom: 340,
+        width: 60,
+        height: 30,
+        toJSON() {
+          return this;
+        },
+      }),
+    });
+
+    const position = resolveOverflowPopoverPosition(trigger);
+
+    expect(position.top).toBeGreaterThanOrEqual(16);
+    expect(position.top + position.maxHeight).toBeLessThanOrEqual(window.innerHeight - 16);
+    trigger.remove();
   });
 
   it("closes overflow popover when clicking same trigger again", async () => {

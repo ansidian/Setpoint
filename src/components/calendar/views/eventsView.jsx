@@ -15,6 +15,13 @@ import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
 import { addDaysYmd, pacificYMD, parseYmd, ymdFromParts } from "../calendarDateUtils.js";
 import { isPinnedCalendarEvent, visualEventDateRange } from "../modal/calendarEventSpanLayout.js";
+import {
+  getDeadlineOverlayComputed,
+  getPlanningItemId,
+  isDeadlinePlanningItem,
+  mergeDeadlineOverlayIntoEvents,
+  orderPlanningItems,
+} from "./events/eventsPlanningModel.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -96,8 +103,20 @@ function buildWeatherCellMeta(weatherData) {
 function compute({ data, viewYear, viewMonth, weatherData = null }) {
   const events = data?.events || [];
   const cellMetaByDate = buildWeatherCellMeta(weatherData);
-  if (!events.length)
-    return { itemsByDay: {}, itemsByDate: {}, totalEvents: 0, allDayEvents: 0, cellMetaByDate };
+  const deadlineOverlayComputed = data?.deadlineOverlay?.enabled
+    ? getDeadlineOverlayComputed({
+        deadlineData: data.deadlineOverlay.data,
+        viewYear,
+        viewMonth,
+        showCompleted: !!data.deadlineOverlay.showCompleted,
+      })
+    : null;
+  if (!events.length) {
+    return mergeDeadlineOverlayIntoEvents({
+      eventComputed: { itemsByDay: {}, itemsByDate: {}, totalEvents: 0, allDayEvents: 0, cellMetaByDate },
+      deadlineOverlayComputed,
+    });
+  }
 
   const itemsByDay = {};
   const itemsByDate = {};
@@ -133,12 +152,15 @@ function compute({ data, viewYear, viewMonth, weatherData = null }) {
   }
   // Sort each day's events chronologically
   for (const d of Object.keys(itemsByDay)) {
-    itemsByDay[d] = orderDetailEvents(itemsByDay[d]);
+    itemsByDay[d] = orderPlanningItems(itemsByDay[d]);
   }
   for (const dateKey of Object.keys(itemsByDate)) {
-    itemsByDate[dateKey] = orderDetailEvents(itemsByDate[dateKey]);
+    itemsByDate[dateKey] = orderPlanningItems(itemsByDate[dateKey]);
   }
-  return { itemsByDay, itemsByDate, totalEvents, allDayEvents, cellMetaByDate };
+  return mergeDeadlineOverlayIntoEvents({
+    eventComputed: { itemsByDay, itemsByDate, totalEvents, allDayEvents, cellMetaByDate },
+    deadlineOverlayComputed,
+  });
 }
 
 function canNavigateBack() {
@@ -170,6 +192,7 @@ function isEditableEvent(ev) {
 
 function orderDetailEvents(items = []) {
   return [...items].sort((a, b) => {
+    if (isDeadlinePlanningItem(a) || isDeadlinePlanningItem(b)) return orderPlanningItems([a, b])[0] === a ? -1 : 1;
     if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
     return (a.startMs || 0) - (b.startMs || 0);
   });
@@ -361,8 +384,22 @@ function toRailItem(ev, onSelectItem, selectedItemId) {
     ev.isRecurring ? "Recurring" : null,
     ev.writable === false ? "Read-only" : null,
   ].filter(Boolean).join(" · ");
-  const selectionId = getEventSelectionId(ev);
+  const selectionId = getPlanningItemId(ev);
   const isSelected = String(selectionId) === String(selectedItemId);
+
+  if (isDeadlinePlanningItem(ev)) {
+    return {
+      id: selectionId,
+      timeLabel: ev.due_time || "End of day",
+      title: ev.title || ev.name || "Untitled",
+      subtitle: ev.project_name || ev.class_name || ev.source || "Deadline",
+      meta: ev.status === "complete" ? "Complete" : "",
+      selected: isSelected,
+      dotColor: ev.source === "todoist" ? "#e8776a" : "#5A8FBF",
+      complete: ev.status === "complete",
+      onClick: !isSelected && onSelectItem ? () => onSelectItem(selectionId) : undefined,
+    };
+  }
 
   return {
     id: selectionId,
@@ -372,9 +409,7 @@ function toRailItem(ev, onSelectItem, selectedItemId) {
     meta,
     selected: isSelected,
     dotColor: ev.color || ev.sourceColor || "#4285f4",
-    onClick: !isSelected && onSelectItem
-        ? () => onSelectItem(selectionId)
-        : undefined,
+    onClick: !isSelected && onSelectItem ? () => onSelectItem(selectionId) : undefined,
   };
 }
 
@@ -389,11 +424,14 @@ function renderDetail({
   onEditEvent,
 }) {
   const ordered = orderDetailEvents(items);
+  const eventItems = ordered.filter((item) => !isDeadlinePlanningItem(item));
+  const deadlineItems = ordered.filter(isDeadlinePlanningItem);
   const allDayItems = [];
   const timedItems = [];
+  const deadlineRailItems = [];
   let selectedEvent = null;
 
-  for (const item of ordered) {
+  for (const item of eventItems) {
     const railItem = toRailItem(item, onSelectItem, selectedItemId);
     if (item.allDay) {
       allDayItems.push(railItem);
@@ -405,12 +443,15 @@ function renderDetail({
       selectedEvent = item;
     }
   }
+  for (const item of deadlineItems) {
+    deadlineRailItems.push(toRailItem(item, onSelectItem, selectedItemId));
+  }
 
   return (
     <TimelineDetailRail
       eyebrow="Events ledger"
       title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
-      summary={`${items.length} event${items.length !== 1 ? "s" : ""}`}
+      summary={`${eventItems.length} event${eventItems.length !== 1 ? "s" : ""}${deadlineItems.length ? ` · ${deadlineItems.length} deadline${deadlineItems.length === 1 ? "" : "s"}` : ""}`}
       accent="#89b4fa"
       headerContent={selectedEvent ? (
         <EventSelectedCard
@@ -425,26 +466,15 @@ function renderDetail({
         />
       ) : null}
       sections={[
-        {
-          id: "all-day",
-          label: "All day",
-          items: allDayItems,
-        },
-        {
-          id: "timed",
-          label: "By time",
-          items: timedItems,
-        },
+        { id: "all-day", label: "All day", items: allDayItems },
+        { id: "timed", label: "By time", items: timedItems },
+        { id: "deadlines", label: "Deadlines", items: deadlineRailItems },
       ]}
     />
   );
 }
 
-function renderFloatingDetail({
-  items,
-  selectedItemId,
-  onEditEvent,
-}) {
+function renderFloatingDetail({ items, selectedItemId, onEditEvent }) {
   const ordered = orderDetailEvents(items);
   const selectedEvent = ordered.find((item) => (
     String(getEventSelectionId(item)) === String(selectedItemId)
@@ -551,7 +581,7 @@ const eventsView = {
   HeaderExtras: EventsHeaderExtras,
   icon: CalendarIcon,
   getDefaultSelectedItemId,
-  getItemId: getEventSelectionId,
+  getItemId: getPlanningItemId,
   label: "Events",
 };
 

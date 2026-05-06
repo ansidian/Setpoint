@@ -171,6 +171,17 @@ function combineDataForRange(cache, keys, start, end, emptyData) {
   return base;
 }
 
+function monthKeysFromData(data) {
+  const keys = new Set();
+  for (const sectionName of ["ctm", "todoist"]) {
+    for (const item of data?.[sectionName]?.upcoming || []) {
+      const key = monthKeyFromDate(dueDateOf(item));
+      if (key) keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
 export default function useCalendarDomainRange({
   disabled = false,
   fetchRange,
@@ -377,12 +388,40 @@ export default function useCalendarDomainRange({
     setRevision((current) => current + 1);
   }, [cacheMode, disabled, emptyData]);
 
+  const seedData = useCallback((data, { stale = true } = {}) => {
+    if (disabled || data == null) return;
+    const fetchedAt = stale ? 0 : Date.now();
+    if (cacheMode === "month") {
+      const keys = monthKeysFromData(data);
+      for (const key of keys) {
+        cacheRef.current.set(key, {
+          data: filterDataForMonth(data, key),
+          fetchedAt,
+        });
+      }
+      const active = activeRangeRef.current;
+      setData(active && keys.length
+        ? combineDataForRange(cacheRef.current, active.keys, active.start, active.end, data)
+        : clone(data));
+      setRevision((current) => current + 1);
+      return;
+    }
+    const next = clone(data);
+    const key = activeKeyRef.current;
+    if (key) {
+      cacheRef.current.set(key, { data: next, fetchedAt });
+    }
+    setData(next);
+    setRevision((current) => current + 1);
+  }, [cacheMode, disabled]);
+
   return {
     data,
     ensureRange,
     invalidate,
     markStale,
     updateData,
+    seedData,
     loading,
     error,
     revision,
