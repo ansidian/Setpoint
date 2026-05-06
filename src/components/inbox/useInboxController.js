@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import useKeyHold from "../../hooks/useKeyHold";
 import useInboxSelectionHistory from "../../hooks/email/useInboxSelectionHistory";
 import { useDashboard } from "../../context/DashboardContext";
 import useInboxUndoSlot from "./useInboxUndoSlot";
@@ -26,6 +25,7 @@ import {
   collectResurfaced,
   mergeReadState,
 } from "./helpers";
+import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 
 export default function useInboxController({
   emailAccounts = [],
@@ -933,20 +933,6 @@ export default function useInboxController({
     setSelectedId,
   ]);
 
-  const trashHold = useKeyHold({
-    key: "e",
-    durationMs: 750,
-    enabled: !!selectedEmail && !readOnly,
-    onComplete: () => onAction("trash"),
-  });
-
-  const snoozeHold = useKeyHold({
-    key: "s",
-    durationMs: 750,
-    enabled: !!selectedEmail && !readOnly,
-    onComplete: () => onAction("snooze", defaultSnoozeTs()),
-  });
-
   useEffect(() => {
     if (!selectedId) return undefined;
     if (readOnly) return undefined;
@@ -993,29 +979,41 @@ export default function useInboxController({
       }
 
       if (
-        isEditableKeyTarget(event.target)
+        shouldSuspendInboxHotkeys(event.target)
       ) {
         return;
       }
 
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === "j" || event.key === "ArrowDown") {
+      const key = event.key.toLowerCase();
+      if (key === "j" || event.key === "ArrowDown") {
         event.preventDefault();
         moveBy(1);
-      } else if (event.key === "k" || event.key === "ArrowUp") {
+      } else if (key === "k" || event.key === "ArrowUp") {
         event.preventDefault();
         moveBy(-1);
-      } else if (event.key === "o") {
+      } else if (key === "o") {
         event.preventDefault();
         if (!selectedEmail) return;
         const url = getGmailUrl(selectedEmail);
         if (url) window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        const action = resolveInboxHotkeyAction(key, selectedEmail, readOnly);
+        if (!action) return;
+        event.preventDefault();
+        if (action.kind === "snooze-default") {
+          onAction("snooze", defaultSnoozeTs());
+        } else if (action.kind === "snapshot-move-lane") {
+          onAction(action.kind, action.lane);
+        } else {
+          onAction(action.kind);
+        }
       }
     }
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moveBy, onAction, onUndo, selectedEmail, undoSlotRef]);
+  }, [moveBy, onAction, onUndo, readOnly, selectedEmail, undoSlotRef]);
 
   const selectedAccount = selectedEmail
     ? accountsById[selectedEmail._accountKey] || selectedEmail._account
@@ -1059,8 +1057,8 @@ export default function useInboxController({
     onAction,
     undo,
     onUndo,
-    trashHold,
-    snoozeHold,
+    trashHold: { active: false, progress: 0 },
+    snoozeHold: { active: false, progress: 0 },
     showTriage: customize.aiVerbosity !== "minimal",
     showDraft: customize.aiVerbosity === "full",
     showPreview: isMobile ? true : customize.showPreview,

@@ -224,7 +224,7 @@ export function NumberField({
 export function QuickAction({
   icon: Icon, label, onClick, primary, danger,
   accent = "#cba6da", buttonRef, ariaLabel, tooltip,
-  holdProgress = 0, holdColor,
+  holdProgress = 0, holdColor, keyHint,
 }) {
   const [hover, setHover] = useState(false);
   const iconOnly = !label;
@@ -274,6 +274,32 @@ export function QuickAction({
       )}
       {Icon && <Icon size={11} style={{ position: "relative" }} />}
       {label && <span style={{ position: "relative" }}>{label}</span>}
+      {keyHint && (
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            right: 2,
+            bottom: 2,
+            minWidth: 12,
+            height: 12,
+            padding: "0 3px",
+            borderRadius: 3,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 8,
+            lineHeight: 1,
+            fontFamily: "Fira Code, ui-monospace, monospace",
+            color: "rgba(205,214,244,0.58)",
+            background: "rgba(11,11,19,0.75)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            pointerEvents: "none",
+          }}
+        >
+          {keyHint}
+        </span>
+      )}
     </button>
   );
   return tooltip ? (

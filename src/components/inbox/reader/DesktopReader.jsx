@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
 import { timeClock, timeSince } from "../helpers";
-import { Avatar, Kbd, QuickAction } from "../primitives";
+import { Avatar, QuickAction } from "../primitives";
 import SnoozePicker from "../SnoozePicker";
 import BillBadge from "../../bills/BillBadge";
 import TriagePanel from "./TriagePanel";
@@ -261,6 +261,7 @@ export default function DesktopReader({
             tooltip="Reopen"
             onClick={() => onAction("snapshot-reopen")}
             accent="#a6e3a1"
+            keyHint="H"
           />
         )}
         {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
@@ -270,6 +271,7 @@ export default function DesktopReader({
             tooltip="Move to Needs Attention"
             onClick={() => onAction("snapshot-move-lane", "needs_attention")}
             accent="#f38ba8"
+            keyHint="A"
           />
         )}
         {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
@@ -279,6 +281,7 @@ export default function DesktopReader({
             tooltip="Move to FYI"
             onClick={() => onAction("snapshot-move-lane", "fyi")}
             accent="#89b4fa"
+            keyHint="F"
           />
         )}
         {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "noise" && (
@@ -288,6 +291,7 @@ export default function DesktopReader({
             tooltip="Move to Noise"
             onClick={() => onAction("snapshot-move-lane", "noise")}
             accent="#a6adc8"
+            keyHint="N"
           />
         )}
         {showSnapshotActions && !isHandledSnapshot && snapshotLane === "needs_attention" && (
@@ -297,6 +301,7 @@ export default function DesktopReader({
             tooltip="Mark handled"
             onClick={() => onAction("snapshot-handled")}
             accent="#a6e3a1"
+            keyHint="H"
           />
         )}
         {showSnapshotActions && !isHandledSnapshot && (
@@ -306,6 +311,7 @@ export default function DesktopReader({
             tooltip="Dismiss from today"
             onClick={() => onAction("snapshot-dismiss")}
             accent="#f9e2af"
+            keyHint="D"
           />
         )}
         {showMutableActions && (
@@ -327,6 +333,7 @@ export default function DesktopReader({
             accent={accent}
             holdProgress={snoozeHoldProgress}
             holdColor="#f97316"
+            keyHint="S"
           />
         )}
         {showMutableActions && snoozeOpen && (
@@ -343,6 +350,7 @@ export default function DesktopReader({
             tooltip="Open in Gmail"
             onClick={() => window.open(gmailUrl, "_blank", "noopener,noreferrer")}
             accent={accent}
+            keyHint="O"
           />
         )}
         {showMutableActions && (
@@ -355,6 +363,7 @@ export default function DesktopReader({
             accent={accent}
             holdProgress={trashHoldProgress}
             holdColor="#f38ba8"
+            keyHint="E"
           />
         )}
         <button
@@ -490,10 +499,7 @@ export default function DesktopReader({
         >
           <Sparkles size={11} color={accent} />
           <span style={{ fontSize: 11, color: "rgba(205,214,244,0.7)", flex: 1 }}>
-            Draft reply ready.{" "}
-            <span style={{ color: "rgba(205,214,244,0.45)" }}>
-              Press <Kbd>R</Kbd> to review.
-            </span>
+            Draft reply ready.
           </span>
           <QuickAction
             icon={Reply}

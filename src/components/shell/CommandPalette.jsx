@@ -43,7 +43,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "new-todoist",  icon: ListPlus,   label: "New Todoist task", hint: "G T", kind: "todoist" },
     { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
     { id: "calendar",     icon: Calendar,   label: "Open calendar",   hint: "C", kind: "calendar" },
-    { id: "history",      icon: History,    label: "Snapshots", kind: "history" },
+    { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
     { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },
     { id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },
     { id: "settings",     icon: SettingsIcon, label: "Open settings", kind: "settings" },

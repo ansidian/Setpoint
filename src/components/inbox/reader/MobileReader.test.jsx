@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MobileReader from "./MobileReader.jsx";
 
@@ -61,5 +61,24 @@ describe("MobileReader bill extraction", () => {
       emailBodyLoading: false,
       emailBodySource: "loaded",
     }));
+  });
+
+  it("keeps mobile actions tap-first without desktop key hints", () => {
+    renderMobileReader({
+      email: {
+        hasBill: false,
+        _activeSnapshot: true,
+        _lane: "needs_attention",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Handled")).toBeTruthy();
+    expect(screen.getByText("Snooze")).toBeTruthy();
+    expect(screen.getByText("Trash")).toBeTruthy();
+    expect(screen.queryByText("H")).toBeNull();
+    expect(screen.queryByText("S")).toBeNull();
+    expect(screen.queryByText("E")).toBeNull();
   });
 });

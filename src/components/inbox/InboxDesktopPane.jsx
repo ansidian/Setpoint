@@ -98,6 +98,8 @@ export default function InboxDesktopPane({
           totalUnread={totalUnread}
           compact={sidebarCompact}
           onOpenDashboard={onOpenDashboard}
+          selectedEmail={selectedEmail}
+          readOnly={readOnly}
         />
 
         <div
