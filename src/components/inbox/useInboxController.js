@@ -12,6 +12,7 @@ import {
   moveSnapshotItemLane,
   dismissSnapshotItemForToday,
   markSnapshotItemHandled,
+  reopenSnapshotItem,
 } from "../../api";
 import { getGmailUrl } from "../../lib/email-links";
 import {
@@ -273,7 +274,7 @@ export default function useInboxController({
       if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
       return true;
     }).sort((a, b) => {
-      const order = { carryover: 0, needs_attention: 1, action: 1, fyi: 2, noise: 3 };
+      const order = { carryover: 0, needs_attention: 1, action: 1, fyi: 2, handled: 3, noise: 4 };
       if (a._untriaged && !b._untriaged) return -1;
       if (!a._untriaged && b._untriaged) return 1;
       if (order[a._lane] !== order[b._lane]) return (order[a._lane] ?? 3) - (order[b._lane] ?? 3);
@@ -332,7 +333,7 @@ export default function useInboxController({
   }, [search]);
 
   const laneCounts = useMemo(() => {
-    const counts = { needs_attention: 0, action: 0, carryover: 0, fyi: 0, noise: 0 };
+    const counts = { needs_attention: 0, action: 0, carryover: 0, fyi: 0, handled: 0, noise: 0 };
     for (const email of flatEmails) {
       if (accountId !== "__all" && email._accountKey !== accountId) continue;
       if (email._untriaged) continue;
@@ -356,6 +357,7 @@ export default function useInboxController({
       action: 0,
       carryover: 0,
       fyi: 0,
+      handled: 0,
       noise: 0,
     };
     for (const email of flatEmails) {
@@ -619,7 +621,8 @@ export default function useInboxController({
         const next = new Map(prev);
         next.set(itemId, {
           ...(prev.get(itemId) || {}),
-          hidden: true,
+          hidden: false,
+          laneOverride: "handled",
           handledAt: new Date().toISOString(),
           statusOverride: "handled",
           pendingAction: "handled",
@@ -652,6 +655,53 @@ export default function useInboxController({
           onActiveSnapshotRefresh();
         });
       moveBy(1);
+      return;
+    }
+
+    if (kind === "snapshot-reopen") {
+      if (readOnly) return;
+      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      const itemId = String(selectedEmail.snapshot_item_id);
+      if (snapshotPendingRef.current.has(itemId)) return;
+      const requestToken = ++snapshotRequestRef.current;
+      snapshotPendingRef.current.add(itemId);
+      setSnapshotOptimistic((prev) => {
+        const next = new Map(prev);
+        next.set(itemId, {
+          ...(prev.get(itemId) || {}),
+          hidden: false,
+          laneOverride: "needs_attention",
+          handledAt: null,
+          statusOverride: null,
+          pendingAction: "reopen",
+          pending: true,
+          requestToken,
+        });
+        return next;
+      });
+      reopenSnapshotItem(selectedEmail.snapshot_item_id)
+        .then(() => onActiveSnapshotRefresh())
+        .then(() => {
+          snapshotPendingRef.current.delete(itemId);
+          setSnapshotOptimistic((prev) => {
+            const current = prev.get(itemId);
+            if (!current || current.requestToken !== requestToken) return prev;
+            const next = new Map(prev);
+            next.set(itemId, { ...current, pending: false });
+            return next;
+          });
+        })
+        .catch(() => {
+          snapshotPendingRef.current.delete(itemId);
+          setSnapshotOptimistic((prev) => {
+            const current = prev.get(itemId);
+            if (!current || current.requestToken !== requestToken) return prev;
+            const next = new Map(prev);
+            next.delete(itemId);
+            return next;
+          });
+          onActiveSnapshotRefresh();
+        });
       return;
     }
 

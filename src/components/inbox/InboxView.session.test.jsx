@@ -8,6 +8,7 @@ import {
   dismissSnapshotItemForToday,
   markSnapshotItemHandled,
   moveSnapshotItemLane,
+  reopenSnapshotItem,
   snoozeEmail,
   trashEmail,
 } from "../../api";
@@ -26,10 +27,11 @@ vi.mock("../../api", async () => {
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
     dismissEmail: vi.fn().mockResolvedValue({}),
     moveSnapshotItemLane: vi.fn().mockResolvedValue({}),
-    dismissSnapshotItemForToday: vi.fn().mockResolvedValue({}),
-    markSnapshotItemHandled: vi.fn().mockResolvedValue({}),
-  };
-});
+	    dismissSnapshotItemForToday: vi.fn().mockResolvedValue({}),
+	    markSnapshotItemHandled: vi.fn().mockResolvedValue({}),
+	    reopenSnapshotItem: vi.fn().mockResolvedValue({}),
+	  };
+	});
 
 vi.mock("../bills/BillBadge.jsx", () => ({
   default: function BillBadgeMock() {
@@ -610,7 +612,7 @@ describe("InboxView session state", () => {
     expect(screen.queryByText("Review the lease")).toBeNull();
   });
 
-  it("hides handled active snapshot rows immediately and suppresses duplicate clicks while pending", async () => {
+	  it("moves handled active snapshot rows to the Handled lane and suppresses duplicate clicks while pending", async () => {
     markSnapshotItemHandled.mockImplementationOnce(() => new Promise(() => {}));
     const activeSnapshot = {
       snapshot: makeActiveSnapshot(),
@@ -660,14 +662,90 @@ describe("InboxView session state", () => {
     fireEvent.click(handledButton);
     fireEvent.click(handledButton);
 
-    expect(markSnapshotItemHandled).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(screen.getByText("Select an email")).toBeTruthy();
-    });
-    expect(screen.queryByText("Snapshot action")).toBeNull();
-  });
+	    expect(markSnapshotItemHandled).toHaveBeenCalledTimes(1);
+	    await waitFor(() => {
+	      expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
+	    });
+	    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+	    expect(screen.getByText("Snapshot action")).toBeTruthy();
+	    expect(reopenSnapshotItem).not.toHaveBeenCalled();
+	  });
 
-  it("suppresses read-only frozen snapshot mutations", async () => {
+	  it("reopens handled active snapshot rows through the controller", async () => {
+	    const activeSnapshot = {
+	      snapshot: makeActiveSnapshot({
+	        lanes: {
+	          needs_attention: [],
+	          fyi: [],
+	          handled: [{
+	            id: 11,
+	            snapshot_item_id: 11,
+	            uid: "snapshot-msg-1",
+	            email_id: "snapshot-msg-1",
+	            account_id: "gmail-work",
+	            lane: "needs_attention",
+	            handled_at: "2026-05-03T16:10:00.000Z",
+	            subject: "Snapshot action",
+	            from_name: "Dana",
+	            from_address: "dana@example.com",
+	            summary: "Needs a response.",
+	            date: "2026-05-03T15:00:00.000Z",
+	            read: false,
+	          }],
+	          noise: [],
+	        },
+	      }),
+	      loading: false,
+	      error: null,
+	      refresh: vi.fn(),
+	      sync: vi.fn(),
+	    };
+
+	    render(
+	      <DashboardProvider
+	        briefing={{ emails: { accounts: [] } }}
+	        setBriefing={() => {}}
+	        setCalendarDeadlines={() => {}}
+	      >
+	        <InboxView
+	          accent="#cba6da"
+	          customize={{
+	            aiVerbosity: "standard",
+	            showPreview: true,
+	            inboxDensity: "default",
+	            sidebarCompact: false,
+	            inboxLayout: "two-pane",
+	            inboxGrouping: "swimlanes",
+	          }}
+	          emailAccounts={[]}
+	          briefingSummary=""
+	          briefingGeneratedAt="2026-05-03 15:00:00"
+	          activeSnapshot={activeSnapshot}
+	          liveEmails={[]}
+	          snoozedEntries={[]}
+	          resurfacedEntries={[]}
+	          onOpenDashboard={() => {}}
+	          onRefresh={() => {}}
+	          sessionState={{
+	            accountId: "__all",
+	            lane: "__all",
+	            search: "",
+	            selectedId: "snapshot-msg-1",
+	          }}
+	          onSessionStateChange={() => {}}
+	        />
+	      </DashboardProvider>,
+	    );
+
+	    fireEvent.click(await screen.findByRole("button", { name: /reopen/i }));
+
+	    expect(reopenSnapshotItem).toHaveBeenCalledWith(11);
+	    await waitFor(() => {
+	      expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
+	    });
+	  });
+
+	  it("suppresses read-only frozen snapshot mutations", async () => {
     const refreshSnapshot = vi.fn().mockResolvedValue({});
     const activeSnapshot = {
       snapshot: {

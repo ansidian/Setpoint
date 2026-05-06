@@ -219,6 +219,7 @@ export default function DesktopReader({
   const gmailUrl = getGmailUrl(email);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
   const showSnapshotActions = email._activeSnapshot && !readOnly;
+  const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
   const showMutableActions = !readOnly;
 
   return (
@@ -253,7 +254,16 @@ export default function DesktopReader({
             accent="#a6e3a1"
           />
         )}
-        {showSnapshotActions && snapshotLane !== "needs_attention" && (
+        {isHandledSnapshot && (
+          <QuickAction
+            icon={Check}
+            ariaLabel="Reopen"
+            tooltip="Reopen"
+            onClick={() => onAction("snapshot-reopen")}
+            accent="#a6e3a1"
+          />
+        )}
+        {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
           <QuickAction
             icon={Zap}
             ariaLabel="Move to Needs Attention"
@@ -262,7 +272,7 @@ export default function DesktopReader({
             accent="#f38ba8"
           />
         )}
-        {showSnapshotActions && snapshotLane !== "fyi" && (
+        {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
           <QuickAction
             icon={FileText}
             ariaLabel="Move to FYI"
@@ -271,7 +281,7 @@ export default function DesktopReader({
             accent="#89b4fa"
           />
         )}
-        {showSnapshotActions && snapshotLane !== "noise" && (
+        {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "noise" && (
           <QuickAction
             icon={BellOff}
             ariaLabel="Move to Noise"
@@ -280,7 +290,7 @@ export default function DesktopReader({
             accent="#a6adc8"
           />
         )}
-        {showSnapshotActions && snapshotLane === "needs_attention" && (
+        {showSnapshotActions && !isHandledSnapshot && snapshotLane === "needs_attention" && (
           <QuickAction
             icon={Check}
             ariaLabel="Mark handled"
@@ -289,7 +299,7 @@ export default function DesktopReader({
             accent="#a6e3a1"
           />
         )}
-        {showSnapshotActions && (
+        {showSnapshotActions && !isHandledSnapshot && (
           <QuickAction
             icon={CalendarX}
             ariaLabel="Dismiss from today"

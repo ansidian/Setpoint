@@ -107,7 +107,7 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByText("Dismiss")).toBeNull();
   });
 
-  it("dispatches snapshot lane and lifecycle actions", () => {
+	  it("dispatches snapshot lane and lifecycle actions", () => {
     const { onAction } = renderReader();
 
     fireEvent.click(screen.getByRole("button", { name: /move to fyi/i }));
@@ -116,10 +116,26 @@ describe("DesktopReader snapshot actions", () => {
 
     expect(onAction).toHaveBeenCalledWith("snapshot-move-lane", "fyi");
     expect(onAction).toHaveBeenCalledWith("snapshot-handled");
-    expect(onAction).toHaveBeenCalledWith("snapshot-dismiss");
-  });
+	    expect(onAction).toHaveBeenCalledWith("snapshot-dismiss");
+	  });
 
-  it("hides mutating actions for read-only snapshot rows", () => {
+	  it("shows Reopen for handled active snapshot rows", () => {
+	    const { onAction } = renderReader({
+	      email: {
+	        _lane: "handled",
+	        handled_at: "2026-05-03T16:10:00.000Z",
+	      },
+	    });
+
+	    expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
+	    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+	    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+
+	    fireEvent.click(screen.getByRole("button", { name: /reopen/i }));
+	    expect(onAction).toHaveBeenCalledWith("snapshot-reopen");
+	  });
+
+	  it("hides mutating actions for read-only snapshot rows", () => {
     renderReader({ readOnly: true });
 
     expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();

@@ -28,9 +28,10 @@ vi.mock("../../briefing/snapshot-service.js", () => ({
 	    processing: { queued: 2, running: 0, total: 2, active: true },
 	  })),
 	  moveSnapshotItemLane: vi.fn(async () => ({ id: 42, lane: "fyi" })),
-  dismissSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: "now" })),
-  markSnapshotItemHandled: vi.fn(async () => ({ id: 42, handled_at: "now" })),
-}));
+	  dismissSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: "now" })),
+	  markSnapshotItemHandled: vi.fn(async () => ({ id: 42, handled_at: "now" })),
+	  reopenSnapshotItem: vi.fn(async () => ({ id: 42, handled_at: null, lane: "needs_attention" })),
+	}));
 
 process.env.EA_USER_ID = "user-1";
 
@@ -120,13 +121,23 @@ describe("snapshot routes", () => {
     expect(snapshotService.dismissSnapshotItemForToday).toHaveBeenCalledWith("user-1", 42);
   });
 
-  it("marks a snapshot item handled", async () => {
+	  it("marks a snapshot item handled", async () => {
     const res = await request(makeApp())
       .post("/api/briefing/snapshot/items/42/handled")
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ id: 42, handled_at: "now" });
-    expect(snapshotService.markSnapshotItemHandled).toHaveBeenCalledWith("user-1", 42);
-  });
-});
+	    expect(snapshotService.markSnapshotItemHandled).toHaveBeenCalledWith("user-1", 42);
+	  });
+
+	  it("reopens a handled snapshot item", async () => {
+	    const res = await request(makeApp())
+	      .post("/api/briefing/snapshot/items/42/reopen")
+	      .set("Cookie", ["ea_session=cookie-session"]);
+
+	    expect(res.status).toBe(200);
+	    expect(res.body).toEqual({ id: 42, handled_at: null, lane: "needs_attention" });
+	    expect(snapshotService.reopenSnapshotItem).toHaveBeenCalledWith("user-1", 42);
+	  });
+	});

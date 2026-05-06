@@ -71,4 +71,14 @@ router.post("/snapshot/items/:itemId/handled", async (req, res) => {
   }
 });
 
+router.post("/snapshot/items/:itemId/reopen", async (req, res) => {
+  try {
+    const itemId = Number(req.params.itemId);
+    res.json(await snapshotService.reopenSnapshotItem(EA_USER_ID, itemId));
+  } catch (err) {
+    console.error("Error reopening snapshot item:", err);
+    res.status(err.status || 500).json({ message: err.status ? err.message : "Failed to reopen snapshot item" });
+  }
+});
+
 export default router;

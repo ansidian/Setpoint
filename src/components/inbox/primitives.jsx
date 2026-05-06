@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History } from "lucide-react";
+import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History, Check } from "lucide-react";
 import { LANE } from "../../lib/redesign-helpers";
 import Tooltip from "../shared/Tooltip";
 
@@ -111,7 +111,9 @@ export function LaneIcon({ laneKey }) {
       ? History
       : laneKey === "fyi"
         ? FileText
-        : BellOff;
+        : laneKey === "handled"
+          ? Check
+          : BellOff;
   return <Icon size={11} color={color} />;
 }
 

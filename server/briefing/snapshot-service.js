@@ -340,8 +340,12 @@ async function loadSnapshotItems(dbClient, snapshotId) {
           WHERE i.snapshot_id = ?
             AND i.dismissed_from_today_at IS NULL
             AND i.provider_removed_at IS NULL
-            AND i.handled_at IS NULL
-          ORDER BY i.is_carryover DESC, i.sort_order ASC, i.email_date_at_snapshot DESC, i.id ASC`,
+          ORDER BY CASE WHEN i.handled_at IS NOT NULL THEN 1 ELSE 0 END ASC,
+                   i.is_carryover DESC,
+                   CASE WHEN i.handled_at IS NOT NULL THEN i.handled_at END DESC,
+                   i.sort_order ASC,
+                   i.email_date_at_snapshot DESC,
+                   i.id ASC`,
     args: [snapshotId],
   });
   return result.rows.map(normalizeSnapshotItem);
@@ -367,6 +371,32 @@ async function loadActiveSnapshotItem(dbClient, userId, itemId) {
             AND i.dismissed_from_today_at IS NULL
             AND i.provider_removed_at IS NULL
             AND i.handled_at IS NULL
+          LIMIT 1`,
+    args: [itemId, userId],
+  });
+  return result.rows[0] || null;
+}
+
+async function loadActiveHandledSnapshotItem(dbClient, userId, itemId) {
+  const result = await dbClient.execute({
+    sql: `SELECT i.*,
+                 idx.read,
+                 t.bill_candidate_json
+          FROM ea_briefing_snapshot_items i
+          JOIN ea_briefing_snapshots s
+            ON s.id = i.snapshot_id
+           AND s.status = 'active'
+          LEFT JOIN ea_email_index idx
+            ON idx.user_id = i.user_id
+           AND idx.account_id = i.account_id
+           AND idx.uid = i.email_id
+          LEFT JOIN ea_email_triage t
+            ON t.id = i.triage_id
+          WHERE i.id = ?
+            AND i.user_id = ?
+            AND i.dismissed_from_today_at IS NULL
+            AND i.provider_removed_at IS NULL
+            AND i.handled_at IS NOT NULL
           LIMIT 1`,
     args: [itemId, userId],
   });
@@ -761,11 +791,16 @@ function buildLanes(items) {
   const lanes = {
     needs_attention: [],
     fyi: [],
+    handled: [],
     noise: [],
   };
   const carryover = [];
 
   for (const item of items) {
+    if (item.handled_at) {
+      lanes.handled.push(item);
+      continue;
+    }
     if (item.is_carryover) {
       carryover.push(item);
       continue;
@@ -811,6 +846,7 @@ function buildSnapshotView(snapshot, items, processing = emptyProcessingState(),
     laneCounts: {
       needs_attention: lanes.needs_attention.length,
       fyi: lanes.fyi.length,
+      handled: lanes.handled.length,
       noise: lanes.noise.length,
       carryover: carryover.length,
     },
@@ -851,13 +887,13 @@ async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
     sql: `SELECT snapshot_id,
                  lane_at_snapshot,
                  is_carryover,
+                 CASE WHEN handled_at IS NOT NULL THEN 1 ELSE 0 END AS is_handled,
                  COUNT(*) AS count
           FROM ea_briefing_snapshot_items
           WHERE snapshot_id IN (${placeholders})
             AND dismissed_from_today_at IS NULL
             AND provider_removed_at IS NULL
-            AND handled_at IS NULL
-          GROUP BY snapshot_id, lane_at_snapshot, is_carryover`,
+          GROUP BY snapshot_id, lane_at_snapshot, is_carryover, is_handled`,
     args: snapshotIds,
   });
 
@@ -866,6 +902,7 @@ async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
     counts.set(Number(id), {
       needs_attention: 0,
       fyi: 0,
+      handled: 0,
       noise: 0,
       carryover: 0,
     });
@@ -873,6 +910,10 @@ async function loadSnapshotHistoryCounts(dbClient, snapshotIds) {
   for (const row of result.rows) {
     const snapshotCounts = counts.get(Number(row.snapshot_id));
     if (!snapshotCounts) continue;
+    if (Number(row.is_handled)) {
+      snapshotCounts.handled += normalizeCount(row.count);
+      continue;
+    }
     if (Number(row.is_carryover)) {
       snapshotCounts.carryover += normalizeCount(row.count);
       continue;
@@ -898,6 +939,7 @@ export async function getSnapshotHistory(userId, {
       const laneCounts = countsBySnapshot.get(snapshot.id) || {
         needs_attention: 0,
         fyi: 0,
+        handled: 0,
         noise: 0,
         carryover: 0,
       };
@@ -1101,6 +1143,37 @@ export async function markSnapshotItemHandled(userId, itemId, {
     args: [handledAt, item.triage_id, userId],
   });
   await insertFeedback(dbClient, item, "mark_handled", "unhandled", "handled");
+
+  const updated = await loadSnapshotItemById(dbClient, userId, itemId);
+  return normalizeSnapshotItem(updated);
+}
+
+export async function reopenSnapshotItem(userId, itemId, {
+  dbClient = db,
+} = {}) {
+  const item = await loadActiveHandledSnapshotItem(dbClient, userId, itemId);
+  if (!item) {
+    throw makeHttpError("Active handled snapshot item not found", 404);
+  }
+
+  await dbClient.execute({
+    sql: `UPDATE ea_briefing_snapshot_items
+          SET handled_at = NULL,
+              lane_at_snapshot = 'needs_attention',
+              is_carryover = 0,
+              updated_at = datetime('now')
+          WHERE id = ? AND user_id = ?`,
+    args: [itemId, userId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE ea_email_triage
+          SET handled_at = NULL,
+              lane = 'needs_attention',
+              updated_at = datetime('now')
+          WHERE id = ? AND user_id = ?`,
+    args: [item.triage_id, userId],
+  });
+  await insertFeedback(dbClient, item, "reopen", "handled", "needs_attention");
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
   return normalizeSnapshotItem(updated);

@@ -11,6 +11,7 @@ import {
   markProviderRemovedFromActiveSnapshots,
   markSnapshotItemHandled,
   moveSnapshotItemLane,
+  reopenSnapshotItem,
   syncActiveSnapshot,
 } from "./snapshot-service.js";
 
@@ -201,7 +202,7 @@ describe("active briefing snapshots", () => {
         status: "active",
         readOnly: false,
         schedule_label: "Morning",
-        laneCounts: expect.objectContaining({ needs_attention: 1, fyi: 0, noise: 0, carryover: 0 }),
+        laneCounts: expect.objectContaining({ needs_attention: 1, fyi: 0, handled: 0, noise: 0, carryover: 0 }),
       }),
       expect.objectContaining({
         id: initial.id,
@@ -224,10 +225,14 @@ describe("active briefing snapshots", () => {
       dbClient,
       now: new Date("2026-05-03T07:30:00.000Z"),
     });
-    await seedSnapshotItem(dbClient, {
+    const frozenItem = await seedSnapshotItem(dbClient, {
       emailId: "msg-frozen",
       lane: "fyi",
       now: new Date("2026-05-03T07:30:00.000Z"),
+    });
+    await markSnapshotItemHandled("user-1", frozenItem.itemId, {
+      dbClient,
+      now: new Date("2026-05-03T08:00:00.000Z"),
     });
     await advanceSnapshotBoundary("user-1", {
       dbClient,
@@ -246,7 +251,8 @@ describe("active briefing snapshots", () => {
     expect(frozenView).toMatchObject({
       readOnly: true,
       snapshot: expect.objectContaining({ id: initial.id, status: "frozen" }),
-      lanes: expect.objectContaining({ fyi: [expect.objectContaining({ email_id: "msg-frozen" })] }),
+      lanes: expect.objectContaining({ handled: [expect.objectContaining({ email_id: "msg-frozen" })] }),
+      laneCounts: expect.objectContaining({ handled: 1, fyi: 0 }),
     });
     expect(activeView).toMatchObject({
       readOnly: false,
@@ -421,6 +427,7 @@ describe("active briefing snapshots", () => {
     expect(view.laneCounts).toEqual({
       needs_attention: 1,
       fyi: 2,
+      handled: 0,
       noise: 1,
       carryover: 1,
     });
@@ -572,7 +579,80 @@ describe("active briefing snapshots", () => {
       dbClient,
       now: new Date("2026-05-03T16:10:00.000Z"),
     });
+    expect(view.laneCounts).toMatchObject({
+      needs_attention: 0,
+      handled: 1,
+    });
     expect(view.lanes.needs_attention).toHaveLength(0);
+    expect(view.lanes.handled.map((item) => item.email_id)).toEqual(["msg-handled"]);
+  });
+
+  it("reopens an active handled item into Needs Attention and clears canonical handled state", async () => {
+    const dbClient = await createMigratedDb();
+    const { itemId, triageId } = await seedSnapshotItem(dbClient, {
+      emailId: "msg-reopen",
+      lane: "fyi",
+    });
+    await markSnapshotItemHandled("user-1", itemId, {
+      dbClient,
+      now: new Date("2026-05-03T16:10:00.000Z"),
+    });
+
+    const reopened = await reopenSnapshotItem("user-1", itemId, {
+      dbClient,
+      now: new Date("2026-05-03T16:12:00.000Z"),
+    });
+
+    expect(reopened).toMatchObject({
+      id: itemId,
+      triage_id: triageId,
+      lane: "needs_attention",
+      lane_at_snapshot: "needs_attention",
+      handled_at: null,
+    });
+
+    const rows = await dbClient.execute({
+      sql: `SELECT i.handled_at AS item_handled_at, i.lane_at_snapshot, t.handled_at AS triage_handled_at,
+                   t.lane, f.feedback_type, f.from_value, f.to_value
+            FROM ea_briefing_snapshot_items i
+            JOIN ea_email_triage t ON t.id = i.triage_id
+            JOIN ea_triage_feedback f ON f.snapshot_item_id = i.id
+            WHERE i.id = ?
+            ORDER BY f.id`,
+      args: [itemId],
+    });
+
+    expect(rows.rows).toEqual([
+      expect.objectContaining({
+        item_handled_at: null,
+        triage_handled_at: null,
+        lane_at_snapshot: "needs_attention",
+        lane: "needs_attention",
+        feedback_type: "mark_handled",
+        from_value: "unhandled",
+        to_value: "handled",
+      }),
+      {
+        item_handled_at: null,
+        triage_handled_at: null,
+        lane_at_snapshot: "needs_attention",
+        lane: "needs_attention",
+        feedback_type: "reopen",
+        from_value: "handled",
+        to_value: "needs_attention",
+      },
+    ]);
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T16:12:00.000Z"),
+    });
+    expect(view.laneCounts).toMatchObject({
+      needs_attention: 1,
+      handled: 0,
+    });
+    expect(view.lanes.needs_attention.map((item) => item.email_id)).toEqual(["msg-reopen"]);
+    expect(view.lanes.handled).toHaveLength(0);
   });
 
   it("carries only unresolved Needs Attention items into the next daily window", async () => {

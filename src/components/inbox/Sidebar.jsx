@@ -233,6 +233,7 @@ export default function Sidebar({
             <LaneRow laneKey="carryover" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="needs_attention" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="fyi" lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="handled" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} />
           </div>
         </div>

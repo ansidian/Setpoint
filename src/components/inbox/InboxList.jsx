@@ -87,14 +87,14 @@ export default function InboxList({
   onCategoryFilterChange,
   readOnly = false,
 }) {
-  const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { noise: true } : {}));
-  const effectiveCollapsed = activeSnapshotMode ? { noise: true, ...collapsed } : collapsed;
+  const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { handled: true, noise: true } : {}));
+  const effectiveCollapsed = activeSnapshotMode ? { handled: true, noise: true, ...collapsed } : collapsed;
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 
   const grouped = useMemo(() => {
-    const g = { live: [], carryover: [], needs_attention: [], action: [], fyi: [], noise: [] };
+    const g = { live: [], carryover: [], needs_attention: [], action: [], fyi: [], handled: [], noise: [] };
     for (const e of emails) {
       if (e._untriaged) g.live.push(e);
       else {
@@ -394,7 +394,7 @@ export default function InboxList({
                 )}
               </div>
             )}
-            {["carryover", "needs_attention", "fyi", "noise"].map((k) => (
+            {["carryover", "needs_attention", "fyi", "handled", "noise"].map((k) => (
               grouped[k].length > 0 && (
                 <div key={k}>
                   <StickyHeader borderColor="rgba(255,255,255,0.03)">
