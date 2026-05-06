@@ -30,4 +30,15 @@ describe("timeline helpers", () => {
       rows: [row(40, 80)],
     })).toBe(80);
   });
+
+  it("keeps the now marker from tracking through all-day events", () => {
+    expect(resolveTimelineNowMarkerTop({
+      items: [
+        { kind: "event", startMs: 0, endMs: 1000, data: { allDay: true } },
+        { kind: "deadline", dueAtMs: 1200 },
+      ],
+      now: 500,
+      rows: [row(40, 80), row(140, 40)],
+    })).toBe(122);
+  });
 });

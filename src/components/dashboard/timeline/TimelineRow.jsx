@@ -64,7 +64,8 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
 
   if (item.kind === "event") {
     const event = item.data;
-    const state = eventState(event, now);
+    const isAllDayEvent = !!event.allDay;
+    const state = isAllDayEvent ? "future" : eventState(event, now);
     isPast = state === "past";
     isLive = state === "live";
     Icon = /zoom|video/i.test(event.location || "") || event.hangoutLink ? Video
@@ -72,12 +73,12 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
       : /coffee|lunch|dinner/i.test(event.title || "") ? Coffee
       : event.attendees?.length > 1 ? Users
       : Calendar;
-    leftLabel = formatEventTime(event.startMs);
+    leftLabel = isAllDayEvent ? "All day" : formatEventTime(event.startMs);
     title = event.title;
     sub = event.attendees?.length
       ? `with ${event.attendees.slice(0, 3).join(", ")}${event.attendees.length > 3 ? ` +${event.attendees.length - 3}` : ""}`
       : event.location || event.subtitle;
-    meta = formatEventDuration(event.startMs, event.endMs);
+    meta = isAllDayEvent ? "" : formatEventDuration(event.startMs, event.endMs);
     urgency = isLive ? "high" : "low";
     railDotColor = event.color || event.sourceColor || accent;
     jumpPayload = { kind: "event", id: getEventSelectionId(event), data: event };
