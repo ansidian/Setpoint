@@ -158,7 +158,8 @@ export default function useCalendarModalEditorRouting({
 
   const openFloatingDeadlineEdit = useCallback((task, options = {}) => {
     if (task?.source !== "todoist") return;
-    const itemId = String(task.id);
+    const itemId = activeView.getItemId ? activeView.getItemId(task) : task.id;
+    const editTaskId = String(task.id);
     const dateKey = options.dateKey || task.due_date || activeSelectedDateKey;
     const fallbackCell = findDateCell(dateKey);
     const parsed = parseYmd(dateKey);
@@ -166,18 +167,18 @@ export default function useCalendarModalEditorRouting({
       setSelectedDay(parsed.day);
       setSelectedDateKey(dateKey);
     }
-    setSelectedItemId(itemId);
-    setDeadlineEditor({ mode: "edit", taskId: itemId });
+    setSelectedItemId(itemId != null ? String(itemId) : null);
+    setDeadlineEditor({ mode: "edit", taskId: editTaskId });
     setDeadlineDraftPreview(null);
     const current = floatingDetailRef.current;
     const reuseCurrentAnchor = current?.open
       && current.view === "deadlines"
-      && String(current.itemId) === itemId
+      && String(current.itemId) === String(itemId)
       && !current.parked;
     openFloatingDetail({
       mode: "edit",
       view: "deadlines",
-      itemId,
+      itemId: itemId != null ? String(itemId) : null,
       dateKey,
       day: parsed?.day ?? null,
       anchorElement: options.anchorElement || (reuseCurrentAnchor ? current.anchorElement : null) || fallbackCell,
@@ -187,7 +188,7 @@ export default function useCalendarModalEditorRouting({
       parked: options.parked ?? (!options.anchorElement && !reuseCurrentAnchor && !fallbackCell),
       itemsSnapshot: [task],
     });
-  }, [activeSelectedDateKey, findDateCell, floatingDetailRef, openFloatingDetail, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
+  }, [activeSelectedDateKey, activeView, findDateCell, floatingDetailRef, openFloatingDetail, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
 
   const cancelFloatingEditor = useCallback(() => {
     const current = floatingDetailRef.current;

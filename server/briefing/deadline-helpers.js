@@ -22,23 +22,19 @@ export async function loadCompletedTaskIds(userId, todoistTasks) {
   return completedIds;
 }
 
-export function separateDeadlines(ctmDeadlines, todoistTasks, completedIds) {
-  const todoistIds = new Set(
-    todoistTasks
-      .filter((task) => task.id != null)
-      .map((task) => String(task.id)),
-  );
-  const ctm = ctmDeadlines.filter(
-    (deadline) => deadline.todoist_id == null || !todoistIds.has(String(deadline.todoist_id)),
-  );
-
-  let todoist = todoistTasks;
-
+export function filterCompletedTodoistTasks(todoistTasks, completedIds) {
+  let todoist = todoistTasks || [];
   if (completedIds?.size) {
     todoist = todoist.filter((task) => !completedIds.has(task.id) && !completedIds.has(String(task.id)));
   }
+  return todoist;
+}
 
-  return { ctm, todoist };
+export function separateDeadlines(ctmDeadlines, todoistTasks, completedIds) {
+  return {
+    ctm: ctmDeadlines || [],
+    todoist: filterCompletedTodoistTasks(todoistTasks, completedIds),
+  };
 }
 
 export function carryForwardCompletedTodoist(newList, prevList, boundary) {

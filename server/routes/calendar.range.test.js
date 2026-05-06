@@ -200,10 +200,7 @@ describe("GET /api/calendar/deadlines/range", () => {
     hydrateRecurringTombstones.mockResolvedValue([
       { id: "todo-recurring", title: "Completed today", due_date: "2026-05-02", source: "todoist", status: "complete" },
     ]);
-    separateDeadlines.mockImplementation((ctm, todoist) => ({
-      ctm: ctm.filter((deadline) => !todoist.some((task) => String(deadline.todoist_id) === String(task.id))),
-      todoist,
-    }));
+    separateDeadlines.mockImplementation((ctm, todoist) => ({ ctm, todoist }));
     computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
     fetchCTMDeadlinesRange.mockResolvedValue([
       { id: "ctm-1", title: "Canvas item", due_date: "2026-05-04", status: "incomplete", todoist_id: "dupe" },
@@ -216,7 +213,7 @@ describe("GET /api/calendar/deadlines/range", () => {
     getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
   });
 
-  it("returns range-backed CTM, active mirrored Todoist rows, local tombstones, stats, and fetchedAt", async () => {
+  it("returns isolated CTM Canvas rows, Todoist rows, local tombstones, stats, and fetchedAt", async () => {
     const res = await request(makeApp()).get(
       "/api/calendar/deadlines/range?start=2026-04-26&end=2026-06-06",
     );
@@ -227,9 +224,9 @@ describe("GET /api/calendar/deadlines/range", () => {
     expect(hydrateRecurringTombstones).toHaveBeenCalledWith(process.env.EA_USER_ID, new Set(["dupe", "todo-1", "todo-recurring"]), {
       viewBoundary: "yesterday",
     });
-    expect(res.body.ctm.upcoming.map((item) => item.id)).toEqual([]);
+    expect(res.body.ctm.upcoming.map((item) => item.id)).toEqual(["ctm-1"]);
     expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["dupe", "todo-1", "todo-recurring"]);
-    expect(res.body.ctm.stats).toEqual({ total: 0 });
+    expect(res.body.ctm.stats).toEqual({ total: 1 });
     expect(res.body.todoist.stats).toEqual({ total: 3 });
     expect(res.body.todoist.syncHealth).toEqual({ state: "current", configured: true, ageMs: 30_000 });
     expect(res.body.minDate).toBe("2025-05-03");

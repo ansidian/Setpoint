@@ -8,14 +8,8 @@ import {
   createTodoistTask,
   updateTodoistTask,
 } from "./todoist.js";
-import { fetchCTMDeadlinesAll, updateCTMEventStatus } from "./ctm.js";
+import { updateCTMEventStatus } from "./ctm.js";
 import { buildSnapshot } from "./tombstones.js";
-
-function findCtmTask(tasks, taskId) {
-  return (tasks || []).find((task) =>
-    String(task.id) === String(taskId) || String(task.todoist_id) === String(taskId),
-  ) || null;
-}
 
 function findTodoistTask(tasks, taskId) {
   return (tasks || []).find((task) =>
@@ -24,17 +18,11 @@ function findTodoistTask(tasks, taskId) {
 }
 
 async function loadCompletionSources(userId) {
-  const [ctmTasks, todoistTasks] = await Promise.all([
-    fetchCTMDeadlinesAll().catch((err) => {
-      console.error("[Briefing] CTM task source fetch failed:", err.message);
-      return [];
-    }),
-    fetchTodoistTasksAll(userId, { refresh: true }).catch((err) => {
-      console.error("[Briefing] Todoist task source fetch failed:", err.message);
-      return [];
-    }),
-  ]);
-  return { ctmTasks, todoistTasks };
+  const todoistTasks = await fetchTodoistTasksAll(userId, { refresh: true }).catch((err) => {
+    console.error("[Briefing] Todoist task source fetch failed:", err.message);
+    return [];
+  });
+  return { todoistTasks };
 }
 
 async function persistCompletedTodoistTask(userId, todoistId, task) {
@@ -55,31 +43,24 @@ async function persistCompletedTodoistTask(userId, todoistId, task) {
 }
 
 export async function completeTask(userId, taskId) {
-  const { ctmTasks, todoistTasks } = await loadCompletionSources(userId);
-  const ctmTask = findCtmTask(ctmTasks, taskId);
+  const { todoistTasks } = await loadCompletionSources(userId);
   const todoistTask = findTodoistTask(todoistTasks, taskId);
 
-  const todoistId = ctmTask?.todoist_id || (todoistTask ? taskId : null);
-
-  if (todoistId) {
-    try {
-      await completeTodoistTask(userId, todoistId);
-    } catch (err) {
-      const wrapped = new Error(`Todoist close failed: ${err.message}`);
-      wrapped.status = 502;
-      throw wrapped;
-    }
-    await persistCompletedTodoistTask(userId, todoistId, todoistTask);
+  if (!todoistTask) {
+    return;
   }
 
-  if (ctmTask) {
-    await updateCTMEventStatus(ctmTask.id, "complete").catch((err) =>
-      console.error("[Briefing] CTM status update failed:", err.message),
-    );
+  try {
+    await completeTodoistTask(userId, taskId);
+  } catch (err) {
+    const wrapped = new Error(`Todoist close failed: ${err.message}`);
+    wrapped.status = 502;
+    throw wrapped;
   }
+  await persistCompletedTodoistTask(userId, taskId, todoistTask);
 }
 
-export async function updateCTMStatus(userId, taskId, status) {
+export async function updateCTMStatus(_userId, taskId, status) {
   if (!["incomplete", "in_progress", "complete"].includes(status)) {
     const err = new Error("Invalid status");
     err.status = 400;
@@ -87,20 +68,6 @@ export async function updateCTMStatus(userId, taskId, status) {
   }
 
   await updateCTMEventStatus(Number(taskId), status);
-
-  if (status === "complete") {
-    const ctmTasks = await fetchCTMDeadlinesAll().catch((err) => {
-      console.error("[Briefing] CTM task source fetch failed:", err.message);
-      return [];
-    });
-    const ctmTask = findCtmTask(ctmTasks, taskId);
-    if (ctmTask?.todoist_id) {
-      await completeTodoistTask(userId, ctmTask.todoist_id).catch((err) =>
-        console.error("[Briefing] Todoist completion failed:", err.message),
-      );
-      await persistCompletedTodoistTask(userId, ctmTask.todoist_id, null);
-    }
-  }
 }
 
 export async function dismissTombstone(userId, todoistId) {

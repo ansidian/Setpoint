@@ -16,8 +16,8 @@ describe("fetchCTMDeadlines", () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => ({
       ok: true,
       json: async () => String(url).includes("status=complete")
-        ? [{ id: "done-future", title: "Future complete", due_date: "2026-04-25", status: "complete" }]
-        : [{ id: "active-overdue", title: "Past active", due_date: "2026-04-20", status: "incomplete" }],
+        ? [{ id: "done-future", title: "Future complete", due_date: "2026-04-25", status: "complete", canvas_id: "course-assignment-2" }]
+        : [{ id: "active-overdue", title: "Past active", due_date: "2026-04-20", status: "incomplete", canvas_id: "course-assignment-1" }],
     })));
 
     const { fetchCTMDeadlines } = await import("./ctm.js");
@@ -36,8 +36,8 @@ describe("fetchCTMDeadlines", () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => ({
       ok: true,
       json: async () => String(url).includes("status=complete")
-        ? [{ id: "done-future", title: "Future complete", due_date: "2026-04-25", status: "complete" }]
-        : [{ id: "active-future", title: "Future active", due_date: "2026-04-24", status: "incomplete" }],
+        ? [{ id: "done-future", title: "Future complete", due_date: "2026-04-25", status: "complete", canvas_id: "course-assignment-2" }]
+        : [{ id: "active-future", title: "Future active", due_date: "2026-04-24", status: "incomplete", canvas_id: "course-assignment-1" }],
     })));
 
     const { fetchCTMDeadlinesAll } = await import("./ctm.js");
@@ -55,8 +55,8 @@ describe("fetchCTMDeadlines", () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => ({
       ok: true,
       json: async () => String(url).includes("status=complete")
-        ? [{ id: "done-range", title: "Done", due_date: "2026-04-28", status: "complete" }]
-        : [{ id: "active-range", title: "Active", due_date: "2026-04-29", status: "incomplete" }],
+        ? [{ id: "done-range", title: "Done", due_date: "2026-04-28", status: "complete", canvas_id: "course-assignment-2" }]
+        : [{ id: "active-range", title: "Active", due_date: "2026-04-29", status: "incomplete", canvas_id: "course-assignment-1" }],
     })));
 
     const { fetchCTMDeadlinesRange } = await import("./ctm.js");
@@ -67,5 +67,46 @@ describe("fetchCTMDeadlines", () => {
     expect(urls).toHaveLength(2);
     expect(urls.every((url) => url.includes("due_after=2026-04-26"))).toBe(true);
     expect(urls.every((url) => url.includes("due_before=2026-06-06"))).toBe(true);
+  });
+
+  it("keeps only Canvas-origin rows if CTM returns Todoist or manual rows despite exclude_source", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url) => ({
+      ok: true,
+      json: async () => String(url).includes("status=complete")
+        ? [
+            { id: "done-ctm", title: "Done CTM", due_date: "2026-04-28", status: "complete", canvas_id: "course-assignment-2" },
+            { id: "done-manual", title: "Done Manual", due_date: "2026-04-28", status: "complete", source: "manual" },
+            {
+              id: "done-todoist",
+              title: "Done Todoist",
+              due_date: "2026-04-28",
+              status: "complete",
+              source: "todoist",
+            },
+            {
+              id: "done-todoist-url",
+              title: "Done Todoist URL",
+              due_date: "2026-04-28",
+              status: "complete",
+              url: "https://app.todoist.com/app/task/123",
+            },
+          ]
+        : [
+            { id: "active-ctm", title: "Active CTM", due_date: "2026-04-29", status: "incomplete", canvas_id: "course-assignment-1" },
+            { id: "active-manual", title: "Active Manual", due_date: "2026-04-29", status: "incomplete", source: "manual" },
+            {
+              id: "active-todoist",
+              title: "Active Todoist",
+              due_date: "2026-04-29",
+              status: "incomplete",
+              todoist_id: "456",
+            },
+          ],
+    })));
+
+    const { fetchCTMDeadlinesRange } = await import("./ctm.js");
+    const out = await fetchCTMDeadlinesRange({ start: "2026-04-26", end: "2026-06-06" });
+
+    expect(out.map((event) => event.id)).toEqual(["active-ctm", "done-ctm"]);
   });
 });

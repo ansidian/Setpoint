@@ -3,6 +3,7 @@ import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
 import { DeadlineStatusIcon } from "./DeadlineStatusIndicator.jsx";
 import { buildDeadlinesAgendaGroups } from "./deadlinesAgendaModel.js";
+import { deadlineMatchesItemId } from "./deadlinesModel.js";
 
 function groupDate(group) {
   const parsed = parseYmd(group.dateKey);
@@ -244,7 +245,7 @@ function CompletedToggle({ enabled, onToggle }) {
 function hasSelectedCompletedDeadline(agenda, selectedItemId) {
   if (!selectedItemId) return false;
   return agenda.groups.some((group) => (
-    group.items.some((item) => item.agendaComplete && String(item.agendaItemId) === String(selectedItemId))
+    group.items.some((item) => item.agendaComplete && deadlineMatchesItemId(item, selectedItemId, group.dateKey))
   ));
 }
 
@@ -325,7 +326,7 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
               >
                 <DeadlineRow
                   task={task}
-                  selected={String(selectedItemId || "") === task.agendaItemId}
+                  selected={deadlineMatchesItemId(task, selectedItemId, group.dateKey)}
                   quickActions={deadlineQuickActions}
                   onSelect={(item, element) => onDeadlineAction?.({
                     item,

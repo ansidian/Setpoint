@@ -412,7 +412,7 @@ describe("CalendarGrid overflow motion coverage", () => {
     fireEvent.click(within(popover).getByText("Hidden Todoist task"));
 
     expect(onOpenFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
-      itemId: "todo-hidden",
+      itemId: "todoist:todo-hidden",
       view: "deadlines",
       itemsSnapshot: [expect.objectContaining({ id: "todo-hidden" })],
     }));

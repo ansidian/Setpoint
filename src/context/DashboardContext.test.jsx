@@ -128,10 +128,17 @@ describe("DashboardContext Todoist local state", () => {
     expect(completedDeadlines.todoist.upcoming[0]._completing).toBeUndefined();
   });
 
-  it("optimistically completes Todoist rows through the generic status action", async () => {
+  it("optimistically completes CTM rows through the generic status action without touching Todoist rows", async () => {
     const task = {
-      id: "todo-status-only",
-      title: "Status-only task",
+      id: "shared-id",
+      title: "Canvas task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+      source: "canvas",
+    };
+    const todoistTask = {
+      id: "shared-id",
+      title: "Todoist task with matching id",
       due_date: "2026-04-21",
       status: "incomplete",
       source: "todoist",
@@ -142,8 +149,8 @@ describe("DashboardContext Todoist local state", () => {
       todoist: { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
     };
     const deadlines = {
-      ctm: { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
-      todoist: { upcoming: [task], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
+      ctm: { upcoming: [task], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
+      todoist: { upcoming: [todoistTask], stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
     };
     const setBriefing = vi.fn((updater) => updater(briefing));
     const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
@@ -160,21 +167,23 @@ describe("DashboardContext Todoist local state", () => {
 
     fireEvent.click(screen.getByText("Complete status"));
 
-    expect(updateTaskStatus).toHaveBeenCalledWith("todo-status-only", "complete");
+    expect(updateTaskStatus).toHaveBeenCalledWith("shared-id", "complete");
     const completingDeadlines = setCalendarDeadlines.mock.results[0].value;
-    expect(completingDeadlines.todoist.upcoming[0]).toMatchObject({
-      id: "todo-status-only",
+    expect(completingDeadlines.ctm.upcoming[0]).toMatchObject({
+      id: "shared-id",
       _completing: true,
     });
+    expect(completingDeadlines.todoist.upcoming[0]._completing).toBeUndefined();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(600);
     });
 
     const completedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
-    expect(completedDeadlines.todoist.upcoming[0]).toMatchObject({
-      id: "todo-status-only",
+    expect(completedDeadlines.ctm.upcoming[0]).toMatchObject({
+      id: "shared-id",
       status: "complete",
     });
+    expect(completedDeadlines.todoist.upcoming[0].status).toBe("incomplete");
   });
 });

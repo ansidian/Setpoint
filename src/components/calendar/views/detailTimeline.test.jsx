@@ -584,7 +584,7 @@ describe("calendar detail timeline", () => {
     expect(completedRows[2].getAttribute("data-complete")).toBe("true");
 
     fireEvent.click(rows[1]);
-    expect(onSelect).toHaveBeenCalledWith("todo-3");
+    expect(onSelect).toHaveBeenCalledWith("todoist:todo-3");
   });
 
   it("keeps selected deadline details in the rail", () => {

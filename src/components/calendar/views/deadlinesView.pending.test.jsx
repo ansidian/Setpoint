@@ -70,7 +70,7 @@ describe("deadlinesView Todoist completion feedback", () => {
     fireEvent.click(screen.getByRole("button", { name: /mark complete/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /completing/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /mark complete/i }).getAttribute("aria-busy")).toBe("true");
     });
 
     resolveComplete({});
@@ -85,7 +85,7 @@ describe("deadlinesView Todoist completion feedback", () => {
     fireEvent.click(screen.getByRole("button", { name: /mark complete/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /completing/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /mark complete/i }).getAttribute("aria-busy")).toBe("true");
     });
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /mark complete/i })).toBeTruthy();
