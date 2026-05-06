@@ -115,6 +115,62 @@ describe("email index health", () => {
 });
 
 describe("email indexing", () => {
+  it("deduplicates repeated provider rows before writing FTS rowids", async () => {
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-duplicate",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "First subject",
+        body_preview: "First preview",
+        body_text: "First body",
+        date: "2026-05-01T12:00:00Z",
+        read: false,
+      },
+      {
+        uid: "gmail-work-msg-duplicate",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Second subject",
+        body_preview: "Second preview",
+        body_text: "Second body",
+        date: "2026-05-01T12:05:00Z",
+        read: true,
+      },
+    ]);
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT i.subject AS index_subject,
+                   i.body_text AS index_body,
+                   i.read,
+                   COUNT(f.rowid) AS fts_count,
+                   MAX(f.subject) AS fts_subject
+            FROM ea_email_index i
+            LEFT JOIN ea_email_fts f ON f.uid = i.uid AND f.rowid = i.rowid
+            WHERE i.uid = ?
+            GROUP BY i.uid`,
+      args: ["gmail-work-msg-duplicate"],
+    });
+
+    expect(rows.rows).toEqual([
+      {
+        index_subject: "Second subject",
+        index_body: "Second body",
+        read: 1,
+        fts_count: 1,
+        fts_subject: "Second subject",
+      },
+    ]);
+  });
+
   it("updates read state and searchable content when a provider refetch sees an existing email", async () => {
     await seedIndexedEmail(testState.db.current, {
       uid: "gmail-work-msg-1",

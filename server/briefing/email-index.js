@@ -220,15 +220,26 @@ async function loadExistingIndexRows(userId, uids, { dbClient }) {
   return new Map(rows.map((row) => [row.uid, row]));
 }
 
+function dedupeEmailsByUid(emails) {
+  const byUid = new Map();
+  for (const email of emails) {
+    if (!email?.uid) continue;
+    byUid.set(email.uid, email);
+  }
+  return [...byUid.values()];
+}
+
 export async function indexEmails(userId, emails, { dbClient = db } = {}) {
   if (!emails.length) return;
+  const uniqueEmails = dedupeEmailsByUid(emails);
+  if (!uniqueEmails.length) return;
 
   const existingRows = await loadExistingIndexRows(
     userId,
-    [...new Set(emails.map((email) => email.uid).filter(Boolean))],
+    uniqueEmails.map((email) => email.uid),
     { dbClient },
   );
-  const stmts = emails.flatMap((email) => {
+  const stmts = uniqueEmails.flatMap((email) => {
     const { fromName, fromAddress } = parseFrom(email);
     const uid = email.uid;
     const subject = email.subject || "";
@@ -297,5 +308,5 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
   });
 
   if (stmts.length) await dbClient.batch(stmts);
-  console.log(`[EA Index] Indexed ${emails.length} email(s)`);
+  console.log(`[EA Index] Indexed ${uniqueEmails.length} email(s)`);
 }
