@@ -7,12 +7,10 @@ import AnimatedRailContent from "./AnimatedRailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGrid from "./CalendarGrid.jsx";
 import buildContextContent from "./buildContextContent.jsx";
+import CalendarModalAgendaRailContent from "./CalendarModalAgendaRailContent.jsx";
 import CalendarModalBackdrop from "./CalendarModalBackdrop.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 import CalendarModalTexture from "./CalendarModalTexture.jsx";
-import BillsAgendaRail from "../views/bills/BillsAgendaRail.jsx";
-import DeadlinesAgendaRail from "../views/deadlines/DeadlinesAgendaRail.jsx";
-import EventsAgendaRail from "../views/events/EventsAgendaRail.jsx";
 
 export default function CalendarModalShell({
   panelRef,
@@ -159,69 +157,34 @@ export default function CalendarModalShell({
   };
 
   const contextContent = useAgendaRail ? (
-    view === "events" ? (
-      <EventsAgendaRail
-        ref={agendaRailRef}
-        viewYear={viewYear}
-        viewMonth={viewMonth}
-        events={viewData?.events || []}
-        weatherData={weatherData}
-        isLoading={!!viewData?.isLoading}
-        selectedDateKey={selectedDateKey}
-        selectedItemId={effectiveSelectedItemId}
-        scrollCommand={agendaScrollCommand}
-        currentYear={currentYear}
-        currentMonth={currentMonth}
-        todayDate={todayDate}
-        eventQuickActions={eventQuickActions}
-        floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
-        onDirtyBlocked={onAgendaDirtyBlocked}
-        onPassiveDateChange={onAgendaPassiveDateChange}
-        onDateAction={onAgendaDateAction}
-        onEventAction={onAgendaEventAction}
-      />
-    ) : view === "bills" ? (
-      <BillsAgendaRail
-        ref={agendaRailRef}
-        viewYear={viewYear}
-        viewMonth={viewMonth}
-        computed={computed}
-        selectedDateKey={selectedDateKey}
-        selectedItemId={effectiveSelectedItemId}
-        scrollCommand={agendaScrollCommand}
-        currentYear={currentYear}
-        currentMonth={currentMonth}
-        todayDate={todayDate}
-        onPassiveDateChange={onAgendaPassiveDateChange}
-        onDateAction={onAgendaDateAction}
-        onBillAction={onAgendaEventAction}
-      />
-    ) : (
-      <DeadlinesAgendaRail
-        ref={agendaRailRef}
-        viewYear={viewYear}
-        viewMonth={viewMonth}
-        computed={computed}
-        selectedDateKey={selectedDateKey}
-        selectedItemId={effectiveSelectedItemId}
-        scrollCommand={agendaScrollCommand}
-        currentYear={currentYear}
-        currentMonth={currentMonth}
-        todayDate={todayDate}
-        floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
-        onDirtyBlocked={onAgendaDirtyBlocked}
-        onPassiveDateChange={onAgendaPassiveDateChange}
-        onDateAction={onAgendaDateAction}
-        onDeadlineAction={onAgendaEventAction}
-        onFilteredSelectedDeadlineHidden={() => {
-          setSelectedItemId(null);
-          onCloseFloatingDetail?.();
-        }}
-        showCompleted={showCompletedDeadlines}
-        onShowCompletedChange={setShowCompletedDeadlines}
-        deadlineQuickActions={deadlineQuickActions}
-      />
-    )
+    <CalendarModalAgendaRailContent
+      ref={agendaRailRef}
+      view={view}
+      viewYear={viewYear}
+      viewMonth={viewMonth}
+      viewData={viewData}
+      weatherData={weatherData}
+      computed={computed}
+      selectedDateKey={selectedDateKey}
+      selectedItemId={effectiveSelectedItemId}
+      scrollCommand={agendaScrollCommand}
+      currentYear={currentYear}
+      currentMonth={currentMonth}
+      todayDate={todayDate}
+      eventQuickActions={eventQuickActions}
+      deadlineQuickActions={deadlineQuickActions}
+      floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+      onDirtyBlocked={onAgendaDirtyBlocked}
+      onPassiveDateChange={onAgendaPassiveDateChange}
+      onDateAction={onAgendaDateAction}
+      onEventAction={onAgendaEventAction}
+      onFilteredSelectedDeadlineHidden={() => {
+        setSelectedItemId(null);
+        onCloseFloatingDetail?.();
+      }}
+      showCompletedDeadlines={showCompletedDeadlines}
+      onShowCompletedDeadlinesChange={setShowCompletedDeadlines}
+    />
   ) : buildContextContent({
     layout,
     view,

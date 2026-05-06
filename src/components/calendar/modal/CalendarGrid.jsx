@@ -1,21 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
-import CalendarEventSpanOverlay from "./CalendarEventSpanOverlay.jsx";
-import CalendarMonthBoundaryOverlay from "./CalendarMonthBoundaryOverlay.jsx";
-import { parseYmd, ymdFromParts } from "../calendarDateUtils.js";
+import { parseYmd } from "../calendarDateUtils.js";
 import { buildCalendarEventSpanLayout } from "./calendarEventSpanLayout.js";
+import { buildCalendarGridCellModel } from "./calendarGridCellModel.js";
 import { getEventSelectionId } from "../../../lib/redesign-helpers";
 import CalendarCell from "./CalendarCell.jsx";
-import CalendarGridSkeleton from "./CalendarGridSkeleton.jsx";
+import CalendarGridLayers from "./CalendarGridLayers.jsx";
 import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";
-import CalendarInlineOverflowLayer from "./CalendarInlineOverflowLayer.jsx";
 import useCalendarGridEffects from "./useCalendarGridEffects.js";
 import {
   GRID_ROWS,
   buildCalendarMonthCells,
   canUseInlineOverflow,
   createMonthWheelState,
-  getCellGhosts,
   resolveInlineOverflowAnchor,
   sameOverflowDate,
   spanCoversOverflowDate,
@@ -370,66 +367,39 @@ export default function CalendarGrid({
         >
           {monthCells.map((cell) => {
             const day = cell.day;
-            const rawItems =
-              itemsByDate?.[cell.dateKey] ??
-              (cell.inCurrentMonth ? itemsByDay[day] : null) ??
-              [];
-            const dayState =
-              activeView.getDayState?.(rawItems) ??
-              buildFallbackDayState(rawItems);
-            const filteredDeadlineDayState = shouldFilterCompletedDeadlines
-              ? {
-                  ...dayState,
-                  items: dayState.activeItems || [],
-                  activeItems: dayState.activeItems || [],
-                  completedItems: [],
-                  activeCount: dayState.activeCount || 0,
-                  completedCount: 0,
-                  totalCount: dayState.activeCount || 0,
-                }
-              : dayState;
-            const cellGhosts = getCellGhosts(ghostPreview, cell.dateKey);
             const cellMeta = cellMetaByDate?.[cell.dateKey] || null;
-            const resolvedDayState = filteredDeadlineDayState;
-            const cellItems = activeView.getDayState
-              ? resolvedDayState
-              : rawItems;
-            const reservedLaneCount = eventDateCells
-              ? spanLayout.reservedLaneCountByDate?.[cell.dateKey] || 0
-              : 0;
-            const pinnedGhostCount = eventDateCells
-              ? spanLayout.pinnedGhostCountByDate?.[cell.dateKey] || 0
-              : 0;
-            const selectionPool = Array.isArray(resolvedDayState.items)
-              ? resolvedDayState.items
-              : rawItems;
-            const resolvedSelectionPool = selectionPool;
-            const hasItems =
-              resolvedDayState.totalCount > 0 ||
-              cellGhosts.length > 0 ||
-              reservedLaneCount > 0;
-            const isToday =
-              cell.dateKey ===
-              ymdFromParts(currentYear, currentMonth, todayDate);
-            const isSelected = selectedCellKey
-              ? selectedCellKey === cell.dateKey
-              : selectedDay === day && cell.inCurrentMonth;
-            const hasOverdue =
-              activeView.hasOverdue?.(resolvedDayState) || false;
-            const allComplete =
-              activeView.allComplete?.(resolvedDayState) || false;
-            const isPastDay =
-              view === "events" &&
-              new Date(`${cell.dateKey}T00:00:00`) <
-                new Date(currentYear, currentMonth, todayDate);
-            const pastTone = isPastDay ? (hasItems ? "items" : "empty") : null;
-            const resolveItemId = activeView.getItemId || ((item) => item?.id);
-            const dayHasSelectedItem =
-              isSelected &&
-              resolvedSelectionPool.some(
-                (item) =>
-                  String(resolveItemId(item)) === String(selectedItemId),
-              );
+            const {
+              allComplete,
+              cellGhosts,
+              cellItems,
+              dayHasSelectedItem,
+              hasItems,
+              hasOverdue,
+              isSelected,
+              isToday,
+              itemCount,
+              loading,
+              pastTone,
+              reservedLaneCount,
+            } = buildCalendarGridCellModel({
+              activeView,
+              buildFallbackDayState,
+              cell,
+              currentMonth,
+              currentYear,
+              eventDateCells,
+              ghostPreview,
+              itemsByDate,
+              itemsByDay,
+              selectedCellKey,
+              selectedDay,
+              selectedItemId,
+              shouldFilterCompletedDeadlines,
+              spanLayout,
+              todayDate,
+              view,
+              viewData,
+            });
             const anchorKey = `${view}-${cell.dateKey || `${viewYear}-${viewMonth}-${day}`}`;
             const overflowOpen = sameOverflowDate(
               resolvedOverflow,
@@ -455,18 +425,14 @@ export default function CalendarGrid({
                 ghosts={cellGhosts}
                 cellMeta={cellMeta}
                 selectedItemId={dayHasSelectedItem ? selectedItemId : null}
-                itemCount={
-                  resolvedDayState.totalCount +
-                  cellGhosts.length +
-                  pinnedGhostCount
-                }
+                itemCount={itemCount}
                 hasItems={hasItems}
                 isToday={isToday}
                 isSelected={isSelected}
                 pastTone={pastTone}
                 hasOverdue={hasOverdue}
                 allComplete={allComplete}
-                loading={viewData?.isLoading}
+                loading={loading}
                 overflowOpen={overflowOpen}
                 overflowMode={overflowOpen ? resolvedOverflow?.mode : null}
                 onSelectDay={() =>
@@ -565,65 +531,41 @@ export default function CalendarGrid({
             );
           })}
         </div>
-        <CalendarMonthBoundaryOverlay
+        <CalendarGridLayers
+          activeSpanSegmentId={activeSpanSegmentId}
+          daysInMonth={daysInMonth}
+          eventDateCells={eventDateCells}
+          eventQuickActions={eventQuickActions}
+          fillGridHeight={fillGridHeight}
+          firstDay={firstDay}
+          gridRowCount={gridRowCount}
+          itemQuickActions={itemQuickActions}
+          layout={layout}
           monthCells={monthCells}
-          layout={layout}
-          gridRowCount={gridRowCount}
-          fillGridHeight={fillGridHeight}
-          suppressedBoundary={
-            resolvedOverflow?.mode === "inline" &&
-            resolvedOverflow.boundarySides?.includes?.("bottom")
-              ? { dateKey: resolvedOverflow.dateKey, sides: ["bottom"] }
-              : null
-          }
-        />
-        <CalendarEventSpanOverlay
-          segments={spanLayout.spanSegments}
-          layout={layout}
-          gridRowCount={gridRowCount}
-          fillGridHeight={fillGridHeight}
-          selectedItemId={selectedItemId}
-          activeSegmentId={activeSpanSegmentId}
-          onSetActive={setActiveSpanSegmentId}
-          onClearActive={(segmentId) => {
+          onBeforeItemAction={onCloseFloatingDetail}
+          onClearActiveSpanSegment={(segmentId) => {
             setActiveSpanSegmentId((current) =>
               current === segmentId ? null : current,
             );
           }}
-          onSelectSegment={handleSelectSpanSegment}
-          quickActions={eventDateCells ? eventQuickActions : null}
-          onBeforeAction={onCloseFloatingDetail}
+          onInlineOverflowInteraction={markOverflowInteraction}
+          onSelectInlineOverflowItem={(itemId, anchorMeta) => {
+            if (resolvedOverflow?.day == null) return;
+            handleSelectItem(
+              resolvedOverflow.day,
+              itemId,
+              resolvedOverflow.dateKey || null,
+              { keepOverflowOpen: true, anchorMeta },
+            );
+          }}
+          onSelectSpanSegment={handleSelectSpanSegment}
+          onSetActiveSpanSegment={setActiveSpanSegmentId}
+          resolvedOverflow={resolvedOverflow}
+          resolvedTrailingEmpty={resolvedTrailingEmpty}
+          selectedItemId={selectedItemId}
+          showGridSkeleton={showGridSkeleton}
+          spanSegments={spanLayout.spanSegments}
         />
-        {resolvedOverflow?.mode === "inline" ? (
-          <CalendarInlineOverflowLayer
-            overflow={resolvedOverflow}
-            selectedItemId={selectedItemId}
-            onSelectItem={(itemId, anchorMeta) => {
-              if (resolvedOverflow?.day == null) return;
-              handleSelectItem(
-                resolvedOverflow.day,
-                itemId,
-                resolvedOverflow.dateKey || null,
-                { keepOverflowOpen: true, anchorMeta },
-              );
-            }}
-            onInteraction={markOverflowInteraction}
-            quickActions={itemQuickActions}
-            onBeforeItemAction={onCloseFloatingDetail}
-          />
-        ) : null}
-
-        {showGridSkeleton && (
-          <CalendarGridSkeleton
-            firstDay={firstDay}
-            daysInMonth={daysInMonth}
-            trailingEmpty={resolvedTrailingEmpty}
-            cellHeight={layout.cellHeight}
-            gridGap={layout.gridGap}
-            fillHeight={fillGridHeight}
-            rowCount={gridRowCount}
-          />
-        )}
       </div>
 
       <CalendarCellOverflowPopover

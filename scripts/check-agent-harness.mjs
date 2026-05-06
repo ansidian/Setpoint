@@ -6,12 +6,10 @@ const root = process.cwd()
 const componentSizeBaseline = {
   threshold: 600,
   // PER-27 closeout records current oversized component debt so future growth fails loudly.
-  // These files need focused decomposition work, but that refactor is outside the triage
+  // This file needs focused decomposition work, but that refactor is outside the triage
   // redesign parent scope and should not be mixed into the closeout.
   files: {
     'src/components/todoist/add-task-panel/AddTaskPanelView.jsx': 1162,
-    'src/components/calendar/modal/CalendarGrid.jsx': 650,
-    'src/components/calendar/modal/CalendarModalShell.jsx': 616,
   },
 }
 
