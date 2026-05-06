@@ -12,24 +12,29 @@ function useSettingsAutoSave() {
   const timerRef = useRef(null);
   const statusTimerRef = useRef(null);
 
-  const flush = useCallback(async () => {
+  const flushPending = useCallback(async ({ updateUi = true } = {}) => {
     const payload = pendingRef.current;
     pendingRef.current = {};
     if (!Object.keys(payload).length) return;
-    setStatus("saving");
+    if (updateUi) setStatus("saving");
     try {
       await updateSettings(payload);
       sessionStorage.setItem("ea_settings_changed", "1");
-      setStatus("saved");
-      clearTimeout(statusTimerRef.current);
-      statusTimerRef.current = setTimeout(
-        () => setStatus((current) => (current === "saved" ? "idle" : current)),
-        1500
-      );
+      window.dispatchEvent(new CustomEvent("ea-settings-changed"));
+      if (updateUi) {
+        setStatus("saved");
+        clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = setTimeout(
+          () => setStatus((current) => (current === "saved" ? "idle" : current)),
+          1500
+        );
+      }
     } catch {
-      setStatus("error");
+      if (updateUi) setStatus("error");
     }
   }, []);
+
+  const flush = useCallback(() => flushPending(), [flushPending]);
 
   const patch = useCallback((updates) => {
     Object.assign(pendingRef.current, updates);
@@ -40,7 +45,8 @@ function useSettingsAutoSave() {
   useEffect(() => () => {
     clearTimeout(timerRef.current);
     clearTimeout(statusTimerRef.current);
-  }, []);
+    flushPending({ updateUi: false });
+  }, [flushPending]);
 
   return { patch, status };
 }

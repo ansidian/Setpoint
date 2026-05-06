@@ -13,6 +13,12 @@ vi.mock("@/components/settings/cards/EmailAiModelCard", () => ({
   },
 }));
 
+vi.mock("@/components/settings/cards/TriageSoundSettingsCard", () => ({
+  default: function TriageSoundSettingsCardMock() {
+    return <div data-testid="triage-sound-settings-card" />;
+  },
+}));
+
 vi.mock("@/components/settings/cards/BillExtractionAiCard", () => ({
   default: function BillExtractionAiCardMock() {
     return <div data-testid="bill-extraction-card" />;
@@ -49,6 +55,7 @@ describe("EmailAutomationSettingsSection", () => {
 
     const orderedElements = [
       screen.getByTestId("email-triage-mode-card"),
+      screen.getByTestId("triage-sound-settings-card"),
       screen.getByTestId("email-ai-model-card"),
       screen.getByTestId("bill-extraction-card"),
       screen.getByText("Email Lookback").closest("[data-settings-section]"),

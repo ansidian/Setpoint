@@ -63,7 +63,7 @@ function applyTodoistTaskDelete(root, taskId) {
   return recalculateTodoistStats(updated);
 }
 
-export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines, children }) {
+export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines, onTaskCompleted = null, children }) {
   const [activeAccount, setActiveAccount] = useState(0);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [loadingBillId, setLoadingBillId] = useState(null);
@@ -170,8 +170,9 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
       return;
     }
 
+    onTaskCompleted?.(taskId);
     setTimeout(() => removeCompletedTask(taskId, "todoist"), 600);
-  }, [briefing?.todoist?.upcoming, expandedTask, setBriefing, setCalendarDeadlines, removeCompletedTask]);
+  }, [briefing?.todoist?.upcoming, expandedTask, onTaskCompleted, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const handleDismissGhost = useCallback((todoistId) => {
     dismissTombstone(todoistId).catch(() => {});
@@ -224,9 +225,10 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
   }, [setBriefing, setCalendarDeadlines]);
 
   const handleUpdateTaskStatus = useCallback(async (taskId, status) => {
-    updateTaskStatus(taskId, status).catch(() => {});
+    const statusUpdate = updateTaskStatus(taskId, status);
 
     if (status === "complete") {
+      statusUpdate.then(() => onTaskCompleted?.(taskId)).catch(() => {});
       const flagCompleting = (root) => {
         if (!root) return root;
         const updated = JSON.parse(JSON.stringify(root));
@@ -243,6 +245,8 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
       return;
     }
 
+    statusUpdate.catch(() => {});
+
     const applyStatus = (root) => {
       if (!root) return root;
       const updated = JSON.parse(JSON.stringify(root));
@@ -254,7 +258,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     };
     setBriefing(prev => applyStatus(prev));
     setCalendarDeadlines?.(prev => (prev ? applyStatus(prev) : prev));
-  }, [expandedTask, setBriefing, setCalendarDeadlines, removeCompletedTask]);
+  }, [expandedTask, onTaskCompleted, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const emailAccounts = useMemo(
     () => briefing?.emails?.accounts || [],

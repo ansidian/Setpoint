@@ -25,6 +25,11 @@ import {
   isAllowedStoredEmailTriageMode,
   normalizeStoredEmailTriageMode,
 } from "../briefing/triage-mode.js";
+import {
+  parseTriageSoundSettingsJson,
+  TRIAGE_NOTIFICATION_SOUNDS,
+  validateTriageSoundSettings,
+} from "../briefing/triage-sound-settings.js";
 import { getTriageCacheStats } from "../briefing/triage-cache-stats.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 import { storeTodoistOAuthTokenResponse } from "../briefing/todoist-token.js";
@@ -364,6 +369,7 @@ router.get("/settings", async (req, res) => {
       todoist_oauth_refresh_token_encrypted,
       schedules_json,
       email_interests_json,
+      triage_sound_settings_json,
       ...safe
     } = result.rows[0];
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
@@ -390,6 +396,8 @@ router.get("/settings", async (req, res) => {
     const triageMode = await getEmailTriageModeForUser(userId);
     safe.email_triage_mode = normalizeStoredEmailTriageMode(safe.email_triage_mode);
     safe.email_triage_effective_mode = triageMode.effective_email_triage_mode;
+    safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
+    safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
 
     // Render suspend availability
     safe.render_configured =
@@ -415,7 +423,7 @@ router.get("/triage/cache-stats", async (_req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings } = req.body;
 
   try {
     if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
@@ -461,6 +469,14 @@ router.put("/settings", async (req, res) => {
       }
       updates.push("email_triage_mode = ?");
       args.push(email_triage_mode);
+    }
+    if (triage_sound_settings !== undefined) {
+      const validation = validateTriageSoundSettings(triage_sound_settings);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updates.push("triage_sound_settings_json = ?");
+      args.push(JSON.stringify(triage_sound_settings));
     }
     if (bill_extract_provider !== undefined || bill_extract_model !== undefined) {
       const provider = bill_extract_provider ?? DEFAULT_BILL_EXTRACT_PROVIDER;

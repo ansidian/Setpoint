@@ -10,13 +10,17 @@ function listenerSetFor(userId) {
 }
 
 function normalizeEvent(event = {}) {
-  return {
+  const normalized = {
     type: event.type || "dashboard_current_changed",
     source: event.source || "unknown",
     reason: event.reason || "changed",
     state: event.state || "current",
     occurredAt: event.occurredAt || new Date().toISOString(),
   };
+  if (event.details && typeof event.details === "object" && !Array.isArray(event.details)) {
+    normalized.details = { ...event.details };
+  }
+  return normalized;
 }
 
 export function subscribeCurrentDashboardEvents(userId, listener) {

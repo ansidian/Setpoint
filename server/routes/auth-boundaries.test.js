@@ -114,6 +114,7 @@ const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
 const notesRoutes = (await import("./notes.js")).default;
+const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../briefing/triage-sound-settings.js");
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
@@ -160,7 +161,8 @@ async function createMigratedDb() {
       email_ai_model TEXT,
       bill_extract_provider TEXT,
       bill_extract_model TEXT,
-      email_triage_mode TEXT DEFAULT 'auto'
+      email_triage_mode TEXT DEFAULT 'auto',
+      triage_sound_settings_json TEXT
     );
 
     CREATE TABLE ea_email_triage (
@@ -280,6 +282,28 @@ describe("auth boundaries", () => {
     expect(res.body.email_triage_effective_mode).toBe("no_model");
   });
 
+  it("returns default triage sound settings and the bundled sound registry", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .get("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.triage_sound_settings).toEqual({
+      laneScope: "needs_attention_and_fyi",
+      volume: 1,
+      triggers: {
+        needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+        fyi_finalized: { enabled: true, soundId: "smooth_modern" },
+        weak_security_grace: { enabled: true, soundId: "low_tone" },
+        triage_failed: { enabled: false, soundId: "low_tone" },
+        event_upcoming: { enabled: true, soundId: "clear_chime" },
+        task_completed: { enabled: true, soundId: "smooth_modern" },
+      },
+    });
+    expect(res.body.triage_notification_sounds).toEqual(TRIAGE_NOTIFICATION_SOUNDS);
+  });
+
   it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
     await seedSession();
     await testState.db.current.batch([
@@ -387,6 +411,63 @@ describe("auth boundaries", () => {
 
     expect(res.status).toBe(200);
     expect(await getSettingsRow()).toMatchObject({ email_triage_mode: "paused" });
+  });
+
+  it("rejects invalid triage sound settings", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        triage_sound_settings: {
+          laneScope: "all_mail",
+          triggers: {
+            needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+          },
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Invalid triage_sound_settings laneScope");
+
+    const soundRes = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        triage_sound_settings: {
+          laneScope: "needs_attention_and_fyi",
+          triggers: {
+            needs_attention_finalized: { enabled: true, soundId: "linear-upload-file" },
+          },
+        },
+      });
+
+    expect(soundRes.status).toBe(400);
+    expect(soundRes.body.message).toBe("Invalid triage_sound_settings soundId");
+  });
+
+  it("updates valid triage sound settings writes", async () => {
+    await seedSession();
+    const settings = {
+      laneScope: "needs_attention_only",
+      volume: 0.85,
+      triggers: {
+        needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+        fyi_finalized: { enabled: false, soundId: "smooth_modern" },
+        weak_security_grace: { enabled: true, soundId: "low_tone" },
+        triage_failed: { enabled: true, soundId: "low_tone" },
+        event_upcoming: { enabled: true, soundId: "clear_chime" },
+        task_completed: { enabled: true, soundId: "smooth_modern" },
+      },
+    };
+
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ triage_sound_settings: settings });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse((await getSettingsRow()).triage_sound_settings_json)).toEqual(settings);
   });
 
   it("stores Todoist OAuth token responses without exposing token material", async () => {

@@ -7,6 +7,7 @@ import {
 } from "@/components/settings/settings-ui";
 import { SETTINGS_PRIMARY_BUTTON_CLASS } from "@/components/settings/settings-core";
 import EmailTriageModeCard from "@/components/settings/cards/EmailTriageModeCard";
+import TriageSoundSettingsCard from "@/components/settings/cards/TriageSoundSettingsCard";
 import EmailAiModelCard from "@/components/settings/cards/EmailAiModelCard";
 import BillExtractionAiCard from "@/components/settings/cards/BillExtractionAiCard";
 import BriefingSchedulesCard from "@/components/settings/cards/BriefingSchedulesCard";
@@ -18,6 +19,7 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
   return (
     <>
       <EmailTriageModeCard settings={settings} setSettings={setSettings} patch={patch} />
+      <TriageSoundSettingsCard settings={settings} setSettings={setSettings} patch={patch} />
       <EmailAiModelCard settings={settings} setSettings={setSettings} patch={patch} />
       <BillExtractionAiCard settings={settings} setSettings={setSettings} patch={patch} />
 
