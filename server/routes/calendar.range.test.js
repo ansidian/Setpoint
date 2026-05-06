@@ -28,8 +28,9 @@ vi.mock("../briefing/todoist.js", () => ({
   fetchTodoistTasksRange: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
 }));
-vi.mock("../briefing/actual.js", () => ({
-  getCalendarBillsRange: vi.fn(),
+vi.mock("../briefing/bills-service.js", () => ({
+  readBillsMirrorRange: vi.fn(),
+  scheduleBillsMirrorRefresh: vi.fn(),
 }));
 vi.mock("../briefing/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
@@ -46,7 +47,7 @@ const { loadUserConfig } = await import("../briefing/config-service.js");
 const { fetchCalendar } = await import("../briefing/calendar.js");
 const { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } = await import("../briefing/ctm.js");
 const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../briefing/todoist.js");
-const { getCalendarBillsRange } = await import("../briefing/actual.js");
+const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../briefing/bills-service.js");
 const { hydrateRecurringTombstones } = await import("../briefing/tombstones.js");
 const db = (await import("../db/connection.js")).default;
 const calendarRoutes = (await import("./calendar.js")).default;
@@ -74,7 +75,12 @@ describe("GET /api/calendar/range", () => {
     fetchTodoistTasksRange.mockResolvedValue([]);
     fetchTodoistDueTaskIdSet.mockResolvedValue(new Set());
     getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true, ageMs: 30_000 });
-    getCalendarBillsRange.mockResolvedValue({ schedules: [], recentTransactions: [], payeeMap: {} });
+    readBillsMirrorRange.mockResolvedValue({
+      schedules: [],
+      recentTransactions: [],
+      payeeMap: {},
+      syncHealth: { state: "current", configured: true },
+    });
     hydrateRecurringTombstones.mockResolvedValue([]);
     loadCompletedTaskIds.mockResolvedValue(new Set());
     separateDeadlines.mockImplementation((ctm, todoist) => ({ ctm, todoist }));
@@ -270,12 +276,14 @@ describe("GET /api/calendar/bills/range", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
-    getCalendarBillsRange.mockResolvedValue({
+    readBillsMirrorRange.mockResolvedValue({
       schedules: [{ id: "sched-1:2026-05-10", name: "Mortgage", next_date: "2026-05-10", paid: false }],
       recentTransactions: [],
       payeeMap: { p1: "Mortgage" },
       actualBudgetUrl: "http://actual.local",
+      syncHealth: { state: "current", configured: true },
     });
+    scheduleBillsMirrorRefresh.mockResolvedValue({ pendingRefreshAt: "2026-05-03T19:00:00.000Z" });
   });
 
   afterEach(() => {
@@ -289,16 +297,24 @@ describe("GET /api/calendar/bills/range", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(getCalendarBillsRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
+    expect(readBillsMirrorRange).toHaveBeenCalledWith(process.env.EA_USER_ID, { start: "2026-04-26", end: "2026-06-06" });
     expect(res.body.schedules).toHaveLength(1);
     expect(res.body.recentTransactions).toEqual([]);
+    expect(res.body.syncHealth).toEqual({ state: "current", configured: true });
     expect(res.body.minDate).toBe("2025-05-03");
     expect(res.body.errors).toEqual([]);
     expect(res.body.fetchedAt).toBe("2026-05-03T19:00:00.000Z");
+    expect(scheduleBillsMirrorRefresh).not.toHaveBeenCalled();
   });
 
-  it("returns an empty bills payload with source errors when Actual fails", async () => {
-    getCalendarBillsRange.mockRejectedValueOnce(new Error("Actual offline"));
+  it("returns empty mirror data and schedules a background refresh when the mirror needs sync", async () => {
+    readBillsMirrorRange.mockResolvedValueOnce({
+      schedules: [],
+      recentTransactions: [],
+      payeeMap: {},
+      actualBudgetUrl: null,
+      syncHealth: { state: "needs_sync", configured: null },
+    });
 
     const res = await request(makeApp()).get(
       "/api/calendar/bills/range?start=2026-04-26&end=2026-06-06",
@@ -307,6 +323,8 @@ describe("GET /api/calendar/bills/range", () => {
     expect(res.status).toBe(200);
     expect(res.body.schedules).toEqual([]);
     expect(res.body.recentTransactions).toEqual([]);
-    expect(res.body.errors).toEqual([{ source: "actual", message: "Actual offline" }]);
+    expect(res.body.syncHealth).toEqual({ state: "needs_sync", configured: null });
+    expect(res.body.errors).toEqual([]);
+    expect(scheduleBillsMirrorRefresh).toHaveBeenCalledWith(process.env.EA_USER_ID);
   });
 });

@@ -2,11 +2,14 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../calendar/CalendarModal", () => ({
-  default: function CalendarModalMock({ deadlinesData }) {
+  default: function CalendarModalMock({ deadlinesData, billsData }) {
     return (
       <div
         data-testid="calendar-modal"
         data-deadline-title={deadlinesData?.todoist?.upcoming?.[0]?.title || ""}
+        data-bill-id={billsData?.schedules?.[0]?.id || ""}
+        data-bill-schedule-id={billsData?.schedules?.[0]?.scheduleId || ""}
+        data-bill-paid={String(!!billsData?.schedules?.[0]?.paid)}
       />
     );
   },
@@ -57,6 +60,53 @@ describe("DashboardCalendarModalMount", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-modal").getAttribute("data-deadline-title")).toBe("Current dashboard task");
+    });
+  });
+
+  it("seeds Bills from mirror occurrence rows without rewriting identity or paid state", async () => {
+    render(
+      <DashboardCalendarModalMount
+        isMobile={false}
+        calendarMounted
+        calendarOpen
+        calendarOpenRequestId={1}
+        dismissCalendar={() => {}}
+        calendarView="bills"
+        changeCalendarView={() => {}}
+        calendarFocus="2026-05-10"
+        calendarFocusItemId="sched-1:2026-05-10"
+        calendarFocusOpenDetail
+        calendarForceDeadlineOverlay={false}
+        eventsData={{ getEvents: () => [] }}
+        handleCalendarEventsRangeChange={() => {}}
+        liveData={{
+          allSchedules: [
+            {
+              id: "sched-1:2026-05-10",
+              scheduleId: "sched-1",
+              name: "Mortgage",
+              next_date: "2026-05-10",
+              paid: true,
+            },
+          ],
+          payeeMap: {},
+          actualBudgetUrl: "https://actual.example.test",
+        }}
+        briefing={{}}
+        calendarBillsData={null}
+        calendarBillRange={{}}
+        calendarDeadlines={undefined}
+        calendarDeadlinesLoading={false}
+        calendarDeadlineRange={{}}
+        calendarDeadlineActions={{}}
+      />,
+    );
+
+    await waitFor(() => {
+      const modal = screen.getByTestId("calendar-modal");
+      expect(modal.getAttribute("data-bill-id")).toBe("sched-1:2026-05-10");
+      expect(modal.getAttribute("data-bill-schedule-id")).toBe("sched-1");
+      expect(modal.getAttribute("data-bill-paid")).toBe("true");
     });
   });
 });

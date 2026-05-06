@@ -8,8 +8,8 @@ import {
   resolveFloatingDetailPlacement,
 } from "./calendarFloatingDetailPlacement.js";
 
-function shellTransition(reducedMotion, userDragged) {
-  if (reducedMotion || userDragged) return { duration: 0.01 };
+function shellTransition(reducedMotion, instantPosition) {
+  if (reducedMotion || instantPosition) return { duration: 0.01 };
   return {
     type: "spring",
     stiffness: 420,
@@ -60,11 +60,16 @@ export default function CalendarFloatingDetailPanel({
   const positionRafRef = useRef(0);
   const dragRafRef = useRef(0);
   const pendingDragPointRef = useRef(null);
+  const measuredPlacementKeysRef = useRef(new Set());
+  const snapNextMeasuredPlacementKeyRef = useRef(null);
   const [measuredSize, setMeasuredSize] = useState({ width: 380, height: 0, maxHeight: 520 });
   const [placementState, setPlacementState] = useState({ key: null, placement: null });
   const [manualPosition, setManualPosition] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [feedbackActive, setFeedbackActive] = useState(false);
+  const [measuredPlacementKey, setMeasuredPlacementKey] = useState(null);
+  const [snapPlacementKey, setSnapPlacementKey] = useState(null);
+  const [hasRevealedMeasuredPlacement, setHasRevealedMeasuredPlacement] = useState(false);
 
   const open = !!detail?.open && !!children;
   const mode = detail?.mode || "detail";
@@ -111,6 +116,10 @@ export default function CalendarFloatingDetailPanel({
     if (!open || detail?.userDragged || draggingRef.current || manualPlacementActive) return;
     const next = computePlacement({ allowPark });
     if (!next) return;
+    if (snapNextMeasuredPlacementKeyRef.current === detail?.placementKey) {
+      snapNextMeasuredPlacementKeyRef.current = null;
+      setSnapPlacementKey(detail?.placementKey || null);
+    }
     setMeasuredSize((current) => (
       current.width === next.width && current.maxHeight === next.maxHeight
         ? current
@@ -146,13 +155,35 @@ export default function CalendarFloatingDetailPanel({
       setMeasuredSize((current) => {
         const nextHeight = Math.round(rect.height);
         const nextWidth = Math.round(rect.width || current.width);
+        if (placementKey && !measuredPlacementKeysRef.current.has(placementKey)) {
+          measuredPlacementKeysRef.current.add(placementKey);
+          if (!hasRevealedMeasuredPlacement) {
+            snapNextMeasuredPlacementKeyRef.current = placementKey;
+          }
+          setMeasuredPlacementKey(placementKey);
+        }
         if (current.height === nextHeight && current.width === nextWidth) return current;
         return { ...current, height: nextHeight, width: nextWidth || current.width };
       });
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [open]);
+  }, [hasRevealedMeasuredPlacement, open, placementKey]);
+
+  useEffect(() => {
+    if (!snapPlacementKey || typeof window === "undefined") return undefined;
+    const frame = window.requestAnimationFrame(() => setSnapPlacementKey(null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [snapPlacementKey]);
+
+  useEffect(() => {
+    const nextRevealed = open
+      ? (!placementKey || measuredPlacementKey === placementKey) || hasRevealedMeasuredPlacement
+      : false;
+    if (nextRevealed === hasRevealedMeasuredPlacement) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasRevealedMeasuredPlacement(nextRevealed);
+  }, [hasRevealedMeasuredPlacement, measuredPlacementKey, open, placementKey]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -330,6 +361,13 @@ export default function CalendarFloatingDetailPanel({
       }
     : anchoredPlacement;
   const manualTransitionActive = manualPlacementActive || dragging || manualDragActive;
+  const snapTransitionActive = snapPlacementKey === placementKey;
+  const awaitingMeasuredPlacement = open
+    && !!placementKey
+    && typeof ResizeObserver !== "undefined"
+    && !manualPlacementActive
+    && !hasRevealedMeasuredPlacement
+    && measuredPlacementKey !== placementKey;
   const feedbackVisible = feedbackActive && open && editorMode && !!detail?.shakeKey;
 
   return createPortal(
@@ -362,11 +400,16 @@ export default function CalendarFloatingDetailPanel({
           willChange: reducedMotion ? "auto" : "transform, opacity",
         }}
         initial={reducedMotion ? false : { opacity: 0, scale: 0.985 }}
-        animate={{ opacity: 1, scale: 1, x: resolvedPlacement.left, y: resolvedPlacement.top }}
+        animate={{
+          opacity: awaitingMeasuredPlacement ? 0 : 1,
+          scale: awaitingMeasuredPlacement ? 0.985 : 1,
+          x: resolvedPlacement.left,
+          y: resolvedPlacement.top,
+        }}
         exit={reducedMotion ? undefined : { opacity: 0, scale: 0.985 }}
         transition={{
-          x: shellTransition(reducedMotion, manualTransitionActive),
-          y: shellTransition(reducedMotion, manualTransitionActive),
+          x: shellTransition(reducedMotion, manualTransitionActive || snapTransitionActive),
+          y: shellTransition(reducedMotion, manualTransitionActive || snapTransitionActive),
           opacity: contentTransition(reducedMotion),
           scale: contentTransition(reducedMotion),
         }}

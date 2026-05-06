@@ -42,6 +42,10 @@ function toBillDescriptor(bill) {
 
   return {
     id: String(bill.id),
+    selectionId: String(bill.scheduleId || bill.id),
+    renderKey: `bill:${bill.scheduleId || bill.id}`,
+    layoutId: `calendar-bill-chip:${bill.scheduleId || bill.id}`,
+    matchItemIds: [bill.id, bill.scheduleId].filter(Boolean).map(String),
     sourceItem: bill,
     title: bill.name,
     detail: bill.paid

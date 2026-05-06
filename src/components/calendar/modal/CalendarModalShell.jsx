@@ -234,7 +234,10 @@ export default function CalendarModalShell({
       ? selectedItems
       : selectedDayState.items || [];
   const selectedItemResolves = floatingDetail?.itemId && activeView.getItemId
-    ? selectedItemPool.some((item) => String(activeView.getItemId(item)) === String(floatingDetail.itemId))
+    ? selectedItemPool.some((item) => (
+        activeView.matchesItemId?.(item, floatingDetail.itemId)
+        || String(activeView.getItemId(item)) === String(floatingDetail.itemId)
+      ))
     : !!floatingDetail?.itemId;
   const floatingDetailItems = floatingDetail?.parked
     && !selectedItemResolves

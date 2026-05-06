@@ -62,4 +62,53 @@ describe("buildCalendarGridCellModel", () => {
     expect(model.isSelected).toBe(true);
     expect(model.rawItems).toEqual([activeDeadline, completedDeadline]);
   });
+
+  it("uses view-specific item matching for selected grid chips", () => {
+    const bill = { id: "bill-1:2026-05-10", scheduleId: "bill-1", name: "Rent" };
+
+    const model = buildCalendarGridCellModel({
+      activeView: {
+        label: "Bills",
+        getDayState: (items) => ({
+          items,
+          activeItems: items,
+          completedItems: [],
+          activeCount: items.length,
+          completedCount: 0,
+          totalCount: items.length,
+        }),
+        getItemId: (item) => item.id,
+        matchesItemId: (item, itemId) => item.scheduleId === itemId || item.id === itemId,
+      },
+      buildFallbackDayState: (items) => ({ items, totalCount: items.length }),
+      cell: {
+        dateKey: "2026-05-10",
+        day: 10,
+        inCurrentMonth: true,
+      },
+      currentMonth: 4,
+      currentYear: 2026,
+      eventDateCells: false,
+      ghostPreview: null,
+      itemsByDate: {
+        "2026-05-10": [bill],
+      },
+      itemsByDay: {},
+      selectedCellKey: "2026-05-10",
+      selectedDay: 10,
+      selectedItemId: "bill-1",
+      shouldFilterCompletedDeadlines: false,
+      spanLayout: {
+        reservedLaneCountByDate: {},
+        pinnedGhostCountByDate: {},
+      },
+      todayDate: 6,
+      view: "bills",
+      viewData: { isLoading: false },
+      viewMonth: 4,
+      viewYear: 2026,
+    });
+
+    expect(model.dayHasSelectedItem).toBe(true);
+  });
 });

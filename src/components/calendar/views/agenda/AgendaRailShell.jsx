@@ -21,6 +21,12 @@ function findRow(rowRefs, itemId, dateKey) {
     if (itemElement && String(itemElement.getAttribute("data-item-id")) === itemIdText && key.endsWith(`-${dateKeyText}`)) {
       return row;
     }
+    const matchIds = String(itemElement?.getAttribute("data-calendar-match-item-ids") || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    if (matchIds.includes(itemIdText) && key.endsWith(`-${dateKeyText}`)) {
+      return row;
+    }
   }
   return null;
 }

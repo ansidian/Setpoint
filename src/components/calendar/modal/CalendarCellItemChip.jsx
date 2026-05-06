@@ -1,4 +1,5 @@
 import { Repeat } from "lucide-react";
+import { motion as Motion, useReducedMotion } from "motion/react";
 
 function chipStyle({
   item,
@@ -289,6 +290,10 @@ export function ItemChip({
   dateKey,
 }) {
   const ghost = !!item.isGhost;
+  const reducedMotion = useReducedMotion();
+  const layoutId = !reducedMotion && item.layoutId ? String(item.layoutId) : undefined;
+  const ChipButton = layoutId ? Motion.button : "button";
+  const selectionId = item.selectionId != null ? String(item.selectionId) : String(item.id);
   const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
 
   if (ghost) {
@@ -314,19 +319,24 @@ export function ItemChip({
   }
 
   return (
-    <button
+    <ChipButton
       key={item.id}
       type="button"
+      layout={layoutId ? "position" : undefined}
+      layoutId={layoutId}
+      transition={layoutId ? { layout: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } } : undefined}
       data-testid="calendar-cell-item-chip"
       data-inline-overflow-item={inlineOverflowItem ? "true" : undefined}
-      data-item-id={String(item.id)}
+      data-item-id={selectionId}
+      data-source-item-id={String(item.id)}
+      data-calendar-layout-id={layoutId}
       data-date-key={dateKey || undefined}
       data-hovered={active ? "true" : "false"}
       draggable={dragAllowed}
       data-calendar-focus-ring="true"
       onClick={(event) => {
         event.stopPropagation();
-        onSelectItem?.(item.id, {
+        onSelectItem?.(selectionId, {
           triggerElement: event.currentTarget,
           sourceCellElement: stackRef?.current?.closest?.("[role='gridcell']") || null,
           dateKey,
@@ -386,6 +396,6 @@ export function ItemChip({
       })}
     >
       <ChipContent item={item} selected={selected} metrics={metrics} />
-    </button>
+    </ChipButton>
   );
 }

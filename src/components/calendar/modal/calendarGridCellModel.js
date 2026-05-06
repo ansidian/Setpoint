@@ -76,6 +76,7 @@ export function buildCalendarGridCellModel({
     isSelected &&
     selectionPool.some(
       (item) =>
+        activeView.matchesItemId?.(item, selectedItemId) ||
         String(resolveItemId(item)) === String(selectedItemId),
     );
 

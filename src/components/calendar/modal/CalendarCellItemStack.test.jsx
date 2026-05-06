@@ -82,6 +82,105 @@ describe("CalendarCellItemStack ghost visibility", () => {
     );
   });
 
+  it("uses stable layout identity and selection aliases for occurrence-backed chips", () => {
+    const onSelectItem = vi.fn();
+    render(
+      <CalendarCellItemStack
+        day={20}
+        selectedItemId="schedule-1"
+        items={[
+          {
+            id: "schedule-1:2026-05-10",
+            renderKey: "bill:schedule-1",
+            layoutId: "calendar-bill-chip:schedule-1",
+            matchItemIds: ["schedule-1:2026-05-10", "schedule-1"],
+            leadingLabel: "$42",
+            title: "Internet",
+          },
+        ]}
+        metrics={metrics}
+        onSelectItem={onSelectItem}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    expect(chip.getAttribute("data-item-id")).toBe("schedule-1:2026-05-10");
+    expect(chip.getAttribute("data-calendar-layout-id")).toBe("calendar-bill-chip:schedule-1");
+    expect(chip.style.border).toContain("color-mix");
+  });
+
+  it("uses selection id for chip anchors while preserving source occurrence id", () => {
+    const onSelectItem = vi.fn();
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          {
+            id: "schedule-1:2026-05-10",
+            selectionId: "schedule-1",
+            renderKey: "bill:schedule-1",
+            layoutId: "calendar-bill-chip:schedule-1",
+            leadingLabel: "$42",
+            title: "Internet",
+            sourceItem: { id: "schedule-1:2026-05-10", scheduleId: "schedule-1" },
+          },
+        ]}
+        metrics={metrics}
+        onSelectItem={onSelectItem}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    expect(chip.getAttribute("data-item-id")).toBe("schedule-1");
+    expect(chip.getAttribute("data-source-item-id")).toBe("schedule-1:2026-05-10");
+    fireEvent.click(chip);
+    expect(onSelectItem).toHaveBeenCalledWith("schedule-1", expect.objectContaining({
+      itemsSnapshot: [expect.objectContaining({ id: "schedule-1:2026-05-10" })],
+    }));
+  });
+
+  it("keeps occurrence-backed chip layout identity stable when the due date changes", () => {
+    const { rerender } = render(
+      <CalendarCellItemStack
+        day={10}
+        items={[
+          {
+            id: "schedule-1:2026-05-10",
+            renderKey: "bill:schedule-1",
+            layoutId: "calendar-bill-chip:schedule-1",
+            leadingLabel: "$42",
+            title: "Internet",
+          },
+        ]}
+        metrics={metrics}
+      />,
+    );
+
+    expect(screen.getByTestId("calendar-cell-item-chip").getAttribute("data-calendar-layout-id")).toBe(
+      "calendar-bill-chip:schedule-1",
+    );
+
+    rerender(
+      <CalendarCellItemStack
+        day={12}
+        items={[
+          {
+            id: "schedule-1:2026-05-12",
+            renderKey: "bill:schedule-1",
+            layoutId: "calendar-bill-chip:schedule-1",
+            leadingLabel: "$42",
+            title: "Internet",
+          },
+        ]}
+        metrics={metrics}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    expect(chip.getAttribute("data-item-id")).toBe("schedule-1:2026-05-12");
+    expect(chip.getAttribute("data-calendar-layout-id")).toBe("calendar-bill-chip:schedule-1");
+  });
+
   it("only strikes the title for completed items", () => {
     render(
       <CalendarCellItemStack

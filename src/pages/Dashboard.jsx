@@ -152,13 +152,14 @@ export default function Dashboard() {
   const refreshLiveDataNow = liveData.refreshNow;
   const snapshotCalendarBills = useCallback(() => {
     setCalendarBillsData({
-      schedules: (liveData.allSchedules || []).map((schedule) => ({ ...schedule, paid: false })),
+      schedules: (liveData.allSchedules || []).map((schedule) => ({ ...schedule })),
       recentTransactions: [],
       payeeMap: liveData.payeeMap || {},
       actualBudgetUrl: liveData.actualBudgetUrl,
+      syncHealth: liveData.billsSyncHealth || null,
     });
     setCalendarBillsFetchedAt(Date.now());
-  }, [liveData.actualBudgetUrl, liveData.allSchedules, liveData.payeeMap]);
+  }, [liveData.actualBudgetUrl, liveData.allSchedules, liveData.billsSyncHealth, liveData.payeeMap]);
   const loadCalendarBills = useCallback((opts) => {
     const force = !!opts?.force;
     const stale = isCalendarDomainCacheStale(calendarBillsFetchedAt);

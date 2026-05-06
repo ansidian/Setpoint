@@ -131,6 +131,47 @@ function resolvePendingFocusItem({ activeView, computed, dateKey, itemId }) {
     || null;
 }
 
+function itemMatchesViewId(activeView, item, itemId) {
+  if (!item || itemId == null) return false;
+  const id = String(itemId);
+  const getItemId = activeView?.getItemId || ((candidate) => candidate?.id);
+  return activeView?.matchesItemId?.(item, id)
+    || String(getItemId(item)) === id
+    || String(item?.id) === id;
+}
+
+function findItemLocation(activeView, computed, itemId, preferredDateKey = null) {
+  if (itemId == null) return null;
+  const matchInPool = (dateKey, pool) => {
+    const item = itemsFromDatePool(activeView, pool)
+      .find((candidate) => itemMatchesViewId(activeView, candidate, itemId));
+    return item ? { dateKey, item } : null;
+  };
+  if (preferredDateKey) {
+    const preferred = matchInPool(preferredDateKey, computed?.itemsByDate?.[preferredDateKey]);
+    if (preferred) return preferred;
+  }
+  for (const [dateKey, pool] of Object.entries(computed?.itemsByDate || {})) {
+    const location = matchInPool(dateKey, pool);
+    if (location) return location;
+  }
+  return null;
+}
+
+function findGridChipAnchor(panelElement, itemId, dateKey) {
+  if (!panelElement || itemId == null || !dateKey) return null;
+  const id = String(itemId);
+  return [
+    ...panelElement.querySelectorAll(
+      "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-event-span-segment']",
+    ),
+  ].find((element) => {
+    if (String(element.getAttribute("data-item-id")) !== id) return false;
+    const cell = element.closest?.("[role='gridcell']");
+    return cell?.getAttribute("data-date-key") === dateKey;
+  }) || null;
+}
+
 export default function useCalendarModalController({
   open,
   onClose,
@@ -762,6 +803,107 @@ export default function useCalendarModalController({
     manualMonthBrowseKey,
   });
   const { canGoPrev, computed, itemsByDay } = viewModel;
+
+  useLayoutEffect(() => {
+    if (!open || view !== "bills" || !activeSelectedItemId || !activeSelectedDateKey) return;
+    const currentLocation = findItemLocation(
+      activeView,
+      computed,
+      activeSelectedItemId,
+      activeSelectedDateKey,
+    );
+    if (currentLocation?.dateKey === activeSelectedDateKey) return;
+    const nextLocation = findItemLocation(activeView, computed, activeSelectedItemId);
+    const parsed = parseYmd(nextLocation?.dateKey);
+    if (!nextLocation || !parsed) return;
+    setSelectedDateKey(nextLocation.dateKey);
+    setSelectedDay(parsed.day);
+    setSelectedItemId(String(activeSelectedItemId));
+    setFloatingDetail((current) => {
+      if (
+        !current?.open
+        || current.view !== "bills"
+        || !itemMatchesViewId(activeView, nextLocation.item, current.itemId)
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        itemId: String(activeSelectedItemId),
+        dateKey: nextLocation.dateKey,
+        day: parsed.day,
+        itemsSnapshot: [nextLocation.item],
+      };
+    });
+  }, [
+    activeSelectedDateKey,
+    activeSelectedItemId,
+    activeView,
+    computed,
+    open,
+    setFloatingDetail,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+    view,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!open || !usesFloatingEditor || !floatingDetail?.open || floatingDetail.parked) return;
+    if (!String(floatingDetail.anchorKind || "").startsWith("agenda")) return;
+    const dateKey = floatingDetail.dateKey || activeSelectedDateKey;
+    const itemId = floatingDetail.itemId || activeSelectedItemId;
+    const anchor = agendaRailRef.current?.getItemAnchor?.(itemId, dateKey);
+    if (!anchor || anchor === floatingDetail.anchorElement) return;
+    reanchorFloatingDetail({
+      itemId,
+      dateKey,
+      anchorElement: anchor,
+      sourceCellElement: anchor,
+      anchorKind: floatingDetail.anchorKind,
+    });
+  }, [
+    activeSelectedDateKey,
+    activeSelectedItemId,
+    computed,
+    floatingDetail,
+    open,
+    reanchorFloatingDetail,
+    usesFloatingEditor,
+  ]);
+
+  useLayoutEffect(() => {
+    if (
+      !open
+      || !usesFloatingEditor
+      || !floatingDetail?.open
+      || floatingDetail.parked
+      || floatingDetail.userDragged
+    ) {
+      return;
+    }
+    if (String(floatingDetail.anchorKind || "").startsWith("agenda")) return;
+    const dateKey = floatingDetail.dateKey || activeSelectedDateKey;
+    const itemId = floatingDetail.itemId || activeSelectedItemId;
+    const anchor = findGridChipAnchor(panelRef.current, itemId, dateKey);
+    if (!anchor || anchor === floatingDetail.anchorElement) return;
+    reanchorFloatingDetail({
+      itemId,
+      dateKey,
+      anchorElement: anchor,
+      sourceCellElement: anchor.closest?.("[role='gridcell']") || null,
+      anchorKind: floatingDetail.anchorKind || "chip",
+    });
+  }, [
+    activeSelectedDateKey,
+    activeSelectedItemId,
+    computed,
+    floatingDetail,
+    open,
+    reanchorFloatingDetail,
+    usesFloatingEditor,
+  ]);
+
   const shellViewData = view === "deadlines"
     ? { ...viewData, pendingUpdate: viewModel.pendingUpdate }
     : viewData;
