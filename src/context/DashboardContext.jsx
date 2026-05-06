@@ -4,11 +4,11 @@ import { markBriefingAccountEmailsRead, setBriefingEmailReadState } from "../lib
 
 const DashboardContext = createContext(null);
 
-function taskMatches(task, taskId) {
-  return !task?._tombstone && (
-    String(task.id) === String(taskId)
-    || String(task.todoist_id) === String(taskId)
-  );
+function taskMatches(task, taskId, section = null) {
+  if (task?._tombstone || String(task?.id) !== String(taskId)) return false;
+  if (section === "todoist") return task.source === "todoist";
+  if (section === "ctm") return task.source !== "todoist";
+  return true;
 }
 
 function recalculateTodoistStats(root) {
@@ -99,7 +99,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     });
   }, [selectedEmail, setBriefing]);
 
-  const removeCompletedTask = useCallback((taskId) => {
+  const removeCompletedTask = useCallback((taskId, sectionName = null) => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     // Keep completed tasks visible everywhere (dashboard + calendar): flip
@@ -108,9 +108,9 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     const finalizeComplete = (root) => {
       if (!root) return root;
       const updated = JSON.parse(JSON.stringify(root));
-      for (const section of ["ctm", "todoist"]) {
+      for (const section of sectionName ? [sectionName] : ["ctm", "todoist"]) {
         if (!updated[section]?.upcoming) continue;
-        const task = updated[section].upcoming.find((t) => taskMatches(t, taskId));
+        const task = updated[section].upcoming.find((t) => taskMatches(t, taskId, section));
         if (task) {
           task.status = "complete";
           delete task._completing;
@@ -131,16 +131,15 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
   }, [setBriefing, setCalendarDeadlines]);
 
   const handleCompleteTask = useCallback(async (taskId, taskSnapshot = null) => {
-    const existingTask = briefing?.todoist?.upcoming?.find((t) => taskMatches(t, taskId))
-      || briefing?.ctm?.upcoming?.find((t) => taskMatches(t, taskId))
-      || (taskMatches(taskSnapshot, taskId) ? taskSnapshot : null);
+    const existingTask = briefing?.todoist?.upcoming?.find((t) => taskMatches(t, taskId, "todoist"))
+      || (taskMatches(taskSnapshot, taskId, "todoist") ? taskSnapshot : null);
     if (!existingTask || existingTask._completing || existingTask.status === "complete") return;
 
     const flagCompleting = (root) => {
       if (!root) return root;
       const updated = JSON.parse(JSON.stringify(root));
-      for (const section of ["ctm", "todoist"]) {
-        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId));
+      for (const section of ["todoist"]) {
+        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
         if (task) task._completing = true;
       }
       return updated;
@@ -160,8 +159,8 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
       const clearCompleting = (root) => {
         if (!root) return root;
         const updated = JSON.parse(JSON.stringify(root));
-        for (const section of ["ctm", "todoist"]) {
-          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId));
+        for (const section of ["todoist"]) {
+          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
           if (task) delete task._completing;
         }
         return updated;
@@ -171,8 +170,8 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
       return;
     }
 
-    setTimeout(() => removeCompletedTask(taskId), 600);
-  }, [briefing?.ctm?.upcoming, briefing?.todoist?.upcoming, expandedTask, setBriefing, setCalendarDeadlines, removeCompletedTask]);
+    setTimeout(() => removeCompletedTask(taskId, "todoist"), 600);
+  }, [briefing?.todoist?.upcoming, expandedTask, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const handleDismissGhost = useCallback((todoistId) => {
     dismissTombstone(todoistId).catch(() => {});
@@ -231,15 +230,15 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
       const flagCompleting = (root) => {
         if (!root) return root;
         const updated = JSON.parse(JSON.stringify(root));
-        for (const section of ["ctm", "todoist"]) {
-          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId));
+        for (const section of ["ctm"]) {
+          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
           if (task) task._completing = true;
         }
         return updated;
       };
       setBriefing(prev => flagCompleting(prev));
       setCalendarDeadlines?.(prev => (prev ? flagCompleting(prev) : prev));
-      setTimeout(() => removeCompletedTask(taskId), 600);
+      setTimeout(() => removeCompletedTask(taskId, "ctm"), 600);
       if (String(expandedTask) === String(taskId)) setExpandedTask(null);
       return;
     }
@@ -247,8 +246,8 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     const applyStatus = (root) => {
       if (!root) return root;
       const updated = JSON.parse(JSON.stringify(root));
-      for (const section of ["ctm", "todoist"]) {
-        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId));
+      for (const section of ["ctm"]) {
+        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
         if (task) task.status = status;
       }
       return updated;

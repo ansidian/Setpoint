@@ -1125,7 +1125,7 @@ describe("CalendarModal responsive layout", () => {
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(within(agendaRail).getAllByText("Project due").length).toBeGreaterThan(0);
     const row = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
-    expect(row.getAttribute("data-item-id")).toBe("deadline-1");
+    expect(row.getAttribute("data-item-id")).toBe("canvas:deadline-1");
 
     fireEvent.click(row);
 
@@ -1548,7 +1548,7 @@ describe("CalendarModal responsive layout", () => {
 
     const quietChip = within(screen.getByTestId("calendar-cell-20")).getByText("Project due").closest("button");
     expect(quietChip).toBeTruthy();
-    expect(quietChip?.getAttribute("data-item-id")).toBe("deadline-1");
+    expect(quietChip?.getAttribute("data-item-id")).toBe("canvas:deadline-1");
   });
 
   it("uses the event-style font treatment for the selected deadline title", async () => {

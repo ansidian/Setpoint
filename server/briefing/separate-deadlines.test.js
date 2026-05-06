@@ -26,7 +26,7 @@ describe("separateDeadlines", () => {
     expect(out.ctm.find((t) => t.id === 2).status).toBe("complete");
   });
 
-  it("keeps a CTM Todoist mirror when Todoist did not return the matching task", () => {
+  it("does not use CTM Todoist metadata to backfill missing Todoist rows", () => {
     const ctm = [
       { id: 1, title: "Linked", status: "complete", due_date: "2026-04-17", todoist_id: "td-1" },
     ];
@@ -37,9 +37,10 @@ describe("separateDeadlines", () => {
 
     expect(out.ctm).toHaveLength(1);
     expect(out.ctm[0].status).toBe("complete");
+    expect(out.todoist).toEqual([]);
   });
 
-  it("suppresses CTM Todoist mirrors when Todoist returns the same task", () => {
+  it("keeps CTM and Todoist sections independent when ids overlap", () => {
     const ctm = [
       { id: 1, title: "From CTM", status: "incomplete", due_date: "2026-04-17", todoist_id: "td-1" },
       { id: 2, title: "Native CTM", status: "incomplete", due_date: "2026-04-17" },
@@ -51,11 +52,11 @@ describe("separateDeadlines", () => {
 
     const out = separateDeadlines(ctm, todoist, new Set());
 
-    expect(out.ctm.map((t) => t.id)).toEqual([2]);
+    expect(out.ctm.map((t) => t.id)).toEqual([1, 2]);
     expect(out.todoist.map((t) => t.id)).toEqual(["td-1", "td-2"]);
   });
 
-  it("normalizes CTM todoist_id and Todoist id before de-duping", () => {
+  it("does not let CTM todoist_id metadata suppress canonical Todoist rows", () => {
     const ctm = [
       { id: 1, title: "From CTM", status: "complete", due_date: "2026-04-17", todoist_id: 12345 },
     ];
@@ -66,7 +67,7 @@ describe("separateDeadlines", () => {
 
     const out = separateDeadlines(ctm, todoist, new Set());
 
-    expect(out.ctm).toEqual([]);
+    expect(out.ctm.map((t) => t.id)).toEqual([1]);
     expect(out.todoist.map((t) => t.id)).toEqual(["12345", "native"]);
   });
 

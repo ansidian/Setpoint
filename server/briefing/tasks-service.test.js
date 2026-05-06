@@ -24,18 +24,16 @@ vi.mock("./todoist.js", () => ({
   updateTodoistTask: vi.fn(),
 }));
 vi.mock("./ctm.js", () => ({
-  fetchCTMDeadlinesAll: vi.fn(),
   updateCTMEventStatus: vi.fn().mockResolvedValue(undefined),
 }));
 
 const todoist = await import("./todoist.js");
 const ctm = await import("./ctm.js");
-const { completeTask } = await import("./tasks-service.js");
+const { completeTask, updateCTMStatus } = await import("./tasks-service.js");
 
 beforeEach(async () => {
   testState.db.current = await createCompletedTasksTestDb();
   Object.values(todoist).forEach((fn) => fn.mockReset?.());
-  ctm.fetchCTMDeadlinesAll.mockReset().mockResolvedValue([]);
   ctm.updateCTMEventStatus.mockClear();
   todoist.fetchTodoistTasksAll.mockResolvedValue([]);
 });
@@ -46,11 +44,10 @@ afterEach(async () => {
 });
 
 describe("completeTask", () => {
-  it("CTM-only: calls updateCTMEventStatus from the domain source", async () => {
-    ctm.fetchCTMDeadlinesAll.mockResolvedValueOnce([{ id: 42 }]);
+  it("does not complete CTM-only tasks through the Todoist completion endpoint", async () => {
     await completeTask("u1", "42");
 
-    expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith(42, "complete");
+    expect(ctm.updateCTMEventStatus).not.toHaveBeenCalled();
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
   });
@@ -102,20 +99,20 @@ describe("completeTask", () => {
     expect(snapshot._completing).toBeUndefined();
   });
 
-  it("CTM with todoist_id: closes in Todoist, updates CTM, and records dedupe state", async () => {
-    ctm.fetchCTMDeadlinesAll.mockResolvedValueOnce([{ id: 42, todoist_id: "td-1" }]);
-    await completeTask("u1", "42");
+  it("updates CTM status without closing or tombstoning a Todoist task", async () => {
+    await updateCTMStatus("u1", "42", "complete");
 
-    const rows = await listCompletedTasks(testState.db.current, "u1");
-
-    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-1");
     expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith(42, "complete");
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      todoist_id: "td-1",
-      due_date: null,
-      snapshot_json: null,
+    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
+    expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
+  });
+
+  it("rejects invalid CTM statuses", async () => {
+    await expect(updateCTMStatus("u1", "42", "blocked")).rejects.toMatchObject({
+      message: "Invalid status",
+      status: 400,
     });
+    expect(ctm.updateCTMEventStatus).not.toHaveBeenCalled();
   });
 
   it("skips tombstone row when matching a Todoist-only completion", async () => {

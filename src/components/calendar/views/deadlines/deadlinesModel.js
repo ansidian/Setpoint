@@ -57,10 +57,11 @@ export function getDeadlineSelectionId(task, dateKey = null) {
   if (!task || task.id == null) return null;
   if (task.agendaItemId) return String(task.agendaItemId);
   const occurrenceDateKey = dateKey || task.agendaDateKey || task.due_date;
-  const isRecurringTodoist = sourceOf(task) === "todoist" && !!task.is_recurring;
+  const source = sourceOf(task);
+  const isRecurringTodoist = source === "todoist" && !!task.is_recurring;
   return isRecurringTodoist && occurrenceDateKey
-    ? `${sourceOf(task)}:${task.id}-${occurrenceDateKey}`
-    : String(task.id);
+    ? `${source}:${task.id}-${occurrenceDateKey}`
+    : `${source}:${task.id}`;
 }
 
 export function deadlineMatchesItemId(task, itemId, dateKey = null) {

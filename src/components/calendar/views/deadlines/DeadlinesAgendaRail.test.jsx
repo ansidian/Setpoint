@@ -71,7 +71,7 @@ describe("DeadlinesAgendaRail", () => {
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
       "todoist:repeat-1-2026-05-05",
       "todoist:repeat-1-2026-05-09",
-      "done-1",
+      "todoist:done-1",
     ]);
     expect(rows[0].getAttribute("data-selected")).toBe("false");
     expect(rows[1].getAttribute("data-selected")).toBe("true");

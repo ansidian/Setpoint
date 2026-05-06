@@ -47,7 +47,7 @@ describe("events planning model", () => {
       id: "active",
       calendarItemKind: "deadline",
       agendaDateKey: "2026-05-12",
-      agendaItemId: "active",
+      agendaItemId: "todoist:active",
     });
     expect(visible.completedDeadlines).toBe(0);
 
@@ -93,8 +93,27 @@ describe("events planning model", () => {
     });
 
     expect(merged.itemsByDate["2026-05-12"]).toHaveLength(2);
-    expect(merged.itemsByDate["2026-05-12"].map(getPlanningItemId)).toEqual(["timed", "active"]);
+    expect(merged.itemsByDate["2026-05-12"].map(getPlanningItemId)).toEqual(["timed", "todoist:active"]);
     expect(isDeadlinePlanningItem(merged.itemsByDate["2026-05-12"][1])).toBe(true);
     expect(merged.totalDeadlines).toBe(1);
+  });
+
+  it("keeps CTM and Todoist deadline planning ids source-distinct", () => {
+    const todoist = deadline({ id: "same", title: "Todoist", due_date: "2026-05-12", source: "todoist" });
+    const ctm = deadline({ id: "same", title: "CTM", due_date: "2026-05-12", source: "canvas" });
+    const overlay = getDeadlineOverlayComputed({
+      deadlineData: {
+        todoist: { upcoming: [todoist] },
+        ctm: { upcoming: [ctm] },
+      },
+      viewYear: 2026,
+      viewMonth: 4,
+      showCompleted: true,
+    });
+
+    expect(overlay.itemsByDate["2026-05-12"].map(getPlanningItemId).sort()).toEqual([
+      "canvas:same",
+      "todoist:same",
+    ]);
   });
 });

@@ -49,6 +49,18 @@ function todoistIdFromUrl(url) {
   }
 }
 
+function isTodoistOriginEvent(e) {
+  const source = String(e.source || e.origin_provider || e.external_provider || "").toLowerCase();
+  if (source === "todoist") return true;
+  if (e.todoist_id) return true;
+  return !!todoistIdFromUrl(e.url);
+}
+
+function isCanvasOriginEvent(e) {
+  const source = String(e.source || e.origin_provider || e.external_provider || "").toLowerCase();
+  return source === "canvas" || !!e.canvas_id;
+}
+
 async function ctmFetch(path, options = {}) {
   const res = await fetch(`${CTM_API_URL}${path}`, {
     ...options,
@@ -66,7 +78,6 @@ async function ctmFetch(path, options = {}) {
 }
 
 function mapCTMEvent(e) {
-  const todoistId = e.todoist_id || todoistIdFromUrl(e.url);
   return {
     id: e.id,
     title: e.title,
@@ -76,11 +87,14 @@ function mapCTMEvent(e) {
     class_color: e.class_color || "#6b7280",
     points_possible: e.points_possible || null,
     status: e.status,
-    source: e.canvas_id ? "canvas" : "manual",
-    todoist_id: todoistId || null,
+    source: "canvas",
     description: e.description || "",
     url: e.url || null,
   };
+}
+
+function mapOwnedCTMEvents(events) {
+  return events.filter((event) => isCanvasOriginEvent(event) && !isTodoistOriginEvent(event)).map(mapCTMEvent);
 }
 
 export async function fetchCTMDeadlines() {
@@ -110,7 +124,7 @@ export async function fetchCTMDeadlines() {
     ctmFetch(`/events?${completedParams}`),
   ]);
   const events = [...activeEvents, ...completedEvents];
-  return events.map(mapCTMEvent);
+  return mapOwnedCTMEvents(events);
 }
 
 // Full-horizon fetch for the calendar modal: active items regardless of date,
@@ -137,7 +151,7 @@ export async function fetchCTMDeadlinesAll() {
     ctmFetch(`/events?${completedParams}`),
   ]);
   const events = [...activeEvents, ...completedEvents];
-  return events.map(mapCTMEvent);
+  return mapOwnedCTMEvents(events);
 }
 
 export async function fetchCTMDeadlinesRange({ start, end }) {
@@ -164,7 +178,7 @@ export async function fetchCTMDeadlinesRange({ start, end }) {
     ctmFetch(`/events?${activeParams}`),
     ctmFetch(`/events?${completedParams}`),
   ]);
-  return [...activeEvents, ...completedEvents].map(mapCTMEvent);
+  return mapOwnedCTMEvents([...activeEvents, ...completedEvents]);
 }
 
 export async function updateCTMEventStatus(eventId, status) {
