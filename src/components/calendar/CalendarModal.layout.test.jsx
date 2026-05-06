@@ -2299,6 +2299,59 @@ describe("CalendarModal responsive layout", () => {
     });
   });
 
+  it("does not refetch the deadlines range when only range data object identity changes", async () => {
+    window.innerWidth = 1900;
+    const ensureRange = vi.fn().mockResolvedValue({});
+
+    function modal(deadlineId) {
+      return wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="deadlines"
+          onViewChange={() => {}}
+          focusDate="2026-04-20"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{}}
+          deadlinesData={{}}
+          deadlinesRangeData={{
+            loading: false,
+            error: null,
+            ensureRange,
+            data: {
+              ctm: { upcoming: [] },
+              todoist: {
+                upcoming: [
+                  {
+                    id: deadlineId,
+                    title: "Deadline",
+                    due_date: "2026-04-20",
+                    source: "todoist",
+                    status: "incomplete",
+                  },
+                ],
+              },
+            },
+          }}
+        />,
+      );
+    }
+
+    const { rerender } = render(modal("todo-1"));
+
+    await waitFor(() => {
+      expect(ensureRange).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(modal("todo-1"));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(ensureRange).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a quiet pending-update indicator for stale event refreshes", () => {
     window.innerWidth = 1900;
 

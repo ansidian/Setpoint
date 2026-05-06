@@ -39,6 +39,8 @@ export default function Dashboard() {
   const calendarDeadlineRange = useCalendarDomainRange({
     fetchRange: getCalendarDeadlinesRange,
     emptyData: null,
+    cacheMode: "month",
+    prefetchMonthRadius: 1,
   });
   const calendarBillRange = useCalendarDomainRange({
     fetchRange: getCalendarBillsRange,

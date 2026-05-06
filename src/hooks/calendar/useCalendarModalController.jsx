@@ -769,13 +769,14 @@ export default function useCalendarModalController({
     eventsData.ensureRange(start, end);
   }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange]);
 
+  const domainEnsureRange = viewData?.ensureRange;
   useEffect(() => {
-    if (!open || view === "events" || !viewData?.ensureRange) return;
+    if (!open || view === "events" || !domainEnsureRange) return;
     const { start, end } = getVisibleGridRange(viewYear, viewMonth);
-    viewData.ensureRange(start, end).catch((err) => {
+    domainEnsureRange(start, end).catch((err) => {
       console.error(`[Calendar] ${view} range fetch failed:`, err);
     });
-  }, [open, view, viewData, viewYear, viewMonth]);
+  }, [domainEnsureRange, open, view, viewYear, viewMonth]);
 
   useEffect(() => {
     const current = floatingDetailRef.current;
