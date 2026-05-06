@@ -107,6 +107,17 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByText("Dismiss")).toBeNull();
   });
 
+  it("shows compact desktop key hints for immediate reader actions", () => {
+    renderReader();
+
+    expect(screen.getByRole("button", { name: /move to fyi/i }).textContent).toContain("F");
+    expect(screen.getByRole("button", { name: /move to noise/i }).textContent).toContain("N");
+    expect(screen.getByRole("button", { name: /mark handled/i }).textContent).toContain("H");
+    expect(screen.getByRole("button", { name: /dismiss from today/i }).textContent).toContain("D");
+    expect(screen.getByRole("button", { name: /snooze email/i }).textContent).toContain("S");
+    expect(screen.getByRole("button", { name: /trash email/i }).textContent).toContain("E");
+  });
+
 	  it("dispatches snapshot lane and lifecycle actions", () => {
     const { onAction } = renderReader();
 
@@ -128,6 +139,7 @@ describe("DesktopReader snapshot actions", () => {
 	    });
 
 	    expect(screen.getByRole("button", { name: /reopen/i })).toBeTruthy();
+	    expect(screen.getByRole("button", { name: /reopen/i }).textContent).toContain("H");
 	    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
 	    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
 

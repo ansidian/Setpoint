@@ -169,8 +169,10 @@ export function LaneAll({ accent, lane, setLane, laneCounts }) {
 export default function Sidebar({
   accent, accounts, accountId, setAccountId,
   lane, setLane, laneCounts, totalUnread, compact,
-  onOpenDashboard,
+  onOpenDashboard, selectedEmail = null, readOnly = false,
 }) {
+  const shortcutRows = buildShortcutRows(selectedEmail, readOnly);
+
   return (
     <div
       style={{
@@ -243,16 +245,60 @@ export default function Sidebar({
         <div style={{ marginTop: "auto", padding: 10 }}>
           <Eyebrow style={{ marginBottom: 8 }}>Shortcuts</Eyebrow>
           <div style={{ display: "grid", rowGap: 6, fontSize: 10, color: "rgba(205,214,244,0.5)" }}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>J</Kbd><Kbd>K</Kbd><span>Navigate</span></div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>E</Kbd><span>Hold · Trash</span></div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>R</Kbd><span>Reply</span></div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>S</Kbd><span>Hold · Snooze</span></div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>P</Kbd><span>Pin</span></div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>⌘F</Kbd><span>Find</span></div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}><Kbd>⌘K</Kbd><span>Command</span></div>
+            {shortcutRows.map((row) => (
+              <ShortcutRow key={`${row.keys.join("-")}-${row.label}`} keys={row.keys} label={row.label} />
+            ))}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function ShortcutRow({ keys, label }) {
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      {keys.map((key) => <Kbd key={key}>{key}</Kbd>)}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function buildShortcutRows(selectedEmail, readOnly) {
+  const rows = [
+    { keys: ["J", "K"], label: "Navigate" },
+  ];
+
+  if (selectedEmail) {
+    rows.push({ keys: ["O"], label: "Open" });
+  }
+
+  if (selectedEmail && !readOnly) {
+    const isSnapshot = !!selectedEmail._activeSnapshot && !!selectedEmail.snapshot_item_id;
+    const isHandled = selectedEmail._lane === "handled";
+    const snapshotLane = selectedEmail._lane === "carryover" ? "needs_attention" : selectedEmail._lane;
+
+    if (isSnapshot && isHandled) {
+      rows.push({ keys: ["H"], label: "Reopen" });
+    } else if (isSnapshot) {
+      if (snapshotLane === "needs_attention") rows.push({ keys: ["H"], label: "Mark handled" });
+      rows.push({ keys: ["D"], label: "Dismiss" });
+      if (snapshotLane !== "needs_attention") rows.push({ keys: ["A"], label: "Move to Needs" });
+      if (snapshotLane !== "fyi") rows.push({ keys: ["F"], label: "Move to FYI" });
+      if (snapshotLane !== "noise") rows.push({ keys: ["N"], label: "Move to Noise" });
+    }
+
+    rows.push(
+      { keys: ["S"], label: "Snooze" },
+      { keys: ["E"], label: "Trash" },
+    );
+  }
+
+  rows.push(
+    { keys: ["⌘F"], label: "Find" },
+    { keys: ["⌘Z"], label: "Undo" },
+    { keys: ["⌘K"], label: "Command" },
+  );
+
+  return rows;
 }

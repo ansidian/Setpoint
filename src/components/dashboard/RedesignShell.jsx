@@ -153,7 +153,7 @@ export function RedesignShell({
     if (actionChordTimerRef.current) clearTimeout(actionChordTimerRef.current);
   }, []);
 
-  // Global hotkeys: ⌘K palette, c calendar, g+key action chords
+  // Global hotkeys: ⌘K palette, c calendar, y snapshots, g+key action chords
   useEffect(() => {
     const clearActionChord = () => {
       actionChordRef.current = null;
@@ -204,7 +204,7 @@ export function RedesignShell({
       }
 
       if (key === "c" && !calendarOpen) { openCalendar(); }
-      if (key === "h") { setHistoryOpen((v) => !v); }
+      if (key === "y") { setHistoryOpen((v) => !v); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

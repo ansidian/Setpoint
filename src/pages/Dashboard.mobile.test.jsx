@@ -230,6 +230,24 @@ describe("RedesignShell mobile behavior", () => {
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
   });
 
+  it("uses Y for snapshots so H stays available to inbox handling", () => {
+    mockIsMobile = false;
+    const props = makeProps();
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "h" });
+    expect(props.setHistoryOpen).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "y" });
+    expect(props.setHistoryOpen).toHaveBeenCalledTimes(1);
+  });
+
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {
     mockIsMobile = false;
     const props = makeProps();

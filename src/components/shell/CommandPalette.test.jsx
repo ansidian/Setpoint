@@ -32,6 +32,7 @@ describe("CommandPalette", () => {
     );
 
     expect(screen.getByText("Snapshots")).toBeTruthy();
+    expect(screen.getByText("Y")).toBeTruthy();
     expect(screen.queryByText("Briefing history")).toBeNull();
   });
 });

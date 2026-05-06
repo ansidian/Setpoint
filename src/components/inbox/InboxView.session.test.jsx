@@ -1010,6 +1010,288 @@ describe("InboxView session state", () => {
 	    });
 	  });
 
+  it("dispatches desktop single-key snapshot actions and preserves shell number keys", async () => {
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [
+            {
+              id: 42,
+              snapshot_item_id: 42,
+              triage_id: 8,
+              account_id: "gmail-a",
+              email_id: "gmail-a-msg-1",
+              uid: "gmail-a-msg-1",
+              lane: "needs_attention",
+              subject: "Review the lease",
+              from_name: "Dana",
+              from_address: "dana@example.com",
+              summary: "Needs your review.",
+              email_date: "2026-05-03T14:00:00.000Z",
+              read: true,
+            },
+            {
+              id: 43,
+              snapshot_item_id: 43,
+              triage_id: 9,
+              account_id: "gmail-a",
+              email_id: "gmail-a-msg-2",
+              uid: "gmail-a-msg-2",
+              lane: "needs_attention",
+              subject: "Second lease note",
+              from_name: "Riley",
+              from_address: "riley@example.com",
+              summary: "Follow-up context.",
+              email_date: "2026-05-03T13:00:00.000Z",
+              read: true,
+            },
+          ],
+          fyi: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    function DesktopHotkeyHarness() {
+      const [sessionState, setSessionState] = useState({
+        accountId: "__all",
+        lane: "__all",
+        search: "",
+        selectedId: "gmail-a-msg-1",
+      });
+
+      return (
+        <DashboardProvider
+          briefing={{ emails: { accounts: [] } }}
+          setBriefing={() => {}}
+          setCalendarDeadlines={() => {}}
+        >
+          <div data-testid="selected-id">{sessionState.selectedId}</div>
+          <InboxView
+            accent="#cba6da"
+            customize={{
+              aiVerbosity: "standard",
+              showPreview: true,
+              inboxDensity: "default",
+              sidebarCompact: false,
+              inboxLayout: "two-pane",
+              inboxGrouping: "swimlanes",
+            }}
+            emailAccounts={[]}
+            briefingSummary=""
+            briefingGeneratedAt="2026-05-03 15:00:00"
+            activeSnapshot={activeSnapshot}
+            liveEmails={[]}
+            snoozedEntries={[]}
+            resurfacedEntries={[]}
+            onOpenDashboard={() => {}}
+            onRefresh={() => {}}
+            sessionState={sessionState}
+            onSessionStateChange={setSessionState}
+          />
+        </DashboardProvider>
+      );
+    }
+
+    render(<DesktopHotkeyHarness />);
+
+    const numberEvent = new KeyboardEvent("keydown", {
+      key: "1",
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(numberEvent);
+    expect(numberEvent.defaultPrevented).toBe(false);
+
+    fireEvent.keyDown(window, { key: "h" });
+
+    expect(markSnapshotItemHandled).toHaveBeenCalledWith(42);
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-id").textContent).toBe("gmail-a-msg-2");
+    });
+  });
+
+  it("suspends desktop action hotkeys while typing or while a floating inbox menu is open", async () => {
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: true,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "gmail-a-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    const searchInput = screen.getByLabelText("Search indexed mail");
+    searchInput.focus();
+    fireEvent.keyDown(searchInput, { key: "d" });
+    expect(dismissSnapshotItemForToday).not.toHaveBeenCalled();
+
+    searchInput.blur();
+    fireEvent.click(screen.getByRole("button", { name: /snooze email/i }));
+    expect(await screen.findByRole("menu")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "e" });
+    expect(trashEmail).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^undo$/i })).toBeNull();
+  });
+
+  it("dispatches desktop lane, dismiss, snooze, and trash hotkeys through existing action paths", async () => {
+    vi.useFakeTimers();
+    const activeSnapshot = {
+      snapshot: makeActiveSnapshot({
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: true,
+          }],
+          fyi: [],
+          noise: [],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    const renderHotkeyInbox = () => render(
+      <DashboardProvider
+        briefing={{ emails: { accounts: [] } }}
+        setBriefing={() => {}}
+        setCalendarDeadlines={() => {}}
+      >
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-03 15:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={{
+            accountId: "__all",
+            lane: "__all",
+            search: "",
+            selectedId: "gmail-a-msg-1",
+          }}
+          onSessionStateChange={() => {}}
+        />
+      </DashboardProvider>,
+    );
+
+    const { unmount: unmountMove } = renderHotkeyInbox();
+    fireEvent.keyDown(window, { key: "f" });
+    expect(moveSnapshotItemLane).toHaveBeenCalledWith(42, "fyi");
+    unmountMove();
+
+    const { unmount: unmountDismiss } = renderHotkeyInbox();
+    fireEvent.keyDown(window, { key: "d" });
+    expect(dismissSnapshotItemForToday).toHaveBeenCalledWith(42);
+    unmountDismiss();
+
+    const { unmount: unmountSnooze } = renderHotkeyInbox();
+    fireEvent.keyDown(window, { key: "s" });
+    expect(snoozeEmail).toHaveBeenCalledWith(
+      "gmail-a-msg-1",
+      expect.any(Number),
+      expect.objectContaining({ uid: "gmail-a-msg-1" }),
+    );
+    unmountSnooze();
+
+    renderHotkeyInbox();
+    fireEvent.keyDown(window, { key: "e" });
+    expect(screen.getByText("Email moved to trash")).toBeTruthy();
+    expect(trashEmail).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(6_000);
+      await Promise.resolve();
+    });
+
+    expect(trashEmail).toHaveBeenCalledWith("gmail-a-msg-1");
+  });
+
 	  it("suppresses read-only frozen snapshot mutations", async () => {
     const refreshSnapshot = vi.fn().mockResolvedValue({});
     const activeSnapshot = {
