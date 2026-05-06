@@ -182,6 +182,51 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getAllByText("Design review").length).toBeGreaterThan(0);
   });
 
+  it("holds Events first paint until deadline overlay readiness resolves on cold mount", () => {
+    window.innerWidth = 1900;
+    const ensureDeadlines = vi.fn(() => new Promise(() => {}));
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          ensureRange: vi.fn().mockResolvedValue([]),
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+            },
+          ]),
+          isMonthLoading: () => false,
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+        deadlinesRangeData={{
+          loading: true,
+          error: null,
+          data: {
+            ctm: { upcoming: [] },
+            todoist: { upcoming: [] },
+          },
+          dataRange: null,
+          ensureRange: ensureDeadlines,
+        }}
+      />,
+    ));
+
+    expect(screen.getByTestId("calendar-grid-skeleton")).toBeTruthy();
+    expect(screen.queryByText("Design review")).toBeNull();
+  });
+
   it("renders adjacent-month event cells and keeps create seeded to the actual selected date", async () => {
     window.innerWidth = 1900;
 

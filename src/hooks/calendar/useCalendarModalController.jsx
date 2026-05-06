@@ -104,6 +104,17 @@ function deadlineOverlayRecordData(record, visibleRange) {
   return record.data || record;
 }
 
+function hasDeadlineItemsInRange(data, range) {
+  if (!data || !range) return false;
+  for (const sectionName of ["ctm", "todoist"]) {
+    for (const item of data?.[sectionName]?.upcoming || []) {
+      const dueDate = item?.agendaDateKey || item?.due_date || item?.dueDate || item?.date;
+      if (dueDate && dueDate >= range.start && dueDate <= range.end) return true;
+    }
+  }
+  return false;
+}
+
 function resolvePendingFocusItem({ activeView, computed, dateKey, itemId }) {
   const getItemId = activeView?.getItemId || ((item) => item?.id);
   const matches = (item) => (
@@ -297,6 +308,15 @@ export default function useCalendarModalController({
         ? deadlinesRangeData?.data
         : null;
       const currentOverlayData = !planningReadiness.deadlinesDelayed ? deadlinesData : null;
+      const hasResolvedDeadlineRange = !!committedOverlayData
+        || !!(seededOverlayData && deadlinesRangeData?.dataRange && rangeMatches(deadlinesRangeData.dataRange, visibleRange));
+      const hasVisibleDeadlineSeed = hasDeadlineItemsInRange(seededOverlayData, visibleRange)
+        || hasDeadlineItemsInRange(currentOverlayData, visibleRange);
+      const awaitingDeadlineOverlay = deadlineOverlayVisible
+        && !!deadlinesRangeData?.ensureRange
+        && ["idle", "loading", "slow"].includes(planningReadiness.state)
+        && !hasResolvedDeadlineRange
+        && !hasVisibleDeadlineSeed;
       const overlayData = committedOverlayData
         || seededOverlayData
         || currentOverlayData;
@@ -304,11 +324,13 @@ export default function useCalendarModalController({
         ? lateDeadlineOverlayData
         : null;
       return {
-        events: dedupeEvents([
-          ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
-          ...(eventsData?.getEvents?.(viewYear, viewMonth) || []),
-          ...(eventsData?.getEvents?.(nextMonth.year, nextMonth.month) || []),
-        ]),
+        events: awaitingDeadlineOverlay
+          ? []
+          : dedupeEvents([
+              ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
+              ...(eventsData?.getEvents?.(viewYear, viewMonth) || []),
+              ...(eventsData?.getEvents?.(nextMonth.year, nextMonth.month) || []),
+            ]),
         deadlineOverlay: {
           enabled: deadlineOverlayVisible,
           showCompleted: completedDeadlineOverlayVisible,
@@ -330,6 +352,7 @@ export default function useCalendarModalController({
         isLoading: eventsData?.isMonthLoading?.(prevMonth.year, prevMonth.month)
           || eventsData?.isMonthLoading?.(viewYear, viewMonth)
           || eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month)
+          || awaitingDeadlineOverlay
           || false,
         pendingUpdate: !!eventsData?.staleRefreshPending,
         hasMonth: eventsData?.hasMonth?.(viewYear, viewMonth) || false,
