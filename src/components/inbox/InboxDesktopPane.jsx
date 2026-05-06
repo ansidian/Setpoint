@@ -2,6 +2,7 @@ import DigestStrip from "./DigestStrip";
 import Sidebar from "./Sidebar";
 import InboxList from "./InboxList";
 import Reader from "./reader/Reader";
+import InboxUndoToast from "./InboxUndoToast";
 
 export default function InboxDesktopPane({
   accent,
@@ -52,6 +53,8 @@ export default function InboxDesktopPane({
   categoryFilter = "__all",
   setCategoryFilter,
   readOnly = false,
+  undo,
+  onUndo,
 }) {
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
@@ -172,6 +175,7 @@ export default function InboxDesktopPane({
           )}
         </div>
       </div>
+      <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
     </div>
   );
 }

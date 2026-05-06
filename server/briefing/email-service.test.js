@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmailIndexTestDb,
+  seedEmailAccount,
   seedIndexedEmail,
 } from "./test-utils/email-index-db.js";
 
@@ -34,6 +35,7 @@ vi.mock("./config-service.js", () => ({ loadUserConfig: vi.fn() }));
 
 const gmail = await import("./gmail.js");
 const icloud = await import("./icloud.js");
+const configService = await import("./config-service.js");
 const emailService = await import("./email-service.js");
 const { __testing__ } = emailService;
 
@@ -297,6 +299,190 @@ describe("searchEmails contract", () => {
       message: "Unsupported email search flag: is:important",
     });
     expect(mockDb.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("pending triage action semantics", () => {
+  it("dismiss durably skips pending triage rows and completes queued jobs", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status)
+            VALUES (?, ?, ?, 'pending')`,
+      args: ["user-1", "gmail-work", "gmail-work-msg-1"],
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'queued', ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "gmail-work-msg-1",
+        "email_triage:user-1:gmail-work:gmail-work-msg-1",
+      ],
+    });
+
+    await emailService.dismiss("user-1", "gmail-work-msg-1");
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT d.email_id,
+                   t.dismissed_at,
+                   t.triage_status,
+                   t.triage_source,
+                   j.status,
+                   j.scheduled_for,
+                   j.last_error
+            FROM ea_dismissed_emails d
+            JOIN ea_email_triage t ON t.user_id = d.user_id AND t.email_id = d.email_id
+            JOIN ea_triage_jobs j ON j.user_id = d.user_id AND j.email_id = d.email_id
+            WHERE d.user_id = ? AND d.email_id = ?`,
+      args: ["user-1", "gmail-work-msg-1"],
+    });
+
+    expect(rows.rows).toEqual([
+      expect.objectContaining({
+        email_id: "gmail-work-msg-1",
+        dismissed_at: expect.any(String),
+        triage_status: "skipped",
+        triage_source: "user_dismissed_pending",
+        status: "complete",
+        scheduled_for: null,
+        last_error: "Skipped pending triage; user dismissed row",
+      }),
+    ]);
+  });
+
+  it("snooze hides active pending rows and defers queued triage until wake", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      email: "work@example.com",
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-1",
+      account_id: "gmail-work",
+      account_email: "work@example.com",
+    });
+    const snapshot = await testState.db.current.execute({
+      sql: `INSERT INTO ea_briefing_snapshots
+              (user_id, start_at, end_at, timezone, status)
+            VALUES (?, ?, ?, 'America/Los_Angeles', 'active')
+            RETURNING id`,
+      args: ["user-1", "2026-05-03T07:00:00.000Z", "2026-05-04T07:00:00.000Z"],
+    });
+    const triage = await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status)
+            VALUES (?, ?, ?, 'pending')
+            RETURNING id`,
+      args: ["user-1", "gmail-work", "gmail-work-msg-1"],
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot)
+            VALUES (?, ?, ?, ?, ?, 'needs_attention', '', '', 'normal', 'uncategorized', 'Pending')`,
+      args: [
+        snapshot.rows[0].id,
+        triage.rows[0].id,
+        "user-1",
+        "gmail-work",
+        "gmail-work-msg-1",
+      ],
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'queued', ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "gmail-work-msg-1",
+        "email_triage:user-1:gmail-work:gmail-work-msg-1",
+      ],
+    });
+    configService.loadUserConfig.mockResolvedValue({
+      accounts: [{ id: "gmail-work", email: "work@example.com", type: "gmail" }],
+    });
+    const untilTs = Date.parse("2026-05-04T16:00:00.000Z");
+
+    await emailService.snooze("user-1", "gmail-work-msg-1", untilTs, {
+      account_id: "gmail-work",
+      account_email: "work@example.com",
+      uid: "gmail-work-msg-1",
+      subject: "Pending",
+    });
+
+    expect(gmail.snoozeAtGmail).toHaveBeenCalledWith(
+      { id: "gmail-work", email: "work@example.com", type: "gmail" },
+      "gmail-work-msg-1",
+    );
+    const rows = await testState.db.current.execute({
+      sql: `SELECT s.status AS snooze_status,
+                   s.until_ts,
+                   t.triage_status,
+                   t.triage_source,
+                   i.dismissed_from_today_at,
+                   j.status AS job_status,
+                   j.scheduled_for,
+                   j.last_error
+            FROM ea_snoozed_emails s
+            JOIN ea_email_triage t ON t.user_id = s.user_id AND t.email_id = s.email_id
+            JOIN ea_briefing_snapshot_items i ON i.user_id = s.user_id AND i.email_id = s.email_id
+            JOIN ea_triage_jobs j ON j.user_id = s.user_id AND j.email_id = s.email_id
+            WHERE s.user_id = ? AND s.email_id = ?`,
+      args: ["user-1", "gmail-work-msg-1"],
+    });
+
+    expect(rows.rows).toEqual([
+      expect.objectContaining({
+        snooze_status: "snoozed",
+        until_ts: untilTs,
+        triage_status: "pending",
+        triage_source: "user_snoozed_pending",
+        dismissed_from_today_at: expect.any(String),
+        job_status: "queued",
+        scheduled_for: "2026-05-04T16:00:00.000Z",
+        last_error: "Deferred pending triage while snoozed",
+      }),
+    ]);
+
+    await emailService.wake("user-1", "gmail-work-msg-1");
+
+    expect(gmail.wakeAtGmail).toHaveBeenCalledWith(
+      { id: "gmail-work", email: "work@example.com", type: "gmail" },
+      "gmail-work-msg-1",
+    );
+    const restoredRows = await testState.db.current.execute({
+      sql: `SELECT s.status AS snooze_status,
+                   t.triage_status,
+                   t.triage_source,
+                   i.dismissed_from_today_at,
+                   j.status AS job_status,
+                   j.scheduled_for,
+                   j.completed_at,
+                   j.last_error
+            FROM ea_email_triage t
+            LEFT JOIN ea_snoozed_emails s ON s.user_id = t.user_id AND s.email_id = t.email_id
+            JOIN ea_briefing_snapshot_items i ON i.user_id = t.user_id AND i.email_id = t.email_id
+            JOIN ea_triage_jobs j ON j.user_id = t.user_id AND j.email_id = t.email_id
+            WHERE t.user_id = ? AND t.email_id = ?`,
+      args: ["user-1", "gmail-work-msg-1"],
+    });
+    expect(restoredRows.rows).toEqual([
+      expect.objectContaining({
+        snooze_status: null,
+        triage_status: "pending",
+        triage_source: "undo_restored_pending",
+        dismissed_from_today_at: null,
+        job_status: "queued",
+        scheduled_for: null,
+        completed_at: null,
+        last_error: "",
+      }),
+    ]);
   });
 });
 

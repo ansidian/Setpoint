@@ -10,6 +10,7 @@ import MobileFilterSheet from "./MobileFilterSheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
 import { buildActiveSnapshotSummary } from "../snapshotSummary";
+import InboxUndoToast from "../InboxUndoToast";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -187,6 +188,8 @@ export default function MobileInboxView({
   liveEmailsLoading = false,
   activeSnapshotMode = false,
   readOnly = false,
+  undo,
+  onUndo,
 }) {
   const rowAccountsById = indexedSearchActive
     ? { ...accountsById, ...indexedSearchAccountsById }
@@ -460,6 +463,7 @@ export default function MobileInboxView({
         totalUnread={totalUnread}
         onClose={() => setMobileFiltersOpen(false)}
       />
+      <InboxUndoToast undo={undo} onUndo={onUndo} accent={accent} />
     </div>
   );
 }

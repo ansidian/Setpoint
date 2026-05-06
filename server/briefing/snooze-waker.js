@@ -2,7 +2,10 @@ import cron from "node-cron";
 import db from "../db/connection.js";
 import { loadUserConfig } from "./config-service.js";
 import { wakeAtGmail } from "./gmail.js";
-import { attachResurfacedSnoozeToActiveSnapshot } from "./snapshot-service.js";
+import {
+  attachResurfacedSnoozeToActiveSnapshot,
+  requeueEmailTriageForEmail,
+} from "./snapshot-service.js";
 
 const CRON_EXPR = "*/5 * * * *"; // every 5 minutes
 // Resurfaced rows live this long after wake before cleanup. Gives the client a
@@ -17,6 +20,7 @@ export async function wakeDueSnoozes({
   loadUserConfigFn = loadUserConfig,
   wakeAtGmailFn = wakeAtGmail,
   attachResurfacedSnoozeToActiveSnapshotFn = attachResurfacedSnoozeToActiveSnapshot,
+  requeueEmailTriageForEmailFn = requeueEmailTriageForEmail,
 } = {}) {
   if (!userId) return;
 
@@ -54,11 +58,29 @@ export async function wakeDueSnoozes({
         args: [resurfacedAt, userId, uid],
       });
       if (snap) {
+        const accountId = snap.account_id || snap.accountId || snap._accountKey;
+        let pendingTriage = false;
+        if (accountId) {
+          const triage = await dbClient.execute({
+            sql: `SELECT triage_status
+                  FROM ea_email_triage
+                  WHERE user_id = ?
+                    AND account_id = ?
+                    AND email_id = ?
+                  LIMIT 1`,
+            args: [userId, accountId, uid],
+          });
+          pendingTriage = triage.rows[0]?.triage_status === "pending";
+        }
         await attachResurfacedSnoozeToActiveSnapshotFn(userId, snap, {
           dbClient,
           now,
           resurfacedAt,
+          pendingTriage,
         });
+        if (pendingTriage && accountId) {
+          await requeueEmailTriageForEmailFn(userId, accountId, uid, { dbClient });
+        }
       }
     } catch (err) {
       console.error(`[EA Snooze] Status update failed for uid=${uid}:`, err.message);

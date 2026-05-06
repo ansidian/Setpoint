@@ -16,7 +16,12 @@ import {
   trashMessage as icloudTrash,
   batchMarkAsRead as icloudBatchMarkAsRead,
 } from "./icloud.js";
-import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
+import {
+  deferPendingTriageForSnooze,
+  markPendingTriageDismissed,
+  markProviderRemovedFromActiveSnapshots,
+  restorePendingTriageEligibilityForEmail,
+} from "./snapshot-service.js";
 import { loadUserConfig } from "./config-service.js";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "./account-canonical.js";
 
@@ -557,6 +562,7 @@ export async function snooze(userId, uid, untilTs, snapshot) {
       err.status = 502;
       throw err;
     }
+    await deferPendingTriageForSnooze(userId, accountId, uid, untilTs);
   }
 }
 
@@ -590,6 +596,7 @@ export async function wake(userId, uid) {
       console.error("[EA Snooze] Gmail wake-modify failed:", unarchiveErr.message);
       // Non-fatal; DB state is correct.
     }
+    await restorePendingTriageEligibilityForEmail(userId, snap.account_id, uid);
   }
 }
 
@@ -598,6 +605,7 @@ export async function dismiss(userId, emailId) {
     sql: "INSERT OR IGNORE INTO ea_dismissed_emails (user_id, email_id) VALUES (?, ?)",
     args: [userId, emailId],
   });
+  await markPendingTriageDismissed(userId, emailId);
 }
 
 // Exposed for unit testing only

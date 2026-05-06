@@ -355,7 +355,9 @@ async function loadActiveSnapshotItem(dbClient, userId, itemId) {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
-                 t.bill_candidate_json
+                 t.bill_candidate_json,
+                 t.triage_status,
+                 t.triage_source
           FROM ea_briefing_snapshot_items i
           JOIN ea_briefing_snapshots s
             ON s.id = i.snapshot_id
@@ -375,6 +377,12 @@ async function loadActiveSnapshotItem(dbClient, userId, itemId) {
     args: [itemId, userId],
   });
   return result.rows[0] || null;
+}
+
+function isPendingSnapshotTriage(item) {
+  return item?.triage_status === "pending"
+    || item?.triage_source === "weak_security_grace"
+    || item?.source === "pending_security_grace";
 }
 
 async function loadActiveHandledSnapshotItem(dbClient, userId, itemId) {
@@ -460,19 +468,24 @@ function snapshotDate(snapshot) {
   return snapshot?.date || snapshot?.email_date || snapshot?.email_date_at_snapshot || null;
 }
 
-async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso) {
+async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso, {
+  pendingTriage = false,
+} = {}) {
   const accountId = snapshotString(snapshot?.account_id, snapshot?.accountId, snapshot?._accountKey);
   const emailId = snapshotString(snapshot?.uid, snapshot?.email_id, snapshot?.id);
   if (!accountId || !emailId) return null;
 
   const lane = snapshotLane(snapshot);
+  const triageStatus = pendingTriage ? "pending" : "complete";
+  const triageSource = pendingTriage ? "snooze_resurface_pending" : "snooze_resurface";
+  const lastTriagedAt = pendingTriage ? null : nowIso;
   await dbClient.execute({
     sql: `INSERT INTO ea_email_triage
             (user_id, account_id, email_id, thread_id, lane, category, urgency,
              escalation_badge, summary, action, deadline_at, triage_status,
              triage_source, last_triaged_at, provider_state, handled_at, dismissed_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete',
-                  'snooze_resurface', ?, 'available', NULL, NULL)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  ?, ?, 'available', NULL, NULL)
           ON CONFLICT(user_id, account_id, email_id) DO UPDATE SET
             lane = excluded.lane,
             category = excluded.category,
@@ -481,8 +494,9 @@ async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso) {
             summary = excluded.summary,
             action = excluded.action,
             deadline_at = excluded.deadline_at,
-            triage_status = 'complete',
-            triage_source = 'snooze_resurface',
+            triage_status = excluded.triage_status,
+            triage_source = excluded.triage_source,
+            last_triaged_at = excluded.last_triaged_at,
             provider_state = 'available',
             handled_at = NULL,
             dismissed_at = NULL,
@@ -499,7 +513,9 @@ async function upsertResurfacedTriage(dbClient, userId, snapshot, nowIso) {
       snapshotString(snapshot?.summary, snapshot?.preview, snapshot?.body_preview),
       snapshotString(snapshot?.action),
       snapshot?.deadline_at || null,
-      nowIso,
+      triageStatus,
+      triageSource,
+      lastTriagedAt,
     ],
   });
 
@@ -523,9 +539,12 @@ export async function attachResurfacedSnoozeToActiveSnapshot(userId, snapshot, {
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
   resurfacedAt = now.getTime(),
+  pendingTriage = false,
 } = {}) {
   const nowIso = now.toISOString();
-  const triage = await upsertResurfacedTriage(dbClient, userId, snapshot, nowIso);
+  const triage = await upsertResurfacedTriage(dbClient, userId, snapshot, nowIso, {
+    pendingTriage,
+  });
   if (!triage?.triageId) return null;
 
   const activeSnapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
@@ -609,6 +628,27 @@ export async function attachResurfacedSnoozeToActiveSnapshot(userId, snapshot, {
   return result.rows[0] ? normalizeSnapshotItem(result.rows[0]) : null;
 }
 
+export async function requeueEmailTriageForEmail(userId, accountId, emailId, {
+  dbClient = db,
+} = {}) {
+  const idempotencyKey = `email_triage:${userId}:${accountId}:${emailId}`;
+  await dbClient.execute({
+    sql: `INSERT INTO ea_triage_jobs
+            (user_id, account_id, email_id, job_type, status, idempotency_key,
+             priority, payload_json, scheduled_for, completed_at, locked_at, last_error)
+          VALUES (?, ?, ?, 'email_triage', 'queued', ?, 2, '{}', NULL, NULL, NULL, '')
+          ON CONFLICT(idempotency_key) DO UPDATE SET
+            status = 'queued',
+            priority = 2,
+            scheduled_for = NULL,
+            completed_at = NULL,
+            locked_at = NULL,
+            last_error = '',
+            updated_at = datetime('now')`,
+    args: [userId, accountId, emailId, idempotencyKey],
+  });
+}
+
 function makeHttpError(message, status) {
   const err = new Error(message);
   err.status = status;
@@ -632,6 +672,179 @@ async function insertFeedback(dbClient, item, feedbackType, fromValue, toValue) 
       toValue,
     ],
   });
+}
+
+export async function completeEmailTriageJobsForEmail(userId, accountId, emailId, {
+  dbClient = db,
+  now = new Date(),
+  lastError = "",
+} = {}) {
+  const result = await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'complete',
+              completed_at = ?,
+              locked_at = NULL,
+              scheduled_for = NULL,
+              last_error = ?,
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND job_type = 'email_triage'
+            AND status IN ('queued', 'running')`,
+    args: [now.toISOString(), lastError, userId, accountId, emailId],
+  });
+  return { updated: Number(result.rowsAffected || 0) };
+}
+
+export async function markPendingTriageDismissedForEmail(userId, accountId, emailId, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const dismissedAt = now.toISOString();
+  const result = await dbClient.execute({
+    sql: `UPDATE ea_email_triage
+          SET dismissed_at = ?,
+              triage_status = 'skipped',
+              triage_source = 'user_dismissed_pending',
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND triage_status = 'pending'`,
+    args: [dismissedAt, userId, accountId, emailId],
+  });
+
+  const jobs = await completeEmailTriageJobsForEmail(userId, accountId, emailId, {
+    dbClient,
+    now,
+    lastError: "Skipped pending triage; user dismissed row",
+  });
+
+  return {
+    updated: Number(result.rowsAffected || 0),
+    jobsUpdated: jobs.updated,
+  };
+}
+
+export async function markPendingTriageDismissed(userId, emailId, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const rows = await dbClient.execute({
+    sql: `SELECT account_id
+          FROM ea_email_triage
+          WHERE user_id = ?
+            AND email_id = ?
+            AND triage_status = 'pending'`,
+    args: [userId, emailId],
+  });
+
+  let updated = 0;
+  let jobsUpdated = 0;
+  for (const row of rows.rows) {
+    const result = await markPendingTriageDismissedForEmail(userId, row.account_id, emailId, {
+      dbClient,
+      now,
+    });
+    updated += result.updated;
+    jobsUpdated += result.jobsUpdated;
+  }
+  return { updated, jobsUpdated };
+}
+
+export async function deferPendingTriageForSnooze(userId, accountId, emailId, untilTs, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const scheduledFor = new Date(untilTs).toISOString();
+  const hiddenAt = now.toISOString();
+  const triageResult = await dbClient.execute({
+    sql: `UPDATE ea_email_triage
+          SET triage_source = 'user_snoozed_pending',
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND triage_status = 'pending'`,
+    args: [userId, accountId, emailId],
+  });
+  const jobsResult = await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'queued',
+              locked_at = NULL,
+              scheduled_for = ?,
+              completed_at = NULL,
+              last_error = 'Deferred pending triage while snoozed',
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND job_type = 'email_triage'
+            AND status IN ('queued', 'running')`,
+    args: [scheduledFor, userId, accountId, emailId],
+  });
+  const itemResult = await dbClient.execute({
+    sql: `UPDATE ea_briefing_snapshot_items
+          SET dismissed_from_today_at = ?,
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND dismissed_from_today_at IS NULL
+            AND provider_removed_at IS NULL
+            AND snapshot_id IN (
+              SELECT id FROM ea_briefing_snapshots
+              WHERE user_id = ? AND status = 'active'
+            )`,
+    args: [hiddenAt, userId, accountId, emailId, userId],
+  });
+
+  return {
+    updated: Number(triageResult.rowsAffected || 0),
+    jobsUpdated: Number(jobsResult.rowsAffected || 0),
+    itemsHidden: Number(itemResult.rowsAffected || 0),
+  };
+}
+
+export async function restorePendingTriageEligibilityForEmail(userId, accountId, emailId, {
+  dbClient = db,
+} = {}) {
+  const triageResult = await dbClient.execute({
+    sql: `UPDATE ea_email_triage
+          SET dismissed_at = NULL,
+              triage_status = 'pending',
+              triage_source = 'undo_restored_pending',
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND last_triaged_at IS NULL
+            AND triage_status != 'complete'`,
+    args: [userId, accountId, emailId],
+  });
+  const itemResult = await dbClient.execute({
+    sql: `UPDATE ea_briefing_snapshot_items
+          SET dismissed_from_today_at = NULL,
+              updated_at = datetime('now')
+          WHERE user_id = ?
+            AND account_id = ?
+            AND email_id = ?
+            AND provider_removed_at IS NULL
+            AND snapshot_id IN (
+              SELECT id FROM ea_briefing_snapshots
+              WHERE user_id = ? AND status = 'active'
+            )`,
+    args: [userId, accountId, emailId, userId],
+  });
+  if (Number(triageResult.rowsAffected || 0) > 0) {
+    await requeueEmailTriageForEmail(userId, accountId, emailId, { dbClient });
+  }
+
+  return {
+    updated: Number(triageResult.rowsAffected || 0),
+    itemsRestored: Number(itemResult.rowsAffected || 0),
+  };
 }
 
 async function loadProcessingState(dbClient, userId) {
@@ -1112,7 +1325,53 @@ export async function dismissSnapshotItemForToday(userId, itemId, {
           WHERE id = ? AND user_id = ?`,
     args: [dismissedAt, itemId, userId],
   });
+  if (isPendingSnapshotTriage(item)) {
+    await markPendingTriageDismissedForEmail(userId, item.account_id, item.email_id, {
+      dbClient,
+      now,
+    });
+  }
   await insertFeedback(dbClient, item, "dismiss_today", "visible", "dismissed");
+
+  const updated = await loadSnapshotItemById(dbClient, userId, itemId);
+  return normalizeSnapshotItem(updated);
+}
+
+export async function restoreSnapshotItemForToday(userId, itemId, {
+  dbClient = db,
+} = {}) {
+  const result = await dbClient.execute({
+    sql: `SELECT i.*,
+                 t.triage_status,
+                 t.last_triaged_at
+          FROM ea_briefing_snapshot_items i
+          JOIN ea_briefing_snapshots s
+            ON s.id = i.snapshot_id
+           AND s.status = 'active'
+          LEFT JOIN ea_email_triage t
+            ON t.id = i.triage_id
+          WHERE i.id = ?
+            AND i.user_id = ?
+            AND i.provider_removed_at IS NULL
+          LIMIT 1`,
+    args: [itemId, userId],
+  });
+  const item = result.rows[0];
+  if (!item) {
+    throw makeHttpError("Active snapshot item not found", 404);
+  }
+
+  if (item.triage_status !== "complete" && !item.last_triaged_at) {
+    await restorePendingTriageEligibilityForEmail(userId, item.account_id, item.email_id, { dbClient });
+  } else {
+    await dbClient.execute({
+      sql: `UPDATE ea_briefing_snapshot_items
+            SET dismissed_from_today_at = NULL,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [itemId, userId],
+    });
+  }
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
   return normalizeSnapshotItem(updated);
@@ -1204,6 +1463,11 @@ export async function markProviderRemovedFromActiveSnapshots(
             AND account_id = ?
             AND email_id = ?`,
     args: [providerState, userId, accountId, emailId],
+  });
+  await completeEmailTriageJobsForEmail(userId, accountId, emailId, {
+    dbClient,
+    now,
+    lastError: `Skipped pending triage; provider state ${providerState}`,
   });
 
   if (items.length) {

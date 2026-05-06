@@ -29,6 +29,7 @@ vi.mock("../../briefing/snapshot-service.js", () => ({
 	  })),
 	  moveSnapshotItemLane: vi.fn(async () => ({ id: 42, lane: "fyi" })),
 	  dismissSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: "now" })),
+	  restoreSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: null })),
 	  markSnapshotItemHandled: vi.fn(async () => ({ id: 42, handled_at: "now" })),
 	  reopenSnapshotItem: vi.fn(async () => ({ id: 42, handled_at: null, lane: "needs_attention" })),
 	}));
@@ -119,6 +120,16 @@ describe("snapshot routes", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ id: 42, dismissed_from_today_at: "now" });
     expect(snapshotService.dismissSnapshotItemForToday).toHaveBeenCalledWith("user-1", 42);
+  });
+
+  it("restores a snapshot item dismissed from today", async () => {
+    const res = await request(makeApp())
+      .post("/api/briefing/snapshot/items/42/restore")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: 42, dismissed_from_today_at: null });
+    expect(snapshotService.restoreSnapshotItemForToday).toHaveBeenCalledWith("user-1", 42);
   });
 
 	  it("marks a snapshot item handled", async () => {

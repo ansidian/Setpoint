@@ -54,6 +54,8 @@ export const moveSnapshotItemLane = (itemId, lane) =>
   });
 export const dismissSnapshotItemForToday = (itemId) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/dismiss`, { method: "POST" });
+export const restoreSnapshotItemForToday = (itemId) =>
+  apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/restore`, { method: "POST" });
 export const markSnapshotItemHandled = (itemId) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/handled`, { method: "POST" });
 export const reopenSnapshotItem = (itemId) =>
