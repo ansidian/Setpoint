@@ -220,6 +220,9 @@ export default function DesktopReader({
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
   const showSnapshotActions = email._activeSnapshot && !readOnly;
   const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
+  const canMarkHandledSnapshot = showSnapshotActions
+    && !isHandledSnapshot
+    && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
   const showMutableActions = !readOnly;
 
   return (
@@ -294,7 +297,7 @@ export default function DesktopReader({
             keyHint="N"
           />
         )}
-        {showSnapshotActions && !isHandledSnapshot && snapshotLane === "needs_attention" && (
+        {canMarkHandledSnapshot && (
           <QuickAction
             icon={Check}
             ariaLabel="Mark handled"

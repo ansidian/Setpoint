@@ -81,4 +81,19 @@ describe("MobileReader bill extraction", () => {
     expect(screen.queryByText("S")).toBeNull();
     expect(screen.queryByText("E")).toBeNull();
   });
+
+  it("allows FYI snapshot rows to be marked handled from the tap menu", () => {
+    renderMobileReader({
+      email: {
+        hasBill: false,
+        _activeSnapshot: true,
+        _lane: "fyi",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Handled")).toBeTruthy();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+  });
 });

@@ -12,6 +12,9 @@ const snapshotEmail = {
 describe("resolveInboxHotkeyAction", () => {
   it("maps mutable snapshot rows to lifecycle and lane actions", () => {
     expect(resolveInboxHotkeyAction("h", snapshotEmail, false)).toEqual({ kind: "snapshot-handled" });
+    expect(resolveInboxHotkeyAction("h", { ...snapshotEmail, _lane: "fyi" }, false)).toEqual({
+      kind: "snapshot-handled",
+    });
     expect(resolveInboxHotkeyAction("d", snapshotEmail, false)).toEqual({ kind: "snapshot-dismiss" });
     expect(resolveInboxHotkeyAction("f", snapshotEmail, false)).toEqual({
       kind: "snapshot-move-lane",

@@ -277,11 +277,12 @@ function buildShortcutRows(selectedEmail, readOnly) {
     const isSnapshot = !!selectedEmail._activeSnapshot && !!selectedEmail.snapshot_item_id;
     const isHandled = selectedEmail._lane === "handled";
     const snapshotLane = selectedEmail._lane === "carryover" ? "needs_attention" : selectedEmail._lane;
+    const canMarkHandled = snapshotLane === "needs_attention" || snapshotLane === "fyi";
 
     if (isSnapshot && isHandled) {
       rows.push({ keys: ["H"], label: "Reopen" });
     } else if (isSnapshot) {
-      if (snapshotLane === "needs_attention") rows.push({ keys: ["H"], label: "Mark handled" });
+      if (canMarkHandled) rows.push({ keys: ["H"], label: "Mark handled" });
       rows.push({ keys: ["D"], label: "Dismiss" });
       if (snapshotLane !== "needs_attention") rows.push({ keys: ["A"], label: "Move to Needs" });
       if (snapshotLane !== "fyi") rows.push({ keys: ["F"], label: "Move to FYI" });
