@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardBody } from "./Dashboard.jsx";
 import { DashboardProvider } from "../context/DashboardContext.jsx";
@@ -92,7 +92,7 @@ function renderDashboardBody({
 }
 
 describe("Dashboard event loading", () => {
-  it("renders seeded briefing events immediately while live refresh is pending", () => {
+  it("holds the dashboard timeline while seeded events are refreshing", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -103,14 +103,15 @@ describe("Dashboard event loading", () => {
       ensureRange: vi.fn(() => new Promise(() => {})),
     });
 
-    expect(screen.getAllByText("Seeded focus block").length).toBeGreaterThan(0);
-    expect(screen.queryByTestId("dashboard-event-skeletons")).toBeNull();
+    expect(screen.getAllByText("Seeded focus block").length).toBe(1);
+    expect(within(screen.getByTestId("today-timeline")).queryByText("Seeded focus block")).toBeNull();
+    expect(screen.getByTestId("dashboard-event-skeletons")).toBeTruthy();
     expect(screen.getByTestId("focus-window-refresh-status")).toBeTruthy();
     expect(screen.getByTestId("timeline-refresh-status")).toBeTruthy();
     expect(screen.getAllByText("Updating Google Calendar").length).toBe(2);
   });
 
-  it("shows event skeletons only when there is no seed data and the first fetch is pending", () => {
+  it("holds the dashboard timeline skeleton instead of showing a deadline-only timeline while events are cold", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -123,6 +124,7 @@ describe("Dashboard event loading", () => {
     expect(screen.getByTestId("dashboard-event-skeletons")).toBeTruthy();
     expect(screen.getByTestId("focus-window-skeleton")).toBeTruthy();
     expect(screen.getAllByText("Essay").length).toBeGreaterThan(0);
+    expect(within(screen.getByTestId("today-timeline")).queryByText("Essay")).toBeNull();
     expect(screen.queryByTestId("focus-window-refresh-status")).toBeNull();
     expect(screen.queryByTestId("timeline-refresh-status")).toBeNull();
   });
@@ -260,7 +262,7 @@ describe("Dashboard event loading", () => {
     }), expect.any(HTMLElement));
   });
 
-  it("deep links timeline events to the selected calendar chip", () => {
+  it("deep links timeline events to the selected calendar chip", async () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -272,11 +274,13 @@ describe("Dashboard event loading", () => {
     };
     renderDashboardBody({
       briefing: makeBriefing([event]),
-      ensureRange: vi.fn(() => new Promise(() => {})),
+      ensureRange: vi.fn().mockResolvedValue([event]),
       onOpenEventsCalendar,
     });
+    await act(async () => {});
 
-    fireEvent.click(within(screen.getByTestId("today-timeline")).getByText("Roadmap sync"));
+    const timeline = screen.getByTestId("today-timeline");
+    fireEvent.click(within(timeline).getByText("Roadmap sync"));
 
     expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1");
   });

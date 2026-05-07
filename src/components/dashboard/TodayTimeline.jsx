@@ -50,7 +50,9 @@ export default function TodayTimeline({
   );
 
   const todayLabel = formatFullDateForOffset(0, now);
-  const showEventSkeletons = eventLoadingState === "empty_loading";
+  const holdPartialTimeline = eventLoadingState !== "ready" && filters.events;
+  const showEventSkeletons = holdPartialTimeline;
+  const visibleGroups = holdPartialTimeline ? [] : groups;
   const showRefreshStatus = eventLoadingState === "refreshing";
   const containScroll = !isMobile && scrollContained;
 
@@ -92,7 +94,7 @@ export default function TodayTimeline({
       >
         {showEventSkeletons && <TimelineSkeleton isMobile={isMobile} />}
         <AnimatePresence initial={false}>
-          {groups.map(([day, dayItems], gi) => (
+          {visibleGroups.map(([day, dayItems], gi) => (
             <Motion.div
               key={day}
               initial={{ opacity: 0, y: 10 }}
@@ -119,7 +121,7 @@ export default function TodayTimeline({
             </Motion.div>
           ))}
         </AnimatePresence>
-        {groups.length === 0 && !showEventSkeletons && (
+        {visibleGroups.length === 0 && !showEventSkeletons && (
           <div
             style={{
               padding: "40px 20px",
