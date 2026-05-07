@@ -404,6 +404,40 @@ describe("AddTaskPanel due picker", () => {
     }));
   });
 
+  it("keeps original due metadata visible when an edit draft changes due placement", () => {
+    render(
+      <AddTaskPanel
+        host="inline"
+        editingTask={{
+          id: "todo-1",
+          title: "Follow up",
+          description: "",
+          class_name: "Inbox",
+          priority: 4,
+          labels: [],
+          due_date: "2026-04-21",
+          due_time: "2:30 PM",
+        }}
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Follow up tomorrow at 9am" },
+    });
+
+    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("April 20, 2026 · 9 AM");
+    const metadata = screen.getByTestId("todoist-edit-metadata");
+    const originalDueChip = within(metadata).getByText("April 21, 2026 · 2:30 PM");
+    expect(originalDueChip.style.flex).toBe("0 0 auto");
+    expect(metadata.textContent).toContain("April 21, 2026 · 2:30 PM");
+    expect(metadata.textContent).not.toContain("April 20, 2026 · 9 AM");
+  });
+
   it("shows existing Todoist metadata as edit-only chips when no draft preview is needed", () => {
     render(
       <AddTaskPanel
@@ -432,6 +466,31 @@ describe("AddTaskPanel due picker", () => {
     expect(metadata.textContent).toContain("Inbox");
     expect(metadata.textContent).toContain("P4");
     expect(metadata.textContent).toContain("IHSS");
+  });
+
+  it("shows a quiet no-due metadata chip for edits without a due date", () => {
+    render(
+      <AddTaskPanel
+        host="inline"
+        editingTask={{
+          id: "todo-no-due",
+          title: "Follow up",
+          description: "",
+          labels: [],
+        }}
+        onClose={() => {}}
+        onTaskAdded={() => {}}
+        onTaskUpdated={() => {}}
+        onTaskDeleted={() => {}}
+      />,
+    );
+    vi.runOnlyPendingTimers();
+
+    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
+    const metadata = screen.getByTestId("todoist-edit-metadata");
+    expect(metadata.textContent).toContain("No due date");
+    expect(metadata.textContent).not.toContain("No labels");
+    expect(metadata.textContent).not.toContain("No priority");
   });
 
   it("uses inline cancel actions instead of the floating close chrome", () => {

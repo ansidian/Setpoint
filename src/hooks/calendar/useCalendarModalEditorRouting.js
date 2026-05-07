@@ -193,6 +193,7 @@ export default function useCalendarModalEditorRouting({
   const cancelFloatingEditor = useCallback(() => {
     const current = floatingDetailRef.current;
     if (!current?.open || (current.mode !== "edit" && current.mode !== "create")) return;
+    suppressAgendaPassiveSync();
     if (current.view === "events") {
       eventEditorRef.current?.closeEditor?.();
     }
@@ -212,7 +213,7 @@ export default function useCalendarModalEditorRouting({
       activeSaveRequestId: null,
       dirty: false,
     });
-  }, [eventEditorRef, floatingDetailRef, setDeadlineDraftPreview, setDeadlineEditor, setFloatingDetail]);
+  }, [eventEditorRef, floatingDetailRef, setDeadlineDraftPreview, setDeadlineEditor, setFloatingDetail, suppressAgendaPassiveSync]);
 
   const handleFloatingDeadlineSaved = useCallback((task) => {
     const current = floatingDetailRef.current;

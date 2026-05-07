@@ -3677,6 +3677,56 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByDisplayValue("Design review")).toBeTruthy();
   });
 
+  it("cancels a dirty floating event edit with Escape without passive-selecting the first agenda day", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+    });
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Design review revised" },
+    });
+    fireEvent.keyDown(screen.getByTestId("calendar-event-title"), { key: "Escape", cancelable: true });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("detail");
+      expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
+    });
+    expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("calendar-cell-1").getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId("calendar-floating-detail-panel").textContent).toContain("Design review");
+  });
+
   it("ignores the active clean event edit chip after returning from park", async () => {
     window.innerWidth = 1900;
 

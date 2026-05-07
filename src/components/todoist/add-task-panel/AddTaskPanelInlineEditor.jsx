@@ -191,6 +191,7 @@ function CompactMetadataChip({ children, color = "rgba(205,214,244,0.62)" }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
+        flex: "0 0 auto",
         maxWidth: "100%",
         minWidth: 0,
         borderRadius: 999,
