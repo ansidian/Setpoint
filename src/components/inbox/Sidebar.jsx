@@ -72,7 +72,29 @@ export function AccountRow({ acc, all, accent, accountId, setAccountId, totalUnr
   );
 }
 
-export function LaneRow({ laneKey, lane, setLane, laneCounts }) {
+export function NoiseUnreadBadge({ count }) {
+  if (!count) return null;
+  return (
+    <span
+      style={{
+        flexShrink: 0,
+        fontSize: 9,
+        fontWeight: 650,
+        padding: "1px 5px",
+        borderRadius: 999,
+        background: "rgba(205,214,244,0.07)",
+        border: "1px solid rgba(205,214,244,0.12)",
+        color: "rgba(205,214,244,0.58)",
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {count} unread
+    </span>
+  );
+}
+
+export function LaneRow({ laneKey, lane, setLane, laneCounts, noiseUnreadCount = 0 }) {
   const [hover, setHover] = useState(false);
   const L = LANE[laneKey];
   const isActive = lane === laneKey;
@@ -118,6 +140,7 @@ export function LaneRow({ laneKey, lane, setLane, laneCounts }) {
       >
         {count}
       </span>
+      {laneKey === "noise" && <NoiseUnreadBadge count={noiseUnreadCount} />}
     </button>
   );
 }
@@ -168,7 +191,7 @@ export function LaneAll({ accent, lane, setLane, laneCounts }) {
 
 export default function Sidebar({
   accent, accounts, accountId, setAccountId,
-  lane, setLane, laneCounts, totalUnread, compact,
+  lane, setLane, laneCounts, totalUnread, noiseUnreadCount = 0, compact,
   onOpenDashboard, selectedEmail = null, readOnly = false,
 }) {
   const shortcutRows = buildShortcutRows(selectedEmail, readOnly);
@@ -236,7 +259,7 @@ export default function Sidebar({
             <LaneRow laneKey="needs_attention" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="fyi" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="handled" lane={lane} setLane={setLane} laneCounts={laneCounts} />
-            <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} noiseUnreadCount={noiseUnreadCount} />
           </div>
         </div>
       )}

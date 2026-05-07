@@ -93,4 +93,17 @@ describe("Sidebar shortcuts", () => {
     expect(screen.getByText("Mark handled")).toBeTruthy();
     expect(screen.queryByText("Move to FYI")).toBeNull();
   });
+
+  it("shows a muted unread hint on the Noise lane row", () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        laneCounts={{ ...baseProps.laneCounts, noise: 8 }}
+        noiseUnreadCount={3}
+      />,
+    );
+
+    expect(screen.getByText("Noise")).toBeTruthy();
+    expect(screen.getByText("3 unread")).toBeTruthy();
+  });
 });

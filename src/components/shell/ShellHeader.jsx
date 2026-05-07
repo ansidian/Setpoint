@@ -21,7 +21,7 @@ export default function ShellHeader({
   onOpenCustomize,
   onOpenHistory,
   onOpenCalendar,
-  liveUnreadCount = 0,
+  inboxUnreadSignalCount = 0,
   refreshing,
   onQuickRefresh,
   systemStatus,
@@ -74,7 +74,7 @@ export default function ShellHeader({
         isMobile={isMobile}
         tab={tab}
         onTab={onTab}
-        liveUnreadCount={liveUnreadCount}
+        inboxUnreadSignalCount={inboxUnreadSignalCount}
       />
       <div style={{ flex: 1 }} />
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}

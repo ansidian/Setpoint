@@ -36,6 +36,7 @@ export default function InboxDesktopPane({
   laneCounts,
   liveCount,
   totalUnread,
+  noiseUnreadCount,
   unreadInView,
   onAction,
   markAllVisibleRead,
@@ -96,6 +97,7 @@ export default function InboxDesktopPane({
           setLane={setLane}
           laneCounts={laneCounts}
           totalUnread={totalUnread}
+          noiseUnreadCount={noiseUnreadCount}
           compact={sidebarCompact}
           onOpenDashboard={onOpenDashboard}
           selectedEmail={selectedEmail}
@@ -149,6 +151,7 @@ export default function InboxDesktopPane({
               indexedSearchError={indexedSearchError}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
+              noiseUnreadCount={noiseUnreadCount}
               briefingGeneratedAt={briefingGeneratedAt}
               searchRef={searchRef}
               activeSnapshotMode={activeSnapshotMode}

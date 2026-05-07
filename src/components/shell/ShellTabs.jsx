@@ -1,7 +1,7 @@
 import { Inbox, LayoutList } from "lucide-react";
 import { Kbd } from "./Kbd.jsx";
 
-export function ShellTabs({ isMobile, tab, onTab, liveUnreadCount }) {
+export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
   return (
     <div
       style={{
@@ -15,7 +15,7 @@ export function ShellTabs({ isMobile, tab, onTab, liveUnreadCount }) {
       }}
     >
       {["dashboard", "inbox"].map((tabKey) => {
-        const showUnread = tabKey === "inbox" && liveUnreadCount > 0;
+        const showUnread = tabKey === "inbox" && inboxUnreadSignalCount > 0;
         return (
           <button
             key={tabKey}
@@ -44,7 +44,7 @@ export function ShellTabs({ isMobile, tab, onTab, liveUnreadCount }) {
               : <Inbox size={isMobile ? 11 : 12} />}
             {showUnread && (
               <span
-                title={`${liveUnreadCount} unread`}
+                title={`${inboxUnreadSignalCount} unread`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -62,7 +62,7 @@ export function ShellTabs({ isMobile, tab, onTab, liveUnreadCount }) {
                   letterSpacing: 0,
                 }}
               >
-                {liveUnreadCount > 99 ? "99+" : liveUnreadCount}
+                {inboxUnreadSignalCount > 99 ? "99+" : inboxUnreadSignalCount}
               </span>
             )}
             <span>{tabKey === "dashboard" ? "Dashboard" : "Inbox"}</span>

@@ -4,7 +4,7 @@ import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import { collectActiveSnapshotEmails, mergeReadState } from "../inbox/helpers";
+import { computeInboxUnreadSignalCount } from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
 import DashboardCalendarModalMount from "./DashboardCalendarModalMount";
 export { DashboardBody };
@@ -338,37 +338,13 @@ export function RedesignShell({
     });
   }, []);
 
-  // Include current snapshot plus live-polled mail in the Inbox badge.
-  const liveUnreadCount = useMemo(() => {
-    const seen = new Set();
-    let unread = 0;
-
-    const addEmail = (email, useReadOverride = false) => {
-      const uid = email?.uid || email?.id;
-      if (!uid || seen.has(uid)) return;
-      seen.add(uid);
-      const read = useReadOverride
-        ? mergeReadState(email.read, uid, liveReadOverrides)
-        : !!email.read;
-      if (!read) unread += 1;
-    };
-
-    const usingSnapshot = !!activeSnapshot?.snapshot?.snapshot;
-    if (usingSnapshot) {
-      for (const email of collectActiveSnapshotEmails(activeSnapshot.snapshot, liveReadOverrides)) {
-        addEmail(email, true);
-      }
-    }
-
-    for (const email of liveData.liveEmails || []) {
-      addEmail(email, true);
-    }
-
-    for (const entry of liveData.resurfacedEntries || []) {
-      addEmail(entry, true);
-    }
-
-    return unread;
+  const inboxUnreadSignalCount = useMemo(() => {
+    return computeInboxUnreadSignalCount({
+      activeSnapshot: activeSnapshot?.snapshot,
+      liveEmails: liveData.liveEmails,
+      resurfacedEntries: liveData.resurfacedEntries,
+      liveReadOverrides,
+    });
   }, [activeSnapshot?.snapshot, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
 
   const liveEmailsLoading = liveData.isPolling;
@@ -425,7 +401,7 @@ export function RedesignShell({
         onOpenCustomize={() => setCustomizeOpen((v) => !v)}
         onOpenHistory={() => setHistoryOpen((v) => !v)}
         onOpenCalendar={() => openCalendar()}
-        liveUnreadCount={liveUnreadCount}
+        inboxUnreadSignalCount={inboxUnreadSignalCount}
         refreshing={bd.refreshing}
         onQuickRefresh={onQuickRefresh}
         systemStatus={liveData.systemStatus}
