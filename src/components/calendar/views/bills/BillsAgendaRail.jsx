@@ -168,6 +168,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   selectedDateKey,
   selectedItemId,
   scrollCommand = null,
+  entryScrollTargetDateKey = null,
   currentYear,
   currentMonth,
   todayDate,
@@ -181,8 +182,8 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
     viewYear,
     viewMonth,
     todayKey,
-    forceVisibleDateKey: selectedDateKey,
-  }), [computed, selectedDateKey, todayKey, viewMonth, viewYear]);
+    forceVisibleDateKey: entryScrollTargetDateKey || selectedDateKey,
+  }), [computed, entryScrollTargetDateKey, selectedDateKey, todayKey, viewMonth, viewYear]);
 
   return (
     <AgendaRailShell
@@ -193,6 +194,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
       todayKey={todayKey}
       selectedDateKey={selectedDateKey}
       scrollCommand={scrollCommand}
+      entryScrollTargetDateKey={entryScrollTargetDateKey}
       onPassiveDateChange={onPassiveDateChange}
       renderHeader={({ group, registerHeader }) => (
         <AgendaHeader

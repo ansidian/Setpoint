@@ -13,6 +13,7 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
   selectedDateKey,
   selectedItemId,
   scrollCommand,
+  entryScrollTargetDateKey,
   currentYear,
   currentMonth,
   todayDate,
@@ -37,9 +38,11 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         deadlineOverlay={viewData?.deadlineOverlay || null}
         weatherData={weatherData}
         isLoading={!!viewData?.isLoading}
+        entryScrollReady={viewData?.agendaEntryReady ?? !viewData?.isLoading}
         selectedDateKey={selectedDateKey}
         selectedItemId={selectedItemId}
         scrollCommand={scrollCommand}
+        entryScrollTargetDateKey={entryScrollTargetDateKey}
         currentYear={currentYear}
         currentMonth={currentMonth}
         todayDate={todayDate}
@@ -63,6 +66,7 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         selectedDateKey={selectedDateKey}
         selectedItemId={selectedItemId}
         scrollCommand={scrollCommand}
+        entryScrollTargetDateKey={entryScrollTargetDateKey}
         currentYear={currentYear}
         currentMonth={currentMonth}
         todayDate={todayDate}
@@ -82,6 +86,7 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
       selectedDateKey={selectedDateKey}
       selectedItemId={selectedItemId}
       scrollCommand={scrollCommand}
+      entryScrollTargetDateKey={entryScrollTargetDateKey}
       currentYear={currentYear}
       currentMonth={currentMonth}
       todayDate={todayDate}

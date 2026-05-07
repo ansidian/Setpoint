@@ -306,9 +306,11 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   deadlineOverlay = null,
   weatherData = null,
   isLoading = false,
+  entryScrollReady: entryScrollReadyProp = null,
   selectedDateKey,
   selectedItemId,
   scrollCommand = null,
+  entryScrollTargetDateKey = null,
   currentYear,
   currentMonth,
   todayDate,
@@ -329,8 +331,12 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
     viewMonth,
     weatherData,
     todayKey,
-    forceVisibleDateKey: selectedDateKey,
-  }), [deadlineOverlay, events, selectedDateKey, todayKey, viewMonth, viewYear, weatherData]);
+    forceVisibleDateKey: entryScrollTargetDateKey || selectedDateKey,
+  }), [deadlineOverlay, entryScrollTargetDateKey, events, selectedDateKey, todayKey, viewMonth, viewYear, weatherData]);
+  const readinessState = deadlineOverlay?.readiness?.state;
+  const waitingForPlanningReadiness = ["idle", "loading", "slow"].includes(readinessState);
+  const entryScrollReady = entryScrollReadyProp ?? !waitingForPlanningReadiness;
+  const showAgendaSkeleton = !entryScrollReady || (isLoading && !agenda.visibleGroups.some((group) => group.hasEvents));
 
   const dirtyBlocked = () => {
     if (!floatingEditorDirty) return false;
@@ -367,7 +373,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
     });
   }
 
-  if (isLoading && !agenda.visibleGroups.some((group) => group.hasEvents)) {
+  if (showAgendaSkeleton) {
     return <AgendaSkeleton />;
   }
 
@@ -380,13 +386,15 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
       todayKey={todayKey}
       selectedDateKey={selectedDateKey}
       scrollCommand={scrollCommand}
+      entryScrollTargetDateKey={entryScrollTargetDateKey}
       isLoading={isLoading}
+      entryScrollReady={entryScrollReady}
       floatingEditorDirty={floatingEditorDirty}
       itemScrollTopOffset={EVENT_SCROLL_TOP_OFFSET}
       onPassiveDateChange={onPassiveDateChange}
       onDirtyBlocked={onDirtyBlocked}
       skeleton={<AgendaSkeleton />}
-      showSkeleton={isLoading && !agenda.visibleGroups.some((group) => group.hasEvents)}
+      showSkeleton={showAgendaSkeleton}
       getSectionProps={(group) => ({
         onDragEnter: () => eventQuickActions?.enterDropTarget?.(group.dateKey),
         onDragOver: (event) => {
