@@ -7,9 +7,37 @@ function emailKey(email) {
   return uid ? String(uid) : null;
 }
 
+function addReadOverrideKey(keys, value) {
+  const key = value?.uid || value?.email_id || value?.id;
+  if (key) keys.add(String(key));
+}
+
 function isBadgeWorthySnapshotEmail(email) {
   if (email?._untriaged) return true;
   return BADGE_LANES.has(email?._lane);
+}
+
+export function collectActiveReadOverrideKeys({
+  activeSnapshotView,
+  liveEmails = [],
+  resurfacedEntries = [],
+}) {
+  const keys = new Set();
+
+  for (const email of liveEmails || []) addReadOverrideKey(keys, email);
+  for (const entry of resurfacedEntries || []) {
+    addReadOverrideKey(keys, entry);
+    addReadOverrideKey(keys, entry?.snapshot);
+  }
+
+  if (activeSnapshotView?.snapshot) {
+    for (const item of activeSnapshotView.carryover || []) addReadOverrideKey(keys, item);
+    for (const lane of Object.values(activeSnapshotView.lanes || {})) {
+      for (const item of lane || []) addReadOverrideKey(keys, item);
+    }
+  }
+
+  return keys;
 }
 
 export function computeInboxUnreadSignalCount({

@@ -4,7 +4,10 @@ import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import { computeInboxUnreadSignalCount } from "./inboxBadgeModel.js";
+import {
+  collectActiveReadOverrideKeys,
+  computeInboxUnreadSignalCount,
+} from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
 import DashboardCalendarModalMount from "./DashboardCalendarModalMount";
 export { DashboardBody };
@@ -15,30 +18,6 @@ const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
 const TriageAnalyticsModal = lazy(() => import("../shell/TriageAnalyticsModal"));
-
-function addReadOverrideKey(keys, value) {
-  const key = value?.uid || value?.email_id || value?.id;
-  if (key) keys.add(String(key));
-}
-
-function collectActiveReadOverrideKeys({ activeSnapshotView, liveEmails = [], resurfacedEntries = [] }) {
-  const keys = new Set();
-
-  for (const email of liveEmails || []) addReadOverrideKey(keys, email);
-  for (const entry of resurfacedEntries || []) {
-    addReadOverrideKey(keys, entry);
-    addReadOverrideKey(keys, entry?.snapshot);
-  }
-
-  if (activeSnapshotView?.snapshot) {
-    for (const item of activeSnapshotView.carryover || []) addReadOverrideKey(keys, item);
-    for (const lane of Object.values(activeSnapshotView.lanes || {})) {
-      for (const item of lane || []) addReadOverrideKey(keys, item);
-    }
-  }
-
-  return keys;
-}
 
 export function RedesignShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,

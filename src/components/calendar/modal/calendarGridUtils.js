@@ -64,6 +64,10 @@ export function spanCoversOverflowDate(overflow, segment) {
   return false;
 }
 
+export function overflowHiddenSignature(items) {
+  return (items || []).map((item) => String(item.id)).join("\u001f");
+}
+
 export function getModalScrollContainer(element) {
   const panel = element?.closest?.("[data-testid='calendar-modal-panel']");
   const body = panel?.querySelector?.("[data-testid='calendar-modal-body']");
