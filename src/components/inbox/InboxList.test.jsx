@@ -96,25 +96,34 @@ describe("InboxList", () => {
       emails: [
         makeInboxEmail({ id: "carry-1", subject: "Carryover contract", date: "2026-05-02T12:00:00.000Z", _lane: "carryover" }),
 	        makeInboxEmail({ id: "need-1", subject: "Needs attention deck", date: "2026-05-03T12:00:00.000Z", _lane: "needs_attention" }),
+	        makeInboxEmail({ id: "catch-1", subject: "Catch-up digest", date: "2026-05-03T12:30:00.000Z", _lane: "catch_up" }),
 	        makeInboxEmail({ id: "fyi-1", subject: "FYI launch note", date: "2026-05-03T13:00:00.000Z", _lane: "fyi" }),
 	        makeInboxEmail({ id: "handled-1", subject: "Handled receipt", date: "2026-05-03T13:30:00.000Z", _lane: "handled" }),
 	        makeInboxEmail({ id: "noise-1", subject: "Noise promo", date: "2026-05-03T14:00:00.000Z", _lane: "noise" }),
 	      ],
-	      totalCount: 5,
-	      unreadCount: 5,
+	      totalCount: 6,
+	      unreadCount: 6,
       activeSnapshotMode: true,
       snapshotCategories: [{ category: "finance", count: 1 }],
     });
 
     expect(screen.getByText("Carryover")).toBeTruthy();
 	    expect(screen.getByText("Needs Attention")).toBeTruthy();
+	    expect(screen.getByText("Catch-up")).toBeTruthy();
 	    expect(screen.getByText("FYI")).toBeTruthy();
 	    expect(screen.getByText("Handled")).toBeTruthy();
 	    expect(screen.getByText("Noise")).toBeTruthy();
     expect(screen.getByText("Finance")).toBeTruthy();
     expect(screen.getByText("Carryover contract")).toBeTruthy();
 	    expect(screen.getByText("Needs attention deck")).toBeTruthy();
+	    expect(screen.getByText("Catch-up digest")).toBeTruthy();
 	    expect(screen.getByText("FYI launch note")).toBeTruthy();
+	    const laneLabels = screen.getAllByRole("button")
+	      .map((button) => button.textContent)
+	      .filter((text) => /Carryover|Needs Attention|Catch-up|FYI|Handled|Noise/.test(text));
+	    const laneIndex = (label) => laneLabels.findIndex((text) => text.includes(label));
+	    expect(laneIndex("Needs Attention")).toBeLessThan(laneIndex("Catch-up"));
+	    expect(laneIndex("Catch-up")).toBeLessThan(laneIndex("FYI"));
 	    expect(screen.queryByText("Handled receipt")).toBeNull();
 	    fireEvent.click(screen.getByText("Handled"));
 	    expect(screen.getByText("Handled receipt")).toBeTruthy();

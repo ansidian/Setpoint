@@ -122,6 +122,48 @@ describe("inbox helpers", () => {
     });
   });
 
+  it("collects catch-up snapshot rows as Catch-up while read overrides only change read state", () => {
+    const activeSnapshot = makeActiveSnapshot({
+      lanes: {
+        needs_attention: [],
+        catch_up: [{
+          id: "catch_up:14",
+          snapshot_item_id: 14,
+          uid: "late-fyi",
+          email_id: "late-fyi",
+          account_id: "gmail-work",
+          lane: "catch_up",
+          lane_at_snapshot: "fyi",
+          subject: "Late FYI",
+          from_name: "Sam",
+          from_address: "sam@example.test",
+          summary: "Arrived late last snapshot.",
+          category: "updates",
+          date: "2026-05-02T15:00:00.000Z",
+          read: false,
+          source: "catch_up",
+        }],
+        fyi: [],
+        noise: [],
+      },
+      carryover: [],
+    });
+
+    const rows = collectActiveSnapshotEmails(activeSnapshot, { "late-fyi": true });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      uid: "late-fyi",
+      _activeSnapshot: true,
+      _untriaged: false,
+      _lane: "catch_up",
+      lane: "catch_up",
+      lane_at_snapshot: "fyi",
+      read: true,
+      _catchUp: true,
+    });
+  });
+
   it("uses coarse pending security labels", () => {
     const classifyAt = Date.parse("2026-05-03T16:05:00.000Z");
 

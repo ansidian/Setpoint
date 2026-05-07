@@ -7,6 +7,7 @@ import {
   advanceSnapshotBoundary,
   getActiveSnapshotView,
   getOrCreateActiveSnapshot,
+  getSnapshotViewById,
   dismissSnapshotItemForToday,
   markProviderRemovedFromActiveSnapshots,
   markSnapshotItemHandled,
@@ -449,6 +450,87 @@ describe("active briefing snapshots", () => {
       { category: "school", count: 1 },
       { category: "travel", count: 1 },
     ]);
+  });
+
+  it("surfaces unread FYI from the previous snapshot as active-only catch-up", async () => {
+    const dbClient = await createMigratedDb();
+    const previous = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    for (const [emailId, lane, read] of [
+      ["late-fyi-unread", "fyi", 0],
+      ["late-fyi-read", "fyi", 1],
+      ["late-noise-unread", "noise", 0],
+    ]) {
+      await dbClient.execute({
+        sql: `INSERT INTO ea_email_index
+                (uid, user_id, account_id, account_label, account_email,
+                 from_name, from_address, subject, body_snippet, body_text,
+                 email_date, read)
+              VALUES (?, 'user-1', 'gmail-work', 'Work Gmail', 'work@example.test',
+                      'Sender', 'sender@example.test', ?, 'Snippet', 'Body',
+                      '2026-05-03T14:30:00.000Z', ?)`,
+        args: [emailId, `Subject ${emailId}`, read],
+      });
+      await dbClient.execute({
+        sql: `INSERT INTO ea_email_triage
+                (user_id, account_id, email_id, lane, category, triage_status)
+              VALUES ('user-1', 'gmail-work', ?, ?, 'updates', 'complete')`,
+        args: [emailId, lane],
+      });
+      await dbClient.execute({
+        sql: `INSERT INTO ea_briefing_snapshot_items
+                (snapshot_id, triage_id, user_id, account_id, email_id,
+                 lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+                 urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+                 from_name_at_snapshot, from_address_at_snapshot, email_date_at_snapshot,
+                 account_label_at_snapshot, account_email_at_snapshot,
+                 account_color_at_snapshot, account_icon_at_snapshot, sort_order)
+              VALUES (?, last_insert_rowid(), 'user-1', 'gmail-work', ?, ?,
+                      'Summary', 'Review', 'normal', 'updates', ?,
+                      'Sender', 'sender@example.test', '2026-05-03T14:30:00.000Z',
+                      'Work Gmail', 'work@example.test', '#cba6da', 'Mail', 10)`,
+        args: [previous.id, emailId, lane, `Subject ${emailId}`],
+      });
+    }
+
+    const active = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+    expect(active.id).not.toBe(previous.id);
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+    const historicalView = await getSnapshotViewById("user-1", previous.id, { dbClient });
+
+    expect(view.lanes.catch_up.map((item) => item.email_id)).toEqual(["late-fyi-unread"]);
+    expect(view.lanes.catch_up[0]).toMatchObject({
+      lane: "catch_up",
+      lane_at_snapshot: "fyi",
+      read: false,
+      source: "catch_up",
+    });
+    expect(view.laneCounts.catch_up).toBe(1);
+    expect(view.filters.accounts).toEqual([
+      expect.objectContaining({ account_id: "gmail-work", count: 1 }),
+    ]);
+    expect(view.filters.categories).toEqual([{ category: "updates", count: 1 }]);
+    const activeItems = await dbClient.execute({
+      sql: `SELECT email_id
+            FROM ea_briefing_snapshot_items
+            WHERE snapshot_id = ?
+            ORDER BY email_id`,
+      args: [active.id],
+    });
+    expect(activeItems.rows.map((row) => row.email_id)).toEqual([]);
+    expect(historicalView.lanes.catch_up).toBeUndefined();
+    expect(historicalView.laneCounts.catch_up).toBeUndefined();
+    expect(historicalView.lanes.fyi.map((item) => item.email_id)).toEqual(["late-fyi-unread", "late-fyi-read"]);
   });
 
   it("moves an active snapshot item between lanes and records feedback", async () => {

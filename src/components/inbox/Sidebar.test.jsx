@@ -12,6 +12,7 @@ const baseProps = {
   laneCounts: {
     carryover: 0,
     needs_attention: 1,
+    catch_up: 0,
     fyi: 0,
     handled: 0,
     noise: 0,
@@ -105,5 +106,31 @@ describe("Sidebar shortcuts", () => {
 
     expect(screen.getByText("Noise")).toBeTruthy();
     expect(screen.getByText("3 unread")).toBeTruthy();
+  });
+
+  it("includes Catch-up in lane navigation but keeps selected Catch-up shortcuts review-only", () => {
+    render(
+      <Sidebar
+        {...baseProps}
+        laneCounts={{ ...baseProps.laneCounts, catch_up: 2 }}
+        selectedEmail={{
+          id: "msg-1",
+          uid: "msg-1",
+          snapshot_item_id: 1,
+          _activeSnapshot: true,
+          _lane: "catch_up",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Catch-up")).toBeTruthy();
+    expect(screen.getByText("Open")).toBeTruthy();
+    expect(screen.queryByText("Mark handled")).toBeNull();
+    expect(screen.queryByText("Dismiss")).toBeNull();
+    expect(screen.queryByText("Move to Needs")).toBeNull();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+    expect(screen.queryByText("Move to Noise")).toBeNull();
+    expect(screen.queryByText("Snooze")).toBeNull();
+    expect(screen.queryByText("Trash")).toBeNull();
   });
 });

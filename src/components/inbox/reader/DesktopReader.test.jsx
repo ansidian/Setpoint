@@ -158,7 +158,7 @@ describe("DesktopReader snapshot actions", () => {
 	    expect(onAction).toHaveBeenCalledWith("snapshot-reopen");
 	  });
 
-	  it("hides mutating actions for read-only snapshot rows", () => {
+  it("hides mutating actions for read-only snapshot rows", () => {
     renderReader({ readOnly: true });
 
     expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
@@ -167,5 +167,32 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByRole("button", { name: /mark read/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
+  });
+
+  it("limits Catch-up rows to read state and Gmail open actions", () => {
+    renderReader({
+      email: {
+        id: "gmail-gmail-work-late-fyi",
+        uid: "gmail-gmail-work-late-fyi",
+        account_id: "gmail-work",
+        account_email: "work@example.test",
+        _lane: "catch_up",
+        lane_at_snapshot: "fyi",
+        hasBill: true,
+        claude: { draftReply: "Thanks." },
+      },
+    });
+
+    expect(screen.getByRole("button", { name: /mark read/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /open in gmail/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /move to needs attention/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /pay bill/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /review reply/i })).toBeNull();
   });
 });

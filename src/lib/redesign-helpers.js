@@ -209,6 +209,7 @@ export function buildTimeline({ events = [], deadlines = [], bills = [] }) {
 export const LANE = {
   needs_attention: { key: "needs_attention", label: "Needs Attention", color: "#f38ba8", soft: "rgba(243,139,168,0.12)", border: "rgba(243,139,168,0.22)", icon: "Zap" },
   carryover: { key: "carryover", label: "Carryover", color: "#f9e2af", soft: "rgba(249,226,175,0.10)", border: "rgba(249,226,175,0.22)", icon: "History" },
+  catch_up: { key: "catch_up", label: "Catch-up", color: "#cba6da", soft: "rgba(203,166,218,0.10)", border: "rgba(203,166,218,0.22)", icon: "MailOpen" },
   fyi:    { key: "fyi",    label: "FYI", color: "#89dceb", soft: "rgba(137,220,235,0.10)", border: "rgba(137,220,235,0.20)", icon: "FileText" },
   handled: { key: "handled", label: "Handled", color: "#a6e3a1", soft: "rgba(166,227,161,0.09)", border: "rgba(166,227,161,0.18)", icon: "Check" },
   noise:  { key: "noise",  label: "Noise", color: "#6c7086", soft: "rgba(108,112,134,0.10)", border: "rgba(255,255,255,0.05)", icon: "BellOff" },

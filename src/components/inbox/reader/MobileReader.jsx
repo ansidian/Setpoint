@@ -17,7 +17,7 @@ import {
   Zap,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { timeClock, timeSince } from "../helpers";
+import { isCatchUpEmail, timeClock, timeSince } from "../helpers";
 import { Avatar } from "../primitives";
 import SnoozePicker from "../SnoozePicker";
 import BillBadge from "../../bills/BillBadge";
@@ -107,17 +107,15 @@ export default function MobileReader({
   readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
+  const catchUp = isCatchUpEmail(email);
   const showMutableActions = !readOnly;
-  const showBillToggle = showMutableActions && (email._untriaged || email.hasBill);
+  const showDestructiveActions = showMutableActions && !catchUp;
+  const showBillToggle = showDestructiveActions && (email._untriaged || email.hasBill);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  const showSnapshotActions = email._activeSnapshot && showMutableActions;
+  const showSnapshotActions = email._activeSnapshot && showDestructiveActions;
   const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
-  const canMarkHandledSnapshot = showSnapshotActions
-    && !isHandledSnapshot
-    && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
-  const triageSummary = showTriage
-    ? email.claude?.summary || email.aiSummary || null
-    : null;
+  const canMarkHandledSnapshot = showSnapshotActions && !isHandledSnapshot && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
+  const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
   const actionsBtnRef = useRef(null);
@@ -321,7 +319,7 @@ export default function MobileReader({
           )}
         </div>
 
-        {drafting && email.claude?.draftReply && (
+        {drafting && !catchUp && email.claude?.draftReply && (
           <div
             data-testid="inbox-mobile-draft-panel"
             style={{
@@ -496,7 +494,7 @@ export default function MobileReader({
                 }}
               />
             )}
-            {email.claude?.draftReply && (
+            {!catchUp && email.claude?.draftReply && (
               <MobileActionRow
                 icon={FileText}
                 label={drafting ? "Hide draft reply" : "Show draft reply"}
@@ -556,7 +554,7 @@ export default function MobileReader({
                 onClick={() => handleAction("toggle-read")}
               />
             )}
-            {showMutableActions && (
+            {showDestructiveActions && (
               <MobileActionRow
                 icon={Clock}
                 label="Snooze"
@@ -576,7 +574,7 @@ export default function MobileReader({
                 }}
               />
             )}
-            {showMutableActions && (
+            {showDestructiveActions && (
               <MobileActionRow
                 icon={Trash2}
                 label="Trash"
@@ -588,7 +586,7 @@ export default function MobileReader({
         </AnchoredFloatingPanel>
       )}
 
-      {showMutableActions && snoozeOpen && (
+      {showDestructiveActions && snoozeOpen && (
         <SnoozePicker
           anchorRef={actionsBtnRef}
           onSelect={(untilTs) => onAction("snooze", untilTs)}

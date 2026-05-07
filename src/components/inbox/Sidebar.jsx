@@ -150,6 +150,7 @@ export function LaneAll({ accent, lane, setLane, laneCounts }) {
   const isActive = lane === "__all";
   const count = (laneCounts.needs_attention || laneCounts.action || 0)
     + (laneCounts.carryover || 0)
+    + (laneCounts.catch_up || 0)
     + (laneCounts.fyi || 0)
     + (laneCounts.noise || 0);
   return (
@@ -257,6 +258,7 @@ export default function Sidebar({
             <LaneAll accent={accent} lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="carryover" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="needs_attention" lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="catch_up" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="fyi" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="handled" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} noiseUnreadCount={noiseUnreadCount} />
@@ -298,11 +300,18 @@ function buildShortcutRows(selectedEmail, readOnly) {
 
   if (selectedEmail && !readOnly) {
     const isSnapshot = !!selectedEmail._activeSnapshot && !!selectedEmail.snapshot_item_id;
+    const isCatchUp = selectedEmail._lane === "catch_up" || selectedEmail._catchUp || selectedEmail.source === "catch_up";
     const isHandled = selectedEmail._lane === "handled";
     const snapshotLane = selectedEmail._lane === "carryover" ? "needs_attention" : selectedEmail._lane;
     const canMarkHandled = snapshotLane === "needs_attention" || snapshotLane === "fyi";
 
-    if (isSnapshot && isHandled) {
+    if (isCatchUp) {
+      return rows.concat(
+        { keys: ["⌘F"], label: "Find" },
+        { keys: ["⌘Z"], label: "Undo" },
+        { keys: ["⌘K"], label: "Command" },
+      );
+    } else if (isSnapshot && isHandled) {
       rows.push({ keys: ["H"], label: "Reopen" });
     } else if (isSnapshot) {
       if (canMarkHandled) rows.push({ keys: ["H"], label: "Mark handled" });

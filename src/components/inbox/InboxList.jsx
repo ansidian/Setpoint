@@ -94,7 +94,7 @@ export default function InboxList({
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 
   const grouped = useMemo(() => {
-    const g = { live: [], carryover: [], needs_attention: [], action: [], fyi: [], handled: [], noise: [] };
+    const g = { live: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], noise: [] };
     for (const e of emails) {
       if (e._untriaged) g.live.push(e);
       else {
@@ -394,7 +394,7 @@ export default function InboxList({
                 )}
               </div>
             )}
-            {["carryover", "needs_attention", "fyi", "handled", "noise"].map((k) => (
+            {["carryover", "needs_attention", "catch_up", "fyi", "handled", "noise"].map((k) => (
               grouped[k].length > 0 && (
                 <div key={k}>
                   <StickyHeader borderColor="rgba(255,255,255,0.03)">
