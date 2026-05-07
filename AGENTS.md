@@ -39,6 +39,8 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 
 Use TDD as a tool for protecting behavior, not as a quota. The goal is durable confidence in the observable product surface.
 
+### TDD Cycle
+
 1. Plan: identify the public interface and the observable behaviors to protect. Prefer behavior and integration-style tests over implementation details or private helpers.
 2. Decide: add a new test only when the change creates or alters meaningful behavior, fixes a regression, touches shared logic, or creates risk that an existing test does not cover.
 3. Red: add one smallest unit or integration test that captures one missing behavior or regression, then run it to confirm the red state. Prefer Vitest and focused existing fixtures; keep Playwright opt-in.
