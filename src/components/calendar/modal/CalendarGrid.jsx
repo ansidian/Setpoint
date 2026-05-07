@@ -2,9 +2,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { buildCalendarEventSpanLayout } from "./calendarEventSpanLayout.js";
-import { buildCalendarGridCellModel } from "./calendarGridCellModel.js";
 import { getEventSelectionId } from "../../../lib/redesign-helpers";
-import CalendarCell from "./CalendarCell.jsx";
+import CalendarGridCells from "./CalendarGridCells.jsx";
 import CalendarGridLayers from "./CalendarGridLayers.jsx";
 import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";
 import useCalendarGridEffects from "./useCalendarGridEffects.js";
@@ -13,14 +12,11 @@ import {
   buildCalendarMonthCells,
   canUseInlineOverflow,
   createMonthWheelState,
+  overflowHiddenSignature,
   resolveInlineOverflowAnchor,
   sameOverflowDate,
   spanCoversOverflowDate,
 } from "./calendarGridUtils.js";
-
-function overflowHiddenSignature(items) {
-  return (items || []).map((item) => String(item.id)).join("\u001f");
-}
 
 export default function CalendarGrid({
   view,
@@ -291,6 +287,69 @@ export default function CalendarGrid({
     });
   }
 
+  const handleOpenOverflow = useCallback(({
+    triggerElement,
+    hiddenItems,
+    totalCount,
+    visibleCount,
+    hiddenStackHeight,
+    leadingColumnWidth,
+    anchorKey,
+    cell,
+    day,
+  }) => {
+    const sourceCellElement =
+      triggerElement?.closest?.("[role='gridcell']");
+    setOverflowState((current) => {
+      if (current?.anchorKey === anchorKey) {
+        return null;
+      }
+      const mode = canUseInlineOverflow({
+        triggerElement,
+        hiddenStackHeight,
+        layout,
+      })
+        ? "inline"
+        : "fallback";
+      const inlineAnchor =
+        mode === "inline"
+          ? resolveInlineOverflowAnchor(
+              triggerElement,
+              gridBodyRef.current,
+            )
+          : null;
+      return {
+        mode,
+        triggerElement,
+        sourceCellElement,
+        inlineAnchor,
+        boundarySides: cell.boundarySides,
+        boundaryColor: cell.boundaryColor,
+        items: hiddenItems,
+        totalCount,
+        visibleCount,
+        leadingColumnWidth,
+        label: new Date(
+          `${cell.dateKey}T00:00:00`,
+        ).toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        }),
+        viewLabel:
+          activeView.label ||
+          view[0].toUpperCase() + view.slice(1),
+        day,
+        dateKey: cell.dateKey,
+        view,
+        viewYear,
+        viewMonth,
+        anchorKey,
+        hiddenSignature: overflowHiddenSignature(hiddenItems),
+      };
+    });
+  }, [activeView.label, layout, view, viewMonth, viewYear]);
+
   useCalendarGridEffects({
     activeMonthWheelStateRef,
     canGoPrev,
@@ -372,173 +431,38 @@ export default function CalendarGrid({
             willChange: monthMotionDirection ? "transform, opacity" : "auto",
           }}
         >
-          {monthCells.map((cell) => {
-            const day = cell.day;
-            const cellMeta = cellMetaByDate?.[cell.dateKey] || null;
-            const {
-              allComplete,
-              cellGhosts,
-              cellItems,
-              dayHasSelectedItem,
-              hasItems,
-              hasOverdue,
-              isSelected,
-              isToday,
-              itemCount,
-              loading,
-              pastTone,
-              reservedLaneCount,
-            } = buildCalendarGridCellModel({
-              activeView,
-              buildFallbackDayState,
-              cell,
-              currentMonth,
-              currentYear,
-              eventDateCells,
-              ghostPreview,
-              itemsByDate,
-              itemsByDay,
-              selectedCellKey,
-              selectedDay,
-              selectedItemId,
-              shouldFilterCompletedDeadlines,
-              spanLayout,
-              todayDate,
-              view,
-              viewData,
-            });
-            const anchorKey = `${view}-${cell.dateKey || `${viewYear}-${viewMonth}-${day}`}`;
-            const overflowOpen = sameOverflowDate(
-              resolvedOverflow,
-              cell.dateKey,
-              day,
-            );
-            const inlineOverflowOpen =
-              overflowOpen && resolvedOverflow?.mode === "inline";
-
-            return (
-              <CalendarCell
-                key={cell.dateKey || day}
-                view={view}
-                viewYear={viewYear}
-                viewMonth={viewMonth}
-                viewLabel={activeView.label || view}
-                day={day}
-                dateKey={cell.dateKey}
-                dateLabel={cell.dateLabel}
-                inCurrentMonth={cell.inCurrentMonth}
-                boundarySides={cell.boundarySides}
-                items={cellItems}
-                ghosts={cellGhosts}
-                cellMeta={cellMeta}
-                selectedItemId={dayHasSelectedItem ? selectedItemId : null}
-                itemCount={itemCount}
-                hasItems={hasItems}
-                isToday={isToday}
-                isSelected={isSelected}
-                pastTone={pastTone}
-                hasOverdue={hasOverdue}
-                allComplete={allComplete}
-                loading={loading}
-                overflowOpen={overflowOpen}
-                overflowMode={overflowOpen ? resolvedOverflow?.mode : null}
-                onSelectDay={() =>
-                  handleSelectDay(day, isSelected, cell.dateKey)
-                }
-                onSelectDateHeader={() =>
-                  handleSelectDay(day, isSelected, cell.dateKey, {
-                    clearItemSelection: true,
-                    directDateAction: false,
-                  })
-                }
-                onSelectItem={(itemId, anchorMeta) =>
-                  handleSelectItem(day, itemId, cell.dateKey, {
-                    keepOverflowOpen: overflowOpen,
-                    anchorMeta,
-                  })
-                }
-                onOpenOverflow={({
-                  triggerElement,
-                  hiddenItems,
-                  totalCount,
-                  visibleCount,
-                  hiddenStackHeight,
-                  leadingColumnWidth,
-                }) => {
-                  const sourceCellElement =
-                    triggerElement?.closest?.("[role='gridcell']");
-                  setOverflowState((current) => {
-                    if (current?.anchorKey === anchorKey) {
-                      return null;
-                    }
-                    const mode = canUseInlineOverflow({
-                      triggerElement,
-                      hiddenStackHeight,
-                      layout,
-                    })
-                      ? "inline"
-                      : "fallback";
-                    const inlineAnchor =
-                      mode === "inline"
-                        ? resolveInlineOverflowAnchor(
-                            triggerElement,
-                            gridBodyRef.current,
-                          )
-                        : null;
-                    return {
-                      mode,
-                      triggerElement,
-                      sourceCellElement,
-                      inlineAnchor,
-                      boundarySides: cell.boundarySides,
-                      boundaryColor: cell.boundaryColor,
-                      items: hiddenItems,
-                      totalCount,
-                      visibleCount,
-                      leadingColumnWidth,
-                      label: new Date(
-                        `${cell.dateKey}T00:00:00`,
-                      ).toLocaleDateString("en-US", {
-                        weekday: "long",
-                        month: "long",
-                        day: "numeric",
-                      }),
-                      viewLabel:
-                        activeView.label ||
-                        view[0].toUpperCase() + view.slice(1),
-                      day,
-                      dateKey: cell.dateKey,
-                      view,
-                      viewYear,
-                      viewMonth,
-                      anchorKey,
-                      hiddenSignature: overflowHiddenSignature(hiddenItems),
-                    };
-                  });
-                }}
-                renderCellContents={(args) =>
-                  activeView.renderCellContents?.({
-                    ...args,
-                    overflowOpen,
-                    overflowAnchorKey: anchorKey,
-                    inlineOverflowOpen,
-                    inlineOverflowVisibleCount: inlineOverflowOpen
-                      ? resolvedOverflow?.visibleCount
-                      : null,
-                    inlineOverflowExternal: true,
-                    onInlineOverflowInteraction: markOverflowInteraction,
-                    onCloseInlineOverflow: closeOverflowWithoutFocus,
-                    onHiddenItemsChange: validateOverflowHiddenItems,
-                    onBeforeItemAction: onCloseFloatingDetail,
-                    pinnedIds: eventDateCells ? spanLayout.pinnedIds : null,
-                    reservedLaneCount,
-                    layout,
-                  })
-                }
-                quickActions={itemQuickActions}
-              />
-            );
-          })}
+          <CalendarGridCells
+            activeView={activeView}
+            buildFallbackDayState={buildFallbackDayState}
+            cellMetaByDate={cellMetaByDate}
+            currentMonth={currentMonth}
+            currentYear={currentYear}
+            eventDateCells={eventDateCells}
+            ghostPreview={ghostPreview}
+            itemQuickActions={itemQuickActions}
+            itemsByDate={itemsByDate}
+            itemsByDay={itemsByDay}
+            layout={layout}
+            monthCells={monthCells}
+            onBeforeItemAction={onCloseFloatingDetail}
+            onCloseInlineOverflow={closeOverflowWithoutFocus}
+            onHiddenItemsChange={validateOverflowHiddenItems}
+            onInlineOverflowInteraction={markOverflowInteraction}
+            onOpenOverflow={handleOpenOverflow}
+            onSelectDay={handleSelectDay}
+            onSelectItem={handleSelectItem}
+            resolvedOverflow={resolvedOverflow}
+            selectedCellKey={selectedCellKey}
+            selectedDay={selectedDay}
+            selectedItemId={selectedItemId}
+            shouldFilterCompletedDeadlines={shouldFilterCompletedDeadlines}
+            spanLayout={spanLayout}
+            todayDate={todayDate}
+            view={view}
+            viewData={viewData}
+            viewMonth={viewMonth}
+            viewYear={viewYear}
+          />
         </div>
         <CalendarGridLayers
           activeSpanSegmentId={activeSpanSegmentId}

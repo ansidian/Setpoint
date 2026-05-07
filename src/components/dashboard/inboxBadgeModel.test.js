@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeInboxUnreadSignalCount } from "./inboxBadgeModel.js";
+import {
+  collectActiveReadOverrideKeys,
+  computeInboxUnreadSignalCount,
+} from "./inboxBadgeModel.js";
 
 function snapshotRow(overrides = {}) {
   const uid = overrides.uid || overrides.email_id || overrides.id || "msg-1";
@@ -92,5 +95,34 @@ describe("computeInboxUnreadSignalCount", () => {
       }),
       liveReadOverrides: { "late-fyi": false },
     })).toBe(1);
+  });
+});
+
+describe("collectActiveReadOverrideKeys", () => {
+  it("retains live, resurfaced, carryover, and lane item keys that can own read overrides", () => {
+    const keys = collectActiveReadOverrideKeys({
+      activeSnapshotView: activeSnapshot({
+        carryover: [snapshotRow({ uid: "carry-uid" })],
+        needs_attention: [snapshotRow({ email_id: "lane-email-id", uid: null })],
+        fyi: [snapshotRow({ id: "lane-id", uid: null, email_id: null })],
+      }),
+      liveEmails: [
+        { uid: "live-uid" },
+        { email_id: "live-email-id" },
+      ],
+      resurfacedEntries: [
+        { id: "resurfaced-id", snapshot: { email_id: "resurfaced-snapshot-email-id" } },
+      ],
+    });
+
+    expect([...keys].sort()).toEqual([
+      "carry-uid",
+      "lane-email-id",
+      "lane-id",
+      "live-email-id",
+      "live-uid",
+      "resurfaced-id",
+      "resurfaced-snapshot-email-id",
+    ]);
   });
 });
