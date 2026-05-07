@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 
 let mockIsMobile = false;
 let mockCustomize = null;
+let latestInboxProps = null;
 
 vi.mock("../hooks/useIsMobile", () => ({
   default: () => mockIsMobile,
@@ -63,7 +64,8 @@ vi.mock("../components/shell/CustomizePanel", () => ({
 }));
 
 vi.mock("../components/inbox/InboxView", () => ({
-  default: function InboxViewMock() {
+  default: function InboxViewMock(props) {
+    latestInboxProps = props;
     return <div data-testid="inbox-view" />;
   },
 }));
@@ -78,6 +80,8 @@ const { RedesignShell } = await import("./Dashboard.jsx");
 
 afterEach(() => {
   window.localStorage.removeItem("calendar:lastView");
+  window.localStorage.removeItem("ea:tab");
+  latestInboxProps = null;
   cleanup();
 });
 
@@ -262,6 +266,74 @@ describe("RedesignShell mobile behavior", () => {
 
     fireEvent.keyDown(window, { key: "y" });
     expect(props.setHistoryOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps active snapshot read overrides across dashboard refreshes", async () => {
+    mockIsMobile = false;
+    window.localStorage.setItem("ea:tab", "inbox");
+    const props = makeProps();
+    props.activeSnapshot = {
+      snapshot: {
+        snapshot: { id: 77, updated_at: "2026-05-07T15:00:00.000Z" },
+        filters: { accounts: [], categories: [] },
+        carryover: [],
+        lanes: {
+          needs_attention: [{
+            id: 42,
+            snapshot_item_id: 42,
+            uid: "snapshot-read",
+            email_id: "snapshot-read",
+            account_id: "gmail-a",
+            lane: "needs_attention",
+            subject: "Read in session",
+            read: false,
+          }],
+          fyi: [],
+          handled: [],
+          noise: [],
+        },
+      },
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      sync: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    await screen.findByTestId("inbox-view");
+    act(() => {
+      latestInboxProps.onLiveReadOverrideChange("snapshot-read", true);
+    });
+    await waitFor(() => {
+      expect(latestInboxProps.liveReadOverrides).toEqual({ "snapshot-read": true });
+    });
+
+    const refreshedProps = {
+      ...props,
+      liveData: {
+        ...props.liveData,
+        liveEmails: [],
+        resurfacedEntries: [],
+      },
+    };
+    rerender(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <RedesignShell {...refreshedProps} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    await waitFor(() => {
+      expect(latestInboxProps.liveReadOverrides).toEqual({ "snapshot-read": true });
+    });
   });
 
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {

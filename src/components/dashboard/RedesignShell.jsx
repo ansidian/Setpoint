@@ -14,6 +14,31 @@ const CommandPalette = lazy(() => import("../shell/CommandPalette"));
 const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
+
+function addReadOverrideKey(keys, value) {
+  const key = value?.uid || value?.email_id || value?.id;
+  if (key) keys.add(String(key));
+}
+
+function collectActiveReadOverrideKeys({ activeSnapshotView, liveEmails = [], resurfacedEntries = [] }) {
+  const keys = new Set();
+
+  for (const email of liveEmails || []) addReadOverrideKey(keys, email);
+  for (const entry of resurfacedEntries || []) {
+    addReadOverrideKey(keys, entry);
+    addReadOverrideKey(keys, entry?.snapshot);
+  }
+
+  if (activeSnapshotView?.snapshot) {
+    for (const item of activeSnapshotView.carryover || []) addReadOverrideKey(keys, item);
+    for (const lane of Object.values(activeSnapshotView.lanes || {})) {
+      for (const item of lane || []) addReadOverrideKey(keys, item);
+    }
+  }
+
+  return keys;
+}
+
 export function RedesignShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef, calendarDeadlines, calendarDeadlinesLoading,
@@ -312,13 +337,11 @@ export function RedesignShell({
   ]);
 
   useEffect(() => {
-    const activeUids = new Set();
-    for (const email of liveData.liveEmails || []) {
-      if (email?.uid) activeUids.add(email.uid);
-    }
-    for (const entry of liveData.resurfacedEntries || []) {
-      if (entry?.uid) activeUids.add(entry.uid);
-    }
+    const activeUids = collectActiveReadOverrideKeys({
+      activeSnapshotView: activeSnapshot?.snapshot,
+      liveEmails: liveData.liveEmails,
+      resurfacedEntries: liveData.resurfacedEntries,
+    });
     setLiveReadOverrides((prev) => {
       const next = {};
       let changed = false;
@@ -328,7 +351,7 @@ export function RedesignShell({
       }
       return changed ? next : prev;
     });
-  }, [liveData.liveEmails, liveData.resurfacedEntries]);
+  }, [activeSnapshot?.snapshot, liveData.liveEmails, liveData.resurfacedEntries]);
 
   const handleLiveReadOverrideChange = useCallback((uid, read) => {
     if (!uid) return;
