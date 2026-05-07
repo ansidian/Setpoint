@@ -35,6 +35,12 @@ export function deadlinePlanningTimeLabel(task) {
   return task?.due_time || sourceLabelFor(task);
 }
 
+export function deadlinePlanningStatusIcon(status) {
+  if (status === "complete") return "complete";
+  if (status === "in_progress") return "in_progress";
+  return null;
+}
+
 function cloneDeadlineForDate(task, dateKey) {
   return {
     ...task,
@@ -152,6 +158,8 @@ export function deadlinePlanningDescriptor(task) {
     leadingColor: accent,
     complete: status === "complete",
     quiet: status === "complete",
+    statusIcon: deadlinePlanningStatusIcon(status),
+    statusLabel: statusLabel(status),
     sortMs: dueDateToMs(task.due_date, task.due_time) ?? Number.POSITIVE_INFINITY,
   };
 }

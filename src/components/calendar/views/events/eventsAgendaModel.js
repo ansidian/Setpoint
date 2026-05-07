@@ -13,12 +13,14 @@ import {
 } from "../agenda/agendaDateModel.js";
 import {
   deadlinePlanningAccent,
+  deadlinePlanningStatusIcon,
   deadlinePlanningSubtitle,
   deadlinePlanningTimeLabel,
   deadlinePlanningTitle,
   getDeadlineOverlayComputed,
   getPlanningItemId,
 } from "./eventsPlanningModel.js";
+import { normalizeStatus, statusLabel } from "../deadlines/deadlinesModel.js";
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles",
@@ -148,7 +150,9 @@ export function buildEventsAgendaGroups({
       agendaTimeRange: deadlinePlanningTimeLabel(task),
       agendaSourceColor: deadlinePlanningAccent(task),
       agendaItemKind: "deadline",
-      agendaComplete: task.status === "complete",
+      agendaComplete: normalizeStatus(task.status) === "complete",
+      agendaStatus: statusLabel(task.status),
+      agendaStatusIcon: deadlinePlanningStatusIcon(normalizeStatus(task.status)),
     }));
     group.hasDeadlines = group.deadlines.length > 0;
     group.hasEvents = group.hasEvents || group.hasDeadlines;

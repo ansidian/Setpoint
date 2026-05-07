@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deadlinePlanningDescriptor,
   getDeadlineOverlayComputed,
   getPlanningItemId,
   isDeadlinePlanningItem,
@@ -115,5 +116,33 @@ describe("events planning model", () => {
       "canvas:same",
       "todoist:same",
     ]);
+  });
+
+  it("describes completed and in-progress deadline status for Events chips", () => {
+    expect(deadlinePlanningDescriptor(deadline({
+      id: "done",
+      title: "Done task",
+      due_date: "2026-05-12",
+      source: "todoist",
+      status: "complete",
+    }))).toMatchObject({
+      statusIcon: "complete",
+      statusLabel: "Complete",
+      complete: true,
+      quiet: true,
+    });
+
+    expect(deadlinePlanningDescriptor(deadline({
+      id: "ctm-progress",
+      title: "Draft essay",
+      due_date: "2026-05-12",
+      source: "canvas",
+      status: "in_progress",
+    }))).toMatchObject({
+      statusIcon: "in_progress",
+      statusLabel: "In progress",
+      complete: false,
+      quiet: false,
+    });
   });
 });

@@ -1,4 +1,43 @@
+import { CheckCircle2, CircleDashed } from "lucide-react";
 import { colorWithAlpha } from "./eventsAgendaColor.js";
+
+function AgendaDeadlineStatus({ deadline }) {
+  if (!deadline.agendaStatusIcon) return null;
+  const Icon = deadline.agendaStatusIcon === "complete" ? CheckCircle2 : CircleDashed;
+  const color = deadline.agendaStatusIcon === "complete" ? "#a6e3a1" : "#89dceb";
+
+  return (
+    <span
+      data-testid={`events-agenda-deadline-status-${deadline.agendaItemId}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        justifySelf: "end",
+        alignSelf: "start",
+        minHeight: 18,
+        padding: "2px 5px",
+        borderRadius: 999,
+        border: `1px solid color-mix(in srgb, ${color} 30%, rgba(255,255,255,0.06))`,
+        background: `color-mix(in srgb, ${color} 10%, rgba(255,255,255,0.025))`,
+        color,
+        fontSize: 9.5,
+        fontWeight: 750,
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <Icon
+        data-events-agenda-deadline-status-icon={deadline.agendaStatusIcon}
+        aria-hidden="true"
+        focusable="false"
+        size={11}
+        strokeWidth={2.4}
+      />
+      <span>{deadline.agendaStatus}</span>
+    </span>
+  );
+}
 
 export default function EventsAgendaDeadlineRow({
   deadline,
@@ -8,6 +47,7 @@ export default function EventsAgendaDeadlineRow({
   onSelect,
 }) {
   const color = deadline.agendaSourceColor || "#89b4fa";
+  const TitleTag = deadline.agendaComplete ? "s" : "span";
 
   return (
     <button
@@ -20,7 +60,7 @@ export default function EventsAgendaDeadlineRow({
       style={{
         width: "100%",
         display: "grid",
-        gridTemplateColumns: "8px minmax(0, 1fr)",
+        gridTemplateColumns: "8px minmax(0, 1fr) auto",
         alignItems: "start",
         columnGap: 8,
         padding: "8px 9px",
@@ -70,12 +110,13 @@ export default function EventsAgendaDeadlineRow({
             textDecorationColor: "rgba(205,214,244,0.28)",
           }}
         >
-          {deadline.agendaTitle}
+          <TitleTag>{deadline.agendaTitle}</TitleTag>
         </span>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.62)", fontSize: 10.5, lineHeight: 1.3 }}>
           {deadline.agendaSubtitle}
         </span>
       </span>
+      <AgendaDeadlineStatus deadline={deadline} />
     </button>
   );
 }

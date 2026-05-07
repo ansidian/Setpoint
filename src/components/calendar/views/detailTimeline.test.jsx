@@ -239,6 +239,40 @@ describe("calendar detail timeline", () => {
     expect(hero?.getAttribute("data-accent")).toBe("#f59e0b");
   });
 
+  it("shows Events overlay deadline statuses in the selected-day detail rail", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        items: [
+          {
+            id: "ctm-1",
+            title: "Draft essay",
+            due_date: "2026-04-19",
+            source: "canvas",
+            class_name: "English",
+            status: "in_progress",
+            calendarItemKind: "deadline",
+          },
+          {
+            id: "todo-1",
+            title: "Submit report",
+            due_date: "2026-04-19",
+            source: "todoist",
+            class_name: "Inbox",
+            status: "complete",
+            calendarItemKind: "deadline",
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByTestId("deadline-status-indicator-ctm-1").textContent).toContain("In progress");
+    expect(screen.getByTestId("deadline-status-indicator-todo-1").textContent).toContain("Complete");
+    expect(screen.getByText("Submit report").closest("[data-testid='timeline-detail-row']")?.getAttribute("data-complete")).toBe("true");
+  });
+
   it("renders selected event CTAs in the selected card footer", () => {
     render(
       eventsView.renderDetail({
