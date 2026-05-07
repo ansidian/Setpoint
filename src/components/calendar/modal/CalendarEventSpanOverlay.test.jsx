@@ -44,4 +44,60 @@ describe("CalendarEventSpanOverlay", () => {
     expect(content?.style.gridTemplateColumns).toBe(`${meta?.style.width} minmax(0, 1fr)`);
     expect(ghost.querySelector("[data-calendar-span-title-text='true']")?.textContent).toBe("Check-in IHSS");
   });
+
+  it("keeps selected span title metrics stable", () => {
+    const title = "Advanced machine learning project review and lab planning";
+    render(
+      <CalendarEventSpanOverlay
+        segments={[
+          {
+            id: "event-plain:2026-04-20:2026-04-22",
+            kind: "event",
+            eventId: "event-plain",
+            row: 1,
+            columnStart: 2,
+            columnEnd: 5,
+            lane: 0,
+            segmentStart: "2026-04-20",
+            segmentEnd: "2026-04-22",
+            item: {
+              id: "event-plain",
+              title,
+              startTime: "09:00",
+              color: "#89b4fa",
+            },
+          },
+          {
+            id: "event-selected:2026-04-20:2026-04-22",
+            kind: "event",
+            eventId: "event-selected",
+            row: 2,
+            columnStart: 2,
+            columnEnd: 5,
+            lane: 1,
+            segmentStart: "2026-04-20",
+            segmentEnd: "2026-04-22",
+            item: {
+              id: "event-selected",
+              title,
+              startTime: "09:00",
+              color: "#89b4fa",
+            },
+          },
+        ]}
+        layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
+        gridRowCount={6}
+        selectedItemId="event-selected"
+      />,
+    );
+
+    const titles = screen
+      .getAllByTestId("calendar-event-span-segment")
+      .map((chip) => chip.querySelector("[data-calendar-span-title-fit]"));
+
+    expect(titles[0]?.getAttribute("data-calendar-span-title-fit")).toBe(
+      titles[1]?.getAttribute("data-calendar-span-title-fit"),
+    );
+    expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
+  });
 });

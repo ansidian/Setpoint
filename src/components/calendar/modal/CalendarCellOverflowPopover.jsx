@@ -448,7 +448,7 @@ export default function CalendarCellOverflowPopover({
                         alignItems: "center",
                         gap: 4,
                         fontSize: 12.5,
-                        fontWeight: selected ? 600 : 500,
+                        fontWeight: 500,
                         lineHeight: 1.25,
                         overflow: "hidden",
                         textOverflow: "ellipsis",

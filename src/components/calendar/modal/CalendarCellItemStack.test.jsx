@@ -90,6 +90,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
       titles[1]?.getAttribute("data-calendar-chip-title-fit"),
     );
+    expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
   });
 
   it("sizes the chip leading column from hidden overflow items in the same day cell", () => {

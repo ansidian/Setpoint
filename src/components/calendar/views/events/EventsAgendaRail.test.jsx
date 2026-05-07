@@ -204,6 +204,27 @@ describe("EventsAgendaRail", () => {
     expect(chips[1].style.border).not.toBe("1px solid rgb(137, 180, 250)");
   });
 
+  it("does not insert a selected-only dot into solid all-day chips", () => {
+    renderRail({
+      selectedDateKey: "2026-05-05",
+      selectedItemId: "all-day",
+      events: [
+        event({
+          id: "all-day",
+          title: "Residency planning block with a long stable title",
+          allDay: true,
+          color: "#89b4fa",
+          start: "2026-05-05T07:00:00.000Z",
+          end: "2026-05-06T07:00:00.000Z",
+        }),
+      ],
+    });
+
+    const chip = screen.getByTestId("calendar-agenda-event-chip");
+    expect(chip.querySelector("span[aria-hidden='true']")).toBeNull();
+    expect(chip.textContent).toContain("Residency planning block with a long stable title");
+  });
+
   it("uses normal sticky headers without terminal scroll affordances", () => {
     renderRail();
 
