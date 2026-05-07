@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from "@/api";
 import { googleEventColorForId } from "../../../../shared/calendar-event-colors.js";
 import {
@@ -48,6 +48,11 @@ function shiftEventByDays(event, deltaDays) {
 function optimisticCloneId(event) {
   optimisticCloneCounter += 1;
   return `optimistic-calendar-copy-${event?.id || "event"}-${Date.now()}-${optimisticCloneCounter}`;
+}
+
+function isOptimisticCloneEvent(event) {
+  return event?._optimisticCalendarClone === true
+    || (typeof event?.id === "string" && event.id.startsWith("optimistic-calendar-copy-"));
 }
 
 export function buildReschedulePayload(event, shiftedEvent, scope) {
@@ -111,6 +116,7 @@ export function buildOptimisticCloneEvent(event, targetDate = null) {
     originalStartTime: null,
     recurrence: null,
     passed: false,
+    _optimisticCalendarClone: true,
   };
 }
 
@@ -168,6 +174,7 @@ export default function useCalendarQuickActions({
   const [prompt, setPrompt] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [status, setStatus] = useState(null);
+  const optimisticCloneRequestsRef = useRef(new Map());
   const dragEnabled = editable && nativeDragSupported(layout);
 
   const clearStatus = useCallback(() => setStatus(null), []);
@@ -201,6 +208,38 @@ export default function useCalendarQuickActions({
   }, [onSelectEvent, refreshRange, upsertEvents]);
 
   const runDelete = useCallback(async ({ event, scope }) => {
+    if (isOptimisticCloneEvent(event)) {
+      const optimisticId = String(event.id);
+      const cloneRequest = optimisticCloneRequestsRef.current.get(optimisticId);
+      if (cloneRequest) cloneRequest.deleted = true;
+      const createdEvent = cloneRequest?.createdEvent || null;
+      const deletionEvent = createdEvent || event;
+      setStatus({ tone: "pending", message: "Deleting event..." });
+      removeEvent?.(optimisticId);
+      if (createdEvent?.id) removeEvent?.(createdEvent.id);
+      onEventDeleted?.(eventSelectionId(deletionEvent), deletionEvent);
+
+      if (createdEvent?.id) {
+        try {
+          await deleteCalendarEvent(createdEvent.id, buildDeletePayload(createdEvent));
+          optimisticCloneRequestsRef.current.delete(optimisticId);
+          setStatus({ tone: "success", message: "Event deleted." });
+          window.setTimeout(() => setStatus(null), 1800);
+        } catch (err) {
+          upsertEvents?.(createdEvent);
+          setStatus({ tone: "error", message: err.message || "Failed to delete event." });
+          throw err;
+        }
+        return;
+      }
+
+      if (!cloneRequest) {
+        setStatus({ tone: "success", message: "Event deleted." });
+        window.setTimeout(() => setStatus(null), 1800);
+      }
+      return;
+    }
+
     const bounds = eventBounds(event);
     setStatus({ tone: "pending", message: "Deleting event..." });
     removeEvent?.(event.id);
@@ -222,19 +261,55 @@ export default function useCalendarQuickActions({
   const runClone = useCallback(async ({ event, targetDate = null }) => {
     if (!editable || !event?.writable) return;
     const optimisticEvent = buildOptimisticCloneEvent(event, targetDate);
+    const optimisticId = String(optimisticEvent.id);
+    const cloneRequest = {
+      createdEvent: null,
+      deleted: false,
+    };
+    optimisticCloneRequestsRef.current.set(optimisticId, cloneRequest);
     upsertEvents?.(optimisticEvent);
     onSelectEvent?.(eventSelectionId(optimisticEvent), pacificYMD(optimisticEvent.startMs));
     try {
       const result = await createCalendarEvent(buildCloneEventPayload(event, targetDate));
       if (result?.event) {
+        cloneRequest.createdEvent = result.event;
+        if (cloneRequest.deleted) {
+          removeEvent?.(optimisticId);
+          try {
+            await deleteCalendarEvent(result.event.id, buildDeletePayload(result.event));
+            optimisticCloneRequestsRef.current.delete(optimisticId);
+            setStatus({ tone: "success", message: "Event deleted." });
+            window.setTimeout(() => setStatus(null), 1800);
+          } catch (err) {
+            upsertEvents?.(result.event);
+            setStatus({ tone: "error", message: err.message || "Failed to delete event." });
+          }
+          return;
+        }
         removeEvent?.(optimisticEvent.id);
         upsertEvents?.(result.event);
         onSelectEvent?.(eventSelectionId(result.event), pacificYMD(result.event.startMs));
+        window.setTimeout(() => {
+          const current = optimisticCloneRequestsRef.current.get(optimisticId);
+          if (current === cloneRequest && !current.deleted) {
+            optimisticCloneRequestsRef.current.delete(optimisticId);
+          }
+        }, 30000);
       } else {
         removeEvent?.(optimisticEvent.id);
+        optimisticCloneRequestsRef.current.delete(optimisticId);
+        if (cloneRequest.deleted) {
+          setStatus({ tone: "success", message: "Event deleted." });
+          window.setTimeout(() => setStatus(null), 1800);
+        }
       }
     } catch {
       removeEvent?.(optimisticEvent.id);
+      optimisticCloneRequestsRef.current.delete(optimisticId);
+      if (cloneRequest.deleted) {
+        setStatus({ tone: "success", message: "Event deleted." });
+        window.setTimeout(() => setStatus(null), 1800);
+      }
       // Silent by design for this hidden power flow.
     }
   }, [editable, onSelectEvent, removeEvent, upsertEvents]);
