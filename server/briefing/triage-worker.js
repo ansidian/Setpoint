@@ -389,7 +389,7 @@ function isOpenAICacheParameterError(status, text) {
 function buildOpenAITriageRequestBody({ model, email, reason, cacheKey, includeCacheFields = true }) {
   return {
     model,
-    store: false,
+    store: true,
     ...(includeCacheFields
       ? {
           prompt_cache_key: cacheKey,
