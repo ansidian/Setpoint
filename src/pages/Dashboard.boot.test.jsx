@@ -28,6 +28,7 @@ vi.mock("../api", () => ({
   getCalendarDeadlines: mocks.getCalendarDeadlines,
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
+  getSettings: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({

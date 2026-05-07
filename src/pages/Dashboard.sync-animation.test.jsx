@@ -12,6 +12,7 @@ vi.mock("../api", () => ({
   getCalendarDeadlines: vi.fn().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } }),
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
+  getSettings: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock("../hooks/useCalendarRange", () => ({

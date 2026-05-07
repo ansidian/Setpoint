@@ -244,7 +244,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
         block: "start",
         forceAuto: true,
       });
-      if (holdEntryTarget && targetDate && targetDate !== selectedDateKey) {
+      if (targetDate && targetDate !== selectedDateKey && !floatingEditorDirty) {
         onPassiveDateChange?.(targetDate);
       }
     });
