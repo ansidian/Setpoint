@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { timeClock, timeSince } from "../helpers";
+import { isCatchUpEmail, timeClock, timeSince } from "../helpers";
 import { Avatar, QuickAction } from "../primitives";
 import SnoozePicker from "../SnoozePicker";
 import BillBadge from "../../bills/BillBadge";
@@ -217,13 +217,16 @@ export default function DesktopReader({
   readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
+  const catchUp = isCatchUpEmail(email);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  const showSnapshotActions = email._activeSnapshot && !readOnly;
+  const showSnapshotActions = email._activeSnapshot && !readOnly && !catchUp;
   const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
   const canMarkHandledSnapshot = showSnapshotActions
     && !isHandledSnapshot
     && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
   const showMutableActions = !readOnly;
+  const showReadAction = showMutableActions;
+  const showDestructiveActions = showMutableActions && !catchUp;
 
   return (
     <div
@@ -247,7 +250,7 @@ export default function DesktopReader({
         }}
       >
         <span style={{ flex: 1 }} />
-        {showMutableActions && (email._untriaged || email.hasBill) && (
+        {showDestructiveActions && (email._untriaged || email.hasBill) && (
           <QuickAction
             icon={CreditCard}
             label={billOpen ? "Hide bill" : "Pay bill"}
@@ -317,7 +320,7 @@ export default function DesktopReader({
             keyHint="D"
           />
         )}
-        {showMutableActions && (
+        {showReadAction && (
           <QuickAction
             icon={email.read ? Mail : MailOpen}
             ariaLabel={email.read ? "Mark unread" : "Mark read"}
@@ -326,7 +329,7 @@ export default function DesktopReader({
             accent={accent}
           />
         )}
-        {showMutableActions && (
+        {showDestructiveActions && (
           <QuickAction
             icon={Clock}
             ariaLabel="Snooze email"
@@ -339,7 +342,7 @@ export default function DesktopReader({
             keyHint="S"
           />
         )}
-        {showMutableActions && snoozeOpen && (
+        {showDestructiveActions && snoozeOpen && (
           <SnoozePicker
             anchorRef={snoozeBtnRef}
             onSelect={(untilTs) => onAction("snooze", untilTs)}
@@ -356,7 +359,7 @@ export default function DesktopReader({
             keyHint="O"
           />
         )}
-        {showMutableActions && (
+        {showDestructiveActions && (
           <QuickAction
             icon={Trash2}
             ariaLabel="Trash email"
@@ -472,7 +475,7 @@ export default function DesktopReader({
           />
         </div>
 
-        {showDraft && email.claude?.draftReply && (
+        {showDraft && !catchUp && email.claude?.draftReply && (
           <div style={{ flexShrink: 0, maxHeight: "45%", overflowY: "auto" }}>
             <DraftReply
               key={email.id}
@@ -488,7 +491,7 @@ export default function DesktopReader({
         )}
       </div>
 
-      {!drafting && !showDraft && email.claude?.draftReply && (
+      {!drafting && !showDraft && !catchUp && email.claude?.draftReply && (
         <div
           style={{
             padding: "10px 20px",

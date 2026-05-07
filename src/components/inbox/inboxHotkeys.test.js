@@ -37,4 +37,12 @@ describe("resolveInboxHotkeyAction", () => {
     expect(resolveInboxHotkeyAction("h", snapshotEmail, true)).toBeNull();
     expect(resolveInboxHotkeyAction("1", snapshotEmail, false)).toBeNull();
   });
+
+  it("does not map destructive or lane hotkeys for Catch-up rows", () => {
+    const catchUp = { ...snapshotEmail, _lane: "catch_up", lane_at_snapshot: "fyi" };
+
+    for (const key of ["h", "d", "f", "n", "a", "s", "e"]) {
+      expect(resolveInboxHotkeyAction(key, catchUp, false)).toBeNull();
+    }
+  });
 });

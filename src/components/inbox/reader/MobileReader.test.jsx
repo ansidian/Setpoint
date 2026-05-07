@@ -17,6 +17,7 @@ afterEach(() => {
 });
 
 function renderMobileReader(overrides = {}) {
+  const onAction = vi.fn();
   render(
     <MobileReader
       email={{
@@ -33,7 +34,7 @@ function renderMobileReader(overrides = {}) {
       }}
       account={{ name: "Inbox", color: "#cba6da" }}
       accent="#cba6da"
-      onAction={() => {}}
+      onAction={onAction}
       onClose={() => {}}
       showTriage={false}
       billOpen
@@ -49,6 +50,7 @@ function renderMobileReader(overrides = {}) {
       setDrafting={() => {}}
     />,
   );
+  return { onAction };
 }
 
 describe("MobileReader bill extraction", () => {
@@ -95,5 +97,35 @@ describe("MobileReader bill extraction", () => {
 
     expect(screen.getByText("Handled")).toBeTruthy();
     expect(screen.queryByText("Move to FYI")).toBeNull();
+  });
+
+  it("limits Catch-up rows to read state and Gmail open actions", () => {
+    renderMobileReader({
+      email: {
+        id: "gmail-gmail-work-late-fyi",
+        uid: "gmail-gmail-work-late-fyi",
+        account_id: "gmail-work",
+        account_email: "work@example.test",
+        hasBill: true,
+        claude: { draftReply: "Thanks." },
+        _activeSnapshot: true,
+        _lane: "catch_up",
+        lane_at_snapshot: "fyi",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Mark read")).toBeTruthy();
+    expect(screen.getByText("Open in Gmail")).toBeTruthy();
+    expect(screen.queryByText("Open bill pay")).toBeNull();
+    expect(screen.queryByText("Show draft reply")).toBeNull();
+    expect(screen.queryByText("Move to Needs")).toBeNull();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+    expect(screen.queryByText("Move to Noise")).toBeNull();
+    expect(screen.queryByText("Handled")).toBeNull();
+    expect(screen.queryByText("Dismiss")).toBeNull();
+    expect(screen.queryByText("Snooze")).toBeNull();
+    expect(screen.queryByText("Trash")).toBeNull();
   });
 });

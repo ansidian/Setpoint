@@ -101,15 +101,17 @@ function normalizeCount(value) {
 function normalizeSnapshotItem(row) {
   const source = row.source || null;
   const resurfacedAt = row.resurfaced_at == null ? null : Number(row.resurfaced_at);
+  const catchUp = source === "catch_up" || Number(row.catch_up || 0) === 1;
+  const normalizedSource = catchUp ? "catch_up" : source;
   return {
-    id: Number(row.id),
+    id: catchUp ? `catch_up:${row.id}` : Number(row.id),
     snapshot_id: Number(row.snapshot_id),
     triage_id: Number(row.triage_id),
     user_id: row.user_id,
     account_id: row.account_id,
     email_id: row.email_id,
     uid: row.email_id,
-    lane: row.lane_at_snapshot,
+    lane: catchUp ? "catch_up" : row.lane_at_snapshot,
     lane_at_snapshot: row.lane_at_snapshot,
     summary: row.summary_at_snapshot || "",
     preview: row.summary_at_snapshot || "",
@@ -130,17 +132,19 @@ function normalizeSnapshotItem(row) {
     account_icon: row.account_icon_at_snapshot || "Mail",
     sort_order: Number(row.sort_order || 0),
     is_carryover: Boolean(row.is_carryover),
-    source,
+    source: normalizedSource,
     source_at: row.source_at || null,
     resurfaced_at: resurfacedAt,
-    _resurfaced: source === "resurfaced_snooze",
-    _resurfacedAt: source === "resurfaced_snooze" ? resurfacedAt : null,
+    _resurfaced: normalizedSource === "resurfaced_snooze",
+    _resurfacedAt: normalizedSource === "resurfaced_snooze" ? resurfacedAt : null,
     dismissed_from_today_at: row.dismissed_from_today_at || null,
     handled_at: row.handled_at || null,
     provider_removed_at: row.provider_removed_at || null,
     read: Boolean(row.read),
     hasBill: Boolean(row.bill_candidate_json),
     bill_candidate: row.bill_candidate_json ? JSON.parse(row.bill_candidate_json) : null,
+    _catchUp: catchUp,
+    previous_snapshot_item_id: catchUp ? Number(row.id) : null,
   };
 }
 
@@ -347,6 +351,51 @@ async function loadSnapshotItems(dbClient, snapshotId) {
                    i.email_date_at_snapshot DESC,
                    i.id ASC`,
     args: [snapshotId],
+  });
+  return result.rows.map(normalizeSnapshotItem);
+}
+
+async function loadActiveCatchUpItems(dbClient, userId, snapshot) {
+  if (!snapshot?.id || !snapshot.start_at) return [];
+  const previous = await loadPreviousFrozenSnapshot(dbClient, userId, {
+    start_at: snapshot.start_at,
+  });
+  if (!previous) return [];
+
+  const result = await dbClient.execute({
+    sql: `SELECT i.*,
+                 0 AS read,
+                 'catch_up' AS source,
+                 1 AS catch_up,
+                 t.bill_candidate_json
+          FROM ea_briefing_snapshot_items i
+          JOIN ea_email_index idx
+            ON idx.user_id = i.user_id
+           AND idx.account_id = i.account_id
+           AND idx.uid = i.email_id
+           AND idx.read = 0
+          LEFT JOIN ea_email_triage t
+            ON t.id = i.triage_id
+          WHERE i.snapshot_id = ?
+            AND i.user_id = ?
+            AND i.lane_at_snapshot = 'fyi'
+            AND i.dismissed_from_today_at IS NULL
+            AND i.handled_at IS NULL
+            AND i.provider_removed_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ea_briefing_snapshot_items active_i
+              WHERE active_i.snapshot_id = ?
+                AND active_i.user_id = i.user_id
+                AND active_i.account_id = i.account_id
+                AND active_i.email_id = i.email_id
+                AND active_i.dismissed_from_today_at IS NULL
+                AND active_i.provider_removed_at IS NULL
+            )
+          ORDER BY i.sort_order ASC,
+                   i.email_date_at_snapshot DESC,
+                   i.id ASC`,
+    args: [previous.id, userId, snapshot.id],
   });
   return result.rows.map(normalizeSnapshotItem);
 }
@@ -1018,6 +1067,11 @@ function buildLanes(items) {
       carryover.push(item);
       continue;
     }
+    if (item.lane === "catch_up") {
+      if (!lanes.catch_up) lanes.catch_up = [];
+      lanes.catch_up.push(item);
+      continue;
+    }
     if (lanes[item.lane]) lanes[item.lane].push(item);
   }
 
@@ -1051,18 +1105,20 @@ function emptyProcessingState() {
 
 function buildSnapshotView(snapshot, items, processing = emptyProcessingState(), accountOrder = null) {
   const { lanes, carryover } = buildLanes(items);
+  const laneCounts = {
+    needs_attention: lanes.needs_attention.length,
+    fyi: lanes.fyi.length,
+    handled: lanes.handled.length,
+    noise: lanes.noise.length,
+    carryover: carryover.length,
+  };
+  if (lanes.catch_up?.length > 0) laneCounts.catch_up = lanes.catch_up.length;
   return {
     snapshot,
     readOnly: snapshot?.status !== "active",
     lanes,
     carryover,
-    laneCounts: {
-      needs_attention: lanes.needs_attention.length,
-      fyi: lanes.fyi.length,
-      handled: lanes.handled.length,
-      noise: lanes.noise.length,
-      carryover: carryover.length,
-    },
+    laneCounts,
     processing,
     filters: buildFilters(items, accountOrder),
   };
@@ -1187,9 +1243,10 @@ export async function getActiveSnapshotView(userId, {
 } = {}) {
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   const items = snapshot ? await loadSnapshotItems(dbClient, snapshot.id) : [];
+  const catchUpItems = snapshot ? await loadActiveCatchUpItems(dbClient, userId, snapshot) : [];
   const accountOrder = await loadAccountFilterOrder(dbClient, userId);
   const processing = await loadProcessingState(dbClient, userId);
-  return buildSnapshotView(snapshot, items, processing, accountOrder);
+  return buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder);
 }
 
 async function runActiveSnapshotSync(userId, {

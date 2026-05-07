@@ -29,6 +29,13 @@ export function mergeReadState(read, uid, readOverrides) {
   return override == null ? !!read : !!override;
 }
 
+export function isCatchUpEmail(email) {
+  return email?._lane === "catch_up"
+    || email?.lane === "catch_up"
+    || email?._catchUp
+    || email?.source === "catch_up";
+}
+
 export function pendingSecurityGraceLabel(classifyAtMs, nowMs = Date.now()) {
   if (!Number.isFinite(classifyAtMs)) return "Triage delayed";
   const remainingMs = classifyAtMs - nowMs;
@@ -57,6 +64,7 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
   const rows = [
     ...(activeSnapshot.carryover || []).map((item) => ({ ...item, _snapshotCarryover: true })),
     ...(activeSnapshot.lanes?.needs_attention || []),
+    ...(activeSnapshot.lanes?.catch_up || []).map((item) => ({ ...item, _snapshotCatchUp: true })),
     ...(activeSnapshot.lanes?.fyi || []),
     ...(activeSnapshot.lanes?.handled || []),
     ...(activeSnapshot.lanes?.noise || []),
@@ -66,6 +74,7 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
     const uid = item.uid || item.email_id || item.id;
     const resurfaced = item.source === "resurfaced_snooze" || item._resurfaced;
     const pendingSecurityGrace = item.source === "pending_security_grace";
+    const catchUp = item._snapshotCatchUp || item.lane === "catch_up" || item.source === "catch_up";
     const resurfacedAt = item.resurfaced_at || item._resurfacedAt || (item.source_at ? Date.parse(item.source_at) : null);
     const pendingSecurityGraceAt = pendingSecurityGrace && item.source_at ? Date.parse(item.source_at) : null;
     const account = accountMap.get(item.account_id) || {
@@ -83,6 +92,8 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       : resurfaced
       || pendingSecurityGrace
       ? null
+      : catchUp
+      ? "catch_up"
       : item._snapshotCarryover
       ? "carryover"
       : item.lane === "action"
@@ -108,11 +119,13 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       account_icon: account.icon,
       _accountKey: account.id || account.name,
       _account: account,
+      lane: catchUp ? "catch_up" : item.lane,
       _lane: lane,
       _untriaged: resurfaced || pendingSecurityGrace,
       _live: false,
       _activeSnapshot: true,
       _carryover: lane === "carryover",
+      _catchUp: lane === "catch_up",
       _resurfaced: resurfaced,
       _resurfacedAt: resurfacedAt,
       _pendingSecurityGrace: pendingSecurityGrace,

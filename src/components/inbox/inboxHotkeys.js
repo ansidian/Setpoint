@@ -6,6 +6,7 @@ export function shouldSuspendInboxHotkeys(target) {
 }
 
 export function resolveInboxHotkeyAction(key, selectedEmail, readOnly) {
+  if (isCatchUpEmail(selectedEmail)) return null;
   if (key === "h" && canHandleSelectedEmail(selectedEmail, readOnly)) {
     return { kind: "snapshot-handled" };
   }
@@ -27,6 +28,10 @@ export function resolveInboxHotkeyAction(key, selectedEmail, readOnly) {
     return { kind: "snapshot-move-lane", lane: "needs_attention" };
   }
   return null;
+}
+
+function isCatchUpEmail(email) {
+  return email?._lane === "catch_up" || email?._catchUp || email?.source === "catch_up";
 }
 
 function isEditableKeyTarget(target) {

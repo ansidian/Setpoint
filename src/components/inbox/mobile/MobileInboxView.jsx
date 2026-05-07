@@ -17,6 +17,7 @@ const MOBILE_FILTER_CHIPS = [
   { key: "__live", label: "New" },
   { key: "carryover", label: "Carry" },
   { key: "needs_attention", label: "Needs" },
+  { key: "catch_up", label: "Catch" },
   { key: "fyi", label: "FYI" },
   { key: "handled", label: "Handled" },
   { key: "noise", label: "Noise" },

@@ -24,6 +24,7 @@ import {
   collectLiveEmails,
   collectResurfaced,
   mergeReadState,
+  isCatchUpEmail,
 } from "./helpers";
 import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
@@ -293,7 +294,7 @@ export default function useInboxController({
       if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
       return true;
     }).sort((a, b) => {
-      const order = { carryover: 0, needs_attention: 1, action: 1, fyi: 2, handled: 3, noise: 4 };
+      const order = { carryover: 0, needs_attention: 1, action: 1, catch_up: 2, fyi: 3, handled: 4, noise: 5 };
       if (a._untriaged && !b._untriaged) return -1;
       if (!a._untriaged && b._untriaged) return 1;
       if (order[a._lane] !== order[b._lane]) return (order[a._lane] ?? 3) - (order[b._lane] ?? 3);
@@ -352,7 +353,7 @@ export default function useInboxController({
   }, [search]);
 
   const laneCounts = useMemo(() => {
-    const counts = { needs_attention: 0, action: 0, carryover: 0, fyi: 0, handled: 0, noise: 0 };
+    const counts = { needs_attention: 0, action: 0, carryover: 0, catch_up: 0, fyi: 0, handled: 0, noise: 0 };
     for (const email of flatEmails) {
       if (accountId !== "__all" && email._accountKey !== accountId) continue;
       if (email._untriaged) continue;
@@ -375,6 +376,7 @@ export default function useInboxController({
       needs_attention: 0,
       action: 0,
       carryover: 0,
+      catch_up: 0,
       fyi: 0,
       handled: 0,
       noise: 0,
@@ -509,6 +511,7 @@ export default function useInboxController({
 
     const id = selectedEmail.id;
     const uid = selectedEmail.uid || id;
+    const catchUpSelected = isCatchUpEmail(selectedEmail);
 
     if (kind === "next") {
       moveBy(1);
@@ -521,6 +524,7 @@ export default function useInboxController({
     }
 
     if (kind === "trash") {
+      if (catchUpSelected) return;
       if (readOnly) return;
       const restoreSelectedId = id || uid;
       if (selectedEmail._live) {
@@ -603,6 +607,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-move-lane") {
+      if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
@@ -673,6 +678,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-dismiss") {
+      if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
@@ -733,6 +739,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-handled") {
+      if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
@@ -805,6 +812,7 @@ export default function useInboxController({
     }
 
     if (kind === "snapshot-reopen") {
+      if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
       const itemId = String(selectedEmail.snapshot_item_id);
@@ -876,6 +884,7 @@ export default function useInboxController({
     }
 
     if (kind === "snooze") {
+      if (catchUpSelected) return;
       if (readOnly) return;
       const untilTs = Number(payload);
       if (!Number.isFinite(untilTs) || untilTs <= Date.now()) return;

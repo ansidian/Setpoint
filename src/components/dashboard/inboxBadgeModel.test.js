@@ -26,6 +26,7 @@ function activeSnapshot(lanes) {
     carryover: lanes.carryover || [],
     lanes: {
       needs_attention: lanes.needs_attention || [],
+      catch_up: lanes.catch_up || [],
       fyi: lanes.fyi || [],
       handled: lanes.handled || [],
       noise: lanes.noise || [],
@@ -69,5 +70,27 @@ describe("computeInboxUnreadSignalCount", () => {
     });
 
     expect(count).toBe(1);
+  });
+
+  it("counts unread Catch-up rows and respects read overrides both ways", () => {
+    expect(computeInboxUnreadSignalCount({
+      activeSnapshot: activeSnapshot({
+        catch_up: [snapshotRow({ uid: "late-fyi", lane: "catch_up", lane_at_snapshot: "fyi" })],
+      }),
+    })).toBe(1);
+
+    expect(computeInboxUnreadSignalCount({
+      activeSnapshot: activeSnapshot({
+        catch_up: [snapshotRow({ uid: "late-fyi", lane: "catch_up", lane_at_snapshot: "fyi" })],
+      }),
+      liveReadOverrides: { "late-fyi": true },
+    })).toBe(0);
+
+    expect(computeInboxUnreadSignalCount({
+      activeSnapshot: activeSnapshot({
+        catch_up: [snapshotRow({ uid: "late-fyi", lane: "catch_up", lane_at_snapshot: "fyi", read: true })],
+      }),
+      liveReadOverrides: { "late-fyi": false },
+    })).toBe(1);
   });
 });
