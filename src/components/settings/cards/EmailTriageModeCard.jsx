@@ -52,13 +52,6 @@ function formatPercent(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
-function formatCompactNumber(value) {
-  return new Intl.NumberFormat(undefined, {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(Number(value || 0)).toLowerCase();
-}
-
 function formatUsdEstimate(value) {
   const number = Number(value || 0);
   if (number > 0 && number < 0.0001) return "<$0.0001";
@@ -70,24 +63,9 @@ function formatUsdEstimate(value) {
   }).format(number);
 }
 
-function formatLastTriaged(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function TriageCacheStats({ stats, loading, error }) {
+function TriageCacheGlance({ stats, loading, error }) {
   const calls = Number(stats?.openaiCalls || 0);
   const windowDays = Number(stats?.windowDays || 7);
-  const lastTriaged = formatLastTriaged(stats?.lastTriagedAt);
-  const monthToDateStats = stats?.comparisonWindows?.monthToDate;
-  const monthToDateCost = Number(monthToDateStats?.estimatedCostUsd || 0);
   const detail = error
     ? "Cache stats unavailable."
     : loading
@@ -97,39 +75,23 @@ function TriageCacheStats({ stats, loading, error }) {
         : `No OpenAI calls in ${windowDays} days`;
 
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[1.6px] text-muted-foreground uppercase">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex items-center gap-2 text-[12px] font-medium text-foreground">
           <Gauge size={13} className="text-primary/75" />
-          Triage cache
+          {loading || error ? "Cache: ..." : `Cache: ${formatPercent(stats?.hitRate)} hit`}
         </div>
-        <StatusPill tone="neutral">OpenAI only</StatusPill>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          ["Hit rate", loading || error ? "..." : formatPercent(stats?.hitRate)],
-          ["Cached", loading || error ? "..." : formatCompactNumber(stats?.cachedInputTokens)],
-          ["Cost", loading || error ? "..." : formatUsdEstimate(stats?.estimatedCostUsd)],
-          ["Saved", loading || error ? "..." : formatUsdEstimate(stats?.estimatedSavingsUsd)],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-md border border-white/[0.05] bg-black/[0.08] px-3 py-2">
-            <div className="text-[10px] font-semibold tracking-[1.4px] text-muted-foreground/60 uppercase">
-              {label}
-            </div>
-            <div className="mt-1 text-[16px] font-semibold leading-none text-foreground">
-              {value}
-            </div>
+        {!loading && !error && Number(stats?.estimatedSavingsUsd || 0) > 0 ? (
+          <div className="text-[11px] font-medium text-muted-foreground/70">
+            Saved {formatUsdEstimate(stats?.estimatedSavingsUsd)}
           </div>
-        ))}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-relaxed text-muted-foreground/60">
-        <span>{detail}</span>
-        {!loading && !error && monthToDateStats?.openaiCalls > 0 ? (
-          <span>MTD cost: {formatUsdEstimate(monthToDateCost)}</span>
         ) : null}
-        {lastTriaged ? <span>Last: {lastTriaged}</span> : null}
+        <div className="text-[11px] text-muted-foreground/60">
+          {detail}
+        </div>
+      </div>
+      <div className="shrink-0">
+        <StatusPill tone="neutral">OpenAI only</StatusPill>
       </div>
     </div>
   );
@@ -207,7 +169,7 @@ export default function EmailTriageModeCard({ settings, setSettings, patch }) {
           {MODE_OPTIONS.find((option) => option.value === effectiveMode)?.description}
         </FieldHint>
 
-        <TriageCacheStats
+        <TriageCacheGlance
           stats={cacheStats}
           loading={cacheStatsState === "loading"}
           error={cacheStatsState === "error"}

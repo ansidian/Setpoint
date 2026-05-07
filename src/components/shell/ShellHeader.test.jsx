@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ShellHeader from "./ShellHeader.jsx";
 
@@ -24,17 +25,20 @@ const currentStatus = {
 
 function renderHeader(overrides = {}) {
   return render(
-    <ShellHeader
-      tab="dashboard"
-      onTab={vi.fn()}
-      onOpenPalette={vi.fn()}
-      onOpenCustomize={vi.fn()}
-      onOpenHistory={vi.fn()}
-      onOpenCalendar={vi.fn()}
-      onQuickRefresh={vi.fn()}
-      systemStatus={currentStatus}
-      {...overrides}
-    />,
+    <MemoryRouter>
+      <ShellHeader
+        tab="dashboard"
+        onTab={vi.fn()}
+        onOpenPalette={vi.fn()}
+        onOpenAnalytics={vi.fn()}
+        onOpenCustomize={vi.fn()}
+        onOpenHistory={vi.fn()}
+        onOpenCalendar={vi.fn()}
+        onQuickRefresh={vi.fn()}
+        systemStatus={currentStatus}
+        {...overrides}
+      />
+    </MemoryRouter>,
   );
 }
 
@@ -116,19 +120,47 @@ describe("ShellHeader system status", () => {
   it("keeps shell controls accessible without native hover tooltips", () => {
     renderHeader();
 
+    expect(screen.getByRole("button", { name: /open analytics/i }).getAttribute("title")).toBe(null);
     expect(screen.getByRole("button", { name: /open command palette/i }).getAttribute("title")).toBe(null);
     expect(screen.getByRole("button", { name: /system status: current/i }).getAttribute("title")).toBe(null);
     expect(screen.getByRole("button", { name: /sync now/i }).getAttribute("title")).toBe(null);
   });
 
-  it("places system status after sync controls in the shell action cluster", () => {
+  it("places analytics before command palette in the shell action cluster", () => {
     renderHeader();
 
     const header = screen.getByTestId("shell-header-desktop");
     const controls = within(header).getAllByRole("button");
     const labels = controls.map((control) => control.getAttribute("aria-label") || control.textContent);
 
+    expect(labels.indexOf("Open analytics")).toBeLessThan(labels.indexOf("Open command palette"));
     expect(labels.indexOf("Open command palette")).toBeLessThan(labels.indexOf("Sync now"));
     expect(labels.indexOf("Sync now")).toBeLessThan(labels.indexOf("System status: current"));
+  });
+
+  it("opens analytics and tints the shell analytics button while active", () => {
+    const onOpenAnalytics = vi.fn();
+    renderHeader({ onOpenAnalytics, analyticsOpen: true });
+
+    const button = screen.getByRole("button", { name: /open analytics/i });
+    fireEvent.click(button);
+
+    expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.style.background).toContain("rgba(203, 166, 218");
+  });
+
+  it("moves analytics into the mobile overflow menu and keeps Sync now on one row", () => {
+    const onOpenAnalytics = vi.fn();
+    renderHeader({ isMobile: true, onOpenAnalytics });
+
+    expect(screen.queryByRole("button", { name: /open analytics/i })).toBeNull();
+    const syncButton = screen.getByRole("button", { name: /sync now/i });
+    expect(syncButton.style.whiteSpace).toBe("nowrap");
+
+    fireEvent.click(screen.getByRole("button", { name: /open more actions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /analytics/i }));
+
+    expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
   });
 });
