@@ -136,6 +136,16 @@ function createDataTransfer() {
   };
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("Calendar event editor rail", () => {
   it("opens the create editor before calendar sources finish loading", async () => {
     let resolveSources;
@@ -424,6 +434,9 @@ describe("Calendar event editor rail", () => {
       clientX: 140,
       clientY: 180,
     });
+    expect(await screen.findByTestId("calendar-event-context-copy")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-context-duplicate")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-color-grid")).toBeTruthy();
     fireEvent.click(await screen.findByTestId("calendar-event-context-delete"));
     fireEvent.click(screen.getByTestId("calendar-event-context-confirm-delete"));
 
@@ -435,6 +448,300 @@ describe("Calendar event editor rail", () => {
       });
     });
     expect(removeEvent).toHaveBeenCalledWith("event-context-delete");
+  });
+
+  it("keeps color dots labeled, checked, and inside the quick-action tab loop", async () => {
+    const event = {
+      id: "event-context-color-accessible",
+      etag: '"etag-context-color-accessible"',
+      title: "Color accessible",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+      sourceColor: "#dc2127",
+      color: "#dc2127",
+      colorId: null,
+    };
+    renderModal({ events: [event] });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+
+    const copy = await screen.findByTestId("calendar-event-context-copy");
+    const red = screen.getByTestId("calendar-event-color-11");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(red);
+    });
+    expect(document.activeElement).not.toBe(copy);
+    expect(red.getAttribute("aria-label")).toBe("Tomato");
+    expect(red.getAttribute("aria-pressed")).toBe("true");
+    expect(red.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
+    expect(screen.getByTestId("calendar-event-color-check-11")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(screen.getByTestId("calendar-event-color-1"));
+
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(red);
+  });
+
+  it("checks the mapped event enum color for existing source-colored events", async () => {
+    const event = {
+      id: "event-context-source-color",
+      etag: '"etag-context-source-color"',
+      title: "Source color",
+      accountId: "gmail-main",
+      calendarId: "work",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+      sourceColor: "#4285f4",
+      color: "#4285f4",
+      colorId: null,
+    };
+    renderModal({ events: [event] });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+
+    const grape = await screen.findByTestId("calendar-event-color-9");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(grape);
+    });
+    expect(grape.getAttribute("aria-label")).toBe("Blueberry");
+    expect(grape.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("calendar-event-color-check-9")).toBeTruthy();
+  });
+
+  it("dismisses open floating detail after a successful context-menu copy", async () => {
+    const event = {
+      id: "event-context-copy-detail",
+      etag: '"etag-context-copy-detail"',
+      title: "Copy closes detail",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+    };
+    renderModal({ events: [event] });
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    fireEvent.click(chip);
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    fireEvent.contextMenu(chip, {
+      clientX: 140,
+      clientY: 180,
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-context-copy"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+  });
+
+  it("opens the color-aware context menu from all-day span events", async () => {
+    const event = {
+      id: "event-all-day-source-color",
+      etag: '"etag-all-day-source-color"',
+      title: "All day source color",
+      accountId: "gmail-main",
+      calendarId: "work",
+      startMs: new Date("2026-04-20T19:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T19:00:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: true,
+      sourceColor: "#4285f4",
+      color: "#4285f4",
+      colorId: null,
+    };
+    renderModal({ events: [event] });
+
+    fireEvent.contextMenu(await screen.findByTestId("calendar-event-span-segment"), {
+      clientX: 140,
+      clientY: 180,
+    });
+
+    expect(await screen.findByTestId("calendar-event-color-grid")).toBeTruthy();
+    expect(screen.getByTestId("calendar-event-color-9").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("calendar-event-color-check-9")).toBeTruthy();
+  });
+
+  it("duplicates a writable event from the quick-action context menu", async () => {
+    const event = {
+      id: "event-context-duplicate",
+      etag: '"etag-context-duplicate"',
+      title: "Duplicate me",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: true,
+      recurringEventId: "series-1",
+      originalStartTime: "2026-04-20T16:00:00.000Z",
+      allDay: false,
+      location: "Office",
+      description: "Notes",
+      colorId: "9",
+    };
+    const created = {
+      ...event,
+      id: "event-context-duplicate-copy",
+      isRecurring: false,
+      recurringEventId: null,
+      originalStartTime: null,
+    };
+    const deferred = createDeferred();
+    mockCreateCalendarEvent.mockReturnValue(deferred.promise);
+    const { upsertEvents } = renderModal({ events: [event] });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-context-duplicate"));
+
+    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
+      id: expect.stringMatching(/^optimistic-calendar-copy-event-context-duplicate-/),
+      title: "Duplicate me",
+      startMs: event.startMs,
+      endMs: event.endMs,
+      isRecurring: false,
+      colorId: "9",
+    }));
+
+    deferred.resolve({ event: created });
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        title: "Duplicate me",
+        allDay: false,
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "09:00",
+        endTime: "09:30",
+        location: "Office",
+        description: "Notes",
+        colorId: "9",
+      });
+    });
+    expect(upsertEvents).toHaveBeenCalledWith(created);
+  });
+
+  it("copies the selected event with Cmd+C and pastes it onto the selected day with Cmd+V", async () => {
+    const event = {
+      id: "event-hotkey-copy",
+      etag: '"etag-hotkey-copy"',
+      title: "Copy with keys",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: true,
+      recurringEventId: "series-1",
+      originalStartTime: "2026-04-20T16:00:00.000Z",
+      allDay: false,
+      location: "Office",
+      description: "Notes",
+      colorId: "7",
+    };
+    const created = {
+      ...event,
+      id: "event-hotkey-copy-created",
+      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T17:30:00.000Z").getTime(),
+      isRecurring: false,
+      recurringEventId: null,
+      originalStartTime: null,
+    };
+    const deferred = createDeferred();
+    mockCreateCalendarEvent.mockReturnValue(deferred.promise);
+    const { upsertEvents } = renderModal({ events: [event] });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-item-chip"));
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+    fireEvent.click(screen.getByTestId("calendar-cell-21"));
+    fireEvent.keyDown(document, { key: "v", metaKey: true });
+
+    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
+      id: expect.stringMatching(/^optimistic-calendar-copy-event-hotkey-copy-/),
+      title: "Copy with keys",
+      startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T17:30:00.000Z").getTime(),
+      isRecurring: false,
+      colorId: "7",
+    }));
+
+    deferred.resolve({ event: created });
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+        title: "Copy with keys",
+        startDate: "2026-04-21",
+        endDate: "2026-04-21",
+        startTime: "09:00",
+        endTime: "10:30",
+        colorId: "7",
+      }));
+    });
+    expect(upsertEvents).toHaveBeenCalledWith(created);
+  });
+
+  it("updates event color from the quick-action context menu", async () => {
+    const event = {
+      id: "event-context-color",
+      etag: '"etag-context-color"',
+      title: "Color me",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+      color: "#4285f4",
+    };
+    mockUpdateCalendarEvent.mockResolvedValue({
+      event: { ...event, colorId: "11", color: "#dc2127" },
+    });
+    const { upsertEvents } = renderModal({ events: [event] });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+    fireEvent.click(await screen.findByTestId("calendar-event-color-11"));
+
+    await waitFor(() => {
+      expect(mockUpdateCalendarEvent).toHaveBeenCalledWith("event-context-color", expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        colorId: "11",
+      }));
+    });
+    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
+      id: "event-context-color",
+      colorId: "11",
+      color: "#dc2127",
+    }));
   });
 
   it("prevents invalid same-day end times by rolling compact schedule edits overnight", async () => {

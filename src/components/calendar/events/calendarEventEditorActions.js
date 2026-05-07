@@ -21,7 +21,7 @@ const defaultClient = {
 };
 
 export function buildCalendarEventPayload({ draft, effectiveTitle }) {
-  return {
+  const payload = {
     accountId: draft.accountId,
     calendarId: draft.calendarId,
     title: effectiveTitle,
@@ -33,6 +33,8 @@ export function buildCalendarEventPayload({ draft, effectiveTitle }) {
     location: draft.location,
     description: draft.description,
   };
+  if (draft.colorId) payload.colorId = draft.colorId;
+  return payload;
 }
 
 export function shouldSendRecurrencePayload({
@@ -49,18 +51,22 @@ export function shouldSendRecurrencePayload({
 }
 
 export function buildBatchCreateItems({ draft, batchDrafts, effectiveTitle }) {
-  return batchDrafts.map((item) => ({
-    accountId: draft.accountId,
-    calendarId: draft.calendarId,
-    title: item.title || effectiveTitle,
-    allDay: draft.allDay,
-    startDate: item.startDate,
-    endDate: item.endDate,
-    startTime: draft.allDay ? null : item.startTime,
-    endTime: draft.allDay ? null : item.endTime,
-    location: draft.location,
-    description: draft.description,
-  }));
+  return batchDrafts.map((item) => {
+    const payload = {
+      accountId: draft.accountId,
+      calendarId: draft.calendarId,
+      title: item.title || effectiveTitle,
+      allDay: draft.allDay,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      startTime: draft.allDay ? null : item.startTime,
+      endTime: draft.allDay ? null : item.endTime,
+      location: draft.location,
+      description: draft.description,
+    };
+    if (draft.colorId) payload.colorId = draft.colorId;
+    return payload;
+  });
 }
 
 export function buildUpdateEventPayload({

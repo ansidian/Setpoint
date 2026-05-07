@@ -14,6 +14,7 @@ vi.mock("./encryption.js", () => ({
 vi.stubGlobal("fetch", vi.fn());
 
 const {
+  createCalendarEvent,
   deleteCalendarEvent,
   extractStructuredRecurrence,
   updateCalendarEvent,
@@ -193,6 +194,71 @@ describe("calendar recurring mutations", () => {
       return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
     });
     expect(patchCall[1].headers["If-Match"]).toBe('"moved-current"');
+  });
+
+  it("sends a valid event color when creating an event", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      if (method === "POST" && path === "calendars/primary/events") {
+        return jsonResponse({
+          id: "event-colored",
+          etag: '"created"',
+          ...JSON.parse(init.body || "{}"),
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    const created = await createCalendarEvent(account, {
+      calendarId: "primary",
+      title: "Planning",
+      allDay: false,
+      startDate: "2026-04-27",
+      endDate: "2026-04-27",
+      startTime: "10:00",
+      endTime: "10:30",
+      colorId: "9",
+    });
+
+    const createCall = fetch.mock.calls.find(([url, init = {}]) => {
+      return (init.method || "GET") === "POST" && String(url).includes("/calendars/primary/events");
+    });
+    expect(JSON.parse(createCall[1].body).colorId).toBe("9");
+    expect(created.colorId).toBe("9");
+    expect(created.color).toBe("#5484ed");
+  });
+
+  it("rejects unsupported event colors", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    await expect(createCalendarEvent(account, {
+      calendarId: "primary",
+      title: "Planning",
+      allDay: false,
+      startDate: "2026-04-27",
+      endDate: "2026-04-27",
+      startTime: "10:00",
+      endTime: "10:30",
+      colorId: "12",
+    })).rejects.toMatchObject({
+      status: 400,
+      code: "calendar_validation_error",
+    });
   });
 
   it("trims a recurring series with exception dates when deleting following events", async () => {

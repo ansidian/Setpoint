@@ -759,4 +759,61 @@ describe("AgendaRailShell", () => {
     expect(railRef.current.activateItem("missing", "2026-05-01")).toBe(false);
     expect(rail.scrollTo).not.toHaveBeenCalled();
   });
+
+  it("waits for the actionable agenda anchor instead of activating the registered wrapper", async () => {
+    const railRef = createRef();
+    const onRowClick = vi.fn();
+
+    function Shell({ ready = false }) {
+      return (
+        <AgendaRailShell
+          ref={railRef}
+          testId="agenda-shell"
+          groups={GROUPS}
+          firstVisibleDateKey="2026-05-01"
+          todayKey="2026-05-01"
+          selectedDateKey="2026-05-01"
+          renderHeader={({ group, registerHeader }) => (
+            <button
+              type="button"
+              ref={(node) => registerHeader(group.dateKey, node)}
+              data-testid={`header-${group.dateKey}`}
+            >
+              {group.dateKey}
+            </button>
+          )}
+          renderGroup={({ group, registerRow }) => (
+            group.dateKey === "2026-05-01" ? (
+              <span ref={(node) => registerRow(`row-1-${group.dateKey}`, node, group.dateKey)}>
+                {ready ? (
+                  <button
+                    type="button"
+                    data-testid="calendar-agenda-event-row"
+                    data-item-id="row-1"
+                    onClick={onRowClick}
+                  >
+                    Row one
+                  </button>
+                ) : null}
+              </span>
+            ) : null
+          )}
+        />
+      );
+    }
+
+    const { rerender } = render(<Shell />);
+    await flushRailEffects();
+
+    expect(railRef.current.getItemAnchor("row-1", "2026-05-01")).toBeNull();
+    expect(railRef.current.activateItem("row-1", "2026-05-01")).toBe(false);
+    expect(onRowClick).not.toHaveBeenCalled();
+
+    rerender(<Shell ready />);
+    await flushRailEffects();
+
+    expect(railRef.current.getItemAnchor("row-1", "2026-05-01")).toBe(screen.getByTestId("calendar-agenda-event-row"));
+    expect(railRef.current.activateItem("row-1", "2026-05-01")).toBe(true);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+  });
 });

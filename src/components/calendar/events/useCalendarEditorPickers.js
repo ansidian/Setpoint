@@ -253,6 +253,9 @@ export default function useCalendarEditorPickers(editor, transientCloseToken = 0
     if (!item) return;
     updateField("accountId", item.accountId, { markTouched: false, markOverride: false });
     updateField("calendarId", item.calendarId, { markTouched: false, markOverride: false });
+    updateField("colorId", item.defaultEventColorId || null, { markTouched: false, markOverride: false });
+    updateField("sourceColor", item.color || null, { markTouched: false, markOverride: false });
+    updateField("sourceColorId", item.defaultEventColorId || null, { markTouched: false, markOverride: false });
     consumeParsedSourceFromTitle();
     setOpenPicker(null);
     setActiveSourceSuggestion(0);

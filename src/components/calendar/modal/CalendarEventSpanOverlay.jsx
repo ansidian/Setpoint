@@ -250,6 +250,19 @@ export default function CalendarEventSpanOverlay({
             }}
             onContextMenu={(event) => {
               if (segment.readOnly || !segment.item?.writable) return;
+              if (quickActions?.openContextMenu?.({
+                event: segment.item,
+                x: event.clientX,
+                y: event.clientY,
+                anchorElement: event.currentTarget,
+                dateKey: clickedSegmentDate(segment, event),
+                anchorKind: "span",
+              })) {
+                event.preventDefault();
+                event.stopPropagation();
+                onBeforeAction?.();
+                return;
+              }
               event.preventDefault();
               event.stopPropagation();
               onBeforeAction?.();

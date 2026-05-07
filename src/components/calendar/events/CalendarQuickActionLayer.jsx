@@ -1,11 +1,26 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
+import Tooltip from "@/components/shared/Tooltip";
+import {
+  GOOGLE_EVENT_COLORS,
+  googleEventColorIdForSourceHex,
+} from "../../../../shared/calendar-event-colors.js";
 
 const SCOPE_OPTIONS = [
   { value: "one", label: "Just this one" },
   { value: "following", label: "Upcoming only" },
   { value: "all", label: "All events" },
 ];
+
+const FOCUSABLE_SELECTOR = [
+  "button:not(:disabled)",
+  "[href]",
+  "input:not(:disabled)",
+  "select:not(:disabled)",
+  "textarea:not(:disabled)",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
 
 function stop(event) {
   event.stopPropagation();
@@ -14,13 +29,14 @@ function stop(event) {
 function menuStyle(menu) {
   const width = 220;
   const padding = 12;
+  const height = 220;
   const left = Math.min(
     Math.max(padding, menu.x),
     Math.max(padding, window.innerWidth - width - padding),
   );
   const top = Math.min(
     Math.max(padding, menu.y),
-    Math.max(padding, window.innerHeight - 150),
+    Math.max(padding, window.innerHeight - height - padding),
   );
   return { left, top, width };
 }
@@ -45,6 +61,82 @@ function actionButtonColors(tone, active) {
     background: active ? "rgba(255,255,255,0.075)" : "rgba(255,255,255,0.04)",
     color: "#cdd6f4",
   };
+}
+
+function focusableItems(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR));
+}
+
+function focusFirstMenuItem(container) {
+  focusableItems(container)[0]?.focus({ preventScroll: true });
+}
+
+function colorDotItems(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll("[data-calendar-event-color-button='true']:not(:disabled)"));
+}
+
+function contextMenuFocusItems(container) {
+  const dots = colorDotItems(container);
+  return dots.length ? dots : focusableItems(container);
+}
+
+function focusMenuColor(container) {
+  const dots = colorDotItems(container);
+  if (!dots.length) {
+    focusFirstMenuItem(container);
+    return;
+  }
+  const selected = dots.find((element) => element.getAttribute("aria-pressed") === "true");
+  (selected || dots[0])?.focus({ preventScroll: true });
+}
+
+function containTabFocus(event, container, itemResolver = focusableItems) {
+  const items = itemResolver(container);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items.at(-1);
+  const active = document.activeElement;
+
+  if (!items.includes(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus({ preventScroll: true });
+    return;
+  }
+
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus({ preventScroll: true });
+    return;
+  }
+
+  if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus({ preventScroll: true });
+  }
+}
+
+function normalizedHex(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function selectedEventColorId(event) {
+  if (event?.colorId) return String(event.colorId);
+  if (event?.sourceColorId) return String(event.sourceColorId);
+  const visibleColor = normalizedHex(event?.color || event?.sourceColor);
+  if (!visibleColor) return null;
+  return googleEventColorIdForSourceHex(visibleColor);
+}
+
+function checkColorForDot(hex) {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return "#f8f5ff";
+  const red = Number.parseInt(clean.slice(0, 2), 16);
+  const green = Number.parseInt(clean.slice(2, 4), 16);
+  const blue = Number.parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+  return luminance > 0.58 ? "#16161e" : "#f8f5ff";
 }
 
 function ActionButton({ children, tone = "default", disabled, onClick, testId }) {
@@ -84,6 +176,113 @@ function ActionButton({ children, tone = "default", disabled, onClick, testId })
     >
       {children}
     </button>
+  );
+}
+
+function ColorDotButton({ color, selected, disabled, onClick }) {
+  const [active, setActive] = useState(false);
+  const interactive = active && !disabled;
+  const checkColor = checkColorForDot(color.hex);
+  const tooltipLabel = color.label;
+
+  const button = (
+    <button
+      type="button"
+      data-testid={`calendar-event-color-${color.colorId}`}
+      data-calendar-event-color-button="true"
+      data-calendar-focus-ring="true"
+      aria-label={tooltipLabel}
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={onClick}
+      onPointerEnter={() => {
+        if (!disabled) setActive(true);
+      }}
+      onPointerLeave={() => setActive(false)}
+      onFocus={() => {
+        if (!disabled) setActive(true);
+      }}
+      onBlur={() => setActive(false)}
+      style={{
+        width: 18,
+        height: 18,
+        padding: 0,
+        borderRadius: 999,
+        position: "relative",
+        display: "grid",
+        placeItems: "center",
+        border: selected
+          ? "2px solid color-mix(in srgb, var(--ea-accent, #cba6da) 82%, white 8%)"
+          : interactive
+            ? "2px solid rgba(255,255,255,0.42)"
+            : "2px solid rgba(255,255,255,0.16)",
+        background: color.hex,
+        boxShadow: selected
+          ? "0 0 0 2px rgba(22,22,30,0.95), 0 0 0 4px color-mix(in srgb, var(--ea-accent, #cba6da) 42%, transparent)"
+          : interactive
+            ? "0 0 0 2px rgba(255,255,255,0.06)"
+            : "none",
+        cursor: disabled ? "not-allowed" : "pointer",
+        transform: interactive ? "translateY(-1px)" : "translateY(0)",
+        opacity: disabled ? 0.56 : 1,
+        transition: "transform 150ms, border-color 150ms, box-shadow 150ms, opacity 150ms",
+      }}
+    >
+      {selected ? (
+        <Check
+          data-testid={`calendar-event-color-check-${color.colorId}`}
+          size={12}
+          strokeWidth={3}
+          aria-hidden="true"
+          style={{
+            color: checkColor,
+            filter: checkColor === "#16161e"
+              ? "drop-shadow(0 0 1px rgba(248,245,255,0.88))"
+              : "drop-shadow(0 0 1px rgba(22,22,30,0.82))",
+          }}
+        />
+      ) : null}
+    </button>
+  );
+
+  return (
+    <Tooltip
+      text={tooltipLabel}
+      side="top"
+      sideOffset={24}
+      delay={250}
+      closeDelay={0}
+      disableHoverablePopup
+      contentStyle={{ pointerEvents: "none" }}
+      style={{ width: 18, height: 18 }}
+    >
+      {button}
+    </Tooltip>
+  );
+}
+
+function ColorGrid({ menu, quickActions }) {
+  const selectedColorId = selectedEventColorId(menu.event);
+  return (
+    <div
+      data-testid="calendar-event-color-grid"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(6, 18px)",
+        gap: "8px 9px",
+        padding: "2px 4px 3px",
+      }}
+    >
+      {GOOGLE_EVENT_COLORS.map((color) => (
+        <ColorDotButton
+          key={color.colorId}
+          color={color}
+          selected={selectedColorId === color.colorId}
+          disabled={menu.busy}
+          onClick={() => quickActions.chooseEventColor(color.colorId)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -151,13 +350,25 @@ function ContextMenu({ quickActions }) {
       quickActions.closeContextMenu();
     }
     function handleKeyDown(event) {
-      if (event.key !== "Escape") return;
-      quickActions.closeContextMenu();
-      event.preventDefault();
-      event.stopPropagation();
+      if (event.key === "Tab") {
+        containTabFocus(event, ref.current, menu.confirm ? focusableItems : contextMenuFocusItems);
+        return;
+      }
+      if (event.key === "Escape") {
+        quickActions.closeContextMenu();
+        event.preventDefault();
+        event.stopPropagation();
+      }
     }
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown, true);
+    window.queueMicrotask(() => {
+      if (menu.confirm) {
+        focusFirstMenuItem(ref.current);
+      } else {
+        focusMenuColor(ref.current);
+      }
+    });
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown, true);
@@ -208,9 +419,26 @@ function ContextMenu({ quickActions }) {
           </ActionButton>
         </>
       ) : (
-        <ActionButton tone="danger" disabled={menu.busy} onClick={quickActions.requestDelete} testId="calendar-event-context-delete">
-          Delete
-        </ActionButton>
+        <>
+          <ActionButton disabled={menu.busy} onClick={quickActions.copyContextEvent} testId="calendar-event-context-copy">
+            Copy
+          </ActionButton>
+          <ActionButton disabled={menu.busy} onClick={quickActions.duplicateContextEvent} testId="calendar-event-context-duplicate">
+            Duplicate
+          </ActionButton>
+          <ActionButton tone="danger" disabled={menu.busy} onClick={quickActions.requestDelete} testId="calendar-event-context-delete">
+            Delete
+          </ActionButton>
+          <div
+            aria-hidden="true"
+            style={{
+              height: 1,
+              margin: "2px 2px",
+              background: "rgba(255,255,255,0.08)",
+            }}
+          />
+          <ColorGrid menu={menu} quickActions={quickActions} />
+        </>
       )}
     </div>,
     document.body,
@@ -242,7 +470,11 @@ function ScopePrompt({ quickActions }) {
   }, [prompt, quickActions]);
 
   if (!prompt) return null;
-  const title = prompt.kind === "delete" ? "Delete recurring event" : "Move recurring event";
+  const title = prompt.kind === "delete"
+    ? "Delete recurring event"
+    : prompt.kind === "color"
+      ? "Color recurring event"
+      : "Move recurring event";
 
   return createPortal(
     <div

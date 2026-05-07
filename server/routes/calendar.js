@@ -349,6 +349,7 @@ router.post("/events", async (req, res) => {
     endTime,
     location,
     description,
+    colorId,
     recurrence,
   } = req.body || {};
   try {
@@ -364,6 +365,7 @@ router.post("/events", async (req, res) => {
       endTime,
       location,
       description,
+      colorId,
       recurrence,
     });
     res.status(201).json({ event });
@@ -426,6 +428,7 @@ router.patch("/events/:eventId", async (req, res) => {
     endTime,
     location,
     description,
+    colorId,
     recurrence,
     scope,
     recurringEventId,
@@ -451,6 +454,7 @@ router.patch("/events/:eventId", async (req, res) => {
       endTime,
       location,
       description,
+      colorId,
       recurrence,
       scope,
       recurringEventId,

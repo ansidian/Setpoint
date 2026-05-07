@@ -301,6 +301,7 @@ export default function useCalendarModalController({
   const eventsLoading = !!eventsData?.loading;
   const eventsStaleRefreshPending = !!eventsData?.staleRefreshPending;
   const eventsRevision = eventsData?.revision;
+  const [calendarEventClipboard, setCalendarEventClipboard] = useState(null);
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -536,6 +537,28 @@ export default function useCalendarModalController({
   const closeEventEditor = eventEditor.closeEditor;
   const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
 
+  const resolveSelectedCalendarEvent = useCallback(() => {
+    if (view !== "events" || activeSelectedItemId == null) return null;
+    const events = viewData?.events || [];
+    const selected = events.find((event) => {
+      const itemId = activeView.getItemId ? activeView.getItemId(event) : event.id;
+      return String(itemId) === String(activeSelectedItemId);
+    });
+    if (!selected?.startMs || !selected?.calendarId || !selected?.accountId) return null;
+    return selected;
+  }, [activeSelectedItemId, activeView, view, viewData?.events]);
+
+  const copyCalendarEvent = useCallback((event) => {
+    if (!event?.startMs || !event?.calendarId || !event?.accountId) return false;
+    setCalendarEventClipboard({ ...event });
+    setFloatingDetail(null);
+    return true;
+  }, [setFloatingDetail]);
+
+  const copySelectedCalendarEvent = useCallback(() => {
+    copyCalendarEvent(resolveSelectedCalendarEvent());
+  }, [copyCalendarEvent, resolveSelectedCalendarEvent]);
+
   useEffect(() => {
     if (!shouldForceDeadlineOverlay({ open, view, forceDeadlineOverlay })) return;
     setDeadlineOverlayVisible(true);
@@ -548,6 +571,7 @@ export default function useCalendarModalController({
     refreshRange: eventsRefreshRange,
     upsertEvents: eventsUpsertEvents,
     removeEvent: eventsRemoveEvent,
+    onCopyEvent: copyCalendarEvent,
     onSelectEvent: (itemId, dateKey) => {
       const parsed = parseYmd(dateKey);
       if (parsed) {
@@ -569,6 +593,11 @@ export default function useCalendarModalController({
       }
     },
   });
+
+  const pasteCopiedCalendarEvent = useCallback(() => {
+    if (!calendarEventClipboard || !activeSelectedDateKey) return;
+    eventQuickActions.pasteEvent?.(calendarEventClipboard, activeSelectedDateKey);
+  }, [activeSelectedDateKey, calendarEventClipboard, eventQuickActions]);
 
   const deadlineQuickActions = useDeadlineQuickActions({
     enabled: open && (view === "deadlines" || (view === "events" && deadlineOverlayVisible)),
@@ -1110,6 +1139,8 @@ export default function useCalendarModalController({
       writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, value);
     },
     navigateMonthRef,
+    onCopySelectedEvent: copySelectedCalendarEvent,
+    onPasteCopiedEvent: pasteCopiedCalendarEvent,
   });
 
   useEffect(() => {

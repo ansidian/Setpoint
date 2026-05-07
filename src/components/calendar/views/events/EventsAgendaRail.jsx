@@ -130,7 +130,8 @@ function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked })
       onContextMenu={(contextEvent) => {
         if (!event.writable) return;
         contextEvent.preventDefault();
-        quickActions?.openDeleteMenu?.({ event, x: contextEvent.clientX, y: contextEvent.clientY });
+        contextEvent.stopPropagation();
+        quickActions?.openContextMenu?.({ event, x: contextEvent.clientX, y: contextEvent.clientY });
       }}
       onClick={(clickEvent) => onSelect(event, clickEvent.currentTarget, "agenda-chip")}
       style={{
@@ -203,7 +204,8 @@ function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickActions, 
       onContextMenu={(contextEvent) => {
         if (!event.writable) return;
         contextEvent.preventDefault();
-        quickActions?.openDeleteMenu?.({ event, x: contextEvent.clientX, y: contextEvent.clientY });
+        contextEvent.stopPropagation();
+        quickActions?.openContextMenu?.({ event, x: contextEvent.clientX, y: contextEvent.clientY });
       }}
       onClick={(clickEvent) => onSelect(event, clickEvent.currentTarget, "agenda-row")}
       style={{

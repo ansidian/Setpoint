@@ -36,7 +36,7 @@ function findRowAnchor(rowRefs, itemId, dateKey) {
   if (!row) return null;
   return row.matches?.(ITEM_ACTION_SELECTOR)
     ? row
-    : row.querySelector?.(ITEM_ACTION_SELECTOR) || row;
+    : row.querySelector?.(ITEM_ACTION_SELECTOR) || null;
 }
 
 const AgendaRailShell = forwardRef(function AgendaRailShell({

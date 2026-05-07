@@ -58,6 +58,25 @@ describe("EventsAgendaRail", () => {
     }));
   });
 
+  it("opens the event context menu from agenda row right-click", () => {
+    const openContextMenu = vi.fn(() => true);
+    renderRail({
+      selectedDateKey: "2026-05-04",
+      eventQuickActions: { openContextMenu },
+    });
+
+    fireEvent.contextMenu(screen.getByTestId("calendar-agenda-event-row"), {
+      clientX: 120,
+      clientY: 160,
+    });
+
+    expect(openContextMenu).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ id: "event-1" }),
+      x: 120,
+      y: 160,
+    }));
+  });
+
   it("keeps the agenda skeleton until entry scroll content is ready", () => {
     const { rerender } = renderRail({
       selectedDateKey: "2026-05-04",
