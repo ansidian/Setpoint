@@ -907,7 +907,7 @@ describe("email triage worker", () => {
       expect(url).toBe("https://api.openai.com/v1/responses");
       const body = JSON.parse(options.body);
       expect(body.model).toBe("gpt-5.4");
-      expect(body.store).toBe(false);
+      expect(body.store).toBe(true);
       expect(body.prompt_cache_key).toBe("ea-email-triage:v1:strong:gpt-5.4");
       expect(body.prompt_cache_retention).toBe("24h");
       expect(consoleLog).toHaveBeenCalledWith(
@@ -1075,7 +1075,7 @@ describe("email triage worker", () => {
       const retryBody = JSON.parse(global.fetch.mock.calls[1][1].body);
       expect(firstBody.prompt_cache_key).toBe("ea-email-triage:v1:strong:gpt-5.4");
       expect(firstBody.prompt_cache_retention).toBe("24h");
-      expect(retryBody.store).toBe(false);
+      expect(retryBody.store).toBe(true);
       expect(retryBody.prompt_cache_key).toBeUndefined();
       expect(retryBody.prompt_cache_retention).toBeUndefined();
       expect(consoleWarn).toHaveBeenCalledWith(
@@ -1319,7 +1319,7 @@ describe("email triage worker", () => {
       expect(url).toBe("https://api.openai.com/v1/responses");
       const body = JSON.parse(options.body);
       expect(body.model).toBe("gpt-5.4-nano");
-      expect(body.store).toBe(false);
+      expect(body.store).toBe(true);
       expect(body.prompt_cache_key).toBe("ea-email-triage:v1:cheap:gpt-5.4-nano");
       expect(body.prompt_cache_retention).toBe("24h");
     } finally {
