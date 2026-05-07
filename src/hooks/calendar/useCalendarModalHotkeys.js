@@ -18,6 +18,11 @@ function isSuspendedHotkeyTarget(target) {
     && !!target.closest("[data-suspend-calendar-hotkeys='true']");
 }
 
+function isTodoistDeadlineItem(item) {
+  const isDeadline = item?.calendarItemKind === "deadline" || (!!item?.due_date && !item?.startMs);
+  return isDeadline && item?.source === "todoist";
+}
+
 export default function useCalendarModalHotkeys({
   open,
   canGoPrev,
@@ -57,6 +62,7 @@ export default function useCalendarModalHotkeys({
   openFloatingDeadlineEdit,
   openFloatingEventCreate,
   openFloatingDeadlineCreate,
+  toggleEventOverlay,
   deadlineOverlayVisible = false,
   toggleDeadlineOverlay,
   toggleCompletedDeadlineOverlay,
@@ -176,17 +182,30 @@ export default function useCalendarModalHotkeys({
           break;
         case "e":
         case "E":
+          if (event.shiftKey && view === "events") {
+            toggleEventOverlay?.();
+            consumeCalendarKey();
+            break;
+          }
           if (selectedItemId != null) {
-            if (view === "events" && eventEditor.editable) {
+            if (view === "events") {
               const dayItems = itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay] || [];
               const resolveId = activeView.getItemId;
-              const ev = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
-              if (ev) {
+              const selectedItem = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
+              if (isTodoistDeadlineItem(selectedItem)) {
                 if (usesFloatingEditor) {
-                  openFloatingEventEdit(ev, { dateKey: selectedDateKey });
+                  openFloatingDeadlineEdit(selectedItem, { dateKey: selectedDateKey });
                 } else {
                   setFloatingDetail(null);
-                  eventEditor.openEdit(ev);
+                  setDeadlineEditor({ mode: "edit", taskId: String(selectedItem.id) });
+                  setDeadlineDraftPreview(null);
+                }
+              } else if (selectedItem && eventEditor.editable) {
+                if (usesFloatingEditor) {
+                  openFloatingEventEdit(selectedItem, { dateKey: selectedDateKey });
+                } else {
+                  setFloatingDetail(null);
+                  eventEditor.openEdit(selectedItem);
                 }
               }
             } else if (view === "deadlines") {
@@ -245,9 +264,9 @@ export default function useCalendarModalHotkeys({
         case "D":
           if (view === "events") {
             if (event.shiftKey) {
-              if (deadlineOverlayVisible) toggleCompletedDeadlineOverlay?.();
-            } else {
               toggleDeadlineOverlay?.();
+            } else {
+              if (deadlineOverlayVisible) toggleCompletedDeadlineOverlay?.();
             }
           }
           consumeCalendarKey();
