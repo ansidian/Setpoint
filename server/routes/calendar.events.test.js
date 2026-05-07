@@ -121,6 +121,7 @@ describe("calendar event routes", () => {
         endDate: "2026-04-20",
         startTime: "09:00",
         endTime: "09:30",
+        colorId: "7",
       });
 
     expect(res.status).toBe(201);
@@ -132,7 +133,7 @@ describe("calendar event routes", () => {
     });
     expect(createCalendarEvent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "gmail-main" }),
-      expect.objectContaining({ title: "Planning", calendarId: "primary" }),
+      expect.objectContaining({ title: "Planning", calendarId: "primary", colorId: "7" }),
     );
   });
 

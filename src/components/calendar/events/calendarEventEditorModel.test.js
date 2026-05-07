@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRecurrencePayload,
+  draftFromEvent,
+  flattenWritableCalendars,
   normalizeDraftForDirty,
   normalizeRecurrenceDraft,
   validateBatchDrafts,
@@ -126,6 +128,44 @@ describe("calendarEventEditorModel", () => {
       ],
       recurrenceDraft: null,
       recurringEditScope: null,
+    });
+  });
+
+  it("maps Google calendar source colors onto event color ids for new and existing events", () => {
+    expect(flattenWritableCalendars([
+      {
+        accountId: "gmail-main",
+        accountLabel: "Google",
+        calendars: [
+          {
+            id: "work",
+            summary: "Work",
+            writable: true,
+            backgroundColor: "#4285f4",
+          },
+        ],
+      },
+    ])).toEqual([
+      expect.objectContaining({
+        calendarId: "work",
+        color: "#4285f4",
+        defaultEventColorId: "9",
+      }),
+    ]);
+
+    expect(draftFromEvent({
+      id: "event-source-color",
+      title: "Work",
+      accountId: "gmail-main",
+      calendarId: "work",
+      startMs: new Date("2026-05-06T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-06T16:30:00.000Z").getTime(),
+      allDay: false,
+      colorId: null,
+      sourceColorId: "3",
+    })).toMatchObject({
+      colorId: "3",
+      sourceColorId: "3",
     });
   });
 

@@ -166,4 +166,60 @@ describe("normalizeGoogleEvent", () => {
       rules: ["RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO"],
     });
   });
+
+  it("uses explicit Google event color before calendar source color", () => {
+    const event = normalizeGoogleEvent({
+      account: {
+        id: "acct-1",
+        email: "me@example.com",
+        label: "Google",
+        color: "#4285f4",
+      },
+      calendar: {
+        id: "primary",
+        summary: "Primary",
+        writable: true,
+        backgroundColor: "#4285f4",
+      },
+      event: {
+        id: "event-1",
+        summary: "Office",
+        colorId: "10",
+        start: { dateTime: "2026-04-20T09:00:00-07:00" },
+        end: { dateTime: "2026-04-20T09:30:00-07:00" },
+      },
+    });
+
+    expect(event.colorId).toBe("10");
+    expect(event.color).toBe("#51b749");
+    expect(event.sourceColor).toBe("#4285f4");
+  });
+
+  it("prefers the calendar background color over the account color for inherited source colors", () => {
+    const event = normalizeGoogleEvent({
+      account: {
+        id: "acct-1",
+        email: "me@example.com",
+        label: "Google",
+        color: "#4285f4",
+      },
+      calendar: {
+        id: "work",
+        summary: "Work",
+        writable: true,
+        backgroundColor: "#7a367a",
+      },
+      event: {
+        id: "event-source-color",
+        summary: "Office",
+        start: { dateTime: "2026-04-20T09:00:00-07:00" },
+        end: { dateTime: "2026-04-20T09:30:00-07:00" },
+      },
+    });
+
+    expect(event.colorId).toBeNull();
+    expect(event.sourceColorId).toBe("3");
+    expect(event.color).toBe("#dbadff");
+    expect(event.sourceColor).toBe("#7a367a");
+  });
 });

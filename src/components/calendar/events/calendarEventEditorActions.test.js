@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildCalendarEventPayload,
   buildBatchCreateItems,
   deleteCalendarEventAction,
   saveCalendarEventAction,
@@ -148,6 +149,39 @@ describe("calendarEventEditorActions", () => {
         description: "Notes",
       },
     ]);
+  });
+
+  it("includes default event color ids on single and batch create payloads", () => {
+    expect(buildCalendarEventPayload({
+      draft: {
+        ...draft,
+        colorId: "3",
+      },
+      effectiveTitle: "Work",
+    })).toMatchObject({
+      title: "Work",
+      colorId: "3",
+    });
+
+    expect(buildBatchCreateItems({
+      draft: {
+        ...draft,
+        colorId: "3",
+      },
+      effectiveTitle: "Work",
+      batchDrafts: [
+        {
+          title: "",
+          startDate: "2026-05-06",
+          endDate: "2026-05-06",
+          startTime: "17:00",
+          endTime: "17:30",
+        },
+      ],
+    })[0]).toMatchObject({
+      title: "Work",
+      colorId: "3",
+    });
   });
 
   it("creates recurring events with a normalized recurrence payload and refresh bounds", async () => {

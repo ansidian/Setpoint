@@ -1,3 +1,5 @@
+import { googleEventColorIdForSourceHex } from "../../../../shared/calendar-event-colors.js";
+
 export function pacificYMD(ms) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
@@ -44,6 +46,9 @@ export function defaultDraft(selectedDate) {
     calendarId: "",
     location: "",
     description: "",
+    colorId: null,
+    sourceColor: null,
+    sourceColorId: null,
   };
 }
 
@@ -64,6 +69,9 @@ export function draftFromEvent(event) {
     calendarId: event.calendarId || "",
     location: event.location || "",
     description: event.description || "",
+    colorId: event.colorId || event.sourceColorId || null,
+    sourceColor: event.sourceColor || null,
+    sourceColorId: event.sourceColorId || null,
   };
 }
 
@@ -111,6 +119,7 @@ export function flattenWritableCalendars(sourceGroups) {
         summary: calendar.summary,
         label: calendar.summary,
         color: calendar.backgroundColor || "#4285f4",
+        defaultEventColorId: googleEventColorIdForSourceHex(calendar.backgroundColor || "#4285f4"),
         primary: !!calendar.primary,
       });
     }

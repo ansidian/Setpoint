@@ -265,6 +265,9 @@ export default function useCalendarEventEditor({
       ...nextDraft,
       accountId: preferred.accountId,
       calendarId: preferred.calendarId,
+      colorId: nextDraft.colorId || preferred.defaultEventColorId || null,
+      sourceColor: preferred.color || null,
+      sourceColorId: preferred.defaultEventColorId || null,
     };
   }, []);
 

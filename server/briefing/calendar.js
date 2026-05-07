@@ -1,5 +1,10 @@
 import db from "../db/connection.js";
 import { decrypt, encrypt } from "./encryption.js";
+import {
+  googleEventColorForSourceHex,
+  googleEventColorForId,
+  normalizeGoogleEventColorId,
+} from "../../shared/calendar-event-colors.js";
 
 export const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 export const CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events";
@@ -549,6 +554,10 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
   const endMs = isAllDay ? allDayAnchorMs(endValue) : new Date(endValue).getTime();
   const openUrl = normalizeGoogleCalendarLink(event.htmlLink || null, account.email);
   const recurrence = extractStructuredRecurrence(event.recurrence);
+  const colorId = normalizeGoogleEventColorId(event.colorId);
+  const explicitColor = googleEventColorForId(colorId)?.hex || null;
+  const inheritedColor = calendar.backgroundColor || account.color || "#4285f4";
+  const inheritedEventColor = googleEventColorForSourceHex(inheritedColor);
 
   return {
     id: event.id,
@@ -563,13 +572,15 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
     attendees: normalizeAttendees(event.attendees),
     hangoutLink: findConferenceLink(event),
     source: calendar.summary,
-    sourceColor: account.color || calendar.backgroundColor || "#4285f4",
+    sourceColor: calendar.backgroundColor || account.color || "#4285f4",
+    sourceColorId: inheritedEventColor?.colorId || null,
     accountId: account.id,
     accountLabel: account.label,
     accountEmail: account.email,
     calendarId: calendar.id,
     calendarName: calendar.summary,
-    color: calendar.backgroundColor || account.color || "#4285f4",
+    colorId,
+    color: explicitColor || inheritedEventColor?.hex || inheritedColor,
     flag: null,
     allDay: isAllDay,
     startMs,
@@ -741,6 +752,10 @@ function toCalendarMutationPayload(input) {
   const endDate = toIsoDate(input.endDate || input.startDate);
   const location = typeof input.location === "string" ? input.location.trim() : "";
   const description = typeof input.description === "string" ? input.description.trim() : "";
+  const colorId = normalizeGoogleEventColorId(input.colorId);
+  if (input.colorId != null && input.colorId !== "" && !colorId) {
+    throwCalendarError(400, "calendar_validation_error", "Event color is not supported.");
+  }
   const recurrence = buildGoogleRecurrenceRules(input.recurrence, {
     allDay,
     startDate,
@@ -758,6 +773,7 @@ function toCalendarMutationPayload(input) {
       start: { date: startDate },
       end: { date: addDaysIso(endDate, 1) },
     };
+    if (colorId) payload.colorId = colorId;
     if (recurrence?.length) payload.recurrence = recurrence;
     return payload;
   }
@@ -777,6 +793,7 @@ function toCalendarMutationPayload(input) {
     start: { dateTime: startIso, timeZone: DASHBOARD_CALENDAR_TZ },
     end: { dateTime: endIso, timeZone: DASHBOARD_CALENDAR_TZ },
   };
+  if (colorId) payload.colorId = colorId;
   if (recurrence?.length) payload.recurrence = recurrence;
   return payload;
 }

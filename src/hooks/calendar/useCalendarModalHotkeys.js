@@ -68,6 +68,8 @@ export default function useCalendarModalHotkeys({
   toggleCompletedDeadlineOverlay,
   setDeadlineOverlayVisible,
   navigateMonthRef,
+  onCopySelectedEvent,
+  onPasteCopiedEvent,
 }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -84,11 +86,13 @@ export default function useCalendarModalHotkeys({
         event.stopPropagation();
       };
 
-      if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+      const commandKey = event.metaKey || event.ctrlKey;
+      const normalizedKey = String(event.key || "").toLowerCase();
+
+      if (commandKey && normalizedKey === "f") {
         consumeCalendarKey();
         return;
       }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       if (event.key === "Escape" && floatingDetail?.open) {
         if (floatingDetail.mode === "edit" || floatingDetail.mode === "create") {
@@ -117,6 +121,20 @@ export default function useCalendarModalHotkeys({
         }
         return;
       }
+
+      if (commandKey && !event.altKey && !event.shiftKey && normalizedKey === "c") {
+        onCopySelectedEvent?.();
+        consumeCalendarKey();
+        return;
+      }
+
+      if (commandKey && !event.altKey && !event.shiftKey && normalizedKey === "v") {
+        onPasteCopiedEvent?.();
+        consumeCalendarKey();
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       if (event.key === " ") {
         const currentDetail = floatingDetailRef.current;
@@ -291,5 +309,5 @@ export default function useCalendarModalHotkeys({
     return () => document.removeEventListener("keydown", handleKey, true);
     // The editor routing helpers intentionally read the latest modal refs inside this document listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor]);
+  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent]);
 }

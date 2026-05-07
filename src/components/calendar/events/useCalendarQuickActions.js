@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { deleteCalendarEvent, updateCalendarEvent } from "@/api";
+import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from "@/api";
+import { googleEventColorForId } from "../../../../shared/calendar-event-colors.js";
 import {
   addDaysYmd,
   daysBetweenYmd,
@@ -8,6 +9,7 @@ import {
 } from "../calendarDateUtils.js";
 
 const DAY_MS = 86400000;
+let optimisticCloneCounter = 0;
 
 function eventSelectionId(event) {
   if (!event) return null;
@@ -43,6 +45,11 @@ function shiftEventByDays(event, deltaDays) {
   };
 }
 
+function optimisticCloneId(event) {
+  optimisticCloneCounter += 1;
+  return `optimistic-calendar-copy-${event?.id || "event"}-${Date.now()}-${optimisticCloneCounter}`;
+}
+
 export function buildReschedulePayload(event, shiftedEvent, scope) {
   return {
     accountId: event.accountId,
@@ -61,6 +68,56 @@ export function buildReschedulePayload(event, shiftedEvent, scope) {
     scope: event.isRecurring ? scope : undefined,
     recurringEventId: event.isRecurring ? event.recurringEventId : undefined,
     originalStartTime: event.isRecurring ? event.originalStartTime : undefined,
+  };
+}
+
+export function buildCloneEventPayload(event, targetDate = null) {
+  const sourceDate = pacificYMD(event.startMs);
+  const startDate = targetDate || sourceDate;
+  const sourceEndDate = event.allDay
+    ? addDaysYmd(pacificYMD(event.endMs), -1)
+    : pacificYMD(event.endMs || event.startMs);
+  const endDate = addDaysYmd(startDate, daysBetweenYmd(sourceDate, sourceEndDate));
+  return {
+    accountId: event.accountId,
+    calendarId: event.calendarId,
+    title: event.title || "",
+    allDay: !!event.allDay,
+    startDate,
+    endDate,
+    startTime: event.allDay ? null : pacificTime24(event.startMs),
+    endTime: event.allDay ? null : pacificTime24(event.endMs || event.startMs),
+    location: event.location || "",
+    description: event.description || "",
+    colorId: event.colorId || event.sourceColorId || undefined,
+  };
+}
+
+export function buildOptimisticCloneEvent(event, targetDate = null) {
+  const sourceDate = pacificYMD(event.startMs);
+  const deltaDays = targetDate ? daysBetweenYmd(sourceDate, targetDate) : 0;
+  const shiftedEvent = shiftEventByDays(event, deltaDays);
+  const colorId = event.colorId || event.sourceColorId || null;
+  return {
+    ...shiftedEvent,
+    id: optimisticCloneId(event),
+    etag: null,
+    htmlLink: null,
+    openUrl: null,
+    colorId,
+    color: googleEventColorForId(colorId)?.hex || event.color,
+    isRecurring: false,
+    recurringEventId: null,
+    originalStartTime: null,
+    recurrence: null,
+    passed: false,
+  };
+}
+
+export function buildColorUpdatePayload(event, colorId, scope) {
+  return {
+    ...buildReschedulePayload(event, event, scope),
+    colorId,
   };
 }
 
@@ -104,6 +161,7 @@ export default function useCalendarQuickActions({
   refreshRange,
   onSelectEvent,
   onEventDeleted,
+  onCopyEvent,
 }) {
   const [draggingEventId, setDraggingEventId] = useState(null);
   const [dropTargetDate, setDropTargetDate] = useState(null);
@@ -161,6 +219,43 @@ export default function useCalendarQuickActions({
     }
   }, [onEventDeleted, refreshRange, removeEvent, upsertEvents]);
 
+  const runClone = useCallback(async ({ event, targetDate = null }) => {
+    if (!editable || !event?.writable) return;
+    const optimisticEvent = buildOptimisticCloneEvent(event, targetDate);
+    upsertEvents?.(optimisticEvent);
+    onSelectEvent?.(eventSelectionId(optimisticEvent), pacificYMD(optimisticEvent.startMs));
+    try {
+      const result = await createCalendarEvent(buildCloneEventPayload(event, targetDate));
+      if (result?.event) {
+        removeEvent?.(optimisticEvent.id);
+        upsertEvents?.(result.event);
+        onSelectEvent?.(eventSelectionId(result.event), pacificYMD(result.event.startMs));
+      } else {
+        removeEvent?.(optimisticEvent.id);
+      }
+    } catch {
+      removeEvent?.(optimisticEvent.id);
+      // Silent by design for this hidden power flow.
+    }
+  }, [editable, onSelectEvent, removeEvent, upsertEvents]);
+
+  const runColorUpdate = useCallback(async ({ event, colorId, scope }) => {
+    if (!editable || !event?.writable || !colorId) return;
+    const color = googleEventColorForId(colorId)?.hex || event.color;
+    const optimisticEvent = { ...event, colorId, color };
+    upsertEvents?.(optimisticEvent);
+    try {
+      const result = await updateCalendarEvent(event.id, buildColorUpdatePayload(event, colorId, scope));
+      if (result?.event) upsertEvents?.(result.event);
+      if (event.isRecurring && scope !== "one") {
+        const bounds = eventBounds(event);
+        if (bounds) await refreshRange?.(bounds.start, bounds.end);
+      }
+    } catch {
+      upsertEvents?.(event);
+    }
+  }, [editable, refreshRange, upsertEvents]);
+
   const beginDrag = useCallback((event) => {
     if (!dragEnabled || !event?.writable) return false;
     setDraggingEventId(eventSelectionId(event));
@@ -206,6 +301,23 @@ export default function useCalendarQuickActions({
     await runReschedule({ event, targetDate });
   }, [dragEnabled, runReschedule]);
 
+  const openContextMenu = useCallback(({ event, item, x, y }) => {
+    const sourceEvent = event || item?.sourceEvent || (item?.sourceItem?.startMs ? item.sourceItem : null);
+    if (!editable || !sourceEvent?.writable) return false;
+    setPrompt(null);
+    setStatus(null);
+    setContextMenu({
+      event: sourceEvent,
+      x,
+      y,
+      confirm: false,
+      busy: false,
+      error: null,
+      pendingColorId: null,
+    });
+    return true;
+  }, [editable]);
+
   const openDeleteMenu = useCallback(({ event, x, y }) => {
     if (!editable || !event?.writable) return;
     setPrompt(null);
@@ -219,6 +331,18 @@ export default function useCalendarQuickActions({
       error: null,
     });
   }, [editable]);
+
+  const copyContextEvent = useCallback(() => {
+    const event = contextMenu?.event;
+    if (event) onCopyEvent?.(event);
+    setContextMenu(null);
+  }, [contextMenu?.event, onCopyEvent]);
+
+  const duplicateContextEvent = useCallback(() => {
+    const event = contextMenu?.event;
+    setContextMenu(null);
+    if (event) runClone({ event });
+  }, [contextMenu?.event, runClone]);
 
   const requestDelete = useCallback(() => {
     setContextMenu((current) => {
@@ -254,6 +378,26 @@ export default function useCalendarQuickActions({
     }
   }, [contextMenu?.event, runDelete]);
 
+  const chooseEventColor = useCallback((colorId) => {
+    const event = contextMenu?.event;
+    if (!event || !colorId) return;
+    if (event.isRecurring) {
+      setPrompt({
+        kind: "color",
+        event,
+        colorId,
+        position: promptPositionFromRect({ left: contextMenu.x, top: contextMenu.y, bottom: contextMenu.y }),
+        selectedScope: "one",
+        confirming: false,
+        error: null,
+      });
+      setContextMenu(null);
+      return;
+    }
+    setContextMenu(null);
+    runColorUpdate({ event, colorId });
+  }, [contextMenu?.event, contextMenu?.x, contextMenu?.y, runColorUpdate]);
+
   const setPromptScope = useCallback((scope) => {
     setPrompt((current) => (current ? { ...current, selectedScope: scope, error: null } : current));
   }, []);
@@ -264,6 +408,12 @@ export default function useCalendarQuickActions({
     try {
       if (prompt.kind === "delete") {
         await runDelete({ event: prompt.event, scope: prompt.selectedScope });
+      } else if (prompt.kind === "color") {
+        await runColorUpdate({
+          event: prompt.event,
+          colorId: prompt.colorId,
+          scope: prompt.selectedScope,
+        });
       } else {
         await runReschedule({
           event: prompt.event,
@@ -276,10 +426,10 @@ export default function useCalendarQuickActions({
       setPrompt((current) => (current ? {
         ...current,
         confirming: false,
-        error: err.message || `Failed to ${current.kind === "delete" ? "delete" : "move"} event.`,
+        error: err.message || `Failed to ${current.kind === "delete" ? "delete" : current.kind === "color" ? "color" : "move"} event.`,
       } : current));
     }
-  }, [prompt, runDelete, runReschedule]);
+  }, [prompt, runColorUpdate, runDelete, runReschedule]);
 
   const cancelPrompt = useCallback(() => setPrompt(null), []);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
@@ -297,9 +447,15 @@ export default function useCalendarQuickActions({
     enterDropTarget,
     leaveDropTarget,
     dropEvent,
+    openContextMenu,
     openDeleteMenu,
+    copyEvent: onCopyEvent,
+    copyContextEvent,
+    duplicateContextEvent,
+    pasteEvent: (event, targetDate) => runClone({ event, targetDate }),
     requestDelete,
     confirmContextDelete,
+    chooseEventColor,
     setPromptScope,
     confirmPrompt,
     cancelPrompt,
@@ -319,9 +475,15 @@ export default function useCalendarQuickActions({
     endDrag,
     enterDropTarget,
     leaveDropTarget,
+    openContextMenu,
     openDeleteMenu,
+    copyContextEvent,
+    duplicateContextEvent,
+    onCopyEvent,
     prompt,
     requestDelete,
+    runClone,
+    chooseEventColor,
     setPromptScope,
     status,
   ]);
