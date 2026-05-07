@@ -194,6 +194,58 @@ describe("AgendaRailShell", () => {
     }));
   });
 
+  it("does not force scrollTop after requesting smooth item scroll", async () => {
+    const renderGroup = ({ group, registerRow }) => (
+      group.dateKey === "2026-05-01" ? (
+        <span
+          ref={(node) => registerRow(`row-1-${group.dateKey}`, node, group.dateKey)}
+          data-testid="agenda-row-target"
+          data-item-id="row-1"
+        >
+          Row one
+        </span>
+      ) : null
+    );
+    const { rerender } = renderShell({ renderGroup });
+    await flushRailEffects();
+
+    const rail = screen.getByTestId("agenda-shell");
+    const row = screen.getByTestId("agenda-row-target");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 120;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
+    row.getBoundingClientRect = () => ({ top: 940, bottom: 984, left: 0, right: 280, width: 280, height: 44 });
+
+    rerender(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        scrollCommand={{ type: "item", itemId: "row-1", dateKey: "2026-05-01", id: "item-1" }}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: 794,
+      behavior: "smooth",
+    }));
+    expect(rail.scrollTop).toBe(120);
+  });
+
   it("does not replay a command already handled through the imperative rail ref", async () => {
     const railRef = createRef();
     const renderGroup = ({ group, registerRow }) => (
