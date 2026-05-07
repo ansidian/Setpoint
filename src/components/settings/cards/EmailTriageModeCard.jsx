@@ -59,7 +59,7 @@ function formatCompactNumber(value) {
   }).format(Number(value || 0)).toLowerCase();
 }
 
-function formatSavings(value) {
+function formatUsdEstimate(value) {
   const number = Number(value || 0);
   if (number > 0 && number < 0.0001) return "<$0.0001";
   if (number > 0 && number < 0.01) return `$${number.toFixed(4)}`;
@@ -86,6 +86,8 @@ function TriageCacheStats({ stats, loading, error }) {
   const calls = Number(stats?.openaiCalls || 0);
   const windowDays = Number(stats?.windowDays || 7);
   const lastTriaged = formatLastTriaged(stats?.lastTriagedAt);
+  const monthToDateStats = stats?.comparisonWindows?.monthToDate;
+  const monthToDateCost = Number(monthToDateStats?.estimatedCostUsd || 0);
   const detail = error
     ? "Cache stats unavailable."
     : loading
@@ -104,11 +106,12 @@ function TriageCacheStats({ stats, loading, error }) {
         <StatusPill tone="neutral">OpenAI only</StatusPill>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ["Hit rate", loading || error ? "..." : formatPercent(stats?.hitRate)],
           ["Cached", loading || error ? "..." : formatCompactNumber(stats?.cachedInputTokens)],
-          ["Saved", loading || error ? "..." : formatSavings(stats?.estimatedSavingsUsd)],
+          ["Cost", loading || error ? "..." : formatUsdEstimate(stats?.estimatedCostUsd)],
+          ["Saved", loading || error ? "..." : formatUsdEstimate(stats?.estimatedSavingsUsd)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-md border border-white/[0.05] bg-black/[0.08] px-3 py-2">
             <div className="text-[10px] font-semibold tracking-[1.4px] text-muted-foreground/60 uppercase">
@@ -123,6 +126,9 @@ function TriageCacheStats({ stats, loading, error }) {
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-relaxed text-muted-foreground/60">
         <span>{detail}</span>
+        {!loading && !error && monthToDateStats?.openaiCalls > 0 ? (
+          <span>MTD cost: {formatUsdEstimate(monthToDateCost)}</span>
+        ) : null}
         {lastTriaged ? <span>Last: {lastTriaged}</span> : null}
       </div>
     </div>

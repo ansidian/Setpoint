@@ -219,6 +219,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await testState.db.current?.close?.();
   testState.db.current = null;
 });
@@ -305,6 +306,8 @@ describe("auth boundaries", () => {
   });
 
   it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T12:00:00.000Z"));
     await seedSession();
     await testState.db.current.batch([
       {
@@ -371,20 +374,32 @@ describe("auth boundaries", () => {
       inputTokens: 3000,
       cachedInputTokens: 1600,
       outputTokens: 300,
+      estimatedCostUsd: 0.005967,
       hitRate: 0.5333,
       lastTriagedAt: "2026-05-04T12:05:00.000Z",
+      comparisonWindows: {
+        monthToDate: {
+          windowDays: null,
+          windowLabel: "month_to_date",
+          openaiCalls: 2,
+          estimatedCostUsd: 0.005967,
+          estimatedSavingsUsd: 0.002358,
+        },
+      },
       byTier: {
         cheap: {
           calls: 1,
           inputTokens: 1000,
           cachedInputTokens: 600,
           outputTokens: 100,
+          estimatedCostUsd: 0.000217,
         },
         strong: {
           calls: 1,
           inputTokens: 2000,
           cachedInputTokens: 1000,
           outputTokens: 200,
+          estimatedCostUsd: 0.00575,
         },
       },
     });

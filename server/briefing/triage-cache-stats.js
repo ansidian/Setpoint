@@ -37,6 +37,7 @@ function emptyTierStats() {
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,
+    estimatedCostUsd: 0,
     estimatedSavingsUsd: 0,
   };
 }
@@ -81,6 +82,12 @@ function collectTier(row, tier) {
 function addCall(summary, call) {
   const tierStats = summary.byTier[call.tier];
   const price = priceForOpenAIModel(call.model);
+  const uncachedInputTokens = Math.max(0, call.inputTokens - call.cachedInputTokens);
+  const estimatedCost = price
+    ? ((uncachedInputTokens / 1_000_000) * price.input)
+      + ((call.cachedInputTokens / 1_000_000) * price.cachedInput)
+      + ((call.outputTokens / 1_000_000) * price.output)
+    : 0;
   const savings = price
     ? (call.cachedInputTokens / 1_000_000) * (price.input - price.cachedInput)
     : 0;
@@ -89,6 +96,7 @@ function addCall(summary, call) {
   summary.inputTokens += call.inputTokens;
   summary.cachedInputTokens += call.cachedInputTokens;
   summary.outputTokens += call.outputTokens;
+  summary.estimatedCostUsd += estimatedCost;
   summary.estimatedSavingsUsd += savings;
   summary.models.add(call.model);
   if (call.lastTriagedAt && (!summary.lastTriagedAt || call.lastTriagedAt > summary.lastTriagedAt)) {
@@ -99,31 +107,35 @@ function addCall(summary, call) {
   tierStats.inputTokens += call.inputTokens;
   tierStats.cachedInputTokens += call.cachedInputTokens;
   tierStats.outputTokens += call.outputTokens;
+  tierStats.estimatedCostUsd += estimatedCost;
   tierStats.estimatedSavingsUsd += savings;
 }
 
-export async function getTriageCacheStats(userId, {
-  dbClient = db,
-  windowDays = DEFAULT_WINDOW_DAYS,
-} = {}) {
-  const result = await dbClient.execute({
-    sql: `SELECT last_triaged_at, model_usage_json,
-                 cheap_model_result_json, strong_model_result_json
-          FROM ea_email_triage
-          WHERE user_id = ?
-            AND last_triaged_at >= datetime('now', ?)
-            AND model_usage_json IS NOT NULL
-            AND model_usage_json != '{}'`,
-    args: [userId, `-${windowDays} days`],
+function monthToDateCutoff(now) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+function summarizeRows(rows, {
+  windowDays,
+  windowLabel = null,
+  cutoff,
+  now,
+}) {
+  const cutoffMs = cutoff.getTime();
+  const filteredRows = rows.filter((row) => {
+    const triagedAt = Date.parse(row.last_triaged_at || "");
+    return Number.isFinite(triagedAt) && triagedAt >= cutoffMs;
   });
 
   const summary = {
     windowDays,
-    generatedAt: new Date().toISOString(),
+    windowLabel,
+    generatedAt: now.toISOString(),
     openaiCalls: 0,
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,
+    estimatedCostUsd: 0,
     estimatedSavingsUsd: 0,
     hitRate: 0,
     lastTriagedAt: null,
@@ -134,7 +146,7 @@ export async function getTriageCacheStats(userId, {
     },
   };
 
-  for (const row of result.rows) {
+  for (const row of filteredRows) {
     for (const tier of ["cheap", "strong"]) {
       const call = collectTier(row, tier);
       if (call) addCall(summary, call);
@@ -144,10 +156,65 @@ export async function getTriageCacheStats(userId, {
   summary.hitRate = summary.inputTokens
     ? roundRate(summary.cachedInputTokens / summary.inputTokens)
     : 0;
+  summary.estimatedCostUsd = roundMoney(summary.estimatedCostUsd);
   summary.estimatedSavingsUsd = roundMoney(summary.estimatedSavingsUsd);
+  summary.byTier.cheap.estimatedCostUsd = roundMoney(summary.byTier.cheap.estimatedCostUsd);
   summary.byTier.cheap.estimatedSavingsUsd = roundMoney(summary.byTier.cheap.estimatedSavingsUsd);
+  summary.byTier.strong.estimatedCostUsd = roundMoney(summary.byTier.strong.estimatedCostUsd);
   summary.byTier.strong.estimatedSavingsUsd = roundMoney(summary.byTier.strong.estimatedSavingsUsd);
   summary.models = [...summary.models].filter(Boolean).sort();
+
+  return summary;
+}
+
+function compactComparisonWindow(summary) {
+  return {
+    windowDays: summary.windowDays,
+    windowLabel: summary.windowLabel,
+    openaiCalls: summary.openaiCalls,
+    inputTokens: summary.inputTokens,
+    cachedInputTokens: summary.cachedInputTokens,
+    outputTokens: summary.outputTokens,
+    estimatedCostUsd: summary.estimatedCostUsd,
+    estimatedSavingsUsd: summary.estimatedSavingsUsd,
+    hitRate: summary.hitRate,
+  };
+}
+
+export async function getTriageCacheStats(userId, {
+  dbClient = db,
+  windowDays = DEFAULT_WINDOW_DAYS,
+  now = new Date(),
+} = {}) {
+  const windowCutoff = new Date(now.getTime() - (windowDays * 24 * 60 * 60 * 1000));
+  const monthCutoff = monthToDateCutoff(now);
+  const queryCutoff = new Date(Math.min(windowCutoff.getTime(), monthCutoff.getTime()));
+  const result = await dbClient.execute({
+    sql: `SELECT last_triaged_at, model_usage_json,
+                 cheap_model_result_json, strong_model_result_json
+          FROM ea_email_triage
+          WHERE user_id = ?
+            AND last_triaged_at >= ?
+            AND model_usage_json IS NOT NULL
+            AND model_usage_json != '{}'`,
+    args: [userId, queryCutoff.toISOString()],
+  });
+
+  const summary = summarizeRows(result.rows, {
+    windowDays,
+    windowLabel: "rolling",
+    cutoff: windowCutoff,
+    now,
+  });
+  const monthToDateSummary = summarizeRows(result.rows, {
+    windowDays: null,
+    windowLabel: "month_to_date",
+    cutoff: monthCutoff,
+    now,
+  });
+  summary.comparisonWindows = {
+    monthToDate: compactComparisonWindow(monthToDateSummary),
+  };
 
   return summary;
 }
