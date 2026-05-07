@@ -10,13 +10,17 @@ vi.mock("@/api", () => ({
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,
+    estimatedCostUsd: 0,
     estimatedSavingsUsd: 0,
     hitRate: 0,
     lastTriagedAt: null,
     models: [],
+    comparisonWindows: {
+      monthToDate: { windowDays: null, windowLabel: "month_to_date", openaiCalls: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
+    },
     byTier: {
-      cheap: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedSavingsUsd: 0 },
-      strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedSavingsUsd: 0 },
+      cheap: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
+      strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
     },
   })),
 }));
@@ -107,13 +111,17 @@ describe("EmailTriageModeCard", () => {
       inputTokens: 3000,
       cachedInputTokens: 1600,
       outputTokens: 300,
+      estimatedCostUsd: 0.005967,
       estimatedSavingsUsd: 0.002358,
       hitRate: 0.5333,
       lastTriagedAt: "2026-05-04T12:05:00.000Z",
       models: ["gpt-5.4", "gpt-5.4-nano"],
+      comparisonWindows: {
+        monthToDate: { windowDays: null, windowLabel: "month_to_date", openaiCalls: 2, estimatedCostUsd: 0.005967, estimatedSavingsUsd: 0.002358 },
+      },
       byTier: {
-        cheap: { calls: 1, inputTokens: 1000, cachedInputTokens: 600, outputTokens: 100, estimatedSavingsUsd: 0.000108 },
-        strong: { calls: 1, inputTokens: 2000, cachedInputTokens: 1000, outputTokens: 200, estimatedSavingsUsd: 0.00225 },
+        cheap: { calls: 1, inputTokens: 1000, cachedInputTokens: 600, outputTokens: 100, estimatedCostUsd: 0.000217, estimatedSavingsUsd: 0.000108 },
+        strong: { calls: 1, inputTokens: 2000, cachedInputTokens: 1000, outputTokens: 200, estimatedCostUsd: 0.00575, estimatedSavingsUsd: 0.00225 },
       },
     });
 
@@ -123,8 +131,11 @@ describe("EmailTriageModeCard", () => {
       expect(screen.getByText("53.3%")).toBeTruthy();
     });
     expect(screen.getByText("1.6k")).toBeTruthy();
+    expect(screen.getByText("Cost")).toBeTruthy();
+    expect(screen.getByText("$0.0060")).toBeTruthy();
     expect(screen.getByText("$0.0024")).toBeTruthy();
     expect(screen.getByText("2 OpenAI calls in 7 days")).toBeTruthy();
+    expect(screen.getByText("MTD cost: $0.0060")).toBeTruthy();
     expect(screen.getByText(/Last: May 4/)).toBeTruthy();
   });
 
@@ -135,13 +146,17 @@ describe("EmailTriageModeCard", () => {
       inputTokens: 1100,
       cachedInputTokens: 100,
       outputTokens: 20,
+      estimatedCostUsd: 0.000227,
       estimatedSavingsUsd: 0.000018,
       hitRate: 0.0909,
       lastTriagedAt: null,
       models: ["gpt-5.4-nano"],
+      comparisonWindows: {
+        monthToDate: { windowDays: null, windowLabel: "month_to_date", openaiCalls: 1, estimatedCostUsd: 0.000227, estimatedSavingsUsd: 0.000018 },
+      },
       byTier: {
-        cheap: { calls: 1, inputTokens: 1100, cachedInputTokens: 100, outputTokens: 20, estimatedSavingsUsd: 0.000018 },
-        strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedSavingsUsd: 0 },
+        cheap: { calls: 1, inputTokens: 1100, cachedInputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.000227, estimatedSavingsUsd: 0.000018 },
+        strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
       },
     });
 
