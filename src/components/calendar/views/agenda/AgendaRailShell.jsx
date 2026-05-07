@@ -87,7 +87,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     registerContent(dateKey, node);
   };
 
-  const scrollElementIntoView = useCallback((element, { block = "start", offsetTop = 0, forceSmooth = false } = {}) => {
+  const scrollElementIntoView = useCallback((element, { block = "start", offsetTop = 0, forceSmooth = false, forceAuto = false } = {}) => {
     if (!element || !scrollerRef.current) return false;
     const scroller = scrollerRef.current;
     suppressPassiveUntilRef.current = performance.now() + 420;
@@ -110,7 +110,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     nextScrollTop = Math.max(0, nextScrollTop);
     const distance = Math.abs(nextScrollTop - scroller.scrollTop);
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    const behavior = reduceMotion || (!forceSmooth && distance > scrollerRect.height * 1.7) ? "auto" : "smooth";
+    const behavior = forceAuto || reduceMotion || (!forceSmooth && distance > scrollerRect.height * 1.7) ? "auto" : "smooth";
     const previousScrollTop = scroller.scrollTop;
     if (typeof scroller.scrollTo === "function") {
       scroller.scrollTo({ top: nextScrollTop, behavior });
@@ -213,7 +213,10 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     if (isLoading) return undefined;
     const targetDate = selectedDateKey || firstVisibleDateKey;
     const id = window.requestAnimationFrame(() => {
-      scrollElementIntoView(headerRefs.current.get(targetDate) || headerRefs.current.get(firstVisibleDateKey), { block: "start" });
+      scrollElementIntoView(headerRefs.current.get(targetDate) || headerRefs.current.get(firstVisibleDateKey), {
+        block: "start",
+        forceAuto: true,
+      });
       if (targetDate && targetDate !== selectedDateKey) {
         onPassiveDateChange?.(targetDate);
       }
