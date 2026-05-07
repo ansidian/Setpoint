@@ -1,6 +1,6 @@
 # EA Dashboard Agent Map
 
-Personal executive-assistant dashboard for one owner. It consolidates email, calendar, weather, Canvas/CTM deadlines, Todoist tasks, and Actual Budget finances into AI-generated briefings. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
+Personal executive-assistant dashboard for one owner. It triages email, fetches calendar, weather, Canvas/CTM deadlines, Todoist tasks, and Actual Budget finances. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
 
 Use this file as a map, not the full manual. Top-level tracked docs are the source of truth for standing product and system guidance. Linear issues are the source of truth for active executable work when an issue exists or the user intends Codex execution. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
 
@@ -18,7 +18,6 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 
 - Do not automatically run Playwright tests or browser automation unless explicitly requested.
 - When exploring the codebase or reading files for context, prefer using explorer agents for concrete, bounded questions, especially when multiple independent areas can be investigated in parallel. Keep immediate blocking investigation local, and synthesize explorer findings before making edits.
-- In Plan mode, do not treat the clarifying-question UI's three-question batch limit as a product requirement. If more than three clarifying questions are necessary to align on scope, ask the most blocking questions first, then continue with additional concise follow-up questions or another clarification round before finalizing the plan.
 - Default to test-first work for meaningful behavior changes, bug fixes, shared logic, data/state transitions, and regressions where a durable public-interface test can protect the behavior. Use the global `tdd` skill when the change warrants a red/green loop, and adapt it to this repo's Vitest and Playwright opt-in conventions.
 - Do not create tests just to satisfy TDD for low-risk mechanical wiring, copy-only changes, styling-only changes, or simple mappings to behavior already covered elsewhere. Examples include binding a hotkey to an existing tested action, renaming a label, or moving a button without changing behavior.
 - For simple wiring changes, prefer verifying that the underlying handler/action is already covered, running the nearest existing focused test when useful, and using lint/build/type checks as appropriate. In the handoff, say when no new test was added because the change was mechanical.
@@ -33,7 +32,6 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Keep Codex tasks bounded. If a plan spans multiple independent surfaces, split it into a parent/spec issue plus child implementation issues rather than asking Codex to execute one large issue.
 - When converting a plan into Linear for Codex, write issues as execution contracts, not vague backlog notes. Each issue should be small enough for one focused PR and should state what not to change.
 - Do not create new local markdown plans by default when Linear is available and the work is intended for Codex execution. Create local docs only for complex design exploration, rough scratch planning, or durable non-Linear project memory.
-- Preserve graceful degradation in the briefing pipeline: each fetcher in `server/briefing/index.js` needs its own `.catch()` fallback so one source does not kill generation.
 
 ## Testing Judgment And TDD
 
@@ -50,6 +48,18 @@ Use TDD as a tool for protecting behavior, not as a quota. The goal is durable c
 7. Verify: expand to the relevant nearby test file, `npm test`, or the mechanical checks when the blast radius justifies it. For mechanical changes, focused lint/build or nearby existing tests may be enough. Report any skipped step explicitly.
 
 When adding tests, prefer durable behavior/model/state assertions over tests that only mirror implementation details such as exact listener registration, CSS selectors, inline styles, or internal helper calls.
+
+### Test Structure Schema
+
+Prefer a layered Vitest structure. New behavior should usually start at the lowest layer that can express the product rule.
+
+1. Model/helper tests are the default home for domain rules. Use small `.test.js` files around pure modules for projections, command resolution, cache/range planning, view-model shaping, date math, lifecycle normalization, and state transitions. These tests should read like `input state -> model/helper -> expected state`.
+2. Hook/controller tests should prove async behavior, cache behavior, React state transitions, and wiring into model helpers. Do not make hook tests re-prove every pure date, grouping, projection, or command branch if that rule can live in a model test.
+3. Component/page tests should be thin outer guardrails. They should verify that visible controls exist, important states render, and user actions reach the right command path. Avoid adding broad DOM cases to files such as `CalendarModal.layout.test.jsx`, `InboxView.session.test.jsx`, or `Dashboard.mobile.test.jsx` when a focused model/helper test can protect the behavior.
+4. Server route tests should protect auth, API contracts, response shape, durable DB state, and important boundary behavior. Avoid exact internal SQL/text assertions unless the SQL shape itself is the public contract or the bug is specifically about SQL generation.
+5. Existing broad tests may remain as integration guardrails, but future changes should ratchet behavior downward into focused model/helper tests first. Keep only one or two UI tests proving the component is wired to that behavior.
+
+When a broad test gets harder to maintain, extract the underlying rule into a named model/helper module before adding more cases. Good recent examples include `calendarModalInteractionModel`, `inboxCommandModel`, `dashboardShellModel`, `calendarRangeModel`, `currentDashboardModel`, `dashboardTaskProjection`, `inboxWorkItems`, and `snapshot-lifecycle`.
 
 ## Mechanical Checks
 
@@ -79,7 +89,7 @@ For dropdowns, popovers, and panels, follow the repo pattern in `src/components/
 
 ## Context Outside The Repo
 
-- Prod DB is Turso; dev DB is `server/db/ea.db`.
+- Prod DB is Turso; dev DB is `server/db/ea.db`, and can be probed through Turso CLI.
 - Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/briefing/actual.js`, not the CLI.
 
 ## Commit Style

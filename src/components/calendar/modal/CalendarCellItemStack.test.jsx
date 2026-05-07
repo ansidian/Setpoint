@@ -120,6 +120,38 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(screen.getByText("+2 more")).toBeTruthy();
   });
 
+  it("does not report unchanged hidden composition on parent rerender", () => {
+    const onHiddenItemsChange = vi.fn();
+    const items = [
+      { id: "visible", leadingLabel: "9:00 AM", title: "Visible hold" },
+      { id: "hidden-time", leadingLabel: "11:59 PM", title: "Hidden deadline" },
+      { id: "hidden-later", leadingLabel: "10:00 PM", title: "Other hidden" },
+    ];
+    const { rerender } = render(
+      <CalendarCellItemStack
+        dateKey="2026-05-10"
+        day={10}
+        items={items}
+        metrics={{ ...metrics, fullVisibleCount: 1, overflowVisibleCount: 1 }}
+        onHiddenItemsChange={onHiddenItemsChange}
+      />,
+    );
+
+    expect(onHiddenItemsChange).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <CalendarCellItemStack
+        dateKey="2026-05-10"
+        day={10}
+        items={items.map((item) => ({ ...item }))}
+        metrics={{ ...metrics, fullVisibleCount: 1, overflowVisibleCount: 1 }}
+        onHiddenItemsChange={onHiddenItemsChange}
+      />,
+    );
+
+    expect(onHiddenItemsChange).toHaveBeenCalledTimes(1);
+  });
+
   it("uses stable layout identity and selection aliases for occurrence-backed chips", () => {
     const onSelectItem = vi.fn();
     render(

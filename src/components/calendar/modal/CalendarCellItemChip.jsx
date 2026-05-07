@@ -1,5 +1,5 @@
 import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
-import { motion as Motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { compactLeadingLabel } from "./CalendarCellItemChipModel.js";
 
 function chipStyle({
@@ -345,7 +345,6 @@ export function ItemChip({
   const ghost = !!item.isGhost;
   const reducedMotion = useReducedMotion();
   const layoutId = !reducedMotion && item.layoutId ? String(item.layoutId) : undefined;
-  const ChipButton = layoutId ? Motion.button : "button";
   const selectionId = item.selectionId != null ? String(item.selectionId) : String(item.id);
   const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
 
@@ -377,12 +376,9 @@ export function ItemChip({
   }
 
   return (
-    <ChipButton
+    <button
       key={item.id}
       type="button"
-      layout={layoutId ? "position" : undefined}
-      layoutId={layoutId}
-      transition={layoutId ? { layout: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } } : undefined}
       data-testid="calendar-cell-item-chip"
       data-inline-overflow-item={inlineOverflowItem ? "true" : undefined}
       data-item-id={selectionId}
@@ -459,6 +455,6 @@ export function ItemChip({
         metrics={metrics}
         leadingColumnWidth={leadingColumnWidth}
       />
-    </ChipButton>
+    </button>
   );
 }

@@ -1,7 +1,12 @@
 import { useCallback, useRef, useState } from "react";
+import {
+  groupMonthKeys,
+  monthBounds,
+  planPrefetchMonthGroups,
+  planVisibleMonthFetches,
+} from "./calendarRangeModel.js";
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
-const MAX_MONTHS_PER_FETCH = 2;
 
 function cacheKey(start, end) {
   return `${start}:${end}`;
@@ -15,70 +20,6 @@ function monthKeyFromDate(dateKey) {
   return typeof dateKey === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateKey)
     ? dateKey.slice(0, 7)
     : null;
-}
-
-function monthIndex(key) {
-  const [year, month] = String(key || "").split("-").map(Number);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
-  return year * 12 + (month - 1);
-}
-
-function keyFromMonthIndex(index) {
-  const year = Math.floor(index / 12);
-  const month = index % 12;
-  return `${year}-${String(month + 1).padStart(2, "0")}`;
-}
-
-function monthsInRange(start, end) {
-  const result = [];
-  const s = new Date(`${start}T12:00:00Z`);
-  const e = new Date(`${end}T12:00:00Z`);
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return result;
-  const cur = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), 1));
-  while (cur <= e) {
-    result.push(`${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, "0")}`);
-    cur.setUTCMonth(cur.getUTCMonth() + 1);
-  }
-  return result;
-}
-
-function expandMonthKeys(keys, radius) {
-  const indexes = keys.map(monthIndex).filter(Number.isFinite);
-  if (!indexes.length || radius <= 0) return keys;
-  const first = Math.min(...indexes) - radius;
-  const last = Math.max(...indexes) + radius;
-  const result = [];
-  for (let index = first; index <= last; index += 1) {
-    result.push(keyFromMonthIndex(index));
-  }
-  return result;
-}
-
-function monthBounds(key) {
-  const [year, month] = key.split("-").map(Number);
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-  return { start, end };
-}
-
-function groupMonthKeys(keys) {
-  const sorted = [...new Set(keys)].sort((a, b) => monthIndex(a) - monthIndex(b));
-  const groups = [];
-  let current = [];
-
-  for (const key of sorted) {
-    const previous = current[current.length - 1];
-    const contiguous = previous && monthIndex(key) === monthIndex(previous) + 1;
-    if (!current.length || (contiguous && current.length < MAX_MONTHS_PER_FETCH)) {
-      current.push(key);
-      continue;
-    }
-    groups.push(current);
-    current = [key];
-  }
-  if (current.length) groups.push(current);
-  return groups;
 }
 
 function clone(value) {
@@ -244,10 +185,14 @@ export default function useCalendarDomainRange({
 
   const prefetchMonths = useCallback((visibleKeys) => {
     if (disabled || !fetchRange || cacheMode !== "month" || prefetchMonthRadius <= 0) return;
-    const visible = new Set(visibleKeys);
-    const prefetchKeys = expandMonthKeys(visibleKeys, prefetchMonthRadius)
-      .filter((key) => !visible.has(key) && !fresh(cacheRef.current.get(key)) && !inFlightRef.current.has(key));
-    for (const group of groupMonthKeys(prefetchKeys)) {
+    const freshCacheKeys = [...cacheRef.current.entries()]
+      .filter(([, entry]) => fresh(entry))
+      .map(([key]) => key);
+    for (const group of planPrefetchMonthGroups(visibleKeys, {
+      cachedKeys: freshCacheKeys,
+      inFlightKeys: [...inFlightRef.current.keys()],
+      prefetchMonthRadius,
+    })) {
       fetchMonthGroup(group).catch((err) => {
         setError(err);
       });
@@ -261,15 +206,12 @@ export default function useCalendarDomainRange({
       return emptyData;
     }
 
-    const visibleKeys = monthsInRange(start, end);
+    const { visibleKeys, missingKeys, pendingKeys, missingGroups } = planVisibleMonthFetches(start, end, {
+      cachedKeys: [...cacheRef.current.keys()],
+      inFlightKeys: [...inFlightRef.current.keys()],
+    });
     activeRangeRef.current = { start, end, keys: visibleKeys };
-    const missingKeys = visibleKeys.filter((key) => !cacheRef.current.has(key) && !inFlightRef.current.has(key));
-    const pending = [...new Set(
-      visibleKeys
-        .filter((key) => !cacheRef.current.has(key))
-        .map((key) => inFlightRef.current.get(key))
-        .filter(Boolean),
-    )];
+    const pending = [...new Set(pendingKeys.map((key) => inFlightRef.current.get(key)).filter(Boolean))];
 
     if (missingKeys.length || pending.length) {
       setLoading(true);
@@ -277,7 +219,7 @@ export default function useCalendarDomainRange({
       try {
         const results = await Promise.allSettled([
           ...pending,
-          ...groupMonthKeys(missingKeys).map((group) => fetchMonthGroup(group)),
+          ...missingGroups.map((group) => fetchMonthGroup(group)),
         ]);
         const failed = results.find((result) => result.status === "rejected");
         if (failed) throw failed.reason;

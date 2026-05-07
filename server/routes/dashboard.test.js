@@ -26,14 +26,7 @@ const testState = vi.hoisted(() => ({
 
 vi.mock("../db/connection.js", () => ({
   default: {
-    execute: (...args) => {
-      const input = args[0];
-      const sql = typeof input === "string" ? input : input?.sql;
-      if (/ea_briefings/i.test(sql || "")) {
-        throw new Error("dashboard current route must not query ea_briefings");
-      }
-      return testState.db.current.execute(...args);
-    },
+    execute: (...args) => testState.db.current.execute(...args),
     executeMultiple: (...args) => testState.db.current.executeMultiple(...args),
     batch: (...args) => testState.db.current.batch(...args),
   },

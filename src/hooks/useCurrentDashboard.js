@@ -4,11 +4,12 @@ import {
   requestCurrentDashboardRefresh,
   syncCurrentDashboard,
 } from "../api";
+import {
+  currentToBriefing,
+  currentToLiveData,
+  hasActiveRefreshWork,
+} from "./currentDashboardModel.js";
 
-const EMPTY_DEADLINES = {
-  ctm: { upcoming: [], stats: null },
-  todoist: { upcoming: [], stats: null },
-};
 const POST_CLICK_POLL_MS = 2_000;
 const POST_CLICK_POLL_MAX_MS = 15_000;
 
@@ -17,53 +18,6 @@ function sleep(ms) {
     const timer = setTimeout(resolve, ms);
     timer.unref?.();
   });
-}
-
-function hasActiveRefreshWork(current) {
-  const currentSources = current?.providerHealth?.currentData?.sources || [];
-  return currentSources.some((source) => source.state === "refreshing")
-    || current?.providerHealth?.activeSnapshot?.state === "syncing"
-    || !!current?.providerHealth?.activeSnapshot?.processing?.active
-    || !!current?.activeSnapshot?.processing?.active;
-}
-
-function currentToBriefing(current) {
-  const deadlines = current?.deadlines || EMPTY_DEADLINES;
-  return {
-    weather: current?.weather || null,
-    calendar: current?.calendar || [],
-    ctm: deadlines.ctm || EMPTY_DEADLINES.ctm,
-    todoist: deadlines.todoist || EMPTY_DEADLINES.todoist,
-    emails: { summary: "", accounts: [] },
-  };
-}
-
-function currentToLiveData(current, { refreshNow, isPolling }) {
-  return {
-    liveEmails: [],
-    liveCalendar: current?.calendar || null,
-    liveDeadlines: current?.deadlines || EMPTY_DEADLINES,
-    liveNextWeekCalendar: null,
-    liveTomorrowCalendar: null,
-    liveWeather: current?.weather || null,
-    liveBills: current?.bills || [],
-    recentTransactions: [],
-    allSchedules: current?.allSchedules || [],
-    payeeMap: current?.payeeMap || {},
-    importantSenders: [],
-    briefingReadStatus: {},
-    lastFetched: current?.fetchedAt || null,
-    isPolling,
-    billsLoading: !!current?.actualConfigured && isPolling && !(current?.bills || []).length,
-    actualConfigured: !!current?.actualConfigured,
-    actualBudgetUrl: current?.actualBudgetUrl || null,
-    billsSyncHealth: current?.billsSyncHealth || null,
-    snoozedEntries: [],
-    resurfacedEntries: [],
-    providerHealth: current?.providerHealth || null,
-    systemStatus: current?.systemStatus || null,
-    refreshNow,
-  };
 }
 
 export default function useCurrentDashboard({ disabled = false, onDashboardEvent = null } = {}) {
