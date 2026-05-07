@@ -21,36 +21,23 @@ import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
 import useCalendarModalWheelContainment from "./useCalendarModalWheelContainment.js";
 import useViewportWidth from "./useViewportWidth.js";
+import {
+  COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY,
+  DEADLINE_OVERLAY_STORAGE_KEY,
+  dashboardDetailFocusRequest,
+  floatingWorkspaceNavigationEffect,
+  initialDeadlineEditorState,
+  isDeadlineCreateFocusRequest,
+  readStoredBoolean,
+  shouldForceDeadlineOverlay,
+  writeStoredBoolean,
+} from "./calendarModalInteractionModel.js";
 
 const VIEWS = {
   events: eventsView,
   bills: billsView,
   deadlines: deadlinesView,
 };
-const DEADLINE_OVERLAY_STORAGE_KEY = "calendar:eventsDeadlineOverlay";
-const COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY = "calendar:eventsCompletedDeadlines";
-
-function readStoredBoolean(key, fallback) {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const value = window.localStorage.getItem(key);
-    if (value === "true") return true;
-    if (value === "false") return false;
-  } catch {
-    return fallback;
-  }
-  return fallback;
-}
-
-function writeStoredBoolean(key, value) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(key, value ? "true" : "false");
-  } catch {
-    // localStorage is an enhancement for this modal preference.
-  }
-}
-
 function addMonthOffset(year, month, offset) {
   const date = new Date(year, month + offset, 1);
   return { year: date.getFullYear(), month: date.getMonth() };
@@ -228,28 +215,28 @@ export default function useCalendarModalController({
     openRequestId,
   });
   const todayDateKey = ymdFromParts(currentYear, currentMonth, todayDate);
-  const isInitialDeadlineCreateRequest = open
-    && focusItemId === "new"
-    && (
-      view === "deadlines"
-      || (view === "events" && forceDeadlineOverlay)
-    );
-  const [deadlineEditor, setDeadlineEditor] = useState(() => (
-    isInitialDeadlineCreateRequest
-      ? {
-          mode: "create",
-          seedDate: focusDate || (view === "events" && forceDeadlineOverlay ? todayDateKey : null),
-        }
-      : null
-  ));
+  const isInitialDeadlineCreateRequest = isDeadlineCreateFocusRequest({
+    open,
+    view,
+    focusItemId,
+    forceDeadlineOverlay,
+  });
+  const [deadlineEditor, setDeadlineEditor] = useState(() => initialDeadlineEditorState({
+    open,
+    view,
+    focusItemId,
+    focusDate,
+    forceDeadlineOverlay,
+    todayDateKey,
+  }));
   const viewportWidth = useViewportWidth();
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
   const [eventOverlayVisible, setEventOverlayVisible] = useState(true);
   const [deadlineOverlayVisible, setDeadlineOverlayVisible] = useState(() => (
-    readStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, true)
+    readStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, true)
   ));
   const [completedDeadlineOverlayVisible, setCompletedDeadlineOverlayVisible] = useState(() => (
-    readStoredBoolean(COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, true)
+    readStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, true)
   ));
   const [committedDeadlineOverlayData, setCommittedDeadlineOverlayData] = useState(null);
   const [lateDeadlineOverlayData, setLateDeadlineOverlayData] = useState(null);
@@ -303,6 +290,17 @@ export default function useCalendarModalController({
     if (isInitialDeadlineCreateRequest && view === "deadlines") return null;
     return todayDateKey;
   }, [focusDate, isInitialDeadlineCreateRequest, open, todayDateKey, view]);
+  const eventsEnsureRange = eventsData?.ensureRange || null;
+  const eventsRefreshRange = eventsData?.refreshRange || null;
+  const eventsUpsertEvents = eventsData?.upsertEvents || null;
+  const eventsRemoveEvent = eventsData?.removeEvent || null;
+  const eventsGetEvents = eventsData?.getEvents || null;
+  const eventsHasMonth = eventsData?.hasMonth || null;
+  const eventsIsMonthLoading = eventsData?.isMonthLoading || null;
+  const eventsEditable = !!eventsData?.editable;
+  const eventsLoading = !!eventsData?.loading;
+  const eventsStaleRefreshPending = !!eventsData?.staleRefreshPending;
+  const eventsRevision = eventsData?.revision;
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -319,16 +317,16 @@ export default function useCalendarModalController({
         || !!(seededOverlayData && deadlinesRangeData?.dataRange && rangeMatches(deadlinesRangeData.dataRange, visibleRange));
       const hasVisibleDeadlineSeed = hasDeadlineItemsInRange(seededOverlayData, visibleRange)
         || hasDeadlineItemsInRange(currentOverlayData, visibleRange);
-      const eventsRangeLoading = !!eventsData?.loading
-        || !!eventsData?.isMonthLoading?.(prevMonth.year, prevMonth.month)
-        || !!eventsData?.isMonthLoading?.(viewYear, viewMonth)
-        || !!eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month);
+      const eventsRangeLoading = eventsLoading
+        || !!eventsIsMonthLoading?.(prevMonth.year, prevMonth.month)
+        || !!eventsIsMonthLoading?.(viewYear, viewMonth)
+        || !!eventsIsMonthLoading?.(nextMonth.year, nextMonth.month);
       const awaitingDeadlineOverlay = deadlineOverlayVisible
         && !!deadlinesRangeData?.ensureRange
         && ["idle", "loading", "slow"].includes(planningReadiness.state)
         && !hasResolvedDeadlineRange
         && !hasVisibleDeadlineSeed;
-      const eventsEntryReady = !eventsData?.ensureRange || !!planningReadiness.eventsReadyAt;
+      const eventsEntryReady = !eventsEnsureRange || !!planningReadiness.eventsReadyAt;
       const deadlinesEntryReady = !deadlineOverlayVisible
         || !deadlinesRangeData?.ensureRange
         || !!planningReadiness.deadlinesReadyAt
@@ -344,9 +342,9 @@ export default function useCalendarModalController({
         events: awaitingDeadlineOverlay || !eventOverlayVisible
           ? []
           : dedupeEvents([
-              ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
-              ...(eventsData?.getEvents?.(viewYear, viewMonth) || []),
-              ...(eventsData?.getEvents?.(nextMonth.year, nextMonth.month) || []),
+              ...(eventsGetEvents?.(prevMonth.year, prevMonth.month) || []),
+              ...(eventsGetEvents?.(viewYear, viewMonth) || []),
+              ...(eventsGetEvents?.(nextMonth.year, nextMonth.month) || []),
             ]),
         deadlineOverlay: {
           enabled: deadlineOverlayVisible,
@@ -370,8 +368,9 @@ export default function useCalendarModalController({
           || awaitingDeadlineOverlay
           || false,
         agendaEntryReady,
-        pendingUpdate: !!eventsData?.staleRefreshPending,
-        hasMonth: eventsData?.hasMonth?.(viewYear, viewMonth) || false,
+        pendingUpdate: eventsStaleRefreshPending,
+        hasMonth: eventsHasMonth?.(viewYear, viewMonth) || false,
+        revision: eventsRevision,
       };
     }
     if (view === "deadlines") {
@@ -396,7 +395,13 @@ export default function useCalendarModalController({
     };
   }, [
     view,
-    eventsData,
+    eventsEnsureRange,
+    eventsGetEvents,
+    eventsHasMonth,
+    eventsIsMonthLoading,
+    eventsLoading,
+    eventsStaleRefreshPending,
+    eventsRevision,
     viewYear,
     viewMonth,
     eventOverlayVisible,
@@ -478,14 +483,14 @@ export default function useCalendarModalController({
   const eventEditor = useCalendarEventEditor({
     open,
     view,
-    editable: !!eventsData?.editable,
+    editable: eventsEditable,
     selectedDay: activeSelectedDay,
     selectedDate: view === "events" ? activeSelectedDateKey : null,
     viewYear,
     viewMonth,
-    refreshRange: eventsData?.refreshRange,
-    upsertEvents: eventsData?.upsertEvents,
-    removeEvent: eventsData?.removeEvent,
+    refreshRange: eventsRefreshRange,
+    upsertEvents: eventsUpsertEvents,
+    removeEvent: eventsRemoveEvent,
     onFocusDate: focusEditorDate,
     onSaved: handleEventEditorSaved,
     onDeleted: handleEventEditorDeleted,
@@ -501,7 +506,7 @@ export default function useCalendarModalController({
   const toggleDeadlineOverlay = useCallback(() => {
     setDeadlineOverlayVisible((current) => {
       const next = !current;
-      writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, next);
+      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, next);
       return next;
     });
   }, []);
@@ -513,7 +518,7 @@ export default function useCalendarModalController({
   const toggleCompletedDeadlineOverlay = useCallback(() => {
     setCompletedDeadlineOverlayVisible((current) => {
       const next = !current;
-      writeStoredBoolean(COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, next);
+      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, next);
       return next;
     });
   }, []);
@@ -532,17 +537,17 @@ export default function useCalendarModalController({
   const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
 
   useEffect(() => {
-    if (!open || view !== "events" || !forceDeadlineOverlay) return;
+    if (!shouldForceDeadlineOverlay({ open, view, forceDeadlineOverlay })) return;
     setDeadlineOverlayVisible(true);
-    writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, true);
+    writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, true);
   }, [forceDeadlineOverlay, open, openRequestId, view]);
 
   const eventQuickActions = useCalendarQuickActions({
-    editable: !!eventsData?.editable,
-    layout: getCalendarLayoutMetrics(viewportWidth),
-    refreshRange: eventsData?.refreshRange,
-    upsertEvents: eventsData?.upsertEvents,
-    removeEvent: eventsData?.removeEvent,
+    editable: eventsEditable,
+    layout: activeLayout,
+    refreshRange: eventsRefreshRange,
+    upsertEvents: eventsUpsertEvents,
+    removeEvent: eventsRemoveEvent,
     onSelectEvent: (itemId, dateKey) => {
       const parsed = parseYmd(dateKey);
       if (parsed) {
@@ -614,32 +619,26 @@ export default function useCalendarModalController({
 
   function navigateMonth(dir, _options = {}) {
     const currentFloating = floatingDetailRef.current;
-    const activeEditorOpen =
-      eventEditorRef.current?.isEditorOpen
-      || !!deadlineEditor?.mode
-      || (
-        currentFloating?.open
-        && (currentFloating.mode === "edit" || currentFloating.mode === "create")
-      );
-    const preserveEditor = activeEditorOpen;
-    const shouldParkFloatingEditor =
-      currentFloating?.open
-      && (currentFloating.mode === "edit" || currentFloating.mode === "create");
+    const workspaceEffect = floatingWorkspaceNavigationEffect({
+      currentFloating,
+      eventEditorOpen: eventEditorRef.current?.isEditorOpen,
+      deadlineEditorMode: deadlineEditor?.mode,
+    });
 
-    if (preserveEditor) {
+    if (workspaceEffect.preserveEditor) {
       setWorkspaceTransientCloseToken((token) => token + 1);
       setManualMonthBrowseKey((key) => key + 1);
     } else {
       setDeadlineDraftPreview(null);
     }
     setMonthMotionDirection(dir > 0 ? 1 : -1);
-    if (preserveEditor) {
-      if (shouldParkFloatingEditor) {
+    if (workspaceEffect.preserveEditor) {
+      if (workspaceEffect.shouldParkFloatingEditor) {
         parkFloatingDetail();
       }
-    } else if (floatingDetail?.open) {
+    } else if (workspaceEffect.shouldParkFloatingDetail) {
       parkFloatingDetail();
-    } else {
+    } else if (workspaceEffect.shouldClearSelection) {
       closeEventEditor();
       setSelectedDay(null);
       setSelectedDateKey(null);
@@ -958,34 +957,34 @@ export default function useCalendarModalController({
     : viewData;
 
   useEffect(() => {
-    if (!open) {
-      setPendingItemDetailFocus(null);
-      handledDashboardDetailFocusRef.current = null;
+    const request = dashboardDetailFocusRequest({
+      open,
+      focusOpenDetail,
+      focusItemId,
+      focusDate,
+      activeSelectedDateKey,
+      openRequestId,
+      usesFloatingEditor,
+      view,
+    });
+    if (!request) {
+      if (!open) {
+        setPendingItemDetailFocus(null);
+        handledDashboardDetailFocusRef.current = null;
+      }
       return;
     }
-    if (!focusOpenDetail || !focusItemId || focusItemId === "new" || !usesFloatingEditor) return;
-    const dateKey = focusDate || activeSelectedDateKey;
-    if (!dateKey) return;
-    const itemId = String(focusItemId);
-    const requestKey = `${openRequestId}:${view}:${dateKey}:${itemId}`;
-    if (handledDashboardDetailFocusRef.current === requestKey) return;
+    if (handledDashboardDetailFocusRef.current === request.requestKey) return;
     setPendingItemDetailFocus((current) => {
       if (
-        current?.openRequestId === openRequestId
-        && current.view === view
-        && current.dateKey === dateKey
-        && current.itemId === itemId
+        current?.openRequestId === request.openRequestId
+        && current.view === request.view
+        && current.dateKey === request.dateKey
+        && current.itemId === request.itemId
       ) {
         return current;
       }
-      return {
-        openRequestId,
-        view,
-        dateKey,
-        itemId,
-        requestKey,
-        attempts: 0,
-      };
+      return request;
     });
   }, [activeSelectedDateKey, focusDate, focusItemId, focusOpenDetail, open, openRequestId, usesFloatingEditor, view]);
 
@@ -1108,13 +1107,13 @@ export default function useCalendarModalController({
     toggleCompletedDeadlineOverlay,
     setDeadlineOverlayVisible: (value) => {
       setDeadlineOverlayVisible(value);
-      writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, value);
+      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, value);
     },
     navigateMonthRef,
   });
 
   useEffect(() => {
-    if (!open || view !== "events" || !eventsData?.ensureRange) return;
+    if (!open || view !== "events" || !eventsEnsureRange) return;
     const { start, end } = getVisibleGridRange(viewYear, viewMonth);
     onEventsVisibleRangeChange?.({ start, end });
     const runEnsure = () => {
@@ -1153,7 +1152,7 @@ export default function useCalendarModalController({
         }));
       }, 3000);
 
-      const eventsPromise = eventsData.ensureRange(start, end)
+      const eventsPromise = eventsEnsureRange(start, end)
         .then(() => {
           eventsDone = true;
           if (canceled) return;
@@ -1239,7 +1238,7 @@ export default function useCalendarModalController({
       };
     }
     return runEnsure();
-  }, [open, view, viewYear, viewMonth, eventsData, eventEditor.isEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
+  }, [open, view, viewYear, viewMonth, eventsEnsureRange, eventsRevision, eventEditor.isEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
 
   const domainEnsureRange = viewData?.ensureRange;
   const domainRevision = viewData?.revision;

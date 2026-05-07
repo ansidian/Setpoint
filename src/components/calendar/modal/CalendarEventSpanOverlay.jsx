@@ -125,7 +125,6 @@ export default function CalendarEventSpanOverlay({
         const selected = segment.eventId && String(segment.eventId) === String(selectedItemId);
         const active = activeSegmentId === segment.id;
         const commonProps = {
-          key: segment.id,
           "data-testid": segment.kind === "ghost" ? "calendar-ghost-chip" : "calendar-event-span-segment",
           "data-calendar-focus-ring": segment.kind === "event" ? "true" : undefined,
           "data-item-id": segment.eventId || undefined,
@@ -220,6 +219,7 @@ export default function CalendarEventSpanOverlay({
         if (segment.kind === "ghost") {
           return (
             <div
+              key={segment.id}
               {...commonProps}
               data-ghost-kind={segment.item?.kind}
               data-ghost-start={segment.item?.startDate}
@@ -237,6 +237,7 @@ export default function CalendarEventSpanOverlay({
 
         return (
           <button
+            key={segment.id}
             {...commonProps}
             type="button"
             draggable={dragAllowed}

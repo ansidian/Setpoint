@@ -27,24 +27,30 @@ export default function TimelineDayGroup({
   const showRelativeTooltip = day === 1 || day <= -2 || (day >= 2 && day <= 6);
 
   const rowRefs = useRef([]);
+  const markerTopRef = useRef(null);
   const [markerTop, setMarkerTop] = useState(null);
 
   const gutter = isMobile ? MOBILE_GUTTER : GUTTER;
   const spineLeft = isMobile ? MOBILE_SPINE_LEFT : SPINE_LEFT;
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useLayoutEffect(() => {
+    const commitMarkerTop = (nextMarkerTop) => {
+      if (Object.is(markerTopRef.current, nextMarkerTop)) return;
+      markerTopRef.current = nextMarkerTop;
+      setMarkerTop(nextMarkerTop);
+    };
+
     if (!isToday) {
-      setMarkerTop(null);
+      commitMarkerTop(null);
       return;
     }
-    setMarkerTop(resolveTimelineNowMarkerTop({
+    rowRefs.current = rowRefs.current.slice(0, items.length);
+    commitMarkerTop(resolveTimelineNowMarkerTop({
       items,
       now,
       rows: rowRefs.current,
     }));
   }, [isToday, items, now]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div style={{ marginBottom: 24 }}>

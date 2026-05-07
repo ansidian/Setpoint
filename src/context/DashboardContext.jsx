@@ -1,67 +1,19 @@
 import { createContext, useContext, useState, useCallback, useRef, useMemo } from "react";
 import { dismissEmail, completeTask, updateTaskStatus, dismissTombstone } from "../api";
 import { markBriefingAccountEmailsRead, setBriefingEmailReadState } from "../lib/briefing-email-state";
+import {
+  EMPTY_DEADLINES,
+  applyTaskComplete,
+  applyTaskCompleting,
+  applyTaskStatus,
+  applyTodoistTaskDelete,
+  applyTodoistTaskUpsert,
+  clearTaskCompleting,
+  dismissTodoistTombstone,
+  taskMatches,
+} from "./dashboardTaskProjection.js";
 
 const DashboardContext = createContext(null);
-
-function taskMatches(task, taskId, section = null) {
-  if (task?._tombstone || String(task?.id) !== String(taskId)) return false;
-  if (section === "todoist") return task.source === "todoist";
-  if (section === "ctm") return task.source !== "todoist";
-  return true;
-}
-
-function recalculateTodoistStats(root) {
-  if (!root?.todoist?.upcoming) return root;
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  let dueToday = 0;
-  let dueThisWeek = 0;
-  for (const task of root.todoist.upcoming) {
-    if (task._tombstone || task.status === "complete") continue;
-    if (task.due_date === today) dueToday += 1;
-    if (task.due_date >= today && task.due_date <= weekFromNow) dueThisWeek += 1;
-  }
-  root.todoist.stats = {
-    incomplete: root.todoist.upcoming.filter((task) => !task._tombstone && task.status !== "complete").length,
-    dueToday,
-    dueThisWeek,
-    totalPoints: 0,
-  };
-  return root;
-}
-
-function ensureTodoistSection(root) {
-  if (!root.todoist) {
-    root.todoist = { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
-  }
-  if (!Array.isArray(root.todoist.upcoming)) root.todoist.upcoming = [];
-  return root.todoist;
-}
-
-function applyTodoistTaskUpsert(root, task, { merge = false } = {}) {
-  if (!root || !task?.id) return root;
-  const updated = JSON.parse(JSON.stringify(root));
-  const todoist = ensureTodoistSection(updated);
-  const index = todoist.upcoming.findIndex(
-    (entry) => !entry._tombstone && String(entry.id) === String(task.id),
-  );
-  if (index >= 0) {
-    todoist.upcoming[index] = merge ? { ...todoist.upcoming[index], ...task } : task;
-  } else {
-    todoist.upcoming.push(task);
-  }
-  return recalculateTodoistStats(updated);
-}
-
-function applyTodoistTaskDelete(root, taskId) {
-  if (!root?.todoist?.upcoming) return root;
-  const updated = JSON.parse(JSON.stringify(root));
-  updated.todoist.upcoming = updated.todoist.upcoming.filter(
-    (task) => task._tombstone || String(task.id) !== String(taskId),
-  );
-  return recalculateTodoistStats(updated);
-}
 
 export function DashboardProvider({
   briefing,
@@ -107,32 +59,10 @@ export function DashboardProvider({
   }, [selectedEmail, setBriefing]);
 
   const removeCompletedTask = useCallback((taskId, sectionName = null) => {
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-    const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     // Keep completed tasks visible everywhere (dashboard + calendar): flip
     // status to "complete" and clear the transient _completing flash flag so
     // the row renders with the strikethrough/dim treatment.
-    const finalizeComplete = (root) => {
-      if (!root) return root;
-      const updated = JSON.parse(JSON.stringify(root));
-      for (const section of sectionName ? [sectionName] : ["ctm", "todoist"]) {
-        if (!updated[section]?.upcoming) continue;
-        const task = updated[section].upcoming.find((t) => taskMatches(t, taskId, section));
-        if (task) {
-          task.status = "complete";
-          delete task._completing;
-        }
-        let totalPoints = 0, dueToday = 0, dueThisWeek = 0, incomplete = 0;
-        for (const d of updated[section].upcoming) {
-          if (d.status !== "complete") incomplete++;
-          if (d.due_date === today) dueToday++;
-          if (d.due_date >= today && d.due_date <= weekFromNow) dueThisWeek++;
-          if (d.points_possible) totalPoints += d.points_possible;
-        }
-        updated[section].stats = { incomplete, dueToday, dueThisWeek, totalPoints };
-      }
-      return updated;
-    };
+    const finalizeComplete = (root) => applyTaskComplete(root, taskId, sectionName);
     setBriefing(prev => finalizeComplete(prev));
     setCalendarDeadlines?.(prev => (prev ? finalizeComplete(prev) : prev));
   }, [setBriefing, setCalendarDeadlines]);
@@ -142,15 +72,7 @@ export function DashboardProvider({
       || (taskMatches(taskSnapshot, taskId, "todoist") ? taskSnapshot : null);
     if (!existingTask || existingTask._completing || existingTask.status === "complete") return;
 
-    const flagCompleting = (root) => {
-      if (!root) return root;
-      const updated = JSON.parse(JSON.stringify(root));
-      for (const section of ["todoist"]) {
-        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
-        if (task) task._completing = true;
-      }
-      return updated;
-    };
+    const flagCompleting = (root) => applyTaskCompleting(root, taskId, "todoist");
     setBriefing(prev => flagCompleting(prev));
     setCalendarDeadlines?.(prev => (prev ? flagCompleting(prev) : prev));
     if (expandedTask === taskId) setExpandedTask(null);
@@ -164,15 +86,7 @@ export function DashboardProvider({
       await completeTask(taskId);
     } catch (err) {
       console.error("[Briefing] Complete task failed:", err.message);
-      const clearCompleting = (root) => {
-        if (!root) return root;
-        const updated = JSON.parse(JSON.stringify(root));
-        for (const section of ["todoist"]) {
-          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
-          if (task) delete task._completing;
-        }
-        return updated;
-      };
+      const clearCompleting = (root) => clearTaskCompleting(root, taskId, "todoist");
       setBriefing(prev => clearCompleting(prev));
       setCalendarDeadlines?.(prev => (prev ? clearCompleting(prev) : prev));
       return;
@@ -184,29 +98,7 @@ export function DashboardProvider({
 
   const handleDismissGhost = useCallback((todoistId) => {
     dismissTombstone(todoistId).catch(() => {});
-    const stripTombstone = (root) => {
-      if (!root) return root;
-      const updated = JSON.parse(JSON.stringify(root));
-      if (updated.todoist?.upcoming) {
-        const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-        const weekFromNow = new Date(Date.now() + 7 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-        updated.todoist.upcoming = updated.todoist.upcoming.filter(
-          (t) => !(t._tombstone && t.id === todoistId),
-        );
-        let dueToday = 0, dueThisWeek = 0;
-        for (const d of updated.todoist.upcoming) {
-          if (d.due_date === today) dueToday++;
-          if (d.due_date >= today && d.due_date <= weekFromNow) dueThisWeek++;
-        }
-        updated.todoist.stats = {
-          incomplete: updated.todoist.upcoming.filter((t) => t.status !== "complete").length,
-          dueToday,
-          dueThisWeek,
-          totalPoints: 0,
-        };
-      }
-      return updated;
-    };
+    const stripTombstone = (root) => dismissTodoistTombstone(root, todoistId);
     setBriefing((prev) => stripTombstone(prev));
     setCalendarDeadlines?.((prev) => (prev ? stripTombstone(prev) : prev));
   }, [setBriefing, setCalendarDeadlines]);
@@ -227,7 +119,7 @@ export function DashboardProvider({
   const handleAddTask = useCallback((task) => {
     setBriefing(prev => applyTodoistTaskUpsert(prev, task));
     setCalendarDeadlines?.(prev => applyTodoistTaskUpsert(
-      prev || { ctm: { upcoming: [], stats: null }, todoist: { upcoming: [] } },
+      prev || EMPTY_DEADLINES,
       task,
     ));
   }, [setBriefing, setCalendarDeadlines]);
@@ -238,15 +130,7 @@ export function DashboardProvider({
     if (status === "complete") {
       onTaskCompletionIntent?.(taskId);
       statusUpdate.then(() => onTaskCompleted?.(taskId)).catch(() => {});
-      const flagCompleting = (root) => {
-        if (!root) return root;
-        const updated = JSON.parse(JSON.stringify(root));
-        for (const section of ["ctm"]) {
-          const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
-          if (task) task._completing = true;
-        }
-        return updated;
-      };
+      const flagCompleting = (root) => applyTaskCompleting(root, taskId, "ctm");
       setBriefing(prev => flagCompleting(prev));
       setCalendarDeadlines?.(prev => (prev ? flagCompleting(prev) : prev));
       setTimeout(() => removeCompletedTask(taskId, "ctm"), 600);
@@ -256,15 +140,7 @@ export function DashboardProvider({
 
     statusUpdate.catch(() => {});
 
-    const applyStatus = (root) => {
-      if (!root) return root;
-      const updated = JSON.parse(JSON.stringify(root));
-      for (const section of ["ctm"]) {
-        const task = updated[section]?.upcoming?.find((t) => taskMatches(t, taskId, section));
-        if (task) task.status = status;
-      }
-      return updated;
-    };
+    const applyStatus = (root) => applyTaskStatus(root, taskId, status, "ctm");
     setBriefing(prev => applyStatus(prev));
     setCalendarDeadlines?.(prev => (prev ? applyStatus(prev) : prev));
   }, [expandedTask, onTaskCompleted, onTaskCompletionIntent, setBriefing, setCalendarDeadlines, removeCompletedTask]);

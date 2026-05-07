@@ -4,79 +4,16 @@ import {
   calendarEventTouchedMonths,
   eventVisuallyOverlapsRange,
 } from "../components/calendar/modal/calendarEventSpanLayout.js";
+import {
+  expandMonthKeys,
+  groupMonthKeys,
+  monthBounds,
+  monthKey,
+  monthsInRange,
+} from "./calendarRangeModel.js";
 
 const PREFETCH_MONTH_RADIUS = 3;
-const MAX_MONTHS_PER_FETCH = 2;
 const CACHE_TTL_MS = 30 * 60 * 1000;
-
-function monthKey(year, month) {
-  return `${year}-${String(month + 1).padStart(2, "0")}`;
-}
-
-function monthIndex(key) {
-  const [year, month] = key.split("-").map(Number);
-  return year * 12 + (month - 1);
-}
-
-function keyFromMonthIndex(index) {
-  const year = Math.floor(index / 12);
-  const month = index % 12;
-  return monthKey(year, month);
-}
-
-// Given an inclusive date range, return the set of month keys it touches.
-function monthsInRange(start, end) {
-  const result = [];
-  const s = new Date(`${start}T12:00:00Z`);
-  const e = new Date(`${end}T12:00:00Z`);
-  const cur = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), 1));
-  while (cur <= e) {
-    result.push(monthKey(cur.getUTCFullYear(), cur.getUTCMonth()));
-    cur.setUTCMonth(cur.getUTCMonth() + 1);
-  }
-  return result;
-}
-
-function expandMonthKeys(keys, radius = PREFETCH_MONTH_RADIUS) {
-  const indexes = keys.map(monthIndex).filter(Number.isFinite);
-  if (!indexes.length) return [];
-  const first = Math.min(...indexes) - radius;
-  const last = Math.max(...indexes) + radius;
-  const result = [];
-  for (let index = first; index <= last; index += 1) {
-    result.push(keyFromMonthIndex(index));
-  }
-  return result;
-}
-
-function groupMonthKeys(keys) {
-  const sorted = [...new Set(keys)]
-    .sort((a, b) => monthIndex(a) - monthIndex(b));
-  const groups = [];
-  let current = [];
-
-  for (const key of sorted) {
-    const previous = current[current.length - 1];
-    const isContiguous = previous && monthIndex(key) === monthIndex(previous) + 1;
-    if (!current.length || (isContiguous && current.length < MAX_MONTHS_PER_FETCH)) {
-      current.push(key);
-      continue;
-    }
-    groups.push(current);
-    current = [key];
-  }
-
-  if (current.length) groups.push(current);
-  return groups;
-}
-
-function monthBounds(key) {
-  const [y, m] = key.split("-").map(Number);
-  const start = `${y}-${String(m).padStart(2, "0")}-01`;
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-  return { start, end };
-}
 
 function eventIdentity(event) {
   return event?.id == null ? null : String(event.id);
@@ -239,7 +176,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
     if (disabled) return [];
 
     const keys = monthsInRange(start, end);
-    const fetchKeys = expandMonthKeys(keys);
+    const fetchKeys = expandMonthKeys(keys, PREFETCH_MONTH_RADIUS);
     const visibleKeySet = new Set(keys);
     const pending = [...new Set(
       keys
@@ -278,7 +215,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
 
   const refreshRangeInPlace = useCallback(async (start, end) => {
     if (disabled) return [];
-    const keys = expandMonthKeys(monthsInRange(start, end));
+    const keys = expandMonthKeys(monthsInRange(start, end), PREFETCH_MONTH_RADIUS);
     if (!keys.length) return eventsForRange(start, end);
 
     setStaleRefreshPending(true);
@@ -305,7 +242,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
 
   const refreshRange = useCallback(async (start, end) => {
     if (disabled) return [];
-    const keys = expandMonthKeys(monthsInRange(start, end));
+    const keys = expandMonthKeys(monthsInRange(start, end), PREFETCH_MONTH_RADIUS);
     cacheGenerationRef.current += 1;
     for (const key of keys) {
       cacheRef.current.delete(key);
@@ -330,7 +267,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
   const markStale = useCallback((start, end) => {
     if (disabled) return;
     const keys = start && end
-      ? expandMonthKeys(monthsInRange(start, end))
+      ? expandMonthKeys(monthsInRange(start, end), PREFETCH_MONTH_RADIUS)
       : [...cacheRef.current.keys()];
     let changed = false;
     for (const key of keys) {

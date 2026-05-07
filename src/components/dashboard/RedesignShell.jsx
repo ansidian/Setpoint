@@ -10,6 +10,11 @@ import {
 } from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
 import DashboardCalendarModalMount from "./DashboardCalendarModalMount";
+import {
+  buildDashboardEventsData,
+  resolveCalendarOpenState,
+  resolveDashboardShellHotkey,
+} from "./dashboardShellModel.js";
 export { DashboardBody };
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
@@ -100,26 +105,30 @@ export function RedesignShell({
     onDismiss: () => setCalendarOpen(false),
   });
   const openCalendar = (viewKey, focusDate = null, focusItemId = null, options = {}) => {
-    if (isMobile) return;
-    const requested = viewKey === "deadlines" ? "events" : viewKey;
-    const resolved = requested === "bills" && !showBills ? "events" : requested || calendarView;
-    const nextFocusItemId = focusItemId ? String(focusItemId) : null;
-    const shouldOpenDetail = !!options.openDetail && nextFocusItemId && nextFocusItemId !== "new";
-    const forceDeadlineOverlay = !!options.forceDeadlineOverlay;
-    setCalendarView(resolved);
-    try { localStorage.setItem("calendar:lastView", resolved); } catch { /* ignore */ }
-    if (forceDeadlineOverlay) {
+    const request = resolveCalendarOpenState({
+      isMobile,
+      viewKey,
+      currentView: calendarView,
+      showBills,
+      focusDate,
+      focusItemId,
+      options,
+    });
+    if (!request) return;
+    setCalendarView(request.view);
+    try { localStorage.setItem("calendar:lastView", request.view); } catch { /* ignore */ }
+    if (request.forceDeadlineOverlay) {
       try { localStorage.setItem("calendar:eventsDeadlineOverlay", "true"); } catch { /* ignore */ }
     }
-    setCalendarFocus(focusDate || null);
-    setCalendarFocusItemId(nextFocusItemId);
-    setCalendarFocusOpenDetail(shouldOpenDetail);
-    setCalendarForceDeadlineOverlay(forceDeadlineOverlay);
+    setCalendarFocus(request.focusDate);
+    setCalendarFocusItemId(request.focusItemId);
+    setCalendarFocusOpenDetail(request.focusOpenDetail);
+    setCalendarForceDeadlineOverlay(request.forceDeadlineOverlay);
     setCalendarOpenRequestId((value) => value + 1);
     setCalendarMounted(true);
     setCalendarOpen(true);
-    if (forceDeadlineOverlay) loadCalendarDeadlines();
-    if (resolved === "bills") loadCalendarBills({ refreshLive: true });
+    if (request.shouldLoadDeadlines) loadCalendarDeadlines();
+    if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
   };
   const openTodoistCreate = useCallback(() => {
     if (isMobile) {
@@ -173,51 +182,58 @@ export function RedesignShell({
 
     function onKey(e) {
       const target = e.target;
-      if (
+      const editableTarget = (
         target.tagName === "INPUT"
         || target.tagName === "TEXTAREA"
         || target.isContentEditable
         || target.closest?.("[data-suspend-calendar-hotkeys='true']")
-      ) {
+      );
+      const command = resolveDashboardShellHotkey({
+        key: e.key,
+        metaKey: e.metaKey,
+        ctrlKey: e.ctrlKey,
+        altKey: e.altKey,
+        repeat: e.repeat,
+        editableTarget,
+        actionChord: actionChordRef.current,
+        calendarOpen,
+      });
+
+      if (command.action === "clear-chord") {
         clearActionChord();
         return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if (command.action === "open-palette") {
         e.preventDefault();
         setPaletteOpen(true);
         return;
       }
-      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      const key = e.key.toLowerCase();
-
-      if (actionChordRef.current === "g") {
+      if (command.clearChord) {
         clearActionChord();
-        if (key === "t") {
-          e.preventDefault();
-          openTodoistCreate();
-          return;
-        }
-        if (key === "e" || key === "c") {
-          e.preventDefault();
-          openCalendar("events", null, "new");
-          return;
-        }
       }
-
-      if (key === "g") {
+      if (command.action === "open-todoist-create") {
+        e.preventDefault();
+        openTodoistCreate();
+        return;
+      }
+      if (command.action === "open-event-create") {
+        e.preventDefault();
+        openCalendar("events", null, "new");
+        return;
+      }
+      if (command.action === "start-g-chord") {
         actionChordRef.current = "g";
         actionChordTimerRef.current = setTimeout(clearActionChord, 900);
         e.preventDefault();
         return;
       }
-
-      if (key === "a") {
+      if (command.action === "toggle-analytics") {
         e.preventDefault();
         setAnalyticsOpen((value) => !value);
         return;
       }
-      if (key === "c" && !calendarOpen) { openCalendar(); }
-      if (key === "y") { setHistoryOpen((v) => !v); }
+      if (command.action === "open-calendar") { openCalendar(); }
+      if (command.action === "toggle-history") { setHistoryOpen((v) => !v); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -294,34 +310,7 @@ export function RedesignShell({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpToSection, onQuickRefresh, openTodoistCreate, setShellTab]);
 
-  const eventsData = useMemo(() => ({
-    ensureRange: calendarRange.ensureRange,
-    refreshRange: calendarRange.refreshRange,
-    refreshRangeInPlace: calendarRange.refreshRangeInPlace,
-    upsertEvents: calendarRange.upsertEvents,
-    removeEvent: calendarRange.removeEvent,
-    getEvents: calendarRange.getEvents,
-    hasMonth: calendarRange.hasMonth,
-    isMonthLoading: calendarRange.isMonthLoading,
-    loading: calendarRange.loading,
-    staleRefreshPending: calendarRange.staleRefreshPending,
-    error: calendarRange.error,
-    revision: calendarRange.revision,
-    editable: true,
-  }), [
-    calendarRange.ensureRange,
-    calendarRange.refreshRange,
-    calendarRange.refreshRangeInPlace,
-    calendarRange.upsertEvents,
-    calendarRange.removeEvent,
-    calendarRange.getEvents,
-    calendarRange.hasMonth,
-    calendarRange.isMonthLoading,
-    calendarRange.loading,
-    calendarRange.staleRefreshPending,
-    calendarRange.error,
-    calendarRange.revision,
-  ]);
+  const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
 
   useEffect(() => {
     const activeUids = collectActiveReadOverrideKeys({

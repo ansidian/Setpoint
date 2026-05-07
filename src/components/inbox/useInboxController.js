@@ -19,15 +19,23 @@ import {
 import { getGmailUrl } from "../../lib/email-links";
 import {
   defaultSnoozeTs,
+  isCatchUpEmail,
+} from "./helpers";
+import {
   makeSynthAccount,
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
   mergeReadState,
-  isCatchUpEmail,
-} from "./helpers";
+} from "./inboxWorkItems.js";
 import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
+import {
+  applyLiveTrashOptimistic,
+  applySnapshotTrashOptimistic,
+  buildTrashCommand,
+  shouldHandleInboxUndoHotkey,
+} from "./inboxCommandModel.js";
 
 const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
 
@@ -512,7 +520,6 @@ export default function useInboxController({
     const id = selectedEmail.id;
     const uid = selectedEmail.uid || id;
     const catchUpSelected = isCatchUpEmail(selectedEmail);
-
     if (kind === "next") {
       moveBy(1);
       return;
@@ -524,73 +531,46 @@ export default function useInboxController({
     }
 
     if (kind === "trash") {
-      if (catchUpSelected) return;
-      if (readOnly) return;
-      const restoreSelectedId = id || uid;
-      if (selectedEmail._live) {
-        setLiveTrashedUids((prev) => {
-          const next = new Set(prev);
-          next.add(uid);
-          return next;
-        });
+      const command = buildTrashCommand(selectedEmail, { readOnly });
+      if (!command.allowed) return;
+      if (command.scope === "live") {
+        setLiveTrashedUids((prev) => applyLiveTrashOptimistic(prev, command.uid, true));
         replaceUndoSlot({
           type: "trash",
           message: "Email moved to trash",
           commit: async () => {
-            await trashEmail(uid);
+            await trashEmail(command.uid);
             await onActiveSnapshotRefresh();
           },
           undo: async () => {
-            setLiveTrashedUids((prev) => {
-              const next = new Set(prev);
-              next.delete(uid);
-              return next;
-            });
-            setSelectedId(restoreSelectedId);
+            setLiveTrashedUids((prev) => applyLiveTrashOptimistic(prev, command.uid, false));
+            setSelectedId(command.restoreSelectedId);
           },
         });
-      } else if (selectedEmail._activeSnapshot) {
-        const itemId = selectedEmail.snapshot_item_id ? String(selectedEmail.snapshot_item_id) : null;
-        if (itemId) {
-          setSnapshotOptimistic((prev) => {
-            const next = new Map(prev);
-            next.set(itemId, {
-              ...(prev.get(itemId) || {}),
-              hidden: true,
-              pendingAction: "trash",
-              pending: false,
-            });
-            return next;
-          });
-        }
+      } else if (command.scope === "activeSnapshot") {
+        if (command.itemId) setSnapshotOptimistic((prev) => applySnapshotTrashOptimistic(prev, command.itemId, true));
         replaceUndoSlot({
           type: "trash",
           message: "Email moved to trash",
           commit: async () => {
-            await trashEmail(uid);
+            await trashEmail(command.uid);
             await onActiveSnapshotRefresh();
           },
           undo: async () => {
-            if (itemId) {
-              setSnapshotOptimistic((prev) => {
-                const next = new Map(prev);
-                next.delete(itemId);
-                return next;
-              });
-            }
-            setSelectedId(restoreSelectedId);
+            if (command.itemId) setSnapshotOptimistic((prev) => applySnapshotTrashOptimistic(prev, command.itemId, false));
+            setSelectedId(command.restoreSelectedId);
           },
         });
       } else {
-        handleDismiss(id);
+        handleDismiss(command.id);
         replaceUndoSlot({
           type: "trash",
           message: "Email moved to trash",
           commit: async () => {
-            await trashEmail(uid);
+            await trashEmail(command.uid);
           },
           undo: async () => {
-            setSelectedId(restoreSelectedId);
+            setSelectedId(command.restoreSelectedId);
           },
         });
       }
@@ -991,8 +971,13 @@ export default function useInboxController({
 
   useEffect(() => {
     function onKey(event) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-        if (!undoSlotRef.current || isEditableKeyTarget(event.target)) return;
+      if (shouldHandleInboxUndoHotkey({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        hasUndoSlot: !!undoSlotRef.current,
+        editableTarget: isEditableKeyTarget(event.target),
+      })) {
         event.preventDefault();
         event.stopPropagation();
         onUndo();

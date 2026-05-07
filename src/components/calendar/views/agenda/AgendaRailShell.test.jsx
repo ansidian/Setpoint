@@ -173,6 +173,110 @@ describe("AgendaRailShell", () => {
     expect(onPassiveDateChange.mock.calls.every(([dateKey]) => dateKey === "2026-05-02")).toBe(true);
   });
 
+  it("does not passive-select the month start while waiting for the entry target to mount", async () => {
+    const onPassiveDateChange = vi.fn();
+
+    render(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={[{ dateKey: "2026-05-01" }]}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-07"
+        selectedDateKey="2026-05-07"
+        entryScrollTargetDateKey="2026-05-07"
+        entryScrollReady
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+
+    const rail = screen.getByTestId("agenda-shell");
+    const firstHeader = screen.getByTestId("header-2026-05-01");
+    rail.scrollTop = 0;
+    rail.scrollTo = vi.fn();
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
+    firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat the same entry passive correction across hydration rerenders", async () => {
+    const onPassiveDateChange = vi.fn();
+    const renderHeader = ({ group, registerHeader }) => (
+      <button
+        type="button"
+        ref={(node) => registerHeader(group.dateKey, node)}
+        data-testid={`header-${group.dateKey}`}
+      >
+        {group.dateKey}
+      </button>
+    );
+
+    const { rerender } = render(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={[
+          { dateKey: "2026-05-01" },
+          { dateKey: "2026-05-07" },
+        ]}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-07"
+        selectedDateKey="2026-05-01"
+        entryScrollTargetDateKey="2026-05-07"
+        entryScrollReady
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={renderHeader}
+        renderGroup={() => null}
+      />,
+    );
+
+    const rail = screen.getByTestId("agenda-shell");
+    const firstHeader = screen.getByTestId("header-2026-05-01");
+    const todayHeader = screen.getByTestId("header-2026-05-07");
+    rail.scrollTop = 0;
+    rail.scrollTo = vi.fn();
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
+    firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+    todayHeader.getBoundingClientRect = () => ({ top: 480, bottom: 514, left: 0, right: 280, width: 280, height: 34 });
+
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).toHaveBeenCalledTimes(1);
+    expect(onPassiveDateChange).toHaveBeenCalledWith("2026-05-07");
+
+    rerender(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={[
+          { dateKey: "2026-05-01" },
+          { dateKey: "2026-05-07" },
+        ]}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-07"
+        selectedDateKey="2026-05-01"
+        entryScrollTargetDateKey="2026-05-07"
+        entryScrollReady
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={renderHeader}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).toHaveBeenCalledTimes(1);
+  });
+
   it("scrolls today's first row below the sticky date header", async () => {
     const renderGroup = ({ group, registerRow }) => (
       group.dateKey === "2026-05-01" ? (

@@ -1,19 +1,11 @@
 import db from "../db/connection.js";
 import { decrypt } from "./encryption.js";
 import {
-  fetchEmailBody as fetchGmailBody,
-  markAsRead as gmailMarkAsRead,
-  markAsUnread as gmailMarkAsUnread,
-  trashMessage as gmailTrash,
   batchMarkAsRead as gmailBatchMarkAsRead,
   snoozeAtGmail,
   wakeAtGmail,
 } from "./gmail.js";
 import {
-  fetchEmailBody as fetchIcloudBody,
-  markAsRead as icloudMarkAsRead,
-  markAsUnread as icloudMarkAsUnread,
-  trashMessage as icloudTrash,
   batchMarkAsRead as icloudBatchMarkAsRead,
 } from "./icloud.js";
 import {
@@ -24,76 +16,15 @@ import {
 } from "./snapshot-service.js";
 import { loadUserConfig } from "./config-service.js";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "./account-canonical.js";
+import {
+  fetchEmailBodyForUid,
+  findAccountByUid,
+  markEmailReadWithProvider,
+  markEmailUnreadWithProvider,
+  trashEmailWithProvider,
+} from "./email-provider-adapters.js";
 
 // --- Private helpers ---
-
-async function findAccountByUid(userId, uid) {
-  if (uid.startsWith("icloud-")) {
-    const indexed = await db.execute({
-      sql: `SELECT a.*
-            FROM ea_email_index idx
-            JOIN ea_accounts a ON a.id = idx.account_id
-            WHERE idx.user_id = ? AND idx.uid = ? AND a.user_id = ?
-            LIMIT 1`,
-      args: [userId, uid, userId],
-    });
-    if (indexed.rows.length) {
-      return { type: "icloud", account: indexed.rows[0] };
-    }
-    const result = await db.execute({
-      sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'icloud'",
-      args: [userId],
-    });
-    if (!result.rows.length) return null;
-    return { type: "icloud", account: result.rows[0] };
-  }
-  if (uid.startsWith("gmail-")) {
-    const result = await db.execute({
-      sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'gmail'",
-      args: [userId],
-    });
-    const rawAccounts = result.rows.map((account) => ({ ...account, type: account.type || "gmail" }));
-    const canonicalAccounts = canonicalizeConfiguredAccounts(rawAccounts);
-    const matchedPrefix = rawAccounts.find((account) => uid.startsWith(`gmail-${account.id}-`)) || null;
-    const matchedEmail = matchedPrefix?.email
-      ? normalizeEmailAddress(matchedPrefix.email)
-      : null;
-
-    if (matchedPrefix && matchedEmail) {
-      const canonical = canonicalAccounts.find(
-        (account) => normalizeEmailAddress(account.email) === matchedEmail,
-      ) || matchedPrefix;
-      return {
-        type: "gmail",
-        account: canonical.id === matchedPrefix.id
-          ? canonical
-          : { ...canonical, canonical_id: canonical.id, uid_account_id: matchedPrefix.id },
-      };
-    }
-
-    const indexed = await db.execute({
-      sql: `SELECT account_id, account_email
-            FROM ea_email_index
-            WHERE user_id = ? AND uid = ?
-            LIMIT 1`,
-      args: [userId, uid],
-    });
-    const indexedEmail = normalizeEmailAddress(indexed.rows[0]?.account_email);
-    if (!indexedEmail) return null;
-    const canonical = canonicalAccounts.find(
-      (account) => normalizeEmailAddress(account.email) === indexedEmail,
-    );
-    if (!canonical) return null;
-    const uidAccountId = indexed.rows[0]?.account_id || canonical.id;
-    return {
-      type: "gmail",
-      account: uidAccountId === canonical.id
-        ? canonical
-        : { ...canonical, canonical_id: canonical.id, uid_account_id: uidAccountId },
-    };
-  }
-  return null;
-}
 
 function buildEmailWebUrl(uid, accountId, accountEmail) {
   if (!uid?.startsWith("gmail-")) return null;
@@ -194,32 +125,7 @@ function buildBatchReadFailure({ message, failed, total }) {
 // --- Read ops ---
 
 export async function getEmailBody(userId, uid) {
-  if (uid.startsWith("icloud-")) {
-    const accounts = await db.execute({
-      sql: "SELECT * FROM ea_accounts WHERE user_id = ? AND type = 'icloud'",
-      args: [userId],
-    });
-    if (!accounts.rows.length) {
-      const err = new Error("No iCloud account found");
-      err.status = 404;
-      throw err;
-    }
-    const account = accounts.rows[0];
-    const password = decrypt(account.credentials_encrypted);
-    return fetchIcloudBody(account.email, password, uid);
-  }
-  if (uid.startsWith("gmail-")) {
-    const found = await findAccountByUid(userId, uid);
-    if (!found?.account) {
-      const err = new Error("Gmail account not found");
-      err.status = 404;
-      throw err;
-    }
-    return fetchGmailBody(found.account, uid);
-  }
-  const err = new Error("Unknown email uid format");
-  err.status = 400;
-  throw err;
+  return fetchEmailBodyForUid(userId, uid);
 }
 
 export async function searchEmails(userId, { q, limit }) {
@@ -306,50 +212,17 @@ export async function searchEmails(userId, { q, limit }) {
 // --- State-changing ops ---
 
 export async function markRead(userId, uid) {
-  const found = await findAccountByUid(userId, uid);
-  if (!found) {
-    const err = new Error("Account not found");
-    err.status = 404;
-    throw err;
-  }
-  if (found.type === "icloud") {
-    const password = decrypt(found.account.credentials_encrypted);
-    await icloudMarkAsRead(found.account.email, password, uid);
-  } else {
-    await gmailMarkAsRead(found.account, uid);
-  }
+  await markEmailReadWithProvider(userId, uid);
   await markEmailsReadInIndex(userId, uid);
 }
 
 export async function markUnread(userId, uid) {
-  const found = await findAccountByUid(userId, uid);
-  if (!found) {
-    const err = new Error("Account not found");
-    err.status = 404;
-    throw err;
-  }
-  if (found.type === "icloud") {
-    const password = decrypt(found.account.credentials_encrypted);
-    await icloudMarkAsUnread(found.account.email, password, uid);
-  } else {
-    await gmailMarkAsUnread(found.account, uid);
-  }
+  await markEmailUnreadWithProvider(userId, uid);
   await markEmailsUnreadInIndex(userId, uid);
 }
 
 export async function trash(userId, uid) {
-  const found = await findAccountByUid(userId, uid);
-  if (!found) {
-    const err = new Error("Account not found");
-    err.status = 404;
-    throw err;
-  }
-  if (found.type === "icloud") {
-    const password = decrypt(found.account.credentials_encrypted);
-    await icloudTrash(found.account.email, password, uid);
-  } else {
-    await gmailTrash(found.account, uid);
-  }
+  const adapter = await trashEmailWithProvider(userId, uid);
   await Promise.all([
     db.execute({
       sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
@@ -357,7 +230,7 @@ export async function trash(userId, uid) {
     }),
     markProviderRemovedFromActiveSnapshots(
       userId,
-      found.account.uid_account_id || found.account.id,
+      adapter.providerAccountId,
       uid,
       "trashed",
     ),

@@ -58,6 +58,7 @@ export default function CalendarCellItemStack({
   const [moreActive, setMoreActive] = useState(false);
   const stackRef = useRef(null);
   const inlineOverflowRef = useRef(null);
+  const hiddenItemsNotificationRef = useRef(null);
   const reservedHeight = getReservedCellItemLaneHeight(Math.max(0, reservedLaneCount), metrics);
   const measuredMetrics = useMemo(() => ({
     ...metrics,
@@ -113,6 +114,14 @@ export default function CalendarCellItemStack({
     ? (hiddenCount * (metrics?.itemHeight ?? 24)) + ((hiddenCount - 1) * (metrics?.gap ?? 4))
     : 0;
   const hiddenSignature = hiddenItems.map((item) => String(item.id)).join("\u001f");
+  const hiddenNotificationSignature = [
+    dateKey || "",
+    day ?? "",
+    hiddenSignature,
+    leadingColumnWidth,
+    stackItems.length,
+    visibleCount,
+  ].join("\u001e");
   const clearActiveChip = useCallback((itemId) => {
     setActiveChipId((current) => (
       current === itemId ? null : current
@@ -120,6 +129,8 @@ export default function CalendarCellItemStack({
   }, []);
 
   useLayoutEffect(() => {
+    if (hiddenItemsNotificationRef.current === hiddenNotificationSignature) return;
+    hiddenItemsNotificationRef.current = hiddenNotificationSignature;
     onHiddenItemsChange?.({
       dateKey,
       day,
@@ -129,7 +140,7 @@ export default function CalendarCellItemStack({
       totalCount: stackItems.length,
       visibleCount,
     });
-  }, [dateKey, day, hiddenItems, hiddenSignature, leadingColumnWidth, onHiddenItemsChange, stackItems.length, visibleCount]);
+  }, [dateKey, day, hiddenItems, hiddenNotificationSignature, hiddenSignature, leadingColumnWidth, onHiddenItemsChange, stackItems.length, visibleCount]);
 
   useLayoutEffect(() => {
     if (!inlineOverflowOpen) return;

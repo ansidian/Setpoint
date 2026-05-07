@@ -66,6 +66,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
   const suppressPassiveUntilRef = useRef(0);
   const scrollRafRef = useRef(0);
   const handledScrollCommandIdRef = useRef(null);
+  const entryPassiveDateChangeRef = useRef(null);
   const entryAnchorRef = useRef({
     targetDateKey: null,
     released: false,
@@ -178,6 +179,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       targetDateKey: entryScrollTargetDateKey,
       released: false,
     };
+    entryPassiveDateChangeRef.current = null;
   }
 
   useImperativeHandle(ref, () => ({
@@ -245,6 +247,11 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
         forceAuto: true,
       });
       if (targetDate && targetDate !== selectedDateKey && !floatingEditorDirty) {
+        if (entryScrollTargetDateKey) {
+          if (!holdEntryTarget) return;
+          if (entryPassiveDateChangeRef.current === targetDate) return;
+          entryPassiveDateChangeRef.current = targetDate;
+        }
         onPassiveDateChange?.(targetDate);
       }
     });

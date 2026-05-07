@@ -2473,6 +2473,49 @@ describe("CalendarModal responsive layout", () => {
     }
   });
 
+  it("does not restart events range readiness when the events data wrapper is recreated", async () => {
+    window.innerWidth = 1900;
+    const ensureRange = vi.fn().mockResolvedValue([]);
+    const getEvents = vi.fn(() => []);
+    const eventsDataForRender = () => ({
+      ensureRange,
+      getEvents,
+      editable: false,
+    });
+
+    const renderModal = () => wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        eventsData={eventsDataForRender()}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    );
+
+    const { rerender } = render(renderModal());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(ensureRange).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
+    });
+
+    rerender(renderModal());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(ensureRange).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
+    });
+  });
+
   it("scrolls the agenda rail to today when pressing t from an earlier date", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
