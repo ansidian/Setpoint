@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
@@ -66,5 +66,16 @@ describe("App auth redirects", () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe("/from-here");
     });
+  });
+
+  it("opens settings from the command-comma shortcut", async () => {
+    render(<App />);
+
+    expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: ",", metaKey: true });
+
+    expect(await screen.findByTestId("settings-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/settings");
   });
 });

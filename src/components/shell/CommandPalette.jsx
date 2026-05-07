@@ -46,7 +46,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
     { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },
     { id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },
-    { id: "settings",     icon: SettingsIcon, label: "Open settings", kind: "settings" },
+    { id: "settings",     icon: SettingsIcon, label: "Open settings", hint: ["⌘", ","], shortcutLabel: "Command comma", kind: "settings" },
   ], []);
 
   const filtered = useMemo(() => {
@@ -145,17 +145,29 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
                 <Icon size={13} color={active ? accent : "rgba(205,214,244,0.55)"} />
                 <span style={{ flex: 1 }}>{item.label}</span>
                 {item.hint && (
-                  <kbd
+                  <span
+                    aria-label={item.shortcutLabel}
                     style={{
-                      fontSize: 10, fontFamily: "Fira Code, monospace",
-                      padding: "1px 5px", borderRadius: 3,
-                      background: "rgba(255,255,255,0.04)",
-                      color: "rgba(205,214,244,0.5)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3,
                     }}
                   >
-                    {item.hint}
-                  </kbd>
+                    {(Array.isArray(item.hint) ? item.hint : [item.hint]).map((key) => (
+                      <kbd
+                        key={key}
+                        style={{
+                          fontSize: 10, fontFamily: "Fira Code, monospace",
+                          padding: "1px 5px", borderRadius: 3,
+                          background: "rgba(255,255,255,0.04)",
+                          color: "rgba(205,214,244,0.5)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
                 )}
                 <ArrowRight size={11} color="rgba(205,214,244,0.3)" />
               </div>
