@@ -87,7 +87,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     registerContent(dateKey, node);
   };
 
-  const scrollElementIntoView = useCallback((element, { block = "start", offsetTop = 0 } = {}) => {
+  const scrollElementIntoView = useCallback((element, { block = "start", offsetTop = 0, forceSmooth = false } = {}) => {
     if (!element || !scrollerRef.current) return false;
     const scroller = scrollerRef.current;
     suppressPassiveUntilRef.current = performance.now() + 420;
@@ -110,14 +110,14 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     nextScrollTop = Math.max(0, nextScrollTop);
     const distance = Math.abs(nextScrollTop - scroller.scrollTop);
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    const behavior = reduceMotion || distance > scrollerRect.height * 1.7 ? "auto" : "smooth";
+    const behavior = reduceMotion || (!forceSmooth && distance > scrollerRect.height * 1.7) ? "auto" : "smooth";
     const previousScrollTop = scroller.scrollTop;
     if (typeof scroller.scrollTo === "function") {
       scroller.scrollTo({ top: nextScrollTop, behavior });
     } else {
       scroller.scrollTop = nextScrollTop;
     }
-    if (Math.abs(scroller.scrollTop - previousScrollTop) < 0.5 && distance > 0.5) {
+    if (behavior === "auto" && Math.abs(scroller.scrollTop - previousScrollTop) < 0.5 && distance > 0.5) {
       scroller.scrollTop = nextScrollTop;
     }
     window.setTimeout(() => {
@@ -147,6 +147,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     return scrollElementIntoView(row || headerRefs.current.get(dateKey), {
       block: row ? "nearest" : "start",
       offsetTop: row ? itemScrollTopOffset : 0,
+      forceSmooth: !!row,
     });
   }, [itemScrollTopOffset, scrollElementIntoView]);
 
