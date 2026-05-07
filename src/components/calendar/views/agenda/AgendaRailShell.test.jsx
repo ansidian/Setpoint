@@ -44,14 +44,18 @@ function renderShell({ scrollCommand = null, renderGroup }) {
 }
 
 describe("AgendaRailShell", () => {
-  it("lands cold entry directly on the selected date header", async () => {
-    render(
+  it("waits for cold-entry readiness and lands on the captured entry date", async () => {
+    const onPassiveDateChange = vi.fn();
+    const { rerender } = render(
       <AgendaRailShell
         testId="agenda-shell"
         groups={GROUPS}
         firstVisibleDateKey="2026-05-01"
         todayKey="2026-05-02"
         selectedDateKey="2026-05-02"
+        entryScrollTargetDateKey="2026-05-02"
+        entryScrollReady={false}
+        onPassiveDateChange={onPassiveDateChange}
         renderHeader={({ group, registerHeader }) => (
           <button
             type="button"
@@ -66,20 +70,107 @@ describe("AgendaRailShell", () => {
     );
 
     const rail = screen.getByTestId("agenda-shell");
+    const firstHeader = screen.getByTestId("header-2026-05-01");
     const secondHeader = screen.getByTestId("header-2026-05-02");
+    const firstSection = rail.querySelector("section[data-date-key='2026-05-01']");
+    const secondSection = rail.querySelector("section[data-date-key='2026-05-02']");
     const scrollTo = vi.fn();
     rail.scrollTop = 0;
     rail.scrollTo = scrollTo;
     rail.getBoundingClientRect = () => ({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
+    firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
     secondHeader.getBoundingClientRect = () => ({ top: 360, bottom: 394, left: 0, right: 280, width: 280, height: 34 });
+    firstSection.getBoundingClientRect = () => ({ top: 0, bottom: 360, left: 0, right: 280, width: 280, height: 360 });
+    secondSection.getBoundingClientRect = () => ({ top: 360, bottom: 720, left: 0, right: 280, width: 280, height: 360 });
 
     await flushRailEffects();
 
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(rail.scrollTop).toBe(0);
+
+    firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+    secondHeader.getBoundingClientRect = () => ({ top: 480, bottom: 514, left: 0, right: 280, width: 280, height: 34 });
+    firstSection.getBoundingClientRect = () => ({ top: 0, bottom: 480, left: 0, right: 280, width: 280, height: 480 });
+    secondSection.getBoundingClientRect = () => ({ top: 480, bottom: 840, left: 0, right: 280, width: 280, height: 360 });
+
+    rerender(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-02"
+        selectedDateKey="2026-05-01"
+        entryScrollTargetDateKey="2026-05-02"
+        entryScrollReady
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
-      top: 360,
+      top: 480,
       behavior: "auto",
     }));
-    expect(rail.scrollTop).toBe(360);
+    expect(rail.scrollTop).toBe(480);
+
+    secondHeader.getBoundingClientRect = () => ({ top: 140, bottom: 174, left: 0, right: 280, width: 280, height: 34 });
+    rerender(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS.map((group) => ({ ...group }))}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-02"
+        selectedDateKey="2026-05-01"
+        entryScrollTargetDateKey="2026-05-02"
+        entryScrollReady
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(scrollTo).toHaveBeenLastCalledWith(expect.objectContaining({
+      top: 620,
+      behavior: "auto",
+    }));
+    expect(rail.scrollTop).toBe(620);
+    const entryScrollCalls = scrollTo.mock.calls.length;
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 760));
+    });
+
+    expect(scrollTo).toHaveBeenCalledTimes(entryScrollCalls);
+
+    firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+    secondHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+    firstSection.getBoundingClientRect = () => ({ top: -480, bottom: 0, left: 0, right: 280, width: 280, height: 480 });
+    secondSection.getBoundingClientRect = () => ({ top: 0, bottom: 360, left: 0, right: 280, width: 280, height: 360 });
+
+    fireEvent.scroll(rail);
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).toHaveBeenCalled();
+    expect(onPassiveDateChange.mock.calls.every(([dateKey]) => dateKey === "2026-05-02")).toBe(true);
   });
 
   it("scrolls today's first row below the sticky date header", async () => {
@@ -448,6 +539,89 @@ describe("AgendaRailShell", () => {
     expect(railRef.current.activateItem("row-1", "2026-05-01")).toBe(true);
     expect(onRowClick).toHaveBeenCalledTimes(1);
     expect(rail.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does not replay entry scroll after an agenda row selection changes the selected date", async () => {
+    const railRef = createRef();
+    const onRowClick = vi.fn();
+    const renderGroup = ({ group, registerRow }) => (
+      group.dateKey === "2026-05-02" ? (
+        <span ref={(node) => registerRow(`row-1-${group.dateKey}`, node, group.dateKey)}>
+          <button
+            type="button"
+            data-testid="calendar-agenda-deadline-row"
+            data-item-id="row-1"
+            onClick={onRowClick}
+          >
+            Row one
+          </button>
+        </span>
+      ) : null
+    );
+
+    const { rerender } = render(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        entryScrollTargetDateKey="2026-05-01"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    const rail = screen.getByTestId("agenda-shell");
+    const firstHeader = screen.getByTestId("header-2026-05-01");
+    const secondHeader = screen.getByTestId("header-2026-05-02");
+    const row = screen.getByTestId("calendar-agenda-deadline-row");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 0;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    firstHeader.getBoundingClientRect = () => ({ top: 0, bottom: 34, left: 0, right: 280, width: 280, height: 34 });
+    secondHeader.getBoundingClientRect = () => ({ top: 420, bottom: 454, left: 0, right: 280, width: 280, height: 34 });
+
+    fireEvent.pointerDown(row);
+    expect(railRef.current.activateItem("row-1", "2026-05-02")).toBe(true);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    scrollTo.mockClear();
+
+    rerender(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS.map((group) => ({ ...group }))}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-02"
+        entryScrollTargetDateKey="2026-05-01"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it("returns false when activating an agenda row that has not mounted", async () => {

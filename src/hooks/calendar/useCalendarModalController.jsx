@@ -296,6 +296,12 @@ export default function useCalendarModalController({
   const activeView = VIEWS[view] || billsView;
   const activeLayout = getCalendarLayoutMetrics(viewportWidth);
   const usesFloatingEditor = !activeLayout.stacked;
+  const agendaEntryTargetDateKey = useMemo(() => {
+    if (!open) return null;
+    if (focusDate && parseYmd(focusDate)) return focusDate;
+    if (isInitialDeadlineCreateRequest && view === "deadlines") return null;
+    return todayDateKey;
+  }, [focusDate, isInitialDeadlineCreateRequest, open, todayDateKey, view]);
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -312,11 +318,21 @@ export default function useCalendarModalController({
         || !!(seededOverlayData && deadlinesRangeData?.dataRange && rangeMatches(deadlinesRangeData.dataRange, visibleRange));
       const hasVisibleDeadlineSeed = hasDeadlineItemsInRange(seededOverlayData, visibleRange)
         || hasDeadlineItemsInRange(currentOverlayData, visibleRange);
+      const eventsRangeLoading = !!eventsData?.loading
+        || !!eventsData?.isMonthLoading?.(prevMonth.year, prevMonth.month)
+        || !!eventsData?.isMonthLoading?.(viewYear, viewMonth)
+        || !!eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month);
       const awaitingDeadlineOverlay = deadlineOverlayVisible
         && !!deadlinesRangeData?.ensureRange
         && ["idle", "loading", "slow"].includes(planningReadiness.state)
         && !hasResolvedDeadlineRange
         && !hasVisibleDeadlineSeed;
+      const eventsEntryReady = !eventsData?.ensureRange || !!planningReadiness.eventsReadyAt;
+      const deadlinesEntryReady = !deadlineOverlayVisible
+        || !deadlinesRangeData?.ensureRange
+        || !!planningReadiness.deadlinesReadyAt
+        || !!planningReadiness.deadlinesDelayed;
+      const agendaEntryReady = eventsEntryReady && deadlinesEntryReady && !awaitingDeadlineOverlay;
       const overlayData = committedOverlayData
         || seededOverlayData
         || currentOverlayData;
@@ -349,11 +365,10 @@ export default function useCalendarModalController({
               }
             : null,
         },
-        isLoading: eventsData?.isMonthLoading?.(prevMonth.year, prevMonth.month)
-          || eventsData?.isMonthLoading?.(viewYear, viewMonth)
-          || eventsData?.isMonthLoading?.(nextMonth.year, nextMonth.month)
+        isLoading: eventsRangeLoading
           || awaitingDeadlineOverlay
           || false,
+        agendaEntryReady,
         pendingUpdate: !!eventsData?.staleRefreshPending,
         hasMonth: eventsData?.hasMonth?.(viewYear, viewMonth) || false,
       };
@@ -1281,6 +1296,7 @@ export default function useCalendarModalController({
     quickActions: { eventQuickActions, deadlineQuickActions },
     agenda: {
       agendaScrollCommand,
+      agendaEntryTargetDateKey,
       onAgendaPassiveDateChange: (dateKey) => selectAgendaDate(dateKey, { passive: true }),
       onAgendaDateAction: (dateKey) => selectAgendaDate(dateKey),
       onAgendaEventAction: selectAgendaEvent,

@@ -256,6 +256,7 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
   selectedDateKey,
   selectedItemId,
   scrollCommand = null,
+  entryScrollTargetDateKey = null,
   currentYear,
   currentMonth,
   todayDate,
@@ -278,17 +279,17 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
     viewYear,
     viewMonth,
     todayKey,
-    forceVisibleDateKey: selectedDateKey,
+    forceVisibleDateKey: entryScrollTargetDateKey || selectedDateKey,
     showCompleted,
-  }), [computed, selectedDateKey, showCompleted, todayKey, viewMonth, viewYear]);
+  }), [computed, entryScrollTargetDateKey, selectedDateKey, showCompleted, todayKey, viewMonth, viewYear]);
   const unfilteredAgenda = useMemo(() => buildDeadlinesAgendaGroups({
     computed,
     viewYear,
     viewMonth,
     todayKey,
-    forceVisibleDateKey: selectedDateKey,
+    forceVisibleDateKey: entryScrollTargetDateKey || selectedDateKey,
     showCompleted: true,
-  }), [computed, selectedDateKey, todayKey, viewMonth, viewYear]);
+  }), [computed, entryScrollTargetDateKey, selectedDateKey, todayKey, viewMonth, viewYear]);
 
   useEffect(() => {
     if (showCompleted) return;
@@ -306,6 +307,7 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
         todayKey={todayKey}
         selectedDateKey={selectedDateKey}
         scrollCommand={scrollCommand}
+        entryScrollTargetDateKey={entryScrollTargetDateKey}
         floatingEditorDirty={floatingEditorDirty}
         onDirtyBlocked={onDirtyBlocked}
         onPassiveDateChange={onPassiveDateChange}

@@ -58,6 +58,39 @@ describe("EventsAgendaRail", () => {
     }));
   });
 
+  it("keeps the agenda skeleton until entry scroll content is ready", () => {
+    const { rerender } = renderRail({
+      selectedDateKey: "2026-05-04",
+      entryScrollReady: false,
+    });
+
+    expect(screen.getByTestId("calendar-events-rail-skeleton")).toBeTruthy();
+    expect(screen.queryByTestId("events-agenda-rail")).toBeNull();
+
+    rerender(
+      <EventsAgendaRail
+        viewYear={2026}
+        viewMonth={4}
+        currentYear={2026}
+        currentMonth={4}
+        todayDate={1}
+        selectedDateKey="2026-05-04"
+        entryScrollReady
+        events={[
+          event({
+            id: "event-1",
+            title: "Planning block",
+            start: "2026-05-04T16:00:00.000Z",
+            end: "2026-05-04T17:00:00.000Z",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId("calendar-events-rail-skeleton")).toBeNull();
+    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
+  });
+
   it("selects date headers without opening an event or moving the agenda rail", () => {
     const onDateAction = vi.fn();
     const onEventAction = vi.fn();

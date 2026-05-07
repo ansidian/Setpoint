@@ -46,8 +46,10 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
   todayKey,
   selectedDateKey,
   scrollCommand = null,
+  entryScrollTargetDateKey = null,
   isLoading = false,
   floatingEditorDirty = false,
+  entryScrollReady = true,
   itemScrollTopOffset = DEFAULT_ITEM_SCROLL_TOP_OFFSET,
   skeleton = null,
   showSkeleton = false,
@@ -58,15 +60,24 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
 }, ref) {
   const scrollerRef = useRef(null);
   const headerRefs = useRef(new Map());
+  const sectionRefs = useRef(new Map());
   const rowRefs = useRef(new Map());
   const contentRefs = useRef(new Map());
   const suppressPassiveUntilRef = useRef(0);
   const scrollRafRef = useRef(0);
   const handledScrollCommandIdRef = useRef(null);
+  const entryAnchorRef = useRef({
+    targetDateKey: null,
+    released: false,
+  });
 
   const registerHeader = (dateKey, node) => {
     if (node) headerRefs.current.set(dateKey, node);
     else headerRefs.current.delete(dateKey);
+  };
+  const registerSection = (dateKey, node) => {
+    if (node) sectionRefs.current.set(dateKey, node);
+    else sectionRefs.current.delete(dateKey);
   };
   const registerContent = (dateKey, node) => {
     if (!dateKey) return;
@@ -158,6 +169,17 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     return true;
   }, []);
 
+  const releaseEntryAnchor = useCallback(() => {
+    entryAnchorRef.current.released = true;
+  }, []);
+
+  if (entryAnchorRef.current.targetDateKey !== entryScrollTargetDateKey) {
+    entryAnchorRef.current = {
+      targetDateKey: entryScrollTargetDateKey,
+      released: false,
+    };
+  }
+
   useImperativeHandle(ref, () => ({
     scrollToDate(dateKey, commandId = null) {
       const handled = scrollToDateHeader(dateKey);
@@ -198,8 +220,10 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       if (scrollCommand.type === "today") {
         handled = scrollToDateStart(todayKey);
       } else if (scrollCommand.type === "date") {
+        releaseEntryAnchor();
         handled = scrollToDateHeader(scrollCommand.dateKey);
       } else if (scrollCommand.type === "event" || scrollCommand.type === "item") {
+        releaseEntryAnchor();
         handled = scrollToItem(scrollCommand.itemId, scrollCommand.dateKey);
       }
       if (handled && scrollCommand.id) {
@@ -207,38 +231,44 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       }
     });
     return () => window.cancelAnimationFrame(id);
-  }, [groups, scrollCommand, scrollToDateHeader, scrollToDateStart, scrollToItem, showSkeleton, todayKey]);
+  }, [groups, releaseEntryAnchor, scrollCommand, scrollToDateHeader, scrollToDateStart, scrollToItem, showSkeleton, todayKey]);
 
   useEffect(() => {
-    if (isLoading) return undefined;
-    const targetDate = selectedDateKey || firstVisibleDateKey;
+    if (isLoading || !entryScrollReady) return undefined;
+    if (entryAnchorRef.current.released) return undefined;
     const id = window.requestAnimationFrame(() => {
-      scrollElementIntoView(headerRefs.current.get(targetDate) || headerRefs.current.get(firstVisibleDateKey), {
+      const entryTargetHeader = entryScrollTargetDateKey ? headerRefs.current.get(entryScrollTargetDateKey) : null;
+      const holdEntryTarget = !!entryTargetHeader && !entryAnchorRef.current.released;
+      const targetDate = holdEntryTarget ? entryScrollTargetDateKey : firstVisibleDateKey;
+      scrollElementIntoView((holdEntryTarget ? entryTargetHeader : headerRefs.current.get(targetDate)) || headerRefs.current.get(firstVisibleDateKey), {
         block: "start",
         forceAuto: true,
       });
-      if (targetDate && targetDate !== selectedDateKey) {
+      if (holdEntryTarget && targetDate && targetDate !== selectedDateKey) {
         onPassiveDateChange?.(targetDate);
       }
     });
     return () => window.cancelAnimationFrame(id);
     // Entry scroll is keyed to the visible month, not every selection update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, firstVisibleDateKey]);
+  }, [entryScrollReady, entryScrollTargetDateKey, firstVisibleDateKey, groups, isLoading]);
 
   function handleScroll() {
-    if (isLoading || scrollRafRef.current) return;
+    if (isLoading || !entryScrollReady || scrollRafRef.current) return;
     scrollRafRef.current = window.requestAnimationFrame(() => {
       scrollRafRef.current = 0;
+      if (entryScrollTargetDateKey && !entryAnchorRef.current.released) return;
       if (performance.now() < suppressPassiveUntilRef.current) return;
       const scroller = scrollerRef.current;
       if (!scroller) return;
       const top = scroller.getBoundingClientRect().top + 4;
       let active = null;
       for (const group of groups) {
+        const section = sectionRefs.current.get(group.dateKey);
         const header = headerRefs.current.get(group.dateKey);
-        if (!header) continue;
-        if (header.getBoundingClientRect().top <= top + 4) active = group.dateKey;
+        const anchor = section || header;
+        if (!anchor) continue;
+        if (anchor.getBoundingClientRect().top <= top + 4) active = group.dateKey;
       }
       active ||= groups[0]?.dateKey || null;
       if (!active || active === selectedDateKey) return;
@@ -249,6 +279,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
 
   function suppressItemPointerPassiveSync(event) {
     if (!(event.target instanceof HTMLElement)) return;
+    releaseEntryAnchor();
     if (!event.target.closest(ITEM_ACTION_SELECTOR)) return;
     suppressPassiveUntilRef.current = Math.max(
       suppressPassiveUntilRef.current,
@@ -265,6 +296,8 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       data-calendar-local-scroll="true"
       onScroll={handleScroll}
       onPointerDownCapture={suppressItemPointerPassiveSync}
+      onWheelCapture={releaseEntryAnchor}
+      onKeyDownCapture={releaseEntryAnchor}
       style={{
         flex: 1,
         minHeight: 0,
@@ -292,17 +325,26 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
           }
         `}
       </style>
-      {groups.map((group) => (
-        <section
-          key={group.dateKey}
-          data-date-key={group.dateKey}
-          {...(getSectionProps?.(group) || {})}
-          style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, paddingBottom: 14 }}
-        >
-          {renderHeader?.({ group, registerHeader })}
-          {renderGroup?.({ group, registerRow, registerContent })}
-        </section>
-      ))}
+      {groups.map((group) => {
+        const sectionProps = getSectionProps?.(group) || {};
+        const { ref: sectionPropRef, ...restSectionProps } = sectionProps;
+        return (
+          <section
+            key={group.dateKey}
+            ref={(node) => {
+              registerSection(group.dateKey, node);
+              if (typeof sectionPropRef === "function") sectionPropRef(node);
+              else if (sectionPropRef) sectionPropRef.current = node;
+            }}
+            data-date-key={group.dateKey}
+            {...restSectionProps}
+            style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, paddingBottom: 14 }}
+          >
+            {renderHeader?.({ group, registerHeader })}
+            {renderGroup?.({ group, registerRow, registerContent })}
+          </section>
+        );
+      })}
     </div>
   );
 });

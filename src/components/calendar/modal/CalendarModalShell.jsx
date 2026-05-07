@@ -59,6 +59,7 @@ export default function CalendarModalShell({
   deadlineQuickActions,
   agendaRailRef,
   agendaScrollCommand,
+  agendaEntryTargetDateKey,
   onAgendaPassiveDateChange,
   onAgendaDateAction,
   onAgendaEventAction,
@@ -169,6 +170,7 @@ export default function CalendarModalShell({
       selectedDateKey={selectedDateKey}
       selectedItemId={effectiveSelectedItemId}
       scrollCommand={agendaScrollCommand}
+      entryScrollTargetDateKey={agendaEntryTargetDateKey}
       currentYear={currentYear}
       currentMonth={currentMonth}
       todayDate={todayDate}

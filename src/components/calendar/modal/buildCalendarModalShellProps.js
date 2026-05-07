@@ -56,6 +56,7 @@ export default function buildCalendarModalShellProps({
     deadlineQuickActions: quickActions.deadlineQuickActions,
     agendaRailRef: refs.agendaRailRef,
     agendaScrollCommand: agenda.agendaScrollCommand,
+    agendaEntryTargetDateKey: agenda.agendaEntryTargetDateKey,
     onAgendaPassiveDateChange: agenda.onAgendaPassiveDateChange,
     onAgendaDateAction: agenda.onAgendaDateAction,
     onAgendaEventAction: agenda.onAgendaEventAction,
