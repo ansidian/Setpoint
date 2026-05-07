@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { getVisibleCellItemCount } from "./calendarCellItemMetrics.js";
 import { ItemChip, MoreButton } from "./CalendarCellItemChip.jsx";
+import { getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 import {
   getMeasuredVisibleCellItemCount,
   getReservedCellItemLaneHeight,
@@ -104,6 +105,9 @@ export default function CalendarCellItemStack({
     ? inlineOverflowVisibleCount
     : measuredCount;
   const { visibleItems, hiddenItems } = splitVisibleCellItems(stackItems, visibleCount);
+  const leadingColumnWidth = useMemo(() => (
+    getChipLeadingColumnWidth(stackItems)
+  ), [stackItems]);
   const hiddenCount = hiddenItems.length;
   const hiddenStackHeight = hiddenCount > 0
     ? (hiddenCount * (metrics?.itemHeight ?? 24)) + ((hiddenCount - 1) * (metrics?.gap ?? 4))
@@ -121,10 +125,11 @@ export default function CalendarCellItemStack({
       day,
       hiddenItems,
       hiddenSignature,
+      leadingColumnWidth,
       totalCount: stackItems.length,
       visibleCount,
     });
-  }, [dateKey, day, hiddenItems, hiddenSignature, onHiddenItemsChange, stackItems.length, visibleCount]);
+  }, [dateKey, day, hiddenItems, hiddenSignature, leadingColumnWidth, onHiddenItemsChange, stackItems.length, visibleCount]);
 
   useLayoutEffect(() => {
     if (!inlineOverflowOpen) return;
@@ -174,6 +179,7 @@ export default function CalendarCellItemStack({
             onBeforeDeleteMenu={onBeforeItemAction}
             stackRef={stackRef}
             dateKey={dateKey}
+            leadingColumnWidth={leadingColumnWidth}
           />
         );
       })}
@@ -232,6 +238,7 @@ export default function CalendarCellItemStack({
                 inlineOverflowItem
                 stackRef={stackRef}
                 dateKey={dateKey}
+                leadingColumnWidth={leadingColumnWidth}
               />
             );
           })}
@@ -257,6 +264,7 @@ export default function CalendarCellItemStack({
               visibleCount,
               dateKey,
               hiddenStackHeight,
+              leadingColumnWidth,
             });
           }}
         />

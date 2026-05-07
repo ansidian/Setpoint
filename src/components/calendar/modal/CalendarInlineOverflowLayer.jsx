@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
 import { CURRENT_MONTH_BOUNDARY_COLOR } from "./calendarGridUtils.js";
+import {
+  CalendarChipRecurringIcon,
+  CalendarChipStatusIcon,
+} from "./CalendarCellItemChip.jsx";
+import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
 function inlineOverflowItemStyle({ item, selected, active }) {
   const accent = item.accent || "var(--ea-accent)";
@@ -38,65 +42,23 @@ function inlineOverflowItemStyle({ item, selected, active }) {
   };
 }
 
-function compactInlineOverflowLabel(value) {
-  const label = String(value || "").trim();
-  const timeMatch = label.match(/^(\d{1,2})(?::([0-5]\d))?\s*([ap])\.?m\.?$/i);
-  if (!timeMatch) return label;
-  const hour = timeMatch[1];
-  const minute = timeMatch[2];
-  const suffix = timeMatch[3].toLowerCase();
-  return minute && minute !== "00" ? `${hour}:${minute}${suffix}` : `${hour}${suffix}`;
-}
-
-function isCompactTimeLabel(value) {
-  return /^\d{1,2}(?::[0-5]\d)?[ap]$/i.test(String(value || "").trim());
-}
-
-function InlineOverflowStatusIcon({ item, selected }) {
-  if (!item.statusIcon) return null;
-  const statusColor = item.statusIcon === "complete"
-    ? "#a6e3a1"
-    : item.statusIcon === "in_progress"
-      ? "#89dceb"
-      : selected
-        ? item.leadingColor || item.accent || "var(--ea-accent)"
-        : item.leadingColor || "rgba(205,214,244,0.62)";
-  const Icon = item.statusIcon === "complete" ? CheckCircle2 : CircleDashed;
-
-  return (
-    <Icon
-      data-calendar-chip-status-icon={item.statusIcon}
-      aria-hidden="true"
-      focusable="false"
-      size={11}
-      strokeWidth={2.4}
-      style={{
-        flex: "0 0 auto",
-        color: statusColor,
-        marginRight: 4,
-        verticalAlign: "-0.12em",
-      }}
-    />
-  );
-}
-
-function InlineOverflowPrefix({ item, selected }) {
-  if (!item.leadingLabel && !item.recurring) return null;
+function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {
+  if (!leadingColumnWidth) return null;
   const color = selected
     ? item.leadingColor || item.accent || "var(--ea-accent)"
     : item.leadingColor || "rgba(205,214,244,0.62)";
-  const compactLabel = compactInlineOverflowLabel(item.leadingLabel);
-  const compactTime = isCompactTimeLabel(compactLabel);
+  const compactLabel = compactLeadingLabel(item.leadingLabel);
   return (
     <span
       data-calendar-chip-meta="true"
       style={{
         flex: "0 0 auto",
-        minWidth: compactTime ? "max-content" : 0,
+        width: leadingColumnWidth,
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
-        maxWidth: compactTime ? 56 : 68,
+        justifyContent: "center",
+        alignSelf: "stretch",
+        maxWidth: leadingColumnWidth,
         overflow: "hidden",
         fontSize: 9,
         fontWeight: 700,
@@ -109,24 +71,16 @@ function InlineOverflowPrefix({ item, selected }) {
       }}
     >
       {item.leadingLabel ? (
-        <span style={{ minWidth: compactTime ? "max-content" : 0, maxWidth: "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ minWidth: 0, maxWidth: "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {compactLabel}
         </span>
-      ) : null}
-      {item.recurring ? (
-        <Repeat
-          aria-hidden="true"
-          size={10}
-          strokeWidth={2.4}
-          style={{ flexShrink: 0, color, opacity: selected ? 0.86 : 0.7 }}
-        />
       ) : null}
     </span>
   );
 }
 
-function InlineOverflowChipContent({ item, selected }) {
-  const length = [compactInlineOverflowLabel(item.leadingLabel), item.title].filter(Boolean).join(" ").length;
+function InlineOverflowChipContent({ item, selected, leadingColumnWidth }) {
+  const length = [compactLeadingLabel(item.leadingLabel), item.title].filter(Boolean).join(" ").length;
   const fontSize = length <= 22 ? 11 : length <= 58 ? 10.5 : 10;
   const lineClamp = length <= 22 ? 1 : 2;
   const lineHeight = 1.08;
@@ -153,9 +107,10 @@ function InlineOverflowChipContent({ item, selected }) {
       data-calendar-chip-title-fit={`${fontSize}/${lineClamp}`}
       style={{
         minWidth: 0,
-        display: "flex",
-        alignItems: "baseline",
-        gap: 0,
+        display: "grid",
+        gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
+        alignItems: "center",
+        columnGap: leadingColumnWidth ? 5 : 0,
         maxHeight,
         overflow: "hidden",
         fontSize,
@@ -163,21 +118,37 @@ function InlineOverflowChipContent({ item, selected }) {
         lineHeight,
       }}
     >
-      <InlineOverflowPrefix item={item} selected={selected} />
-      <InlineOverflowStatusIcon item={item} selected={selected} />
-      <TitleTag
-        data-calendar-chip-title-text="true"
+      <InlineOverflowPrefix
+        item={item}
+        selected={selected}
+        leadingColumnWidth={leadingColumnWidth}
+      />
+      <span
         style={{
           minWidth: 0,
-          flex: "1 1 auto",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
           maxHeight,
           overflow: "hidden",
-          ...titleClampStyle,
-          textDecorationColor: "rgba(205,214,244,0.28)",
         }}
       >
-        {item.title}
-      </TitleTag>
+        <CalendarChipStatusIcon item={item} selected={selected} metrics={{ itemHeight: 36 }} />
+        <CalendarChipRecurringIcon item={item} selected={selected} metrics={{ itemHeight: 36 }} />
+        <TitleTag
+          data-calendar-chip-title-text="true"
+          style={{
+            minWidth: 0,
+            flex: "1 1 auto",
+            maxHeight,
+            overflow: "hidden",
+            ...titleClampStyle,
+            textDecorationColor: "rgba(205,214,244,0.28)",
+          }}
+        >
+          {item.title}
+        </TitleTag>
+      </span>
     </span>
   );
 }
@@ -196,6 +167,7 @@ export default function CalendarInlineOverflowLayer({
   if (!overflow?.inlineAnchor || !overflow.items?.length) return null;
   const boundaryColor = overflow.boundaryColor || CURRENT_MONTH_BOUNDARY_COLOR;
   const drawBottomBoundary = overflow.boundarySides?.includes?.("bottom");
+  const leadingColumnWidth = overflow.leadingColumnWidth ?? getChipLeadingColumnWidth(overflow.items);
 
   return (
     <div
@@ -302,7 +274,11 @@ export default function CalendarInlineOverflowLayer({
             onBlur={() => setActiveItemId((current) => (current === itemId ? null : current))}
             style={inlineOverflowItemStyle({ item, selected, active })}
           >
-            <InlineOverflowChipContent item={item} selected={selected} />
+            <InlineOverflowChipContent
+              item={item}
+              selected={selected}
+              leadingColumnWidth={leadingColumnWidth}
+            />
           </button>
         );
       })}
