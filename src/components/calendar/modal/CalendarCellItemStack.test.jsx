@@ -55,6 +55,8 @@ describe("CalendarCellItemStack ghost visibility", () => {
     const longTitle = chips[1].querySelector("[data-calendar-chip-title='true']");
 
     expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.textContent).toContain("10:50a");
+    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.flex).toBe("0 0 auto");
+    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.maxWidth).toBe("56px");
     expect(shortTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("11/1");
     expect(longTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("10/2");
     expect(longTitle?.textContent).toContain("Advanced machine learning project review");
@@ -198,6 +200,40 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
     expect(meta?.closest("s")).toBeNull();
     expect(title?.closest("s")).toBeTruthy();
+  });
+
+  it("renders decorative status icons before completed and in-progress deadline chip titles", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "canvas-done", leadingLabel: "Canvas", title: "Turn in lab", complete: true, statusIcon: "complete" },
+          { id: "todo-done", leadingLabel: "Todoist", title: "Submit report", complete: true, statusIcon: "complete" },
+          { id: "progress", leadingLabel: "Canvas", title: "Draft essay", statusIcon: "in_progress" },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 3 }}
+      />,
+    );
+
+    const chips = screen.getAllByTestId("calendar-cell-item-chip");
+    const completeIcon = chips[0].querySelector("[data-calendar-chip-status-icon='complete']");
+    const todoistCompleteIcon = chips[1].querySelector("[data-calendar-chip-status-icon='complete']");
+    const progressIcon = chips[2].querySelector("[data-calendar-chip-status-icon='in_progress']");
+
+    expect(completeIcon).toBeTruthy();
+    expect(completeIcon?.getAttribute("aria-hidden")).toBe("true");
+    expect(completeIcon?.closest("s")).toBeNull();
+    expect(chips[0].textContent).toContain("Turn in lab");
+    expect(chips[0].querySelector("[data-calendar-chip-title-text='true']")?.closest("s")).toBeTruthy();
+    expect(todoistCompleteIcon).toBeTruthy();
+    expect(todoistCompleteIcon?.getAttribute("aria-hidden")).toBe("true");
+    expect(chips[1].textContent).toContain("Submit report");
+    expect(chips[1].querySelector("[data-calendar-chip-title-text='true']")?.closest("s")).toBeTruthy();
+    expect(progressIcon).toBeTruthy();
+    expect(progressIcon?.getAttribute("aria-hidden")).toBe("true");
+    expect(progressIcon?.closest("s")).toBeNull();
+    expect(chips[2].textContent).toContain("Draft essay");
+    expect(chips[2].querySelector("[data-calendar-chip-title-text='true']")?.closest("s")).toBeNull();
   });
 
   it("renders the collapsed overflow trigger when hidden chips exist", () => {

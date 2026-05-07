@@ -88,6 +88,57 @@ describe("events agenda model", () => {
     expect(agenda.visibleGroups.slice(1).every((group) => group.allDay[0].agendaTitle === "Trip")).toBe(true);
   });
 
+  it("carries deadline status metadata for Events agenda rows", () => {
+    const agenda = buildEventsAgendaGroups({
+      viewYear: 2026,
+      viewMonth: 4,
+      todayKey: "2026-05-01",
+      events: [],
+      deadlineOverlay: {
+        showCompleted: true,
+        data: {
+          ctm: {
+            upcoming: [
+              {
+                id: "ctm-1",
+                title: "Draft essay",
+                due_date: "2026-05-12",
+                source: "canvas",
+                status: "in_progress",
+              },
+            ],
+          },
+          todoist: {
+            upcoming: [
+              {
+                id: "todo-1",
+                title: "Submit report",
+                due_date: "2026-05-12",
+                source: "todoist",
+                status: "complete",
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(agenda.visibleGroups.find((group) => group.dateKey === "2026-05-12")?.deadlines).toEqual([
+      expect.objectContaining({
+        agendaItemId: "canvas:ctm-1",
+        agendaStatus: "In progress",
+        agendaStatusIcon: "in_progress",
+        agendaComplete: false,
+      }),
+      expect.objectContaining({
+        agendaItemId: "todoist:todo-1",
+        agendaStatus: "Complete",
+        agendaStatusIcon: "complete",
+        agendaComplete: true,
+      }),
+    ]);
+  });
+
   it("formats today, tomorrow, and weekday headers", () => {
     expect(formatAgendaHeaderLabel("2026-05-10", "2026-05-10")).toBe("TODAY 5/10/26");
     expect(formatAgendaHeaderLabel("2026-05-11", "2026-05-10")).toBe("TOMORROW 5/11/26");

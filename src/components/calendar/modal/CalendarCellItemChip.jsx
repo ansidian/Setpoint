@@ -1,4 +1,4 @@
-import { Repeat } from "lucide-react";
+import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
 import { motion as Motion, useReducedMotion } from "motion/react";
 
 function chipStyle({
@@ -83,6 +83,10 @@ function compactLeadingLabel(value) {
   return minute && minute !== "00" ? `${hour}:${minute}${suffix}` : `${hour}${suffix}`;
 }
 
+function isCompactTimeLabel(value) {
+  return /^\d{1,2}(?::[0-5]\d)?[ap]$/i.test(String(value || "").trim());
+}
+
 function chipContentFit(item, metrics) {
   const itemHeight = metrics?.itemHeight ?? 24;
   const compactLabel = compactLeadingLabel(item.leadingLabel);
@@ -104,21 +108,51 @@ function metadataColor(item, selected) {
   return item.leadingColor || "rgba(205,214,244,0.62)";
 }
 
+function ChipStatusIcon({ item, selected, metrics }) {
+  if (!item.statusIcon) return null;
+  const itemHeight = metrics?.itemHeight ?? 24;
+  const size = itemHeight >= 36 ? 11 : 10;
+  const statusColor = item.statusIcon === "complete"
+    ? "#a6e3a1"
+    : item.statusIcon === "in_progress"
+      ? "#89dceb"
+      : metadataColor(item, selected);
+  const Icon = item.statusIcon === "complete" ? CheckCircle2 : CircleDashed;
+
+  return (
+    <Icon
+      data-calendar-chip-status-icon={item.statusIcon}
+      aria-hidden="true"
+      focusable="false"
+      size={size}
+      strokeWidth={2.4}
+      style={{
+        flex: "0 0 auto",
+        color: statusColor,
+        marginRight: 4,
+        verticalAlign: "-0.12em",
+      }}
+    />
+  );
+}
+
 function ChipPrefix({ item, selected, metrics }) {
   if (!item.leadingLabel && !item.recurring) return null;
   const color = metadataColor(item, selected);
   const itemHeight = metrics?.itemHeight ?? 24;
   const compactLabel = compactLeadingLabel(item.leadingLabel);
+  const compactTime = isCompactTimeLabel(compactLabel);
 
   return (
     <span
       data-calendar-chip-meta="true"
       style={{
-        minWidth: 0,
+        flex: "0 0 auto",
+        minWidth: compactTime ? "max-content" : 0,
         display: "inline-flex",
         alignItems: "center",
         gap: itemHeight >= 36 ? 5 : 4,
-        maxWidth: "100%",
+        maxWidth: compactTime ? 56 : 68,
         overflow: "hidden",
         fontSize: metadataFontSize(metrics),
         fontWeight: 700,
@@ -133,7 +167,8 @@ function ChipPrefix({ item, selected, metrics }) {
       {item.leadingLabel ? (
         <span
           style={{
-            minWidth: 0,
+            minWidth: compactTime ? "max-content" : 0,
+            maxWidth: "inherit",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -164,7 +199,7 @@ function ChipContent({ item, selected, metrics }) {
   const TitleTag = item.complete ? "s" : "span";
   const lineHeightPx = Number((fit.fontSize * fit.lineHeight).toFixed(2));
   const maxHeight = Number((lineHeightPx * fit.lineClamp).toFixed(2));
-  const clampStyle = fit.lineClamp > 1
+  const titleClampStyle = fit.lineClamp > 1
     ? {
         display: "-webkit-box",
         WebkitLineClamp: fit.lineClamp,
@@ -189,19 +224,27 @@ function ChipContent({ item, selected, metrics }) {
       style={{
         minWidth: 0,
         minHeight: 0,
+        display: "flex",
+        alignItems: "baseline",
         flex: "0 1 auto",
+        gap: 0,
         maxHeight,
         overflow: "hidden",
-        ...clampStyle,
         fontSize: fit.fontSize,
         fontWeight: 500,
         lineHeight: fit.lineHeight,
       }}
     >
       <ChipPrefix item={item} selected={selected} metrics={metrics} />
+      <ChipStatusIcon item={item} selected={selected} metrics={metrics} />
       <TitleTag
         data-calendar-chip-title-text="true"
         style={{
+          minWidth: 0,
+          flex: "1 1 auto",
+          maxHeight,
+          overflow: "hidden",
+          ...titleClampStyle,
           textDecorationColor: "rgba(205,214,244,0.28)",
         }}
       >

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Calendar as CalendarIcon, ExternalLink, Pencil, Video } from "lucide-react";
+import { Calendar as CalendarIcon, CheckCircle2, CircleDashed, ExternalLink, Pencil, Video } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
 import {
@@ -22,6 +22,7 @@ import {
   mergeDeadlineOverlayIntoEvents,
   orderPlanningItems,
 } from "./events/eventsPlanningModel.js";
+import { normalizeStatus, statusLabel } from "./deadlines/deadlinesModel.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -207,6 +208,37 @@ function eventAccent(ev) {
   return ev?.color || ev?.sourceColor || "#89b4fa";
 }
 
+function DeadlineTimelineStatus({ task, compact = false }) {
+  const status = normalizeStatus(task?.status);
+  if (status !== "complete" && status !== "in_progress") return null;
+  const Icon = status === "complete" ? CheckCircle2 : CircleDashed;
+  const color = status === "complete" ? "#a6e3a1" : "#89dceb";
+
+  return (
+    <span
+      data-testid={`deadline-status-indicator-${task.id}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        minHeight: compact ? 18 : 20,
+        padding: compact ? "2px 5px" : "3px 6px",
+        borderRadius: 999,
+        border: `1px solid color-mix(in srgb, ${color} 30%, rgba(255,255,255,0.06))`,
+        background: `color-mix(in srgb, ${color} 10%, rgba(255,255,255,0.025))`,
+        color,
+        fontSize: compact ? 9.5 : 10,
+        fontWeight: 750,
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <Icon aria-hidden="true" focusable="false" size={compact ? 11 : 12} strokeWidth={2.4} />
+      <span>{statusLabel(status)}</span>
+    </span>
+  );
+}
+
 function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
   const motion = useDetailRailMotion();
   const editable = isEditableEvent(ev);
@@ -388,15 +420,17 @@ function toRailItem(ev, onSelectItem, selectedItemId) {
   const isSelected = String(selectionId) === String(selectedItemId);
 
   if (isDeadlinePlanningItem(ev)) {
+    const status = normalizeStatus(ev.status);
     return {
       id: selectionId,
       timeLabel: ev.due_time || "End of day",
       title: ev.title || ev.name || "Untitled",
       subtitle: ev.project_name || ev.class_name || ev.source || "Deadline",
-      meta: ev.status === "complete" ? "Complete" : "",
+      meta: "",
       selected: isSelected,
       dotColor: ev.source === "todoist" ? "#e8776a" : "#5A8FBF",
-      complete: ev.status === "complete",
+      complete: status === "complete",
+      trailing: <DeadlineTimelineStatus task={ev} />,
       onClick: !isSelected && onSelectItem ? () => onSelectItem(selectionId) : undefined,
     };
   }
