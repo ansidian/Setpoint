@@ -362,6 +362,49 @@ describe("InboxView mobile", () => {
     expect(screen.queryByText(/Snapshot updated/i)).toBeNull();
   });
 
+  it("shows unread noise as a quiet mobile summary hint", () => {
+    activeSnapshotMock.state = {
+      snapshot: makeActiveSnapshot({
+        filters: {
+          accounts: [{
+            account_id: "gmail-work",
+            label: "Work",
+            email: "work@example.com",
+            color: "#89dceb",
+            icon: "Mail",
+            count: 1,
+          }],
+          categories: [],
+        },
+        lanes: {
+          needs_attention: [],
+          fyi: [],
+          noise: [{
+            id: 12,
+            snapshot_item_id: 12,
+            uid: "noise-unread-1",
+            email_id: "noise-unread-1",
+            account_id: "gmail-work",
+            lane: "noise",
+            subject: "Sale digest",
+            from_name: "Store",
+            from_address: "store@example.com",
+            summary: "Low-priority promotion.",
+            date: "2026-05-03T15:00:00.000Z",
+            read: false,
+          }],
+        },
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    expect(screen.getByText((_, element) => element?.textContent === "1 noise unread")).toBeTruthy();
+  });
+
   it("shows resurfaced snoozes as fresh live rows in active snapshot mode", () => {
     activeSnapshotMock.state = {
       snapshot: makeActiveSnapshot({

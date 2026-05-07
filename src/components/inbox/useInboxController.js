@@ -26,6 +26,7 @@ import {
   mergeReadState,
 } from "./helpers";
 import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
+import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
 
 const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
 
@@ -394,6 +395,14 @@ export default function useInboxController({
   const totalUnread = useMemo(() => {
     return flatEmails.filter((email) => !email.read).length;
   }, [flatEmails]);
+
+  const noiseUnreadCount = useMemo(() => computeScopedNoiseUnreadCount(flatEmails, {
+    accountId,
+    categoryFilter,
+    indexedSearchActive,
+    snoozedMap,
+    nowTick,
+  }), [accountId, categoryFilter, flatEmails, indexedSearchActive, nowTick, snoozedMap]);
 
   const unreadInView = useMemo(() => {
     return visibleEmails.filter((email) => !email.read).length;
@@ -1063,6 +1072,7 @@ export default function useInboxController({
     liveCount,
     mobileChipCounts,
     totalUnread,
+    noiseUnreadCount,
     unreadInView,
     markAllVisibleRead,
     onAction,

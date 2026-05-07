@@ -121,6 +121,23 @@ describe("InboxList", () => {
 	    expect(screen.queryByText("Not yet triaged")).toBeNull();
 	  });
 
+  it("shows unread noise in the collapsed Noise lane header", () => {
+    renderInboxList({
+      emails: [
+        makeInboxEmail({ id: "noise-unread-1", subject: "Unread sale", _lane: "noise", read: false }),
+        makeInboxEmail({ id: "noise-read-1", subject: "Read promo", _lane: "noise", read: true }),
+      ],
+      totalCount: 2,
+      unreadCount: 1,
+      noiseUnreadCount: 1,
+      activeSnapshotMode: true,
+    });
+
+    expect(screen.getByText("Noise")).toBeTruthy();
+    expect(screen.getByText("1 unread")).toBeTruthy();
+    expect(screen.queryByText("Unread sale")).toBeNull();
+  });
+
   it("collapses low-priority active snapshot categories into a More menu", () => {
     const onCategoryFilterChange = vi.fn();
 

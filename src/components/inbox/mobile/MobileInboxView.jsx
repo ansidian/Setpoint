@@ -175,6 +175,7 @@ export default function MobileInboxView({
   visibleEmails,
   mobileChipCounts,
   totalUnread,
+  noiseUnreadCount = 0,
   unreadInView,
   markAllVisibleRead,
   onAction,
@@ -280,6 +281,11 @@ export default function MobileInboxView({
                 <div style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
                   <span style={{ color: "#fff", fontWeight: 700 }}>{mobileChipCounts.__all}</span> in scope
                 </div>
+                {noiseUnreadCount > 0 && (
+                  <div style={{ fontSize: 11, color: "rgba(205,214,244,0.52)" }}>
+                    <span style={{ color: "rgba(205,214,244,0.78)", fontWeight: 700 }}>{noiseUnreadCount}</span> noise unread
+                  </div>
+                )}
               </div>
             </div>
           </div>

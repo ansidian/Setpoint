@@ -74,7 +74,7 @@ export default function InboxList({
   accent, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
-  totalCount, unreadCount, briefingGeneratedAt, searchRef,
+  totalCount, unreadCount, noiseUnreadCount = 0, briefingGeneratedAt, searchRef,
   liveEmailsLoading = false,
   indexedSearchActive = false,
   indexedSearchLoading = false,
@@ -432,6 +432,24 @@ export default function InboxList({
                       >
                         {grouped[k].length}
                       </span>
+                      {k === "noise" && noiseUnreadCount > 0 && (
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            fontSize: 9,
+                            fontWeight: 650,
+                            padding: "2px 6px",
+                            borderRadius: 999,
+                            background: "rgba(205,214,244,0.07)",
+                            border: "1px solid rgba(205,214,244,0.12)",
+                            color: "rgba(205,214,244,0.58)",
+                            fontVariantNumeric: "tabular-nums",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {noiseUnreadCount} unread
+                        </span>
+                      )}
                       <span style={{ flex: 1 }} />
                       {effectiveCollapsed[k] ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
                     </div>
