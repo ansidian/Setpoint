@@ -94,6 +94,7 @@ describe("DashboardContext Todoist local state", () => {
     const setBriefing = vi.fn((updater) => updater(briefing));
     const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
     const onTaskCompleted = vi.fn();
+    const onTaskCompletionIntent = vi.fn();
 
     render(
       <DashboardProvider
@@ -101,6 +102,7 @@ describe("DashboardContext Todoist local state", () => {
         setBriefing={setBriefing}
         setCalendarDeadlines={setCalendarDeadlines}
         onTaskCompleted={onTaskCompleted}
+        onTaskCompletionIntent={onTaskCompletionIntent}
       >
         <Probe task={task} />
       </DashboardProvider>,
@@ -111,6 +113,7 @@ describe("DashboardContext Todoist local state", () => {
     });
 
     expect(completeTask).toHaveBeenCalledWith("todo-range-only");
+    expect(onTaskCompletionIntent).toHaveBeenCalledWith("todo-range-only");
     const completingDeadlines = setCalendarDeadlines.mock.results[0].value;
     expect(completingDeadlines.todoist.upcoming[0]).toMatchObject({
       id: "todo-range-only",
@@ -158,6 +161,7 @@ describe("DashboardContext Todoist local state", () => {
     const setBriefing = vi.fn((updater) => updater(briefing));
     const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
     const onTaskCompleted = vi.fn();
+    const onTaskCompletionIntent = vi.fn();
 
     render(
       <DashboardProvider
@@ -165,6 +169,7 @@ describe("DashboardContext Todoist local state", () => {
         setBriefing={setBriefing}
         setCalendarDeadlines={setCalendarDeadlines}
         onTaskCompleted={onTaskCompleted}
+        onTaskCompletionIntent={onTaskCompletionIntent}
       >
         <Probe task={task} />
       </DashboardProvider>,
@@ -173,6 +178,7 @@ describe("DashboardContext Todoist local state", () => {
     fireEvent.click(screen.getByText("Complete status"));
 
     expect(updateTaskStatus).toHaveBeenCalledWith("shared-id", "complete");
+    expect(onTaskCompletionIntent).toHaveBeenCalledWith("shared-id");
     const completingDeadlines = setCalendarDeadlines.mock.results[0].value;
     expect(completingDeadlines.ctm.upcoming[0]).toMatchObject({
       id: "shared-id",

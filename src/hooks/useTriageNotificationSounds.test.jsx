@@ -100,6 +100,47 @@ describe("useTriageNotificationSounds", () => {
     });
   });
 
+  it("attempts task completion sounds from the completion gesture before the session is unlocked", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handleTaskCompleted("todo-1");
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/smooth-modern.mp3");
+      expect(sessionStorage.getItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY)).toBe("1");
+    });
+  });
+
+  it("plays repeated task completion actions for the same task id", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handleTaskCompleted("ctm-1");
+      result.current.handleTaskCompleted("ctm-1");
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledTimes(2);
+      expect(globalThis.Audio).toHaveBeenNthCalledWith(1, "/sounds/notifications/smooth-modern.mp3");
+      expect(globalThis.Audio).toHaveBeenNthCalledWith(2, "/sounds/notifications/smooth-modern.mp3");
+    });
+  });
+
   it("plays configured sounds for upcoming calendar events and task completion actions", async () => {
     const play = vi.fn(() => Promise.resolve());
     vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
