@@ -578,6 +578,32 @@ describe("Calendar event editor rail", () => {
     });
   });
 
+  it("shows seeded edit metadata when unchanged placement suppresses the ghost preview", async () => {
+    renderModal({
+      events: [{
+        id: "event-edit-metadata",
+        title: "Planning block",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+        writable: true,
+        isRecurring: false,
+        allDay: false,
+      }],
+    });
+
+    await openFloatingEventEditorFromSelectedChip();
+
+    expect(screen.queryByTestId("calendar-ghost-overlay")).toBeNull();
+    const summary = screen.getByTestId("calendar-draft-preview-summary");
+    expect(summary.textContent).toMatch(/apr 20, 2026/i);
+    expect(summary.textContent).toMatch(/9:00 am to 10:00 am/i);
+    expect(summary.textContent).toMatch(/personal/i);
+    expect(summary.textContent).toMatch(/no location/i);
+    expect(summary.textContent).toMatch(/does not repeat/i);
+  });
+
   it("renders a multi-day ghost as a spanning draft chip from the compact schedule picker", async () => {
     renderModal();
 
