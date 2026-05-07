@@ -35,4 +35,20 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Y")).toBeTruthy();
     expect(screen.queryByText("Briefing history")).toBeNull();
   });
+
+  it("shows the settings command-comma shortcut as key hints", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Open settings")).toBeTruthy();
+    expect(screen.getByLabelText("Command comma")).toBeTruthy();
+    expect(screen.getByText("⌘").tagName).toBe("KBD");
+    expect(screen.getByText(",").tagName).toBe("KBD");
+  });
 });

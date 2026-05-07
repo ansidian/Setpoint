@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { checkAuth } from "./api";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -12,6 +12,27 @@ function AuthSpinner() {
       <div className="w-5 h-5 border-2 border-white/10 border-t-accent-light rounded-full animate-spin" />
     </div>
   );
+}
+
+function SettingsShortcut({ enabled }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+
+    function onKeyDown(event) {
+      if (event.defaultPrevented) return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key !== ",") return;
+
+      event.preventDefault();
+      navigate("/settings");
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [enabled, navigate]);
+
+  return null;
 }
 
 export default function App() {
@@ -31,6 +52,7 @@ export default function App() {
     <>
       <MouseSpotlightCanvas />
       <BrowserRouter>
+        <SettingsShortcut enabled={authenticated === true} />
         <Routes>
           <Route path="/login" element={
             authenticated ? <Navigate to="/" replace /> : (
