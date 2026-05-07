@@ -18,23 +18,29 @@ export default function CalendarDraftPreviewPanel({
   draft,
   selectedSource,
   recurrenceDraft,
+  isRecurringEvent = false,
+  showDraftFallback = false,
 }) {
   const ghosts = ghostPreview?.ghosts || [];
-  if (!ghosts.length) return null;
+  const hasGhosts = ghosts.length > 0;
+  if (!hasGhosts && !showDraftFallback) return null;
   const first = ghosts[0];
-  const conflictCount = ghostPreview.totalConflictCount || 0;
+  const conflictCount = ghostPreview?.totalConflictCount || 0;
   const fallbackScheduleSummary = ghosts.length > 1
     ? `${ghosts.length} draft events`
-    : ghostDisplayRange(first);
+    : hasGhosts
+      ? ghostDisplayRange(first)
+      : "No schedule";
   const scheduleSummary = ghosts.length > 1
     ? fallbackScheduleSummary
     : formatScheduleSummary(draft, fallbackScheduleSummary);
   const sourceSummary = selectedSource?.summary || selectedSource?.label || "No calendar";
   const locationSummary = draft?.location?.trim() || "No location";
-  const recurrenceSummary = formatRecurrenceSummary(recurrenceDraft, draft?.startDate) || "Does not repeat";
+  const recurrenceSummary = formatRecurrenceSummary(recurrenceDraft, draft?.startDate)
+    || (isRecurringEvent ? "Recurring event" : "Does not repeat");
   const statusSummary = conflictCount
     ? `Overlaps ${conflictCount} event${conflictCount === 1 ? "" : "s"}`
-    : first.recurring
+    : first?.recurring
       ? "First occurrence shown"
       : null;
   const segments = [
@@ -60,7 +66,7 @@ export default function CalendarDraftPreviewPanel({
       kind: "repeat",
       label: "Repeat",
       value: recurrenceSummary,
-      color: recurrenceDraft ? "#a6e3a1" : "rgba(166,173,200,0.62)",
+      color: recurrenceDraft || isRecurringEvent ? "#a6e3a1" : "rgba(166,173,200,0.62)",
     },
     statusSummary
       ? {
@@ -107,10 +113,10 @@ export default function CalendarDraftPreviewPanel({
             data-testid="calendar-draft-preview-segment"
             data-summary-kind={segment.kind}
             style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: "min(190px, 100%)",
+              overflow: segment.kind === "schedule" ? "visible" : "hidden",
+              textOverflow: segment.kind === "schedule" ? "clip" : "ellipsis",
+              whiteSpace: segment.kind === "schedule" ? "normal" : "nowrap",
+              maxWidth: segment.kind === "schedule" ? "100%" : "min(190px, 100%)",
               color: segment.color,
               fontWeight: segment.kind === "schedule" || segment.kind === "conflict" ? 600 : 500,
             }}

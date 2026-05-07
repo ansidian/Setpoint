@@ -171,6 +171,8 @@ export default function CalendarEventEditorRail({
                 draft={draft}
                 selectedSource={selectedSource}
                 recurrenceDraft={recurrenceDraft}
+                isRecurringEvent={isEditingRecurring}
+                showDraftFallback={isEditing}
               />
 
               <CalendarEventTitleAssistPanel
