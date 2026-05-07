@@ -44,6 +44,44 @@ function renderShell({ scrollCommand = null, renderGroup }) {
 }
 
 describe("AgendaRailShell", () => {
+  it("lands cold entry directly on the selected date header", async () => {
+    render(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-02"
+        selectedDateKey="2026-05-02"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+
+    const rail = screen.getByTestId("agenda-shell");
+    const secondHeader = screen.getByTestId("header-2026-05-02");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 0;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
+    secondHeader.getBoundingClientRect = () => ({ top: 360, bottom: 394, left: 0, right: 280, width: 280, height: 34 });
+
+    await flushRailEffects();
+
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: 360,
+      behavior: "auto",
+    }));
+    expect(rail.scrollTop).toBe(360);
+  });
+
   it("scrolls today's first row below the sticky date header", async () => {
     const renderGroup = ({ group, registerRow }) => (
       group.dateKey === "2026-05-01" ? (
