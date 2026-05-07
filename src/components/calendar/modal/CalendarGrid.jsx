@@ -168,6 +168,7 @@ export default function CalendarGrid({
         current.hiddenSignature === nextSignature
         && current.totalCount === composition.totalCount
         && current.visibleCount === composition.visibleCount
+        && current.leadingColumnWidth === composition.leadingColumnWidth
       ) {
         return current;
       }
@@ -462,6 +463,7 @@ export default function CalendarGrid({
                   totalCount,
                   visibleCount,
                   hiddenStackHeight,
+                  leadingColumnWidth,
                 }) => {
                   const sourceCellElement =
                     triggerElement?.closest?.("[role='gridcell']");
@@ -493,6 +495,7 @@ export default function CalendarGrid({
                       items: hiddenItems,
                       totalCount,
                       visibleCount,
+                      leadingColumnWidth,
                       label: new Date(
                         `${cell.dateKey}T00:00:00`,
                       ).toLocaleDateString("en-US", {

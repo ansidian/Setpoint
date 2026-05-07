@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarCellItemStack from "./CalendarCellItemStack.jsx";
+import { getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
 const metrics = {
   itemHeight: 30,
@@ -55,8 +56,15 @@ describe("CalendarCellItemStack ghost visibility", () => {
     const longTitle = chips[1].querySelector("[data-calendar-chip-title='true']");
 
     expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.textContent).toContain("10:50a");
-    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.flex).toBe("0 0 auto");
-    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.maxWidth).toBe("56px");
+    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.width).toBe(
+      `${getChipLeadingColumnWidth([
+        { leadingLabel: "10:50 AM" },
+        { leadingLabel: "11:30 AM" },
+      ])}px`,
+    );
+    expect(chips[1].querySelector("[data-calendar-chip-meta='true']")?.style.width).toBe(
+      chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.width,
+    );
     expect(shortTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("11/1");
     expect(longTitle?.getAttribute("data-calendar-chip-title-fit")).toBe("10/2");
     expect(longTitle?.textContent).toContain("Advanced machine learning project review");
@@ -82,6 +90,34 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
       titles[1]?.getAttribute("data-calendar-chip-title-fit"),
     );
+  });
+
+  it("sizes the chip leading column from hidden overflow items in the same day cell", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "visible", leadingLabel: "9:00 AM", title: "Visible hold" },
+          { id: "hidden-time", leadingLabel: "11:59 PM", title: "Hidden deadline" },
+          { id: "hidden-later", leadingLabel: "10:00 PM", title: "Other hidden" },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 1, overflowVisibleCount: 1 }}
+      />,
+    );
+
+    const visibleMeta = screen
+      .getByTestId("calendar-cell-item-chip")
+      .querySelector("[data-calendar-chip-meta='true']");
+
+    expect(visibleMeta?.textContent).toContain("9a");
+    expect(visibleMeta?.style.width).toBe(
+      `${getChipLeadingColumnWidth([
+        { leadingLabel: "9:00 AM" },
+        { leadingLabel: "11:59 PM" },
+        { leadingLabel: "10:00 PM" },
+      ])}px`,
+    );
+    expect(screen.getByText("+2 more")).toBeTruthy();
   });
 
   it("uses stable layout identity and selection aliases for occurrence-backed chips", () => {
@@ -234,6 +270,12 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(progressIcon?.closest("s")).toBeNull();
     expect(chips[2].textContent).toContain("Draft essay");
     expect(chips[2].querySelector("[data-calendar-chip-title-text='true']")?.closest("s")).toBeNull();
+    expect(chips[0].querySelector("[data-calendar-chip-meta='true']")?.style.width).toBe(
+      chips[1].querySelector("[data-calendar-chip-meta='true']")?.style.width,
+    );
+    expect(chips[1].querySelector("[data-calendar-chip-meta='true']")?.style.width).toBe(
+      chips[2].querySelector("[data-calendar-chip-meta='true']")?.style.width,
+    );
   });
 
   it("renders the collapsed overflow trigger when hidden chips exist", () => {
@@ -379,6 +421,12 @@ describe("CalendarCellItemStack ghost visibility", () => {
       ]),
       totalCount: 4,
       visibleCount: 2,
+      leadingColumnWidth: getChipLeadingColumnWidth([
+        { leadingLabel: "9:00 AM" },
+        { leadingLabel: "10:00 AM" },
+        { leadingLabel: "11:00 AM" },
+        { leadingLabel: "12:30 PM" },
+      ]),
     }));
   });
 

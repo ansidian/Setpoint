@@ -1,8 +1,12 @@
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Repeat } from "lucide-react";
 import { resolveOverflowPopoverPosition } from "./CalendarCellOverflowPopover.position.js";
+import {
+  CalendarChipRecurringIcon,
+  CalendarChipStatusIcon,
+} from "./CalendarCellItemChip.jsx";
+import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
 function isOverflowTriggerTarget(target) {
   return target instanceof HTMLElement
@@ -77,8 +81,8 @@ function itemButtonStyle({
   };
 }
 
-function OverflowMetadata({ item, selected, accent }) {
-  if (!item.leadingLabel && !item.recurring) return null;
+function OverflowMetadata({ item, selected, accent, leadingColumnWidth }) {
+  if (!leadingColumnWidth) return null;
   const color = selected
     ? item.leadingColor || accent
     : item.leadingColor || accent;
@@ -86,10 +90,13 @@ function OverflowMetadata({ item, selected, accent }) {
   return (
     <span
       style={{
+        width: leadingColumnWidth,
         minWidth: 0,
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
-        gap: 5,
+        justifyContent: "center",
+        alignSelf: "center",
+        maxWidth: leadingColumnWidth,
         overflow: "hidden",
         fontSize: 10,
         fontWeight: 700,
@@ -102,20 +109,8 @@ function OverflowMetadata({ item, selected, accent }) {
     >
       {item.leadingLabel ? (
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {item.leadingLabel}
+          {compactLeadingLabel(item.leadingLabel)}
         </span>
-      ) : null}
-      {item.recurring ? (
-        <Repeat
-          aria-hidden="true"
-          size={10}
-          strokeWidth={2.4}
-          style={{
-            flexShrink: 0,
-            color,
-            opacity: selected ? 0.86 : 0.7,
-          }}
-        />
       ) : null}
     </span>
   );
@@ -138,6 +133,7 @@ export default function CalendarCellOverflowPopover({
   const positionRafRef = useRef(0);
   const [activeItemId, setActiveItemId] = useState(null);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 300, maxHeight: 320 });
+  const leadingColumnWidth = popover?.leadingColumnWidth ?? getChipLeadingColumnWidth(popover?.items || []);
 
   const updatePosition = useCallback(() => {
     if (!popover?.triggerElement?.isConnected) {
@@ -432,23 +428,48 @@ export default function CalendarCellOverflowPopover({
                       active,
                       ghost,
                     }),
+                    display: "grid",
+                    gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
+                    alignItems: "center",
+                    columnGap: leadingColumnWidth ? 8 : 0,
                   }}
                 >
-                  <OverflowMetadata item={item} selected={selected} accent={accent} />
+                  <OverflowMetadata
+                    item={item}
+                    selected={selected}
+                    accent={accent}
+                    leadingColumnWidth={leadingColumnWidth}
+                  />
                   <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                     <span
                       style={{
+                        minWidth: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
                         fontSize: 12.5,
                         fontWeight: selected ? 600 : 500,
                         lineHeight: 1.25,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
-                        textDecoration: item.complete ? "line-through" : "none",
-                        textDecorationColor: "rgba(205,214,244,0.28)",
                       }}
                     >
-                      {item.title}
+                      <CalendarChipStatusIcon item={item} selected={selected} metrics={{ itemHeight: 36 }} />
+                      <CalendarChipRecurringIcon item={item} selected={selected} metrics={{ itemHeight: 36 }} />
+                      <span
+                        style={{
+                          minWidth: 0,
+                          flex: "1 1 auto",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          textDecoration: item.complete ? "line-through" : "none",
+                          textDecorationColor: "rgba(205,214,244,0.28)",
+                        }}
+                      >
+                        {item.title}
+                      </span>
                     </span>
                     {item.detail ? (
                       <span

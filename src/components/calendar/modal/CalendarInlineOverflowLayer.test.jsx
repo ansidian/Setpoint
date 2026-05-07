@@ -14,6 +14,7 @@ describe("CalendarInlineOverflowLayer", () => {
         overflow={{
           inlineAnchor: { top: 0, left: 0, width: 320 },
           dateKey: "2026-05-12",
+          leadingColumnWidth: 35,
           items: [
             {
               id: "canvas:ctm-done",
@@ -46,8 +47,8 @@ describe("CalendarInlineOverflowLayer", () => {
     const secondIcon = chips[1].querySelector("[data-calendar-chip-status-icon='complete']");
 
     expect(firstMeta?.textContent).toContain("11:59p");
-    expect(firstMeta?.style.flex).toBe("0 0 auto");
-    expect(firstMeta?.style.maxWidth).toBe("56px");
+    expect(firstMeta?.style.width).toBe("35px");
+    expect(firstMeta?.style.justifyContent).toBe("center");
     expect(firstIcon?.getAttribute("aria-hidden")).toBe("true");
     expect(firstIcon?.closest("s")).toBeNull();
     expect(chips[0].textContent).toContain("Teamwork Assessment");
