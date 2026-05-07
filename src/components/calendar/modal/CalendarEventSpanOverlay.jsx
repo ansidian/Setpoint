@@ -1,5 +1,6 @@
 import { Repeat } from "lucide-react";
 import { parseYmd } from "../calendarDateUtils.js";
+import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 import { spanSegmentDisplay } from "./calendarEventSpanLayout.js";
 
 const GRID_ROWS = 6;
@@ -85,16 +86,6 @@ function spanTitleFit(title) {
   return { fontSize: 10, lineHeight: 1.08, lineClamp: 2 };
 }
 
-function compactLeadingLabel(value) {
-  const label = String(value || "").trim();
-  const timeMatch = label.match(/^(\d{1,2})(?::([0-5]\d))?\s*([ap])\.?m\.?$/i);
-  if (!timeMatch) return label;
-  const hour = timeMatch[1];
-  const minute = timeMatch[2];
-  const suffix = timeMatch[3].toLowerCase();
-  return minute && minute !== "00" ? `${hour}:${minute}${suffix}` : `${hour}${suffix}`;
-}
-
 export default function CalendarEventSpanOverlay({
   segments,
   layout,
@@ -129,6 +120,7 @@ export default function CalendarEventSpanOverlay({
       {segments.map((segment) => {
         const display = spanSegmentDisplay(segment);
         const compactLabel = compactLeadingLabel(display.leadingLabel);
+        const leadingColumnWidth = getChipLeadingColumnWidth([{ leadingLabel: display.leadingLabel }]);
         const titleFit = spanTitleFit([compactLabel, display.title].filter(Boolean).join(" "));
         const selected = segment.eventId && String(segment.eventId) === String(selectedItemId);
         const active = activeSegmentId === segment.id;
@@ -147,54 +139,81 @@ export default function CalendarEventSpanOverlay({
             data-calendar-span-title-fit={`${titleFit.fontSize}/${titleFit.lineClamp}`}
             style={{
               minWidth: 0,
+              minHeight: 0,
               overflow: "hidden",
-              display: "-webkit-box",
-              WebkitLineClamp: titleFit.lineClamp,
-              WebkitBoxOrient: "vertical",
-              overflowWrap: "break-word",
-              wordBreak: "normal",
-              whiteSpace: "normal",
+              display: "grid",
+              gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
+              alignItems: "center",
+              columnGap: leadingColumnWidth ? 5 : 0,
               fontSize: titleFit.fontSize,
               fontWeight: selected ? 650 : 600,
               lineHeight: titleFit.lineHeight,
             }}
           >
+            {leadingColumnWidth ? (
+              <span
+                data-calendar-span-meta="true"
+                style={{
+                  flex: "0 0 auto",
+                  width: leadingColumnWidth,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  alignSelf: "stretch",
+                  maxWidth: leadingColumnWidth,
+                  overflow: "hidden",
+                  fontSize: 8.5,
+                  lineHeight: 1,
+                  fontWeight: 800,
+                  letterSpacing: 0.15,
+                  color: selected ? display.color : display.color || "var(--ea-accent)",
+                  fontVariantNumeric: "tabular-nums",
+                  verticalAlign: "baseline",
+                }}
+              >
+                <span style={{ minWidth: 0, maxWidth: "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {compactLabel}
+                </span>
+              </span>
+            ) : null}
             <span
-              data-calendar-span-meta="true"
               style={{
                 minWidth: 0,
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
                 gap: 4,
-                maxWidth: "100%",
                 overflow: "hidden",
-                fontSize: 8.5,
-                lineHeight: 1,
-                fontWeight: 800,
-                letterSpacing: 0.15,
-                color: selected ? display.color : display.color || "var(--ea-accent)",
-                fontVariantNumeric: "tabular-nums",
-                marginRight: 4,
-                verticalAlign: "baseline",
               }}
             >
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {compactLabel}
-              </span>
               {display.recurring ? (
                 <Repeat
                   aria-hidden="true"
                   size={10}
                   strokeWidth={2.4}
                   style={{
-                    flexShrink: 0,
+                    flex: "0 0 auto",
                     color: selected ? display.color : display.color || "var(--ea-accent)",
                     opacity: selected ? 0.86 : 0.7,
                   }}
                 />
               ) : null}
+              <span
+                data-calendar-span-title-text="true"
+                style={{
+                  minWidth: 0,
+                  flex: "1 1 auto",
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: titleFit.lineClamp,
+                  WebkitBoxOrient: "vertical",
+                  overflowWrap: "break-word",
+                  wordBreak: "normal",
+                  whiteSpace: "normal",
+                }}
+              >
+                {display.title}
+              </span>
             </span>
-            <span data-calendar-span-title-text="true">{display.title}</span>
           </span>
         );
 

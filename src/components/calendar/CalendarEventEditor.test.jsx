@@ -601,6 +601,37 @@ describe("Calendar event editor rail", () => {
     });
   });
 
+  it("cancels a dirty floating event edit back to the original detail on Escape", async () => {
+    renderModal({
+      events: [{
+        id: "event-1",
+        title: "Design review",
+        startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+        allDay: false,
+        color: "#4285f4",
+        writable: true,
+      }],
+      focusDate: "2026-04-20",
+    });
+
+    await openFloatingEventEditorFromSelectedChip();
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Design review revised" },
+    });
+
+    fireEvent.keyDown(screen.getByTestId("calendar-event-title"), { key: "Escape", cancelable: true });
+
+    await waitFor(() => {
+      const panel = screen.getByTestId("calendar-floating-detail-panel");
+      expect(panel.getAttribute("data-floating-mode")).toBe("detail");
+      expect(screen.queryByTestId("calendar-event-editor-rail")).toBeNull();
+    });
+    expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("calendar-cell-1").getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByTestId("calendar-floating-detail-panel").textContent).toContain("Design review");
+  });
+
   it("debounces ghost-driven month navigation for NLP date changes", async () => {
     renderModal();
 

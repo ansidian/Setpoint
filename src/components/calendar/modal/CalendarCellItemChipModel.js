@@ -17,7 +17,7 @@ function estimateLeadingLabelWidth(value) {
   if (!label) return 0;
   const compactTime = isCompactTimeLabel(label);
   const estimated = Math.ceil(label.length * (compactTime ? 5.8 : 5.5));
-  return Math.max(compactTime ? 14 : 24, Math.min(compactTime ? 56 : 68, estimated));
+  return Math.max(compactTime ? 22 : 24, Math.min(compactTime ? 56 : 68, estimated));
 }
 
 export function getChipLeadingColumnWidth(items = []) {

@@ -93,8 +93,10 @@ export default function CalendarDraftPreviewPanel({
           style={{
             display: "inline-flex",
             alignItems: "center",
+            flex: "0 0 auto",
             gap: 7,
             minWidth: 0,
+            maxWidth: "100%",
           }}
         >
           {index > 0 ? (
@@ -108,7 +110,7 @@ export default function CalendarDraftPreviewPanel({
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              maxWidth: 190,
+              maxWidth: "min(190px, 100%)",
               color: segment.color,
               fontWeight: segment.kind === "schedule" || segment.kind === "conflict" ? 600 : 500,
             }}

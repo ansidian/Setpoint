@@ -5,21 +5,22 @@ import AddTaskPanelInlineEditor from "./AddTaskPanelInlineEditor.jsx";
 import { formatFriendlyDraftPreview } from "./formatDraftPreview.js";
 
 function buildEditMetadataItems({
-  draftPreview,
   editingTask,
   isEdit,
   resolvedLabels,
   resolvedPriority,
   resolvedProject,
-  showDraftPreview,
 }) {
   if (!isEdit) return [];
+  const originalDueText = editingTask?.due_date
+    ? formatFriendlyDraftPreview({ dueDate: editingTask.due_date, dueTime: editingTask.due_time })
+    : "No due date";
   return [
-    !showDraftPreview && draftPreview?.dueDate ? {
+    {
       id: "due",
-      text: formatFriendlyDraftPreview(draftPreview),
-      color: "rgba(249,226,175,0.86)",
-    } : null,
+      text: originalDueText,
+      color: editingTask?.due_date ? "rgba(249,226,175,0.86)" : "rgba(205,214,244,0.52)",
+    },
     (resolvedProject?.name || editingTask?.class_name || editingTask?.project_name) ? {
       id: "project",
       text: resolvedProject?.name || editingTask?.class_name || editingTask?.project_name,
@@ -41,7 +42,6 @@ function buildEditMetadataItems({
 export default function AddTaskPanelView({ controller }) {
   const {
     active,
-    draftPreview,
     editingTask,
     host,
     isEdit,
@@ -68,15 +68,12 @@ export default function AddTaskPanelView({ controller }) {
 
   if (!isInline && !pos) return null;
 
-  const showDraftPreview = !!(draftPreview?.dueDate && (!draftPreview.isEditing || draftPreview.placementChanged));
   const editMetadataItems = buildEditMetadataItems({
-    draftPreview,
     editingTask,
     isEdit,
     resolvedLabels,
     resolvedPriority,
     resolvedProject,
-    showDraftPreview,
   });
 
   if (isInline) {
