@@ -67,7 +67,7 @@ export async function updateCTMStatus(_userId, taskId, status) {
     throw err;
   }
 
-  await updateCTMEventStatus(Number(taskId), status);
+  await updateCTMEventStatus(taskId, status);
 }
 
 export async function dismissTombstone(userId, todoistId) {

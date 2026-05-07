@@ -102,9 +102,15 @@ describe("completeTask", () => {
   it("updates CTM status without closing or tombstoning a Todoist task", async () => {
     await updateCTMStatus("u1", "42", "complete");
 
-    expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith(42, "complete");
+    expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith("42", "complete");
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
+  });
+
+  it("preserves string CTM event ids when updating status", async () => {
+    await updateCTMStatus("u1", "canvas-assignment-42", "complete");
+
+    expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith("canvas-assignment-42", "complete");
   });
 
   it("rejects invalid CTM statuses", async () => {
