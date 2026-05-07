@@ -19,8 +19,9 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Do not automatically run Playwright tests or browser automation unless explicitly requested.
 - When exploring the codebase or reading files for context, prefer using explorer agents for concrete, bounded questions, especially when multiple independent areas can be investigated in parallel. Keep immediate blocking investigation local, and synthesize explorer findings before making edits.
 - In Plan mode, do not treat the clarifying-question UI's three-question batch limit as a product requirement. If more than three clarifying questions are necessary to align on scope, ask the most blocking questions first, then continue with additional concise follow-up questions or another clarification round before finalizing the plan.
-- Default to test-driven development for behavior changes and bug fixes. Use the global `tdd` skill when available, and adapt it to this repo's Vitest and Playwright opt-in conventions.
-- If TDD is not practical for a change, call that out in the handoff with the reason and the verification used instead. Documentation-only, config-only, exploratory spikes, and urgent production repairs are acceptable exceptions.
+- Default to test-first work for meaningful behavior changes, bug fixes, shared logic, data/state transitions, and regressions where a durable public-interface test can protect the behavior. Use the global `tdd` skill when the change warrants a red/green loop, and adapt it to this repo's Vitest and Playwright opt-in conventions.
+- Do not create tests just to satisfy TDD for low-risk mechanical wiring, copy-only changes, styling-only changes, or simple mappings to behavior already covered elsewhere. Examples include binding a hotkey to an existing tested action, renaming a label, or moving a button without changing behavior.
+- For simple wiring changes, prefer verifying that the underlying handler/action is already covered, running the nearest existing focused test when useful, and using lint/build/type checks as appropriate. In the handoff, say when no new test was added because the change was mechanical.
 - For frontend-facing work, use the global `impeccable` skill and treat this as a dense product UI, not a marketing surface.
 - For UI work, add deliberate hover/focus motion to buttons and icon buttons unless the control is disabled or reduced-motion handling requires a static state.
 - Before handing off UI changes, scan every touched enabled button or icon button, including close/cancel controls in overlays, for hover, focus, and active-state styling.
@@ -34,14 +35,19 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Do not create new local markdown plans by default when Linear is available and the work is intended for Codex execution. Create local docs only for complex design exploration, rough scratch planning, or durable non-Linear project memory.
 - Preserve graceful degradation in the briefing pipeline: each fetcher in `server/briefing/index.js` needs its own `.catch()` fallback so one source does not kill generation.
 
-## TDD Cycle
+## Testing Judgment And TDD
+
+Use TDD as a tool for protecting behavior, not as a quota. The goal is durable confidence in the observable product surface.
 
 1. Plan: identify the public interface and the observable behaviors to protect. Prefer behavior and integration-style tests over implementation details or private helpers.
-2. Red: add one smallest unit or integration test that captures one missing behavior or regression, then run it to confirm the red state. Prefer Vitest and focused existing fixtures; keep Playwright opt-in.
-3. Green: run the focused test command and implement only enough code to pass it.
-4. Repeat: continue one behavior at a time. Do not write a batch of speculative tests before implementing the first passing slice.
-5. Refactor: clean up names, structure, and duplication while keeping the targeted test green. Do not refactor while the focused test is red.
-6. Verify: expand to the relevant nearby test file, `npm test`, or the mechanical checks when the blast radius justifies it. Report any skipped step explicitly.
+2. Decide: add a new test only when the change creates or alters meaningful behavior, fixes a regression, touches shared logic, or creates risk that an existing test does not cover.
+3. Red: add one smallest unit or integration test that captures one missing behavior or regression, then run it to confirm the red state. Prefer Vitest and focused existing fixtures; keep Playwright opt-in.
+4. Green: run the focused test command and implement only enough code to pass it.
+5. Repeat: continue one behavior at a time. Do not write a batch of speculative tests before implementing the first passing slice.
+6. Refactor: clean up names, structure, and duplication while keeping the targeted test green. Do not refactor while the focused test is red.
+7. Verify: expand to the relevant nearby test file, `npm test`, or the mechanical checks when the blast radius justifies it. For mechanical changes, focused lint/build or nearby existing tests may be enough. Report any skipped step explicitly.
+
+When adding tests, prefer durable behavior/model/state assertions over tests that only mirror implementation details such as exact listener registration, CSS selectors, inline styles, or internal helper calls.
 
 ## Mechanical Checks
 
