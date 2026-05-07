@@ -20,7 +20,10 @@ vi.mock("motion/react", async () => {
       ...props,
       ref,
       "data-motion-animate-opacity": animate?.opacity ?? "",
+      "data-motion-animate-x": animate?.x ?? "",
       "data-motion-animate-y": animate?.y ?? "",
+      "data-motion-transition-x-duration": transition?.x?.duration ?? "",
+      "data-motion-transition-x-type": transition?.x?.type ?? "",
       "data-motion-transition-y-duration": transition?.y?.duration ?? "",
       "data-motion-transition-y-type": transition?.y?.type ?? "",
     }, children);
@@ -149,7 +152,7 @@ describe("CalendarFloatingDetailPanel", () => {
 
     const panel = screen.getByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-motion-animate-opacity")).toBe("0");
-    expect(panel.getAttribute("data-motion-transition-y-type")).toBe("spring");
+    expect(panel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
     expect(Number(panel.getAttribute("data-motion-animate-y"))).toBe(detail.initialPlacement.top);
 
     await act(async () => {
@@ -235,6 +238,112 @@ describe("CalendarFloatingDetailPanel", () => {
     });
 
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-opacity")).toBe("1");
+  });
+
+  it("snaps cold side flips until the first measured placement is revealed", async () => {
+    const calendarPanel = appendRectElement({
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 900,
+      width: 900,
+      height: 900,
+    });
+    const anchorElement = appendRectElement({
+      top: 400,
+      left: 380,
+      right: 420,
+      bottom: 424,
+      width: 40,
+      height: 24,
+    });
+    const makeDetail = ({ forcedSide = null, sideIntent = "auto" } = {}) => ({
+      open: true,
+      mode: "detail",
+      placementKey: "event-placement-cold-flip",
+      view: "events",
+      itemId: "event-1",
+      dateKey: "2026-04-20",
+      anchorElement,
+      sourceCellElement: anchorElement,
+      exclusionElement: null,
+      anchorKind: "chip",
+      preferredSide: null,
+      forcedSide,
+      sideIntent,
+      parked: false,
+      userDragged: false,
+      initialPlacement: resolveFloatingDetailPlacement({
+        anchorRect: anchorElement.getBoundingClientRect(),
+        sourceRect: anchorElement.getBoundingClientRect(),
+        exclusionRect: null,
+        calendarRect: calendarPanel.getBoundingClientRect(),
+        railRect: null,
+        panelHeight: 300,
+        mode: "detail",
+        forcedSide,
+        allowRailOverlap: sideIntent === "user-flip",
+      }),
+    });
+
+    const { rerender } = render(
+      <CalendarFloatingDetailPanel
+        detail={makeDetail()}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Design review</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-opacity")).toBe("0");
+
+    rerender(
+      <CalendarFloatingDetailPanel
+        detail={makeDetail({ forcedSide: "left", sideIntent: "user-flip" })}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Design review</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    const coldFlippedPanel = screen.getByTestId("calendar-floating-detail-panel");
+    expect(coldFlippedPanel.getAttribute("data-motion-animate-opacity")).toBe("0");
+    expect(coldFlippedPanel.getAttribute("data-motion-transition-x-duration")).toBe("0.01");
+    expect(coldFlippedPanel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+
+    const revealedPanel = screen.getByTestId("calendar-floating-detail-panel");
+    expect(revealedPanel.getAttribute("data-motion-animate-opacity")).toBe("1");
+    expect(revealedPanel.getAttribute("data-motion-transition-x-duration")).toBe("0.01");
+    expect(revealedPanel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
+
+    await nextFrame();
+
+    rerender(
+      <CalendarFloatingDetailPanel
+        detail={makeDetail()}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Design review</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-x-type")).toBe("spring");
   });
 
   it("keeps chip-to-chip repositions visible after the panel has measured once", async () => {
