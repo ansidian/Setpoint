@@ -267,7 +267,7 @@ export default function Dashboard() {
         briefing={effectiveBriefing}
         setBriefing={bd.setBriefing}
         setCalendarDeadlines={updateCalendarDeadlinesLocal}
-        onTaskCompleted={triageNotificationSounds.handleTaskCompleted}
+        onTaskCompletionIntent={triageNotificationSounds.handleTaskCompleted}
       >
         <RedesignShell
           bd={shellBd}

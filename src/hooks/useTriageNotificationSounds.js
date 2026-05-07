@@ -45,6 +45,7 @@ export default function useTriageNotificationSounds() {
   const gateRef = useRef({ dedupeKeys: readDedupeKeys(), lastTriggerAt: {} });
   const playQueueRef = useRef(Promise.resolve());
   const lastPlayAtRef = useRef(0);
+  const taskCompletionSequenceRef = useRef(0);
 
   const loadSettings = useCallback(() => {
     getSettings()
@@ -69,13 +70,20 @@ export default function useTriageNotificationSounds() {
     };
   }, [loadSettings]);
 
-  const schedulePlayback = useCallback((sound, volume) => {
-    playQueueRef.current = playQueueRef.current.then(async () => {
-      const waitMs = Math.max(0, lastPlayAtRef.current + TRIAGE_SOUND_SPACING_MS - Date.now());
-      if (waitMs > 0) await sleep(waitMs);
-      await playTriageNotificationSound(sound, { volume });
+  const schedulePlayback = useCallback((sound, volume, { markUnlocked = false, immediate = false } = {}) => {
+    const play = async () => {
+      if (!immediate) {
+        const waitMs = Math.max(0, lastPlayAtRef.current + TRIAGE_SOUND_SPACING_MS - Date.now());
+        if (waitMs > 0) await sleep(waitMs);
+      }
+      await playTriageNotificationSound(sound, { volume, markUnlocked });
       lastPlayAtRef.current = Date.now();
-    });
+    };
+    if (immediate) {
+      playQueueRef.current = play().catch(() => {});
+      return;
+    }
+    playQueueRef.current = playQueueRef.current.then(play);
   }, []);
 
   const handleDashboardEvent = useCallback((event) => {
@@ -95,8 +103,9 @@ export default function useTriageNotificationSounds() {
     schedulePlayback(eventInfo.sound, eventInfo.volume);
   }, [schedulePlayback]);
 
-  const handleAppTrigger = useCallback((triggerType, eventKey, { coalesce = false } = {}) => {
-    if (!isTriageSoundAudioUnlocked()) return;
+  const handleAppTrigger = useCallback((triggerType, eventKey, { coalesce = false, allowLocked = false } = {}) => {
+    const unlocked = isTriageSoundAudioUnlocked();
+    if (!unlocked && !allowLocked) return;
     const eventInfo = resolveDashboardSoundForTrigger(
       triggerType,
       settingsRef.current,
@@ -116,7 +125,10 @@ export default function useTriageNotificationSounds() {
       gateRef.current.dedupeKeys.add(eventInfo.eventKey);
       writeDedupeKeys(gateRef.current.dedupeKeys);
     }
-    schedulePlayback(eventInfo.sound, eventInfo.volume);
+    schedulePlayback(eventInfo.sound, eventInfo.volume, {
+      immediate: allowLocked,
+      markUnlocked: allowLocked,
+    });
   }, [schedulePlayback]);
 
   const handleCalendarSnapshot = useCallback((liveData) => {
@@ -136,6 +148,10 @@ export default function useTriageNotificationSounds() {
   return useMemo(() => ({
     handleDashboardEvent,
     handleCalendarSnapshot,
-    handleTaskCompleted: (taskId) => handleAppTrigger("task_completed", `task_completed:${taskId || Date.now()}`),
+    handleTaskCompleted: (taskId) => {
+      taskCompletionSequenceRef.current += 1;
+      const occurrenceKey = `${Date.now()}:${taskCompletionSequenceRef.current}`;
+      handleAppTrigger("task_completed", `task_completed:${taskId || "unknown"}:${occurrenceKey}`, { allowLocked: true });
+    },
   }), [handleAppTrigger, handleCalendarSnapshot, handleDashboardEvent]);
 }

@@ -63,7 +63,14 @@ function applyTodoistTaskDelete(root, taskId) {
   return recalculateTodoistStats(updated);
 }
 
-export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines, onTaskCompleted = null, children }) {
+export function DashboardProvider({
+  briefing,
+  setBriefing,
+  setCalendarDeadlines,
+  onTaskCompleted = null,
+  onTaskCompletionIntent = null,
+  children,
+}) {
   const [activeAccount, setActiveAccount] = useState(0);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [loadingBillId, setLoadingBillId] = useState(null);
@@ -147,6 +154,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     setBriefing(prev => flagCompleting(prev));
     setCalendarDeadlines?.(prev => (prev ? flagCompleting(prev) : prev));
     if (expandedTask === taskId) setExpandedTask(null);
+    onTaskCompletionIntent?.(taskId);
 
     // Await the server so we can revert the optimistic flag on failure.
     // Swallowing this caused the "marked complete, refresh flips back" bug
@@ -172,7 +180,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
 
     onTaskCompleted?.(taskId);
     setTimeout(() => removeCompletedTask(taskId, "todoist"), 600);
-  }, [briefing?.todoist?.upcoming, expandedTask, onTaskCompleted, setBriefing, setCalendarDeadlines, removeCompletedTask]);
+  }, [briefing?.todoist?.upcoming, expandedTask, onTaskCompleted, onTaskCompletionIntent, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const handleDismissGhost = useCallback((todoistId) => {
     dismissTombstone(todoistId).catch(() => {});
@@ -228,6 +236,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     const statusUpdate = updateTaskStatus(taskId, status);
 
     if (status === "complete") {
+      onTaskCompletionIntent?.(taskId);
       statusUpdate.then(() => onTaskCompleted?.(taskId)).catch(() => {});
       const flagCompleting = (root) => {
         if (!root) return root;
@@ -258,7 +267,7 @@ export function DashboardProvider({ briefing, setBriefing, setCalendarDeadlines,
     };
     setBriefing(prev => applyStatus(prev));
     setCalendarDeadlines?.(prev => (prev ? applyStatus(prev) : prev));
-  }, [expandedTask, onTaskCompleted, setBriefing, setCalendarDeadlines, removeCompletedTask]);
+  }, [expandedTask, onTaskCompleted, onTaskCompletionIntent, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const emailAccounts = useMemo(
     () => briefing?.emails?.accounts || [],
