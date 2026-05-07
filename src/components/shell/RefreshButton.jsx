@@ -47,6 +47,8 @@ export function RefreshButton({
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
         opacity: busy ? 0.6 : 1,
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
@@ -56,7 +58,7 @@ export function RefreshButton({
         size={isMobile ? 10 : 11}
         style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}
       />
-      <span style={{ position: "relative" }}>
+      <span style={{ position: "relative", whiteSpace: "nowrap" }}>
         {refreshing ? "Syncing…" : "Sync now"}
       </span>
       {!isMobile && <Kbd>R</Kbd>}

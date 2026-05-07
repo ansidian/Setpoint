@@ -14,6 +14,7 @@ const CommandPalette = lazy(() => import("../shell/CommandPalette"));
 const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
+const TriageAnalyticsModal = lazy(() => import("../shell/TriageAnalyticsModal"));
 
 function addReadOverrideKey(keys, value) {
   const key = value?.uid || value?.email_id || value?.id;
@@ -84,6 +85,7 @@ export function RedesignShell({
   }, [dismissMobileInboxTab, isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [liveReadOverrides, setLiveReadOverrides] = useState({});
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState(null);
@@ -180,7 +182,7 @@ export function RedesignShell({
     if (actionChordTimerRef.current) clearTimeout(actionChordTimerRef.current);
   }, []);
 
-  // Global hotkeys: ⌘K palette, c calendar, y snapshots, g+key action chords
+  // Global hotkeys: ⌘K palette, a analytics, c calendar, y snapshots, g+key action chords
   useEffect(() => {
     const clearActionChord = () => {
       actionChordRef.current = null;
@@ -230,6 +232,11 @@ export function RedesignShell({
         return;
       }
 
+      if (key === "a") {
+        e.preventDefault();
+        setAnalyticsOpen((value) => !value);
+        return;
+      }
       if (key === "c" && !calendarOpen) { openCalendar(); }
       if (key === "y") { setHistoryOpen((v) => !v); }
     }
@@ -300,6 +307,7 @@ export function RedesignShell({
     else if (item.kind === "calendar") openCalendar();
     else if (item.kind === "todoist") openTodoistCreate();
     else if (item.kind === "event") openCalendar("events", null, "new");
+    else if (item.kind === "analytics") setAnalyticsOpen(true);
     else if (item.kind === "history") setHistoryOpen(true);
     else if (item.kind === "customize") setCustomizeOpen(true);
     else if (item.kind === "refresh") onQuickRefresh?.();
@@ -420,6 +428,8 @@ export function RedesignShell({
         isMobile={isMobile}
         tab={tab}
         onTab={setShellTab}
+        analyticsOpen={analyticsOpen}
+        onOpenAnalytics={() => setAnalyticsOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenCustomize={() => setCustomizeOpen((v) => !v)}
         onOpenHistory={() => setHistoryOpen((v) => !v)}
@@ -545,6 +555,15 @@ export function RedesignShell({
             accent={accent}
             onClose={() => setPaletteOpen(false)}
             onAction={handlePaletteAction}
+          />
+        </Suspense>
+      )}
+
+      {analyticsOpen && (
+        <Suspense fallback={null}>
+          <TriageAnalyticsModal
+            open={analyticsOpen}
+            onClose={() => setAnalyticsOpen(false)}
           />
         </Suspense>
       )}

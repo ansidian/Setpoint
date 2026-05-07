@@ -52,8 +52,22 @@ vi.mock("../components/briefing/BriefingHistoryPanel", () => ({
 }));
 
 vi.mock("../components/shell/CommandPalette", () => ({
-  default: function CommandPaletteMock() {
-    return null;
+  default: function CommandPaletteMock({ open, onAction }) {
+    return open ? (
+      <button
+        type="button"
+        data-testid="command-palette-analytics-action"
+        onClick={() => onAction({ kind: "analytics" })}
+      >
+        Analytics action
+      </button>
+    ) : null;
+  },
+}));
+
+vi.mock("../components/shell/TriageAnalyticsModal", () => ({
+  default: function TriageAnalyticsModalMock({ open }) {
+    return open ? <div data-testid="triage-analytics-modal" /> : null;
   },
 }));
 
@@ -197,6 +211,36 @@ describe("RedesignShell mobile behavior", () => {
 
     fireEvent.keyDown(window, { key: "c" });
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
+  });
+
+  it("opens shell analytics from the A hotkey without stealing text input", async () => {
+    mockIsMobile = false;
+    renderShell();
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "a" });
+    expect(screen.queryByTestId("triage-analytics-modal")).toBeNull();
+    input.remove();
+
+    fireEvent.keyDown(window, { key: "A" });
+    expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "a" });
+    await waitFor(() => {
+      expect(screen.queryByTestId("triage-analytics-modal")).toBeNull();
+    });
+  });
+
+  it("opens shell analytics from the command palette action", async () => {
+    mockIsMobile = false;
+    renderShell();
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(await screen.findByTestId("command-palette-analytics-action"));
+
+    expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
   });
 
   it("ignores a stale persisted Deadlines calendar view", async () => {

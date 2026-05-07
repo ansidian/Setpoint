@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  BarChart3,
   History,
   LayoutList,
   MoreHorizontal,
@@ -114,6 +115,7 @@ export function OverflowMenu({
   onCloseMenu,
   onOpenHistory,
   onOpenCalendar,
+  onOpenAnalytics,
   onOpenCustomize,
 }) {
   return (
@@ -151,6 +153,16 @@ export function OverflowMenu({
               onClick={() => {
                 onCloseMenu();
                 onOpenCalendar?.();
+              }}
+            />
+          )}
+          {isMobile && (
+            <MenuItem
+              icon={BarChart3}
+              label="Analytics"
+              onClick={() => {
+                onCloseMenu();
+                onOpenAnalytics?.();
               }}
             />
           )}

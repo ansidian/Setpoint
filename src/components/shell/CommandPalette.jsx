@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  BarChart3,
   LayoutList, Inbox, Clock, AlertCircle, CreditCard,
   RefreshCw, Search, ArrowRight, Calendar, History, Settings as SettingsIcon, Sliders,
   CalendarPlus, ListPlus,
@@ -43,6 +44,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "new-todoist",  icon: ListPlus,   label: "New Todoist task", hint: "G T", kind: "todoist" },
     { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
     { id: "calendar",     icon: Calendar,   label: "Open calendar",   hint: "C", kind: "calendar" },
+    { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },
     { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
     { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },
     { id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },

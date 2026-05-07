@@ -128,15 +128,15 @@ describe("EmailTriageModeCard", () => {
     renderCard();
 
     await waitFor(() => {
-      expect(screen.getByText("53.3%")).toBeTruthy();
+      expect(screen.getByText("Cache: 53.3% hit")).toBeTruthy();
     });
-    expect(screen.getByText("1.6k")).toBeTruthy();
-    expect(screen.getByText("Cost")).toBeTruthy();
-    expect(screen.getByText("$0.0060")).toBeTruthy();
-    expect(screen.getByText("$0.0024")).toBeTruthy();
+    expect(screen.queryByText("Cost")).toBeNull();
+    expect(screen.queryByText("1.6k")).toBeNull();
+    expect(screen.getByText((content) => content.includes("$0.0024"))).toBeTruthy();
+    expect(screen.getByText("Cache: 53.3% hit")).toBeTruthy();
     expect(screen.getByText("2 OpenAI calls in 7 days")).toBeTruthy();
-    expect(screen.getByText("MTD cost: $0.0060")).toBeTruthy();
-    expect(screen.getByText(/Last: May 4/)).toBeTruthy();
+    expect(screen.queryByText("MTD cost: $0.0060")).toBeNull();
+    expect(screen.queryByText(/Last: May 4/)).toBeNull();
   });
 
   it("does not round tiny nonzero cache savings down to zero", async () => {
@@ -163,7 +163,7 @@ describe("EmailTriageModeCard", () => {
     renderCard();
 
     await waitFor(() => {
-      expect(screen.getByText("<$0.0001")).toBeTruthy();
+      expect(screen.getByText((content) => content.includes("<$0.0001"))).toBeTruthy();
     });
   });
 });

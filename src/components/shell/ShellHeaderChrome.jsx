@@ -1,3 +1,4 @@
+export { AnalyticsTriggerButton } from "./AnalyticsTriggerButton.jsx";
 export { Kbd } from "./Kbd.jsx";
 export { OverflowMenu } from "./OverflowMenu.jsx";
 export { PaletteTriggerButton } from "./PaletteTriggerButton.jsx";

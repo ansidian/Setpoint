@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AnalyticsTriggerButton,
   OverflowMenu,
   PaletteTriggerButton,
   RefreshButton,
@@ -17,6 +18,8 @@ export default function ShellHeader({
   isMobile = false,
   tab,
   onTab,
+  analyticsOpen = false,
+  onOpenAnalytics,
   onOpenPalette,
   onOpenCustomize,
   onOpenHistory,
@@ -77,6 +80,12 @@ export default function ShellHeader({
         inboxUnreadSignalCount={inboxUnreadSignalCount}
       />
       <div style={{ flex: 1 }} />
+      {!isMobile && (
+        <AnalyticsTriggerButton
+          active={analyticsOpen}
+          onOpenAnalytics={onOpenAnalytics}
+        />
+      )}
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
       <RefreshButton
         isMobile={isMobile}
@@ -92,6 +101,7 @@ export default function ShellHeader({
           onCloseMenu={() => setMenuOpen(false)}
           onOpenHistory={onOpenHistory}
           onOpenCalendar={onOpenCalendar}
+          onOpenAnalytics={onOpenAnalytics}
           onOpenCustomize={onOpenCustomize}
         />
       </div>
