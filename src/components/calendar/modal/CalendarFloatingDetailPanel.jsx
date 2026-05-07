@@ -369,6 +369,7 @@ export default function CalendarFloatingDetailPanel({
     && !hasRevealedMeasuredPlacement
     && measuredPlacementKey !== placementKey;
   const feedbackVisible = feedbackActive && open && editorMode && !!detail?.shakeKey;
+  const instantPlacementTransition = manualTransitionActive || snapTransitionActive || awaitingMeasuredPlacement;
 
   return createPortal(
     <AnimatePresence initial={false}>
@@ -408,8 +409,8 @@ export default function CalendarFloatingDetailPanel({
         }}
         exit={reducedMotion ? undefined : { opacity: 0, scale: 0.985 }}
         transition={{
-          x: shellTransition(reducedMotion, manualTransitionActive || snapTransitionActive),
-          y: shellTransition(reducedMotion, manualTransitionActive || snapTransitionActive),
+          x: shellTransition(reducedMotion, instantPlacementTransition),
+          y: shellTransition(reducedMotion, instantPlacementTransition),
           opacity: contentTransition(reducedMotion),
           scale: contentTransition(reducedMotion),
         }}
