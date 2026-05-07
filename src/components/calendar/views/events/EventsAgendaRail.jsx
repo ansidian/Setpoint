@@ -162,7 +162,7 @@ function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked })
         eventObject.currentTarget.style.transform = "translateY(0)";
       }}
     >
-      {!solid || selected ? (
+      {!solid ? (
         <span
           aria-hidden="true"
           style={{ width: 6, height: 6, borderRadius: 999, background: color, flexShrink: 0 }}

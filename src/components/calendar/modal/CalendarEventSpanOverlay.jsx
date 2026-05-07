@@ -145,7 +145,7 @@ export default function CalendarEventSpanOverlay({
               alignItems: "center",
               columnGap: leadingColumnWidth ? 5 : 0,
               fontSize: titleFit.fontSize,
-              fontWeight: selected ? 650 : 600,
+              fontWeight: 600,
               lineHeight: titleFit.lineHeight,
             }}
           >

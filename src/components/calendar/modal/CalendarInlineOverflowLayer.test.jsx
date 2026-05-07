@@ -62,4 +62,38 @@ describe("CalendarInlineOverflowLayer", () => {
       dateKey: "2026-05-12",
     }));
   });
+
+  it("keeps selected inline overflow title metrics stable", () => {
+    render(
+      <CalendarInlineOverflowLayer
+        overflow={{
+          inlineAnchor: { top: 0, left: 0, width: 320 },
+          dateKey: "2026-05-12",
+          leadingColumnWidth: 35,
+          items: [
+            {
+              id: "event-plain",
+              leadingLabel: "9:00 AM",
+              title: "Advanced machine learning project review and lab planning",
+            },
+            {
+              id: "event-selected",
+              leadingLabel: "9:00 AM",
+              title: "Advanced machine learning project review and lab planning",
+            },
+          ],
+        }}
+        selectedItemId="event-selected"
+      />,
+    );
+
+    const titles = screen
+      .getAllByTestId("calendar-cell-item-chip")
+      .map((chip) => chip.querySelector("[data-calendar-chip-title='true']"));
+
+    expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
+      titles[1]?.getAttribute("data-calendar-chip-title-fit"),
+    );
+    expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
+  });
 });

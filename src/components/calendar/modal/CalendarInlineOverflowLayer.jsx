@@ -114,7 +114,7 @@ function InlineOverflowChipContent({ item, selected, leadingColumnWidth }) {
         maxHeight,
         overflow: "hidden",
         fontSize,
-        fontWeight: selected ? 600 : 500,
+        fontWeight: 500,
         lineHeight,
       }}
     >
