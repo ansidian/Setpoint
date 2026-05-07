@@ -244,6 +244,7 @@ export default function useCalendarModalController({
   ));
   const viewportWidth = useViewportWidth();
   const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
+  const [eventOverlayVisible, setEventOverlayVisible] = useState(true);
   const [deadlineOverlayVisible, setDeadlineOverlayVisible] = useState(() => (
     readStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, true)
   ));
@@ -340,7 +341,7 @@ export default function useCalendarModalController({
         ? lateDeadlineOverlayData
         : null;
       return {
-        events: awaitingDeadlineOverlay
+        events: awaitingDeadlineOverlay || !eventOverlayVisible
           ? []
           : dedupeEvents([
               ...(eventsData?.getEvents?.(prevMonth.year, prevMonth.month) || []),
@@ -398,6 +399,7 @@ export default function useCalendarModalController({
     eventsData,
     viewYear,
     viewMonth,
+    eventOverlayVisible,
     deadlineOverlayVisible,
     completedDeadlineOverlayVisible,
     committedDeadlineOverlayData,
@@ -502,6 +504,10 @@ export default function useCalendarModalController({
       writeStoredBoolean(DEADLINE_OVERLAY_STORAGE_KEY, next);
       return next;
     });
+  }, []);
+
+  const toggleEventOverlay = useCallback(() => {
+    setEventOverlayVisible((current) => !current);
   }, []);
 
   const toggleCompletedDeadlineOverlay = useCallback(() => {
@@ -1096,6 +1102,7 @@ export default function useCalendarModalController({
     openFloatingDeadlineEdit,
     openFloatingEventCreate,
     openFloatingDeadlineCreate,
+    toggleEventOverlay,
     deadlineOverlayVisible,
     toggleDeadlineOverlay,
     toggleCompletedDeadlineOverlay,
@@ -1277,6 +1284,12 @@ export default function useCalendarModalController({
     editors: {
       eventEditor: {
         ...eventEditor,
+        eventOverlay: view === "events"
+          ? {
+              enabled: eventOverlayVisible,
+              onToggle: toggleEventOverlay,
+            }
+          : null,
         deadlineOverlay: view === "events"
           ? {
               enabled: deadlineOverlayVisible,

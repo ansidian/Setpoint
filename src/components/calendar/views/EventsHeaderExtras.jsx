@@ -1,4 +1,4 @@
-import { CheckCircle2, ListChecks, Plus } from "lucide-react";
+import { CalendarDays, CheckCircle2, ListChecks, Plus } from "lucide-react";
 import { useState } from "react";
 import Tooltip from "@/components/shared/Tooltip";
 
@@ -7,9 +7,12 @@ export default function EventsHeaderExtras({ editor, selectedDateLabel }) {
 
   if (!editor?.editable) return null;
   const label = selectedDateLabel ? `New event on ${selectedDateLabel}` : "New event";
+  const eventOverlay = editor.eventOverlay;
+  const eventsVisible = eventOverlay?.enabled !== false;
   const overlay = editor.deadlineOverlay;
   const overlayVisible = !!overlay?.enabled;
   const completedVisible = !!overlay?.showCompleted;
+  const eventsTooltip = eventsVisible ? "Hide events" : "Show events";
   const deadlinesTooltip = overlayVisible ? "Hide deadlines" : "Show deadlines";
   const completedTooltip = completedVisible ? "Hide completed deadlines" : "Show completed deadlines";
   const readiness = overlay?.readiness || {};
@@ -37,6 +40,22 @@ export default function EventsHeaderExtras({ editor, selectedDateLabel }) {
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       {overlay ? (
         <>
+          {eventOverlay ? (
+            <Tooltip text={eventsTooltip} side="top" sideOffset={7} delay={350}>
+              <button
+                type="button"
+                onClick={eventOverlay.onToggle}
+                aria-label={eventsVisible ? "Hide events in Events" : "Show events in Events"}
+                aria-pressed={eventsVisible}
+                data-calendar-focus-ring="true"
+                onMouseEnter={() => setHovered("events")}
+                onMouseLeave={() => setHovered(null)}
+                style={toggleStyle(eventsVisible, "events")}
+              >
+                <CalendarDays size={14} />
+              </button>
+            </Tooltip>
+          ) : null}
           <Tooltip text={deadlinesTooltip} side="top" sideOffset={7} delay={350}>
             <button
               type="button"

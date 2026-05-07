@@ -702,10 +702,13 @@ describe("CalendarModal responsive layout", () => {
 
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
 
+    const eventToggle = screen.getByRole("button", { name: /hide events in events/i });
     const deadlineToggle = screen.getByRole("button", { name: /hide deadlines in events/i });
     const completedToggle = screen.getByRole("button", { name: /hide completed deadlines/i });
+    expect(eventToggle.getAttribute("title")).toBeNull();
     expect(deadlineToggle.getAttribute("title")).toBeNull();
     expect(completedToggle.getAttribute("title")).toBeNull();
+    expect(eventToggle.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
     expect(deadlineToggle.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
     expect(completedToggle.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
 
@@ -852,6 +855,43 @@ describe("CalendarModal responsive layout", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  it("edits selected Todoist overlay items from the Events E hotkey", async () => {
+    window.innerWidth = 1900;
+    const onViewChange = vi.fn();
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={onViewChange}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          todoist: {
+            upcoming: [
+              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
+          },
+        }}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByText("Project due"));
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+
+    fireEvent.keyDown(document, { key: "e" });
+
+    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
@@ -1041,10 +1081,10 @@ describe("CalendarModal responsive layout", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Current dashboard task")).toBeNull();
   });
 
-  it("uses D and Shift+D for Events deadline overlay preferences", async () => {
+  it("uses the Events header toggle, D, Shift+D, and Shift+E for planning-layer preferences", async () => {
     window.innerWidth = 1900;
 
-    render(wrapWithDashboard(
+    const renderEventsModal = () => render(wrapWithDashboard(
       <CalendarModal
         open
         onClose={() => {}}
@@ -1053,7 +1093,17 @@ describe("CalendarModal responsive layout", () => {
         focusDate="2026-04-20"
         eventsData={{
           editable: true,
-          getEvents: () => [],
+          getEvents: () => [
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ],
         }}
         billsData={{}}
         deadlinesData={{
@@ -1067,23 +1117,64 @@ describe("CalendarModal responsive layout", () => {
       />,
     ));
 
+    const { unmount } = renderEventsModal();
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Done task")).toBeTruthy();
 
-    fireEvent.keyDown(document, { key: "D", shiftKey: true });
+    const eventToggle = screen.getByRole("button", { name: /hide events in events/i });
+    expect(eventToggle.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
+    fireEvent.click(eventToggle);
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Design review")).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: /show events in events/i })).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
+    expect(window.localStorage.getItem("calendar:eventsEventOverlay")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "E", shiftKey: true });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
+    });
+    expect(window.localStorage.getItem("calendar:eventsEventOverlay")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "E", shiftKey: true });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Design review")).toBeNull();
+    });
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
+    expect(window.localStorage.getItem("calendar:eventsEventOverlay")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "E", shiftKey: true });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
+    });
+    expect(window.localStorage.getItem("calendar:eventsEventOverlay")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "d" });
     await waitFor(() => {
       expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Done task")).toBeNull();
     });
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
     expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
 
-    fireEvent.keyDown(document, { key: "d" });
+    fireEvent.keyDown(document, { key: "D", shiftKey: true });
     await waitFor(() => {
       expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Open task")).toBeNull();
     });
     expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
 
-    fireEvent.keyDown(document, { key: "D", shiftKey: true });
+    fireEvent.keyDown(document, { key: "d" });
     expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
+
+    fireEvent.keyDown(document, { key: "E", shiftKey: true });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Design review")).toBeNull();
+    });
+
+    unmount();
+    renderEventsModal();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Design review")).toBeTruthy();
   });
 
   it("marks slow deadline overlay loading, degrades at timeout, and applies late data explicitly", async () => {
