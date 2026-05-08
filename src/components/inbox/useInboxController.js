@@ -26,7 +26,6 @@ import {
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
-  mergeReadState,
 } from "./inboxWorkItems.js";
 import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
@@ -36,6 +35,7 @@ import {
   buildTrashCommand,
   shouldHandleInboxUndoHotkey,
 } from "./inboxCommandModel.js";
+import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
 
 const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
 
@@ -1089,10 +1089,6 @@ export default function useInboxController({
   };
 }
 
-function stripHighlight(value) {
-  return String(value || "").replace(/<\/?mark>/g, "");
-}
-
 function formatLaneLabel(lane) {
   if (lane === "needs_attention") return "Needs Attention";
   if (lane === "fyi") return "FYI";
@@ -1108,57 +1104,4 @@ function isEditableKeyTarget(target) {
     || tagName === "TEXTAREA"
     || tagName === "SELECT"
     || target.isContentEditable;
-}
-
-function normalizeIndexedSearchResults(data, readOverrides) {
-  const accountsById = {};
-  const emails = [];
-
-  for (const account of data?.accounts || []) {
-    const accountKey = account.account_id;
-    const normalizedAccount = {
-      id: account.account_id,
-      name: account.account_label,
-      email: account.account_email,
-      color: account.account_color,
-      icon: account.account_icon || "Mail",
-    };
-    accountsById[accountKey] = normalizedAccount;
-
-    for (const result of account.results || []) {
-      const uid = result.uid;
-      emails.push({
-        id: uid,
-        uid,
-        subject: stripHighlight(result.subject),
-        from: result.from_name || result.from_address || "Unknown",
-        fromEmail: result.from_address,
-        from_email: result.from_address,
-        preview: stripHighlight(result.body_snippet || result.body_highlight),
-        body_preview: stripHighlight(result.body_snippet || result.body_highlight),
-        date: result.email_date,
-        email_date: result.email_date,
-        read: mergeReadState(result.read, uid, readOverrides),
-        account_id: account.account_id,
-        account_label: account.account_label,
-        account_email: account.account_email,
-        account_color: account.account_color,
-        account_icon: account.account_icon || "Mail",
-        web_url: result.web_url,
-        _accountKey: accountKey,
-        _account: normalizedAccount,
-        _lane: null,
-        _untriaged: false,
-        _indexedSearch: true,
-      });
-    }
-  }
-
-  return {
-    query: data?.query || "",
-    emails,
-    accountsById,
-    loading: false,
-    error: null,
-  };
 }

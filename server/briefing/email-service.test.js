@@ -162,7 +162,7 @@ describe("searchEmails contract", () => {
       limit: 5,
     });
 
-    expect(result).toEqual({
+    expect(result).toEqual(expect.objectContaining({
       accounts: [
         expect.objectContaining({
           account_id: "gmail-work",
@@ -178,7 +178,14 @@ describe("searchEmails contract", () => {
       ],
       total: 1,
       query: "tuition receipt",
-    });
+    }));
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        uid: "gmail-work-historical-1",
+        account_id: "gmail-work",
+        account_label: "Work",
+      }),
+    ]);
   });
 
   it("combines is:unread with full-text search against indexed read state", async () => {
@@ -235,6 +242,46 @@ describe("searchEmails contract", () => {
     expect(result.accounts[0].results[0].read).toBe(false);
   });
 
+  it("smart-ranks flag-only unread searches by usefulness and recency", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "newer-unread-noise",
+      subject: "Newsletter",
+      body_snippet: "Unread promotion",
+      email_date: "2026-05-07T12:00:00Z",
+      read: 0,
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "older-unread-bill",
+      subject: "Payment required",
+      body_snippet: "Unread bill",
+      email_date: "2026-04-28T12:00:00Z",
+      read: 0,
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, bill_candidate_json, triage_status)
+            VALUES (?, ?, ?, 'needs_attention', 'finance', 'high', ?, 'complete')`,
+      args: ["user-1", "gmail-work", "older-unread-bill", JSON.stringify({ amount_due: 25 })],
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, triage_status)
+            VALUES (?, ?, ?, 'noise', 'promotions', 'low', 'complete')`,
+      args: ["user-1", "gmail-work", "newer-unread-noise"],
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "is:unread",
+      limit: 5,
+    });
+
+    expect(result.results.map((email) => email.uid)).toEqual([
+      "older-unread-bill",
+      "newer-unread-noise",
+    ]);
+  });
+
   it("supports is:read as an indexed read predicate", async () => {
     testState.db.current = await createEmailIndexTestDb();
     await seedIndexedEmail(testState.db.current, {
@@ -287,6 +334,88 @@ describe("searchEmails contract", () => {
     });
 
     expect(result.accounts[0].results.map((email) => email.uid)).toEqual(["newer", "older"]);
+  });
+
+  it("returns top-level smart-ranked results while keeping grouped account results", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-personal-newer-noise",
+      account_id: "gmail-personal",
+      account_label: "Personal",
+      account_email: "personal@example.com",
+      from_name: "Promotions",
+      from_address: "deals@example.com",
+      subject: "Weekend digest",
+      body_snippet: "Tuition receipt appears in the body only.",
+      body_text: "Tuition receipt appears in the body only.",
+      email_date: "2026-05-06T12:00:00Z",
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-older-finance",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      from_name: "Bursar Office",
+      from_address: "billing@school.edu",
+      subject: "Tuition receipt ready",
+      body_snippet: "Payment confirmation attached.",
+      body_text: "Payment confirmation attached.",
+      email_date: "2026-04-20T12:00:00Z",
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, deadline_at, triage_status)
+            VALUES (?, ?, ?, 'needs_attention', 'finance', 'high', ?, 'complete')`,
+      args: ["user-1", "gmail-work", "gmail-work-older-finance", "2026-05-10T16:00:00Z"],
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, triage_status)
+            VALUES (?, ?, ?, 'noise', 'promotions', 'low', 'complete')`,
+      args: ["user-1", "gmail-personal", "gmail-personal-newer-noise"],
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "tuition receipt",
+      limit: 5,
+    });
+
+    expect(result.results.map((email) => email.uid)).toEqual([
+      "gmail-work-older-finance",
+      "gmail-personal-newer-noise",
+    ]);
+    expect(result.accounts.flatMap((account) => account.results).map((email) => email.uid)).toEqual([
+      "gmail-work-older-finance",
+      "gmail-personal-newer-noise",
+    ]);
+  });
+
+  it("includes search scoring details only for explicit debug searches", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "debug-invoice",
+      subject: "Invoice due",
+      body_text: "Invoice due",
+    });
+
+    const normal = await emailService.searchEmails("user-1", {
+      q: "invoice",
+      limit: 5,
+    });
+    const debug = await emailService.searchEmails("user-1", {
+      q: "invoice",
+      limit: 5,
+      debug: true,
+    });
+
+    expect(normal.results[0]).not.toHaveProperty("search_score");
+    expect(normal.results[0]).not.toHaveProperty("search_score_details");
+    expect(debug.results[0]).toEqual(expect.objectContaining({
+      search_score: expect.any(Number),
+      search_score_details: expect.objectContaining({
+        details: expect.any(Array),
+      }),
+    }));
   });
 
   it("rejects unsupported flag-like search tokens", async () => {

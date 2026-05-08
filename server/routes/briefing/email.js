@@ -101,12 +101,12 @@ router.post("/email/mark-all-read", async (req, res) => {
 });
 
 router.get("/email-search", async (req, res) => {
-  const { q, limit } = req.query;
+  const { q, limit, debug } = req.query;
   if (!q || !q.trim()) {
     return res.status(400).json({ message: "Query parameter 'q' is required" });
   }
   try {
-    res.json(await emailService.searchEmails(EA_USER_ID, { q, limit }));
+    res.json(await emailService.searchEmails(EA_USER_ID, { q, limit, debug: debug === "1" }));
   } catch (err) {
     console.error("[EA] Email search error:", err.message);
     const status = err.status || 500;
