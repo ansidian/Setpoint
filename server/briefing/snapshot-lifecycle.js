@@ -87,11 +87,25 @@ export function normalizeCount(value) {
   return Number(value || 0);
 }
 
+export function normalizeBillCandidate(candidate) {
+  if (!candidate || typeof candidate !== "object") return null;
+  const payee = candidate.payee || candidate.payee_hint || "";
+  return {
+    ...candidate,
+    payee,
+    amount: candidate.amount ?? candidate.amount_due ?? null,
+    due_date: candidate.due_date || candidate.dueDate || null,
+    type: candidate.type || "expense",
+  };
+}
+
 export function normalizeSnapshotItem(row) {
   const source = row.source || null;
   const resurfacedAt = row.resurfaced_at == null ? null : Number(row.resurfaced_at);
   const catchUp = source === "catch_up" || Number(row.catch_up || 0) === 1;
   const normalizedSource = catchUp ? "catch_up" : source;
+  const billCandidate = row.bill_candidate_json ? JSON.parse(row.bill_candidate_json) : null;
+  const extractedBill = normalizeBillCandidate(billCandidate);
   return {
     id: catchUp ? `catch_up:${row.id}` : Number(row.id),
     snapshot_id: Number(row.snapshot_id),
@@ -130,8 +144,9 @@ export function normalizeSnapshotItem(row) {
     handled_at: row.handled_at || null,
     provider_removed_at: row.provider_removed_at || null,
     read: Boolean(row.read),
-    hasBill: Boolean(row.bill_candidate_json),
-    bill_candidate: row.bill_candidate_json ? JSON.parse(row.bill_candidate_json) : null,
+    hasBill: Boolean(billCandidate),
+    bill_candidate: billCandidate,
+    extractedBill,
     _catchUp: catchUp,
     previous_snapshot_item_id: catchUp ? Number(row.id) : null,
   };
