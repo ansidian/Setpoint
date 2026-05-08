@@ -10,6 +10,7 @@ import {
   renewDueGmailWatches,
 } from "./gmail-sync.js";
 import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
+import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email-search-embedding-worker.js";
 
 const activeJobs = [];
 // Background indexer state lives outside activeJobs so initScheduler's re-runs
@@ -21,6 +22,8 @@ let gmailHistorySyncJob = null;
 let gmailHistorySyncInFlight = false;
 let emailTriageJob = null;
 let emailTriageInFlight = false;
+let emailSearchEmbeddingJob = null;
+let emailSearchEmbeddingInFlight = false;
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
 const INDEXER_LOOKBACK_HOURS = 2;
@@ -28,6 +31,8 @@ const INDEXER_CRON = "*/10 * * * *";
 const GMAIL_WATCH_RENEWAL_CRON = "17 3 * * *";
 const GMAIL_HISTORY_SYNC_CRON = "* * * * *";
 const EMAIL_TRIAGE_CRON = "* * * * *";
+const EMAIL_SEARCH_EMBEDDING_CRON = "*/5 * * * *";
+const EMAIL_SEARCH_EMBEDDINGS_DISABLED = process.env.EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED === "1";
 
 export async function initScheduler() {
   // Clear any existing jobs (in case of re-init)
@@ -193,6 +198,21 @@ export async function runEmailTriageWorker() {
   }
 }
 
+export async function runEmailSearchEmbeddingWorker() {
+  if (EMAIL_SEARCH_EMBEDDINGS_DISABLED) return;
+  if (emailSearchEmbeddingInFlight) return;
+  emailSearchEmbeddingInFlight = true;
+  try {
+    const result = await processEmailSearchEmbeddingBatchesForAllUsers();
+    const embedded = result.users.reduce((sum, user) => sum + Number(user.embedded || 0), 0);
+    if (embedded) console.log(`[Email Search Embeddings] Embedded ${embedded} indexed email(s)`);
+  } catch (err) {
+    console.error("[Email Search Embeddings] Worker failed:", err.message);
+  } finally {
+    emailSearchEmbeddingInFlight = false;
+  }
+}
+
 export function startBackgroundIndexer() {
   if (indexerJob) {
     indexerJob.stop();
@@ -245,4 +265,20 @@ export function startBackgroundIndexer() {
       console.error("[Email Triage] Initial worker failed:", err.message),
     );
   }, 12000);
+
+  if (emailSearchEmbeddingJob) {
+    emailSearchEmbeddingJob.stop();
+    emailSearchEmbeddingJob = null;
+  }
+  if (EMAIL_SEARCH_EMBEDDINGS_DISABLED) {
+    console.log("[Email Search Embeddings] Worker disabled by EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED=1");
+    return;
+  }
+  emailSearchEmbeddingJob = cron.schedule(EMAIL_SEARCH_EMBEDDING_CRON, runEmailSearchEmbeddingWorker);
+  console.log(`[Email Search Embeddings] Worker scheduled (${EMAIL_SEARCH_EMBEDDING_CRON})`);
+  setTimeout(() => {
+    runEmailSearchEmbeddingWorker().catch((err) =>
+      console.error("[Email Search Embeddings] Initial worker failed:", err.message),
+    );
+  }, 15000);
 }

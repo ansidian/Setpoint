@@ -47,6 +47,51 @@ vi.mock("@/api", () => ({
         estimatedSavingsUsd: 0.00225,
       },
     },
+    semanticSearch: {
+      coverage: {
+        semantic_status: "active",
+        total_indexed: 1981,
+        fresh_embeddings: 1981,
+        stale_embeddings: 0,
+        missing_embeddings: 0,
+        coverage_ratio: 1,
+      },
+      corpusEmbeddings: {
+        model: "text-embedding-3-small",
+        embeddedDocuments: 1981,
+        estimatedInputTokens: 125000,
+        estimatedCostUsd: 0.0025,
+        actualUsage: {
+          calls: 2,
+          inputTokens: 210000,
+          cachedInputTokens: 0,
+          outputTokens: 0,
+          estimatedCostUsd: 0.0042,
+          estimatedCalls: 0,
+          byEvent: {
+            corpus_embedding: { calls: 2 },
+          },
+        },
+      },
+      askAi: {
+        actualUsage: {
+          calls: 3,
+          inputTokens: 1020,
+          cachedInputTokens: 200,
+          outputTokens: 160,
+          estimatedCostUsd: 0.0012,
+          estimatedCalls: 1,
+          byEvent: {
+            planner: { calls: 1 },
+            query_embedding: { calls: 1, estimatedCalls: 1 },
+            answer: { calls: 1 },
+          },
+        },
+        perSuccessfulAskEstimate: {
+          estimatedCostUsd: 0.0061,
+        },
+      },
+    },
   })),
 }));
 
@@ -61,8 +106,8 @@ describe("TriageAnalyticsModal", () => {
   it("shows OpenAI triage cache, cost, model, and tier analytics", async () => {
     render(<TriageAnalyticsModal open onClose={() => {}} />);
 
-    expect(await screen.findByRole("dialog", { name: /ai triage analytics/i })).toBeTruthy();
-    expect(getTriageCacheStats).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("dialog", { name: /ai analytics/i })).toBeTruthy();
+    expect(getTriageCacheStats).toHaveBeenCalledWith({ semantic: true });
 
     await waitFor(() => {
       expect(screen.getAllByText("53.3%").length).toBeGreaterThan(0);
@@ -76,6 +121,18 @@ describe("TriageAnalyticsModal", () => {
     expect(screen.getByText("gpt-5.4-nano")).toBeTruthy();
     expect(screen.getByText("Cheap tier")).toBeTruthy();
     expect(screen.getByText("Strong tier")).toBeTruthy();
+    expect(screen.getByText("Triage cost")).toBeTruthy();
+    expect(screen.getAllByText("Ask AI cost").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Semantic search")).toBeTruthy();
+    expect(screen.getByText("Semantic search details")).toBeTruthy();
+    expect(screen.getAllByText("1981 / 1981").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("$0.0025").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("$0.0012").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("$0.0061").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Backfill spend")).toBeNull();
+    expect(screen.queryByText("Backfill calls")).toBeNull();
+    expect(screen.getByText(/actual Ask AI usage is logged as aggregate tokens only/i)).toBeTruthy();
+    expect(screen.getByText(/Ask AI spent \$0.0012 in this window/i)).toBeTruthy();
     expect(screen.getByText(/Hit rate can fall when new uncached calls add input tokens/)).toBeTruthy();
   });
 });

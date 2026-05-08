@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "Synthetic CI-safe retrieval cases. Do not add real personal email UIDs or snippets here.",
+  "cases": [
+    {
+      "id": "synthetic-amazon-return-active",
+      "query": "amazon return drop off deadline",
+      "expected_uids": ["synthetic-active-return"],
+      "must_not_top": ["synthetic-refund-decoy"],
+      "top_n": 3
+    },
+    {
+      "id": "synthetic-payment-due-vs-receipt",
+      "query": "credit card payment due",
+      "expected_uids": ["synthetic-payment-due"],
+      "must_not_top": ["synthetic-payment-receipt"],
+      "top_n": 3
+    }
+  ]
+}

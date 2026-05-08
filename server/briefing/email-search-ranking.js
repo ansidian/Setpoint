@@ -47,7 +47,7 @@ export function scoreEmailSearchRow(row, { query = "", now = Date.now() } = {}) 
   const subject = normalizeText(row.subject);
   const fromAddress = normalizeText(row.from_address);
   const fromName = normalizeText(row.from_name);
-  const body = normalizeText(`${row.body_snippet || ""} ${row.body_highlight || ""}`);
+  const body = normalizeText(`${row.body_snippet || ""} ${row.body_highlight || ""} ${row.body_text || ""}`);
   const details = [];
   let score = 0;
 
@@ -63,6 +63,9 @@ export function scoreEmailSearchRow(row, { query = "", now = Date.now() } = {}) 
     if (fromAddress.includes(term)) add(details, "sender_token", 15);
     if (subject.includes(term)) add(details, "subject_token", 9);
     if (body.includes(term)) add(details, "body_token", 2);
+  }
+  if (terms.length > 1 && terms.every((term) => body.includes(term))) {
+    add(details, "body_all_terms", 12);
   }
 
   const lane = snapshotValue(row, "snapshot_lane", "triage_lane", "untriaged");

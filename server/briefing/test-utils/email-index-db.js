@@ -9,6 +9,9 @@ const migrationsDir = join(__dirname, "../../db/migrations");
 const migrationFiles = [
   "001_ea_tables.sql",
   "004_email_read_state_search_index.sql",
+  "005_email_search_embeddings.sql",
+  "006_email_search_embedding_state.sql",
+  "007_email_search_ai_usage.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>

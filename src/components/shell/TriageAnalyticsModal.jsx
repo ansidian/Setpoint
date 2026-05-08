@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useState } from "react";
-import { BarChart3, Bot, Coins, DatabaseZap, Gauge, Layers3 } from "lucide-react";
+import { BarChart3, Bot, Coins, DatabaseZap, Gauge, Layers3, Search } from "lucide-react";
 import { getTriageCacheStats } from "@/api";
 import {
   Dialog,
@@ -108,6 +108,91 @@ function Stat({ label, value }) {
   );
 }
 
+function SemanticSearchAnalytics({ stats }) {
+  const semantic = stats?.semanticSearch;
+  if (!semantic) return null;
+  const coverage = semantic.coverage || {};
+  const corpus = semantic.corpusEmbeddings || {};
+  const askAi = semantic.askAi || {};
+  const actual = askAi.actualUsage || {};
+  const estimate = askAi.perSuccessfulAskEstimate || {};
+  const coveragePercent = formatPercent(coverage.coverage_ratio);
+  const askCost = formatUsdEstimate(actual.estimatedCostUsd);
+
+  return (
+    <div className="grid gap-3">
+      <div className="rounded-lg border border-[#89b4fa]/20 bg-[#89b4fa]/10 p-3">
+        <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[1.4px] text-[#89b4fa] uppercase">
+          <Search size={13} />
+          Semantic search
+        </div>
+        <p className="mt-2 text-[12px] leading-relaxed text-foreground/85">
+          Ask AI spent {askCost} in this window. Vector coverage is {coveragePercent}.
+        </p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground/65">
+          Corpus cost estimates the current stored embedding set; per-ask estimate includes planner, query vector, and capped answer.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-[11px] font-semibold tracking-[1.4px] text-muted-foreground uppercase">
+            Semantic search details
+          </div>
+          <div className="rounded-full border border-white/[0.08] bg-black/[0.12] px-2 py-1 text-[10px] font-semibold tracking-[1.2px] text-muted-foreground uppercase">
+            {coverage.semantic_status || "unknown"}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Coverage" value={coveragePercent} />
+          <Stat label="Fresh vectors" value={`${numberValue(coverage.fresh_embeddings)} / ${numberValue(coverage.total_indexed)}`} />
+          <Stat label="Corpus cost" value={formatUsdEstimate(corpus.estimatedCostUsd)} />
+          <Stat label="Ask AI cost" value={askCost} />
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Ask AI calls" value={numberValue(actual.calls)} />
+          <Stat label="Input" value={formatCompactNumber(actual.inputTokens)} />
+          <Stat label="Output" value={formatCompactNumber(actual.outputTokens)} />
+          <Stat label="Per ask est." value={formatUsdEstimate(estimate.estimatedCostUsd)} />
+        </div>
+
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground/65">
+          Actual Ask AI usage is logged as aggregate tokens only.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SemanticSearchHeroMetrics({ stats }) {
+  const semantic = stats?.semanticSearch;
+  if (!semantic) return null;
+  const coverage = semantic.coverage || {};
+  const corpus = semantic.corpusEmbeddings || {};
+  const askAi = semantic.askAi || {};
+  const actual = askAi.actualUsage || {};
+  const estimate = askAi.perSuccessfulAskEstimate || {};
+
+  const metrics = [
+    { label: "Ask AI cost", value: formatUsdEstimate(actual.estimatedCostUsd), icon: Search, tone: "accent" },
+    { label: "Ask AI calls", value: numberValue(actual.calls), icon: Bot },
+    { label: "Coverage", value: formatPercent(coverage.coverage_ratio), icon: Gauge, tone: "success" },
+    { label: "Corpus est.", value: formatUsdEstimate(corpus.estimatedCostUsd), icon: Coins },
+    { label: "Per ask est.", value: formatUsdEstimate(estimate.estimatedCostUsd), icon: BarChart3 },
+    { label: "Vectors", value: `${numberValue(coverage.fresh_embeddings)} / ${numberValue(coverage.total_indexed)}`, icon: DatabaseZap },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {metrics.map((metric) => (
+        <Metric key={metric.label} {...metric} />
+      ))}
+    </div>
+  );
+}
+
 function LoadingState() {
   return (
     <div className="grid gap-3">
@@ -134,9 +219,9 @@ function AnalyticsBody({ stats }) {
 
   const metrics = useMemo(() => ([
     { label: "Hit rate", value: formatPercent(stats?.hitRate), icon: Gauge, tone: "accent" },
-    { label: "OpenAI calls", value: numberValue(stats?.openaiCalls), icon: Bot },
+    { label: "Triage calls", value: numberValue(stats?.openaiCalls), icon: Bot },
     { label: "Cached", value: formatCompactNumber(stats?.cachedInputTokens), icon: DatabaseZap, tone: "success" },
-    { label: "Cost", value: formatUsdEstimate(stats?.estimatedCostUsd), icon: Coins },
+    { label: "Triage cost", value: formatUsdEstimate(stats?.estimatedCostUsd), icon: Coins },
     { label: "Saved", value: formatUsdEstimate(stats?.estimatedSavingsUsd), icon: BarChart3, tone: "success" },
     { label: "Output", value: formatCompactNumber(stats?.outputTokens), icon: Layers3 },
   ]), [stats]);
@@ -192,6 +277,9 @@ function AnalyticsBody({ stats }) {
         <TierRow label="Strong tier" stats={stats?.byTier?.strong} />
       </div>
 
+      <SemanticSearchHeroMetrics stats={stats} />
+      <SemanticSearchAnalytics stats={stats} />
+
       <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
         <div className="mb-2 text-[11px] font-semibold tracking-[1.4px] text-muted-foreground uppercase">
           Models
@@ -221,7 +309,7 @@ export default function TriageAnalyticsModal({ open, onClose }) {
     queueMicrotask(() => {
       if (!cancelled) setState("loading");
     });
-    getTriageCacheStats()
+    getTriageCacheStats({ semantic: true })
       .then((nextStats) => {
         if (cancelled) return;
         setStats(nextStats);
@@ -245,10 +333,10 @@ export default function TriageAnalyticsModal({ open, onClose }) {
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-[13px] font-semibold tracking-[1.8px] text-foreground uppercase">
-                AI triage analytics
+                AI analytics
               </DialogTitle>
               <DialogDescription className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/70">
-                OpenAI triage cost, prompt-cache behavior, model use, and tier split.
+                OpenAI triage cost, prompt-cache behavior, model use, and semantic search estimates.
               </DialogDescription>
             </div>
           </div>

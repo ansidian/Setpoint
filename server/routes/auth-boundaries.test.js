@@ -404,6 +404,18 @@ describe("auth boundaries", () => {
       },
     });
     expect(res.body.estimatedSavingsUsd).toBeCloseTo(0.002358, 6);
+    expect(res.body.semanticSearch).toBeUndefined();
+
+    const semanticRes = await request(makeApp())
+      .get("/api/ea/triage/cache-stats?semantic=1")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(semanticRes.status).toBe(200);
+    expect(semanticRes.body.semanticSearch).toMatchObject({
+      coverage: {
+        semantic_status: "unavailable",
+      },
+    });
   });
 
   it("rejects invalid email triage mode writes", async () => {

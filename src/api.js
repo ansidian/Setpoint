@@ -66,7 +66,9 @@ export const getCurrentDashboard = () => apiFetch("/api/dashboard/current");
 export const getDashboardHealth = () => apiFetch("/api/dashboard/health");
 export const requestCurrentDashboardRefresh = () => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = () => apiFetch("/api/dashboard/current/sync", { method: "POST" });
-export const getTriageCacheStats = () => apiFetch("/api/ea/triage/cache-stats");
+export const getTriageCacheStats = (options = {}) => (
+  apiFetch(`/api/ea/triage/cache-stats${options.semantic ? "?semantic=1" : ""}`)
+);
 // 5-minute in-memory TTL cache for email bodies. Bodies don't mutate
 // server-side once delivered; the cache eliminates the loading flicker on
 // re-selection and dedupes concurrent fetches for the same uid.
@@ -169,6 +171,16 @@ export const searchEmails = (query, limit) => {
   if (limit) params.set("limit", limit);
   return apiFetch(`/api/briefing/email-search?${params}`);
 };
+
+export const askInboxAiSearch = (query, limit) => (
+  apiFetch("/api/briefing/email-search/ask-ai", {
+    method: "POST",
+    body: JSON.stringify({
+      q: query,
+      ...(limit ? { limit } : {}),
+    }),
+  })
+);
 
 // Important Senders
 export const getImportantSenders = () => apiFetch("/api/ea/important-senders");

@@ -40,3 +40,4 @@ dist-ssr
 .continue/
 skills-lock.json
 docs/
+server/briefing/evals/local/

@@ -10,6 +10,7 @@ import {
   unsnoozeEmail,
   markAllEmailsAsRead,
   searchEmails,
+  askInboxAiSearch,
   moveSnapshotItemLane,
   dismissSnapshotItemForToday,
   restoreSnapshotItemForToday,
@@ -36,6 +37,15 @@ import {
   shouldHandleInboxUndoHotkey,
 } from "./inboxCommandModel.js";
 import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
+import {
+  EMPTY_INBOX_AI_SEARCH,
+  clearInboxAiSearch,
+  completeInboxAiRequest,
+  failInboxAiRequest,
+  isInboxAiResultMode,
+  requestInboxAiConfirmation,
+  startInboxAiRequest,
+} from "./inboxAiSearchModel.js";
 
 const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
 
@@ -86,7 +96,10 @@ export default function useInboxController({
     loading: false,
     error: null,
   });
+  const [inboxAiSearch, setInboxAiSearch] = useState(EMPTY_INBOX_AI_SEARCH);
   const searchRequestRef = useRef(0);
+  const inboxAiRequestRef = useRef(0);
+  const liveReadOverridesRef = useRef(liveReadOverrides);
   const {
     undo,
     undoSlotRef,
@@ -114,8 +127,15 @@ export default function useInboxController({
   }, [setSessionField]);
 
   const setSearch = useCallback((value) => {
+    setInboxAiSearch((prev) => (
+      prev.status === "idle" ? prev : clearInboxAiSearch(prev)
+    ));
     setSessionField("search", value);
   }, [setSessionField]);
+
+  useEffect(() => {
+    liveReadOverridesRef.current = liveReadOverrides;
+  }, [liveReadOverrides]);
 
   const setSelectedId = useCallback((value) => {
     setSessionField("selectedId", value);
@@ -289,8 +309,10 @@ export default function useInboxController({
   ]);
 
   const indexedSearchActive = search.trim().length >= 2;
+  const inboxAiResultMode = isInboxAiResultMode(inboxAiSearch);
 
   const visibleEmails = useMemo(() => {
+    if (inboxAiResultMode) return inboxAiSearch.emails;
     if (indexedSearchActive) return indexedSearch.emails;
     return flatEmails.filter((email) => {
       const uid = email.uid || email.id;
@@ -310,7 +332,18 @@ export default function useInboxController({
       const bKey = b._resurfacedAt || new Date(b.date).getTime();
       return bKey - aKey;
     });
-  }, [flatEmails, accountId, categoryFilter, lane, snoozedMap, nowTick, indexedSearch.emails, indexedSearchActive]);
+  }, [
+    flatEmails,
+    accountId,
+    categoryFilter,
+    lane,
+    snoozedMap,
+    nowTick,
+    indexedSearch.emails,
+    indexedSearchActive,
+    inboxAiResultMode,
+    inboxAiSearch.emails,
+  ]);
 
   useEffect(() => {
     const term = search.trim();
@@ -420,10 +453,41 @@ export default function useInboxController({
 
   const selectedEmail = useMemo(() => {
     if (!selectedId) return null;
+    const aiHit = inboxAiSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
+    if (aiHit) return aiHit;
     const searchHit = indexedSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
     if (searchHit) return searchHit;
     return flatEmails.find((email) => email.id === selectedId || email.uid === selectedId) || null;
-  }, [selectedId, flatEmails, indexedSearch.emails]);
+  }, [selectedId, flatEmails, indexedSearch.emails, inboxAiSearch.emails]);
+
+  const requestInboxAiSearch = useCallback((query = search) => {
+    setInboxAiSearch((prev) => requestInboxAiConfirmation(prev, query));
+  }, [search]);
+
+  const cancelInboxAiSearch = useCallback(() => {
+    setInboxAiSearch((prev) => clearInboxAiSearch(prev));
+  }, []);
+
+  const confirmInboxAiSearch = useCallback(() => {
+    const query = inboxAiSearch.status === "confirming" ? inboxAiSearch.query : search.trim();
+    if (query.length < 2) return;
+
+    inboxAiRequestRef.current += 1;
+    const requestId = inboxAiRequestRef.current;
+    setInboxAiSearch((prev) => startInboxAiRequest(prev, query, requestId));
+
+    askInboxAiSearch(query)
+      .then((data) => {
+        setInboxAiSearch((prev) => completeInboxAiRequest(prev, {
+          requestId,
+          response: data,
+          readOverrides: liveReadOverridesRef.current,
+        }));
+      })
+      .catch((err) => {
+        setInboxAiSearch((prev) => failInboxAiRequest(prev, { requestId, error: err }));
+      });
+  }, [inboxAiSearch.query, inboxAiSearch.status, search]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -1061,6 +1125,12 @@ export default function useInboxController({
     indexedSearchActive,
     indexedSearchLoading: indexedSearch.loading,
     indexedSearchError: indexedSearch.error,
+    inboxAiSearchAccountsById: inboxAiSearch.accountsById,
+    inboxAiSearch,
+    inboxAiSearchActive: inboxAiResultMode,
+    onInboxAiIntent: requestInboxAiSearch,
+    onInboxAiConfirm: confirmInboxAiSearch,
+    onInboxAiCancel: cancelInboxAiSearch,
     visibleEmails,
     laneCounts,
     liveCount,
@@ -1085,7 +1155,7 @@ export default function useInboxController({
     snapshotCategories,
     categoryFilter,
     setCategoryFilter,
-    scopedAccount: indexedSearchActive ? null : scopedAccount,
+    scopedAccount: indexedSearchActive || inboxAiResultMode ? null : scopedAccount,
   };
 }
 
