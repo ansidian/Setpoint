@@ -1,4 +1,5 @@
 import AccountsSettingsSection from "@/components/settings/sections/AccountsSettingsSection";
+import ActualBudgetSettingsSection from "@/components/settings/sections/ActualBudgetSettingsSection";
 import EmailAutomationSettingsSection from "@/components/settings/sections/EmailAutomationSettingsSection";
 import SystemSettingsSection from "@/components/settings/sections/SystemSettingsSection";
 import {
@@ -35,6 +36,14 @@ export default function Settings() {
         <AccountsSettingsSection
           accounts={accounts}
           setAccounts={setAccounts}
+          settings={settings}
+          setSettings={setSettings}
+          patch={patch}
+        />
+      );
+    } else if (tab === "actual") {
+      content = (
+        <ActualBudgetSettingsSection
           settings={settings}
           setSettings={setSettings}
           patch={patch}
