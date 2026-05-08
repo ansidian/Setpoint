@@ -701,7 +701,7 @@ async function claimNextEmailTriageJob(dbClient, now) {
   });
   const job = result.rows[0] || null;
   if (!job) return null;
-  await dbClient.execute({
+  const claim = await dbClient.execute({
     sql: `UPDATE ea_triage_jobs
           SET status = 'running',
               attempts = attempts + 1,
@@ -710,6 +710,7 @@ async function claimNextEmailTriageJob(dbClient, now) {
           WHERE id = ? AND status = 'queued'`,
     args: [nowIso(now), job.id],
   });
+  if (Number(claim.rowsAffected || 0) === 0) return null;
   return job;
 }
 
