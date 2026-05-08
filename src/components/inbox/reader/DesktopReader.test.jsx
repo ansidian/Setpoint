@@ -69,6 +69,19 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
   });
 
+  it("hides the bill-pay affordance for triaged non-bill emails", () => {
+    renderReader({
+      email: {
+        subject: "Regular update",
+        category: "needs_attention",
+        hasBill: false,
+        _untriaged: false,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: /pay bill/i })).toBeNull();
+  });
+
   it("passes the loaded provider body to bill extraction instead of the row preview", () => {
     renderReader({
       billOpen: true,
@@ -206,6 +219,7 @@ describe("DesktopReader snapshot actions", () => {
     });
 
     expect(screen.getByRole("button", { name: /dismiss from today/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /mark read/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /snooze email/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /trash email/i })).toBeTruthy();
@@ -229,6 +243,7 @@ describe("DesktopReader snapshot actions", () => {
     });
 
     expect(screen.getByRole("button", { name: /mark unread/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /pay bill/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /snooze email/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /trash email/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();

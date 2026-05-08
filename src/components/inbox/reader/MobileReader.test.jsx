@@ -37,7 +37,7 @@ function renderMobileReader(overrides = {}) {
       onAction={onAction}
       onClose={() => {}}
       showTriage={false}
-      billOpen
+      billOpen={overrides.billOpen ?? true}
       setBillOpen={() => {}}
       snoozeOpen={false}
       setSnoozeOpen={() => {}}
@@ -82,6 +82,20 @@ describe("MobileReader bill extraction", () => {
     expect(screen.queryByText("H")).toBeNull();
     expect(screen.queryByText("S")).toBeNull();
     expect(screen.queryByText("E")).toBeNull();
+  });
+
+  it("hides mobile bill pay for triaged non-bill emails", () => {
+    renderMobileReader({
+      email: {
+        hasBill: false,
+        _activeSnapshot: true,
+        _lane: "needs_attention",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.queryByText("Open bill pay")).toBeNull();
   });
 
   it("allows FYI snapshot rows to be marked handled from the tap menu", () => {
@@ -131,6 +145,7 @@ describe("MobileReader bill extraction", () => {
 
   it("keeps queued snapshot rows dismissible but hides manual triage moves", () => {
     const { onAction } = renderMobileReader({
+      billOpen: false,
       email: {
         hasBill: false,
         _activeSnapshot: true,
@@ -143,6 +158,7 @@ describe("MobileReader bill extraction", () => {
     fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
 
     expect(screen.getByText("Dismiss")).toBeTruthy();
+    expect(screen.getByText("Open bill pay")).toBeTruthy();
     expect(screen.getByText("Snooze")).toBeTruthy();
     expect(screen.getByText("Trash")).toBeTruthy();
     expect(screen.queryByText("Move to Needs")).toBeNull();
@@ -156,6 +172,7 @@ describe("MobileReader bill extraction", () => {
 
   it("hides snapshot lifecycle actions for untriaged-read rows", () => {
     renderMobileReader({
+      billOpen: false,
       email: {
         hasBill: false,
         read: true,
@@ -169,6 +186,7 @@ describe("MobileReader bill extraction", () => {
     fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
 
     expect(screen.getByText("Mark unread")).toBeTruthy();
+    expect(screen.getByText("Open bill pay")).toBeTruthy();
     expect(screen.queryByText("Dismiss")).toBeNull();
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Handled")).toBeNull();
