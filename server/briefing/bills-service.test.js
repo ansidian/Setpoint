@@ -30,6 +30,7 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
   process.env.OPENAI_API_KEY = "test-openai-key";
   Object.values(mockActual).forEach((fn) => fn.mockReset());
+  mockActual.getPayees.mockResolvedValue([]);
   mockDb.execute.mockReset();
   mockDb.batch.mockReset();
 });
@@ -49,6 +50,8 @@ const {
   scheduleBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
   isBillsMirrorMaintenanceDue,
+  resolveBillPaySeed,
+  resolveBillPaySample,
 } = await import("./bills-service.js");
 
 function rowResult(rows = []) {
@@ -57,13 +60,18 @@ function rowResult(rows = []) {
 
 describe("extractBill (Anthropic)", () => {
   it("translates category/account codes back to real ids and reports the model used", async () => {
-    mockSettings("anthropic", "claude-haiku-4-5");
+    mockDb.execute
+      .mockResolvedValueOnce({
+        rows: [{ bill_extract_provider: "anthropic", bill_extract_model: "claude-haiku-4-5" }],
+      })
+      .mockResolvedValueOnce({ rows: [{ bill_pay_mappings_json: null }] });
     mockActual.getCategories.mockResolvedValueOnce([
       { group: "G1", categories: [{ id: "CAT-REAL-1", name: "Groceries" }] },
     ]);
     mockActual.getAccounts.mockResolvedValueOnce([
       { id: "ACC-REAL-1", name: "Visa" },
     ]);
+    mockActual.getPayees.mockResolvedValueOnce([]);
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -98,6 +106,7 @@ describe("extractBill (Anthropic)", () => {
       to_account_id: null,
       provider: "anthropic",
       model: "claude-haiku-4-5",
+      mapping: { status: "unmapped", reason: "no_profile_match", matchedProfiles: [] },
     });
     const fetchUrl = global.fetch.mock.calls[0][0];
     expect(fetchUrl).toContain("anthropic.com");
@@ -115,6 +124,125 @@ describe("extractBill (Anthropic)", () => {
     await expect(
       extractBill("u1", { subject: "x", from: "y", body: "z" })
     ).rejects.toMatchObject({ status: 502 });
+  });
+});
+
+describe("Bill Pay resolver service", () => {
+  it("loads a triaged server candidate by email id before resolving", async () => {
+    mockDb.execute
+      .mockResolvedValueOnce({
+        rows: [{
+          bill_pay_mappings_json: JSON.stringify({
+            version: 1,
+            profiles: [{
+              id: "edison",
+              enabled: true,
+              identity: { aliases: ["edison"] },
+              behaviors: [{
+                id: "monthly",
+                enabled: true,
+                type: "expense",
+                intent: { subject: ["bill"] },
+                amountStrategy: "model_amount",
+                targets: {
+                  payee_id: "payee-edison",
+                  payee_label: "Southern California Edison",
+                  category_id: "cat-utilities",
+                  category_label: "Utilities",
+                },
+              }],
+            }],
+          }),
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          bill_candidate_json: JSON.stringify({
+            payee_hint: "Edison",
+            amount: 64.2,
+            due_date: "2026-05-29",
+          }),
+          from_name: "Edison",
+          from_address: "billing@sce.com",
+          subject: "Your Edison bill",
+          body_snippet: "Statement ready",
+          body_text: "Statement ready",
+        }],
+      });
+    mockActual.getMetadata.mockResolvedValueOnce({
+      accounts: [],
+      payees: [{ id: "payee-edison", name: "Southern California Edison" }],
+      categories: [{ id: "cat-utilities", name: "Utilities" }],
+    });
+
+    const result = await resolveBillPaySeed("u1", {
+      emailId: "msg-1",
+      candidate: { payee_hint: "Client fallback", amount: 1 },
+      source: "triage",
+    });
+
+    expect(result.mapping).toMatchObject({
+      status: "matched",
+      profileId: "edison",
+      behaviorId: "monthly",
+    });
+    expect(result.bill).toMatchObject({
+      payee: "Southern California Edison",
+      payee_id: "payee-edison",
+      category_id: "cat-utilities",
+      amount: 64.2,
+      due_date: "2026-05-29",
+    });
+  });
+
+  it("resolves a pasted-text mapping sample without requiring an email id", async () => {
+    mockActual.getMetadata.mockResolvedValueOnce({
+      accounts: [],
+      payees: [{ id: "payee-spectrum", name: "Spectrum" }],
+      categories: [{ id: "cat-internet", name: "Internet" }],
+    });
+
+    const result = await resolveBillPaySample("u1", {
+      mappings: {
+        version: 1,
+        profiles: [{
+          id: "spectrum",
+          enabled: true,
+          identity: { aliases: ["spectrum"] },
+          behaviors: [{
+            id: "internet",
+            enabled: true,
+            type: "expense",
+            intent: { body: ["internet statement"] },
+            amountStrategy: "amount_due",
+            targets: {
+              payee_id: "payee-spectrum",
+              payee_label: "Spectrum",
+              category_id: "cat-internet",
+              category_label: "Internet",
+            },
+          }],
+        }],
+      },
+      email: {
+        from: "billing@spectrum.net",
+        subject: "Statement",
+        body: "Spectrum internet statement. Amount due: $84.99",
+      },
+      candidate: { payee_hint: "Spectrum", due_date: "2026-06-01" },
+    });
+
+    expect(result.mapping).toMatchObject({
+      status: "matched",
+      profileId: "spectrum",
+      behaviorId: "internet",
+      amountSource: "amount_due",
+    });
+    expect(result.bill).toMatchObject({
+      payee_id: "payee-spectrum",
+      category_id: "cat-internet",
+      amount: 84.99,
+    });
   });
 });
 
@@ -155,6 +283,7 @@ describe("extractBill (OpenAI)", () => {
         to_account_id: null,
         provider: "openai",
         model,
+        mapping: { status: "unmapped", reason: "no_profile_match", matchedProfiles: [] },
       });
       const fetchUrl = global.fetch.mock.calls[0][0];
       const body = JSON.parse(global.fetch.mock.calls[0][1].body);

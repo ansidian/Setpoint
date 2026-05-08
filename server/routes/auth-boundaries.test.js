@@ -165,7 +165,8 @@ async function createMigratedDb() {
       bill_extract_provider TEXT,
       bill_extract_model TEXT,
       email_triage_mode TEXT DEFAULT 'auto',
-      triage_sound_settings_json TEXT
+      triage_sound_settings_json TEXT,
+      bill_pay_mappings_json TEXT
     );
 
     CREATE TABLE ea_email_triage (
@@ -317,6 +318,16 @@ describe("auth boundaries", () => {
       },
     });
     expect(res.body.triage_notification_sounds).toEqual(TRIAGE_NOTIFICATION_SOUNDS);
+  });
+
+  it("returns default Bill Pay mappings from settings", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .get("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.bill_pay_mappings).toEqual({ version: 1, profiles: [] });
   });
 
   it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
@@ -509,6 +520,49 @@ describe("auth boundaries", () => {
 
     expect(res.status).toBe(200);
     expect(JSON.parse((await getSettingsRow()).triage_sound_settings_json)).toEqual(settings);
+  });
+
+  it("rejects invalid Bill Pay mapping settings", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        bill_pay_mappings: {
+          version: 1,
+          profiles: [{ id: "empty", enabled: true, behaviors: [] }],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Enabled bill_pay_mappings profile requires identity matchers");
+  });
+
+  it("updates valid Bill Pay mapping settings writes", async () => {
+    await seedSession();
+    const mappings = {
+      version: 1,
+      profiles: [{
+        id: "edison",
+        enabled: true,
+        identity: { aliases: ["edison"] },
+        behaviors: [{
+          id: "monthly",
+          enabled: true,
+          type: "expense",
+          intent: { subject: ["bill"] },
+          targets: { payee_id: "payee-edison", payee_label: "Southern California Edison" },
+        }],
+      }],
+    };
+
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ bill_pay_mappings: mappings });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse((await getSettingsRow()).bill_pay_mappings_json)).toEqual(mappings);
   });
 
   it("stores Todoist OAuth token responses without exposing token material", async () => {

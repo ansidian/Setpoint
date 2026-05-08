@@ -106,4 +106,18 @@ describe("database migrations", () => {
     expect(columnByName.has("query_text")).toBe(false);
     expect(columnByName.has("answer_text")).toBe(false);
   });
+
+  it("adds Bill Pay mapping settings JSON storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "008_bill_pay_mappings.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_settings')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+
+    expect(columnByName.get("bill_pay_mappings_json").type).toBe("TEXT");
+    expect(columnByName.get("bill_pay_mappings_json").dflt_value).toBe("NULL");
+  });
 });
