@@ -231,6 +231,7 @@ export default function DesktopReader({
   const showMutableActions = !readOnly;
   const showReadAction = showMutableActions;
   const showDestructiveActions = showMutableActions && !catchUp;
+  const showBillToggle = email._untriaged || email.hasBill || isQueuedSnapshot || isUntriagedReadSnapshot;
 
   return (
     <div
@@ -254,7 +255,7 @@ export default function DesktopReader({
         }}
       >
         <span style={{ flex: 1 }} />
-        {showDestructiveActions && (email._untriaged || email.hasBill) && (
+        {showDestructiveActions && showBillToggle && (
           <QuickAction
             icon={CreditCard}
             label={billOpen ? "Hide bill" : "Pay bill"}

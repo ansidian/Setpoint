@@ -48,10 +48,11 @@ export default function MobileReader({
   const catchUp = isCatchUpEmail(email);
   const showMutableActions = !readOnly;
   const showDestructiveActions = showMutableActions && !catchUp;
-  const showBillToggle = showDestructiveActions && (email._untriaged || email.hasBill);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
   const isQueuedSnapshot = email._lane === "queued";
   const isUntriagedReadSnapshot = email._lane === "untriaged_read";
+  const showBillToggle = showDestructiveActions
+    && (email._untriaged || email.hasBill || isQueuedSnapshot || isUntriagedReadSnapshot);
   const showSnapshotActions = email._activeSnapshot && showDestructiveActions;
   const showSnapshotWorkflowActions = showSnapshotActions && !isQueuedSnapshot && !isUntriagedReadSnapshot;
   const canDismissSnapshot = showSnapshotActions && !isUntriagedReadSnapshot;
