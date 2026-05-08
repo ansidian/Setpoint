@@ -1,4 +1,5 @@
 import db from "../db/connection.js";
+import { getEmailSearchCostStats } from "./email-search-cost-stats.js";
 
 const DEFAULT_WINDOW_DAYS = 7;
 const OPENAI_PRICE_PER_MILLION = {
@@ -185,6 +186,7 @@ export async function getTriageCacheStats(userId, {
   dbClient = db,
   windowDays = DEFAULT_WINDOW_DAYS,
   now = new Date(),
+  includeSemanticSearch = false,
 } = {}) {
   const windowCutoff = new Date(now.getTime() - (windowDays * 24 * 60 * 60 * 1000));
   const monthCutoff = monthToDateCutoff(now);
@@ -215,6 +217,13 @@ export async function getTriageCacheStats(userId, {
   summary.comparisonWindows = {
     monthToDate: compactComparisonWindow(monthToDateSummary),
   };
+  if (includeSemanticSearch) {
+    summary.semanticSearch = await getEmailSearchCostStats(userId, {
+      dbClient,
+      windowDays,
+      now,
+    });
+  }
 
   return summary;
 }

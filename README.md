@@ -64,7 +64,7 @@ EA_ENCRYPTION_KEY=
 # Email AI providers
 ANTHROPIC_API_KEY=
 
-# OpenAI (optional; enables OpenAI email AI and bill extraction providers)
+# OpenAI (optional; enables OpenAI email AI, bill extraction, and inbox-search embeddings)
 OPENAI_API_KEY=
 
 # Google OAuth (Gmail + Calendar)
@@ -104,6 +104,22 @@ first dashboard requests before catch-up jobs start. The default worker delay is
 extra 10 minutes before email backfill. Backfill only resumes interrupted jobs
 on startup by default; set `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` to queue a
 new broad backfill automatically.
+
+### Opt-in Turso semantic search verification
+
+Normal `npm run dev` uses the local SQLite fallback and does not require Turso.
+To test inbox Ask AI against Turso/libSQL native vectors, opt in explicitly:
+
+```bash
+npm run ai-search:embedding-status -- --adapter=turso
+npm run ai-search:backfill -- --adapter=turso --limit=25
+npm run dev:ai-search-turso
+```
+
+The Turso commands require `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+`EA_USER_ID`, and `OPENAI_API_KEY` when backfilling. `dev:ai-search-turso` sets
+`AI_SEARCH_VECTOR_ADAPTER=turso` and disables the periodic embedding worker, so
+semantic coverage changes only when you run an explicit bounded backfill.
 
 ### Todoist OAuth and webhook setup
 

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as emailService from "../../briefing/email-service.js";
+import { answerInboxAiSearch } from "../../briefing/email-search-answer.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
@@ -111,6 +112,19 @@ router.get("/email-search", async (req, res) => {
     console.error("[EA] Email search error:", err.message);
     const status = err.status || 500;
     res.status(status).json({ message: status < 500 ? err.message : "Email search failed" });
+  }
+});
+
+router.post("/email-search/ask-ai", async (req, res) => {
+  const { q, limit } = req.body || {};
+  if (!q || !String(q).trim()) {
+    return res.status(400).json({ message: "Query field 'q' is required" });
+  }
+  try {
+    res.json(await answerInboxAiSearch(EA_USER_ID, { q, limit }));
+  } catch (err) {
+    const status = err.status || 500;
+    res.status(status).json({ message: status < 500 ? err.message : "Inbox AI search failed" });
   }
 });
 

@@ -43,4 +43,41 @@ describe("rankEmailSearchRows", () => {
       "newer-noise-body",
     ]);
   });
+
+  it("uses indexed body text so prefix FTS matches can compete with generic semantic hits", () => {
+    const rows = [
+      {
+        uid: "generic-prime",
+        from_name: "Streaming Updates",
+        from_address: "no-reply@example.com",
+        subject: "$6 Prime credit inside",
+        body_snippet: "Prime Video credit expires soon.",
+        body_highlight: "Play Minecraft Legends included with [Prime] [Promotional] credits",
+        email_date: "2025-10-24T23:03:14Z",
+        read: 1,
+      },
+      {
+        uid: "prime-visa-credit",
+        from_name: "Chase Visa Card",
+        from_address: "ChaseVisaCard@message.card.visa.com",
+        subject: "Activate to get a $15 statement credit",
+        body_snippet: "Spend $100 with your credit card.",
+        body_highlight: "Chase_RBP 2026 [Prime] Visa Spend 100",
+        body_text: "Prime Visa promotional offer. Spend 100 and get a statement credit.",
+        email_date: "2026-04-06T21:01:20Z",
+        read: 1,
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, {
+      query: "prime promo",
+      limit: 2,
+      now: "2026-04-10T12:00:00Z",
+    });
+
+    expect(ranked.map((row) => row.uid)).toEqual([
+      "prime-visa-credit",
+      "generic-prime",
+    ]);
+  });
 });

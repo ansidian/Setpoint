@@ -16,6 +16,9 @@ const triageWorkerApi = vi.hoisted(() => ({
   processNextEmailTriageJob: vi.fn(),
   recoverStaleRunningTriageJobs: vi.fn(),
 }));
+const embeddingWorkerApi = vi.hoisted(() => ({
+  processEmailSearchEmbeddingBatchesForAllUsers: vi.fn(),
+}));
 
 vi.mock("node-cron", () => ({ default: cronApi }));
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
@@ -25,8 +28,9 @@ vi.mock("./snapshot-service.js", () => snapshotApi);
 vi.mock("./email-index.js", () => ({ indexEmails: vi.fn() }));
 vi.mock("./gmail-sync.js", () => gmailSyncApi);
 vi.mock("./triage-worker.js", () => triageWorkerApi);
+vi.mock("./email-search-embedding-worker.js", () => embeddingWorkerApi);
 
-const { initScheduler, runEmailTriageWorker } = await import("./scheduler.js");
+const { initScheduler, runEmailSearchEmbeddingWorker, runEmailTriageWorker } = await import("./scheduler.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -70,6 +74,28 @@ describe("initScheduler", () => {
       }),
     );
     expect(snapshotApi.advanceSnapshotBoundary).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("email search embedding scheduler worker", () => {
+  it("logs only aggregate embedding counts", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    embeddingWorkerApi.processEmailSearchEmbeddingBatchesForAllUsers.mockResolvedValueOnce({
+      processed: true,
+      users: [
+        { user_id: "user-1", embedded: 2, selected: 3 },
+      ],
+    });
+
+    await runEmailSearchEmbeddingWorker();
+
+    expect(embeddingWorkerApi.processEmailSearchEmbeddingBatchesForAllUsers).toHaveBeenCalledTimes(1);
+    expect(logSpy).toHaveBeenCalledWith("[Email Search Embeddings] Embedded 2 indexed email(s)");
+    expect(JSON.stringify(logSpy.mock.calls)).not.toContain("user-1");
+    expect(errorSpy).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });
 

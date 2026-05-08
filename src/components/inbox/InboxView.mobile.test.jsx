@@ -3,7 +3,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import InboxView from "./InboxView.jsx";
-import { searchEmails, markEmailAsRead, markEmailAsUnread } from "../../api";
+import { askInboxAiSearch, searchEmails, markEmailAsRead, markEmailAsUnread } from "../../api";
 import {
   makeActiveSnapshot,
   makeInboxAccounts,
@@ -32,6 +32,7 @@ vi.mock("../../api", async () => {
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
     dismissEmail: vi.fn().mockResolvedValue({}),
     searchEmails: vi.fn().mockResolvedValue({ accounts: [] }),
+    askInboxAiSearch: vi.fn(),
   };
 });
 
@@ -55,6 +56,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/");
   activeSnapshotMock.state = {
     snapshot: null,
     loading: false,
@@ -147,6 +149,39 @@ function activateBudgetSnapshot() {
   };
 }
 
+function mobileAiResponse({ uid = "ai-source-1", subject = "AI source row", answer = "Grounded mobile answer.", confidence = "medium" } = {}) {
+  return {
+    answer_status: "ok",
+    answer: {
+      answer,
+      confidence,
+      cited_source_uids: [uid],
+      missing_info: [],
+      low_confidence_reason: "",
+    },
+    retrieval: {
+      mode: "hybrid",
+      vector_status: "ok",
+      lexical_status: "ok",
+      total_candidates: 2,
+    },
+    sources: [{
+      uid,
+      sender: "Mobile Source <source@example.com>",
+      subject,
+      date: "2026-05-08T15:00:00.000Z",
+      read: true,
+      snippet: "Grounded mobile source excerpt.",
+      account: {
+        id: "gmail-personal",
+        label: "Personal",
+        email: "personal@example.com",
+        color: "#cba6da",
+      },
+    }],
+  };
+}
+
 describe("InboxView mobile", () => {
   it("uses the persisted FTS email search instead of local inbox filtering", async () => {
     searchEmails.mockResolvedValueOnce({
@@ -219,6 +254,72 @@ describe("InboxView mobile", () => {
       expect(screen.getByText("No indexed mail matches")).toBeTruthy();
     });
     expect(screen.queryByTestId("inbox-mobile-search-skeleton")).toBeNull();
+  });
+
+  it("opens a stable mobile Ask AI confirmation with long-query truncation", () => {
+    const longQuery = "find the amazon return deadline email with drop off instructions and refund warning from last month";
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: longQuery },
+    });
+    fireEvent.click(screen.getByTestId("inbox-mobile-ask-ai-trigger"));
+
+    const query = screen.getByTestId("inbox-ai-confirmation-query");
+    expect(screen.getByTestId("inbox-ai-confirmation")).toBeTruthy();
+    expect(query.getAttribute("title")).toBe(longQuery);
+    expect(query.style.overflow).toBe("hidden");
+    expect(query.style.textOverflow).toBe("ellipsis");
+    expect(screen.getByTestId("inbox-mobile-chip-grid").style.gridTemplateColumns).toBe("minmax(0, 1fr)");
+  });
+
+  it("runs confirmed mobile Ask AI and opens source rows through the existing reader", async () => {
+    askInboxAiSearch.mockResolvedValueOnce(mobileAiResponse({
+      subject: "Amazon return reminder",
+      answer: "The return deadline is May 12.",
+      confidence: "medium",
+    }));
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+    const input = screen.getByLabelText("Search indexed mail");
+
+    fireEvent.change(input, { target: { value: "amazon return" } });
+    fireEvent.keyDown(input, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(askInboxAiSearch).toHaveBeenCalledWith("amazon return");
+    await waitFor(() => {
+      expect(screen.getByText("The return deadline is May 12.")).toBeTruthy();
+    });
+    expect(screen.getByText("Semantic + indexed mail · 2 candidates")).toBeTruthy();
+    expect(screen.getByText("medium confidence")).toBeTruthy();
+    expect(screen.getByText("Amazon return reminder")).toBeTruthy();
+    expect(screen.queryByText(/planner/i)).toBeNull();
+  });
+
+  it("keeps mobile Ask AI loading and error states inside the list layout", async () => {
+    let rejectAi;
+    askInboxAiSearch.mockReturnValueOnce(new Promise((_, reject) => {
+      rejectAi = reject;
+    }));
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+    const input = screen.getByLabelText("Search indexed mail");
+
+    fireEvent.change(input, { target: { value: "tuition deadline" } });
+    fireEvent.click(screen.getByTestId("inbox-mobile-ask-ai-trigger"));
+    fireEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+
+    expect(screen.getByText("Asking AI over indexed mail")).toBeTruthy();
+    expect(screen.queryByText("No indexed mail matches")).toBeNull();
+
+    await act(async () => {
+      rejectAi(new Error("AI unavailable"));
+    });
+
+    expect(await screen.findByText("AI unavailable")).toBeTruthy();
+    expect(screen.queryByText("No indexed mail matches")).toBeNull();
   });
 
   it("respects a seedSelectedId on mobile", () => {
@@ -308,7 +409,9 @@ describe("InboxView mobile", () => {
       </DashboardProvider>,
     );
 
-    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
+    });
 
     await waitFor(() => {
       expect(markEmailAsRead).toHaveBeenCalledWith("snapshot-msg-1");

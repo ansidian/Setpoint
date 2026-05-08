@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
 import { buildActiveSnapshotSummary } from "../snapshotSummary";
 import InboxUndoToast from "../InboxUndoToast";
+import { InboxAiStatusBlock, InboxAskAiConfirmation } from "../InboxAskAiSearch.jsx";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -73,6 +74,26 @@ function MobileChip({ active, label, count, onClick, accent }) {
 
 function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = false, testId }) {
   const Icon = icon;
+  const baseStyle = {
+    width: 34,
+    height: 34,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    border: `1px solid ${tinted ? `${accent}40` : "rgba(255,255,255,0.08)"}`,
+    background: tinted ? `${accent}16` : "rgba(255,255,255,0.03)",
+    color: tinted ? accent : "rgba(205,214,244,0.7)",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "background 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out",
+  };
+  const hoverStyle = {
+    background: tinted ? `${accent}24` : "rgba(255,255,255,0.07)",
+    borderColor: tinted ? `${accent}66` : "rgba(255,255,255,0.14)",
+    color: tinted ? "#fff" : "rgba(205,214,244,0.9)",
+    transform: "translateY(-1px)",
+  };
   return (
     <button
       ref={buttonRef}
@@ -81,19 +102,11 @@ function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = fa
       title={label}
       data-testid={testId}
       onClick={onClick}
-      style={{
-        width: 34,
-        height: 34,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: 10,
-        border: `1px solid ${tinted ? `${accent}40` : "rgba(255,255,255,0.08)"}`,
-        background: tinted ? `${accent}16` : "rgba(255,255,255,0.03)",
-        color: tinted ? accent : "rgba(205,214,244,0.7)",
-        cursor: "pointer",
-        fontFamily: "inherit",
-      }}
+      onMouseEnter={(event) => Object.assign(event.currentTarget.style, hoverStyle)}
+      onMouseLeave={(event) => Object.assign(event.currentTarget.style, baseStyle)}
+      onFocus={(event) => Object.assign(event.currentTarget.style, hoverStyle)}
+      onBlur={(event) => Object.assign(event.currentTarget.style, baseStyle)}
+      style={baseStyle}
     >
       <Icon size={15} />
     </button>
@@ -173,6 +186,12 @@ export default function MobileInboxView({
   indexedSearchActive,
   indexedSearchLoading,
   indexedSearchError,
+  inboxAiSearchAccountsById,
+  inboxAiSearch,
+  inboxAiSearchActive,
+  onInboxAiIntent,
+  onInboxAiConfirm,
+  onInboxAiCancel,
   visibleEmails,
   mobileChipCounts,
   totalUnread,
@@ -193,12 +212,14 @@ export default function MobileInboxView({
   undo,
   onUndo,
 }) {
-  const rowAccountsById = indexedSearchActive
-    ? { ...accountsById, ...indexedSearchAccountsById }
+  const rowAccountsById = indexedSearchActive || inboxAiSearchActive
+    ? { ...accountsById, ...indexedSearchAccountsById, ...inboxAiSearchAccountsById }
     : accountsById;
   const snapshotSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
     : briefingSummary;
+  const showAiConfirmation = inboxAiSearch?.status === "confirming";
+  const showAiStatus = inboxAiSearch?.status && !["idle", "confirming"].includes(inboxAiSearch.status);
 
   return (
     <div
@@ -324,6 +345,18 @@ export default function MobileInboxView({
                   aria-label="Search indexed mail"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault();
+                      onInboxAiIntent(search);
+                    } else if (event.key === "Enter" && showAiConfirmation) {
+                      event.preventDefault();
+                      onInboxAiConfirm();
+                    } else if (event.key === "Escape" && (showAiConfirmation || inboxAiSearchActive)) {
+                      event.preventDefault();
+                      onInboxAiCancel();
+                    }
+                  }}
                   placeholder="Search indexed mail"
                   style={{
                     flex: 1,
@@ -336,6 +369,14 @@ export default function MobileInboxView({
                   }}
                 />
               </div>
+              <MobileIconButton
+                icon={Sparkles}
+                label="Ask AI"
+                onClick={() => onInboxAiIntent(search)}
+                accent={accent}
+                tinted={showAiConfirmation || inboxAiSearchActive}
+                testId="inbox-mobile-ask-ai-trigger"
+              />
               <MobileIconButton
                 icon={Filter}
                 label="Open filters"
@@ -362,22 +403,32 @@ export default function MobileInboxView({
                 compact
               />
             </div>
+            {showAiConfirmation && (
+              <div style={{ paddingTop: 10 }}>
+                <InboxAskAiConfirmation
+                  query={inboxAiSearch.query}
+                  accent={accent}
+                  onConfirm={onInboxAiConfirm}
+                  onCancel={onInboxAiCancel}
+                />
+              </div>
+            )}
 
             <div
               data-testid="inbox-mobile-chip-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: indexedSearchActive ? "minmax(0, 1fr)" : "repeat(5, minmax(0, 1fr))",
+                gridTemplateColumns: indexedSearchActive || inboxAiSearchActive ? "minmax(0, 1fr)" : "repeat(5, minmax(0, 1fr))",
                 gap: 6,
                 paddingTop: 10,
               }}
             >
-              {(indexedSearchActive ? [{ key: "__all", label: "All" }] : MOBILE_FILTER_CHIPS).map((chip) => (
+              {(indexedSearchActive || inboxAiSearchActive ? [{ key: "__all", label: "All" }] : MOBILE_FILTER_CHIPS).map((chip) => (
                 <MobileChip
                   key={chip.key}
-                  active={indexedSearchActive ? true : lane === chip.key}
+                  active={indexedSearchActive || inboxAiSearchActive ? true : lane === chip.key}
                   label={chip.label}
-                  count={indexedSearchActive ? visibleEmails.length : mobileChipCounts[chip.key]}
+                  count={indexedSearchActive || inboxAiSearchActive ? visibleEmails.length : mobileChipCounts[chip.key]}
                   onClick={() => setLane(chip.key)}
                   accent={accent}
                 />
@@ -398,7 +449,9 @@ export default function MobileInboxView({
               <span style={{ opacity: 0.35 }}>·</span>
               <span>
                 {visibleEmails.length}{" "}
-                {indexedSearchActive
+                {inboxAiSearchActive
+                  ? `AI source${visibleEmails.length === 1 ? "" : "s"}`
+                  : indexedSearchActive
                   ? `indexed result${visibleEmails.length === 1 ? "" : "s"}`
                   : "shown"}
               </span>
@@ -406,7 +459,7 @@ export default function MobileInboxView({
           </div>
 
           <div style={{ padding: "6px 0 20px" }}>
-            {indexedSearchError && (
+            {indexedSearchError && !inboxAiSearchActive && (
               <div
                 style={{
                   margin: "8px 16px",
@@ -421,16 +474,17 @@ export default function MobileInboxView({
                 {indexedSearchError}
               </div>
             )}
+            {showAiStatus && <InboxAiStatusBlock aiSearch={inboxAiSearch} accent={accent} />}
             {!indexedSearchActive && liveEmailsLoading && visibleEmails.length > 0 && (
               <MobileLiveLoadingBlock compact activeSnapshotMode={activeSnapshotMode} />
             )}
-            {indexedSearchActive && indexedSearchLoading ? (
+            {indexedSearchActive && indexedSearchLoading && !inboxAiSearchActive ? (
               <div data-testid="inbox-mobile-search-skeleton">
                 <MobileLiveSkeletonRows count={5} />
               </div>
             ) : !indexedSearchActive && liveEmailsLoading && visibleEmails.length === 0 ? (
               <MobileLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
-            ) : visibleEmails.length > 0 ? (
+            ) : inboxAiSearch?.status === "loading" ? null : visibleEmails.length > 0 ? (
               visibleEmails.map((email) => (
                 <EmailRow
                   key={email.id || email.uid}
@@ -452,7 +506,7 @@ export default function MobileInboxView({
                   fontSize: 12,
                 }}
               >
-                {indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
+                {inboxAiSearchActive ? "No AI sources yet" : indexedSearchActive ? "No indexed mail matches" : "No emails match this view."}
               </div>
             )}
           </div>

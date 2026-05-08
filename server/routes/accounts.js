@@ -411,10 +411,12 @@ router.get("/settings", async (req, res) => {
   }
 });
 
-router.get("/triage/cache-stats", async (_req, res) => {
+router.get("/triage/cache-stats", async (req, res) => {
   const userId = process.env.EA_USER_ID;
   try {
-    res.json(await getTriageCacheStats(userId));
+    res.json(await getTriageCacheStats(userId, {
+      includeSemanticSearch: req.query.semantic === "1",
+    }));
   } catch (err) {
     console.error("Error fetching triage cache stats:", err.message);
     res.status(500).json({ message: "Failed to fetch triage cache stats" });

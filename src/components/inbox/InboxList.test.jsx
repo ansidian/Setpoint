@@ -247,4 +247,153 @@ describe("InboxList", () => {
     expect(screen.queryByTestId("inbox-search-skeleton")).toBeNull();
     expect(screen.getByText("No indexed mail matches")).toBeTruthy();
   });
+
+  it("starts the desktop Ask AI confirmation with Cmd+Enter", () => {
+    const onInboxAiIntent = vi.fn();
+
+    renderInboxList({
+      searchQuery: "amazon return",
+      onInboxAiIntent,
+    });
+
+    fireEvent.keyDown(screen.getByLabelText("Search indexed mail"), {
+      key: "Enter",
+      metaKey: true,
+    });
+
+    expect(onInboxAiIntent).toHaveBeenCalledWith("amazon return");
+  });
+
+  it("confirms or cancels pending Ask AI from the search input", () => {
+    const onInboxAiConfirm = vi.fn();
+    const onInboxAiCancel = vi.fn();
+
+    renderInboxList({
+      searchQuery: "google security",
+      inboxAiSearch: {
+        status: "confirming",
+        query: "google security",
+      },
+      onInboxAiConfirm,
+      onInboxAiCancel,
+    });
+
+    fireEvent.keyDown(screen.getByLabelText("Search indexed mail"), { key: "Enter" });
+    expect(onInboxAiConfirm).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(screen.getByLabelText("Search indexed mail"), { key: "Escape" });
+    expect(onInboxAiCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a stable unclipped inline Ask AI confirmation for long queries", () => {
+    const longQuery = "find the amazon return deadline email with the drop off instructions and refund warning from last month";
+
+    renderInboxList({
+      searchQuery: longQuery,
+      inboxAiSearch: {
+        status: "confirming",
+        query: longQuery,
+      },
+    });
+
+    const confirmation = screen.getByTestId("inbox-ai-confirmation");
+    const query = screen.getByTestId("inbox-ai-confirmation-query");
+
+    expect(confirmation).toBeTruthy();
+    expect(query.getAttribute("title")).toBe(longQuery);
+    expect(query.style.overflow).toBe("hidden");
+    expect(query.style.textOverflow).toBe("ellipsis");
+    expect(query.style.whiteSpace).toBe("nowrap");
+    expect(screen.getByRole("button", { name: /^ask$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /cancel ask ai/i })).toBeTruthy();
+  });
+
+  it("renders Ask AI answer status, non-high confidence, and reusable source rows without debug planner chrome", () => {
+    renderInboxList({
+      indexedSearchActive: true,
+      inboxAiSearchActive: true,
+      layout: "flat",
+      searchQuery: "amazon return",
+      emails: [
+        makeInboxEmail({
+          id: "source-1",
+          uid: "source-1",
+          subject: "Amazon return reminder",
+          from: "Amazon Returns",
+          _lane: null,
+          _indexedSearch: true,
+          _inboxAiSource: true,
+        }),
+      ],
+      totalCount: 1,
+      unreadCount: 1,
+      inboxAiSearch: {
+        status: "answer",
+        query: "amazon return",
+        answer: {
+          answer: "Amazon says the return deadline is May 12.",
+          confidence: "medium",
+        },
+        retrieval: {
+          vector_status: "ok",
+          total_candidates: 3,
+        },
+      },
+    });
+
+    expect(screen.getByText("Semantic + indexed mail · 3 candidates")).toBeTruthy();
+    expect(screen.getByText("medium confidence")).toBeTruthy();
+    expect(screen.getByText("Amazon says the return deadline is May 12.")).toBeTruthy();
+    expect(screen.getByText("Amazon return reminder")).toBeTruthy();
+    expect(screen.getByText(/AI source/)).toBeTruthy();
+    expect(screen.queryByText(/planner/i)).toBeNull();
+  });
+
+  it("keeps Ask AI loading and no-source states stable without indexed-search empty copy", () => {
+    const { rerender } = renderInboxList({
+      indexedSearchActive: true,
+      inboxAiSearchActive: true,
+      searchQuery: "tuition deadline",
+      emails: [],
+      inboxAiSearch: {
+        status: "loading",
+        query: "tuition deadline",
+      },
+    });
+
+    expect(screen.getByText("Asking AI over indexed mail")).toBeTruthy();
+    expect(screen.queryByText("No indexed mail matches")).toBeNull();
+
+    rerender(
+      <InboxList
+        accent="#cba6da"
+        emails={[]}
+        accountsById={{}}
+        selectedId={null}
+        onOpen={() => {}}
+        density="default"
+        layout="flat"
+        showPreview
+        searchQuery="tuition deadline"
+        onSearchChange={() => {}}
+        onMarkAllRead={() => {}}
+        onRefresh={() => {}}
+        totalCount={0}
+        unreadCount={0}
+        briefingGeneratedAt={null}
+        searchRef={null}
+        indexedSearchActive
+        inboxAiSearchActive
+        inboxAiSearch={{
+          status: "no_sources",
+          query: "tuition deadline",
+          retrieval: { vector_status: "unavailable", total_candidates: 0 },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Indexed fallback · 0 candidates")).toBeTruthy();
+    expect(screen.getByText("No grounded indexed mail matched this question.")).toBeTruthy();
+    expect(screen.queryByText("No indexed mail matches")).toBeNull();
+  });
 });
