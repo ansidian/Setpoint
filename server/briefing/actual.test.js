@@ -486,4 +486,32 @@ describe("actual.js calendar bill mapping", () => {
         expect.objectContaining({ id: "s2:2026-05-12", scheduleId: "s2", payee: "Visa transfer", paid: false, type: "transfer" }),
       ]);
   });
+
+  it("marks calendar bill instances paid when Actual has a matching schedule transaction", async () => {
+    const { getCalendarBillsRange } = await import("./actual.js");
+    const actualApi = (await import("@actual-app/api")).default;
+    actualApi.__state.payees = [
+      { id: "p1", name: "SCE", transfer_acct: null },
+    ];
+    actualApi.__state.schedules = [
+      { id: "s1", name: "Electricity", rule: "r1", next_date: "2026-05-10", completed: false },
+    ];
+    actualApi.__state.rules = [
+      { id: "r1", conditions: [{ field: "amount", value: -12234 }, { field: "payee", value: "p1" }] },
+    ];
+    actualApi.__state.transactions = [
+      { id: "t1", date: "2026-05-10", amount: -12234, payee: "p1", schedule: "s1" },
+    ];
+
+    const out = await getCalendarBillsRange("user1", { start: "2026-05-01", end: "2026-05-31" });
+
+    expect(out.schedules).toEqual([
+      expect.objectContaining({
+        id: "s1:2026-05-10",
+        scheduleId: "s1",
+        paid: true,
+        openActionDisabled: true,
+      }),
+    ]);
+  });
 });
