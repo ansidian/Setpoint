@@ -9,6 +9,8 @@ import {
   markSnapshotItemHandled,
   moveSnapshotItemLane,
   reopenSnapshotItem,
+  settleArrivalGrace,
+  settleArrivalGraceOnExit,
   snoozeEmail,
   trashEmail,
   unsnoozeEmail,
@@ -31,8 +33,10 @@ vi.mock("../../api", async () => {
     moveSnapshotItemLane: vi.fn().mockResolvedValue({}),
 	    dismissSnapshotItemForToday: vi.fn().mockResolvedValue({}),
 	    restoreSnapshotItemForToday: vi.fn().mockResolvedValue({}),
-	    markSnapshotItemHandled: vi.fn().mockResolvedValue({}),
-	    reopenSnapshotItem: vi.fn().mockResolvedValue({}),
+    markSnapshotItemHandled: vi.fn().mockResolvedValue({}),
+    reopenSnapshotItem: vi.fn().mockResolvedValue({}),
+    settleArrivalGrace: vi.fn().mockResolvedValue({}),
+    settleArrivalGraceOnExit: vi.fn(),
 	  };
 	});
 
@@ -194,6 +198,32 @@ describe("InboxView session state", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toggle inbox mount" }));
     expect(await screen.findByTestId("inbox-mobile-reader")).toBeTruthy();
     expect(screen.getByText("Project budget sign-off")).toBeTruthy();
+  });
+
+  it("settles arrival-grace rows on Inbox exit without blocking navigation", async () => {
+    settleArrivalGrace.mockImplementationOnce(() => new Promise(() => {}));
+    render(<InboxSessionHarness />);
+
+    fireEvent.click(screen.getByText("Project budget sign-off"));
+    expect(screen.getByTestId("inbox-mobile-reader")).toBeTruthy();
+    expect(settleArrivalGrace).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to inbox" }));
+    expect(screen.getByTestId("inbox-mobile-list")).toBeTruthy();
+    expect(settleArrivalGrace).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox mount" }));
+
+    expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
+    expect(settleArrivalGrace).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a keepalive settle attempt on page exit", () => {
+    render(<InboxSessionHarness />);
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(settleArrivalGraceOnExit).toHaveBeenCalledTimes(1);
   });
 
   it("lets a new seedSelectedId override the stored selection", async () => {

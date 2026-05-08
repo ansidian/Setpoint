@@ -101,6 +101,15 @@ router.post("/email/mark-all-read", async (req, res) => {
   }
 });
 
+router.post("/email/arrival-grace/settle", async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await emailService.settleArrivalGrace(EA_USER_ID)) });
+  } catch (err) {
+    console.error("Error settling arrival-grace email:", err);
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
 router.get("/email-search", async (req, res) => {
   const { q, limit, debug } = req.query;
   if (!q || !q.trim()) {

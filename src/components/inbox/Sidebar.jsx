@@ -149,6 +149,7 @@ export function LaneAll({ accent, lane, setLane, laneCounts }) {
   const [hover, setHover] = useState(false);
   const isActive = lane === "__all";
   const count = (laneCounts.needs_attention || laneCounts.action || 0)
+    + (laneCounts.queued || 0)
     + (laneCounts.carryover || 0)
     + (laneCounts.catch_up || 0)
     + (laneCounts.fyi || 0)
@@ -256,11 +257,13 @@ export default function Sidebar({
           <Eyebrow style={{ padding: "0 10px 8px" }}>Triage lanes</Eyebrow>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <LaneAll accent={accent} lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="queued" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="carryover" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="needs_attention" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="catch_up" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="fyi" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="handled" lane={lane} setLane={setLane} laneCounts={laneCounts} />
+            <LaneRow laneKey="untriaged_read" lane={lane} setLane={setLane} laneCounts={laneCounts} />
             <LaneRow laneKey="noise" lane={lane} setLane={setLane} laneCounts={laneCounts} noiseUnreadCount={noiseUnreadCount} />
           </div>
         </div>
@@ -301,16 +304,20 @@ function buildShortcutRows(selectedEmail, readOnly) {
   if (selectedEmail && !readOnly) {
     const isSnapshot = !!selectedEmail._activeSnapshot && !!selectedEmail.snapshot_item_id;
     const isCatchUp = selectedEmail._lane === "catch_up" || selectedEmail._catchUp || selectedEmail.source === "catch_up";
+    const isQueued = selectedEmail._lane === "queued";
+    const isUntriagedRead = selectedEmail._lane === "untriaged_read";
     const isHandled = selectedEmail._lane === "handled";
     const snapshotLane = selectedEmail._lane === "carryover" ? "needs_attention" : selectedEmail._lane;
     const canMarkHandled = snapshotLane === "needs_attention" || snapshotLane === "fyi";
 
-    if (isCatchUp) {
+    if (isCatchUp || isUntriagedRead) {
       return rows.concat(
         { keys: ["⌘F"], label: "Find" },
         { keys: ["⌘Z"], label: "Undo" },
         { keys: ["⌘K"], label: "Command" },
       );
+    } else if (isSnapshot && isQueued) {
+      rows.push({ keys: ["D"], label: "Dismiss" });
     } else if (isSnapshot && isHandled) {
       rows.push({ keys: ["H"], label: "Reopen" });
     } else if (isSnapshot) {

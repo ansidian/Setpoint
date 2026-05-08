@@ -36,6 +36,7 @@ vi.mock("../briefing/email-service.js", () => ({
   trash: vi.fn(),
   markAllRead: vi.fn(),
   searchEmails: vi.fn(),
+  settleArrivalGrace: vi.fn(async () => ({ settled: 2, emailIds: ["msg-1", "msg-2"] })),
 }));
 vi.mock("../briefing/tasks-service.js", () => ({
   completeTask: vi.fn(),
@@ -111,6 +112,7 @@ vi.mock("../dashboard/current-service.js", () => ({
 process.env.EA_USER_ID = "user-1";
 
 const { createQuickTxn, sendBill } = await import("../briefing/bills-service.js");
+const emailService = await import("../briefing/email-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
@@ -251,6 +253,17 @@ describe("auth boundaries", () => {
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(404);
+  });
+
+  it("settles arrival-grace rows through the authenticated briefing endpoint", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .post("/api/briefing/email/arrival-grace/settle")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, settled: 2, emailIds: ["msg-1", "msg-2"] });
+    expect(emailService.settleArrivalGrace).toHaveBeenCalledWith("user-1");
   });
 
   it("blocks bearer auth on settings route", async () => {

@@ -3,9 +3,12 @@ import db from "../db/connection.js";
 import { loadUserConfig } from "./config-service.js";
 import { wakeAtGmail } from "./gmail.js";
 import {
+  attachArrivalGraceEmailToActiveSnapshot,
   attachResurfacedSnoozeToActiveSnapshot,
+  requeueArrivalGraceTriageForEmail,
   requeueEmailTriageForEmail,
 } from "./snapshot-service.js";
+import { ARRIVAL_GRACE_SOURCE } from "./arrival-grace.js";
 
 const CRON_EXPR = "*/5 * * * *"; // every 5 minutes
 // Resurfaced rows live this long after wake before cleanup. Gives the client a
@@ -20,6 +23,8 @@ export async function wakeDueSnoozes({
   loadUserConfigFn = loadUserConfig,
   wakeAtGmailFn = wakeAtGmail,
   attachResurfacedSnoozeToActiveSnapshotFn = attachResurfacedSnoozeToActiveSnapshot,
+  attachArrivalGraceEmailToActiveSnapshotFn = attachArrivalGraceEmailToActiveSnapshot,
+  requeueArrivalGraceTriageForEmailFn = requeueArrivalGraceTriageForEmail,
   requeueEmailTriageForEmailFn = requeueEmailTriageForEmail,
 } = {}) {
   if (!userId) return;
@@ -60,9 +65,12 @@ export async function wakeDueSnoozes({
       if (snap) {
         const accountId = snap.account_id || snap.accountId || snap._accountKey;
         let pendingTriage = false;
+        let pendingArrivalGrace = false;
         if (accountId) {
           const triage = await dbClient.execute({
-            sql: `SELECT triage_status
+            sql: `SELECT triage_status,
+                         triage_source,
+                         decision_metadata_json
                   FROM ea_email_triage
                   WHERE user_id = ?
                     AND account_id = ?
@@ -70,16 +78,39 @@ export async function wakeDueSnoozes({
                   LIMIT 1`,
             args: [userId, accountId, uid],
           });
-          pendingTriage = triage.rows[0]?.triage_status === "pending";
+          const triageRow = triage.rows[0];
+          pendingTriage = triageRow?.triage_status === "pending";
+          let metadata = {};
+          try {
+            metadata = triageRow?.decision_metadata_json
+              ? JSON.parse(triageRow.decision_metadata_json)
+              : {};
+          } catch {
+            metadata = {};
+          }
+          pendingArrivalGrace = pendingTriage
+            && (
+              triageRow?.triage_source === ARRIVAL_GRACE_SOURCE
+              || metadata?.snoozedPending?.previousTriageSource === ARRIVAL_GRACE_SOURCE
+            );
         }
-        await attachResurfacedSnoozeToActiveSnapshotFn(userId, snap, {
-          dbClient,
-          now,
-          resurfacedAt,
-          pendingTriage,
-        });
-        if (pendingTriage && accountId) {
-          await requeueEmailTriageForEmailFn(userId, accountId, uid, { dbClient });
+        if (pendingArrivalGrace && accountId) {
+          await requeueArrivalGraceTriageForEmailFn(userId, accountId, uid, { dbClient, now });
+          await attachArrivalGraceEmailToActiveSnapshotFn(userId, accountId, {
+            ...snap,
+            uid,
+            email_id: uid,
+          }, { dbClient, now });
+        } else {
+          await attachResurfacedSnoozeToActiveSnapshotFn(userId, snap, {
+            dbClient,
+            now,
+            resurfacedAt,
+            pendingTriage,
+          });
+          if (pendingTriage && accountId) {
+            await requeueEmailTriageForEmailFn(userId, accountId, uid, { dbClient });
+          }
         }
       }
     } catch (err) {

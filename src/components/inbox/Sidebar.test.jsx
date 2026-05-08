@@ -10,11 +10,13 @@ const baseProps = {
   lane: "__all",
   setLane: () => {},
   laneCounts: {
+    queued: 0,
     carryover: 0,
     needs_attention: 1,
     catch_up: 0,
     fyi: 0,
     handled: 0,
+    untriaged_read: 0,
     noise: 0,
   },
   totalUnread: 1,
@@ -130,6 +132,50 @@ describe("Sidebar shortcuts", () => {
     expect(screen.queryByText("Move to Needs")).toBeNull();
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Move to Noise")).toBeNull();
+    expect(screen.queryByText("Snooze")).toBeNull();
+    expect(screen.queryByText("Trash")).toBeNull();
+  });
+
+  it("shows queued and untriaged-read lanes while keeping their shortcuts constrained", () => {
+    const { rerender } = render(
+      <Sidebar
+        {...baseProps}
+        laneCounts={{ ...baseProps.laneCounts, queued: 2, untriaged_read: 1 }}
+        selectedEmail={{
+          id: "msg-1",
+          uid: "msg-1",
+          snapshot_item_id: 1,
+          _activeSnapshot: true,
+          _lane: "queued",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Queued")).toBeTruthy();
+    expect(screen.getByText("Untriaged Read")).toBeTruthy();
+    expect(screen.getByText("Dismiss")).toBeTruthy();
+    expect(screen.queryByText("Mark handled")).toBeNull();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+    expect(screen.getByText("Snooze")).toBeTruthy();
+    expect(screen.getByText("Trash")).toBeTruthy();
+
+    rerender(
+      <Sidebar
+        {...baseProps}
+        laneCounts={{ ...baseProps.laneCounts, queued: 2, untriaged_read: 1 }}
+        selectedEmail={{
+          id: "msg-2",
+          uid: "msg-2",
+          snapshot_item_id: 2,
+          _activeSnapshot: true,
+          _lane: "untriaged_read",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Open")).toBeTruthy();
+    expect(screen.queryByText("Dismiss")).toBeNull();
+    expect(screen.queryByText("Mark handled")).toBeNull();
     expect(screen.queryByText("Snooze")).toBeNull();
     expect(screen.queryByText("Trash")).toBeNull();
   });

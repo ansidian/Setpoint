@@ -1,15 +1,16 @@
 import InboxDesktopPane from "./InboxDesktopPane";
 import MobileInboxView from "./mobile/MobileInboxView";
 import useInboxController from "./useInboxController";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useActiveSnapshot from "../../hooks/useActiveSnapshot";
+import { settleArrivalGrace, settleArrivalGraceOnExit } from "../../api";
 
 const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
   snapshot: { id: "loading" },
   filters: { accounts: [], categories: [] },
   carryover: [],
-  lanes: { needs_attention: [], catch_up: [], fyi: [], handled: [], noise: [] },
-  laneCounts: { needs_attention: 0, catch_up: 0, fyi: 0, handled: 0, noise: 0, carryover: 0 },
+  lanes: { queued: [], needs_attention: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [] },
+  laneCounts: { queued: 0, needs_attention: 0, catch_up: 0, fyi: 0, handled: 0, untriaged_read: 0, noise: 0, carryover: 0 },
   processing: { total: 0, active: false },
 };
 
@@ -65,6 +66,25 @@ export default function InboxView({
   const snapshotInboxMode = !!controlledActiveSnapshot || !!activeSnapshot.snapshot?.snapshot;
   const activeSnapshotView = activeSnapshot.snapshot || (snapshotInboxMode ? EMPTY_ACTIVE_SNAPSHOT_VIEW : null);
   const readOnly = !!activeSnapshotView?.readOnly;
+  const shouldSettleArrivalGraceRef = useRef(false);
+  useEffect(() => {
+    shouldSettleArrivalGraceRef.current = snapshotInboxMode && !readOnly;
+  }, [snapshotInboxMode, readOnly]);
+
+  useEffect(() => {
+    const settleOnPageExit = () => {
+      if (!shouldSettleArrivalGraceRef.current) return;
+      settleArrivalGraceOnExit();
+    };
+    window.addEventListener("pagehide", settleOnPageExit);
+    window.addEventListener("beforeunload", settleOnPageExit);
+    return () => {
+      window.removeEventListener("pagehide", settleOnPageExit);
+      window.removeEventListener("beforeunload", settleOnPageExit);
+      if (!shouldSettleArrivalGraceRef.current) return;
+      settleArrivalGrace().catch(() => {});
+    };
+  }, []);
   const snapshotAccounts = useMemo(() => (
     activeSnapshotView?.filters?.accounts || []
   ).map((account) => ({

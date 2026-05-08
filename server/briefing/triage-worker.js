@@ -1,6 +1,10 @@
 import db from "../db/connection.js";
-import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
+import {
+  getOrCreateActiveSnapshot,
+  settleReadArrivalGraceRows,
+} from "./snapshot-service.js";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
+import { ARRIVAL_GRACE_SOURCE, ARRIVAL_GRACE_READ_SOURCE } from "./arrival-grace.js";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "./email-ai-models.js";
 import {
   evaluateTriagePreflight,
@@ -1002,6 +1006,20 @@ export async function processNextEmailTriageJob({
 
   const mode = await getEmailTriageModeForUser(nextJob.user_id, { dbClient });
   if (mode.effective_email_triage_mode === "paused") {
+    const settled = await settleReadArrivalGraceRows(nextJob.user_id, {
+      dbClient,
+      now,
+      emailIds: nextJob.email_id ? [nextJob.email_id] : [],
+    });
+    if (settled.settled > 0) {
+      return {
+        processed: true,
+        email_id: nextJob.email_id,
+        skipped: true,
+        source: ARRIVAL_GRACE_READ_SOURCE,
+        model_calls: [],
+      };
+    }
     return {
       processed: false,
       paused: true,
@@ -1046,6 +1064,28 @@ export async function processNextEmailTriageJob({
         email_id: email.email_id,
         skipped: true,
         source: "provider_unavailable_skip",
+        model_calls: [],
+      };
+    }
+
+    if (email.triage_source === ARRIVAL_GRACE_SOURCE && email.read) {
+      await settleReadArrivalGraceRows(email.user_id, {
+        dbClient,
+        now,
+        emailIds: [email.email_id],
+      });
+      publishCurrentDashboardEvent(email.user_id, {
+        source: "email_triage",
+        reason: ARRIVAL_GRACE_READ_SOURCE,
+        state: "current",
+        occurredAt: nowIso(now),
+      });
+      return {
+        processed: true,
+        job_id: Number(job.id),
+        email_id: email.email_id,
+        skipped: true,
+        source: ARRIVAL_GRACE_READ_SOURCE,
         model_calls: [],
       };
     }

@@ -428,9 +428,11 @@ describe("active briefing snapshots", () => {
       },
     });
     expect(view.laneCounts).toEqual({
+      queued: 0,
       needs_attention: 1,
       fyi: 2,
       handled: 0,
+      untriaged_read: 0,
       noise: 1,
       carryover: 1,
     });
@@ -705,6 +707,77 @@ describe("active briefing snapshots", () => {
     });
     expect(view.lanes.needs_attention).toHaveLength(0);
     expect(view.laneCounts.needs_attention).toBe(0);
+  });
+
+  it("settles read arrival-grace rows idempotently from active snapshot reconciliation", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-03T16:00:00.000Z");
+    const snapshot = await getOrCreateActiveSnapshot("user-1", { dbClient, now });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_email_index
+              (uid, user_id, account_id, account_label, account_email,
+               from_name, from_address, subject, body_snippet, body_text, email_date, read)
+            VALUES (?, 'user-1', 'gmail-work', 'Work', 'work@example.com',
+                    'Reader', 'reader@example.com', 'Read in grace', 'Read it',
+                    'Read it', '2026-05-03T15:58:00.000Z', 1)`,
+      args: ["msg-arrival-read"],
+    });
+    const triageResult = await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES ('user-1', 'gmail-work', ?, 'pending', 'arrival_grace')
+            RETURNING id`,
+      args: ["msg-arrival-read"],
+    });
+    const triageId = Number(triageResult.rows[0].id);
+    await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               source, source_at)
+            VALUES (?, ?, 'user-1', 'gmail-work', ?, 'queued',
+                    'Queued for triage.', 'Waiting briefly before triage.',
+                    'normal', 'uncategorized', 'Read in grace',
+                    'arrival_grace', '2026-05-03T16:03:00.000Z')`,
+      args: [snapshot.id, triageId, "msg-arrival-read"],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+            VALUES ('user-1', 'gmail-work', ?, 'email_triage', 'queued',
+                    '2026-05-03T16:03:00.000Z', ?)`,
+      args: ["msg-arrival-read", "email_triage:user-1:gmail-work:msg-arrival-read"],
+    });
+
+    const first = await getActiveSnapshotView("user-1", { dbClient, now });
+    const second = await getActiveSnapshotView("user-1", { dbClient, now });
+
+    expect(first.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
+    expect(second.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status,
+                   t.triage_source,
+                   j.status AS job_status,
+                   j.completed_at,
+                   i.lane_at_snapshot,
+                   i.source
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.email_id = t.email_id
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            WHERE t.email_id = ?`,
+      args: ["msg-arrival-read"],
+    });
+    expect(rows.rows).toEqual([
+      {
+        triage_status: "skipped",
+        triage_source: "arrival_grace_read",
+        job_status: "complete",
+        completed_at: "2026-05-03T16:00:00.000Z",
+        lane_at_snapshot: "untriaged_read",
+        source: "arrival_grace_read",
+      },
+    ]);
   });
 
   it("restores pending triage eligibility for undo after pending dismissal", async () => {
@@ -1019,6 +1092,66 @@ describe("active briefing snapshots", () => {
       now: new Date("2026-05-04T16:00:00.000Z"),
     });
     expect(secondLoad.carryover.map((item) => item.email_id)).toEqual(["msg-unresolved"]);
+  });
+
+  it("carries queued arrival-grace rows across snapshot boundaries without resetting their deadline", async () => {
+    const dbClient = await createMigratedDb();
+    const previousNow = new Date("2026-05-03T18:00:00.000Z");
+    const previous = await getOrCreateActiveSnapshot("user-1", { dbClient, now: previousNow });
+    const triageResult = await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES ('user-1', 'gmail-work', 'msg-queued-carry', 'pending', 'arrival_grace')
+            RETURNING id`,
+      args: [],
+    });
+    const triageId = Number(triageResult.rows[0].id);
+    await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               source, source_at)
+            VALUES (?, ?, 'user-1', 'gmail-work', 'msg-queued-carry',
+                    'queued', 'Queued for triage.', 'Waiting briefly before triage.',
+                    'normal', 'uncategorized', 'Queued carry',
+                    'arrival_grace', '2026-05-03T18:03:00.000Z')`,
+      args: [previous.id, triageId],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+            VALUES ('user-1', 'gmail-work', 'msg-queued-carry', 'email_triage',
+                    'queued', '2026-05-03T18:03:00.000Z',
+                    'email_triage:user-1:gmail-work:msg-queued-carry')`,
+      args: [],
+    });
+
+    const nextView = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+
+    expect(nextView.carryover.map((item) => ({
+      email_id: item.email_id,
+      lane: item.lane,
+      source: item.source,
+      source_at: item.source_at,
+      is_carryover: item.is_carryover,
+    }))).toEqual([
+      {
+        email_id: "msg-queued-carry",
+        lane: "queued",
+        source: "arrival_grace",
+        source_at: "2026-05-03T18:03:00.000Z",
+        is_carryover: true,
+      },
+    ]);
+    const job = await dbClient.execute({
+      sql: "SELECT scheduled_for FROM ea_triage_jobs WHERE email_id = ?",
+      args: ["msg-queued-carry"],
+    });
+    expect(job.rows[0].scheduled_for).toBe("2026-05-03T18:03:00.000Z");
   });
 
   it("hides provider-archived or trashed messages from active lanes while preserving rows", async () => {

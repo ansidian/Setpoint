@@ -26,69 +26,7 @@ import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 import MobileActionRow from "./MobileActionRow";
-
-function MobileStatusPill({ color, label, subtle = false }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "5px 9px",
-        borderRadius: 999,
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: 0.5,
-        textTransform: "uppercase",
-        color,
-        background: subtle ? `${color}12` : `${color}18`,
-        border: `1px solid ${color}${subtle ? "2c" : "38"}`,
-      }}
-    >
-      {!subtle && (
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: 999,
-            background: color,
-            boxShadow: `0 0 6px ${color}`,
-          }}
-        />
-      )}
-      {label}
-    </span>
-  );
-}
-
-function InlineControlButton({ icon, label, active = false, onClick, buttonRef }) {
-  const IconComponent = icon;
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "7px 10px",
-        borderRadius: 10,
-        border: `1px solid ${active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
-        background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
-        color: active ? "#fff" : "rgba(205,214,244,0.72)",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        fontSize: 10,
-        fontWeight: 600,
-        flexShrink: 0,
-      }}
-    >
-      <IconComponent size={11} />
-      {label}
-    </button>
-  );
-}
+import { InlineControlButton, MobileStatusPill } from "./MobileReaderControls.jsx";
 
 export default function MobileReader({
   email,
@@ -112,9 +50,13 @@ export default function MobileReader({
   const showDestructiveActions = showMutableActions && !catchUp;
   const showBillToggle = showDestructiveActions && (email._untriaged || email.hasBill);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
+  const isQueuedSnapshot = email._lane === "queued";
+  const isUntriagedReadSnapshot = email._lane === "untriaged_read";
   const showSnapshotActions = email._activeSnapshot && showDestructiveActions;
-  const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
-  const canMarkHandledSnapshot = showSnapshotActions && !isHandledSnapshot && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
+  const showSnapshotWorkflowActions = showSnapshotActions && !isQueuedSnapshot && !isUntriagedReadSnapshot;
+  const canDismissSnapshot = showSnapshotActions && !isUntriagedReadSnapshot;
+  const isHandledSnapshot = showSnapshotWorkflowActions && email._lane === "handled";
+  const canMarkHandledSnapshot = showSnapshotWorkflowActions && !isHandledSnapshot && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
@@ -276,6 +218,12 @@ export default function MobileReader({
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
             {email._untriaged && (
               <MobileStatusPill color="#89b4fa" label="Live" />
+            )}
+            {isQueuedSnapshot && (
+              <MobileStatusPill color="#89b4fa" label="Queued" subtle />
+            )}
+            {isUntriagedReadSnapshot && (
+              <MobileStatusPill color="#a6adc8" label="Read" subtle />
             )}
             {billOpen && (
               <MobileStatusPill color="#a6e3a1" label="Bill pay open" subtle />
@@ -475,7 +423,7 @@ export default function MobileReader({
           panelRef={actionsPanelRef}
           onClose={() => setActionsOpen(false)}
           width={220}
-          height={showSnapshotActions ? 420 : showBillToggle || email.claude?.draftReply ? 320 : 260}
+          height={showSnapshotWorkflowActions ? 420 : showBillToggle || email.claude?.draftReply ? 320 : 260}
           role="menu"
           ariaLabel="Email actions"
           style={{
@@ -512,21 +460,21 @@ export default function MobileReader({
                 onClick={() => handleAction("snapshot-reopen")}
               />
             )}
-            {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
+            {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
               <MobileActionRow
                 icon={Zap}
                 label="Move to Needs"
                 onClick={() => handleAction("snapshot-move-lane", "needs_attention")}
               />
             )}
-            {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
+            {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
               <MobileActionRow
                 icon={FileText}
                 label="Move to FYI"
                 onClick={() => handleAction("snapshot-move-lane", "fyi")}
               />
             )}
-            {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "noise" && (
+            {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "noise" && (
               <MobileActionRow
                 icon={BellOff}
                 label="Move to Noise"
@@ -540,7 +488,7 @@ export default function MobileReader({
                 onClick={() => handleAction("snapshot-handled")}
               />
             )}
-            {showSnapshotActions && !isHandledSnapshot && (
+            {canDismissSnapshot && !isHandledSnapshot && (
               <MobileActionRow
                 icon={XCircle}
                 label="Dismiss"

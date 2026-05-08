@@ -111,6 +111,23 @@ export const markEmailAsRead = (uid) => apiFetch(`/api/briefing/email/${encodeUR
 export const markEmailAsUnread = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-unread`, { method: "POST" });
 export const trashEmail = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/trash`, { method: "POST" });
 export const markAllEmailsAsRead = (uids) => apiFetch("/api/briefing/email/mark-all-read", { method: "POST", body: JSON.stringify({ uids }) });
+export const settleArrivalGrace = () => apiFetch("/api/briefing/email/arrival-grace/settle", { method: "POST" });
+export const settleArrivalGraceOnExit = () => {
+  const path = "/api/briefing/email/arrival-grace/settle";
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    const body = new Blob(["{}"], { type: "application/json" });
+    if (navigator.sendBeacon(path, body)) return;
+  }
+  fetch(path, {
+    method: "POST",
+    keepalive: true,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "EADashboard",
+    },
+    body: "{}",
+  }).catch(() => {});
+};
 // Calendar
 export const getCalendarDeadlines = () => apiFetch("/api/calendar/deadlines");
 export const getCalendarDeadlinesRange = (start, end) =>
