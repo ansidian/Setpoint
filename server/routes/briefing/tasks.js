@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as tasksService from "../../briefing/tasks-service.js";
+import { applyDeadlineCurrentStatus } from "../../dashboard/current-service.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;
@@ -7,6 +8,11 @@ const EA_USER_ID = process.env.EA_USER_ID;
 router.post("/complete-task/:taskId", async (req, res) => {
   try {
     await tasksService.completeTask(EA_USER_ID, req.params.taskId);
+    await applyDeadlineCurrentStatus(EA_USER_ID, req.params.taskId, "complete", {
+      source: "todoist",
+    }).catch((err) => {
+      console.error("[Briefing] Failed to update current Todoist deadline cache:", err.message);
+    });
     res.json({ ok: true });
   } catch (err) {
     const status = err.status || 500;
@@ -29,6 +35,11 @@ router.patch("/task-status/:taskId", async (req, res) => {
   const { status } = req.body;
   try {
     await tasksService.updateCTMStatus(EA_USER_ID, req.params.taskId, status);
+    await applyDeadlineCurrentStatus(EA_USER_ID, req.params.taskId, status, {
+      source: "ctm",
+    }).catch((err) => {
+      console.error("[Briefing] Failed to update current CTM deadline cache:", err.message);
+    });
     res.json({ ok: true, status });
   } catch (err) {
     const httpStatus = err.status || 500;

@@ -101,6 +101,7 @@ vi.mock("../briefing/bill-extractors/catalog.js", () => ({
   DEFAULT_BILL_EXTRACT_MODEL: "haiku",
 }));
 vi.mock("../dashboard/current-service.js", () => ({
+  applyDeadlineCurrentStatus: vi.fn(async () => ({ updated: true })),
   getCurrentDashboard: vi.fn(async () => ({ weather: null, providerHealth: {} })),
   getDashboardSystemHealth: vi.fn(async () => ({ providerHealth: {}, systemStatus: { state: "current", sources: [] } })),
   requestCurrentDashboardRefresh: vi.fn(async () => ({ weather: null, providerHealth: {} })),

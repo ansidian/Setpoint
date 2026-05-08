@@ -94,7 +94,10 @@ const EMPTY_DEADLINES_FOR_TEST = {
 };
 
 const { default: router } = await import("./dashboard.js");
-const { __resetCurrentDashboardRefreshStateForTests } = await import("../dashboard/current-service.js");
+const {
+  __resetCurrentDashboardRefreshStateForTests,
+  applyDeadlineCurrentStatus,
+} = await import("../dashboard/current-service.js");
 const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
@@ -815,6 +818,57 @@ describe("GET /api/dashboard/current", () => {
     );
     expect(res.body.deadlines.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
     expect(res.body.deadlines.todoist.stats).toEqual({ total: 2 });
+  });
+
+  it("writes successful deadline status mutations through to current dashboard cache", async () => {
+    const eventPromise = new Promise((resolve) => {
+      const unsubscribe = subscribeCurrentDashboardEvents("u1", (event) => {
+        unsubscribe();
+        resolve(event);
+      });
+    });
+    await seedCache("deadlines_current", {
+      ctm: {
+        upcoming: [
+          { id: "ctm-1", title: "Submit essay", status: "incomplete", source: "canvas" },
+        ],
+        stats: { total: 1 },
+      },
+      todoist: {
+        upcoming: [
+          { id: "todo-1", title: "Buy stamps", status: "incomplete", source: "todoist" },
+        ],
+        stats: { total: 1 },
+      },
+    });
+
+    const result = await applyDeadlineCurrentStatus("u1", "ctm-1", "complete", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-08T12:00:00.000Z"),
+      source: "ctm",
+    });
+
+    expect(result.updated).toBe(true);
+    const cached = await testState.db.current.execute({
+      sql: "SELECT payload_json, status, refresh_started_at FROM ea_current_data_cache WHERE user_id = ? AND cache_key = ?",
+      args: ["u1", "deadlines_current"],
+    });
+    const payload = JSON.parse(cached.rows[0].payload_json);
+    expect(payload.ctm.upcoming[0]).toMatchObject({
+      id: "ctm-1",
+      status: "complete",
+    });
+    expect(payload.todoist.upcoming[0].status).toBe("incomplete");
+    expect(payload.ctm.stats).toEqual({ total: 1 });
+    expect(cached.rows[0]).toMatchObject({
+      status: "current",
+      refresh_started_at: null,
+    });
+    await expect(eventPromise).resolves.toMatchObject({
+      source: "deadlines",
+      reason: "task_status_updated",
+      details: { taskId: "ctm-1", status: "complete" },
+    });
   });
 
   it("returns stale cached rows immediately while refreshing them in the background", async () => {

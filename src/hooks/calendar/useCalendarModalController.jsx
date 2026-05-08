@@ -38,6 +38,8 @@ const VIEWS = {
   bills: billsView,
   deadlines: deadlinesView,
 };
+const DASHBOARD_DETAIL_FOCUS_RETRY_MS = 250;
+const DASHBOARD_DETAIL_FOCUS_MAX_ATTEMPTS = 120;
 function addMonthOffset(year, month, offset) {
   const date = new Date(year, month + offset, 1);
   return { year: date.getFullYear(), month: date.getMonth() };
@@ -1039,6 +1041,7 @@ export default function useCalendarModalController({
       ? String(activeView.getItemId ? activeView.getItemId(item) : item.id)
       : pendingItemDetailFocus.itemId;
 
+    let retryTimeout = 0;
     const retryOrDegrade = () => {
       setPendingItemDetailFocus((latest) => {
         if (
@@ -1050,7 +1053,7 @@ export default function useCalendarModalController({
         ) {
           return latest;
         }
-        if ((latest.attempts || 0) >= 20) {
+        if ((latest.attempts || 0) >= DASHBOARD_DETAIL_FOCUS_MAX_ATTEMPTS) {
           return null;
         }
         return { ...latest, attempts: (latest.attempts || 0) + 1 };
@@ -1058,8 +1061,8 @@ export default function useCalendarModalController({
     };
 
     if (!item) {
-      const id = window.setTimeout(retryOrDegrade, 250);
-      return () => window.clearTimeout(id);
+      retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
+      return () => window.clearTimeout(retryTimeout);
     }
 
     const firstRaf = window.requestAnimationFrame(() => {
@@ -1069,7 +1072,7 @@ export default function useCalendarModalController({
         resolvedDateKey,
       );
       if (!activated) {
-        retryOrDegrade();
+        retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
         return;
       }
       handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
@@ -1078,6 +1081,7 @@ export default function useCalendarModalController({
 
     return () => {
       window.cancelAnimationFrame(firstRaf);
+      window.clearTimeout(retryTimeout);
     };
   }, [
     activeView,
