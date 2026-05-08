@@ -32,6 +32,12 @@ vi.mock("@/components/settings/sections/AccountsSettingsSection", () => ({
   },
 }));
 
+vi.mock("@/components/settings/sections/ActualBudgetSettingsSection", () => ({
+  default: function ActualBudgetSettingsSectionMock() {
+    return <div data-testid="settings-actual-section">actual section</div>;
+  },
+}));
+
 vi.mock("@/components/settings/sections/EmailAutomationSettingsSection", () => ({
   default: function EmailAutomationSettingsSectionMock({ patch }) {
     return (
@@ -101,6 +107,13 @@ describe("Settings page", () => {
     renderSettings();
 
     expect(await screen.findByTestId("settings-accounts-section")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Actual Budget" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("settings-actual-section")).toBeTruthy();
+    });
+    expect(window.location.search).toBe("?tab=actual");
 
     fireEvent.click(screen.getByRole("button", { name: "System" }));
 
