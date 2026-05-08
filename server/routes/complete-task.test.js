@@ -16,6 +16,7 @@ const testState = vi.hoisted(() => ({
   fetchCTMDeadlinesAll: vi.fn(),
   updateTodoistTask: vi.fn(),
   updateCTMEventStatus: vi.fn(),
+  applyDeadlineCurrentStatus: vi.fn(),
 }));
 
 vi.mock("../db/connection.js", () => ({
@@ -40,6 +41,10 @@ vi.mock("../briefing/todoist.js", () => ({
 vi.mock("../briefing/ctm.js", () => ({
   fetchCTMDeadlinesAll: (...args) => testState.fetchCTMDeadlinesAll(...args),
   updateCTMEventStatus: (...args) => testState.updateCTMEventStatus(...args),
+}));
+
+vi.mock("../dashboard/current-service.js", () => ({
+  applyDeadlineCurrentStatus: (...args) => testState.applyDeadlineCurrentStatus(...args),
 }));
 
 process.env.EA_USER_ID = "user-1";
@@ -105,6 +110,7 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     testState.fetchCTMDeadlinesAll.mockReset().mockResolvedValue([]);
     testState.updateTodoistTask.mockReset();
     testState.updateCTMEventStatus.mockReset().mockResolvedValue(undefined);
+    testState.applyDeadlineCurrentStatus.mockReset().mockResolvedValue({ updated: true });
   });
 
   afterEach(async () => {
@@ -145,6 +151,9 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
 
     expect(res.status).toBe(200);
     expect(testState.completeTodoistTask).toHaveBeenCalledWith("user-1", "td-rec");
+    expect(testState.applyDeadlineCurrentStatus).toHaveBeenCalledWith("user-1", "td-rec", "complete", {
+      source: "todoist",
+    });
 
     const rows = await completedTaskRows();
     expect(rows).toHaveLength(1);
@@ -179,6 +188,7 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
     expect(res.status).toBe(502);
     expect(res.body.message).toBe("Todoist close failed: Todoist API 401: bad token");
     expect(await completedTaskRows()).toHaveLength(0);
+    expect(testState.applyDeadlineCurrentStatus).not.toHaveBeenCalled();
   });
 
   it("completes a mirror-backed Todoist task without reading latest briefing JSON", async () => {
@@ -280,5 +290,54 @@ describe("POST /api/briefing/complete-task/:taskId", () => {
       is_recurring: false,
     });
 
+  });
+});
+
+describe("PATCH /api/briefing/task-status/:taskId", () => {
+  beforeEach(async () => {
+    testState.db.current = await createMigratedDb();
+    testState.completeTodoistTask.mockReset();
+    testState.createTodoistTask.mockReset();
+    testState.deleteTodoistTask.mockReset();
+    testState.fetchTodoistProjects.mockReset();
+    testState.fetchTodoistLabels.mockReset();
+    testState.fetchTodoistTasksAll.mockReset().mockResolvedValue([]);
+    testState.fetchCTMDeadlinesAll.mockReset().mockResolvedValue([]);
+    testState.updateTodoistTask.mockReset();
+    testState.updateCTMEventStatus.mockReset().mockResolvedValue(undefined);
+    testState.applyDeadlineCurrentStatus.mockReset().mockResolvedValue({ updated: true });
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+  });
+
+  it("writes successful CTM status changes through to current deadline cache", async () => {
+    const res = await request(makeApp())
+      .patch("/api/briefing/task-status/ctm-one")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ status: "complete" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, status: "complete" });
+    expect(testState.updateCTMEventStatus).toHaveBeenCalledWith("ctm-one", "complete");
+    expect(testState.applyDeadlineCurrentStatus).toHaveBeenCalledWith("user-1", "ctm-one", "complete", {
+      source: "ctm",
+    });
+  });
+
+  it("does not update current deadline cache when the CTM mutation fails", async () => {
+    const err = new Error("Invalid status");
+    err.status = 400;
+    testState.updateCTMEventStatus.mockRejectedValueOnce(err);
+
+    const res = await request(makeApp())
+      .patch("/api/briefing/task-status/ctm-one")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ status: "bad" });
+
+    expect(res.status).toBe(400);
+    expect(testState.applyDeadlineCurrentStatus).not.toHaveBeenCalled();
   });
 });

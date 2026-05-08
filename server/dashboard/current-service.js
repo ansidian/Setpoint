@@ -179,6 +179,64 @@ function publishBillsCurrentChange(userId, previousRow, nextPayload, {
   });
 }
 
+export async function applyDeadlineCurrentStatus(userId, taskId, status, {
+  dbClient = db,
+  now = new Date(),
+  source = null,
+} = {}) {
+  if (!userId || taskId == null || !status) return { updated: false };
+  const result = await dbClient.execute({
+    sql: `SELECT payload_json
+          FROM ea_current_data_cache
+          WHERE user_id = ? AND cache_key = 'deadlines_current'`,
+    args: [userId],
+  });
+  const row = result.rows[0];
+  if (!row?.payload_json) return { updated: false };
+
+  const payload = parsePayload(row, EMPTY_DEADLINES);
+  let updated = false;
+  const sections = source === "todoist" ? ["todoist"] : source === "ctm" ? ["ctm"] : ["ctm", "todoist"];
+  for (const section of sections) {
+    const upcoming = payload?.[section]?.upcoming;
+    if (!Array.isArray(upcoming)) continue;
+    let sectionUpdated = false;
+    for (const task of upcoming) {
+      if (String(task?.id) !== String(taskId)) continue;
+      task.status = status;
+      delete task._completing;
+      sectionUpdated = true;
+      updated = true;
+    }
+    if (sectionUpdated) {
+      payload[section].stats = computeDeadlineStats(upcoming);
+    }
+  }
+  if (!updated) return { updated: false };
+
+  await dbClient.execute({
+    sql: `UPDATE ea_current_data_cache
+          SET payload_json = ?,
+              status = 'current',
+              error_message = NULL,
+              refresh_started_at = NULL,
+              updated_at = ?
+          WHERE user_id = ? AND cache_key = 'deadlines_current'`,
+    args: [JSON.stringify(payload), now.toISOString(), userId],
+  });
+  publishCurrentDashboardEvent(userId, {
+    source: "deadlines",
+    reason: "task_status_updated",
+    state: "current",
+    occurredAt: now.toISOString(),
+    details: {
+      taskId: String(taskId),
+      status,
+    },
+  });
+  return { updated: true, payload };
+}
+
 function snapshotSyncTimeoutMs() {
   const parsed = Number.parseInt(process.env.EA_DASHBOARD_SYNC_SNAPSHOT_TIMEOUT_MS || "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : SNAPSHOT_SYNC_TIMEOUT_MS;
