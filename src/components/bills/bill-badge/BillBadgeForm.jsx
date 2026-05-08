@@ -406,6 +406,8 @@ function FeeAndSendRow({
 
 export default function BillBadgeForm({
   bill,
+  mapping,
+  mappingLoading,
   isMobile,
   usesStackedLayout,
   effectiveModel,
@@ -458,6 +460,8 @@ export default function BillBadgeForm({
       <BillBadgeHeader
         isMobile={isMobile}
         usesStackedLayout={usesStackedLayout}
+        mapping={mapping}
+        mappingLoading={mappingLoading}
         editType={editType}
         effectiveModel={effectiveModel}
         modelDisplayName={modelDisplayName}

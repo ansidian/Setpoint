@@ -10,6 +10,8 @@ export default function BillBadge({
   emailBodyLoading,
   emailBodySource,
   emailBodyError,
+  mapping,
+  mappingLoading = false,
   layout = "inline",
 }) {
   const isDrawer = layout === "drawer";
@@ -41,6 +43,8 @@ export default function BillBadge({
     >
       <BillBadgeForm
         bill={bill}
+        mapping={mapping}
+        mappingLoading={mappingLoading}
         isMobile={isMobile}
         usesStackedLayout={usesStackedLayout}
         {...form}

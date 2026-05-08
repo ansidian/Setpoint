@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractBillFromEmail, sendToActualBudget } from "../../api";
 import { ensureMetadataLoaded, _metadataCache } from "../../lib/actualMetadata.js";
 import {
@@ -18,6 +18,7 @@ export default function useBillBadgeForm({
   emailBodySource = "loaded",
   emailBodyError = null,
 }) {
+  const touchedRef = useRef({});
   const [extractModel, setExtractModel] = useState(null);
   const effectiveModel = model || extractModel;
   const modelDisplayName = formatModelName(effectiveModel);
@@ -32,24 +33,24 @@ export default function useBillBadgeForm({
   const [state, setState] = useState("idle");
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [editPayee, setEditPayee] = useState(bill.payee || "");
+  const [editPayee, setEditPayeeState] = useState(bill.payee_id || bill.payee || "");
   const initialAmount = bill.amount != null ? String(bill.amount) : "";
   const initialDetectedFee = detectFee(bill.payee);
   const initialBaseAmount = parseFloat(initialAmount) || 0;
   const initialFeeNote = !bill.notes && initialDetectedFee && initialBaseAmount > 0
     ? `$${initialBaseAmount.toFixed(2)} + $${initialDetectedFee.fee.toFixed(2)} CC fee`
     : "";
-  const [editAmount, setEditAmount] = useState(initialAmount);
-  const [editDue, setEditDue] = useState(bill.due_date || "");
-  const [editType, setEditType] = useState(bill.type || "expense");
+  const [editAmount, setEditAmountState] = useState(initialAmount);
+  const [editDue, setEditDueState] = useState(bill.due_date || "");
+  const [editType, setEditTypeState] = useState(bill.type || "expense");
   const [accounts, setAccounts] = useState(_metadataCache?.accounts || []);
   const [payees, setPayees] = useState(_metadataCache?.payees || []);
   const [categories, setCategories] = useState(_metadataCache?.categories || []);
-  const [editAccount, setEditAccount] = useState("");
-  const [editCategory, setEditCategory] = useState(bill.category_id || "");
-  const [editFromAccount, setEditFromAccount] = useState("");
-  const [editToAccount, setEditToAccount] = useState("");
-  const [editScheduleName, setEditScheduleName] = useState("");
+  const [editAccount, setEditAccountState] = useState(bill.account_id || "");
+  const [editCategory, setEditCategoryState] = useState(bill.category_id || "");
+  const [editFromAccount, setEditFromAccountState] = useState(bill.from_account_id || "");
+  const [editToAccount, setEditToAccountState] = useState(bill.to_account_id || "");
+  const [editScheduleName, setEditScheduleNameState] = useState(bill.schedule_name || "");
   const [editNotes, setEditNotesValue] = useState(bill.notes || initialFeeNote);
   const [notesTouched, setNotesTouched] = useState(false);
   const [autoNoteValue, setAutoNoteValue] = useState(initialFeeNote);
@@ -58,6 +59,46 @@ export default function useBillBadgeForm({
   const [customFee, setCustomFee] = useState("");
 
   const isTransfer = editType === "transfer";
+
+  const markTouched = (field) => {
+    touchedRef.current[field] = true;
+  };
+  const setEditPayee = (value) => {
+    markTouched("payee");
+    setEditPayeeState(value);
+  };
+  const setEditAmount = (value) => {
+    markTouched("amount");
+    setEditAmountState(value);
+  };
+  const setEditDue = (value) => {
+    markTouched("due");
+    setEditDueState(value);
+  };
+  const setEditType = (value) => {
+    markTouched("type");
+    setEditTypeState(value);
+  };
+  const setEditAccount = (value) => {
+    markTouched("account");
+    setEditAccountState(value);
+  };
+  const setEditCategory = (value) => {
+    markTouched("category");
+    setEditCategoryState(value);
+  };
+  const setEditFromAccount = (value) => {
+    markTouched("fromAccount");
+    setEditFromAccountState(value);
+  };
+  const setEditToAccount = (value) => {
+    markTouched("toAccount");
+    setEditToAccountState(value);
+  };
+  const setEditScheduleName = (value) => {
+    markTouched("scheduleName");
+    setEditScheduleNameState(value);
+  };
 
   const resolvedPayeeName = useMemo(() => {
     if (payees.length && editPayee) {
@@ -83,6 +124,27 @@ export default function useBillBadgeForm({
     setAutoNoteValue("");
     setEditNotesValue(value);
   };
+
+  const applyBillSeed = useCallback((seed, { model: nextModel } = {}) => {
+    if (!seed || typeof seed !== "object") return;
+    if (!touchedRef.current.type && seed.type) setEditTypeState(seed.type);
+    if (!touchedRef.current.payee) {
+      const seededPayee = seed.payee_id && payees.some((payee) => payee.id === seed.payee_id)
+        ? seed.payee_id
+        : seed.payee || "";
+      if (seededPayee) setEditPayeeState(seededPayee);
+    }
+    if (!touchedRef.current.amount) {
+      setEditAmountState(seed.amount != null ? String(seed.amount) : "");
+    }
+    if (!touchedRef.current.due && seed.due_date !== undefined) setEditDueState(seed.due_date || "");
+    if (!touchedRef.current.account && seed.account_id) setEditAccountState(seed.account_id);
+    if (!touchedRef.current.category && seed.category_id) setEditCategoryState(seed.category_id);
+    if (!touchedRef.current.fromAccount && seed.from_account_id) setEditFromAccountState(seed.from_account_id);
+    if (!touchedRef.current.toAccount && seed.to_account_id) setEditToAccountState(seed.to_account_id);
+    if (!touchedRef.current.scheduleName && seed.schedule_name) setEditScheduleNameState(seed.schedule_name);
+    if (nextModel) setExtractModel(nextModel);
+  }, [payees]);
 
   const maybeSetAutoFeeNote = (nextFeeNote) => {
     if (notesTouched) return;
@@ -125,24 +187,34 @@ export default function useBillBadgeForm({
           account.name.toLowerCase().includes(bill.payee.toLowerCase())
           || bill.payee.toLowerCase().includes(account.name.toLowerCase()));
         if (match) {
-          setEditToAccount(match.id);
+          if (!touchedRef.current.toAccount) setEditToAccountState(match.id);
           matchedToId = match.id;
         }
       }
 
       if (bill.type === "transfer" && data.accounts.length) {
         const from = pickDefaultFromAccount(data.accounts);
-        if (from) setEditFromAccount(from.id);
+        if (from && !touchedRef.current.fromAccount) setEditFromAccountState(from.id);
         const name = scheduleNameFor(data.accounts, matchedToId);
-        if (name) setEditScheduleName(name);
+        if (name && !touchedRef.current.scheduleName) setEditScheduleNameState(name);
       }
 
       if (bill.payee && data.payees.length) {
         const match = data.payees.find((payee) => payee.name.toLowerCase() === bill.payee.toLowerCase());
-        if (match) setEditPayee(match.id);
+        if (match && !touchedRef.current.payee) setEditPayeeState(match.id);
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- bill props are stable
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) applyBillSeed(bill);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyBillSeed, bill]);
 
   const handleTypeChange = (key) => {
     setEditType(key);
@@ -174,31 +246,20 @@ export default function useBillBadgeForm({
         from: emailFrom,
         body: emailBody,
       });
-      if (result.payee) {
-        const match = payees.find((payee) => payee.name.toLowerCase() === String(result.payee).toLowerCase());
-        setEditPayee(match ? match.id : result.payee);
-      }
-      if (result.amount != null) setEditAmount(String(result.amount));
-      if (result.due_date) setEditDue(result.due_date);
-      if (result.category_id && categories.some((category) => category.id === result.category_id)) {
-        setEditCategory(result.category_id);
-      }
-      if (result.type === "transfer") {
-        const toId = result.to_account_id && accounts.some((account) => account.id === result.to_account_id)
+      const toId = result.type === "transfer"
+        && result.to_account_id
+        && accounts.some((account) => account.id === result.to_account_id)
           ? result.to_account_id
-          : editToAccount;
-        if (toId !== editToAccount) setEditToAccount(toId);
-        if (!editFromAccount) {
-          const from = pickDefaultFromAccount(accounts);
-          if (from) setEditFromAccount(from.id);
-        }
-        const name = scheduleNameFor(accounts, toId);
-        if (name) setEditScheduleName(name);
-        setEditType("transfer");
-      } else if (result.type) {
-        setEditType(result.type);
-      }
-      setExtractModel(result.model || "claude-haiku-4-5");
+          : undefined;
+      applyBillSeed({
+        ...result,
+        to_account_id: toId,
+        category_id: result.category_id && categories.some((category) => category.id === result.category_id)
+          ? result.category_id
+          : undefined,
+        from_account_id: result.from_account_id || pickDefaultFromAccount(accounts)?.id,
+        schedule_name: result.schedule_name || scheduleNameFor(accounts, toId || editToAccount),
+      }, { model: result.model || "claude-haiku-4-5" });
       setExtractState("done");
     } catch (err) {
       console.error("Bill extract failed:", err);

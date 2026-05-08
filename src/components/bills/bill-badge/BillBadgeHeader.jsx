@@ -71,9 +71,28 @@ function ExtractButton({ extractState, onClick, disabled = false, className, var
   );
 }
 
+function mappingStatusLabel(mapping, loading) {
+  if (loading) return "Mapping...";
+  if (!mapping?.status) return null;
+  if (mapping.status === "matched") {
+    const parts = ["Mapped:"];
+    if (mapping.profileId) parts.push(mapping.profileId);
+    if (mapping.behaviorId) parts.push("·", mapping.behaviorId);
+    if (mapping.amountSource === "blank") parts.push("·", "amount missing");
+    return parts.join(" ");
+  }
+  if (mapping.status === "identity_only") return "Identity match: choose bill details";
+  if (mapping.status === "unmapped") return "Unmapped: review fields manually";
+  if (mapping.status === "invalid_target") return "Mapping needs review: Actual target changed";
+  if (mapping.status === "incomplete_mapping") return "Mapping incomplete: review fields manually";
+  return null;
+}
+
 export default function BillBadgeHeader({
   isMobile,
   usesStackedLayout,
+  mapping,
+  mappingLoading,
   editType,
   effectiveModel,
   modelDisplayName,
@@ -83,6 +102,7 @@ export default function BillBadgeHeader({
   onExtract,
   onTypeChange,
 }) {
+  const mappingLabel = mappingStatusLabel(mapping, mappingLoading);
   return (
     <>
       <div className={cn("flex items-center gap-1.5 flex-wrap", isMobile && "grid grid-cols-2 gap-2")}>
@@ -132,6 +152,17 @@ export default function BillBadgeHeader({
       {usesStackedLayout && (
         <div className={cn("text-muted-foreground/45 italic", isMobile ? "text-[11px] mt-3" : "text-[10px] mt-1.5")}>
           {typeHints[editType]}
+        </div>
+      )}
+      {mappingLabel && (
+        <div className={cn(
+          "text-muted-foreground/45 truncate",
+          usesStackedLayout
+            ? (isMobile ? "text-[11px] mt-2" : "text-[10px] mt-1.5")
+            : "text-[10px] mt-1.5",
+        )}
+        >
+          {mappingLabel}
         </div>
       )}
       {usesStackedLayout && (
