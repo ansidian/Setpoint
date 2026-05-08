@@ -23,6 +23,7 @@ import {
   markEmailUnreadWithProvider,
   trashEmailWithProvider,
 } from "./email-provider-adapters.js";
+import { rankEmailSearchRows } from "./email-search-ranking.js";
 
 // --- Private helpers ---
 
@@ -128,12 +129,50 @@ export async function getEmailBody(userId, uid) {
   return fetchEmailBodyForUid(userId, uid);
 }
 
-export async function searchEmails(userId, { q, limit }) {
+export async function searchEmails(userId, { q, limit, debug = false }) {
   const maxResults = Math.min(parseInt(limit) || 30, 100);
-  const fetchLimit = Math.max(maxResults * 3, 90);
+  const fetchLimit = Math.min(Math.max(maxResults * 8, 200), 500);
   const { textQuery, readFilter } = parseEmailSearchQuery(q);
   const hasTextQuery = textQuery.trim().length > 0;
   const readPredicate = readFilter == null ? "" : " AND idx.read = ?";
+  const snapshotJoin = `
+              LEFT JOIN ea_email_triage triage
+                ON triage.user_id = idx.user_id
+               AND triage.account_id = idx.account_id
+               AND triage.email_id = idx.uid
+              LEFT JOIN ea_briefing_snapshot_items snap
+                ON snap.id = (
+                  SELECT si.id
+                  FROM ea_briefing_snapshot_items si
+                  JOIN ea_briefing_snapshots s ON s.id = si.snapshot_id
+                  WHERE si.user_id = idx.user_id
+                    AND si.account_id = idx.account_id
+                    AND si.email_id = idx.uid
+                    AND s.status = 'active'
+                  ORDER BY si.updated_at DESC, si.id DESC
+                  LIMIT 1
+                )`;
+  const rankingColumns = `,
+                triage.lane AS triage_lane,
+                triage.category AS triage_category,
+                triage.urgency AS triage_urgency,
+                triage.deadline_at AS triage_deadline_at,
+                triage.escalation_badge AS triage_escalation_badge,
+                triage.bill_candidate_json AS triage_bill_candidate_json,
+                triage.handled_at AS triage_handled_at,
+                triage.provider_state AS triage_provider_state,
+                triage.updated_at AS triage_updated_at,
+                snap.lane_at_snapshot AS snapshot_lane,
+                snap.category_at_snapshot AS snapshot_category,
+                snap.urgency_at_snapshot AS snapshot_urgency,
+                snap.deadline_at_snapshot AS snapshot_deadline_at,
+                snap.escalation_badge_at_snapshot AS snapshot_escalation_badge,
+                snap.dismissed_from_today_at AS snapshot_dismissed_from_today_at,
+                snap.handled_at AS snapshot_handled_at,
+                snap.provider_removed_at AS snapshot_provider_removed_at,
+                snap.source_at AS snapshot_source_at,
+                snap.resurfaced_at AS snapshot_resurfaced_at,
+                snap.updated_at AS snapshot_updated_at`;
   const result = hasTextQuery
     ? await db.execute({
         sql: `SELECT
@@ -144,8 +183,10 @@ export async function searchEmails(userId, { q, limit }) {
                 snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
                 snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
                 rank
+                ${rankingColumns}
               FROM ea_email_fts
               JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
+              ${snapshotJoin}
               WHERE ea_email_fts MATCH ? AND idx.user_id = ?${readPredicate}
               ORDER BY rank
               LIMIT ?`,
@@ -162,7 +203,9 @@ export async function searchEmails(userId, { q, limit }) {
                 NULL AS subject_highlight,
                 NULL AS body_highlight,
                 0 AS rank
+                ${rankingColumns}
               FROM ea_email_index idx
+              ${snapshotJoin}
               WHERE idx.user_id = ?${readPredicate}
               ORDER BY idx.email_date DESC
               LIMIT ?`,
@@ -171,15 +214,39 @@ export async function searchEmails(userId, { q, limit }) {
           : [userId, readFilter, fetchLimit],
       });
 
-  const ranked = [...result.rows]
-    .sort((a, b) => {
-      const aTime = a.email_date ? Date.parse(a.email_date) : 0;
-      const bTime = b.email_date ? Date.parse(b.email_date) : 0;
-      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
-    })
-    .slice(0, maxResults);
+  const ranked = rankEmailSearchRows(result.rows, {
+    query: textQuery,
+    limit: maxResults,
+    debug,
+  });
 
   const byAccount = {};
+  const results = [];
+  const buildResult = (row) => {
+    const email = {
+      uid: row.uid,
+      from_name: row.from_name,
+      from_address: row.from_address,
+      subject: row.subject,
+      body_snippet: row.body_snippet,
+      subject_highlight: row.subject_highlight,
+      body_highlight: row.body_highlight,
+      email_date: row.email_date,
+      read: !!row.read,
+      web_url: buildEmailWebUrl(row.uid, row.account_id, row.account_email),
+      account_id: row.account_id,
+      account_label: row.account_label,
+      account_email: row.account_email,
+      account_color: row.account_color,
+      account_icon: row.account_icon,
+    };
+    if (debug) {
+      email.search_score = row.search_score;
+      email.search_score_details = row.search_score_details;
+    }
+    return email;
+  };
+
   for (const row of ranked) {
     const key = row.account_id;
     if (!byAccount[key]) {
@@ -192,21 +259,12 @@ export async function searchEmails(userId, { q, limit }) {
         results: [],
       };
     }
-    byAccount[key].results.push({
-      uid: row.uid,
-      from_name: row.from_name,
-      from_address: row.from_address,
-      subject: row.subject,
-      body_snippet: row.body_snippet,
-      subject_highlight: row.subject_highlight,
-      body_highlight: row.body_highlight,
-      email_date: row.email_date,
-      read: !!row.read,
-      web_url: buildEmailWebUrl(row.uid, row.account_id, row.account_email),
-    });
+    const email = buildResult(row);
+    results.push(email);
+    byAccount[key].results.push(email);
   }
 
-  return { accounts: Object.values(byAccount), total: ranked.length, query: q };
+  return { results, accounts: Object.values(byAccount), total: ranked.length, query: q };
 }
 
 // --- State-changing ops ---
