@@ -5,9 +5,12 @@ import { sendToActualBudget } from "../../api";
 
 const actualMetadataMock = vi.hoisted(() => ({
   metadata: {
-    accounts: [{ id: "checking", name: "Checking", type: "checking" }],
-    payees: [],
-    categories: [],
+    accounts: [
+      { id: "checking", name: "Checking", type: "checking" },
+      { id: "visa", name: "Visa 4242", type: "credit" },
+    ],
+    payees: [{ id: "payee-power", name: "Power Co" }],
+    categories: [{ id: "cat-utilities", name: "Utilities" }],
   },
 }));
 
@@ -26,18 +29,18 @@ afterEach(() => {
 });
 
 function renderForm(bill = {}) {
-  return renderHook(() => useBillBadgeForm({
+  return renderHook(({ currentBill }) => useBillBadgeForm({
     bill: {
       payee: "U.S. Bank",
       amount: 42.25,
       due_date: "2026-05-10",
       type: "expense",
-      ...bill,
+      ...currentBill,
     },
     emailSubject: "Payment due",
     emailFrom: "Bank",
     emailBody: "Full bill body",
-  }));
+  }), { initialProps: { currentBill: bill } });
 }
 
 describe("useBillBadgeForm notes", () => {
@@ -74,5 +77,64 @@ describe("useBillBadgeForm notes", () => {
     await waitFor(() => {
       expect(result.current.editNotes).toBe("$100.00 + $1.65 CC fee");
     });
+  });
+});
+
+describe("useBillBadgeForm async seeds", () => {
+  it("applies resolver seed fields that the user has not touched", async () => {
+    const { result, rerender } = renderForm({
+      payee: "",
+      amount: null,
+      due_date: "",
+      type: "expense",
+    });
+
+    rerender({
+      currentBill: {
+        payee: "Power Co",
+        payee_id: "payee-power",
+        amount: 73.11,
+        due_date: "2026-05-30",
+        type: "expense",
+        account_id: "checking",
+        category_id: "cat-utilities",
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.editPayee).toBe("payee-power");
+      expect(result.current.editAmount).toBe("73.11");
+      expect(result.current.editDue).toBe("2026-05-30");
+      expect(result.current.editAccount).toBe("checking");
+      expect(result.current.editCategory).toBe("cat-utilities");
+    });
+  });
+
+  it("does not overwrite user-touched fields when a late seed arrives", async () => {
+    const { result, rerender } = renderForm({
+      payee: "",
+      amount: null,
+      due_date: "",
+      type: "expense",
+    });
+
+    act(() => {
+      result.current.setEditAmount("11.00");
+      result.current.setEditDue("2026-06-02");
+    });
+    rerender({
+      currentBill: {
+        payee: "Power Co",
+        amount: 73.11,
+        due_date: "2026-05-30",
+        type: "expense",
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.editPayee).toBe("Power Co");
+    });
+    expect(result.current.editAmount).toBe("11.00");
+    expect(result.current.editDue).toBe("2026-06-02");
   });
 });

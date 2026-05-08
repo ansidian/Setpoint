@@ -40,6 +40,7 @@ export default function MobileReader({
   snoozeOpen,
   setSnoozeOpen,
   bodyState,
+  billResolution,
   drafting,
   setDrafting,
   readOnly = false,
@@ -64,6 +65,12 @@ export default function MobileReader({
   const actionsBtnRef = useRef(null);
   const actionsPanelRef = useRef(null);
   const extractionBody = resolveBillExtractionBody(bodyState);
+  const billSeed = billResolution?.resolvedBill || email.extractedBill || {
+    payee: "",
+    amount: null,
+    due_date: "",
+    type: "expense",
+  };
 
   const billPanelHeight = billExpanded ? "52%" : "38%";
   const handleAction = (kind, payload) => {
@@ -399,12 +406,7 @@ export default function MobileReader({
             >
               <BillBadge
                 layout="mobile"
-                bill={email.extractedBill || {
-                  payee: "",
-                  amount: null,
-                  due_date: "",
-                  type: "expense",
-                }}
+                bill={billSeed}
                 model={email.billModel}
                 emailSubject={email.subject}
                 emailFrom={email.from}
@@ -412,6 +414,8 @@ export default function MobileReader({
                 emailBodyLoading={extractionBody.loading}
                 emailBodySource={extractionBody.source}
                 emailBodyError={extractionBody.error}
+                mapping={billResolution?.mapping}
+                mappingLoading={billResolution?.status === "loading"}
               />
             </div>
           </div>

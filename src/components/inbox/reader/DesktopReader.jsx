@@ -104,8 +104,14 @@ function LiveEmailNotice({ email }) {
   );
 }
 
-function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState }) {
+function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, billResolution }) {
   const extractionBody = resolveBillExtractionBody(bodyState);
+  const billSeed = billResolution?.resolvedBill || email.extractedBill || {
+    payee: "",
+    amount: null,
+    due_date: "",
+    type: "expense",
+  };
 
   return (
     <div
@@ -174,12 +180,7 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState }) {
           <div style={{ padding: "14px 16px 18px" }}>
             <BillBadge
               layout="drawer"
-              bill={email.extractedBill || {
-                payee: "",
-                amount: null,
-                due_date: "",
-                type: "expense",
-              }}
+              bill={billSeed}
               model={email.billModel}
               emailSubject={email.subject}
               emailFrom={email.from}
@@ -187,6 +188,8 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState }) {
               emailBodyLoading={extractionBody.loading}
               emailBodySource={extractionBody.source}
               emailBodyError={extractionBody.error}
+              mapping={billResolution?.mapping}
+              mappingLoading={billResolution?.status === "loading"}
             />
           </div>
         </aside>
@@ -212,6 +215,7 @@ export default function DesktopReader({
   snoozeOpen,
   setSnoozeOpen,
   bodyState,
+  billResolution,
   drafting,
   setDrafting,
   readOnly = false,
@@ -477,6 +481,7 @@ export default function DesktopReader({
             setBillOpen={setBillOpen}
             email={email}
             bodyState={bodyState}
+            billResolution={billResolution}
           />
         </div>
 

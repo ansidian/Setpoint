@@ -161,6 +161,7 @@ export const deleteTodoistTask = (id) => apiFetch(`/api/briefing/todoist/tasks/$
 // Actual Budget
 export const sendToActualBudget = (bill) => apiFetch("/api/briefing/actual/send", { method: "POST", body: JSON.stringify(bill) });
 export const extractBillFromEmail = ({ subject, from, body }) => apiFetch("/api/briefing/bills/extract", { method: "POST", body: JSON.stringify({ subject, from, body }) });
+export const resolveBillPaySeed = (payload) => apiFetch("/api/briefing/bills/resolve", { method: "POST", body: JSON.stringify(payload || {}) });
 export const markBillPaid = (id) => apiFetch(`/api/briefing/actual/bills/${encodeURIComponent(id)}/mark-paid`, { method: "POST" });
 export const getActualAccounts = () => apiFetch("/api/briefing/actual/accounts");
 export const getActualPayees = () => apiFetch("/api/briefing/actual/payees");
