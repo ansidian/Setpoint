@@ -82,6 +82,37 @@ async function queueEmail(dbClient, email = {}) {
 }
 
 describe("email triage worker", () => {
+  it("does not process a job when another worker claims it first", async () => {
+    const queuedJob = {
+      id: 7,
+      user_id: "user-1",
+      account_id: "gmail-work",
+      email_id: "msg-1",
+      job_type: "email_triage",
+      status: "queued",
+    };
+    const dbClient = {
+      execute: vi.fn(async (query) => {
+        const sql = typeof query === "string" ? query : query.sql;
+        if (sql.includes("FROM ea_triage_jobs") && sql.includes("LIMIT 1")) {
+          return { rows: [queuedJob] };
+        }
+        if (sql.includes("SELECT email_triage_mode")) {
+          return { rows: [{ email_triage_mode: "real" }] };
+        }
+        if (sql.includes("UPDATE ea_triage_jobs") && sql.includes("status = 'running'")) {
+          return { rows: [], rowsAffected: 0 };
+        }
+        throw new Error(`Unexpected SQL: ${sql}`);
+      }),
+    };
+
+    await expect(processNextEmailTriageJob({ dbClient }))
+      .resolves
+      .toEqual({ processed: false });
+    expect(dbClient.execute).toHaveBeenCalledTimes(4);
+  });
+
   it("delays weak-risk security once and exposes pending snapshot metadata", async () => {
     __resetCurrentDashboardEventsForTests();
     const dbClient = await createMigratedDb();
