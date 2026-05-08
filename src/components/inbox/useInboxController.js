@@ -48,12 +48,33 @@ import {
 } from "./inboxAiSearchModel.js";
 
 const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
+const SNAPSHOT_MUTABLE_LANES = new Set(["needs_attention", "carryover", "fyi", "noise", "handled"]);
+const SNAPSHOT_DISMISSIBLE_LANES = new Set(["queued", "needs_attention", "carryover", "fyi", "noise"]);
+const SNAPSHOT_LANE_ORDER = {
+  queued: 0,
+  carryover: 1,
+  needs_attention: 2,
+  action: 2,
+  catch_up: 3,
+  fyi: 4,
+  handled: 5,
+  untriaged_read: 6,
+  noise: 7,
+};
 
 function getSnapshotReopenLane(email) {
   const lane = email?._lane === "carryover"
     ? "needs_attention"
     : email?.lane || email?.lane_at_snapshot || email?._lane;
   return SNAPSHOT_REOPEN_LANES.has(lane) ? lane : "needs_attention";
+}
+
+function isSnapshotWorkflowLane(email) {
+  return SNAPSHOT_MUTABLE_LANES.has(email?._lane);
+}
+
+function isSnapshotDismissibleLane(email) {
+  return SNAPSHOT_DISMISSIBLE_LANES.has(email?._lane);
 }
 
 export default function useInboxController({
@@ -324,10 +345,11 @@ export default function useInboxController({
       if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
       return true;
     }).sort((a, b) => {
-      const order = { carryover: 0, needs_attention: 1, action: 1, catch_up: 2, fyi: 3, handled: 4, noise: 5 };
       if (a._untriaged && !b._untriaged) return -1;
       if (!a._untriaged && b._untriaged) return 1;
-      if (order[a._lane] !== order[b._lane]) return (order[a._lane] ?? 3) - (order[b._lane] ?? 3);
+      if (SNAPSHOT_LANE_ORDER[a._lane] !== SNAPSHOT_LANE_ORDER[b._lane]) {
+        return (SNAPSHOT_LANE_ORDER[a._lane] ?? 4) - (SNAPSHOT_LANE_ORDER[b._lane] ?? 4);
+      }
       const aKey = a._resurfacedAt || new Date(a.date).getTime();
       const bKey = b._resurfacedAt || new Date(b.date).getTime();
       return bKey - aKey;
@@ -394,7 +416,7 @@ export default function useInboxController({
   }, [search]);
 
   const laneCounts = useMemo(() => {
-    const counts = { needs_attention: 0, action: 0, carryover: 0, catch_up: 0, fyi: 0, handled: 0, noise: 0 };
+    const counts = { queued: 0, needs_attention: 0, action: 0, carryover: 0, catch_up: 0, fyi: 0, handled: 0, untriaged_read: 0, noise: 0 };
     for (const email of flatEmails) {
       if (accountId !== "__all" && email._accountKey !== accountId) continue;
       if (email._untriaged) continue;
@@ -414,12 +436,14 @@ export default function useInboxController({
     const counts = {
       __all: 0,
       __live: 0,
+      queued: 0,
       needs_attention: 0,
       action: 0,
       carryover: 0,
       catch_up: 0,
       fyi: 0,
       handled: 0,
+      untriaged_read: 0,
       noise: 0,
     };
     for (const email of flatEmails) {
@@ -436,7 +460,7 @@ export default function useInboxController({
   }, [flatEmails, snoozedMap, nowTick, accountId]);
 
   const totalUnread = useMemo(() => {
-    return flatEmails.filter((email) => !email.read).length;
+    return flatEmails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
   }, [flatEmails]);
 
   const noiseUnreadCount = useMemo(() => computeScopedNoiseUnreadCount(flatEmails, {
@@ -448,7 +472,7 @@ export default function useInboxController({
   }), [accountId, categoryFilter, flatEmails, indexedSearchActive, nowTick, snoozedMap]);
 
   const unreadInView = useMemo(() => {
-    return visibleEmails.filter((email) => !email.read).length;
+    return visibleEmails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
   }, [visibleEmails]);
 
   const selectedEmail = useMemo(() => {
@@ -654,6 +678,7 @@ export default function useInboxController({
       if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      if (!isSnapshotWorkflowLane(selectedEmail) || selectedEmail._lane === "handled") return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
       const previousLane = selectedEmail._lane === "carryover"
@@ -725,6 +750,7 @@ export default function useInboxController({
       if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      if (!isSnapshotDismissibleLane(selectedEmail)) return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
       const restoreSelectedId = id || uid;
@@ -786,6 +812,7 @@ export default function useInboxController({
       if (catchUpSelected) return;
       if (readOnly) return;
       if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
+      if (!isSnapshotWorkflowLane(selectedEmail) || selectedEmail._lane === "handled") return;
       const itemId = String(selectedEmail.snapshot_item_id);
       if (snapshotPendingRef.current.has(itemId)) return;
       const restoreSelectedId = id || uid;

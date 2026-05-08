@@ -45,6 +45,7 @@ function isEditableKeyTarget(target) {
 
 function canHandleSelectedEmail(email, readOnly) {
   if (readOnly || !email?._activeSnapshot || !email.snapshot_item_id) return false;
+  if (email._lane === "queued" || email._lane === "untriaged_read") return false;
   const lane = email._lane === "carryover" ? "needs_attention" : email._lane;
   return lane === "needs_attention" || lane === "fyi";
 }
@@ -54,12 +55,16 @@ function canReopenSelectedEmail(email, readOnly) {
 }
 
 function canDismissSelectedEmail(email, readOnly) {
-  return !readOnly && !!email?._activeSnapshot && !!email.snapshot_item_id && email._lane !== "handled";
+  return !readOnly
+    && !!email?._activeSnapshot
+    && !!email.snapshot_item_id
+    && email._lane !== "handled"
+    && email._lane !== "untriaged_read";
 }
 
 function canMoveSelectedEmailToLane(email, targetLane, readOnly) {
   if (readOnly || !email?._activeSnapshot || !email.snapshot_item_id) return false;
-  if (email._lane === "handled" || email._untriaged) return false;
+  if (email._lane === "handled" || email._lane === "queued" || email._lane === "untriaged_read" || email._untriaged) return false;
   const currentLane = email._lane === "carryover" ? "needs_attention" : email._lane;
   return currentLane !== targetLane;
 }

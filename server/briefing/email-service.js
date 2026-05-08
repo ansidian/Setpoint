@@ -13,6 +13,7 @@ import {
   markPendingTriageDismissed,
   markProviderRemovedFromActiveSnapshots,
   restorePendingTriageEligibilityForEmail,
+  settleReadArrivalGraceRows,
 } from "./snapshot-service.js";
 import { loadUserConfig } from "./config-service.js";
 import { canonicalizeConfiguredAccounts, normalizeEmailAddress } from "./account-canonical.js";
@@ -500,6 +501,10 @@ export async function dismiss(userId, emailId) {
     args: [userId, emailId],
   });
   await markPendingTriageDismissed(userId, emailId);
+}
+
+export async function settleArrivalGrace(userId) {
+  return settleReadArrivalGraceRows(userId);
 }
 
 // Exposed for unit testing only

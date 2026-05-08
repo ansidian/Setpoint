@@ -93,8 +93,8 @@ export default function InboxList({
   onCategoryFilterChange,
   readOnly = false,
 }) {
-  const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { handled: true, noise: true } : {}));
-  const effectiveCollapsed = activeSnapshotMode ? { handled: true, noise: true, ...collapsed } : collapsed;
+  const [collapsed, setCollapsed] = useState(() => (activeSnapshotMode ? { handled: true, untriaged_read: true, noise: true } : {}));
+  const effectiveCollapsed = activeSnapshotMode ? { handled: true, untriaged_read: true, noise: true, ...collapsed } : collapsed;
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading && !inboxAiSearchActive;
@@ -102,7 +102,7 @@ export default function InboxList({
   const showAiStatus = inboxAiSearch?.status && !["idle", "confirming"].includes(inboxAiSearch.status);
 
   const grouped = useMemo(() => {
-    const g = { live: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], noise: [] };
+    const g = { live: [], queued: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [] };
     for (const e of emails) {
       if (e._untriaged) g.live.push(e);
       else {
@@ -421,7 +421,7 @@ export default function InboxList({
                 )}
               </div>
             )}
-            {["carryover", "needs_attention", "catch_up", "fyi", "handled", "noise"].map((k) => (
+            {["queued", "carryover", "needs_attention", "catch_up", "fyi", "handled", "untriaged_read", "noise"].map((k) => (
               grouped[k].length > 0 && (
                 <div key={k}>
                   <StickyHeader borderColor="rgba(255,255,255,0.03)">

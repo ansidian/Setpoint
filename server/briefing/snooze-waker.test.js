@@ -173,4 +173,94 @@ describe("snooze waker", () => {
       _resurfaced: true,
     });
   });
+
+  it("restarts arrival grace when a snoozed queued row resurfaces", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-04T17:30:00.000Z");
+    const resurfacedAt = now.getTime();
+    const wakeAtGmailFn = vi.fn().mockResolvedValue(undefined);
+
+    await dbClient.execute({
+      sql: `INSERT INTO ea_snoozed_emails
+              (user_id, email_id, until_ts, email_snapshot, status)
+            VALUES (?, ?, ?, ?, 'snoozed')`,
+      args: ["user-1", "gmail-work-arrival-msg", resurfacedAt - 1_000, JSON.stringify({
+        uid: "gmail-work-arrival-msg",
+        id: "gmail-work-arrival-msg",
+        account_id: "gmail-work",
+        account_label: "Work Gmail",
+        account_email: "work@example.test",
+        subject: "Queued wake",
+        from_name: "Casey",
+        from_address: "casey@example.test",
+        date: "2026-05-02T15:00:00.000Z",
+        summary: "Queued for triage.",
+        action: "Waiting briefly before triage.",
+        category: "uncategorized",
+        urgency: "normal",
+        lane: "queued",
+      })],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source, decision_metadata_json)
+            VALUES (?, ?, ?, 'pending', 'user_snoozed_pending', ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "gmail-work-arrival-msg",
+        JSON.stringify({ snoozedPending: { previousTriageSource: "arrival_grace" } }),
+      ],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+            VALUES (?, ?, ?, 'email_triage', 'queued', ?, ?)`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "gmail-work-arrival-msg",
+        "2026-05-04T17:30:00.000Z",
+        "email_triage:user-1:gmail-work:gmail-work-arrival-msg",
+      ],
+    });
+
+    await wakeDueSnoozes({
+      userId: "user-1",
+      dbClient,
+      now,
+      loadUserConfigFn: vi.fn(async () => ({
+        accounts: [{ id: "gmail-work", email: "work@example.test", type: "gmail" }],
+      })),
+      wakeAtGmailFn,
+    });
+
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status,
+                   t.triage_source,
+                   j.status AS job_status,
+                   j.scheduled_for,
+                   i.lane_at_snapshot,
+                   i.source,
+                   i.source_at
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            WHERE t.email_id = ?`,
+      args: ["gmail-work-arrival-msg"],
+    });
+    expect(rows.rows).toEqual([
+      {
+        triage_status: "pending",
+        triage_source: "arrival_grace",
+        job_status: "queued",
+        scheduled_for: "2026-05-04T17:33:00.000Z",
+        lane_at_snapshot: "queued",
+        source: "arrival_grace",
+        source_at: "2026-05-04T17:33:00.000Z",
+      },
+    ]);
+  });
 });

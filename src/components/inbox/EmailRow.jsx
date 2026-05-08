@@ -7,6 +7,8 @@ import { Avatar } from "./primitives";
 export default function EmailRow({ email, account, selected, onOpen, density, showPreview, accent }) {
   const [hover, setHover] = useState(false);
   const untriaged = email._untriaged;
+  const arrivalGraceQueued = email._arrivalGraceQueued;
+  const untriagedRead = email._untriagedRead;
   const laneKey = email._lane;
   const L = laneKey && LANE[laneKey];
   const urgColor = email.urgency === "high" ? "#f38ba8"
@@ -130,6 +132,34 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
               {email._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live"}
             </span>
           )}
+          {arrivalGraceQueued && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+                padding: "2px 6px", borderRadius: 4,
+                color: "#89b4fa", background: "rgba(137,180,250,0.08)",
+                border: "1px solid rgba(137,180,250,0.24)",
+              }}
+            >
+              <Clock size={8} />
+              Queued
+            </span>
+          )}
+          {untriagedRead && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+                padding: "2px 6px", borderRadius: 4,
+                color: "rgba(205,214,244,0.58)",
+                background: "rgba(205,214,244,0.05)",
+                border: "1px solid rgba(205,214,244,0.09)",
+              }}
+            >
+              Read
+            </span>
+          )}
           {!untriaged && email.urgentFlag && email._lane !== "noise" && (
             <span
               style={{
@@ -142,7 +172,7 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
               {email.urgentFlag.label || email.urgency}
             </span>
           )}
-          {!untriaged && email.category && (
+          {!untriaged && !arrivalGraceQueued && !untriagedRead && email.category && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center",

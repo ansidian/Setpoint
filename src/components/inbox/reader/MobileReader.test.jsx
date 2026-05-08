@@ -128,4 +128,49 @@ describe("MobileReader bill extraction", () => {
     expect(screen.queryByText("Snooze")).toBeNull();
     expect(screen.queryByText("Trash")).toBeNull();
   });
+
+  it("keeps queued snapshot rows dismissible but hides manual triage moves", () => {
+    const { onAction } = renderMobileReader({
+      email: {
+        hasBill: false,
+        _activeSnapshot: true,
+        _lane: "queued",
+        _arrivalGraceQueued: true,
+      },
+    });
+
+    expect(screen.getByText("Queued")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Dismiss")).toBeTruthy();
+    expect(screen.getByText("Snooze")).toBeTruthy();
+    expect(screen.getByText("Trash")).toBeTruthy();
+    expect(screen.queryByText("Move to Needs")).toBeNull();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+    expect(screen.queryByText("Move to Noise")).toBeNull();
+    expect(screen.queryByText("Handled")).toBeNull();
+
+    fireEvent.click(screen.getByText("Dismiss"));
+    expect(onAction).toHaveBeenCalledWith("snapshot-dismiss", undefined);
+  });
+
+  it("hides snapshot lifecycle actions for untriaged-read rows", () => {
+    renderMobileReader({
+      email: {
+        hasBill: false,
+        read: true,
+        _activeSnapshot: true,
+        _lane: "untriaged_read",
+        _untriagedRead: true,
+      },
+    });
+
+    expect(screen.getByText("Read")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Mark unread")).toBeTruthy();
+    expect(screen.queryByText("Dismiss")).toBeNull();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+    expect(screen.queryByText("Handled")).toBeNull();
+  });
 });

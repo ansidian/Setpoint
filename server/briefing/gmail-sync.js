@@ -1,7 +1,11 @@
 import db from "../db/connection.js";
 import { getAccessToken, fetchEmails, fetchEmailsByIds, isMessageRead } from "./gmail.js";
 import { indexEmails } from "./email-index.js";
-import { markProviderRemovedFromActiveSnapshots } from "./snapshot-service.js";
+import {
+  attachArrivalGraceEmailToActiveSnapshot,
+  markProviderRemovedFromActiveSnapshots,
+} from "./snapshot-service.js";
+import { ARRIVAL_GRACE_SOURCE, arrivalGraceDeadline } from "./arrival-grace.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
@@ -308,26 +312,37 @@ async function getStoredHistoryId(account, dbClient) {
   return result.rows[0]?.last_history_id || null;
 }
 
-function triageStatementsForEmail(userId, accountId, email) {
+function triageStatementsForEmail(userId, accountId, email, {
+  arrivalGrace = false,
+  now = new Date(),
+} = {}) {
   const idempotencyKey = `email_triage:${userId}:${accountId}:${email.uid}`;
+  const scheduledFor = arrivalGrace ? arrivalGraceDeadline(now) : null;
   const payload = JSON.stringify({
     uid: email.uid,
     subject: email.subject || "",
+    ...(arrivalGrace
+      ? {
+          arrivalGrace: true,
+          queuedAt: now.toISOString(),
+          graceDeadline: scheduledFor,
+        }
+      : {}),
   });
   return [
     {
       sql: `INSERT OR IGNORE INTO ea_email_triage
-              (user_id, account_id, email_id)
-            VALUES (?, ?, ?)`,
-      args: [userId, accountId, email.uid],
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES (?, ?, ?, 'pending', ?)`,
+      args: [userId, accountId, email.uid, arrivalGrace ? ARRIVAL_GRACE_SOURCE : "unknown"],
     },
     {
       sql: `INSERT INTO ea_triage_jobs
               (user_id, account_id, email_id, job_type, idempotency_key,
-               priority, payload_json)
-            VALUES (?, ?, ?, 'email_triage', ?, 2, ?)
+               priority, payload_json, scheduled_for)
+            VALUES (?, ?, ?, 'email_triage', ?, 2, ?, ?)
             ON CONFLICT(idempotency_key) DO NOTHING`,
-      args: [userId, accountId, email.uid, idempotencyKey, payload],
+      args: [userId, accountId, email.uid, idempotencyKey, payload, scheduledFor],
     },
   ];
 }
@@ -513,7 +528,7 @@ export async function syncGmailHistoryForAccount(account, {
     const emails = await fetchEmailsFn(account, GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS);
     if (emails.length) await indexEmailsFn(account.user_id, emails);
     const statements = emails.flatMap((email) =>
-      triageStatementsForEmail(account.user_id, account.id, email),
+      triageStatementsForEmail(account.user_id, account.id, email, { arrivalGrace: false, now }),
     );
     statements.push({
       sql: `UPDATE ea_gmail_watch_state
@@ -560,7 +575,7 @@ export async function syncGmailHistoryForAccount(account, {
   }
 
   const statements = emails.flatMap((email) =>
-    triageStatementsForEmail(account.user_id, account.id, email),
+    triageStatementsForEmail(account.user_id, account.id, email, { arrivalGrace: true, now }),
   );
   statements.push({
     sql: `UPDATE ea_gmail_watch_state
@@ -572,6 +587,12 @@ export async function syncGmailHistoryForAccount(account, {
     args: [lastHistoryId, now.toISOString(), "", account.user_id, account.id],
   });
   await dbClient.batch(statements);
+  for (const email of emails) {
+    await attachArrivalGraceEmailToActiveSnapshot(account.user_id, account.id, email, {
+      dbClient,
+      now,
+    });
+  }
 
   return {
     account_id: account.id,
@@ -586,11 +607,21 @@ export async function syncGmailHistoryForAccount(account, {
 
 export async function enqueueEmailTriageForEmails(userId, emails, {
   dbClient = db,
+  now = new Date(),
+  arrivalGrace = true,
 } = {}) {
   const statements = emails.flatMap((email) =>
-    triageStatementsForEmail(userId, email.account_id, email),
+    triageStatementsForEmail(userId, email.account_id, email, { arrivalGrace, now }),
   );
   if (statements.length) await dbClient.batch(statements);
+  if (arrivalGrace) {
+    for (const email of emails) {
+      await attachArrivalGraceEmailToActiveSnapshot(userId, email.account_id, email, {
+        dbClient,
+        now,
+      });
+    }
+  }
   return { queued: emails.length };
 }
 

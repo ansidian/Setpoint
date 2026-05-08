@@ -16,11 +16,13 @@ import { InboxAiStatusBlock, InboxAskAiConfirmation } from "../InboxAskAiSearch.
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
   { key: "__live", label: "New" },
+  { key: "queued", label: "Queue" },
   { key: "carryover", label: "Carry" },
   { key: "needs_attention", label: "Needs" },
   { key: "catch_up", label: "Catch" },
   { key: "fyi", label: "FYI" },
   { key: "handled", label: "Handled" },
+  { key: "untriaged_read", label: "Read" },
   { key: "noise", label: "Noise" },
 ];
 

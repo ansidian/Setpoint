@@ -195,4 +195,44 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByRole("button", { name: /pay bill/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /review reply/i })).toBeNull();
   });
+
+  it("keeps queued snapshot rows dismissible but blocks manual triage and handled workflows", () => {
+    const { onAction } = renderReader({
+      email: {
+        _lane: "queued",
+        _arrivalGraceQueued: true,
+        hasBill: false,
+      },
+    });
+
+    expect(screen.getByRole("button", { name: /dismiss from today/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /mark read/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /snooze email/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /trash email/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /move to needs attention/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /dismiss from today/i }));
+    expect(onAction).toHaveBeenCalledWith("snapshot-dismiss");
+  });
+
+  it("keeps untriaged-read snapshot rows out of snapshot lifecycle actions", () => {
+    renderReader({
+      email: {
+        _lane: "untriaged_read",
+        _untriagedRead: true,
+        read: true,
+        hasBill: false,
+      },
+    });
+
+    expect(screen.getByRole("button", { name: /mark unread/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /snooze email/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /trash email/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+  });
 });

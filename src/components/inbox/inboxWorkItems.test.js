@@ -43,6 +43,54 @@ describe("inbox work items", () => {
     ]);
   });
 
+  it("projects arrival grace lanes without treating them as live untriaged rows", () => {
+    const snapshot = makeActiveSnapshot({
+      lanes: {
+        queued: [{
+          id: 2,
+          uid: "queued-1",
+          account_id: "gmail-work",
+          lane: "queued",
+          source: "arrival_grace",
+          subject: "Fresh arrival",
+          read: false,
+        }],
+        needs_attention: [],
+        fyi: [],
+        untriaged_read: [{
+          id: 3,
+          uid: "read-1",
+          account_id: "gmail-work",
+          lane: "untriaged_read",
+          source: "arrival_grace_read",
+          subject: "Read before triage",
+          read: false,
+        }],
+        noise: [],
+      },
+      carryover: [],
+    });
+
+    const rows = collectActiveSnapshotEmails(snapshot, { "queued-1": true });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        uid: "queued-1",
+        _lane: "queued",
+        _arrivalGraceQueued: true,
+        _untriaged: false,
+        read: true,
+      }),
+      expect.objectContaining({
+        uid: "read-1",
+        _lane: "untriaged_read",
+        _untriagedRead: true,
+        _untriaged: false,
+        read: true,
+      }),
+    ]);
+  });
+
   it("normalizes live and resurfaced rows through the same account seam", () => {
     const synthAccount = makeSynthAccount([{ id: "work", name: "Work", color: "#fff", icon: "Mail" }]);
     const liveRows = collectLiveEmails(

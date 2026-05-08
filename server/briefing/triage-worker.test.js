@@ -203,6 +203,97 @@ describe("email triage worker", () => {
     await dbClient.close();
   });
 
+  it("settles read arrival-grace rows without model calls when the worker reaches them", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient);
+    await dbClient.execute({
+      sql: "UPDATE ea_email_index SET read = 1 WHERE uid = ?",
+      args: ["msg-1"],
+    });
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET triage_source = 'arrival_grace',
+                triage_status = 'pending'
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_triage_jobs SET scheduled_for = ? WHERE email_id = ?",
+      args: ["2026-05-03T12:03:00.000Z", "msg-1"],
+    });
+    const snapshot = await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshots
+              (user_id, start_at, end_at, timezone, status)
+            VALUES ('user-1', '2026-05-03T07:00:00.000Z', '2026-05-04T07:00:00.000Z',
+                    'America/Los_Angeles', 'active')
+            RETURNING id`,
+      args: [],
+    });
+    const triage = await dbClient.execute({
+      sql: "SELECT id FROM ea_email_triage WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               source, source_at)
+            VALUES (?, ?, 'user-1', 'gmail-work', 'msg-1',
+                    'queued', 'Queued for triage.', 'Waiting briefly before triage.',
+                    'normal', 'uncategorized', 'Fresh arrival',
+                    'arrival_grace', '2026-05-03T12:03:00.000Z')`,
+      args: [Number(snapshot.rows[0].id), Number(triage.rows[0].id)],
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:03:30.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      skipped: true,
+      source: "arrival_grace_read",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status,
+                   t.triage_source,
+                   t.last_triaged_at,
+                   j.status AS job_status,
+                   j.completed_at,
+                   j.scheduled_for,
+                   i.lane_at_snapshot,
+                   i.source
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            WHERE t.email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows).toEqual([
+      {
+        triage_status: "skipped",
+        triage_source: "arrival_grace_read",
+        last_triaged_at: "2026-05-03T12:03:30.000Z",
+        job_status: "complete",
+        completed_at: "2026-05-03T12:03:30.000Z",
+        scheduled_for: null,
+        lane_at_snapshot: "untriaged_read",
+        source: "arrival_grace_read",
+      },
+    ]);
+    await dbClient.close();
+  });
+
   it("finalizes read weak-security grace rows as FYI on the second run without model calls", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
@@ -511,6 +602,65 @@ describe("email triage worker", () => {
       attempts: 0,
       locked_at: null,
     });
+  });
+
+  it("settles read arrival-grace rows even when triage mode is paused", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient);
+    await dbClient.batch([
+      {
+        sql: "UPDATE ea_settings SET email_triage_mode = 'paused' WHERE user_id = ?",
+        args: ["user-1"],
+      },
+      {
+        sql: `UPDATE ea_email_index
+              SET read = 1
+              WHERE uid = ?`,
+        args: ["msg-1"],
+      },
+      {
+        sql: `UPDATE ea_email_triage
+              SET triage_source = 'arrival_grace',
+                  triage_status = 'pending'
+              WHERE email_id = ?`,
+        args: ["msg-1"],
+      },
+      {
+        sql: "UPDATE ea_triage_jobs SET scheduled_for = ? WHERE email_id = ?",
+        args: ["2026-05-03T12:03:00.000Z", "msg-1"],
+      },
+    ]);
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:03:30.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      skipped: true,
+      source: "arrival_grace_read",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status, t.triage_source, j.status, j.completed_at
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.email_id = t.email_id
+            WHERE t.email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows).toEqual([
+      {
+        triage_status: "skipped",
+        triage_source: "arrival_grace_read",
+        status: "complete",
+        completed_at: "2026-05-03T12:03:30.000Z",
+      },
+    ]);
   });
 
   it("finalizes obvious noise with rules only and attaches it to the active snapshot", async () => {

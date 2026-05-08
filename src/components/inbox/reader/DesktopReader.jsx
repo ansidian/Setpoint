@@ -219,9 +219,13 @@ export default function DesktopReader({
   const gmailUrl = getGmailUrl(email);
   const catchUp = isCatchUpEmail(email);
   const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
+  const isQueuedSnapshot = email._lane === "queued";
+  const isUntriagedReadSnapshot = email._lane === "untriaged_read";
   const showSnapshotActions = email._activeSnapshot && !readOnly && !catchUp;
-  const isHandledSnapshot = showSnapshotActions && email._lane === "handled";
-  const canMarkHandledSnapshot = showSnapshotActions
+  const showSnapshotWorkflowActions = showSnapshotActions && !isQueuedSnapshot && !isUntriagedReadSnapshot;
+  const canDismissSnapshot = showSnapshotActions && !isUntriagedReadSnapshot;
+  const isHandledSnapshot = showSnapshotWorkflowActions && email._lane === "handled";
+  const canMarkHandledSnapshot = showSnapshotWorkflowActions
     && !isHandledSnapshot
     && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
   const showMutableActions = !readOnly;
@@ -270,7 +274,7 @@ export default function DesktopReader({
             keyHint="H"
           />
         )}
-        {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
+        {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
           <QuickAction
             icon={Zap}
             ariaLabel="Move to Needs Attention"
@@ -280,7 +284,7 @@ export default function DesktopReader({
             keyHint="A"
           />
         )}
-        {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
+        {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
           <QuickAction
             icon={FileText}
             ariaLabel="Move to FYI"
@@ -290,7 +294,7 @@ export default function DesktopReader({
             keyHint="F"
           />
         )}
-        {showSnapshotActions && !isHandledSnapshot && snapshotLane !== "noise" && (
+        {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "noise" && (
           <QuickAction
             icon={BellOff}
             ariaLabel="Move to Noise"
@@ -310,7 +314,7 @@ export default function DesktopReader({
             keyHint="H"
           />
         )}
-        {showSnapshotActions && !isHandledSnapshot && (
+        {canDismissSnapshot && !isHandledSnapshot && (
           <QuickAction
             icon={CalendarX}
             ariaLabel="Dismiss from today"

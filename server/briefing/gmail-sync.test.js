@@ -126,6 +126,65 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     });
   });
 
+  it("enqueues normal fresh mail into arrival grace and attaches it to the active snapshot", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-fresh-1",
+      read: 0,
+      email_date: "2026-05-03T12:00:00.000Z",
+    });
+
+    const result = await gmailSync.enqueueEmailTriageForEmails(
+      "user-1",
+      [{
+        uid: "gmail-work-fresh-1",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from_name: "Fresh Sender",
+        from_address: "fresh@example.com",
+        subject: "Fresh arrival",
+        body_snippet: "This should wait briefly.",
+        email_date: "2026-05-03T12:00:00.000Z",
+      }],
+      {
+        dbClient: testState.db.current,
+        now: new Date("2026-05-03T12:00:00.000Z"),
+      },
+    );
+
+    expect(result).toEqual({ queued: 1 });
+    const rows = await testState.db.current.execute({
+      sql: `SELECT t.triage_status,
+                   t.triage_source,
+                   j.status AS job_status,
+                   j.scheduled_for,
+                   i.lane_at_snapshot,
+                   i.source,
+                   i.source_at
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+             AND j.job_type = 'email_triage'
+            JOIN ea_briefing_snapshot_items i ON i.triage_id = t.id
+            WHERE t.email_id = ?`,
+      args: ["gmail-work-fresh-1"],
+    });
+    expect(rows.rows).toEqual([
+      {
+        triage_status: "pending",
+        triage_source: "arrival_grace",
+        job_status: "queued",
+        scheduled_for: "2026-05-03T12:03:00.000Z",
+        lane_at_snapshot: "queued",
+        source: "arrival_grace",
+        source_at: "2026-05-03T12:03:00.000Z",
+      },
+    ]);
+  });
+
   it("registers an INBOX watch and persists Gmail history cursor state", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,
@@ -278,13 +337,21 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       last_error: "",
     });
     const jobs = await testState.db.current.execute({
-      sql: `SELECT email_id, job_type
+      sql: `SELECT email_id, job_type, scheduled_for, payload_json
             FROM ea_triage_jobs
             WHERE job_type = 'email_triage'`,
       args: [],
     });
     expect(jobs.rows).toEqual([
-      { email_id: "gmail-gmail-work-current-msg", job_type: "email_triage" },
+      {
+        email_id: "gmail-gmail-work-current-msg",
+        job_type: "email_triage",
+        scheduled_for: null,
+        payload_json: JSON.stringify({
+          uid: "gmail-gmail-work-current-msg",
+          subject: "Current inbox message",
+        }),
+      },
     ]);
   });
 
@@ -424,8 +491,20 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       }),
     ]);
     expect(jobs.rows.map((row) => JSON.parse(row.payload_json))).toEqual([
-      { uid: "gmail-gmail-work-msg-1", subject: "One" },
-      { uid: "gmail-gmail-work-msg-3", subject: "Three" },
+      {
+        uid: "gmail-gmail-work-msg-1",
+        subject: "One",
+        arrivalGrace: true,
+        queuedAt: "2026-05-03T12:15:00.000Z",
+        graceDeadline: "2026-05-03T12:18:00.000Z",
+      },
+      {
+        uid: "gmail-gmail-work-msg-3",
+        subject: "Three",
+        arrivalGrace: true,
+        queuedAt: "2026-05-03T12:15:00.000Z",
+        graceDeadline: "2026-05-03T12:18:00.000Z",
+      },
     ]);
 
     const watchState = await testState.db.current.execute({

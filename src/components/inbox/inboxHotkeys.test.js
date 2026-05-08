@@ -45,4 +45,17 @@ describe("resolveInboxHotkeyAction", () => {
       expect(resolveInboxHotkeyAction(key, catchUp, false)).toBeNull();
     }
   });
+
+  it("limits arrival-grace lanes to their allowed snapshot shortcuts", () => {
+    const queued = { ...snapshotEmail, _lane: "queued" };
+    const untriagedRead = { ...snapshotEmail, _lane: "untriaged_read" };
+
+    expect(resolveInboxHotkeyAction("d", queued, false)).toEqual({ kind: "snapshot-dismiss" });
+    expect(resolveInboxHotkeyAction("h", queued, false)).toBeNull();
+    expect(resolveInboxHotkeyAction("f", queued, false)).toBeNull();
+
+    for (const key of ["h", "d", "f", "n", "a"]) {
+      expect(resolveInboxHotkeyAction(key, untriagedRead, false)).toBeNull();
+    }
+  });
 });

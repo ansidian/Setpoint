@@ -62,11 +62,13 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
     },
   ]));
   const rows = [
+    ...(activeSnapshot.lanes?.queued || []),
     ...(activeSnapshot.carryover || []).map((item) => ({ ...item, _snapshotCarryover: true })),
     ...(activeSnapshot.lanes?.needs_attention || []),
     ...(activeSnapshot.lanes?.catch_up || []).map((item) => ({ ...item, _snapshotCatchUp: true })),
     ...(activeSnapshot.lanes?.fyi || []),
     ...(activeSnapshot.lanes?.handled || []),
+    ...(activeSnapshot.lanes?.untriaged_read || []),
     ...(activeSnapshot.lanes?.noise || []),
   ];
 
@@ -74,6 +76,8 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
     const uid = item.uid || item.email_id || item.id;
     const resurfaced = item.source === "resurfaced_snooze" || item._resurfaced;
     const pendingSecurityGrace = item.source === "pending_security_grace";
+    const arrivalGraceQueued = item.lane === "queued" || item.source === "arrival_grace";
+    const untriagedRead = item.lane === "untriaged_read" || item.source === "arrival_grace_read";
     const catchUp = item._snapshotCatchUp || item.lane === "catch_up" || item.source === "catch_up";
     const resurfacedAt = item.resurfaced_at || item._resurfacedAt || (item.source_at ? Date.parse(item.source_at) : null);
     const pendingSecurityGraceAt = pendingSecurityGrace && item.source_at ? Date.parse(item.source_at) : null;
@@ -92,6 +96,10 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       : resurfaced
       || pendingSecurityGrace
       ? null
+      : arrivalGraceQueued
+      ? "queued"
+      : untriagedRead
+      ? "untriaged_read"
       : catchUp
       ? "catch_up"
       : item._snapshotCarryover
@@ -111,7 +119,7 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       preview: item.preview || item.summary || "",
       body_preview: item.body_preview || item.preview || item.summary || "",
       date: item.date || item.email_date,
-      read: mergeReadState(item.read, uid, liveReadOverrides),
+      read: untriagedRead ? true : mergeReadState(item.read, uid, liveReadOverrides),
       account_id: item.account_id,
       account_label: account.name,
       account_email: account.email,
@@ -126,6 +134,8 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       _activeSnapshot: true,
       _carryover: lane === "carryover",
       _catchUp: lane === "catch_up",
+      _arrivalGraceQueued: arrivalGraceQueued,
+      _untriagedRead: untriagedRead,
       _resurfaced: resurfaced,
       _resurfacedAt: resurfacedAt,
       _pendingSecurityGrace: pendingSecurityGrace,
