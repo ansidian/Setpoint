@@ -24,6 +24,7 @@ import {
   trashEmailWithProvider,
 } from "./email-provider-adapters.js";
 import { rankEmailSearchRows } from "./email-search-ranking.js";
+import { normalizeBillCandidate } from "./snapshot-lifecycle.js";
 
 // --- Private helpers ---
 
@@ -61,6 +62,15 @@ function invalidSearchFlagError(message) {
   err.status = 400;
   err.code = "invalid_email_search_flags";
   return err;
+}
+
+function parseJsonPayload(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 function parseEmailSearchQuery(raw) {
@@ -223,6 +233,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
   const byAccount = {};
   const results = [];
   const buildResult = (row) => {
+    const billCandidate = parseJsonPayload(row.triage_bill_candidate_json);
     const email = {
       uid: row.uid,
       from_name: row.from_name,
@@ -240,6 +251,11 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
       account_color: row.account_color,
       account_icon: row.account_icon,
     };
+    if (billCandidate) {
+      email.hasBill = true;
+      email.bill_candidate = billCandidate;
+      email.extractedBill = normalizeBillCandidate(billCandidate);
+    }
     if (debug) {
       email.search_score = row.search_score;
       email.search_score_details = row.search_score_details;

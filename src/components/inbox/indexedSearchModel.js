@@ -48,6 +48,9 @@ function normalizeSearchEmail(result, account, readOverrides) {
     _lane: null,
     _untriaged: false,
     _indexedSearch: true,
+    hasBill: !!result.hasBill,
+    bill_candidate: result.bill_candidate || null,
+    extractedBill: result.extractedBill || null,
   };
 }
 

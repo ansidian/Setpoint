@@ -61,7 +61,7 @@ describe("snapshot lifecycle model", () => {
       handled_at: null,
       provider_removed_at: null,
       read: 1,
-      bill_candidate_json: "{\"amount\":12}",
+      bill_candidate_json: "{\"payee_hint\":\"Billing Team\",\"amount\":12,\"due_date\":\"2026-05-10\",\"requires_confirmation\":true}",
     })).toMatchObject({
       id: "catch_up:13",
       snapshot_id: 2,
@@ -82,7 +82,19 @@ describe("snapshot lifecycle model", () => {
       resurfaced_at: 7,
       read: true,
       hasBill: true,
-      bill_candidate: { amount: 12 },
+      bill_candidate: {
+        payee_hint: "Billing Team",
+        amount: 12,
+        due_date: "2026-05-10",
+        requires_confirmation: true,
+      },
+      extractedBill: {
+        payee: "Billing Team",
+        amount: 12,
+        due_date: "2026-05-10",
+        type: "expense",
+        requires_confirmation: true,
+      },
       _catchUp: true,
       previous_snapshot_item_id: 13,
     });

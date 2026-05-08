@@ -262,7 +262,12 @@ describe("searchEmails contract", () => {
       sql: `INSERT INTO ea_email_triage
               (user_id, account_id, email_id, lane, category, urgency, bill_candidate_json, triage_status)
             VALUES (?, ?, ?, 'needs_attention', 'finance', 'high', ?, 'complete')`,
-      args: ["user-1", "gmail-work", "older-unread-bill", JSON.stringify({ amount_due: 25 })],
+      args: ["user-1", "gmail-work", "older-unread-bill", JSON.stringify({
+        payee_hint: "Power Utility",
+        amount: 25,
+        due_date: "2026-05-10",
+        requires_confirmation: true,
+      })],
     });
     await testState.db.current.execute({
       sql: `INSERT INTO ea_email_triage
@@ -280,6 +285,16 @@ describe("searchEmails contract", () => {
       "older-unread-bill",
       "newer-unread-noise",
     ]);
+    expect(result.results[0]).toMatchObject({
+      hasBill: true,
+      extractedBill: {
+        payee: "Power Utility",
+        amount: 25,
+        due_date: "2026-05-10",
+        type: "expense",
+        requires_confirmation: true,
+      },
+    });
   });
 
   it("supports is:read as an indexed read predicate", async () => {
