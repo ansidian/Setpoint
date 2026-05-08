@@ -18,6 +18,8 @@ import {
   DEFAULT_BILL_EXTRACT_MODEL,
   isAllowedBillExtractModel,
 } from "./bill-extractors/catalog.js";
+import { resolveExtractedBillPay } from "./bill-pay-service.js";
+export { resolveBillPaySample, resolveBillPaySeed } from "./bill-pay-service.js";
 
 const PROVIDERS = {
   [ANTHROPIC_PROVIDER.id]: ANTHROPIC_PROVIDER,
@@ -583,9 +585,10 @@ export async function refreshBillsMirror(userId, {
 }
 
 export async function extractBill(userId, { subject, from, body }) {
-  const [categories, accounts] = await Promise.all([
+  const [categories, accounts, payees] = await Promise.all([
     actualGetCategories(userId).catch(() => []),
     actualGetAccounts(userId).catch(() => []),
+    actualGetPayees(userId).catch(() => []),
   ]);
 
   const catCodeToId = new Map();
@@ -642,7 +645,7 @@ export async function extractBill(userId, { subject, from, body }) {
     `[EA] Bill extract: provider=${providerId} model=${model} in=${usage.input_tokens ?? usage.prompt_tokens ?? "?"} out=${usage.output_tokens ?? usage.completion_tokens ?? "?"} trimmed_chars=${trimmed.length}`,
   );
 
-  return {
+  const extracted = {
     payee: fields.payee,
     amount: fields.amount,
     due_date: fields.due_date,
@@ -652,5 +655,17 @@ export async function extractBill(userId, { subject, from, body }) {
     to_account_id: fields.to_account_code ? acctCodeToId.get(fields.to_account_code) || null : null,
     provider: providerId,
     model,
+  };
+  const resolved = await resolveExtractedBillPay(userId, {
+    extracted,
+    metadata: { accounts, categories, payees },
+    email: { subject, from, body },
+  });
+
+  return {
+    ...resolved.bill,
+    provider: providerId,
+    model,
+    mapping: resolved.mapping,
   };
 }

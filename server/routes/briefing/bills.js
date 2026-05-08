@@ -82,6 +82,35 @@ router.post("/bills/extract", async (req, res) => {
   }
 });
 
+router.post("/bills/resolve", async (req, res) => {
+  const {
+    emailId,
+    accountId,
+    subject,
+    from,
+    body,
+    snippet,
+    candidate,
+    source = "triage",
+  } = req.body || {};
+  try {
+    res.json(await billsService.resolveBillPaySeed(EA_USER_ID, {
+      emailId,
+      accountId,
+      subject,
+      from,
+      body,
+      snippet,
+      candidate,
+      source,
+    }));
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Error resolving bill pay:", err);
+    res.status(status).json({ message: err.message });
+  }
+});
+
 router.post("/actual/bills/:id/mark-paid", async (req, res) => {
   try {
     res.json(await billsService.markBillPaid(EA_USER_ID, req.params.id));

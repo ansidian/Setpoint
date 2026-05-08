@@ -30,6 +30,10 @@ import {
   TRIAGE_NOTIFICATION_SOUNDS,
   validateTriageSoundSettings,
 } from "../briefing/triage-sound-settings.js";
+import {
+  parseBillPayMappingsJson,
+  validateBillPayMappings,
+} from "../briefing/bill-pay-mappings.js";
 import { getTriageCacheStats } from "../briefing/triage-cache-stats.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 import { storeTodoistOAuthTokenResponse } from "../briefing/todoist-token.js";
@@ -370,6 +374,7 @@ router.get("/settings", async (req, res) => {
       schedules_json,
       email_interests_json,
       triage_sound_settings_json,
+      bill_pay_mappings_json,
       ...safe
     } = result.rows[0];
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
@@ -398,6 +403,7 @@ router.get("/settings", async (req, res) => {
     safe.email_triage_effective_mode = triageMode.effective_email_triage_mode;
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
+    safe.bill_pay_mappings = parseBillPayMappingsJson(bill_pay_mappings_json);
 
     // Render suspend availability
     safe.render_configured =
@@ -425,7 +431,7 @@ router.get("/triage/cache-stats", async (req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings } = req.body;
 
   try {
     if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
@@ -479,6 +485,14 @@ router.put("/settings", async (req, res) => {
       }
       updates.push("triage_sound_settings_json = ?");
       args.push(JSON.stringify(triage_sound_settings));
+    }
+    if (bill_pay_mappings !== undefined) {
+      const validation = validateBillPayMappings(bill_pay_mappings);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updates.push("bill_pay_mappings_json = ?");
+      args.push(JSON.stringify(bill_pay_mappings));
     }
     if (bill_extract_provider !== undefined || bill_extract_model !== undefined) {
       const provider = bill_extract_provider ?? DEFAULT_BILL_EXTRACT_PROVIDER;
