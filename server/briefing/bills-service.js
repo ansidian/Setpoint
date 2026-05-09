@@ -124,11 +124,21 @@ function hasActualMetadataRows(metadata = {}) {
 }
 
 async function loadActualMetadataForProjection(userId, { refreshLocal = true } = {}) {
+  let liveSyncError = null;
+  if (refreshLocal) {
+    try {
+      return await actualGetMetadata(userId, { forceWorker: true, forceRefresh: true });
+    } catch (err) {
+      liveSyncError = err;
+      console.warn("[EA] Live Actual metadata sync failed; falling back to lightweight projection:", err.message);
+    }
+  }
   try {
-    return await readLocalActualMetadata(userId, { refresh: refreshLocal });
+    return await readLocalActualMetadata(userId, { refresh: liveSyncError ? false : refreshLocal });
   } catch (err) {
     console.warn("[EA] Lightweight Actual metadata projection failed; falling back to Actual worker:", err.message);
-    return actualGetMetadata(userId);
+    if (liveSyncError) throw liveSyncError;
+    return actualGetMetadata(userId, { forceWorker: true, forceRefresh: refreshLocal });
   }
 }
 

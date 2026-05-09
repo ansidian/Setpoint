@@ -133,17 +133,22 @@ export function testConnection(userId, overrides = null) {
 // The @actual-app/api is a singleton — parallel init/shutdown calls conflict,
 // so we batch everything into one connection.
 // Cache check is inside withLock to prevent cache stampede (D-03 from RESEARCH.md).
-export function getMetadata(userId) {
-  return withLock(() => getMetadataInner(userId));
+export function getMetadata(userId, { forceRefresh = false } = {}) {
+  return withLock(() => getMetadataInner(userId, { forceRefresh }));
 }
 
 // Inner body — assumes caller already holds the withLock mutex. Lets operations
 // like createQuickTxn chain metadata fetch + mutation inside one critical section
 // without re-entering the lock (which would serialize against itself).
-async function getMetadataInner(userId) {
+async function getMetadataInner(userId, { forceRefresh = false } = {}) {
     const now = Date.now();
-    if (metadataCache.data && now - metadataCache.ts < METADATA_TTL_MS) {
+    if (!forceRefresh && metadataCache.data && now - metadataCache.ts < METADATA_TTL_MS) {
       return metadataCache.data;
+    }
+
+    if (forceRefresh) {
+      metadataCache = { data: null, ts: 0 };
+      await closeActualSession();
     }
 
     return withActualBudget(userId, async () => {
