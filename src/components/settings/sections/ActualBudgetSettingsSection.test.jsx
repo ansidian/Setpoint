@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
   getActualMetadata: vi.fn(),
+  resolveBillPayMappingSample: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
 }));
 
 vi.mock("@/api", () => ({
   getActualMetadata: mockApi.getActualMetadata,
+  resolveBillPayMappingSample: mockApi.resolveBillPayMappingSample,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
 }));
@@ -80,6 +82,16 @@ beforeEach(() => {
   });
   mockApi.testActualBudget.mockResolvedValue({ success: true });
   mockApi.updateSettings.mockResolvedValue({ success: true });
+  mockApi.resolveBillPayMappingSample.mockResolvedValue({
+    bill: { payee: "Citi", amount: 25, due_date: "2026-05-15", type: "expense" },
+    mapping: {
+      status: "matched",
+      profileId: "profile-citi",
+      behaviorId: "minimum-due",
+      amountSource: "minimum_due",
+      matchedProfiles: ["profile-citi"],
+    },
+  });
 });
 
 describe("ActualBudgetSettingsSection", () => {
@@ -187,5 +199,68 @@ describe("ActualBudgetSettingsSection", () => {
 
     expect(await screen.findByText("Missing: Old Payee")).toBeTruthy();
     expect(screen.getByText("Payee missing: Old Payee")).toBeTruthy();
+  });
+
+  it("submits pasted mapping samples and renders diagnostics", async () => {
+    const mappings = {
+      version: 1,
+      profiles: [
+        {
+          id: "profile-citi",
+          name: "Citi",
+          enabled: true,
+          identity: { domain: ["citi.com"] },
+          behaviors: [
+            {
+              id: "minimum-due",
+              name: "Minimum due",
+              enabled: true,
+              type: "expense",
+              intent: { subject: ["payment due"] },
+              targets: { payee_id: "payee-citi", payee_label: "Citi" },
+            },
+          ],
+        },
+      ],
+    };
+
+    renderSection({ initialSettings: { bill_pay_mappings: mappings } });
+
+    fireEvent.change(await screen.findByPlaceholderText("sample@billing.example.com"), {
+      target: { value: "alerts@citi.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Your payment is due"), {
+      target: { value: "Payment due" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Paste the relevant bill text here."), {
+      target: { value: "Minimum due: $25" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run Test" }));
+
+    await waitFor(() => {
+      expect(mockApi.resolveBillPayMappingSample).toHaveBeenCalledWith(expect.objectContaining({
+        email: {
+          from: "alerts@citi.com",
+          subject: "Payment due",
+          body: "Minimum due: $25",
+          snippet: "Minimum due: $25",
+        },
+        candidate: null,
+      }));
+    });
+    const submitted = mockApi.resolveBillPayMappingSample.mock.calls[0][0];
+    expect(submitted.mappings.profiles[0]).toMatchObject({
+      id: "profile-citi",
+      identity: { domain: ["citi.com"] },
+    });
+    expect(submitted.mappings.profiles[0].behaviors[0]).toMatchObject({
+      id: "minimum-due",
+      intent: { subject: ["payment due"] },
+    });
+    expect(await screen.findByText("Matched")).toBeTruthy();
+    expect(screen.getByText("Profile profile-citi")).toBeTruthy();
+    expect(screen.getByText("Behavior minimum-due")).toBeTruthy();
+    expect(screen.getByText("Amount minimum_due")).toBeTruthy();
+    expect(screen.getByText("Identity matches: profile-citi")).toBeTruthy();
   });
 });

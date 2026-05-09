@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getActualMetadata } from "@/api";
 import ActualBudgetConnectionCard from "@/components/settings/cards/ActualBudgetConnectionCard";
 import BillPayMappingsCard from "@/components/settings/cards/BillPayMappingsCard";
+import BillPayMappingTestCard from "@/components/settings/cards/BillPayMappingTestCard";
 
 const EMPTY_METADATA = { accounts: [], payees: [], categories: [] };
 
@@ -36,6 +37,7 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
         metadata={metadata}
         metadataLoading={metadataLoading}
       />
+      <BillPayMappingTestCard settings={settings} />
     </>
   );
 }

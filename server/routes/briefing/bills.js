@@ -111,6 +111,21 @@ router.post("/bills/resolve", async (req, res) => {
   }
 });
 
+router.post("/bills/resolve-sample", async (req, res) => {
+  const { mappings, email, candidate } = req.body || {};
+  try {
+    res.json(await billsService.resolveBillPaySample(EA_USER_ID, {
+      mappings,
+      email,
+      candidate,
+    }));
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Error resolving bill pay sample:", err);
+    res.status(status).json({ message: err.message });
+  }
+});
+
 router.post("/actual/bills/:id/mark-paid", async (req, res) => {
   try {
     res.json(await billsService.markBillPaid(EA_USER_ID, req.params.id));
