@@ -113,6 +113,15 @@ function metadataFromRow(row) {
   };
 }
 
+function hasActualMetadataRows(metadata = {}) {
+  return Boolean(
+    metadata.accounts?.length
+    || metadata.payees?.length
+    || metadata.categories?.length
+    || metadata.schedules?.length
+  );
+}
+
 function metadataProjectionArgs(userId, metadata, timestamp) {
   const normalized = metadataWithPayeeMap(metadata);
   return [
@@ -381,14 +390,20 @@ export async function refreshActualMetadataProjection(userId, {
   }
 }
 
-export async function getMetadata(userId) {
+function metadataUnavailableError(projected) {
+  const detail = projected?.syncHealth?.lastError ? `: ${projected.syncHealth.lastError}` : "";
+  return Object.assign(new Error(`Actual metadata projection is unavailable${detail}`), { status: 503 });
+}
+
+export async function getMetadata(userId, { allowRefresh = false } = {}) {
   const projected = await readActualMetadataProjection(userId).catch(() => null);
-  if (projected?.syncHealth?.state === "current" || projected?.syncHealth?.state === "degraded") {
-    return projected;
-  }
+  if (projected?.syncHealth?.state === "current") return projected;
+  if (projected && hasActualMetadataRows(projected)) return projected;
+  if (!allowRefresh) throw metadataUnavailableError(projected);
   return refreshActualMetadataProjection(userId).catch((err) => {
     console.error("[EA] Actual metadata projection refresh failed:", err.message);
-    return projected || { ...EMPTY_ACTUAL_METADATA, syncHealth: { state: "needs_sync", lastError: err.message } };
+    if (projected && hasActualMetadataRows(projected)) return projected;
+    throw err;
   });
 }
 

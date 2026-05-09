@@ -225,6 +225,16 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.getByText("Payee missing: Old Payee")).toBeTruthy();
   });
 
+  it("surfaces metadata load failures instead of presenting an ordinary empty mapping list", async () => {
+    mockApi.getActualMetadata.mockRejectedValueOnce(new Error("Actual worker exited"));
+    renderSection();
+
+    fireEvent.click(await screen.findByRole("button", { name: /profile/i }));
+
+    expect(await screen.findByText("Metadata unavailable")).toBeTruthy();
+    expect(screen.getByText(/Actual metadata could not load/i)).toBeTruthy();
+  });
+
   it("defaults mapping profiles to collapsed and supports expanding them", async () => {
     renderSection({
       initialSettings: {

@@ -9,6 +9,7 @@ const EMPTY_METADATA = { accounts: [], payees: [], categories: [] };
 export default function ActualBudgetSettingsSection({ settings, setSettings, patch }) {
   const [metadata, setMetadata] = useState(EMPTY_METADATA);
   const [metadataLoading, setMetadataLoading] = useState(false);
+  const [metadataError, setMetadataError] = useState("");
   const mountedRef = useRef(true);
   const metadataPromiseRef = useRef(null);
 
@@ -19,6 +20,7 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
   const requestMetadata = useCallback(() => {
     if (metadataPromiseRef.current) return metadataPromiseRef.current;
     setMetadataLoading(true);
+    setMetadataError("");
     const promise = getActualMetadata()
       .then((result) => {
         if (mountedRef.current) setMetadata(result || EMPTY_METADATA);
@@ -27,7 +29,8 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
       .catch((error) => {
         metadataPromiseRef.current = null;
         if (mountedRef.current) setMetadata(EMPTY_METADATA);
-        throw error;
+        if (mountedRef.current) setMetadataError(error?.message || "Actual metadata unavailable");
+        return EMPTY_METADATA;
       })
       .finally(() => {
         if (mountedRef.current) setMetadataLoading(false);
@@ -45,6 +48,7 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
         patch={patch}
         metadata={metadata}
         metadataLoading={metadataLoading}
+        metadataError={metadataError}
         onRequestMetadata={requestMetadata}
       />
       <BillPayMappingTestCard settings={settings} />
