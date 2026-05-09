@@ -11,7 +11,7 @@ import {
 } from "./currentDashboardModel.js";
 
 const POST_CLICK_POLL_MS = 2_000;
-const POST_CLICK_POLL_MAX_MS = 15_000;
+const POST_CLICK_POLL_MAX_MS = 45_000;
 
 function sleep(ms) {
   return new Promise((resolve) => {

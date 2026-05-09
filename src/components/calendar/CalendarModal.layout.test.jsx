@@ -3138,6 +3138,43 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.queryByTestId("calendar-pending-update")).toBeNull();
   });
 
+  it("matches utility statement status against mirrored bill payees", () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="bills"
+        onViewChange={() => {}}
+        focusDate="2026-05-26"
+        eventsData={{ getEvents: () => [] }}
+        billsData={{
+          schedules: [
+            {
+              id: "water:2026-05-26",
+              scheduleId: "water",
+              name: "Water Bill",
+              payee: "SGV Water",
+              next_date: "2026-05-26",
+              amount: 50.67,
+              paid: false,
+              type: "bill",
+            },
+          ],
+          payeeMap: {},
+        }}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(screen.getByLabelText("Utility statement status"));
+
+    const waterRow = screen.getByText("Water").parentElement?.parentElement;
+    expect(waterRow).toBeTruthy();
+    expect(within(waterRow).getByText("next May 26")).toBeTruthy();
+  });
+
   it("refetches the visible Bills range when range data is marked stale", async () => {
     window.innerWidth = 1900;
     const ensureRange = vi.fn().mockResolvedValue({});

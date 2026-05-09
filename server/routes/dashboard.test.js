@@ -561,6 +561,46 @@ describe("GET /api/dashboard/current", () => {
     }));
   });
 
+  it("publishes Bills refresh completion even when manual sync returns the same visible payload", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+    await seedCache("bills_current", {
+      bills: [{ id: "bill-1", payee: "Water" }],
+      allSchedules: [{ id: "bill-1", payee: "Water" }],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
+    });
+    testState.refreshBillsMirror.mockResolvedValueOnce({
+      bills: [{ id: "bill-1", payee: "Water" }],
+      allSchedules: [{ id: "bill-1", payee: "Water" }],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+      billsSyncHealth: { state: "current", configured: true },
+    });
+    const listener = vi.fn();
+    const unsubscribe = subscribeCurrentDashboardEvents("u1", listener);
+
+    try {
+      const res = await request(makeApp())
+        .post("/api/dashboard/current/refresh")
+        .set("Cookie", ["ea_session=cookie-session"]);
+
+      expect(res.status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({
+        source: "bills",
+        reason: "changed",
+        state: "current",
+      }));
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("manual refresh forces a pending Bills mirror refresh even when current cache is fresh", async () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", []);
