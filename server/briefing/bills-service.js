@@ -875,7 +875,14 @@ export async function refreshBillsMirror(userId, {
               updated_at = excluded.updated_at`,
       args: [userId, actualBudgetUrl, timestamp, String(err?.message || err).slice(0, 500), timestamp],
     });
-    throw err;
+    const fallbackRange = billMirrorRefreshRange({ now });
+    const fallback = await readBillsMirrorRange(userId, fallbackRange, { dbClient });
+    return currentPayloadFromOccurrences(fallback.schedules, {
+      actualConfigured: true,
+      actualBudgetUrl: fallback.actualBudgetUrl || actualBudgetUrl,
+      now,
+      syncHealth: fallback.syncHealth,
+    });
   }
 }
 

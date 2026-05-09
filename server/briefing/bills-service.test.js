@@ -499,22 +499,56 @@ describe("Bills mirror", () => {
     ]);
   });
 
-  it("preserves old mirror rows and marks degraded when refresh fails", async () => {
+  it("returns old mirror rows with degraded health when refresh fails", async () => {
     mockActual.getMetadata.mockRejectedValueOnce(new Error("Actual offline"));
-    mockDb.execute.mockResolvedValueOnce(rowResult());
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult())
+      .mockResolvedValueOnce(rowResult([
+        {
+          status: "degraded",
+          actual_configured: 1,
+          actual_budget_url: "https://actual.example.test",
+          last_success_at: "2026-05-05T12:00:00.000Z",
+          last_attempt_at: "2026-05-06T12:00:00.000Z",
+          last_error: "Actual offline",
+          pending_refresh_at: null,
+          refresh_started_at: null,
+        },
+      ]))
+      .mockResolvedValueOnce(rowResult([
+        {
+          occurrence_id: "sched-1:2026-05-10",
+          schedule_id: "sched-1",
+          occurrence_date: "2026-05-10",
+          name: "Mortgage",
+          payee: "Mortgage Co",
+          amount: 1500,
+          type: "bill",
+          paid: 0,
+          open_action_disabled: 0,
+        },
+      ]));
 
-    await expect(
-      refreshBillsMirror("u1", {
-        actualBudgetUrl: "https://actual.example.test",
-        now: new Date("2026-05-06T12:00:00.000Z"),
-      }),
-    ).rejects.toThrow("Actual offline");
+    const out = await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
 
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/ea_bills_mirror_state/i),
     }));
+    expect(out.billsSyncHealth).toMatchObject({
+      state: "degraded",
+      lastError: "Actual offline",
+    });
+    expect(out.allSchedules).toEqual([
+      expect.objectContaining({
+        id: "sched-1:2026-05-10",
+        payee: "Mortgage Co",
+      }),
+    ]);
   });
 
   it("schedules and consumes server-owned delayed refreshes", async () => {
