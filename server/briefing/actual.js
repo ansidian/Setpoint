@@ -1,5 +1,6 @@
 import { runActualWorkerOperation } from "./actual-worker.js";
 import { testActualConnectionHttp } from "./actual-connection-test.js";
+import { readLocalActualMetadata } from "./actual-local-metadata.js";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;
 let metadataCache = { data: null, ts: 0 };
@@ -101,6 +102,13 @@ export async function getMetadata(userId) {
   const now = Date.now();
   if (metadataCache.data && now - metadataCache.ts < METADATA_TTL_MS) {
     return metadataCache.data;
+  }
+  try {
+    const localData = await readLocalActualMetadata(userId);
+    metadataCache = { data: localData, ts: Date.now() };
+    return localData;
+  } catch (err) {
+    console.warn("[EA] Lightweight Actual metadata read failed; falling back to Actual worker:", err.message);
   }
   const data = await callActual("getMetadata", [userId]);
   metadataCache = { data, ts: Date.now() };

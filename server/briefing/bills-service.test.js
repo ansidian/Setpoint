@@ -11,8 +11,12 @@ const mockActual = {
   testConnection: vi.fn(),
   createQuickTxn: vi.fn(),
 };
+const mockActualLocal = {
+  readLocalActualMetadata: vi.fn(),
+};
 const mockDb = { execute: vi.fn(), batch: vi.fn() };
 vi.mock("./actual.js", () => mockActual);
+vi.mock("./actual-local-metadata.js", () => mockActualLocal);
 vi.mock("./bill-extract.js", () => ({ trimBillBody: ({ body }) => body.slice(0, 100) }));
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
 
@@ -55,6 +59,8 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
   process.env.OPENAI_API_KEY = "test-openai-key";
   Object.values(mockActual).forEach((fn) => fn.mockReset());
+  mockActualLocal.readLocalActualMetadata.mockReset();
+  mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
   mockActual.getPayees.mockResolvedValue([]);
   mockActual.getMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [] });
   mockDb.execute.mockReset();
@@ -404,7 +410,7 @@ describe("Bills mirror", () => {
   });
 
   it("full-replaces schedule and occurrence mirror rows on successful refresh", async () => {
-    mockActual.getMetadata.mockResolvedValueOnce({
+    const actualMetadata = {
       accounts: [{ id: "acct-1", name: "Checking" }],
       payees: [{ id: "payee-1", name: "Mortgage Co" }],
       payeeMap: { "payee-1": "Mortgage Co" },
@@ -422,7 +428,8 @@ describe("Bills mirror", () => {
         },
       ],
       recentTransactions: [],
-    });
+    };
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
     mockDb.batch.mockResolvedValueOnce([]);
     mockDb.execute.mockResolvedValueOnce(rowResult());
 
@@ -431,7 +438,8 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1");
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
       expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
@@ -591,7 +599,7 @@ describe("listAccounts", () => {
         },
       ]))
       .mockResolvedValueOnce(rowResult());
-    mockActual.getMetadata.mockResolvedValueOnce({
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
       accounts: [{ id: "a1", name: "Checking" }],
       payees: [],
       categories: [],
@@ -600,7 +608,8 @@ describe("listAccounts", () => {
     const out = await getMetadata("u1", { allowRefresh: true });
 
     expect(out.accounts).toEqual([{ id: "a1", name: "Checking" }]);
-    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1");
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
     }));

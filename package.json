@@ -43,6 +43,7 @@
     "@icons-pack/react-simple-icons": "^13.13.0",
     "@libsql/client": "^0.17.0",
     "@tailwindcss/vite": "^4.2.2",
+    "adm-zip": "^0.5.17",
     "bcrypt": "^6.0.0",
     "chrono-node": "^2.9.0",
     "class-variance-authority": "^0.7.1",
