@@ -21,8 +21,16 @@ const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 
 function mockSettings(provider, model) {
-  mockDb.execute.mockResolvedValueOnce({
-    rows: [{ bill_extract_provider: provider, bill_extract_model: model }],
+  mockDb.execute.mockImplementation(({ sql }) => {
+    if (/bill_extract_provider/i.test(sql)) {
+      return Promise.resolve({
+        rows: [{ bill_extract_provider: provider, bill_extract_model: model }],
+      });
+    }
+    if (/bill_pay_mappings_json/i.test(sql)) {
+      return Promise.resolve({ rows: [{ bill_pay_mappings_json: null }] });
+    }
+    return Promise.resolve(rowResult());
   });
 }
 
@@ -31,6 +39,7 @@ beforeEach(() => {
   process.env.OPENAI_API_KEY = "test-openai-key";
   Object.values(mockActual).forEach((fn) => fn.mockReset());
   mockActual.getPayees.mockResolvedValue([]);
+  mockActual.getMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [] });
   mockDb.execute.mockReset();
   mockDb.batch.mockReset();
 });
@@ -60,18 +69,16 @@ function rowResult(rows = []) {
 
 describe("extractBill (Anthropic)", () => {
   it("translates category/account codes back to real ids and reports the model used", async () => {
-    mockDb.execute
-      .mockResolvedValueOnce({
-        rows: [{ bill_extract_provider: "anthropic", bill_extract_model: "claude-haiku-4-5" }],
-      })
-      .mockResolvedValueOnce({ rows: [{ bill_pay_mappings_json: null }] });
-    mockActual.getCategories.mockResolvedValueOnce([
-      { group: "G1", categories: [{ id: "CAT-REAL-1", name: "Groceries" }] },
-    ]);
-    mockActual.getAccounts.mockResolvedValueOnce([
-      { id: "ACC-REAL-1", name: "Visa" },
-    ]);
-    mockActual.getPayees.mockResolvedValueOnce([]);
+    mockSettings("anthropic", "claude-haiku-4-5");
+    mockActual.getMetadata.mockResolvedValueOnce({
+      categories: [
+        { group: "G1", categories: [{ id: "CAT-REAL-1", name: "Groceries" }] },
+      ],
+      accounts: [
+        { id: "ACC-REAL-1", name: "Visa" },
+      ],
+      payees: [],
+    });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -114,8 +121,7 @@ describe("extractBill (Anthropic)", () => {
 
   it("returns 502-shaped error when Anthropic response lacks tool_use", async () => {
     mockSettings("anthropic", "claude-haiku-4-5");
-    mockActual.getCategories.mockResolvedValueOnce([]);
-    mockActual.getAccounts.mockResolvedValueOnce([]);
+    mockActual.getMetadata.mockResolvedValueOnce({ accounts: [], payees: [], categories: [] });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ content: [] }),
@@ -247,10 +253,13 @@ describe("extractBill (OpenAI)", () => {
     "uses Responses API structured output and returns the same normalized shape (%s)",
     async (model) => {
       mockSettings("openai", model);
-      mockActual.getCategories.mockResolvedValueOnce([
-        { group: "G1", categories: [{ id: "CAT-REAL-2", name: "Internet" }] },
-      ]);
-      mockActual.getAccounts.mockResolvedValueOnce([{ id: "ACC-REAL-2", name: "Visa" }]);
+      mockActual.getMetadata.mockResolvedValueOnce({
+        categories: [
+          { group: "G1", categories: [{ id: "CAT-REAL-2", name: "Internet" }] },
+        ],
+        accounts: [{ id: "ACC-REAL-2", name: "Visa" }],
+        payees: [],
+      });
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -292,8 +301,7 @@ describe("extractBill (OpenAI)", () => {
   it("surfaces a clear unavailable error when OPENAI_API_KEY is missing", async () => {
     mockSettings("openai", "gpt-5.5");
     delete process.env.OPENAI_API_KEY;
-    mockActual.getCategories.mockResolvedValueOnce([]);
-    mockActual.getAccounts.mockResolvedValueOnce([]);
+    mockActual.getMetadata.mockResolvedValueOnce({ accounts: [], payees: [], categories: [] });
 
     await expect(
       extractBill("u1", { subject: "x", from: "y", body: "z" })
@@ -404,13 +412,14 @@ describe("Bills mirror", () => {
     });
 
     expect(mockActual.getCalendarBillsRange).toHaveBeenCalledWith("u1", {
-      start: "1900-01-01",
-      end: "9999-12-31",
+      start: "2026-04-06",
+      end: "2027-11-06",
     });
     expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
       expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
       expect.stringMatching(/DELETE FROM ea_bill_occurrence_mirror/i),
       expect.stringMatching(/DELETE FROM ea_bill_schedule_mirror/i),
+      expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
       expect.stringMatching(/INSERT INTO ea_bill_schedule_mirror/i),
       expect.stringMatching(/INSERT INTO ea_bill_occurrence_mirror/i),
       expect.stringMatching(/UPDATE ea_bills_mirror_state/i),
@@ -486,9 +495,22 @@ describe("Bills mirror", () => {
 });
 
 describe("listAccounts", () => {
-  it("passes through to actual.getAccounts", async () => {
-    mockActual.getAccounts.mockResolvedValueOnce([{ id: "a1" }]);
+  it("reads from the projected Actual metadata mirror", async () => {
+    mockDb.execute.mockResolvedValueOnce(rowResult([
+      {
+        status: "current",
+        accounts_json: JSON.stringify([{ id: "a1" }]),
+        payees_json: "[]",
+        categories_json: "[]",
+        schedules_json: "[]",
+        recent_transactions_json: "[]",
+        last_success_at: "2026-05-06T12:00:00.000Z",
+        last_attempt_at: "2026-05-06T12:00:00.000Z",
+        last_error: null,
+      },
+    ]));
     const out = await listAccounts("u1");
     expect(out).toEqual([{ id: "a1" }]);
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
   });
 });

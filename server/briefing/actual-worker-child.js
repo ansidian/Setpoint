@@ -24,31 +24,36 @@ function serializeError(error) {
   };
 }
 
-function sendAndExit(payload, exitCode = 0) {
+function sendPayload(payload) {
   if (typeof process.send !== "function") {
-    process.exit(exitCode);
     return;
   }
-  process.send(payload, () => {
-    process.exit(exitCode);
-  });
+  process.send(payload);
 }
+
+let operationQueue = Promise.resolve();
 
 process.on("message", async (message) => {
   const { id, operation, args = [] } = message || {};
   if (!id || !OPERATIONS.has(operation) || !Array.isArray(args)) {
-    sendAndExit({
+    sendPayload({
       id,
       ok: false,
       error: serializeError(Object.assign(new Error("Invalid Actual worker request"), { status: 400 })),
-    }, 1);
+    });
     return;
   }
 
-  try {
-    const result = await actualCore[operation](...args);
-    sendAndExit({ id, ok: true, result });
-  } catch (error) {
-    sendAndExit({ id, ok: false, error: serializeError(error) }, 1);
-  }
+  operationQueue = operationQueue
+    .then(async () => {
+      try {
+        const result = await actualCore[operation](...args);
+        sendPayload({ id, ok: true, result });
+      } catch (error) {
+        sendPayload({ id, ok: false, error: serializeError(error) });
+      }
+    })
+    .catch((error) => {
+      sendPayload({ id, ok: false, error: serializeError(error) });
+    });
 });

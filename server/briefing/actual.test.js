@@ -202,7 +202,7 @@ describe("actual.js metadata cache", () => {
     expect(actualApi.init).toHaveBeenCalledTimes(1);
   });
 
-  it("getMetadata re-fetches after TTL expires (init called twice)", async () => {
+  it("getMetadata re-fetches after TTL expires while reusing the loaded budget session", async () => {
     const { getMetadata } = await import("./actual.js");
     const actualApi = (await import("@actual-app/api")).default;
 
@@ -217,7 +217,8 @@ describe("actual.js metadata cache", () => {
     dateSpy.mockReturnValue(baseTime + 6 * 60 * 1000);
     await getMetadata("user1");
 
-    expect(actualApi.init).toHaveBeenCalledTimes(2);
+    expect(actualApi.init).toHaveBeenCalledTimes(1);
+    expect(actualApi.getAccounts).toHaveBeenCalledTimes(2);
 
     dateSpy.mockRestore();
   });
@@ -230,7 +231,7 @@ describe("actual.js sendBill mutex", () => {
     actualApiState.reset();
   });
 
-  it("sendBill acquires the mutex (init not called concurrently with getMetadata)", async () => {
+  it("sendBill reuses the loaded budget after getMetadata", async () => {
     const { getMetadata, sendBill } = await import("./actual.js");
     const actualApi = (await import("@actual-app/api")).default;
 
@@ -256,8 +257,8 @@ describe("actual.js sendBill mutex", () => {
 
     await Promise.all([p1, p2]);
 
-    // Both inits sequential — mutex was acquired by each
-    expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
+    expect(order).toEqual(["init-1-start", "init-1-end"]);
+    expect(actualApi.addTransactions).toHaveBeenCalled();
   });
 
   it("sends an explicit empty note for one-time bill pay transactions when notes are blank", async () => {
@@ -403,7 +404,7 @@ describe("actual.js createQuickTxn", () => {
     expect(txn.category).toBe("c1");
   });
 
-  it("acquires the mutex (serializes against getMetadata)", async () => {
+  it("reuses the loaded budget after getMetadata", async () => {
     const { getMetadata, createQuickTxn } = await import("./actual.js");
     const actualApi = (await import("@actual-app/api")).default;
 
@@ -426,7 +427,8 @@ describe("actual.js createQuickTxn", () => {
 
     await Promise.all([p1, p2]);
 
-    expect(order.indexOf("init-1-end")).toBeLessThan(order.indexOf("init-2-start"));
+    expect(order).toEqual(["init-1-start", "init-1-end"]);
+    expect(actualApi.addTransactions).toHaveBeenCalled();
   });
 });
 

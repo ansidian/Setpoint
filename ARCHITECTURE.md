@@ -59,7 +59,7 @@ graph TB
 | Calendar | Google Calendar API | Event sync (reuses Gmail OAuth) |
 | Weather | Pirate Weather | Forecast data |
 | Tasks | CTM API, Todoist API | Academic deadlines + personal tasks |
-| Finance | @actual-app/api | Budget tracking, bill management |
+| Finance | @actual-app/api behind provider worker + EA mirrors | Budget tracking, bill management |
 | Auth | bcrypt, cookie sessions | Password login, session tokens |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
 | Scheduling | node-cron | Snapshot boundary checks and background workers |
@@ -88,7 +88,9 @@ ea-dashboard/
 │   │   ├── todoist.js              # Todoist tasks: fetch + complete
 │   │   ├── tombstones.js           # Hydrate completed-but-visible recurring Todoist rows
 │   │   ├── snooze-waker.js         # Periodic unsnoozer: resurfaces emails past their until_ts
-│   │   ├── actual.js               # Actual Budget: metadata, bills, send transactions
+│   │   ├── actual.js               # Actual Budget provider facade
+│   │   ├── actual-core.js          # Actual Budget SDK operations inside provider worker
+│   │   ├── actual-worker.js        # Persistent Actual worker owner + health state
 │   │   ├── html-to-text.js         # HTML email body → plain text for indexing/snippets
 │   │   ├── email-index.js          # FTS5 email indexing for cross-account search
 │   │   ├── encryption.js           # AES-256-GCM encrypt/decrypt
@@ -361,7 +363,7 @@ Model selection is user-configurable through `/api/ea/models`, defaults to Anthr
 | Weather | `server/briefing/weather.js` | Pirate Weather | API key | Cached data or placeholder |
 | CTM | `server/briefing/ctm.js` | Custom REST API | Bearer token | Empty array, continue |
 | Todoist | `server/briefing/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
-| Actual Budget | `server/briefing/actual.js` | @actual-app/api SDK | Server URL + password (encrypted) | Empty array, continue |
+| Actual Budget | `server/briefing/actual.js` + `server/briefing/bills-service.js` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
 | Email triage AI | `server/briefing/triage-worker.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
 | Bill extraction AI | `server/briefing/bill-extract.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Bill extraction returns no bill signal |
 All data source failures are caught individually — one source going down never blocks the current dashboard. Email triage and bill extraction failures are isolated to durable jobs or the specific bill-signal request.
@@ -531,6 +533,7 @@ erDiagram
 | # | File | Purpose |
 |---|------|---------|
 | 1 | `001_ea_tables.sql` | Accounts, settings, auth, email index/FTS, snapshot, triage, current-data cache, Todoist mirror, notes, and Actual helper tables |
+| 9 | `009_actual_metadata_mirror.sql` | Projected Actual accounts, payees, categories, schedules, and recent transactions for fast EA reads |
 
 ## Key Patterns
 
@@ -549,7 +552,7 @@ Current-data fetches degrade independently. A Gmail outage can leave the snapsho
 ### Connection Pooling
 
 - **iCloud IMAP**: Persistent connections per email address with 10-minute idle TTL. Reused across fetches, auto-reconnect on loss.
-- **Actual Budget**: Singleton API instance with mutex lock. Serial access prevents contention from the SDK's single-connection design.
+- **Actual Budget**: Persistent provider worker owns the singleton SDK session. Calls are serialized through the worker, worker health is tracked in-process, and EA reads normally use mirrored metadata/bill rows instead of opening Actual.
 - **Gmail**: Token refresh on-demand before each API call (5-minute expiry buffer).
 
 ### Floating Panel Pattern
@@ -667,7 +670,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/briefing/actual/send` | Send bill as transaction |
-| GET | `/api/briefing/actual/metadata` | Accounts + categories + payees |
+| GET | `/api/briefing/actual/metadata` | Mirrored accounts + categories + payees |
 | GET | `/api/briefing/actual/accounts` | Account list |
 | GET | `/api/briefing/actual/payees` | Payee list |
 | GET | `/api/briefing/actual/categories` | Category tree |

@@ -22,11 +22,53 @@ async function getActualConfig(userId) {
 
 // --- Mutex: serialize all Actual Budget API access (singleton contention prevention) ---
 let lock = Promise.resolve();
+let activeBudget = null;
 
 function withLock(fn) {
   const result = lock.then(() => fn());
   lock = result.catch(() => {});
   return result;
+}
+
+function actualSessionKey(config) {
+  return JSON.stringify({
+    serverURL: config.serverURL,
+    password: config.password || "",
+    syncId: config.syncId,
+  });
+}
+
+async function closeActualSession() {
+  activeBudget = null;
+  await actualApi.shutdown().catch(() => {});
+}
+
+async function ensureActualBudget(userId) {
+  const config = await getActualConfig(userId);
+  const key = actualSessionKey(config);
+  if (activeBudget?.key === key) return config;
+  if (activeBudget) {
+    await closeActualSession();
+  }
+  try {
+    await actualApi.init({ serverURL: config.serverURL, password: config.password });
+    await actualApi.downloadBudget(config.syncId);
+    activeBudget = { key, ...config, loadedAt: new Date().toISOString() };
+    return config;
+  } catch (error) {
+    await closeActualSession();
+    throw error;
+  }
+}
+
+async function withActualBudget(userId, fn) {
+  const config = await ensureActualBudget(userId);
+  try {
+    return await fn(config);
+  } catch (error) {
+    await closeActualSession();
+    throw error;
+  }
 }
 
 // --- Metadata cache: 5-minute TTL ---
@@ -76,15 +118,13 @@ export function testConnection(userId, overrides = null) {
       // getBudgets validates auth + connectivity without downloading/syncing
       const budgets = await actualApi.getBudgets();
       const found = budgets.some((b) => b.groupId === syncId);
-      await actualApi.shutdown().catch(() => {});
       return {
         success: true,
         budgetCount: budgets.length,
         budgetFound: found,
       };
-    } catch (err) {
-      await actualApi.shutdown().catch(() => {});
-      throw err;
+    } finally {
+      await closeActualSession();
     }
   });
 }
@@ -106,11 +146,7 @@ async function getMetadataInner(userId) {
       return metadataCache.data;
     }
 
-    const { serverURL, password, syncId } = await getActualConfig(userId);
-    try {
-      await actualApi.init({ serverURL, password });
-      await actualApi.downloadBudget(syncId);
-
+    return withActualBudget(userId, async () => {
       const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
       const [rawAccounts, rawPayees, groups, schedules, recentTxns] = await Promise.all([
         actualApi.getAccounts(),
@@ -162,9 +198,7 @@ async function getMetadataInner(userId) {
       const result = { accounts, payees, payeeMap, categories, schedules: classifiedSchedules, recentTransactions };
       metadataCache = { data: result, ts: Date.now() };
       return result;
-    } finally {
-      await actualApi.shutdown().catch(() => {});
-    }
+    });
 }
 
 // Individual accessors for routes/services that only need one metadata slice.
@@ -524,11 +558,7 @@ export async function getUpcomingBills(userId) {
 
 export function getCalendarBillsRange(userId, { start, end }) {
   return withLock(async () => {
-    const { serverURL, password, syncId } = await getActualConfig(userId);
-    try {
-      await actualApi.init({ serverURL, password });
-      await actualApi.downloadBudget(syncId);
-
+    return withActualBudget(userId, async ({ serverURL }) => {
       const [rawPayees, schedules] = await Promise.all([
         actualApi.getPayees(),
         getSchedulesWithConditions(),
@@ -547,36 +577,24 @@ export function getCalendarBillsRange(userId, { start, end }) {
         payeeMap,
         actualBudgetUrl: serverURL,
       };
-    } finally {
-      await actualApi.shutdown().catch(() => {});
-    }
+    });
   });
 }
 
 export function markBillPaid(scheduleId, userId) {
   return withLock(async () => {
-    const { serverURL, password, syncId } = await getActualConfig(userId);
-    try {
-      await actualApi.init({ serverURL, password });
-      await actualApi.downloadBudget(syncId);
+    return withActualBudget(userId, async () => {
       await actualApi.internal.send("schedule/post-transaction", { id: scheduleId });
       await actualApi.sync();
       metadataCache = { data: null, ts: 0 };
       return { success: true };
-    } finally {
-      await actualApi.shutdown().catch(() => {});
-    }
+    });
   });
 }
 
 export function sendBill(billData, userId) {
   return withLock(async () => {
-    const { serverURL, password, syncId } = await getActualConfig(userId);
-
-    try {
-      await actualApi.init({ serverURL, password });
-      await actualApi.downloadBudget(syncId);
-
+    return withActualBudget(userId, async () => {
       const accounts = await actualApi.getAccounts();
 
       // Use user-selected account if provided, otherwise auto-detect
@@ -621,10 +639,9 @@ export function sendBill(billData, userId) {
       }
 
       await actualApi.sync();
+      metadataCache = { data: null, ts: 0 };
       return result;
-    } finally {
-      await actualApi.shutdown().catch(() => {});
-    }
+    });
   });
 }
 
@@ -659,11 +676,7 @@ export function createQuickTxn(userId, { accountName, amount, payee, type = "pay
     const amountCents = Math.round(Math.abs(Number(amount)) * 100);
     const signed = type === "deposit" ? amountCents : -amountCents;
 
-    const { serverURL, password, syncId } = await getActualConfig(userId);
-    try {
-      await actualApi.init({ serverURL, password });
-      await actualApi.downloadBudget(syncId);
-
+    return withActualBudget(userId, async () => {
       const txn = {
         date: txnDate,
         amount: signed,
@@ -688,12 +701,11 @@ export function createQuickTxn(userId, { accountName, amount, payee, type = "pay
         date: txnDate,
         category: categoryName || null,
       };
-    } finally {
-      await actualApi.shutdown().catch(() => {});
-    }
+    });
   });
 }
 
 export const __testing__ = {
   mapOpenBillInstances,
+  closeActualSession,
 };
