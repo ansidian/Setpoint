@@ -404,20 +404,24 @@ describe("Bills mirror", () => {
   });
 
   it("full-replaces schedule and occurrence mirror rows on successful refresh", async () => {
-    mockActual.getCalendarBillsRange.mockResolvedValueOnce({
+    mockActual.getMetadata.mockResolvedValueOnce({
+      accounts: [{ id: "acct-1", name: "Checking" }],
+      payees: [{ id: "payee-1", name: "Mortgage Co" }],
+      payeeMap: { "payee-1": "Mortgage Co" },
+      categories: [{ group_name: "Home", categories: [{ id: "cat-1", name: "Mortgage" }] }],
       schedules: [
         {
-          id: "sched-1:2026-05-10",
-          scheduleId: "sched-1",
+          id: "sched-1",
           name: "Mortgage",
-          payee: "Mortgage Co",
-          amount: 1500,
           next_date: "2026-05-10",
-          paid: false,
           type: "bill",
+          conditions: [
+            { field: "payee", value: "payee-1" },
+            { field: "amount", value: -150000 },
+          ],
         },
       ],
-      actualBudgetUrl: "https://actual.example.test",
+      recentTransactions: [],
     });
     mockDb.batch.mockResolvedValueOnce([]);
     mockDb.execute.mockResolvedValueOnce(rowResult());
@@ -427,10 +431,8 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActual.getCalendarBillsRange).toHaveBeenCalledWith("u1", {
-      start: "2026-04-06",
-      end: "2027-11-06",
-    });
+    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1");
+    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
       expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
       expect.stringMatching(/DELETE FROM ea_bill_occurrence_mirror/i),
@@ -441,10 +443,18 @@ describe("Bills mirror", () => {
       expect.stringMatching(/UPDATE ea_bills_mirror_state/i),
     ]);
     expect(out.syncHealth).toMatchObject({ state: "current", configured: true });
+    expect(out.allSchedules).toEqual([
+      expect.objectContaining({
+        id: "sched-1:2026-05-10",
+        scheduleId: "sched-1",
+        payee: "Mortgage Co",
+        amount: 1500,
+      }),
+    ]);
   });
 
   it("preserves old mirror rows and marks degraded when refresh fails", async () => {
-    mockActual.getCalendarBillsRange.mockRejectedValueOnce(new Error("Actual offline"));
+    mockActual.getMetadata.mockRejectedValueOnce(new Error("Actual offline"));
     mockDb.execute.mockResolvedValueOnce(rowResult());
 
     await expect(
@@ -454,6 +464,7 @@ describe("Bills mirror", () => {
       }),
     ).rejects.toThrow("Actual offline");
 
+    expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/ea_bills_mirror_state/i),
@@ -486,7 +497,7 @@ describe("Bills mirror", () => {
   });
 
   it("flags maintenance due only for old successful configured mirrors", () => {
-    const now = new Date("2026-05-06T12:16:00.000Z");
+    const now = new Date("2026-05-06T18:01:00.000Z");
 
     expect(isBillsMirrorMaintenanceDue({
       state: "current",
@@ -506,6 +517,17 @@ describe("Bills mirror", () => {
       state: "needs_sync",
       configured: true,
       lastSuccessAt: "2026-05-06T11:00:00.000Z",
+    }, { now })).toBe(false);
+  });
+
+  it("backs off degraded mirror maintenance after a recent failed attempt", () => {
+    const now = new Date("2026-05-06T18:01:00.000Z");
+
+    expect(isBillsMirrorMaintenanceDue({
+      state: "degraded",
+      configured: true,
+      lastSuccessAt: "2026-05-06T12:00:00.000Z",
+      lastAttemptAt: "2026-05-06T17:55:00.000Z",
     }, { now })).toBe(false);
   });
 });
