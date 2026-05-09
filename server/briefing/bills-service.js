@@ -30,6 +30,7 @@ const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
 export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 6 * 60 * 60 * 1000;
 const BILLS_MIRROR_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map();
+const BILLS_MIRROR_REFRESH_IN_FLIGHT = new Map();
 let billsMirrorRefreshWorkerTimer = null;
 
 const EMPTY_ACTUAL_METADATA = {
@@ -134,7 +135,10 @@ async function loadActualMetadataForProjection(userId, { refreshLocal = true } =
     }
   }
   try {
-    return await readLocalActualMetadata(userId, { refresh: liveSyncError ? false : refreshLocal });
+    return await readLocalActualMetadata(userId, {
+      refresh: liveSyncError ? false : refreshLocal,
+      localOnly: !!liveSyncError,
+    });
   } catch (err) {
     console.warn("[EA] Lightweight Actual metadata projection failed; falling back to Actual worker:", err.message);
     if (liveSyncError) throw liveSyncError;
@@ -673,6 +677,7 @@ export async function runDueBillsMirrorRefresh(userId, {
 export function __resetBillsMirrorRefreshTimersForTests() {
   for (const timer of BILLS_MIRROR_REFRESH_TIMERS.values()) clearTimeout(timer);
   BILLS_MIRROR_REFRESH_TIMERS.clear();
+  BILLS_MIRROR_REFRESH_IN_FLIGHT.clear();
   if (billsMirrorRefreshWorkerTimer) clearInterval(billsMirrorRefreshWorkerTimer);
   billsMirrorRefreshWorkerTimer = null;
 }
@@ -722,6 +727,24 @@ export function startBillsMirrorRefreshWorker({
 }
 
 export async function refreshBillsMirror(userId, {
+  actualBudgetUrl = null,
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const inFlightKey = `${userId}:${actualBudgetUrl || "unconfigured"}`;
+  const existingRefresh = BILLS_MIRROR_REFRESH_IN_FLIGHT.get(inFlightKey);
+  if (existingRefresh) return existingRefresh;
+  const refreshPromise = refreshBillsMirrorInner(userId, { actualBudgetUrl, dbClient, now })
+    .finally(() => {
+      if (BILLS_MIRROR_REFRESH_IN_FLIGHT.get(inFlightKey) === refreshPromise) {
+        BILLS_MIRROR_REFRESH_IN_FLIGHT.delete(inFlightKey);
+      }
+    });
+  BILLS_MIRROR_REFRESH_IN_FLIGHT.set(inFlightKey, refreshPromise);
+  return refreshPromise;
+}
+
+async function refreshBillsMirrorInner(userId, {
   actualBudgetUrl = null,
   dbClient = db,
   now = new Date(),

@@ -490,7 +490,10 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: false });
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+      refresh: false,
+      localOnly: true,
+    });
     expect(out.allSchedules).toEqual([
       expect.objectContaining({
         name: "Water Bill",
@@ -549,6 +552,50 @@ describe("Bills mirror", () => {
         payee: "Mortgage Co",
       }),
     ]);
+  });
+
+  it("coalesces concurrent mirror refreshes for the same user", async () => {
+    const actualMetadata = {
+      accounts: [],
+      payees: [{ id: "payee-1", name: "Mortgage Co" }],
+      payeeMap: { "payee-1": "Mortgage Co" },
+      categories: [],
+      schedules: [
+        {
+          id: "sched-1",
+          name: "Mortgage",
+          next_date: "2026-05-10",
+          type: "bill",
+          conditions: [
+            { field: "payee", value: "payee-1" },
+            { field: "amount", value: -150000 },
+          ],
+        },
+      ],
+      recentTransactions: [],
+    };
+    let finishBatch;
+    mockActual.getMetadata.mockResolvedValueOnce(actualMetadata);
+    mockDb.batch.mockReturnValueOnce(new Promise((resolve) => {
+      finishBatch = () => resolve([]);
+    }));
+
+    const first = refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+    const second = refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+    await Promise.resolve();
+
+    expect(mockActual.getMetadata).toHaveBeenCalledTimes(1);
+    finishBatch();
+
+    const [firstOut, secondOut] = await Promise.all([first, second]);
+    expect(firstOut.allSchedules).toEqual(secondOut.allSchedules);
+    expect(mockDb.batch).toHaveBeenCalledTimes(1);
   });
 
   it("schedules and consumes server-owned delayed refreshes", async () => {

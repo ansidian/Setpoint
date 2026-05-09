@@ -223,6 +223,9 @@ async function ensureLocalBudget(config, options = {}) {
   if (options.refresh) return downloadBudget(config, options);
   const local = await findLocalBudgetDir(config.syncId, options);
   if (local) return local;
+  if (options.localOnly) {
+    throw Object.assign(new Error("Actual Budget local metadata is unavailable"), { status: 503 });
+  }
   return downloadBudget(config, options);
 }
 
