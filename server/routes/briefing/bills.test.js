@@ -11,6 +11,7 @@ const mockBillsService = vi.hoisted(() => ({
   createQuickTxn: vi.fn(),
   extractBill: vi.fn(),
   resolveBillPaySeed: vi.fn(),
+  resolveBillPaySample: vi.fn(),
   markBillPaid: vi.fn(),
   getMetadata: vi.fn(),
   listAccounts: vi.fn(),
@@ -80,6 +81,46 @@ describe("Bill Pay routes", () => {
       snippet: undefined,
       candidate: { payee_hint: "Power", amount: 10 },
       source: "triage",
+    });
+  });
+
+  it("resolves a pasted Bill Pay sample through briefing cookie auth", async () => {
+    mockBillsService.resolveBillPaySample.mockResolvedValueOnce({
+      bill: { payee: "Citi", amount: 25 },
+      mapping: { status: "matched", profileId: "citi", behaviorId: "minimum" },
+    });
+
+    const mappings = {
+      version: 1,
+      profiles: [{ id: "citi", enabled: true, identity: { domain: ["citi.com"] } }],
+    };
+
+    const res = await request(makeApp())
+      .post("/api/briefing/bills/resolve-sample")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        mappings,
+        email: {
+          from: "alerts@citi.com",
+          subject: "Payment due",
+          body: "Minimum due: $25",
+        },
+        candidate: { payee: "Citi", amount: 10, due_date: "2026-05-15" },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      bill: { payee: "Citi", amount: 25 },
+      mapping: { status: "matched", profileId: "citi", behaviorId: "minimum" },
+    });
+    expect(mockBillsService.resolveBillPaySample).toHaveBeenCalledWith("user-1", {
+      mappings,
+      email: {
+        from: "alerts@citi.com",
+        subject: "Payment due",
+        body: "Minimum due: $25",
+      },
+      candidate: { payee: "Citi", amount: 10, due_date: "2026-05-15" },
     });
   });
 });
