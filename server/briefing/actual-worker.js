@@ -19,6 +19,8 @@ let workerStderr = "";
 let pendingRequests = new Map();
 let operationQueue = Promise.resolve();
 let health = { ...INITIAL_HEALTH };
+let idleShutdownTimer = null;
+let idleShutdownExpected = false;
 
 function appendBounded(current, chunk) {
   const next = current + chunk;
@@ -34,6 +36,30 @@ function workerExecArgv() {
   const maxOldSpace = Number(process.env.EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB);
   if (!Number.isFinite(maxOldSpace) || maxOldSpace <= 0) return [];
   return [`--max-old-space-size=${Math.floor(maxOldSpace)}`];
+}
+
+function idleShutdownMs() {
+  const configured = Number(process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return process.env.NODE_ENV === "production" ? 60_000 : 0;
+}
+
+function clearIdleShutdownTimer() {
+  if (!idleShutdownTimer) return;
+  clearTimeout(idleShutdownTimer);
+  idleShutdownTimer = null;
+}
+
+function scheduleIdleShutdown() {
+  clearIdleShutdownTimer();
+  const delay = idleShutdownMs();
+  if (!worker || pendingRequests.size || delay <= 0) return;
+  idleShutdownTimer = setTimeout(() => {
+    if (!worker || pendingRequests.size) return;
+    idleShutdownExpected = true;
+    worker.kill("SIGTERM");
+  }, delay);
+  idleShutdownTimer.unref?.();
 }
 
 function deserializeError(errorPayload = {}) {
@@ -69,7 +95,9 @@ function rejectPendingRequests(error) {
 }
 
 function spawnWorker(options = {}) {
+  clearIdleShutdownTimer();
   if (worker) return worker;
+  idleShutdownExpected = false;
   const child = fork(options.workerPath || WORKER_PATH, [], {
     env: process.env,
     execArgv: options.execArgv || workerExecArgv(),
@@ -102,6 +130,7 @@ function spawnWorker(options = {}) {
     };
     if (message.ok) request.resolve(message.result);
     else request.reject(deserializeError(message.error));
+    if (!pendingRequests.size) scheduleIdleShutdown();
   });
   child.on("error", (error) => {
     health = {
@@ -116,6 +145,7 @@ function spawnWorker(options = {}) {
   child.on("exit", (code, signal) => {
     const exitedWorker = worker;
     worker = null;
+    clearIdleShutdownTimer();
     const lastExitAt = new Date().toISOString();
     const error = workerExitError({
       operation: pendingRequests.size ? "pending operation" : "idle",
@@ -124,16 +154,18 @@ function spawnWorker(options = {}) {
       stderr: workerStderr,
       timedOut: false,
     });
+    const expectedIdleShutdown = idleShutdownExpected && !pendingRequests.size;
+    idleShutdownExpected = false;
     health = {
       ...health,
-      state: "unavailable",
+      state: expectedIdleShutdown ? "idle" : "unavailable",
       pid: null,
       inFlight: 0,
       lastExitAt,
       lastExit: { code, signal },
-      lastError: error.message,
+      lastError: expectedIdleShutdown ? null : error.message,
     };
-    if (exitedWorker) rejectPendingRequests(error);
+    if (exitedWorker && !expectedIdleShutdown) rejectPendingRequests(error);
   });
   return child;
 }
@@ -185,6 +217,8 @@ export function getActualWorkerHealth() {
 }
 
 export function shutdownActualWorkerForTests() {
+  clearIdleShutdownTimer();
+  idleShutdownExpected = false;
   if (worker) {
     worker.kill("SIGTERM");
     worker = null;

@@ -31,6 +31,8 @@ describe("Actual worker runner", () => {
 
   afterEach(() => {
     shutdownActualWorkerForTests();
+    vi.useRealTimers();
+    delete process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS;
   });
 
   it("resolves with the worker result", async () => {
@@ -123,5 +125,32 @@ describe("Actual worker runner", () => {
 
     await expect(second).resolves.toEqual({ accounts: [] });
     expect(forkMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shuts down an idle worker after the configured idle window", async () => {
+    vi.useFakeTimers();
+    process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS = "25";
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+
+    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    await Promise.resolve();
+    const request = child.send.mock.calls[0][0];
+    child.emit("message", {
+      id: request.id,
+      ok: true,
+      result: { accounts: [] },
+    });
+    await expect(resultPromise).resolves.toEqual({ accounts: [] });
+
+    expect(child.kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(25);
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    child.emit("exit", null, "SIGTERM");
+    expect(getActualWorkerHealth()).toMatchObject({
+      state: "idle",
+      pid: null,
+      lastError: null,
+    });
   });
 });
