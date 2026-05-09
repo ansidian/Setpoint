@@ -27,12 +27,12 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
       const schedule = schedules.find((entry) => {
         const payeeCond = entry.conditions?.find((condition) => condition.field === "payee");
         const payeeName = payeeCond ? payeeMap[payeeCond.value] : null;
-        const haystack = `${payeeName || ""} ${entry.name || ""}`.toLowerCase();
+        const haystack = `${payeeName || ""} ${entry.payee || ""} ${entry.name || ""}`.toLowerCase();
         return haystack.includes(utility.match);
       });
       const nextDate = schedule?.next_date || null;
       const amtCond = schedule?.conditions?.find((condition) => condition.field === "amount");
-      const amount = amtCond?.value ? Math.abs(amtCond.value) / 100 : null;
+      const amount = amtCond?.value ? Math.abs(amtCond.value) / 100 : schedule?.amount ?? null;
       return {
         ...utility,
         found: !!schedule,

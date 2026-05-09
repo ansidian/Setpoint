@@ -725,7 +725,7 @@ export async function getCurrentDashboard(userId, {
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
-  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
   return composeCurrentDashboardResponse(rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
     providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
@@ -785,7 +785,7 @@ export async function requestCurrentDashboardRefresh(userId, {
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
-  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
   const shouldSyncSnapshot = true;
   if (shouldSyncSnapshot) {
     syncActiveSnapshot(userId)
@@ -822,9 +822,9 @@ export async function requestBillsCurrentMaintenanceRefresh(userId, {
   applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, { forceKeys, now });
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   if (!scheduledKeys.length) return { scheduled: false, due: false };
-  await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
+  const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
-  scheduleBackgroundCurrentRefresh(userId, rows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
   return { scheduled: true, due: true, refresh: refreshPlan };
 }
 

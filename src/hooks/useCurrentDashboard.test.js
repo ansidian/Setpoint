@@ -236,6 +236,76 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("keeps manual sync polling long enough for Bills force refresh to settle", async () => {
+    vi.useFakeTimers();
+    requestCurrentDashboardRefresh.mockResolvedValueOnce({
+      ...currentPayload,
+      providerHealth: {
+        ...currentPayload.providerHealth,
+        currentData: {
+          state: "current",
+          sources: [{ key: "bills_current", state: "refreshing", severity: "info" }],
+        },
+        activeSnapshot: { state: "syncing", reason: "background" },
+      },
+      refresh: {
+        mode: "manual",
+        scheduled: [{ key: "bills_current", reason: "manual_bills_sync" }],
+        skipped: [],
+      },
+    });
+    let pollCount = 0;
+    getCurrentDashboard.mockImplementation(async () => {
+      if (pollCount === 0) {
+        pollCount += 1;
+        return currentPayload;
+      }
+      pollCount += 1;
+      if (pollCount < 16) {
+        return {
+          ...currentPayload,
+          providerHealth: {
+            ...currentPayload.providerHealth,
+            currentData: {
+              state: "current",
+              sources: [{ key: "bills_current", state: "refreshing", severity: "info" }],
+            },
+          },
+          refresh: { mode: "passive", scheduled: [], skipped: [] },
+        };
+      }
+      return {
+        ...currentPayload,
+        allSchedules: [{ id: "water", payee: "SGV Water" }],
+        providerHealth: {
+          ...currentPayload.providerHealth,
+          currentData: {
+            state: "current",
+            sources: [{ key: "bills_current", state: "current", severity: "none" }],
+          },
+        },
+        refresh: { mode: "passive", scheduled: [], skipped: [] },
+        fetchedAt: "2026-05-05T00:40:00.000Z",
+      };
+    });
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    let syncPromise;
+    await act(async () => {
+      syncPromise = result.current.activeSnapshot.sync();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      await syncPromise;
+    });
+
+    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:40:00.000Z");
+    expect(result.current.liveData.allSchedules).toEqual([{ id: "water", payee: "SGV Water" }]);
+    unmount();
+  });
+
   it("does not poll after manual sync when no work was scheduled", async () => {
     requestCurrentDashboardRefresh.mockResolvedValueOnce({
       ...currentPayload,
