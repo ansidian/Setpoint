@@ -93,6 +93,33 @@ function parseMoney(value) {
   return Number.isFinite(amount) ? amount : null;
 }
 
+const MONTHS = Object.freeze({
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+});
+
 function parseLabeledAmount(text, labels) {
   const source = String(text || "");
   for (const label of labels) {
@@ -103,6 +130,17 @@ function parseLabeledAmount(text, labels) {
     if (amount != null) return amount;
   }
   return null;
+}
+
+function parseTrailingLabeledAmount(text, label) {
+  const source = String(text || "");
+  const index = normalizeText(source).indexOf(normalizeText(label));
+  if (index < 0) return null;
+
+  const tail = source.slice(index + label.length, index + label.length + 260);
+  const matches = [...tail.matchAll(/\$\s*([0-9][0-9,]*(?:\.\d{1,2})?)/g)];
+  if (!matches.length) return null;
+  return parseMoney(matches[matches.length - 1]?.[1]);
 }
 
 function toIsoDate(month, day, year) {
@@ -122,15 +160,25 @@ function toIsoDate(month, day, year) {
   ].join("-");
 }
 
+function toIsoDateFromMonthName(month, day, year) {
+  const numericMonth = MONTHS[normalizeText(month)];
+  return toIsoDate(numericMonth, day, year);
+}
+
 function parseLabeledDate(text) {
   const source = String(text || "");
-  const labels = ["payment due date", "due date", "transaction date", "date"];
+  const labels = ["payment due date", "payment is due", "payment due", "due date", "payment date", "paid on", "transaction date", "date"];
   for (const label of labels) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-    const re = new RegExp(`${escaped}\\s*(?:is|of)?\\s*[:\\-]?\\s*\\n?\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})`, "i");
-    const match = source.match(re);
-    const date = match ? toIsoDate(match[1], match[2], match[3]) : null;
-    if (date) return date;
+    const numericRe = new RegExp(`${escaped}\\s*(?:is|of|on)?\\s*[:\\-]?\\s*\\n?\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})`, "i");
+    const numericMatch = source.match(numericRe);
+    const numericDate = numericMatch ? toIsoDate(numericMatch[1], numericMatch[2], numericMatch[3]) : null;
+    if (numericDate) return numericDate;
+
+    const namedRe = new RegExp(`${escaped}\\s*(?:is|of|on)?\\s*[:\\-]?\\s*\\n?\\s*(?:(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day)?[,]?\\s+)?([A-Za-z]+)\\s+(\\d{1,2})(?:st|nd|rd|th)?[,]?\\s+(\\d{4})`, "i");
+    const namedMatch = source.match(namedRe);
+    const namedDate = namedMatch ? toIsoDateFromMonthName(namedMatch[1], namedMatch[2], namedMatch[3]) : null;
+    if (namedDate) return namedDate;
   }
   return null;
 }
@@ -142,12 +190,16 @@ function amountFromStrategy(strategy, context) {
   }
   const text = `${context.subject}\n${context.body}`;
   const labelsByStrategy = {
-    statement_balance: ["statement balance"],
-    minimum_due: ["minimum due", "minimum payment"],
-    amount_due: ["amount due", "total due", "payment due", "amount"],
+    statement_balance: ["remaining statement balance", "statement balance"],
+    minimum_due: ["minimum due", "minimum payment due", "minimum payment"],
+    amount_due: ["amount due", "total due", "payment due", "payment amount", "amount paid", "you paid", "payment", "amount"],
   };
   const amount = parseLabeledAmount(text, labelsByStrategy[strategy] || []);
   if (amount != null) return { amount, source: strategy };
+  if (strategy === "statement_balance") {
+    const trailingAmount = parseTrailingLabeledAmount(text, "remaining statement balance");
+    if (trailingAmount != null) return { amount: trailingAmount, source: strategy };
+  }
   return { amount: null, source: null };
 }
 

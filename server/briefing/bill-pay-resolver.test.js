@@ -210,6 +210,234 @@ describe("Bill Pay resolver", () => {
     expect(pastedText.bill.amount).toBeNull();
   });
 
+  it("extracts statement balances and due dates from bank payment reminders", () => {
+    const mappings = {
+      version: 1,
+      profiles: [
+        {
+          id: "sofi",
+          enabled: true,
+          identity: { domain: ["o.sofi.org"], aliases: ["SoFi Credit Card"] },
+          behaviors: [{
+            id: "payment-due",
+            enabled: true,
+            type: "transfer",
+            intent: { subject: ["payment is due"], body: ["remaining statement balance"] },
+            amountStrategy: "statement_balance",
+            targets: {
+              from_account_id: "acct-checking",
+              from_account_label: "Checking",
+              to_account_id: "acct-card",
+              to_account_label: "Visa 4242",
+            },
+          }],
+        },
+        {
+          id: "usbank",
+          enabled: true,
+          identity: { domain: ["notifications.usbank.com"], last4: ["8288"] },
+          behaviors: [{
+            id: "payment-due",
+            enabled: true,
+            type: "transfer",
+            intent: { subject: ["payment is due"], body: ["credit card ending in 8288"] },
+            amountStrategy: "statement_balance",
+            targets: {
+              from_account_id: "acct-checking",
+              from_account_label: "Checking",
+              to_account_id: "acct-card",
+              to_account_label: "Visa 4242",
+            },
+          }],
+        },
+      ],
+    };
+
+    const sofi = resolveBillPayMapping({
+      mappings,
+      metadata,
+      source: "pasted_text",
+      email: {
+        from: "SoFi@o.sofi.org",
+        subject: "Your SoFi Credit Card payment is due on May 05, 2026",
+        body: "This is a reminder that you have a SoFi Credit Card payment due on Tuesday, May 05, 2026. The remaining statement balance is: $156.98.",
+      },
+    });
+    const usbank = resolveBillPayMapping({
+      mappings,
+      metadata,
+      source: "pasted_text",
+      email: {
+        from: "usbank@notifications.usbank.com",
+        subject: "Your credit card payment is due on May 10, 2026.",
+        body: "Your automatic payment to your credit card ending in 8288. Minimum payment due $40.00 Statement balance $253.10.",
+      },
+    });
+
+    expect(sofi.mapping).toMatchObject({ status: "matched", profileId: "sofi", amountSource: "statement_balance" });
+    expect(sofi.bill).toMatchObject({ amount: 156.98, due_date: "2026-05-05" });
+    expect(usbank.mapping).toMatchObject({ status: "matched", profileId: "usbank", amountSource: "statement_balance" });
+    expect(usbank.bill).toMatchObject({ amount: 253.1, due_date: "2026-05-10" });
+  });
+
+  it("extracts U.S. Bank remaining statement balance from flattened table text", () => {
+    const result = resolveBillPayMapping({
+      mappings: {
+        version: 1,
+        profiles: [{
+          id: "usbank",
+          enabled: true,
+          identity: { domain: ["notifications.usbank.com"], aliases: ["US Bank"], last4: ["8288"] },
+          behaviors: [{
+            id: "payment-due",
+            enabled: true,
+            type: "transfer",
+            intent: { subject: ["payment is due"], body: ["credit card ending in 8288"] },
+            amountStrategy: "statement_balance",
+            targets: {
+              from_account_id: "acct-checking",
+              from_account_label: "Checking",
+              to_account_id: "acct-card",
+              to_account_label: "Visa 4242",
+            },
+          }],
+        }],
+      },
+      metadata,
+      source: "pasted_text",
+      email: {
+        from: "usbank@notifications.usbank.com",
+        subject: "Your credit card payment is due on May 10, 2026.",
+        body: [
+          "US Bank",
+          "Your credit card payment is due on May 10, 2026.",
+          "Your automatic payment to your credit card ending in 8288 will be made on May 10, 2026.",
+          "Due date *May 10, 2026*",
+          "Minimum payment Avoid late fees *$40.00*",
+          "Plan adjusted balance Avoid interest and late fees on your ExtendPay plan",
+          "Remaining statement balance Avoid interest and late fees",
+          "*$0.00*",
+          "*$253.10*",
+        ].join(" "),
+      },
+    });
+
+    expect(result.mapping).toMatchObject({
+      status: "matched",
+      profileId: "usbank",
+      behaviorId: "payment-due",
+      amountSource: "statement_balance",
+    });
+    expect(result.bill).toMatchObject({ amount: 253.1, due_date: "2026-05-10" });
+  });
+
+  it("extracts payment amounts and dates from autopay and confirmation wording", () => {
+    const mappings = {
+      version: 1,
+      profiles: [{
+        id: "paypal",
+        enabled: true,
+        identity: { aliases: ["PayPal Cashback World Mastercard"] },
+        behaviors: [{
+          id: "payment",
+          enabled: true,
+          type: "transfer",
+          intent: { body: ["PayPal Cashback World Mastercard"] },
+          amountStrategy: "amount_due",
+          targets: {
+            from_account_id: "acct-checking",
+            from_account_label: "Checking",
+            to_account_id: "acct-card",
+            to_account_label: "Visa 4242",
+          },
+        }],
+      }],
+    };
+
+    const cases = [
+      [
+        "autopay",
+        "Monthly autopay option Statement Balance Payment date 05/07/2026 Payment Amount $162.00 PayPal Cashback World Mastercard",
+        162,
+        "2026-05-07",
+      ],
+      [
+        "amount-paid",
+        "Hello, Andy You paid $50.61. Amount Paid $50.61 Paid On 04/07/2026 PayPal Cashback World Mastercard Account Ending In 3234",
+        50.61,
+        "2026-04-07",
+      ],
+      [
+        "payment-of",
+        "Your payment of $317.81 is complete. Thanks for your payment of $317.81 to your PayPal Cashback World Mastercard.",
+        317.81,
+        null,
+      ],
+    ];
+
+    for (const [name, body, amount, dueDate] of cases) {
+      const result = resolveBillPayMapping({
+        mappings,
+        metadata,
+        source: "pasted_text",
+        email: {
+          from: "customer.service@servicing.synchrony.com",
+          subject: "Payment Confirmation",
+          body,
+        },
+      });
+
+      expect(result.mapping, name).toMatchObject({
+        status: "matched",
+        profileId: "paypal",
+        behaviorId: "payment",
+        amountSource: "amount_due",
+      });
+      expect(result.bill, name).toMatchObject({ amount, due_date: dueDate });
+    }
+  });
+
+  it("extracts minimum payment due wording from card statements", () => {
+    const result = resolveBillPayMapping({
+      mappings: {
+        version: 1,
+        profiles: [{
+          id: "chase",
+          enabled: true,
+          identity: { domain: ["chase.com"], last4: ["8635"] },
+          behaviors: [{
+            id: "minimum",
+            enabled: true,
+            type: "transfer",
+            intent: { subject: ["statement"], body: ["minimum payment due"] },
+            amountStrategy: "minimum_due",
+            targets: {
+              from_account_id: "acct-checking",
+              from_account_label: "Checking",
+              to_account_id: "acct-card",
+              to_account_label: "Visa 4242",
+            },
+          }],
+        }],
+      },
+      metadata,
+      source: "pasted_text",
+      email: {
+        from: "no.reply.alerts@chase.com",
+        subject: "Your credit card statement is available",
+        body: "Account Chase Credit Card (...8635) Due date 03/28/2026 Minimum payment due $40.00 Statement balance $54.41 Auto-pay enabled",
+      },
+    });
+
+    expect(result.mapping).toMatchObject({
+      status: "matched",
+      profileId: "chase",
+      behaviorId: "minimum",
+      amountSource: "minimum_due",
+    });
+    expect(result.bill).toMatchObject({ amount: 40, due_date: "2026-03-28" });
+  });
+
   it("parses plain transaction amount and labeled date from pasted text", () => {
     const result = resolveBillPayMapping({
       mappings: {
