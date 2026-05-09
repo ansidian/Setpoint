@@ -522,7 +522,7 @@ describe("GET /api/dashboard/current", () => {
     });
   });
 
-  it("manual refresh skips fresh non-Bills current-data sources and forces Bills ground truth", async () => {
+  it("manual refresh skips fresh stable sources while reconciling Todoist deadlines and Bills ground truth", async () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", []);
     await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
@@ -542,19 +542,20 @@ describe("GET /api/dashboard/current", () => {
     expect(res.body.refresh).toMatchObject({
       mode: "manual",
       scheduled: expect.arrayContaining([
+        expect.objectContaining({ key: "deadlines_current", reason: "manual_todoist_sync" }),
         expect.objectContaining({ key: "bills_current", reason: "manual_bills_sync" }),
         expect.objectContaining({ key: "active_snapshot", reason: "manual_retry" }),
       ]),
       skipped: expect.arrayContaining([
         expect.objectContaining({ key: "weather_current", reason: "fresh" }),
         expect.objectContaining({ key: "calendar_current", reason: "fresh" }),
-        expect.objectContaining({ key: "deadlines_current", reason: "fresh" }),
       ]),
     });
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
-    expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: true });
+    expect(testState.fetchTodoistDueTaskIdSet).toHaveBeenCalledWith("u1", { refresh: true });
     expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
       actualBudgetUrl: "https://actual.example.test",
       force: true,

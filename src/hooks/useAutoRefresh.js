@@ -23,24 +23,33 @@ export default function useAutoRefresh({
   useEffect(() => {
     if (disabled) return;
 
+    const refreshIfDue = () => {
+      if (document.visibilityState === "hidden") return;
+      const last = lastRef.current;
+      if (last != null && Date.now() - last < REFRESH_INTERVAL_MS) return;
+      lastRef.current = Date.now();
+      onQuickRef.current?.();
+    };
+
     const tick = () => {
       if (document.visibilityState === "hidden") return;
+      lastRef.current = Date.now();
       onQuickRef.current?.();
     };
 
     const onVisibility = () => {
       if (document.visibilityState !== "visible") return;
-      const last = lastRef.current;
-      if (last != null && Date.now() - last < REFRESH_INTERVAL_MS) return;
-      onQuickRef.current?.();
+      refreshIfDue();
     };
 
     const intervalId = setInterval(tick, REFRESH_INTERVAL_MS);
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", refreshIfDue);
 
     return () => {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", refreshIfDue);
     };
   }, [disabled]);
 }
