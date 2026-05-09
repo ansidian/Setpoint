@@ -117,8 +117,9 @@ function makeSessionSnapshot(includeAction = true) {
   });
 }
 
-function InboxSessionHarness({ initialSelectedId = null }) {
+function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh = vi.fn() }) {
   const [showInbox, setShowInbox] = useState(true);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [seedSelectedId, setSeedSelectedId] = useState(null);
   const [snapshot, setSnapshot] = useState(() => makeSessionSnapshot(true));
   const [sessionState, setSessionState] = useState({
@@ -138,7 +139,7 @@ function InboxSessionHarness({ initialSelectedId = null }) {
     snapshot,
     loading: false,
     error: null,
-    refresh: vi.fn(),
+    refresh: activeSnapshotRefresh,
     sync: vi.fn(),
   };
 
@@ -153,6 +154,10 @@ function InboxSessionHarness({ initialSelectedId = null }) {
       <button type="button" onClick={() => setSnapshot(makeSessionSnapshot(false))}>
         Remove action email
       </button>
+      <button type="button" onClick={() => setCalendarOpen(true)}>
+        Open calendar modal
+      </button>
+      {calendarOpen && <div data-testid="calendar-modal-placeholder">Calendar modal</div>}
       {showInbox ? (
         <InboxView
           accent="#cba6da"
@@ -216,6 +221,22 @@ describe("InboxView session state", () => {
 
     expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
     expect(settleArrivalGrace).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes the active snapshot after Inbox exit but not while a calendar modal is open", async () => {
+    const activeSnapshotRefresh = vi.fn().mockResolvedValue({});
+    render(<InboxSessionHarness activeSnapshotRefresh={activeSnapshotRefresh} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open calendar modal" }));
+    expect(screen.getByTestId("calendar-modal-placeholder")).toBeTruthy();
+    expect(settleArrivalGrace).not.toHaveBeenCalled();
+    expect(activeSnapshotRefresh).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox mount" }));
+
+    expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
+    expect(settleArrivalGrace).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(activeSnapshotRefresh).toHaveBeenCalledTimes(1));
   });
 
   it("uses a keepalive settle attempt on page exit", () => {

@@ -2,7 +2,7 @@ import db from "../db/connection.js";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import { loadUserConfig } from "./config-service.js";
 import { fetchAllEmails } from "./email-fetch.js";
-import { indexEmails } from "./email-index.js";
+import { indexEmails, parseFrom } from "./email-index.js";
 import { enqueueEmailTriageForEmails } from "./gmail-sync.js";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
 import { getElapsedMs, logTiming } from "../timing.js";
@@ -226,6 +226,8 @@ async function loadSnapshotItems(dbClient, snapshotId) {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  idx.read,
+                 idx.from_name AS index_from_name,
+                 idx.from_address AS index_from_address,
                  t.bill_candidate_json
           FROM ea_briefing_snapshot_items i
           LEFT JOIN ea_email_index idx
@@ -258,6 +260,8 @@ async function loadActiveCatchUpItems(dbClient, userId, snapshot) {
   const result = await dbClient.execute({
     sql: `SELECT i.*,
                  0 AS read,
+                 idx.from_name AS index_from_name,
+                 idx.from_address AS index_from_address,
                  'catch_up' AS source,
                  1 AS catch_up,
                  t.bill_candidate_json
@@ -399,6 +403,14 @@ function snapshotString(...values) {
     if (value != null && String(value).trim()) return String(value).trim();
   }
   return "";
+}
+
+function snapshotSenderFromEmail(email = {}) {
+  const parsed = parseFrom(email);
+  return {
+    fromName: snapshotString(email.from_name, parsed.fromName),
+    fromAddress: snapshotString(email.from_address, parsed.fromAddress),
+  };
 }
 
 function snapshotLane(snapshot) {
@@ -647,6 +659,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
 } = {}) {
   const emailId = email?.uid || email?.email_id || email?.id;
   if (!userId || !accountId || !emailId) return null;
+  const sender = snapshotSenderFromEmail(email);
   const triage = await dbClient.execute({
     sql: `SELECT t.id,
                  j.scheduled_for
@@ -714,8 +727,8 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
       emailId,
       ARRIVAL_GRACE_QUEUED_LANE,
       email.subject || "",
-      email.from_name || "",
-      email.from_address || "",
+      sender.fromName,
+      sender.fromAddress,
       email.email_date || email.date || null,
       email.account_label || "",
       email.account_email || "",

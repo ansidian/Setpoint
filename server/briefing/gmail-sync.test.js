@@ -147,8 +147,7 @@ describe("Gmail Pub/Sub sync ingestion", () => {
         account_email: "work@example.com",
         account_color: "#123456",
         account_icon: "Mail",
-        from_name: "Fresh Sender",
-        from_address: "fresh@example.com",
+        from: "Fresh Sender <fresh@example.com>",
         subject: "Fresh arrival",
         body_snippet: "This should wait briefly.",
         email_date: "2026-05-03T12:00:00.000Z",
@@ -166,6 +165,8 @@ describe("Gmail Pub/Sub sync ingestion", () => {
                    j.status AS job_status,
                    j.scheduled_for,
                    i.lane_at_snapshot,
+                   i.from_name_at_snapshot,
+                   i.from_address_at_snapshot,
                    i.source,
                    i.source_at
             FROM ea_email_triage t
@@ -184,6 +185,8 @@ describe("Gmail Pub/Sub sync ingestion", () => {
         job_status: "queued",
         scheduled_for: "2026-05-03T12:03:00.000Z",
         lane_at_snapshot: "queued",
+        from_name_at_snapshot: "Fresh Sender",
+        from_address_at_snapshot: "fresh@example.com",
         source: "arrival_grace",
         source_at: "2026-05-03T12:03:00.000Z",
       },

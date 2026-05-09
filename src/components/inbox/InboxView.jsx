@@ -67,9 +67,13 @@ export default function InboxView({
   const activeSnapshotView = activeSnapshot.snapshot || (snapshotInboxMode ? EMPTY_ACTIVE_SNAPSHOT_VIEW : null);
   const readOnly = !!activeSnapshotView?.readOnly;
   const shouldSettleArrivalGraceRef = useRef(false);
+  const refreshAfterArrivalGraceSettleRef = useRef(null);
   useEffect(() => {
     shouldSettleArrivalGraceRef.current = snapshotInboxMode && !readOnly;
-  }, [snapshotInboxMode, readOnly]);
+    refreshAfterArrivalGraceSettleRef.current = snapshotInboxMode && !readOnly
+      ? controlledActiveSnapshot?.refresh || null
+      : null;
+  }, [controlledActiveSnapshot?.refresh, snapshotInboxMode, readOnly]);
 
   useEffect(() => {
     const settleOnPageExit = () => {
@@ -82,7 +86,9 @@ export default function InboxView({
       window.removeEventListener("pagehide", settleOnPageExit);
       window.removeEventListener("beforeunload", settleOnPageExit);
       if (!shouldSettleArrivalGraceRef.current) return;
-      settleArrivalGrace().catch(() => {});
+      settleArrivalGrace()
+        .then(() => refreshAfterArrivalGraceSettleRef.current?.())
+        .catch(() => {});
     };
   }, []);
   const snapshotAccounts = useMemo(() => (

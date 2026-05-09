@@ -754,6 +754,11 @@ describe("active briefing snapshots", () => {
     const second = await getActiveSnapshotView("user-1", { dbClient, now });
 
     expect(first.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
+    expect(first.lanes.untriaged_read[0]).toMatchObject({
+      from_name: "Reader",
+      from_address: "reader@example.com",
+      from: "Reader",
+    });
     expect(second.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
     const rows = await dbClient.execute({
       sql: `SELECT t.triage_status,
