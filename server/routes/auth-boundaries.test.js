@@ -659,6 +659,18 @@ describe("auth boundaries", () => {
     );
   });
 
+  it("rejects non-numeric quick-txn amounts before calling Actual", async () => {
+    await seedBearer(["actual:write"]);
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/quick-txn")
+      .set("Authorization", "Bearer scoped-token")
+      .send({ account: "Checking", amount: "$12.34", payee: "Coffee" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("amount must be a number");
+    expect(createQuickTxn).not.toHaveBeenCalled();
+  });
+
   it("allows cookie session auth on quick-txn", async () => {
     await seedSession();
     const res = await request(makeApp())
