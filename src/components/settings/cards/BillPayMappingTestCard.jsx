@@ -20,9 +20,6 @@ const EMPTY_FORM = {
   from: "",
   subject: "",
   body: "",
-  payee: "",
-  amount: "",
-  dueDate: "",
 };
 
 function statusLabel(status) {
@@ -57,6 +54,29 @@ function ResultField({ label, value }) {
   );
 }
 
+function resultFieldsForBill(bill) {
+  const type = bill.type || "expense";
+  const common = [
+    ["Amount", bill.amount],
+    [type === "expense" || type === "income" ? "Date" : "Due date", bill.due_date],
+    ["Type", type],
+  ];
+  if (type === "transfer") {
+    return [
+      ...common,
+      ["From account", bill.from_account_label || bill.from_account_id],
+      ["To account", bill.to_account_label || bill.to_account_id],
+      ["Schedule", bill.schedule_name],
+    ];
+  }
+  return [
+    ["Payee", bill.payee || bill.payee_label],
+    ...common,
+    ["Account", bill.account_label || bill.account_id],
+    ["Category", bill.category_label || bill.category_id],
+  ];
+}
+
 function DiagnosticsResult({ result }) {
   if (!result) return null;
   const bill = result.bill || {};
@@ -72,15 +92,10 @@ function DiagnosticsResult({ result }) {
         {mapping.amountSource ? <StatusPill tone="neutral">Amount {mapping.amountSource}</StatusPill> : null}
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <ResultField label="Payee" value={bill.payee || bill.payee_label} />
-        <ResultField label="Amount" value={bill.amount} />
-        <ResultField label="Due date" value={bill.due_date} />
-        <ResultField label="Type" value={bill.type} />
-        <ResultField label="Account" value={bill.account_label || bill.account_id} />
-        <ResultField label="Category" value={bill.category_label || bill.category_id} />
-        <ResultField label="From account" value={bill.from_account_label || bill.from_account_id} />
-        <ResultField label="To account" value={bill.to_account_label || bill.to_account_id} />
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {resultFieldsForBill(bill).map(([label, value]) => (
+          <ResultField key={label} label={label} value={value} />
+        ))}
       </div>
 
       <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-muted-foreground/70">
@@ -116,12 +131,6 @@ export default function BillPayMappingTestCard({ settings }) {
     setStatus("loading");
     setError(null);
     setResult(null);
-    const amount = form.amount.trim() ? Number(form.amount) : null;
-    const candidate = {
-      ...(form.payee.trim() ? { payee: form.payee.trim() } : {}),
-      ...(Number.isFinite(amount) ? { amount } : {}),
-      ...(form.dueDate.trim() ? { due_date: form.dueDate.trim() } : {}),
-    };
     try {
       const response = await resolveBillPayMappingSample({
         mappings,
@@ -131,7 +140,6 @@ export default function BillPayMappingTestCard({ settings }) {
           body: form.body,
           snippet: form.body,
         },
-        candidate: Object.keys(candidate).length ? candidate : null,
       });
       setResult(response);
       setStatus("idle");
@@ -177,38 +185,6 @@ export default function BillPayMappingTestCard({ settings }) {
             placeholder="Paste the relevant bill text here."
             className="min-h-24 bg-input-bg text-[13px]"
           />
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <SectionLabel>Candidate payee</SectionLabel>
-            <Input
-              value={form.payee}
-              onChange={(event) => updateField("payee", event.target.value)}
-              placeholder="Optional"
-              className="bg-input-bg"
-            />
-          </div>
-          <div>
-            <SectionLabel>Candidate amount</SectionLabel>
-            <Input
-              type="number"
-              step="0.01"
-              value={form.amount}
-              onChange={(event) => updateField("amount", event.target.value)}
-              placeholder="Optional"
-              className="bg-input-bg"
-            />
-          </div>
-          <div>
-            <SectionLabel>Candidate due date</SectionLabel>
-            <Input
-              type="date"
-              value={form.dueDate}
-              onChange={(event) => updateField("dueDate", event.target.value)}
-              className="bg-input-bg"
-            />
-          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

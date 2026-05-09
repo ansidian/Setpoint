@@ -210,6 +210,67 @@ describe("Bill Pay resolver", () => {
     expect(pastedText.bill.amount).toBeNull();
   });
 
+  it("parses plain transaction amount and labeled date from pasted text", () => {
+    const result = resolveBillPayMapping({
+      mappings: {
+        version: 1,
+        profiles: [{
+          id: "citi",
+          enabled: true,
+          identity: {
+            domain: ["citi.com"],
+            last4: ["0004"],
+          },
+          behaviors: [{
+            id: "transaction-gas",
+            enabled: true,
+            type: "expense",
+            intent: {
+              subject: ["transaction"],
+              body: ["gas"],
+            },
+            amountStrategy: "amount_due",
+            targets: {
+              account_id: "acct-card",
+              account_label: "Visa 4242",
+              category_id: "cat-utilities",
+              category_label: "Utilities",
+            },
+          }],
+        }],
+      },
+      metadata,
+      source: "pasted_text",
+      email: {
+        from: "alerts@info6.citi.com",
+        subject: "A $44.72 transaction was made on your Costco Anywhere",
+        body: [
+          "Amount: $44.72",
+          "Card Ending In",
+          "0004",
+          "Merchant",
+          "COSTCO GAS #1318 MONTEREY PARKUS",
+          "Date",
+          "04/30/2026",
+        ].join("\n"),
+      },
+    });
+
+    expect(result.mapping).toMatchObject({
+      status: "matched",
+      profileId: "citi",
+      behaviorId: "transaction-gas",
+      amountSource: "amount_due",
+    });
+    expect(result.bill).toMatchObject({
+      type: "expense",
+      amount: 44.72,
+      due_date: "2026-04-30",
+      account_id: "acct-card",
+      category_id: "cat-utilities",
+    });
+  });
+
   it("reports stale Actual targets without applying mapped IDs", () => {
     const result = resolveBillPayMapping({
       mappings: {

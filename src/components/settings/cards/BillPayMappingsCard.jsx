@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -363,6 +363,8 @@ function ProfileEditor({
   onDelete,
   onMove,
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   function updateBehavior(behaviorIndex, updater) {
     onChange({
       ...profile,
@@ -374,6 +376,14 @@ function ProfileEditor({
     <div className="rounded-lg border border-white/[0.06] bg-white/[0.018] p-3 sm:p-4">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            className={MINI_ICON_BUTTON_CLASS}
+            onClick={() => setCollapsed((current) => !current)}
+            aria-label={`${collapsed ? "Expand" : "Collapse"} profile ${index + 1}`}
+          >
+            {collapsed ? <ChevronRight size={13} className="mx-auto" /> : <ChevronDown size={13} className="mx-auto" />}
+          </button>
           <Input
             value={profile.name}
             onChange={(event) => onChange({ ...profile, name: event.target.value })}
@@ -407,77 +417,88 @@ function ProfileEditor({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <ChipEditor
-            label="Senders"
-            chips={profile.identity.sender}
-            placeholder="billing@example.com"
-            onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, sender: next } })}
-          />
-          <ChipEditor
-            label="Domains"
-            chips={profile.identity.domain}
-            placeholder="example.com"
-            onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, domain: next } })}
-          />
-          <ChipEditor
-            label="Aliases"
-            chips={profile.identity.aliases}
-            placeholder="Costco Visa"
-            onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, aliases: next } })}
-          />
-          <ChipEditor
-            label="Last 4"
-            chips={profile.identity.last4}
-            placeholder="1234"
-            onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, last4: next } })}
-          />
-        </div>
-
-        {profile.enabled && !Object.values(profile.identity).some((values) => values.length) ? (
-          <FieldHint className="text-warning">
-            Enabled profile needs at least one sender, domain, alias, or last4 matcher.
-          </FieldHint>
-        ) : null}
-
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] pt-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">
-              Behaviors
-            </div>
-            <FieldHint>{profile.behaviors.length} configured</FieldHint>
+        {collapsed ? (
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/70">
+            <StatusPill tone={profile.enabled ? "success" : "neutral"}>
+              {profile.enabled ? "Enabled" : "Disabled"}
+            </StatusPill>
+            <span>{profile.behaviors.length} {profile.behaviors.length === 1 ? "behavior" : "behaviors"}</span>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className={SETTINGS_SECONDARY_BUTTON_CLASS}
-            onClick={() => onChange({ ...profile, behaviors: [...profile.behaviors, createBehavior()] })}
-          >
-            <Plus size={13} />
-            Behavior
-          </Button>
-        </div>
+        ) : (
+          <>
+            <div className="grid gap-3 md:grid-cols-2">
+              <ChipEditor
+                label="Senders"
+                chips={profile.identity.sender}
+                placeholder="billing@example.com"
+                onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, sender: next } })}
+              />
+              <ChipEditor
+                label="Domains"
+                chips={profile.identity.domain}
+                placeholder="example.com"
+                onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, domain: next } })}
+              />
+              <ChipEditor
+                label="Aliases"
+                chips={profile.identity.aliases}
+                placeholder="Costco Visa"
+                onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, aliases: next } })}
+              />
+              <ChipEditor
+                label="Last 4"
+                chips={profile.identity.last4}
+                placeholder="1234"
+                onChange={(next) => onChange({ ...profile, identity: { ...profile.identity, last4: next } })}
+              />
+            </div>
 
-        <div className="flex flex-col gap-3">
-          {profile.behaviors.map((behavior, behaviorIndex) => (
-            <BehaviorEditor
-              key={behavior.id}
-              behavior={behavior}
-              index={behaviorIndex}
-              count={profile.behaviors.length}
-              accounts={accounts}
-              payees={payees}
-              categories={categories}
-              onChange={(nextBehavior) => updateBehavior(behaviorIndex, () => nextBehavior)}
-              onDelete={() => onChange({ ...profile, behaviors: removeAt(profile.behaviors, behaviorIndex) })}
-              onMove={(direction) => onChange({
-                ...profile,
-                behaviors: moveAt(profile.behaviors, behaviorIndex, direction),
-              })}
-            />
-          ))}
-        </div>
+            {profile.enabled && !Object.values(profile.identity).some((values) => values.length) ? (
+              <FieldHint className="text-warning">
+                Enabled profile needs at least one sender, domain, alias, or last4 matcher.
+              </FieldHint>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] pt-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">
+                  Behaviors
+                </div>
+                <FieldHint>{profile.behaviors.length} configured</FieldHint>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className={SETTINGS_SECONDARY_BUTTON_CLASS}
+                onClick={() => onChange({ ...profile, behaviors: [...profile.behaviors, createBehavior()] })}
+              >
+                <Plus size={13} />
+                Behavior
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {profile.behaviors.map((behavior, behaviorIndex) => (
+                <BehaviorEditor
+                  key={behavior.id}
+                  behavior={behavior}
+                  index={behaviorIndex}
+                  count={profile.behaviors.length}
+                  accounts={accounts}
+                  payees={payees}
+                  categories={categories}
+                  onChange={(nextBehavior) => updateBehavior(behaviorIndex, () => nextBehavior)}
+                  onDelete={() => onChange({ ...profile, behaviors: removeAt(profile.behaviors, behaviorIndex) })}
+                  onMove={(direction) => onChange({
+                    ...profile,
+                    behaviors: moveAt(profile.behaviors, behaviorIndex, direction),
+                  })}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
