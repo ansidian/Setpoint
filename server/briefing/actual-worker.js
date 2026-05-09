@@ -2,6 +2,7 @@ import { fork } from "child_process";
 import path from "path";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+const PRODUCTION_DEFAULT_MAX_OLD_SPACE_MB = 192;
 const OUTPUT_LIMIT = 8_000;
 const WORKER_PATH = path.resolve("server/briefing/actual-worker-child.js");
 const INITIAL_HEALTH = {
@@ -34,8 +35,13 @@ function timeoutMs() {
 
 function workerExecArgv() {
   const maxOldSpace = Number(process.env.EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB);
-  if (!Number.isFinite(maxOldSpace) || maxOldSpace <= 0) return [];
-  return [`--max-old-space-size=${Math.floor(maxOldSpace)}`];
+  if (Number.isFinite(maxOldSpace) && maxOldSpace > 0) {
+    return [`--max-old-space-size=${Math.floor(maxOldSpace)}`];
+  }
+  if (process.env.NODE_ENV === "production") {
+    return [`--max-old-space-size=${PRODUCTION_DEFAULT_MAX_OLD_SPACE_MB}`];
+  }
+  return [];
 }
 
 function idleShutdownMs() {

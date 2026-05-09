@@ -379,6 +379,7 @@ export default function BillPayMappingsCard({
   patch,
   metadata,
   metadataLoading,
+  metadataError,
   onRequestMetadata,
 }) {
   const mappings = normalizeMappings(settings?.bill_pay_mappings);
@@ -422,8 +423,8 @@ export default function BillPayMappingsCard({
       icon={<Plus size={14} />}
       description="Resolve Bill Pay seeds from deterministic Actual-owned profiles before falling back to manual extraction."
       headerAction={
-        <StatusPill tone={metadataLoading ? "neutral" : "accent"}>
-          {metadataLoading ? "Metadata loading" : `${mappings.profiles.length} profiles`}
+        <StatusPill tone={metadataError ? "warning" : metadataLoading ? "neutral" : "accent"}>
+          {metadataError ? "Metadata unavailable" : metadataLoading ? "Metadata loading" : `${mappings.profiles.length} profiles`}
         </StatusPill>
       }
     >
@@ -442,6 +443,12 @@ export default function BillPayMappingsCard({
             Profile
           </Button>
         </div>
+
+        {metadataError ? (
+          <FieldHint className="text-warning">
+            Actual metadata could not load. Account, payee, and category dropdowns may be incomplete.
+          </FieldHint>
+        ) : null}
 
         {mappings.profiles.length ? (
           <div className="flex flex-col gap-4">

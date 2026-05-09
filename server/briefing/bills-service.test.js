@@ -20,7 +20,21 @@ const originalFetch = global.fetch;
 const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 
-function mockSettings(provider, model) {
+function metadataProjectionRow(metadata = {}) {
+  return {
+    status: "current",
+    accounts_json: JSON.stringify(metadata.accounts || []),
+    payees_json: JSON.stringify(metadata.payees || []),
+    categories_json: JSON.stringify(metadata.categories || []),
+    schedules_json: JSON.stringify(metadata.schedules || []),
+    recent_transactions_json: JSON.stringify(metadata.recentTransactions || []),
+    last_success_at: "2026-05-06T12:00:00.000Z",
+    last_attempt_at: "2026-05-06T12:00:00.000Z",
+    last_error: null,
+  };
+}
+
+function mockSettings(provider, model, { metadata = null } = {}) {
   mockDb.execute.mockImplementation(({ sql }) => {
     if (/bill_extract_provider/i.test(sql)) {
       return Promise.resolve({
@@ -29,6 +43,9 @@ function mockSettings(provider, model) {
     }
     if (/bill_pay_mappings_json/i.test(sql)) {
       return Promise.resolve({ rows: [{ bill_pay_mappings_json: null }] });
+    }
+    if (/ea_actual_metadata_mirror/i.test(sql) && metadata) {
+      return Promise.resolve(rowResult([metadataProjectionRow(metadata)]));
     }
     return Promise.resolve(rowResult());
   });
@@ -52,6 +69,7 @@ afterEach(() => {
 
 const {
   extractBill,
+  getMetadata,
   sendBill,
   listAccounts,
   readBillsMirrorRange,
@@ -69,8 +87,7 @@ function rowResult(rows = []) {
 
 describe("extractBill (Anthropic)", () => {
   it("translates category/account codes back to real ids and reports the model used", async () => {
-    mockSettings("anthropic", "claude-haiku-4-5");
-    mockActual.getMetadata.mockResolvedValueOnce({
+    mockSettings("anthropic", "claude-haiku-4-5", { metadata: {
       categories: [
         { group: "G1", categories: [{ id: "CAT-REAL-1", name: "Groceries" }] },
       ],
@@ -78,7 +95,7 @@ describe("extractBill (Anthropic)", () => {
         { id: "ACC-REAL-1", name: "Visa" },
       ],
       payees: [],
-    });
+    } });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -198,11 +215,11 @@ describe("Bill Pay resolver service", () => {
   });
 
   it("resolves a pasted-text mapping sample without requiring an email id", async () => {
-    mockActual.getMetadata.mockResolvedValueOnce({
+    mockDb.execute.mockResolvedValueOnce(rowResult([metadataProjectionRow({
       accounts: [],
       payees: [{ id: "payee-spectrum", name: "Spectrum" }],
       categories: [{ id: "cat-internet", name: "Internet" }],
-    });
+    })]));
 
     const result = await resolveBillPaySample("u1", {
       mappings: {
@@ -252,14 +269,13 @@ describe("extractBill (OpenAI)", () => {
   it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"])(
     "uses Responses API structured output and returns the same normalized shape (%s)",
     async (model) => {
-      mockSettings("openai", model);
-      mockActual.getMetadata.mockResolvedValueOnce({
+      mockSettings("openai", model, { metadata: {
         categories: [
           { group: "G1", categories: [{ id: "CAT-REAL-2", name: "Internet" }] },
         ],
         accounts: [{ id: "ACC-REAL-2", name: "Visa" }],
         payees: [],
-      });
+      } });
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -512,5 +528,59 @@ describe("listAccounts", () => {
     const out = await listAccounts("u1");
     expect(out).toEqual([{ id: "a1" }]);
     expect(mockActual.getMetadata).not.toHaveBeenCalled();
+  });
+
+  it("does not spawn Actual for empty degraded metadata on render-facing reads", async () => {
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult([
+        {
+          status: "degraded",
+          accounts_json: "[]",
+          payees_json: "[]",
+          categories_json: "[]",
+          schedules_json: "[]",
+          recent_transactions_json: "[]",
+          last_success_at: null,
+          last_attempt_at: "2026-05-06T12:00:00.000Z",
+          last_error: "Actual worker exited",
+        },
+      ]));
+
+    await expect(listAccounts("u1")).rejects.toMatchObject({
+      status: 503,
+      message: /Actual metadata projection is unavailable/,
+    });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+  });
+
+  it("can explicitly refresh empty metadata projections when a refresh worker requests it", async () => {
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult([
+        {
+          status: "needs_sync",
+          accounts_json: "[]",
+          payees_json: "[]",
+          categories_json: "[]",
+          schedules_json: "[]",
+          recent_transactions_json: "[]",
+          last_success_at: null,
+          last_attempt_at: "2026-05-06T12:00:00.000Z",
+          last_error: "Actual worker exited",
+        },
+      ]))
+      .mockResolvedValueOnce(rowResult());
+    mockActual.getMetadata.mockResolvedValueOnce({
+      accounts: [{ id: "a1", name: "Checking" }],
+      payees: [],
+      categories: [],
+    });
+
+    const out = await getMetadata("u1", { allowRefresh: true });
+
+    expect(out.accounts).toEqual([{ id: "a1", name: "Checking" }]);
+    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1");
+    expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
+      sql: expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
+    }));
   });
 });

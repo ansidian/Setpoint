@@ -33,6 +33,8 @@ describe("Actual worker runner", () => {
     shutdownActualWorkerForTests();
     vi.useRealTimers();
     delete process.env.EA_ACTUAL_WORKER_IDLE_SHUTDOWN_MS;
+    delete process.env.EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB;
+    process.env.NODE_ENV = "test";
   });
 
   it("resolves with the worker result", async () => {
@@ -152,5 +154,42 @@ describe("Actual worker runner", () => {
       pid: null,
       lastError: null,
     });
+  });
+
+  it("caps production worker heap by default", async () => {
+    process.env.NODE_ENV = "production";
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+
+    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    await Promise.resolve();
+
+    expect(forkMock.mock.calls[0][2].execArgv).toEqual(["--max-old-space-size=192"]);
+    const request = child.send.mock.calls[0][0];
+    child.emit("message", {
+      id: request.id,
+      ok: true,
+      result: { accounts: [] },
+    });
+    await expect(resultPromise).resolves.toEqual({ accounts: [] });
+  });
+
+  it("allows an explicit worker heap cap override", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.EA_ACTUAL_WORKER_MAX_OLD_SPACE_MB = "128";
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+
+    const resultPromise = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 1000 });
+    await Promise.resolve();
+
+    expect(forkMock.mock.calls[0][2].execArgv).toEqual(["--max-old-space-size=128"]);
+    const request = child.send.mock.calls[0][0];
+    child.emit("message", {
+      id: request.id,
+      ok: true,
+      result: { accounts: [] },
+    });
+    await expect(resultPromise).resolves.toEqual({ accounts: [] });
   });
 });
