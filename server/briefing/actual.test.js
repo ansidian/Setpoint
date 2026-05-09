@@ -95,7 +95,7 @@ vi.mock("../db/connection.js", () => ({
 
 vi.mock("./encryption.js", () => ({ decrypt: vi.fn((v) => v) }));
 
-describe("actual.js mutex (withLock)", () => {
+describe("actual-core mutex (withLock)", () => {
   beforeEach(() => {
     // Reset module registry so each test gets fresh lock + metadataCache state
     // Reset all mocks so call counts start from 0
@@ -106,7 +106,7 @@ describe("actual.js mutex (withLock)", () => {
 
   it("two concurrent calls execute sequentially (second starts after first finishes)", async () => {
     // Use testConnection (no cache) so both calls always reach init
-    const { testConnection } = await import("./actual.js");
+    const { testConnection } = await import("./actual-core.js");
     const actualApi = (await import("@actual-app/api")).default;
 
     const order = [];
@@ -296,7 +296,7 @@ describe("actual.js sendBill mutex", () => {
   });
 });
 
-describe("actual.js testConnection mutex", () => {
+describe("actual-core testConnection mutex", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -304,7 +304,7 @@ describe("actual.js testConnection mutex", () => {
   });
 
   it("testConnection acquires the mutex (init not called concurrently with getMetadata)", async () => {
-    const { getMetadata, testConnection } = await import("./actual.js");
+    const { getMetadata, testConnection } = await import("./actual-core.js");
     const actualApi = (await import("@actual-app/api")).default;
 
     const order = [];

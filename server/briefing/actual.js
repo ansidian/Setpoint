@@ -1,4 +1,5 @@
 import { runActualWorkerOperation } from "./actual-worker.js";
+import { testActualConnectionHttp } from "./actual-connection-test.js";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;
 let metadataCache = { data: null, ts: 0 };
@@ -92,7 +93,7 @@ function clearMetadataCache() {
 }
 
 export function testConnection(userId, overrides = null) {
-  return callActual("testConnection", [userId, overrides]);
+  return testActualConnectionHttp(userId, overrides);
 }
 
 export async function getMetadata(userId) {
