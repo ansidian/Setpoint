@@ -389,6 +389,50 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("refreshes active snapshot data after queued email dashboard-current events", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const queuedSnapshot = {
+      ...currentPayload.activeSnapshot,
+      lanes: {
+        ...currentPayload.activeSnapshot.lanes,
+        queued: [{
+          uid: "queued-arrival",
+          email_id: "queued-arrival",
+          lane: "queued",
+          source: "arrival_grace",
+          read: false,
+        }],
+      },
+    };
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        activeSnapshot: queuedSnapshot,
+        fetchedAt: "2026-05-05T00:22:00.000Z",
+      });
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", {
+        source: "email_triage",
+        reason: "email_triage_queued",
+        details: {
+          triggerType: "email_queued",
+          emailId: "queued-arrival",
+          lane: "queued",
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(result.current.activeSnapshot.snapshot.lanes.queued).toEqual(queuedSnapshot.lanes.queued);
+    unmount();
+  });
+
   it("closes the dashboard-current event stream on unmount and skips it when disabled", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const { unmount } = renderHook(() => useCurrentDashboard());

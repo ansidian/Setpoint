@@ -1,6 +1,6 @@
 import { collectActiveSnapshotEmails, mergeReadState } from "../inbox/helpers.js";
 
-const BADGE_LANES = new Set(["carryover", "needs_attention", "action", "catch_up", "fyi"]);
+const BADGE_LANES = new Set(["queued", "carryover", "needs_attention", "action", "catch_up", "fyi"]);
 
 function emailKey(email) {
   const uid = email?.uid || email?.id;
