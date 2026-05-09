@@ -146,6 +146,7 @@ function ChipPrefix({ item, selected, metrics, leadingColumnWidth }) {
   if (!leadingColumnWidth) return null;
   const color = metadataColor(item, selected);
   const compactLabel = compactLeadingLabel(item.leadingLabel);
+  const preserveLeadingLabel = item.preserveLeadingLabel === true;
 
   return (
     <span
@@ -171,10 +172,10 @@ function ChipPrefix({ item, selected, metrics, leadingColumnWidth }) {
       {item.leadingLabel ? (
         <span
           style={{
-            minWidth: 0,
-            maxWidth: "inherit",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
+            minWidth: preserveLeadingLabel ? "max-content" : 0,
+            maxWidth: preserveLeadingLabel ? "none" : "inherit",
+            overflow: preserveLeadingLabel ? "visible" : "hidden",
+            textOverflow: preserveLeadingLabel ? "clip" : "ellipsis",
             whiteSpace: "nowrap",
           }}
         >

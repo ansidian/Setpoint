@@ -55,7 +55,8 @@ function toBillDescriptor(bill) {
         : bill.next_date
           ? relativeDateLabel(days)
           : "Scheduled",
-    leadingLabel: formatAmount(bill.amount).replace(".00", ""),
+    leadingLabel: formatAmount(bill.amount),
+    preserveLeadingLabel: true,
     accent,
     leadingColor: accent,
     complete: bill.paid,

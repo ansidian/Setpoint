@@ -271,6 +271,38 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(title?.closest("s")).toBeTruthy();
   });
 
+  it("preserves full bill amount prefixes and truncates the title first", () => {
+    const amount = "$1,234,567.89";
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          {
+            id: "large-bill",
+            leadingLabel: amount,
+            preserveLeadingLabel: true,
+            title: "Long lender name that should yield space before the amount clips",
+          },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 1 }}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    const meta = chip.querySelector("[data-calendar-chip-meta='true']");
+    const amountText = meta?.firstElementChild;
+    const titleFrame = chip.querySelector("[data-calendar-chip-title='true']");
+
+    expect(meta?.textContent).toBe(amount);
+    expect(meta?.style.width).toBe(`${getChipLeadingColumnWidth([
+      { leadingLabel: amount, preserveLeadingLabel: true },
+    ])}px`);
+    expect(Number.parseInt(meta?.style.width || "0", 10)).toBeGreaterThan(68);
+    expect(amountText?.style.textOverflow).toBe("clip");
+    expect(amountText?.style.overflow).toBe("visible");
+    expect(titleFrame?.style.gridTemplateColumns).toContain("minmax(0, 1fr)");
+  });
+
   it("renders decorative status icons before completed and in-progress deadline chip titles", () => {
     render(
       <CalendarCellItemStack
