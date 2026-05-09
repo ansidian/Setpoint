@@ -42,7 +42,7 @@ describe("CalendarCellItemStack model", () => {
     )).toBe(0);
   });
 
-  it("keeps hidden ghost chips in chronological overflow order", () => {
+  it("promotes hidden ghost chips into the visible preview slot", () => {
     const result = splitVisibleCellItems([
       { id: "real-1" },
       { id: "real-2" },
@@ -52,11 +52,11 @@ describe("CalendarCellItemStack model", () => {
 
     expect(result.visibleItems.map((item) => item.id)).toEqual([
       "real-1",
-      "real-2",
+      "ghost-1",
     ]);
     expect(result.hiddenItems.map((item) => item.id)).toEqual([
+      "real-2",
       "real-3",
-      "ghost-1",
     ]);
   });
 });

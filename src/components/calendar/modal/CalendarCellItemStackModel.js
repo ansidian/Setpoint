@@ -8,6 +8,10 @@ export function splitVisibleCellItems(items, visibleCount) {
   if (count >= items.length) return { visibleItems: items, hiddenItems: [] };
 
   const visibleItems = items.slice(0, count);
+  const hiddenGhost = items.slice(count).find((item) => item.isGhost);
+  if (hiddenGhost) {
+    visibleItems[count - 1] = hiddenGhost;
+  }
   const visibleIds = new Set(visibleItems.map((item) => String(item.id)));
 
   return {
