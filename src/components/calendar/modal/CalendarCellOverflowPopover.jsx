@@ -86,6 +86,7 @@ function OverflowMetadata({ item, selected, accent, leadingColumnWidth }) {
   const color = selected
     ? item.leadingColor || accent
     : item.leadingColor || accent;
+  const preserveLeadingLabel = item.preserveLeadingLabel === true;
 
   return (
     <span
@@ -108,7 +109,13 @@ function OverflowMetadata({ item, selected, accent, leadingColumnWidth }) {
       }}
     >
       {item.leadingLabel ? (
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span
+          style={{
+            minWidth: preserveLeadingLabel ? "max-content" : 0,
+            overflow: preserveLeadingLabel ? "visible" : "hidden",
+            textOverflow: preserveLeadingLabel ? "clip" : "ellipsis",
+          }}
+        >
           {compactLeadingLabel(item.leadingLabel)}
         </span>
       ) : null}

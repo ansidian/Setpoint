@@ -48,6 +48,7 @@ function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {
     ? item.leadingColor || item.accent || "var(--ea-accent)"
     : item.leadingColor || "rgba(205,214,244,0.62)";
   const compactLabel = compactLeadingLabel(item.leadingLabel);
+  const preserveLeadingLabel = item.preserveLeadingLabel === true;
   return (
     <span
       data-calendar-chip-meta="true"
@@ -71,7 +72,15 @@ function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {
       }}
     >
       {item.leadingLabel ? (
-        <span style={{ minWidth: 0, maxWidth: "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            minWidth: preserveLeadingLabel ? "max-content" : 0,
+            maxWidth: preserveLeadingLabel ? "none" : "inherit",
+            overflow: preserveLeadingLabel ? "visible" : "hidden",
+            textOverflow: preserveLeadingLabel ? "clip" : "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {compactLabel}
         </span>
       ) : null}

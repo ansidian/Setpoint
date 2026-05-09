@@ -7,4 +7,11 @@ describe("CalendarCellItemChipModel", () => {
     expect(getChipLeadingColumnWidth([{ leadingLabel: "1:00 PM" }])).toBeGreaterThanOrEqual(22);
     expect(getChipLeadingColumnWidth([{ leadingLabel: "9:00 AM" }])).toBeGreaterThanOrEqual(22);
   });
+
+  it("does not cap preserved leading labels", () => {
+    const longAmount = "$1,234,567.89";
+
+    expect(getChipLeadingColumnWidth([{ leadingLabel: longAmount }])).toBe(68);
+    expect(getChipLeadingColumnWidth([{ leadingLabel: longAmount, preserveLeadingLabel: true }])).toBeGreaterThan(68);
+  });
 });

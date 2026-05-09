@@ -13,15 +13,18 @@ function isCompactTimeLabel(value) {
 }
 
 function estimateLeadingLabelWidth(value) {
-  const label = compactLeadingLabel(value);
+  const source = value && typeof value === "object" ? value : { leadingLabel: value };
+  const label = compactLeadingLabel(source.leadingLabel);
   if (!label) return 0;
   const compactTime = isCompactTimeLabel(label);
-  const estimated = Math.ceil(label.length * (compactTime ? 5.8 : 5.5));
+  const preserve = source.preserveLeadingLabel === true;
+  const estimated = Math.ceil(label.length * (compactTime ? 5.8 : preserve ? 6.2 : 5.5));
+  if (preserve) return Math.max(24, estimated + 3);
   return Math.max(compactTime ? 22 : 24, Math.min(compactTime ? 56 : 68, estimated));
 }
 
 export function getChipLeadingColumnWidth(items = []) {
   return items.reduce((width, item) => (
-    Math.max(width, estimateLeadingLabelWidth(item?.leadingLabel))
+    Math.max(width, estimateLeadingLabelWidth(item))
   ), 0);
 }
