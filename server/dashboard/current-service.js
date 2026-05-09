@@ -775,6 +775,8 @@ export async function requestCurrentDashboardRefresh(userId, {
   const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, todoistHealth });
   const forceKeys = new Set();
+  ensureScheduled(refreshPlan, "deadlines_current", "manual_todoist_sync");
+  forceKeys.add("deadlines_current");
   if (billsMirror?.syncHealth?.pendingRefreshAt) {
     ensureScheduled(refreshPlan, "bills_current", "pending_bills_mirror");
     forceKeys.add("bills_current");

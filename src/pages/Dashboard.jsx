@@ -79,8 +79,8 @@ export default function Dashboard() {
     if (currentSyncing) return Promise.resolve();
     setLastQuickRefreshAt(Date.now());
     setCurrentSyncing(true);
-    return withSyncWatchdog(liveData.refreshNow?.()).finally(() => setCurrentSyncing(false));
-  }, [currentSyncing, liveData]);
+    return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
+  }, [activeSnapshot, currentSyncing]);
   const handleExplicitQuickRefresh = useCallback(() => {
     if (currentSyncing) return Promise.resolve();
     setLastQuickRefreshAt(Date.now());
