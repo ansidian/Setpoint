@@ -3,7 +3,17 @@ import {
   createCalendarEventsBatch,
   deleteCalendarEvent,
   updateCalendarEvent,
+  createReminder,
+  deleteReminder,
 } from "@/api";
+import {
+  buildEventReminderCreatePayload,
+  isUnsavedReminder,
+} from "./calendarEventReminderModel";
+import {
+  applyUpcomingReminderState,
+  projectUpcomingReminderState,
+} from "../reminderDisplay.js";
 import {
   buildRecurrencePayload,
   draftBounds,
@@ -18,6 +28,8 @@ const defaultClient = {
   createBatch: createCalendarEventsBatch,
   update: updateCalendarEvent,
   remove: deleteCalendarEvent,
+  createReminder,
+  deleteReminder,
 };
 
 export function buildCalendarEventPayload({ draft, effectiveTitle }) {
@@ -151,6 +163,7 @@ export async function saveCalendarEventAction(options, client = defaultClient) {
     recurringEditScope = null,
     intentMode = "single",
     batchDrafts = [],
+    eventReminders = { items: [], removedIds: [] },
   } = options;
 
   if (!editingEvent && intentMode === "batch") {
@@ -189,17 +202,43 @@ export async function saveCalendarEventAction(options, client = defaultClient) {
     savedEvent = result.event;
   }
 
+  const removedIds = eventReminders?.removedIds || [];
+  for (const reminderId of removedIds) {
+    await client.deleteReminder?.(reminderId);
+  }
+
+  const reminderCreates = [];
+  for (const reminder of eventReminders?.items || []) {
+    if (!isUnsavedReminder(reminder)) continue;
+    reminderCreates.push(await client.createReminder?.(buildEventReminderCreatePayload({
+      event: savedEvent,
+      reminder,
+    })));
+  }
+  const reminderItems = eventReminders?.items || [];
+  const remindersChanged = removedIds.length > 0 || reminderCreates.length > 0;
+  const projectedSavedEvent = remindersChanged
+    ? applyUpcomingReminderState(
+      savedEvent,
+      projectUpcomingReminderState(reminderItems, {
+        anchorAt: savedEvent?.startMs ? new Date(savedEvent.startMs).toISOString() : null,
+      }),
+    )
+    : savedEvent;
+
   const bounds = mergeBounds(eventBounds(editingEvent), draftBounds(draft), eventBounds(savedEvent));
   const shouldRefresh = (!editingEvent && intentMode === "recurring")
     || !!(editingEvent && (isEditingRecurring || shouldSendRecurrence));
 
   return {
     kind: editingEvent ? "update" : "create",
-    savedEvent,
+    savedEvent: projectedSavedEvent,
     bounds,
     focusDate: savedEvent?.startMs ? pacificYMD(savedEvent.startMs) : null,
     shouldRefresh: shouldRefresh && !!bounds,
     shouldUpsert: !shouldRefresh,
+    reminderCreates: reminderCreates.length,
+    reminderDeletes: removedIds.length,
   };
 }
 

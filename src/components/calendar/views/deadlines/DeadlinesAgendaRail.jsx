@@ -1,9 +1,11 @@
 import { forwardRef, useEffect, useMemo, useState } from "react";
+import { Bell } from "lucide-react";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
 import { DeadlineStatusIcon } from "./DeadlineStatusIndicator.jsx";
 import { buildDeadlinesAgendaGroups } from "./deadlinesAgendaModel.js";
 import { deadlineMatchesItemId } from "./deadlinesModel.js";
+import { formatReminderSummary } from "../../reminderDisplay.js";
 
 function groupDate(group) {
   const parsed = parseYmd(group.dateKey);
@@ -65,6 +67,7 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
 
 function DeadlineRow({ task, selected, onSelect, quickActions }) {
   const color = task.agendaSelectedColor;
+  const reminderSummary = formatReminderSummary(task);
   return (
     <button
       type="button"
@@ -135,6 +138,12 @@ function DeadlineRow({ task, selected, onSelect, quickActions }) {
         {task.agendaSubtitle ? (
           <span style={{ color: "rgba(166,173,200,0.64)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {task.agendaSubtitle}
+          </span>
+        ) : null}
+        {reminderSummary ? (
+          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#f9e2af", fontSize: 10.5, lineHeight: 1.3 }}>
+            <Bell size={11} aria-hidden />
+            {reminderSummary}
           </span>
         ) : null}
       </span>

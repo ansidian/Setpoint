@@ -1,5 +1,6 @@
 import {
   Calendar,
+  Bell,
   CheckCircle2,
   Circle,
   CircleDashed,
@@ -18,6 +19,7 @@ import {
   urgencyForDays,
 } from "../../../lib/redesign-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
+import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 import {
   DEADLINE_SOURCE_COLORS,
   PRIORITY_COLOR,
@@ -112,6 +114,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
   const urgencyColors = { high: "#f38ba8", medium: "#f9e2af", low: accent };
   const dotColor = urgencyColors[urgency] || accent;
   const effectiveRailDotColor = railDotColor || dotColor;
+  const reminderSummary = formatReminderSummary(item.data);
   const opacity = isPast ? 0.38 : 1;
   const railBorderColor = railDotColor
     ? `${effectiveRailDotColor}${isLive ? "" : "55"}`
@@ -264,6 +267,33 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
               }}
             >
               {overdueText}
+            </span>
+          )}
+          {reminderSummary && (
+            <span
+              data-testid="dashboard-reminder-indicator"
+              aria-label={reminderSummary}
+              title={reminderSummary}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                maxWidth: isMobile ? "100%" : 170,
+                padding: "2px 6px",
+                borderRadius: 999,
+                border: "1px solid rgba(249,226,175,0.28)",
+                background: "rgba(249,226,175,0.10)",
+                color: "#f9e2af",
+                fontSize: isMobile ? 9.5 : 10,
+                fontWeight: 650,
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Bell size={isMobile ? 10 : 11} aria-hidden />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                {reminderSummary}
+              </span>
             </span>
           )}
         </div>

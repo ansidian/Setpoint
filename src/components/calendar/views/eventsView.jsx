@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Calendar as CalendarIcon, CheckCircle2, CircleDashed, ExternalLink, Pencil, Video } from "lucide-react";
+import { Bell, Calendar as CalendarIcon, CheckCircle2, CircleDashed, ExternalLink, Pencil, Video } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
 import {
@@ -7,11 +7,13 @@ import {
   RailActionGroup,
   RailHeroCard,
   RailMetaChip,
+  RailReminderIndicator,
 } from "../DetailRailPrimitives.jsx";
 import { useDetailRailMotion } from "../detailRailMotion.js";
 import { formatEventDuration, getEventSelectionId } from "../../../lib/redesign-helpers";
 import { extractNonZoomEventUrl, extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../lib/calendar-links";
 import EventsHeaderExtras from "./EventsHeaderExtras.jsx";
+import { formatReminderSummary } from "../reminderDisplay.js";
 import { getVisibleEventCount, renderEventsCellContents } from "./events/EventsCellContent.jsx";
 import { renderEventsFooter } from "./events/EventsFooter.jsx";
 import { addDaysYmd, pacificYMD, parseYmd, ymdFromParts } from "../calendarDateUtils.js";
@@ -250,6 +252,7 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
     : null;
   const durationLabel = !ev.allDay ? eventMeta(ev) : null;
   const accessoryLabel = location || attendeeSummary || null;
+  const reminderSummary = formatReminderSummary(ev);
 
   return (
     <Motion.div
@@ -337,9 +340,15 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
           </Motion.div>
         </Motion.div>
 
-        {(durationLabel || ev.allDay || ev.isRecurring || !editable) ? (
+        {(durationLabel || ev.allDay || ev.isRecurring || !editable || reminderSummary) ? (
           <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
             {durationLabel ? <RailMetaChip tone="quiet" compact>{durationLabel}</RailMetaChip> : null}
+            {reminderSummary ? (
+              <RailReminderIndicator compact>
+                <Bell size={10} strokeWidth={2.2} />
+                {reminderSummary}
+              </RailReminderIndicator>
+            ) : null}
             {ev.allDay ? <RailMetaChip tone="quiet" compact>All day</RailMetaChip> : null}
             {ev.isRecurring ? <RailMetaChip tone="quiet" compact>Recurring</RailMetaChip> : null}
             {!editable ? <RailMetaChip tone="quiet" compact>Read-only</RailMetaChip> : null}
@@ -412,8 +421,10 @@ function hasEventActions(ev) {
 }
 
 function toRailItem(ev, onSelectItem, selectedItemId) {
+  const reminderSummary = formatReminderSummary(ev);
   const meta = [
     eventMeta(ev),
+    reminderSummary,
     ev.isRecurring ? "Recurring" : null,
     ev.writable === false ? "Read-only" : null,
   ].filter(Boolean).join(" · ");

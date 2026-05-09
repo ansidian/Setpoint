@@ -8,6 +8,9 @@ const mockUpdateTodoistTask = vi.fn();
 const mockGetTodoistProjects = vi.fn();
 const mockGetTodoistLabels = vi.fn();
 const mockDeleteTodoistTask = vi.fn();
+const mockListReminders = vi.fn();
+const mockCreateReminder = vi.fn();
+const mockDeleteReminder = vi.fn();
 
 vi.mock("../../../api", () => ({
   createTodoistTask: (...args) => mockCreateTodoistTask(...args),
@@ -15,6 +18,9 @@ vi.mock("../../../api", () => ({
   getTodoistProjects: (...args) => mockGetTodoistProjects(...args),
   getTodoistLabels: (...args) => mockGetTodoistLabels(...args),
   deleteTodoistTask: (...args) => mockDeleteTodoistTask(...args),
+  listReminders: (...args) => mockListReminders(...args),
+  createReminder: (...args) => mockCreateReminder(...args),
+  deleteReminder: (...args) => mockDeleteReminder(...args),
 }));
 
 function PanelHarness(props) {
@@ -56,6 +62,9 @@ describe("AddTaskPanel due picker", () => {
     mockGetTodoistProjects.mockResolvedValue([]);
     mockGetTodoistLabels.mockResolvedValue([]);
     mockDeleteTodoistTask.mockResolvedValue({});
+    mockListReminders.mockResolvedValue({ reminders: [] });
+    mockCreateReminder.mockResolvedValue({ reminder: { id: "rem-created" } });
+    mockDeleteReminder.mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -63,6 +72,106 @@ describe("AddTaskPanel due picker", () => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it("flushes pending Todoist reminders only after provider task creation succeeds", async () => {
+    const onTaskAdded = vi.fn();
+    mockCreateTodoistTask.mockResolvedValueOnce({
+      id: "todo-new",
+      title: "Call dentist",
+      due_date: "2026-04-20",
+      due_time: "10:00 AM",
+      class_name: "Inbox",
+      url: "https://todoist.example/todo-new",
+    });
+
+    render(<PanelHarness onTaskAdded={onTaskAdded} />);
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Call dentist tomorrow at 10am" },
+    });
+    fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
+    expect(screen.getByTestId("todoist-reminder-chip").textContent).toContain("30 minutes before");
+
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+
+    expect(mockCreateTodoistTask).toHaveBeenCalledWith(expect.objectContaining({
+      content: "Call dentist",
+      due_string: "2026-04-20 at 10 AM",
+    }));
+    expect(mockCreateReminder).toHaveBeenCalledWith(expect.objectContaining({
+      sourceType: "todoist_task",
+      sourceItemId: "todo-new",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-04-20T17:00:00.000Z",
+      offsetMinutes: -30,
+    }));
+    expect(onTaskAdded).toHaveBeenCalledWith(expect.objectContaining({
+      id: "todo-new",
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 1,
+      nextReminderAt: "2026-04-20T16:30:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingCount: 1,
+        nextReminderAt: "2026-04-20T16:30:00.000Z",
+      },
+    }));
+  });
+
+  it("does not create pending reminders when provider task creation fails", async () => {
+    mockCreateTodoistTask.mockRejectedValueOnce(new Error("Todoist unavailable"));
+
+    render(<PanelHarness />);
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Call dentist tomorrow at 10am" },
+    });
+    fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+
+    expect(mockCreateTodoistTask).toHaveBeenCalled();
+    expect(mockCreateReminder).not.toHaveBeenCalled();
+    expect(screen.getByText("Todoist unavailable")).toBeTruthy();
+  });
+
+  it("loads existing reminders when editing a Todoist task", async () => {
+    mockListReminders.mockResolvedValueOnce({
+      reminders: [
+        { id: "rem-sent", offset_minutes: -60, status: "sent" },
+        { id: "rem-pending", offset_minutes: -30, status: "pending" },
+      ],
+    });
+
+    render(
+      <PanelHarness
+        editingTask={{
+          id: "todo-1",
+          title: "Follow up",
+          description: "",
+          class_name: "Inbox",
+          priority: 4,
+          labels: [],
+          due_date: "2026-04-21",
+          due_time: "2:30 PM",
+        }}
+      />,
+    );
+    await vi.runAllTimersAsync();
+
+    expect(mockListReminders).toHaveBeenCalledWith({
+      sourceType: "todoist_task",
+      sourceItemId: "todo-1",
+    });
+    expect(screen.getAllByTestId("todoist-reminder-chip").map((chip) => chip.textContent)).toEqual([
+      expect.stringContaining("1 hour before"),
+      expect.stringContaining("30 minutes before"),
+    ]);
+    expect(screen.getAllByTestId("todoist-reminder-chip")[0].textContent).toContain("sent");
   });
 
   it("submits a manual due_string when creating a task", async () => {

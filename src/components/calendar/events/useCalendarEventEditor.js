@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getGmailAuthUrl } from "@/api";
+import { getGmailAuthUrl, listReminders } from "@/api";
 import {
   deleteCalendarEventAction,
   saveCalendarEventAction,
@@ -7,6 +7,13 @@ import {
 import { parseCalendarTitle } from "./parseCalendarTitle";
 import useCalendarLocationSuggestions from "./useCalendarLocationSuggestions";
 import useCalendarSources from "./useCalendarSources";
+import {
+  createEventReminderDraftFromCustom,
+  createEventReminderDraftFromOffset,
+  EVENT_REMINDER_PRESETS,
+  eventReminderSourceFromEvent,
+  getEventReminderPresetState,
+} from "./calendarEventReminderModel";
 import {
   coerceEditingTitleAssist,
   createManualOverrides,
@@ -60,6 +67,10 @@ export default function useCalendarEventEditor({
   const [errorCode, setErrorCode] = useState(null);
   const [touchedFields, setTouchedFields] = useState({});
   const [saveAttempted, setSaveAttempted] = useState(false);
+  const [eventReminders, setEventReminders] = useState([]);
+  const [removedReminderIds, setRemovedReminderIds] = useState([]);
+  const [reminderError, setReminderError] = useState(null);
+  const [customReminder, setCustomReminder] = useState({ date: "", time: "" });
   const editorHistoryTokenRef = useRef(null);
   const editorRequestIdRef = useRef(0);
   const selectLocationRef = useRef(null);
@@ -179,6 +190,10 @@ export default function useCalendarEventEditor({
       setManualRecurrenceOverride(false);
       setRecurringEditScope(null);
       setTitleInput("");
+      setEventReminders([]);
+      setRemovedReminderIds([]);
+      setReminderError(null);
+      setCustomReminder({ date: "", time: "" });
       resetLocationSuggestions();
     }
   }, [open, resetLocationSuggestions, view]);
@@ -253,6 +268,10 @@ export default function useCalendarEventEditor({
     setRecurrenceDraft(null);
     setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
+    setEventReminders([]);
+    setRemovedReminderIds([]);
+    setReminderError(null);
+    setCustomReminder({ date: "", time: "" });
     resetLocationSuggestions();
   }, [resetLocationSuggestions]);
 
@@ -289,6 +308,10 @@ export default function useCalendarEventEditor({
     setConfirmDelete(false);
     setTouchedFields({});
     setSaveAttempted(false);
+    setEventReminders([]);
+    setRemovedReminderIds([]);
+    setReminderError(null);
+    setCustomReminder({ date: nextDraft.startDate, time: nextDraft.startTime || "09:00" });
     resetLocationSuggestions();
     setMode("editor");
     setError(null);
@@ -349,10 +372,25 @@ export default function useCalendarEventEditor({
     setConfirmDelete(false);
     setTouchedFields({});
     setSaveAttempted(false);
+    setEventReminders([]);
+    setRemovedReminderIds([]);
+    setReminderError(null);
+    setCustomReminder({ date: nextDraft.startDate, time: nextDraft.startTime || "09:00" });
     resetLocationSuggestions();
     setMode("editor");
     setError(null);
     setErrorCode(null);
+    try {
+      const source = eventReminderSourceFromEvent(event);
+      const result = await listReminders({
+        sourceType: source.sourceType,
+        sourceItemId: source.sourceItemId,
+        sourceOccurrenceId: source.sourceOccurrenceId,
+      });
+      setEventReminders(result.reminders || []);
+    } catch (err) {
+      setReminderError(err.message || "Failed to load reminders.");
+    }
     dirtyBaselineRef.current = normalizeDraftForDirty({
       draft: nextDraft,
       effectiveTitle: nextDraft.title,
@@ -363,6 +401,66 @@ export default function useCalendarEventEditor({
       recurringEditScope: null,
     });
   }, [editable, ensureSources, resetLocationSuggestions, seedDefaultCalendar]);
+
+  const updateCustomReminder = useCallback((patch) => {
+    setCustomReminder((current) => ({ ...current, ...patch }));
+    setReminderError(null);
+  }, []);
+
+  const addReminderDraft = useCallback((nextReminder) => {
+    if (nextReminder.blocked) {
+      setReminderError(nextReminder.blockReason === "duplicate"
+        ? "That reminder is already on this event."
+        : nextReminder.blockReason === "past"
+          ? "Choose a future reminder time."
+          : "Choose an event start before adding a reminder.");
+      return;
+    }
+    setEventReminders((current) => [...current, nextReminder]);
+    setReminderError(null);
+  }, []);
+
+  const addEventReminderPreset = useCallback((offsetMinutes) => {
+    addReminderDraft(createEventReminderDraftFromOffset({
+      draft,
+      offsetMinutes,
+      existingReminders: eventReminders,
+    }));
+  }, [addReminderDraft, draft, eventReminders]);
+
+  const addCustomEventReminder = useCallback((selection = null) => {
+    const reminderSelection = selection || customReminder;
+    addReminderDraft(createEventReminderDraftFromCustom({
+      draft,
+      reminderDate: reminderSelection.date,
+      reminderTime: reminderSelection.time,
+      existingReminders: eventReminders,
+    }));
+  }, [addReminderDraft, customReminder, draft, eventReminders]);
+
+  const eventReminderPresetStates = useMemo(() => {
+    return Object.fromEntries(EVENT_REMINDER_PRESETS.map((preset) => [
+      preset.offsetMinutes,
+      getEventReminderPresetState({
+        draft,
+        offsetMinutes: preset.offsetMinutes,
+        existingReminders: eventReminders,
+      }),
+    ]));
+  }, [draft, eventReminders]);
+
+  const removeEventReminder = useCallback((reminder) => {
+    if (reminder?.id) {
+      setRemovedReminderIds((current) => (
+        current.includes(reminder.id) ? current : [...current, reminder.id]
+      ));
+    }
+    setEventReminders((current) => current.filter((entry) => {
+      if (reminder?.id) return entry.id !== reminder.id;
+      return entry.clientId !== reminder?.clientId;
+    }));
+    setReminderError(null);
+  }, []);
 
   const closeEditor = useCallback(() => {
     clearEditorState();
@@ -566,6 +664,10 @@ export default function useCalendarEventEditor({
         isEditingRecurring,
         recurringEditScope,
         intentMode: intentState.mode !== "batch" && recurrenceDraft ? "recurring" : intentState.mode,
+        eventReminders: {
+          items: eventReminders,
+          removedIds: removedReminderIds,
+        },
       });
 
       if (result.kind === "batch-create") {
@@ -584,6 +686,8 @@ export default function useCalendarEventEditor({
         setEditingEvent(null);
         setConfirmDelete(false);
         setBatchDrafts([]);
+        setEventReminders([]);
+        setRemovedReminderIds([]);
         onSaved?.(result.createdEvents[0] || null, {
           kind: "batch-create",
           createdEvents: result.createdEvents,
@@ -597,6 +701,8 @@ export default function useCalendarEventEditor({
       setMode("detail");
       setEditingEvent(null);
       setConfirmDelete(false);
+      setEventReminders([]);
+      setRemovedReminderIds([]);
       onSaved?.(result.savedEvent, {
         kind: result.kind,
       });
@@ -606,7 +712,7 @@ export default function useCalendarEventEditor({
     } finally {
       setSaving(false);
     }
-  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, intentState.mode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, upsertEvents, validationMessage]);
+  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, upsertEvents, validationMessage]);
 
   const reconnect = useCallback(async () => {
     try {
@@ -730,6 +836,10 @@ export default function useCalendarEventEditor({
     saving,
     deleting,
     confirmDelete,
+    eventReminders,
+    eventReminderPresetStates,
+    reminderError,
+    customReminder,
     locationSuggestions,
     locationSuggestionsLoading,
     locationSuggestionsError,
@@ -743,6 +853,10 @@ export default function useCalendarEventEditor({
     removeBatchDraft,
     exitBatchMode,
     updateRecurrenceDraft,
+    updateCustomReminder,
+    addEventReminderPreset,
+    addCustomEventReminder,
+    removeEventReminder,
     selectRecurrencePreset,
     toggleRecurrenceWeekday,
     selectRecurringEditScope,

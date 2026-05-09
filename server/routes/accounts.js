@@ -37,6 +37,16 @@ import {
 import { getTriageCacheStats } from "../briefing/triage-cache-stats.js";
 import { canonicalizeConfiguredAccounts } from "../briefing/account-canonical.js";
 import { storeTodoistOAuthTokenResponse } from "../briefing/todoist-token.js";
+import {
+  formatGenericDiscordTestPayload,
+  sendDiscordWebhook,
+} from "../briefing/discord-reminders.js";
+import {
+  createReminder,
+  deleteReminder,
+  listRemindersForSource,
+} from "../briefing/reminder-service.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 
 const router = Router();
 const GMAIL_OAUTH_BIND_COOKIE = "ea_oauth_bind";
@@ -371,6 +381,7 @@ router.get("/settings", async (req, res) => {
       actual_budget_password_encrypted,
       todoist_api_token_encrypted,
       todoist_oauth_refresh_token_encrypted,
+      discord_webhook_url_encrypted,
       schedules_json,
       email_interests_json,
       triage_sound_settings_json,
@@ -380,6 +391,7 @@ router.get("/settings", async (req, res) => {
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
     safe.todoist_configured = !!todoist_api_token_encrypted;
     safe.todoist_oauth_configured = !!(todoist_api_token_encrypted && todoist_oauth_refresh_token_encrypted);
+    safe.discord_webhook_configured = !!discord_webhook_url_encrypted;
     safe.schedules = schedules_json
       ? JSON.parse(schedules_json)
       : [
@@ -431,7 +443,7 @@ router.get("/triage/cache-stats", async (req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id } = req.body;
 
   try {
     if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
@@ -494,6 +506,16 @@ router.put("/settings", async (req, res) => {
       updates.push("bill_pay_mappings_json = ?");
       args.push(JSON.stringify(bill_pay_mappings));
     }
+    if (discord_webhook_url !== undefined) {
+      const trimmedWebhook = String(discord_webhook_url || "").trim();
+      updates.push("discord_webhook_url_encrypted = ?");
+      args.push(trimmedWebhook ? encrypt(trimmedWebhook) : null);
+    }
+    if (discord_user_id !== undefined) {
+      const trimmedUserId = String(discord_user_id || "").trim();
+      updates.push("discord_user_id = ?");
+      args.push(trimmedUserId || null);
+    }
     if (bill_extract_provider !== undefined || bill_extract_model !== undefined) {
       const provider = bill_extract_provider ?? DEFAULT_BILL_EXTRACT_PROVIDER;
       const model = bill_extract_model ?? DEFAULT_BILL_EXTRACT_MODEL;
@@ -532,6 +554,119 @@ router.put("/settings", async (req, res) => {
   } catch (err) {
     console.error("Error updating EA settings:", err);
     res.status(500).json({ message: "Failed to update settings" });
+  }
+});
+
+router.post("/settings/discord-reminder-test", async (_req, res) => {
+  const userId = process.env.EA_USER_ID;
+  try {
+    const result = await db.execute({
+      sql: "SELECT discord_webhook_url_encrypted, discord_user_id FROM ea_settings WHERE user_id = ?",
+      args: [userId],
+    });
+    const settings = result.rows[0] || {};
+    if (!settings.discord_webhook_url_encrypted) {
+      return res.status(400).json({ message: "Discord webhook not configured" });
+    }
+
+    const payload = formatGenericDiscordTestPayload({
+      discordUserId: settings.discord_user_id,
+    });
+    const delivery = await sendDiscordWebhook(
+      decrypt(settings.discord_webhook_url_encrypted),
+      payload,
+    );
+    if (delivery.ok) {
+      return res.json({ success: true, status: delivery.status });
+    }
+    if (delivery.rateLimited) {
+      if (delivery.retryAfterMs) {
+        res.set("Retry-After", String(Math.ceil(delivery.retryAfterMs / 1000)));
+      }
+      return res.status(429).json({ message: "Discord webhook rate limited" });
+    }
+    return res.status(502).json({ message: "Discord webhook test failed" });
+  } catch (err) {
+    console.error("Discord reminder test failed:", err);
+    return res.status(500).json({ message: "Discord reminder test failed" });
+  }
+});
+
+router.get("/reminders", async (req, res) => {
+  const userId = process.env.EA_USER_ID;
+  const sourceType = req.query.sourceType || req.query.source_type;
+  const sourceItemId = req.query.sourceItemId || req.query.source_item_id;
+  const sourceOccurrenceId = req.query.sourceOccurrenceId || req.query.source_occurrence_id;
+  if (!sourceType || !sourceItemId) {
+    return res.status(400).json({ message: "sourceType and sourceItemId are required" });
+  }
+
+  try {
+    const reminders = await listRemindersForSource({
+      userId,
+      sourceType,
+      sourceItemId,
+      sourceOccurrenceId: sourceOccurrenceId || undefined,
+    });
+    return res.json({ reminders });
+  } catch (err) {
+    console.error("Error listing reminders:", err);
+    return res.status(400).json({ message: err.message || "Failed to list reminders" });
+  }
+});
+
+router.post("/reminders", async (req, res) => {
+  const userId = process.env.EA_USER_ID;
+  try {
+    const sourceType = req.body.sourceType || req.body.source_type;
+    const sourceItemId = req.body.sourceItemId || req.body.source_item_id;
+    const sourceOccurrenceId = req.body.sourceOccurrenceId || req.body.source_occurrence_id;
+    const reminder = await createReminder({
+      userId,
+      sourceType,
+      sourceAccountId: req.body.sourceAccountId || req.body.source_account_id,
+      sourceCalendarId: req.body.sourceCalendarId || req.body.source_calendar_id,
+      sourceItemId,
+      sourceOccurrenceId,
+      anchorKind: req.body.anchorKind || req.body.anchor_kind,
+      anchorAt: req.body.anchorAt || req.body.anchor_at,
+      offsetMinutes: req.body.offsetMinutes ?? req.body.offset_minutes,
+      payloadSnapshot: req.body.payloadSnapshot || req.body.payload_snapshot,
+    });
+    publishCurrentDashboardEvent(userId, {
+      source: "reminders",
+      reason: "reminder_created",
+      state: "current",
+      details: {
+        sourceType,
+        sourceItemId: sourceItemId == null ? null : String(sourceItemId),
+        sourceOccurrenceId: sourceOccurrenceId || null,
+      },
+    });
+    return res.status(201).json({ reminder });
+  } catch (err) {
+    console.error("Error creating reminder:", err);
+    return res.status(400).json({ message: err.message || "Failed to create reminder" });
+  }
+});
+
+router.delete("/reminders/:id", async (req, res) => {
+  const userId = process.env.EA_USER_ID;
+  try {
+    const deleted = await deleteReminder(userId, req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Reminder not found" });
+    publishCurrentDashboardEvent(userId, {
+      source: "reminders",
+      reason: "reminder_deleted",
+      state: "current",
+      details: {
+        reminderId: req.params.id,
+      },
+    });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Error deleting reminder:", err);
+    return res.status(500).json({ message: "Failed to delete reminder" });
   }
 });
 

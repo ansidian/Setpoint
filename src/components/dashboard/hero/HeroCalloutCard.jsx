@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Bell } from "lucide-react";
+import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 
 export default function HeroCalloutCard({
   accent,
@@ -10,6 +12,7 @@ export default function HeroCalloutCard({
   sub,
   title,
   urgency,
+  data,
 }) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -22,6 +25,7 @@ export default function HeroCalloutCard({
   const tone = colors[urgency] || colors.low;
   const kindLabel = { event: "Next up", deadline: "Deadline", bill: "Payment" }[kind] || "";
   const active = hovered || focused;
+  const reminderSummary = formatReminderSummary(data);
 
   return (
     <button
@@ -95,6 +99,35 @@ export default function HeroCalloutCard({
             >
               {lead}
             </div>
+            {reminderSummary ? (
+              <div
+                data-testid="dashboard-reminder-indicator"
+                aria-label={reminderSummary}
+                title={reminderSummary}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  minWidth: 0,
+                  maxWidth: isMobile ? "100%" : 132,
+                  padding: "1px 6px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(249,226,175,0.26)",
+                  background: "rgba(249,226,175,0.10)",
+                  color: "#f9e2af",
+                  fontSize: isMobile ? 9.5 : 10,
+                  fontWeight: 650,
+                  lineHeight: 1.1,
+                  whiteSpace: "nowrap",
+                  flexShrink: 1,
+                }}
+              >
+                <Bell size={10} aria-hidden />
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {reminderSummary}
+                </span>
+              </div>
+            ) : null}
           </div>
 
           <div

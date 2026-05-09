@@ -1,4 +1,4 @@
-import { Flag } from "lucide-react";
+import { Bell, Flag } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import { daysUntil } from "../../../../lib/bill-utils";
 import { urgencyForDays } from "../../../../lib/redesign-helpers";
@@ -6,6 +6,7 @@ import {
   RailFactTile,
   RailHeroCard,
   RailMetaChip,
+  RailReminderIndicator,
 } from "../../DetailRailPrimitives.jsx";
 import { useDetailRailMotion } from "../../detailRailMotion.js";
 import {
@@ -26,6 +27,7 @@ import {
   deadlineSecondaryMeta,
   deadlineTitle,
 } from "./deadlineDetailModel.js";
+import { formatReminderSummary } from "../../reminderDisplay.js";
 
 function PriorityBadge({ level }) {
   const meta = PRIORITY_META[level];
@@ -75,6 +77,7 @@ export default function DeadlineDetailCard({
   const showPriorityChip = isTodoist && PRIORITY_META[task.priority];
   const showPointsChip = task.points_possible != null;
   const density = ultraCompact ? "compressed" : compact ? "compact" : "default";
+  const reminderSummary = formatReminderSummary(task);
 
   if (ultraCompact) {
     return (
@@ -182,6 +185,12 @@ export default function DeadlineDetailCard({
                 compact
                 testId="calendar-selected-deadline-status"
               />
+              {reminderSummary ? (
+                <RailReminderIndicator compact>
+                  <Bell size={10} strokeWidth={2.2} />
+                  {reminderSummary}
+                </RailReminderIndicator>
+              ) : null}
               {secondaryMeta ? (
                 <span
                   style={{
@@ -300,8 +309,14 @@ export default function DeadlineDetailCard({
           ) : null}
         </Motion.div>
 
-        {!compact && (showPriorityChip || showPointsChip || !isTodoist) ? (
+        {!compact && (showPriorityChip || showPointsChip || !isTodoist || reminderSummary) ? (
           <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
+            {reminderSummary ? (
+              <RailReminderIndicator>
+                <Bell size={10} strokeWidth={2.2} />
+                {reminderSummary}
+              </RailReminderIndicator>
+            ) : null}
             {showPriorityChip ? <PriorityBadge level={task.priority} /> : null}
             {showPointsChip ? <RailMetaChip tone="quiet">{task.points_possible} pts</RailMetaChip> : null}
             {!isTodoist ? <RailMetaChip tone="quiet">{sourceLabel}</RailMetaChip> : null}

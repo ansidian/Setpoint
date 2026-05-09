@@ -45,6 +45,10 @@ function toDeadlineDescriptor(task) {
     quiet: task.status === "complete",
     sortMinutes: task.due_time ? minutesFromDisplayTime(task.due_time) : Number.POSITIVE_INFINITY,
     completeSort: task.status === "complete" ? 1 : 0,
+    hasUpcomingReminder: !!task.hasUpcomingReminder,
+    upcomingReminderCount: task.upcomingReminderCount || 0,
+    nextReminderAt: task.nextReminderAt || null,
+    reminderState: task.reminderState || null,
   };
 }
 

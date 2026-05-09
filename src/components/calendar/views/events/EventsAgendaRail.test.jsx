@@ -77,6 +77,26 @@ describe("EventsAgendaRail", () => {
     }));
   });
 
+  it("shows compact reminder timing in agenda rows", () => {
+    renderRail({
+      selectedDateKey: "2026-05-04",
+      events: [
+        event({
+          id: "event-reminder",
+          title: "Planning block",
+          start: "2026-05-04T16:00:00.000Z",
+          end: "2026-05-04T17:00:00.000Z",
+          hasUpcomingReminder: true,
+          upcomingReminderCount: 1,
+          nextReminderAt: "2026-05-04T15:30:00.000Z",
+        }),
+      ],
+    });
+
+    expect(screen.getByTestId("calendar-agenda-reminder-label").textContent).toContain("Reminder");
+    expect(screen.getByTestId("calendar-agenda-reminder-label").textContent).toContain("May 4");
+  });
+
   it("keeps the agenda skeleton until entry scroll content is ready", () => {
     const { rerender } = renderRail({
       selectedDateKey: "2026-05-04",

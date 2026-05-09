@@ -7,6 +7,7 @@ const mockApi = vi.hoisted(() => ({
   getAccounts: vi.fn(),
   getGmailAuthUrl: vi.fn(),
   removeAccount: vi.fn(),
+  testDiscordReminderWebhook: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
 }));
@@ -17,6 +18,7 @@ vi.mock("@/api", () => ({
   getAccounts: mockApi.getAccounts,
   getGmailAuthUrl: mockApi.getGmailAuthUrl,
   removeAccount: mockApi.removeAccount,
+  testDiscordReminderWebhook: mockApi.testDiscordReminderWebhook,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
 }));
@@ -66,5 +68,46 @@ describe("AccountsSettingsSection", () => {
       });
     });
     expect(screen.getByText("34.0522, -118.2437")).toBeTruthy();
+  });
+
+  it("saves and tests Discord reminder webhook settings", async () => {
+    mockApi.updateSettings.mockResolvedValue({ success: true });
+    mockApi.testDiscordReminderWebhook.mockResolvedValue({ success: true });
+
+    render(
+      <AccountsSettingsSection
+        accounts={[]}
+        setAccounts={vi.fn()}
+        settings={{
+          discord_webhook_configured: true,
+          discord_user_id: "123456789",
+        }}
+        patch={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Saved")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/discord webhook url/i), {
+      target: { value: "https://discord.com/api/webhooks/example" },
+    });
+    fireEvent.change(screen.getByLabelText(/discord user id/i), {
+      target: { value: "987654321" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^save discord$/i }));
+
+    await waitFor(() => {
+      expect(mockApi.updateSettings).toHaveBeenCalledWith({
+        discord_webhook_url: "https://discord.com/api/webhooks/example",
+        discord_user_id: "987654321",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /send test/i }));
+
+    await waitFor(() => {
+      expect(mockApi.testDiscordReminderWebhook).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText("Test sent")).toBeTruthy();
   });
 });

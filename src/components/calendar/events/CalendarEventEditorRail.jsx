@@ -9,6 +9,7 @@ import CalendarEventEditorStatusMessages from "./CalendarEventEditorStatusMessag
 import CalendarEventEditorPanels from "./CalendarEventEditorPanels";
 import CalendarEventTitleAssistPanel from "./CalendarEventTitleAssistPanel";
 import CalendarEventTitleField from "./CalendarEventTitleField";
+import CalendarEventReminderChips from "./CalendarEventReminderChips";
 import CalendarDraftPreviewPanel from "./CalendarDraftPreviewPanel";
 import useCalendarEditorPickers from "./useCalendarEditorPickers";
 import { EDITOR_ENTRANCE_TRANSITION } from "../detailRailMotion";
@@ -45,6 +46,14 @@ export default function CalendarEventEditorRail({
     exitBatchMode,
     selectRecurringEditScope,
     reconnect,
+    eventReminders,
+    eventReminderPresetStates,
+    reminderError,
+    customReminder,
+    addEventReminderPreset,
+    updateCustomReminder,
+    addCustomEventReminder,
+    removeEventReminder,
   } = editor;
 
   const pickers = useCalendarEditorPickers(editor, transientCloseToken);
@@ -207,6 +216,20 @@ export default function CalendarEventEditorRail({
                 repeatRef={repeatRef}
                 handleLocationSuggestionKey={handleLocationSuggestionKey}
               />
+
+              {!isBatchMode ? (
+                <CalendarEventReminderChips
+                  reminders={eventReminders}
+                  presetStates={eventReminderPresetStates}
+                  reminderError={reminderError}
+                  customReminder={customReminder}
+                  disabled={disabled}
+                  onAddPreset={addEventReminderPreset}
+                  onUpdateCustomReminder={updateCustomReminder}
+                  onAddCustom={addCustomEventReminder}
+                  onRemoveReminder={removeEventReminder}
+                />
+              ) : null}
 
               <div
                 style={{

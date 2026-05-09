@@ -70,6 +70,47 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(longTitle?.textContent).toContain("Advanced machine learning project review");
   });
 
+  it("renders upcoming reminder markers without adding a title column", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          {
+            id: "reminder",
+            leadingLabel: "9:00 AM",
+            title: "Reminder hold",
+            hasUpcomingReminder: true,
+          },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 1 }}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    const content = chip.querySelector("[data-calendar-chip-content='true']");
+    expect(chip.querySelector("[data-calendar-chip-reminder-marker='true']")).toBeTruthy();
+    expect(content?.style.gridTemplateColumns).toMatch(/px minmax\(0, 1fr\)$/);
+    expect(content?.style.gridTemplateColumns).not.toMatch(/auto/);
+  });
+
+  it("uses the same upcoming reminder marker for inline overflow chips", () => {
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "visible", leadingLabel: "9:00 AM", title: "Visible" },
+          { id: "hidden", leadingLabel: "10:00 AM", title: "Hidden", hasUpcomingReminder: true },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 1, overflowVisibleCount: 1 }}
+        inlineOverflowOpen
+        inlineOverflowVisibleCount={1}
+      />,
+    );
+
+    const inlineOverflow = screen.getByTestId("calendar-cell-inline-overflow");
+    expect(inlineOverflow.querySelector("[data-calendar-chip-reminder-marker='true']")).toBeTruthy();
+  });
+
   it("keeps selected chip title metrics stable", () => {
     render(
       <CalendarCellItemStack

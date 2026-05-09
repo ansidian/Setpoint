@@ -1,4 +1,5 @@
-import { CheckCircle2, CircleDashed } from "lucide-react";
+import { Bell, CheckCircle2, CircleDashed } from "lucide-react";
+import { formatReminderSummary } from "../../reminderDisplay.js";
 import { colorWithAlpha } from "./eventsAgendaColor.js";
 
 function AgendaDeadlineStatus({ deadline }) {
@@ -48,6 +49,7 @@ export default function EventsAgendaDeadlineRow({
 }) {
   const color = deadline.agendaSourceColor || "#89b4fa";
   const TitleTag = deadline.agendaComplete ? "s" : "span";
+  const reminderSummary = formatReminderSummary(deadline);
 
   return (
     <button
@@ -115,6 +117,26 @@ export default function EventsAgendaDeadlineRow({
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.62)", fontSize: 10.5, lineHeight: 1.3 }}>
           {deadline.agendaSubtitle}
         </span>
+        {reminderSummary ? (
+          <span
+            data-testid="calendar-agenda-reminder-label"
+            aria-label={reminderSummary}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              color: "#f9e2af",
+              fontSize: 10.5,
+              lineHeight: 1.3,
+              minWidth: 0,
+            }}
+          >
+            <Bell size={11} aria-hidden />
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {reminderSummary}
+            </span>
+          </span>
+        ) : null}
       </span>
       <AgendaDeadlineStatus deadline={deadline} />
     </button>

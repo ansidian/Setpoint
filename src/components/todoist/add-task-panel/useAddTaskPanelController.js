@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  createReminder,
   createTodoistTask,
+  deleteReminder,
   deleteTodoistTask,
   getTodoistLabels,
   getTodoistProjects,
+  listReminders,
   updateTodoistTask,
 } from "../../../api";
 import useIsMobile from "../../../hooks/useIsMobile";
@@ -11,13 +14,38 @@ import { epochFromLa } from "../../inbox/helpers";
 import { formatResolvedDate, parseTokens } from "./parsing";
 import { buildManualDue, getInitialDueEpoch } from "./due";
 import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.js";
+import {
+  applyUpcomingReminderState,
+  projectUpcomingReminderState,
+} from "../../calendar/reminderDisplay.js";
 import { buildTodoistTaskPayload } from "./submitPayload";
+import {
+  buildTodoistReminderCreatePayload,
+  createTodoistReminderDraftFromCustom,
+  createTodoistReminderDraftFromOffset,
+  getTodoistReminderPresetState,
+  isUnsavedTodoistReminder,
+  TODOIST_REMINDER_PRESETS,
+  todoistAnchorFromTask,
+} from "./todoistReminderModel.js";
 
 function buildSeededDue(initialDueDate) {
   if (!initialDueDate) return null;
   const [year, month, day] = String(initialDueDate).split("-").map(Number);
   if (!year || !month || !day) return null;
   return buildManualDue(epochFromLa(year, month - 1, day, 9, 0));
+}
+
+function displayTimeToInputValue(dueTime) {
+  if (!dueTime) return "09:00";
+  const match = String(dueTime).match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  if (!match) return "09:00";
+  let hour = parseInt(match[1], 10);
+  const minute = match[2] ? parseInt(match[2], 10) : 0;
+  const ampm = match[3].toLowerCase();
+  if (ampm === "pm" && hour < 12) hour += 12;
+  if (ampm === "am" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 export default function useAddTaskPanelController({
@@ -90,6 +118,13 @@ export default function useAddTaskPanelController({
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [todoistReminders, setTodoistReminders] = useState([]);
+  const [removedReminderIds, setRemovedReminderIds] = useState([]);
+  const [reminderError, setReminderError] = useState(null);
+  const [customReminder, setCustomReminder] = useState(() => ({
+    date: editingTask?.due_date || initialDueDate || "",
+    time: displayTimeToInputValue(editingTask?.due_time),
+  }));
   const [pos, setPos] = useState(null);
   const isMobile = useIsMobile();
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -183,6 +218,27 @@ export default function useAddTaskPanelController({
     });
   }, [editingTask, labels]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setTodoistReminders([]);
+    setRemovedReminderIds([]);
+    setReminderError(null);
+    if (!editingTask?.id) return undefined;
+    listReminders({
+      sourceType: "todoist_task",
+      sourceItemId: editingTask.id,
+    })
+      .then((result) => {
+        if (!cancelled) setTodoistReminders(result.reminders || []);
+      })
+      .catch((err) => {
+        if (!cancelled) setReminderError(err.message || "Failed to load reminders.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingTask?.id]);
+
   const seededNlpDueDate = !editingTask ? initialDueDate : null;
   const parsed = useMemo(
     () => parseTokens(input, projects, labels, { seededDueDate: seededNlpDueDate }),
@@ -226,6 +282,26 @@ export default function useAddTaskPanelController({
       placementChanged,
     };
   }, [editingTask?.due_date, editingTask?.due_time, editingTask?.title, input, isEdit, manualDue?.epochMs, overrides.due, parsed.duePreview, parsed.stripped, resolvedPriority, seededDueEpoch]);
+
+  const reminderDraftTask = useMemo(() => ({
+    ...(editingTask || {}),
+    id: editingTask?.id || null,
+    title: parsed.stripped || input.trim() || editingTask?.title || "",
+    due_date: draftPreview?.dueDate || editingTask?.due_date || null,
+    due_time: draftPreview?.dueTime || editingTask?.due_time || null,
+    class_name: resolvedProject?.name || editingTask?.class_name || editingTask?.project_name || "Todoist",
+    class_color: resolvedProject?.color || editingTask?.class_color || null,
+    url: editingTask?.url || null,
+  }), [draftPreview?.dueDate, draftPreview?.dueTime, editingTask, input, parsed.stripped, resolvedProject?.color, resolvedProject?.name]);
+  const hasReminderAnchor = !!reminderDraftTask.due_date;
+
+  useEffect(() => {
+    if (!reminderDraftTask.due_date) return;
+    setCustomReminder((current) => ({
+      date: current.date || reminderDraftTask.due_date,
+      time: current.time || displayTimeToInputValue(reminderDraftTask.due_time),
+    }));
+  }, [reminderDraftTask.due_date, reminderDraftTask.due_time]);
 
   const originalDueValue = useMemo(() => (
     editingTask
@@ -272,6 +348,66 @@ export default function useAddTaskPanelController({
 
   const closeDuePicker = useCallback(() => {
     setDuePickerOpen(false);
+  }, []);
+
+  const updateCustomReminder = useCallback((patch) => {
+    setCustomReminder((current) => ({ ...current, ...patch }));
+    setReminderError(null);
+  }, []);
+
+  const addTodoistReminderDraft = useCallback((nextReminder) => {
+    if (nextReminder.blocked) {
+      setReminderError(nextReminder.blockReason === "duplicate"
+        ? "That reminder is already on this task."
+        : nextReminder.blockReason === "past"
+          ? "Choose a future reminder time."
+          : "Choose a due date before adding a reminder.");
+      return;
+    }
+    setTodoistReminders((current) => [...current, nextReminder]);
+    setReminderError(null);
+  }, []);
+
+  const addTodoistReminderPreset = useCallback((offsetMinutes) => {
+    addTodoistReminderDraft(createTodoistReminderDraftFromOffset({
+      task: reminderDraftTask,
+      offsetMinutes,
+      existingReminders: todoistReminders,
+    }));
+  }, [addTodoistReminderDraft, reminderDraftTask, todoistReminders]);
+
+  const addCustomTodoistReminder = useCallback((selection = null) => {
+    const reminderSelection = selection || customReminder;
+    addTodoistReminderDraft(createTodoistReminderDraftFromCustom({
+      task: reminderDraftTask,
+      reminderDate: reminderSelection.date,
+      reminderTime: reminderSelection.time,
+      existingReminders: todoistReminders,
+    }));
+  }, [addTodoistReminderDraft, customReminder, reminderDraftTask, todoistReminders]);
+
+  const todoistReminderPresetStates = useMemo(() => {
+    return Object.fromEntries(TODOIST_REMINDER_PRESETS.map((preset) => [
+      preset.offsetMinutes,
+      getTodoistReminderPresetState({
+        task: reminderDraftTask,
+        offsetMinutes: preset.offsetMinutes,
+        existingReminders: todoistReminders,
+      }),
+    ]));
+  }, [reminderDraftTask, todoistReminders]);
+
+  const removeTodoistReminder = useCallback((reminder) => {
+    if (reminder?.id) {
+      setRemovedReminderIds((current) => (
+        current.includes(reminder.id) ? current : [...current, reminder.id]
+      ));
+    }
+    setTodoistReminders((current) => current.filter((entry) => {
+      if (reminder?.id) return entry.id !== reminder.id;
+      return entry.clientId !== reminder?.clientId;
+    }));
+    setReminderError(null);
   }, []);
 
   useEffect(() => {
@@ -498,10 +634,35 @@ export default function useAddTaskPanelController({
       let task;
       if (isEdit) {
         task = await updateTodoistTask(editingTask.id, payload);
-        onTaskUpdated?.(task);
       } else {
         task = await createTodoistTask(payload);
-        onTaskAdded?.(task);
+      }
+      const savedTask = isEdit ? { ...editingTask, ...task, id: editingTask.id } : task;
+      for (const reminderId of removedReminderIds) {
+        await deleteReminder(reminderId);
+      }
+      let reminderCreates = 0;
+      for (const reminder of todoistReminders) {
+        if (!isUnsavedTodoistReminder(reminder)) continue;
+        await createReminder(buildTodoistReminderCreatePayload({
+          task: savedTask,
+          reminder,
+        }));
+        reminderCreates += 1;
+      }
+      const remindersChanged = removedReminderIds.length > 0 || reminderCreates > 0;
+      const projectedTask = remindersChanged
+        ? applyUpcomingReminderState(
+          savedTask,
+          projectUpcomingReminderState(todoistReminders, {
+            anchorAt: todoistAnchorFromTask(savedTask)?.anchorAt || null,
+          }),
+        )
+        : task;
+      if (isEdit) {
+        onTaskUpdated?.(projectedTask);
+      } else {
+        onTaskAdded?.(projectedTask);
       }
       requestClose();
     } catch (err) {
@@ -572,6 +733,15 @@ export default function useAddTaskPanelController({
     isDirty,
     duePickerOpen,
     duePickerNow,
+    todoistReminders,
+    todoistReminderPresetStates,
+    reminderError,
+    customReminder,
+    hasReminderAnchor,
+    updateCustomReminder,
+    addTodoistReminderPreset,
+    addCustomTodoistReminder,
+    removeTodoistReminder,
     openDuePicker,
     closeDuePicker,
     handleDueSelect,

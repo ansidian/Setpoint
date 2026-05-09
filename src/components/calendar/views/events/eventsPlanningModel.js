@@ -161,5 +161,9 @@ export function deadlinePlanningDescriptor(task) {
     statusIcon: deadlinePlanningStatusIcon(status),
     statusLabel: statusLabel(status),
     sortMs: dueDateToMs(task.due_date, task.due_time) ?? Number.POSITIVE_INFINITY,
+    hasUpcomingReminder: !!task.hasUpcomingReminder,
+    upcomingReminderCount: task.upcomingReminderCount || 0,
+    nextReminderAt: task.nextReminderAt || null,
+    reminderState: task.reminderState || null,
   };
 }

@@ -1,5 +1,5 @@
 import { forwardRef, useMemo, useRef, useState } from "react";
-import { ChevronDown, Video } from "lucide-react";
+import { Bell, ChevronDown, Video } from "lucide-react";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links.js";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
@@ -7,6 +7,7 @@ import EventsAgendaDeadlineRow from "./EventsAgendaDeadlineRow.jsx";
 import { AgendaSkeleton, WeatherHeader } from "./EventsAgendaRailParts.jsx";
 import { colorWithAlpha, contrastText } from "./eventsAgendaColor.js";
 import { buildEventsAgendaGroups } from "./eventsAgendaModel.js";
+import { formatReminderSummary } from "../../reminderDisplay.js";
 
 const EVENT_SCROLL_TOP_OFFSET = 44;
 
@@ -108,6 +109,7 @@ function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked })
   const safeText = contrastText(color);
   const solid = safeText === "#16161e";
   const dragAllowed = !!quickActions?.dragEnabled && !!event.writable;
+  const reminderSummary = formatReminderSummary(event);
   return (
     <button
       type="button"
@@ -172,6 +174,12 @@ function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked })
       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {event.agendaTitle}
       </span>
+      {reminderSummary ? (
+        <span data-testid="calendar-agenda-reminder-label" aria-label={reminderSummary} style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, color: "#f9e2af", fontSize: 10 }}>
+          <Bell size={10} aria-hidden />
+          {reminderSummary.replace(/^Reminder\s+/, "")}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -182,6 +190,7 @@ function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickActions, 
   const hasVideo = !!extractZoomMeetingUrl(event);
   const past = isPastTimedEventToday(event, dateKey, todayKey);
   const dragAllowed = !!quickActions?.dragEnabled && !!event.writable;
+  const reminderSummary = formatReminderSummary(event);
   return (
     <button
       type="button"
@@ -294,6 +303,12 @@ function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickActions, 
             }}
           >
             {location}
+          </span>
+        ) : null}
+        {reminderSummary ? (
+          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#f9e2af", fontSize: 10.5, lineHeight: 1.3 }}>
+            <Bell size={11} aria-hidden />
+            {reminderSummary}
           </span>
         ) : null}
       </span>

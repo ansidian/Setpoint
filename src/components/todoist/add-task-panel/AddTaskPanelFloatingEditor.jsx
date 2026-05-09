@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CalendarClock, Trash2, X } from "lucide-react";
 import { Dropdown, LabelPicker, PriorityIndicator } from "./controls";
 import { buildContainerStyle, buildDropdownRowStyle, DRAG_HANDLE_STYLE } from "./styles";
@@ -11,10 +12,14 @@ import {
   TodoistSelectedLabelChips,
   TodoistTaskTextSection,
 } from "./AddTaskPanelShared.jsx";
+import TodoistReminderChips from "./TodoistReminderChips.jsx";
 
 export default function AddTaskPanelFloatingEditor({ active, state }) {
+  const [closeHover, setCloseHover] = useState(false);
   const {
     autocompleteType,
+    addCustomTodoistReminder,
+    addTodoistReminderPreset,
     canSubmit,
     cancelDelete,
     closeDuePicker,
@@ -36,6 +41,7 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
     handleInputChange,
     handleKeyDown,
     handleSubmit,
+    hasReminderAnchor,
     host,
     input,
     inputRef,
@@ -50,6 +56,8 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
     priorityOptions,
     projects,
     recurrenceSummary,
+    reminderError,
+    removeTodoistReminder,
     requestClose,
     resolvedLabels,
     resolvedPriority,
@@ -60,6 +68,10 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
     setManualProject,
     setOverrides,
     submitting,
+    todoistReminders,
+    todoistReminderPresetStates,
+    updateCustomReminder,
+    customReminder,
   } = state;
 
   return (
@@ -91,15 +103,19 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
             type="button"
             onClick={requestClose}
             aria-label="Close"
+            onMouseEnter={() => setCloseHover(true)}
+            onMouseLeave={() => setCloseHover(false)}
             style={{
-              background: "transparent",
-              border: "none",
+              background: closeHover ? "rgba(255,255,255,0.06)" : "transparent",
+              border: "1px solid transparent",
               cursor: "pointer",
-              color: "rgba(205,214,244,0.5)",
+              color: closeHover ? "rgba(205,214,244,0.78)" : "rgba(205,214,244,0.5)",
               padding: 4,
               borderRadius: 4,
               display: "inline-flex",
               fontFamily: "inherit",
+              transform: closeHover ? "translateY(-1px)" : "translateY(0)",
+              transition: "transform 140ms, background 140ms, color 140ms",
             }}
           >
             <X size={16} />
@@ -277,6 +293,19 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
               )}
             </div>
           </div>
+
+          <TodoistReminderChips
+            reminders={todoistReminders}
+            reminderError={reminderError}
+            customReminder={customReminder}
+            disabled={submitting || deleting}
+            hasAnchor={hasReminderAnchor}
+            presetStates={todoistReminderPresetStates}
+            onAddPreset={addTodoistReminderPreset}
+            onUpdateCustomReminder={updateCustomReminder}
+            onAddCustom={addCustomTodoistReminder}
+            onRemoveReminder={removeTodoistReminder}
+          />
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, paddingTop: 4 }}>

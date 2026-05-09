@@ -28,6 +28,12 @@ import {
   suggestGooglePlaces,
 } from "../briefing/google-places.js";
 import { hydrateRecurringTombstones } from "../briefing/tombstones.js";
+import {
+  deleteSourceReminders,
+  listUpcomingReminderStatesForSources,
+  reminderSourceKey,
+  recomputeUnsentRemindersForSource,
+} from "../briefing/reminder-service.js";
 
 const router = Router();
 router.use(requireCookieSession);
@@ -93,7 +99,10 @@ router.get("/deadlines", async (_req, res) => {
       viewBoundary: "yesterday",
     });
 
-    const todoistWithCompleted = [...separated.todoist, ...tombstones];
+    const todoistWithCompleted = await hydrateUpcomingReminderState(userId, [
+      ...separated.todoist,
+      ...tombstones,
+    ], todoistReminderSource);
 
     res.json({
       ctm: {
@@ -172,6 +181,68 @@ function quietSourceError(source, err) {
   return { source, message: err?.message || `${source} unavailable` };
 }
 
+function eventAnchorAt(event) {
+  if (!event?.startMs) return null;
+  return new Date(event.startMs).toISOString();
+}
+
+function eventOccurrenceIdentity({ event, originalStartTime, scope }) {
+  if (scope && scope !== "one") return undefined;
+  if (originalStartTime) return originalStartTime;
+  if (event?.isRecurring) return event.originalStartTime || eventAnchorAt(event);
+  return undefined;
+}
+
+function emptyReminderState() {
+  return {
+    hasUpcomingReminder: false,
+    upcomingCount: 0,
+    nextReminderAt: null,
+  };
+}
+
+function eventReminderSource(event) {
+  if (!event?.id) return null;
+  return {
+    sourceType: "calendar_event",
+    sourceItemId: event.id,
+    sourceOccurrenceId: event.isRecurring
+      ? event.originalStartTime || eventAnchorAt(event)
+      : null,
+  };
+}
+
+function todoistReminderSource(task) {
+  if (!task?.id) return null;
+  return {
+    sourceType: "todoist_task",
+    sourceItemId: String(task.id),
+    sourceOccurrenceId: null,
+  };
+}
+
+async function hydrateUpcomingReminderState(userId, items, sourceForItem) {
+  const sourcesByIndex = (items || []).map(sourceForItem);
+  const sources = sourcesByIndex.filter(Boolean);
+  const stateByKey = await listUpcomingReminderStatesForSources({
+    userId,
+    sources,
+  });
+  return (items || []).map((item, index) => {
+    const source = sourcesByIndex[index];
+    const state = source
+      ? stateByKey.get(reminderSourceKey(source)) || emptyReminderState()
+      : emptyReminderState();
+    return {
+      ...item,
+      reminderState: state,
+      hasUpcomingReminder: state.hasUpcomingReminder,
+      upcomingReminderCount: state.upcomingCount,
+      nextReminderAt: state.nextReminderAt,
+    };
+  });
+}
+
 router.get("/range", async (req, res) => {
   const range = validateCalendarRange(req, res);
   if (!range) return undefined;
@@ -191,8 +262,9 @@ router.get("/range", async (req, res) => {
       startDate: dayStart,
       endDate: dayEnd,
     });
+    const hydratedEvents = await hydrateUpcomingReminderState(userId, events, eventReminderSource);
 
-    res.json({ events, fetchedAt: new Date().toISOString() });
+    res.json({ events: hydratedEvents, fetchedAt: new Date().toISOString() });
   } catch (err) {
     console.error("[Calendar] range fetch failed:", err.message);
     res.status(500).json({ message: "Failed to fetch calendar range" });
@@ -232,6 +304,7 @@ router.get("/deadlines/range", async (req, res) => {
       task.due_date && task.due_date >= range.start && task.due_date <= range.end,
     );
     const separated = separateDeadlines(ctmDeadlines, [...todoistTasks, ...rangeTombstones], new Set());
+    const hydratedTodoist = await hydrateUpcomingReminderState(userId, separated.todoist, todoistReminderSource);
 
     res.json({
       ctm: {
@@ -239,8 +312,8 @@ router.get("/deadlines/range", async (req, res) => {
         stats: computeDeadlineStats(separated.ctm),
       },
       todoist: {
-        upcoming: separated.todoist,
-        stats: computeDeadlineStats(separated.todoist),
+        upcoming: hydratedTodoist,
+        stats: computeDeadlineStats(hydratedTodoist),
         syncHealth: todoistSyncHealth,
       },
       minDate: range.minDate,
@@ -460,6 +533,17 @@ router.patch("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
+    const anchorAt = eventAnchorAt(event);
+    if (anchorAt) {
+      await recomputeUnsentRemindersForSource({
+        userId: process.env.EA_USER_ID,
+        sourceType: "calendar_event",
+        sourceItemId: eventId,
+        sourceOccurrenceId: eventOccurrenceIdentity({ event, originalStartTime, scope }),
+        anchorKind: "event_start",
+        anchorAt,
+      });
+    }
     res.json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to update calendar event");
@@ -477,6 +561,16 @@ router.delete("/events/:eventId", async (req, res) => {
       scope,
       recurringEventId,
       originalStartTime,
+    });
+    await deleteSourceReminders({
+      userId: process.env.EA_USER_ID,
+      sourceType: "calendar_event",
+      sourceItemId: eventId,
+      sourceOccurrenceId: eventOccurrenceIdentity({
+        event: { isRecurring: !!(recurringEventId || originalStartTime), originalStartTime },
+        originalStartTime,
+        scope,
+      }),
     });
     res.json({ ok: true });
   } catch (err) {

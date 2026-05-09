@@ -179,6 +179,16 @@ export const removeAccount = (id) => apiFetch(`/api/ea/accounts/${id}`, { method
 export const reorderAccounts = (order) => apiFetch("/api/ea/accounts/reorder", { method: "PATCH", body: JSON.stringify({ order }) });
 export const getSettings = () => apiFetch("/api/ea/settings");
 export const updateSettings = (data) => apiFetch("/api/ea/settings", { method: "PUT", body: JSON.stringify(data) });
+export const testDiscordReminderWebhook = () => apiFetch("/api/ea/settings/discord-reminder-test", { method: "POST" });
+export const listReminders = ({ sourceType, sourceItemId, sourceOccurrenceId } = {}) => {
+  const params = new URLSearchParams();
+  if (sourceType) params.set("sourceType", sourceType);
+  if (sourceItemId) params.set("sourceItemId", sourceItemId);
+  if (sourceOccurrenceId) params.set("sourceOccurrenceId", sourceOccurrenceId);
+  return apiFetch(`/api/ea/reminders?${params.toString()}`);
+};
+export const createReminder = (data) => apiFetch("/api/ea/reminders", { method: "POST", body: JSON.stringify(data) });
+export const deleteReminder = (id) => apiFetch(`/api/ea/reminders/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const geocodeLocation = (q) => apiFetch(`/api/ea/geocode?q=${encodeURIComponent(q)}`);
 export const skipSchedule = (index, skip = true) => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
 export const getModels = () => apiFetch("/api/ea/models");

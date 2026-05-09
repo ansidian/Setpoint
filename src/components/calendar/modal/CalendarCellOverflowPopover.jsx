@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { resolveOverflowPopoverPosition } from "./CalendarCellOverflowPopover.position.js";
 import {
   CalendarChipRecurringIcon,
+  CalendarChipReminderMarker,
   CalendarChipStatusIcon,
 } from "./CalendarCellItemChip.jsx";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
@@ -51,6 +52,7 @@ function itemButtonStyle({
   ghost,
 }) {
   return {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
@@ -441,6 +443,7 @@ export default function CalendarCellOverflowPopover({
                     columnGap: leadingColumnWidth ? 8 : 0,
                   }}
                 >
+                  <CalendarChipReminderMarker item={item} />
                   <OverflowMetadata
                     item={item}
                     selected={selected}

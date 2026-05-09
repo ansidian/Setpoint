@@ -16,7 +16,7 @@ import calendarRoutes from "./routes/calendar.js";
 import notesRoutes from "./routes/notes.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
 import todoistWebhookRoutes from "./routes/todoist-webhook.js";
-import { initScheduler, startBackgroundIndexer } from "./briefing/scheduler.js";
+import { initScheduler, startBackgroundIndexer, startReminderSchedulerWorker } from "./briefing/scheduler.js";
 import { startSnoozeWaker } from "./briefing/snooze-waker.js";
 import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker } from "./briefing/todoist-webhook.js";
@@ -127,6 +127,7 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
       scheduleStartupWorker("todoist-sync", startupDelays.todoistSync, () => startTodoistMirrorSyncWorker());
       scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
+      scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
     });
   }).catch((err) => {
     console.error("Migration failed:", err);
