@@ -204,11 +204,13 @@ describe("ActualBudgetSettingsSection", () => {
       },
     });
 
-    expect(await screen.findByText("Missing: Old Payee")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Expand profile 1" }));
+
+    expect(await screen.findByText("Old Payee")).toBeTruthy();
     expect(screen.getByText("Payee missing: Old Payee")).toBeTruthy();
   });
 
-  it("collapses and expands mapping profiles", async () => {
+  it("defaults mapping profiles to collapsed and supports expanding them", async () => {
     renderSection({
       initialSettings: {
         bill_pay_mappings: {
@@ -231,16 +233,16 @@ describe("ActualBudgetSettingsSection", () => {
       },
     });
 
+    expect(await screen.findByText("1 behavior")).toBeTruthy();
+    expect(screen.queryByText("citi.com")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand profile 1" }));
+
     expect(await screen.findByText("citi.com")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse profile 1" }));
 
     expect(screen.queryByText("citi.com")).toBeNull();
-    expect(screen.getByText("1 behavior")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Expand profile 1" }));
-
-    expect(await screen.findByText("citi.com")).toBeTruthy();
   });
 
   it("submits pasted mapping samples and renders diagnostics", async () => {

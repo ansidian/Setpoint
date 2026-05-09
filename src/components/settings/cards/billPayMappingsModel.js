@@ -128,7 +128,7 @@ export function optionWithStoredLabel(options, id, label, prefix) {
   return [
     {
       id,
-      name: `Missing: ${label || id}`,
+      name: label || id,
       missing: true,
       missingLabel: `${prefix} missing`,
     },

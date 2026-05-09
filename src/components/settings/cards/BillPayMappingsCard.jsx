@@ -183,7 +183,7 @@ function BehaviorEditor({
   }
 
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+    <div className="rounded-lg border border-white/[0.045] bg-white/[0.015] p-3">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
@@ -356,15 +356,15 @@ function ProfileEditor({
   profile,
   index,
   count,
+  collapsed,
   accounts,
   payees,
   categories,
+  onToggleCollapsed,
   onChange,
   onDelete,
   onMove,
 }) {
-  const [collapsed, setCollapsed] = useState(false);
-
   function updateBehavior(behaviorIndex, updater) {
     onChange({
       ...profile,
@@ -373,13 +373,13 @@ function ProfileEditor({
   }
 
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.018] p-3 sm:p-4">
+    <div className="overflow-hidden rounded-lg border border-white/[0.1] bg-white/[0.018]">
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 border-b border-white/[0.08] bg-white/[0.045] px-3 py-3 sm:flex-row sm:items-center sm:px-4">
           <button
             type="button"
             className={MINI_ICON_BUTTON_CLASS}
-            onClick={() => setCollapsed((current) => !current)}
+            onClick={onToggleCollapsed}
             aria-label={`${collapsed ? "Expand" : "Collapse"} profile ${index + 1}`}
           >
             {collapsed ? <ChevronRight size={13} className="mx-auto" /> : <ChevronDown size={13} className="mx-auto" />}
@@ -388,7 +388,7 @@ function ProfileEditor({
             value={profile.name}
             onChange={(event) => onChange({ ...profile, name: event.target.value })}
             aria-label={`Profile ${index + 1} name`}
-            className="h-8 flex-1 bg-input-bg text-[13px] font-semibold"
+            className="h-8 flex-1 border-white/[0.1] bg-white/[0.025] text-[13px] font-semibold"
           />
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground/75">
@@ -418,14 +418,14 @@ function ProfileEditor({
         </div>
 
         {collapsed ? (
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/70">
+          <div className="flex flex-wrap items-center gap-2 px-3 pb-3 text-[11px] text-muted-foreground/70 sm:px-4">
             <StatusPill tone={profile.enabled ? "success" : "neutral"}>
               {profile.enabled ? "Enabled" : "Disabled"}
             </StatusPill>
             <span>{profile.behaviors.length} {profile.behaviors.length === 1 ? "behavior" : "behaviors"}</span>
           </div>
         ) : (
-          <>
+          <div className="flex flex-col gap-3 px-3 pb-3 sm:px-4 sm:pb-4">
             <div className="grid gap-3 md:grid-cols-2">
               <ChipEditor
                 label="Senders"
@@ -459,7 +459,7 @@ function ProfileEditor({
               </FieldHint>
             ) : null}
 
-            <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] pt-3">
+            <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[1.5px] text-muted-foreground">
                   Behaviors
@@ -497,7 +497,7 @@ function ProfileEditor({
                 />
               ))}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -506,6 +506,7 @@ function ProfileEditor({
 
 export default function BillPayMappingsCard({ settings, setSettings, patch, metadata, metadataLoading }) {
   const mappings = normalizeMappings(settings?.bill_pay_mappings);
+  const [expandedProfileIds, setExpandedProfileIds] = useState(() => new Set());
   const accounts = metadata?.accounts || [];
   const payees = metadata?.payees || [];
   const categories = flattenActualCategories(metadata?.categories || []);
@@ -520,6 +521,21 @@ export default function BillPayMappingsCard({ settings, setSettings, patch, meta
       ...mappings,
       profiles: updateAt(mappings.profiles, profileIndex, updater),
     });
+  }
+
+  function toggleProfile(profileId) {
+    setExpandedProfileIds((current) => {
+      const next = new Set(current);
+      if (next.has(profileId)) next.delete(profileId);
+      else next.add(profileId);
+      return next;
+    });
+  }
+
+  function addProfile() {
+    const profile = createProfile();
+    setExpandedProfileIds((current) => new Set([...current, profile.id]));
+    applyMappings({ ...mappings, profiles: [...mappings.profiles, profile] });
   }
 
   return (
@@ -542,7 +558,7 @@ export default function BillPayMappingsCard({ settings, setSettings, patch, meta
             type="button"
             size="sm"
             className={SETTINGS_PRIMARY_BUTTON_CLASS}
-            onClick={() => applyMappings({ ...mappings, profiles: [...mappings.profiles, createProfile()] })}
+            onClick={addProfile}
           >
             <Plus size={13} />
             Profile
@@ -557,9 +573,11 @@ export default function BillPayMappingsCard({ settings, setSettings, patch, meta
                 profile={profile}
                 index={profileIndex}
                 count={mappings.profiles.length}
+                collapsed={!expandedProfileIds.has(profile.id)}
                 accounts={accounts}
                 payees={payees}
                 categories={categories}
+                onToggleCollapsed={() => toggleProfile(profile.id)}
                 onChange={(nextProfile) => updateProfile(profileIndex, () => nextProfile)}
                 onDelete={() => applyMappings({
                   ...mappings,
