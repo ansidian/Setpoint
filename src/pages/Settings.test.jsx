@@ -11,6 +11,7 @@ const mockApi = vi.hoisted(() => ({
     volume: 1,
     triggers: {
       needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+      email_queued: { enabled: true, soundId: "quick_chime" },
       fyi_finalized: { enabled: true, soundId: "smooth_modern" },
       weak_security_grace: { enabled: true, soundId: "low_tone" },
       triage_failed: { enabled: false, soundId: "low_tone" },

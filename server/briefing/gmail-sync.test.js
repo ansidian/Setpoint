@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetCurrentDashboardEventsForTests, subscribeCurrentDashboardEvents } from "../dashboard/current-events.js";
 import {
   createEmailIndexTestDb,
   seedEmailAccount,
@@ -19,6 +20,7 @@ vi.mock("../db/connection.js", () => ({
 const gmailSync = await import("./gmail-sync.js");
 
 beforeEach(async () => {
+  __resetCurrentDashboardEventsForTests();
   testState.db.current = await createEmailIndexTestDb();
 });
 
@@ -133,6 +135,9 @@ describe("Gmail Pub/Sub sync ingestion", () => {
       email_date: "2026-05-03T12:00:00.000Z",
     });
 
+    const events = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
+
     const result = await gmailSync.enqueueEmailTriageForEmails(
       "user-1",
       [{
@@ -183,6 +188,21 @@ describe("Gmail Pub/Sub sync ingestion", () => {
         source_at: "2026-05-03T12:03:00.000Z",
       },
     ]);
+    expect(events).toEqual([
+      expect.objectContaining({
+        source: "email_triage",
+        reason: "email_triage_queued",
+        details: {
+          triggerType: "email_queued",
+          eventKey: "email_triage:gmail-work:gmail-work-fresh-1:email_triage_queued",
+          emailId: "gmail-work-fresh-1",
+          lane: "queued",
+          triageSource: "arrival_grace",
+          reason: "email_triage_queued",
+        },
+      }),
+    ]);
+    unsubscribe();
   });
 
   it("registers an INBOX watch and persists Gmail history cursor state", async () => {

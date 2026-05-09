@@ -294,6 +294,85 @@ describe("email triage worker", () => {
     await dbClient.close();
   });
 
+  it("waits until arrival grace expires before calling the triage model", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "University Billing",
+      from_address: "billing@school.example",
+      subject: "Payment due for tuition",
+      body_snippet: "Your payment due date is May 8.",
+      body_text: "Tuition balance $450.00 is due May 8.",
+    });
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET triage_source = 'arrival_grace',
+                triage_status = 'pending'
+            WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_triage_jobs SET scheduled_for = ? WHERE email_id = ?",
+      args: ["2026-05-03T12:03:00.000Z", "msg-1"],
+    });
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "needs_attention",
+          category: "finance",
+          urgency: "high",
+          escalation_badge: "High Risk",
+          summary: "Tuition payment is due soon.",
+          action: "Review payment",
+          deadline_at: "2026-05-08T16:00:00.000Z",
+          confidence: 0.88,
+        },
+        usage: { input_tokens: 120, output_tokens: 40 },
+        estimated_cost_usd: 0.004,
+        latency_ms: 600,
+        tier,
+      })),
+    };
+
+    await expect(processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:02:59.000Z"),
+    })).resolves.toEqual({ processed: false });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:03:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "needs_attention",
+      model_calls: ["strong"],
+    });
+    expect(modelClient.classify).toHaveBeenCalledTimes(1);
+
+    const rows = await dbClient.execute({
+      sql: `SELECT t.triage_status,
+                   t.triage_source,
+                   j.status AS job_status,
+                   j.scheduled_for
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j ON j.email_id = t.email_id
+            WHERE t.email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      triage_status: "complete",
+      triage_source: "strong_model",
+      job_status: "complete",
+      scheduled_for: null,
+    });
+    await dbClient.close();
+  });
+
   it("finalizes read weak-security grace rows as FYI on the second run without model calls", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
