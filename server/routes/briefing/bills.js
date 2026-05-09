@@ -50,10 +50,14 @@ quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("ac
   if (!account || amount == null || !payee) {
     return res.status(400).json({ message: "account, amount, and payee are required" });
   }
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount)) {
+    return res.status(400).json({ message: "amount must be a number" });
+  }
   try {
     const result = await billsService.createQuickTxn(EA_USER_ID, {
       accountName: account,
-      amount: Number(amount),
+      amount: numericAmount,
       payee: String(payee),
       type: type === "deposit" ? "deposit" : "payment",
       date,
