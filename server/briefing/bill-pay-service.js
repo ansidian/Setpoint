@@ -1,10 +1,5 @@
 import db from "../db/connection.js";
-import {
-  getAccounts as actualGetAccounts,
-  getCategories as actualGetCategories,
-  getMetadata as actualGetMetadata,
-  getPayees as actualGetPayees,
-} from "./actual.js";
+import { getMetadata as actualGetMetadata } from "./actual.js";
 import { parseBillPayMappingsJson } from "./bill-pay-mappings.js";
 import { resolveBillPayMapping } from "./bill-pay-resolver.js";
 
@@ -69,12 +64,7 @@ async function loadBillPayMetadata(userId) {
   try {
     return await actualGetMetadata(userId);
   } catch {
-    const [accounts, categories, payees] = await Promise.all([
-      actualGetAccounts(userId).catch(() => []),
-      actualGetCategories(userId).catch(() => []),
-      actualGetPayees(userId).catch(() => []),
-    ]);
-    return { accounts, categories, payees };
+    return { accounts: [], categories: [], payees: [] };
   }
 }
 
@@ -116,15 +106,16 @@ export async function resolveBillPaySample(userId, {
   mappings = null,
   email = {},
   candidate = null,
+  metadata = null,
   dbClient = db,
 } = {}) {
-  const [effectiveMappings, metadata] = await Promise.all([
+  const [effectiveMappings, effectiveMetadata] = await Promise.all([
     mappings ? Promise.resolve(parseBillPayMappingsJson(JSON.stringify(mappings))) : loadBillPayMappings(userId, { dbClient }),
-    loadBillPayMetadata(userId),
+    metadata ? Promise.resolve(metadata) : loadBillPayMetadata(userId),
   ]);
   return resolveBillPayMapping({
     mappings: effectiveMappings,
-    metadata,
+    metadata: effectiveMetadata,
     source: "pasted_text",
     email,
     candidate,

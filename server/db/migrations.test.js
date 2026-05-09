@@ -120,4 +120,22 @@ describe("database migrations", () => {
     expect(columnByName.get("bill_pay_mappings_json").type).toBe("TEXT");
     expect(columnByName.get("bill_pay_mappings_json").dflt_value).toBe("NULL");
   });
+
+  it("adds Actual metadata projection storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "009_actual_metadata_mirror.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_actual_metadata_mirror')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+
+    expect(columnByName.get("user_id").pk).toBe(1);
+    expect(columnByName.get("accounts_json").notnull).toBe(1);
+    expect(columnByName.get("payees_json").notnull).toBe(1);
+    expect(columnByName.get("categories_json").notnull).toBe(1);
+    expect(columnByName.get("schedules_json").notnull).toBe(1);
+    expect(columnByName.get("recent_transactions_json").notnull).toBe(1);
+  });
 });

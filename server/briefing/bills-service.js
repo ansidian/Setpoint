@@ -1,9 +1,6 @@
 import {
   sendBill as actualSendBill,
   markBillPaid as actualMarkBillPaid,
-  getAccounts as actualGetAccounts,
-  getCategories as actualGetCategories,
-  getPayees as actualGetPayees,
   getMetadata as actualGetMetadata,
   getCalendarBillsRange as actualGetCalendarBillsRange,
   testConnection as actualTestConnection,
@@ -18,24 +15,139 @@ import {
   DEFAULT_BILL_EXTRACT_MODEL,
   isAllowedBillExtractModel,
 } from "./bill-extractors/catalog.js";
-import { resolveExtractedBillPay } from "./bill-pay-service.js";
-export { resolveBillPaySample, resolveBillPaySeed } from "./bill-pay-service.js";
+import {
+  resolveBillPaySample as resolveBillPaySampleCore,
+  resolveExtractedBillPay,
+} from "./bill-pay-service.js";
+export { resolveBillPaySeed } from "./bill-pay-service.js";
 
 const PROVIDERS = {
   [ANTHROPIC_PROVIDER.id]: ANTHROPIC_PROVIDER,
   [OPENAI_PROVIDER.id]: OPENAI_PROVIDER,
 };
-const BILL_MIRROR_REFRESH_RANGE = { start: "1900-01-01", end: "9999-12-31" };
+const BILL_MIRROR_LOOKBACK_DAYS = 30;
+const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
 export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 15 * 60 * 1000;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map();
 let billsMirrorRefreshWorkerTimer = null;
+
+const EMPTY_ACTUAL_METADATA = {
+  accounts: [],
+  payees: [],
+  payeeMap: {},
+  categories: [],
+  schedules: [],
+  recentTransactions: [],
+};
 
 function isoNow(now = new Date()) {
   return now.toISOString();
 }
 
+function todayYmd(now = new Date()) {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+}
+
+function addDaysYmd(ymd, days) {
+  const date = new Date(`${ymd}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function addMonthsYmd(ymd, months) {
+  const date = new Date(`${ymd}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+export function billMirrorRefreshRange({ now = new Date() } = {}) {
+  const today = todayYmd(now);
+  return {
+    start: addDaysYmd(today, -BILL_MIRROR_LOOKBACK_DAYS),
+    end: addMonthsYmd(today, BILL_MIRROR_LOOKAHEAD_MONTHS),
+  };
+}
+
 function boolFromDb(value) {
   return value === true || value === 1 || value === "1";
+}
+
+function safeJson(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function metadataWithPayeeMap(metadata = {}) {
+  const payees = Array.isArray(metadata.payees) ? metadata.payees : [];
+  return {
+    accounts: Array.isArray(metadata.accounts) ? metadata.accounts : [],
+    payees,
+    payeeMap: metadata.payeeMap || Object.fromEntries(payees.map((payee) => [payee.id, payee.name])),
+    categories: Array.isArray(metadata.categories) ? metadata.categories : [],
+    schedules: Array.isArray(metadata.schedules) ? metadata.schedules : [],
+    recentTransactions: Array.isArray(metadata.recentTransactions) ? metadata.recentTransactions : [],
+  };
+}
+
+function metadataFromRow(row) {
+  if (!row) return null;
+  const metadata = metadataWithPayeeMap({
+    accounts: safeJson(row.accounts_json, []),
+    payees: safeJson(row.payees_json, []),
+    categories: safeJson(row.categories_json, []),
+    schedules: safeJson(row.schedules_json, []),
+    recentTransactions: safeJson(row.recent_transactions_json, []),
+  });
+  return {
+    ...metadata,
+    syncHealth: {
+      state: row.status || "needs_sync",
+      lastSuccessAt: row.last_success_at || null,
+      lastAttemptAt: row.last_attempt_at || null,
+      lastError: row.last_error || null,
+    },
+  };
+}
+
+function metadataProjectionArgs(userId, metadata, timestamp) {
+  const normalized = metadataWithPayeeMap(metadata);
+  return [
+    userId,
+    JSON.stringify(normalized.accounts),
+    JSON.stringify(normalized.payees),
+    JSON.stringify(normalized.categories),
+    JSON.stringify(normalized.schedules),
+    JSON.stringify(normalized.recentTransactions),
+    timestamp,
+    timestamp,
+    timestamp,
+  ];
+}
+
+function upsertMetadataProjectionQuery(userId, metadata, timestamp) {
+  return {
+    sql: `INSERT INTO ea_actual_metadata_mirror
+            (user_id, status, accounts_json, payees_json, categories_json,
+             schedules_json, recent_transactions_json, last_success_at,
+             last_attempt_at, last_error, updated_at)
+          VALUES (?, 'current', ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            status = 'current',
+            accounts_json = excluded.accounts_json,
+            payees_json = excluded.payees_json,
+            categories_json = excluded.categories_json,
+            schedules_json = excluded.schedules_json,
+            recent_transactions_json = excluded.recent_transactions_json,
+            last_success_at = excluded.last_success_at,
+            last_attempt_at = excluded.last_attempt_at,
+            last_error = NULL,
+            updated_at = excluded.updated_at`,
+    args: metadataProjectionArgs(userId, metadata, timestamp),
+  };
 }
 
 function mirrorStateFromRow(row) {
@@ -221,20 +333,78 @@ export async function markBillPaid(userId, billId) {
   return result;
 }
 
-export async function listAccounts(userId) {
-  return actualGetAccounts(userId);
+export async function readActualMetadataProjection(userId, { dbClient = db } = {}) {
+  const result = await dbClient.execute({
+    sql: `SELECT status, accounts_json, payees_json, categories_json, schedules_json,
+                 recent_transactions_json, last_success_at, last_attempt_at, last_error
+          FROM ea_actual_metadata_mirror
+          WHERE user_id = ?`,
+    args: [userId],
+  });
+  return metadataFromRow(result.rows?.[0] || null);
 }
 
-export async function listCategories(userId) {
-  return actualGetCategories(userId);
-}
-
-export async function listPayees(userId) {
-  return actualGetPayees(userId);
+export async function refreshActualMetadataProjection(userId, {
+  dbClient = db,
+  now = new Date(),
+  metadata = null,
+} = {}) {
+  const timestamp = isoNow(now);
+  try {
+    const actualMetadata = metadataWithPayeeMap(metadata || await actualGetMetadata(userId));
+    await dbClient.execute(upsertMetadataProjectionQuery(userId, actualMetadata, timestamp));
+    return {
+      ...actualMetadata,
+      syncHealth: {
+        state: "current",
+        lastSuccessAt: timestamp,
+        lastAttemptAt: timestamp,
+        lastError: null,
+      },
+    };
+  } catch (err) {
+    await dbClient.execute({
+      sql: `INSERT INTO ea_actual_metadata_mirror
+              (user_id, status, last_attempt_at, last_error, updated_at)
+            VALUES (?, 'degraded', ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              status = CASE
+                WHEN ea_actual_metadata_mirror.last_success_at IS NULL THEN 'needs_sync'
+                ELSE 'degraded'
+              END,
+              last_attempt_at = excluded.last_attempt_at,
+              last_error = excluded.last_error,
+              updated_at = excluded.updated_at`,
+      args: [userId, timestamp, String(err?.message || err).slice(0, 500), timestamp],
+    }).catch(() => {});
+    throw err;
+  }
 }
 
 export async function getMetadata(userId) {
-  return actualGetMetadata(userId);
+  const projected = await readActualMetadataProjection(userId).catch(() => null);
+  if (projected?.syncHealth?.state === "current" || projected?.syncHealth?.state === "degraded") {
+    return projected;
+  }
+  return refreshActualMetadataProjection(userId).catch((err) => {
+    console.error("[EA] Actual metadata projection refresh failed:", err.message);
+    return projected || { ...EMPTY_ACTUAL_METADATA, syncHealth: { state: "needs_sync", lastError: err.message } };
+  });
+}
+
+export async function listAccounts(userId) {
+  const { accounts } = await getMetadata(userId);
+  return accounts;
+}
+
+export async function listCategories(userId) {
+  const { categories } = await getMetadata(userId);
+  return categories;
+}
+
+export async function listPayees(userId) {
+  const { payees } = await getMetadata(userId);
+  return payees;
 }
 
 export async function testConnection(userId, overrides) {
@@ -242,7 +412,16 @@ export async function testConnection(userId, overrides) {
 }
 
 export async function createQuickTxn(userId, payload) {
-  return actualCreateQuickTxn(userId, payload);
+  const result = await actualCreateQuickTxn(userId, payload);
+  await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 }).catch((err) => {
+    console.error("[EA] Bills mirror delayed refresh scheduling failed:", err.message);
+  });
+  return result;
+}
+
+export async function resolveBillPaySample(userId, payload = {}) {
+  const metadata = await getMetadata(userId);
+  return resolveBillPaySampleCore(userId, { ...payload, metadata });
 }
 
 export async function getBillsMirrorState(userId, { dbClient = db } = {}) {
@@ -449,6 +628,10 @@ export async function refreshBillsMirror(userId, {
         args: [userId],
       },
       {
+        sql: `DELETE FROM ea_actual_metadata_mirror WHERE user_id = ?`,
+        args: [userId],
+      },
+      {
         sql: `INSERT INTO ea_bills_mirror_state
                 (user_id, status, actual_configured, actual_budget_url, last_attempt_at,
                  last_error, pending_refresh_at, refresh_started_at, updated_at)
@@ -482,7 +665,11 @@ export async function refreshBillsMirror(userId, {
   }
 
   try {
-    const data = await actualGetCalendarBillsRange(userId, BILL_MIRROR_REFRESH_RANGE);
+    const refreshRange = billMirrorRefreshRange({ now });
+    const [data, metadata] = await Promise.all([
+      actualGetCalendarBillsRange(userId, refreshRange),
+      actualGetMetadata(userId),
+    ]);
     const occurrences = (data.schedules || [])
       .map(normalizeMirrorOccurrence)
       .filter((occurrence) => occurrence.scheduleId && occurrence.next_date && occurrence.type !== "income");
@@ -509,6 +696,7 @@ export async function refreshBillsMirror(userId, {
         sql: `DELETE FROM ea_bill_schedule_mirror WHERE user_id = ?`,
         args: [userId],
       },
+      upsertMetadataProjectionQuery(userId, metadata, timestamp),
       ...occurrences.map((occurrence) => ({
         sql: `INSERT INTO ea_bill_schedule_mirror
                 (user_id, schedule_id, name, payee, amount, type, next_date, paid, raw_json, updated_at)
@@ -585,11 +773,10 @@ export async function refreshBillsMirror(userId, {
 }
 
 export async function extractBill(userId, { subject, from, body }) {
-  const [categories, accounts, payees] = await Promise.all([
-    actualGetCategories(userId).catch(() => []),
-    actualGetAccounts(userId).catch(() => []),
-    actualGetPayees(userId).catch(() => []),
-  ]);
+  const metadata = await getMetadata(userId).catch(() => EMPTY_ACTUAL_METADATA);
+  const categories = metadata.categories || [];
+  const accounts = metadata.accounts || [];
+  const payees = metadata.payees || [];
 
   const catCodeToId = new Map();
   const catList = [];
