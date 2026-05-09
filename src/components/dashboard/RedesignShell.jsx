@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
 import ShellHeader from "../shell/ShellHeader";
+import { AnalyticsModalMount } from "../shell/AnalyticsModalMount.jsx";
+import { loadTriageAnalyticsModal } from "../shell/triageAnalyticsModalLoader.js";
 import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
+import { useAnalyticsModalController } from "../shell/useAnalyticsModalController.js";
 import {
   collectActiveReadOverrideKeys,
   computeInboxUnreadSignalCount,
@@ -22,7 +25,6 @@ const CommandPalette = lazy(() => import("../shell/CommandPalette"));
 const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
-const TriageAnalyticsModal = lazy(() => import("../shell/TriageAnalyticsModal"));
 
 export function RedesignShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
@@ -69,7 +71,6 @@ export function RedesignShell({
   }, [dismissMobileInboxTab, isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [liveReadOverrides, setLiveReadOverrides] = useState({});
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState(null);
@@ -99,6 +100,14 @@ export function RedesignShell({
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const actionChordRef = useRef(null);
   const actionChordTimerRef = useRef(null);
+  const analyticsBackdropSourceRef = useRef(null);
+  const { analyticsOpen, analyticsBackdropSnapshot, closeAnalytics, openAnalytics, prepareAnalyticsSurface } = useAnalyticsModalController({
+    sourceRef: analyticsBackdropSourceRef,
+    loadModal: loadTriageAnalyticsModal,
+    refreshing: bd.refreshing,
+    refreshKey: liveData.briefingGeneratedAt,
+    tab,
+  });
   const dismissCalendar = useBrowserBackDismiss({
     enabled: !isMobile && calendarOpen,
     historyKey: "eaDashboardCalendarModal",
@@ -229,7 +238,8 @@ export function RedesignShell({
       }
       if (command.action === "toggle-analytics") {
         e.preventDefault();
-        setAnalyticsOpen((value) => !value);
+        if (analyticsOpen) closeAnalytics();
+        else void openAnalytics();
         return;
       }
       if (command.action === "open-calendar") { openCalendar(); }
@@ -238,7 +248,7 @@ export function RedesignShell({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarOpen, isMobile, openTodoistCreate]);
+  }, [analyticsOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openTodoistCreate]);
 
   const { accent } = customize;
   const briefing = bd.briefing;
@@ -302,13 +312,18 @@ export function RedesignShell({
     else if (item.kind === "calendar") openCalendar();
     else if (item.kind === "todoist") openTodoistCreate();
     else if (item.kind === "event") openCalendar("events", null, "new");
-    else if (item.kind === "analytics") setAnalyticsOpen(true);
+    else if (item.kind === "analytics") {
+      setPaletteOpen(false);
+      window.requestAnimationFrame(() => {
+        void openAnalytics();
+      });
+    }
     else if (item.kind === "history") setHistoryOpen(true);
     else if (item.kind === "customize") setCustomizeOpen(true);
     else if (item.kind === "refresh") onQuickRefresh?.();
     else if (item.kind === "settings") window.location.href = "/settings";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpToSection, onQuickRefresh, openTodoistCreate, setShellTab]);
+  }, [jumpToSection, onQuickRefresh, openAnalytics, openTodoistCreate, setShellTab]);
 
   const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
 
@@ -381,6 +396,7 @@ export function RedesignShell({
 
   return (
     <div
+      ref={analyticsBackdropSourceRef}
       style={{
         position: "fixed", inset: 0,
         display: "flex", flexDirection: "column",
@@ -397,7 +413,8 @@ export function RedesignShell({
         tab={tab}
         onTab={setShellTab}
         analyticsOpen={analyticsOpen}
-        onOpenAnalytics={() => setAnalyticsOpen(true)}
+        onOpenAnalytics={() => { void openAnalytics(); }}
+        onPrepareAnalytics={prepareAnalyticsSurface}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenCustomize={() => setCustomizeOpen((v) => !v)}
         onOpenHistory={() => setHistoryOpen((v) => !v)}
@@ -527,14 +544,11 @@ export function RedesignShell({
         </Suspense>
       )}
 
-      {analyticsOpen && (
-        <Suspense fallback={null}>
-          <TriageAnalyticsModal
-            open={analyticsOpen}
-            onClose={() => setAnalyticsOpen(false)}
-          />
-        </Suspense>
-      )}
+      <AnalyticsModalMount
+        open={analyticsOpen}
+        onClose={closeAnalytics}
+        backdropSnapshot={analyticsBackdropSnapshot}
+      />
 
       {customizeOpen && (
         <Suspense fallback={null}>

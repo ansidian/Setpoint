@@ -299,7 +299,7 @@ function AnalyticsBody({ stats }) {
   );
 }
 
-export default function TriageAnalyticsModal({ open, onClose }) {
+export default function TriageAnalyticsModal({ open, onClose, backdropSnapshot = null }) {
   const [stats, setStats] = useState(null);
   const [state, setState] = useState("idle");
 
@@ -325,7 +325,23 @@ export default function TriageAnalyticsModal({ open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
-      <DialogContent className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[#16161e] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px]">
+      <DialogContent
+        data-testid="triage-analytics-modal"
+        overlayClassName="bg-[#0b0b13]/70"
+        overlayStyle={{
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
+          ...(backdropSnapshot?.dataUrl
+            ? {
+                backgroundImage: `linear-gradient(rgba(11,11,19,0.54), rgba(11,11,19,0.68)), url("${backdropSnapshot.dataUrl}")`,
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "cover",
+              }
+            : {}),
+        }}
+        className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[#16161e] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px]"
+      >
         <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.10] text-primary">

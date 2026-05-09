@@ -66,9 +66,21 @@ vi.mock("../components/shell/CommandPalette", () => ({
 }));
 
 vi.mock("../components/shell/TriageAnalyticsModal", () => ({
-  default: function TriageAnalyticsModalMock({ open }) {
-    return open ? <div data-testid="triage-analytics-modal" /> : null;
+  default: function TriageAnalyticsModalMock({ open, backdropSnapshot }) {
+    return open ? (
+      <div
+        data-testid="triage-analytics-modal"
+        data-backdrop-snapshot={backdropSnapshot?.dataUrl || ""}
+      />
+    ) : null;
   },
+}));
+
+vi.mock("@/components/shell/analyticsBackdropSnapshot.js", () => ({
+  captureAnalyticsBackdropSnapshot: vi.fn(async () => ({
+    dataUrl: "data:image/jpeg;base64,test-dashboard-backdrop",
+  })),
+  prewarmAnalyticsBackdropCapture: vi.fn(),
 }));
 
 vi.mock("../components/shell/CustomizePanel", () => ({
@@ -91,12 +103,14 @@ vi.mock("../components/dashboard/DeadlineDetailPopover", () => ({
 }));
 
 const { RedesignShell } = await import("./Dashboard.jsx");
+const { captureAnalyticsBackdropSnapshot } = await import("@/components/shell/analyticsBackdropSnapshot.js");
 
 afterEach(() => {
   window.localStorage.removeItem("calendar:lastView");
   window.localStorage.removeItem("ea:tab");
   latestInboxProps = null;
   cleanup();
+  vi.clearAllMocks();
 });
 
 beforeEach(() => {
@@ -231,6 +245,17 @@ describe("RedesignShell mobile behavior", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("triage-analytics-modal")).toBeNull();
     });
+  });
+
+  it("opens shell analytics without running backdrop capture on the click path", async () => {
+    mockIsMobile = false;
+    captureAnalyticsBackdropSnapshot.mockImplementationOnce(() => new Promise(() => {}));
+    renderShell();
+
+    fireEvent.keyDown(window, { key: "A" });
+
+    expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
+    expect(captureAnalyticsBackdropSnapshot).not.toHaveBeenCalled();
   });
 
   it("opens shell analytics from the command palette action", async () => {
