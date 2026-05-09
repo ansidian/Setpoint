@@ -504,7 +504,14 @@ function ProfileEditor({
   );
 }
 
-export default function BillPayMappingsCard({ settings, setSettings, patch, metadata, metadataLoading }) {
+export default function BillPayMappingsCard({
+  settings,
+  setSettings,
+  patch,
+  metadata,
+  metadataLoading,
+  onRequestMetadata,
+}) {
   const mappings = normalizeMappings(settings?.bill_pay_mappings);
   const [expandedProfileIds, setExpandedProfileIds] = useState(() => new Set());
   const accounts = metadata?.accounts || [];
@@ -524,6 +531,7 @@ export default function BillPayMappingsCard({ settings, setSettings, patch, meta
   }
 
   function toggleProfile(profileId) {
+    if (!expandedProfileIds.has(profileId)) onRequestMetadata?.();
     setExpandedProfileIds((current) => {
       const next = new Set(current);
       if (next.has(profileId)) next.delete(profileId);
@@ -534,6 +542,7 @@ export default function BillPayMappingsCard({ settings, setSettings, patch, meta
 
   function addProfile() {
     const profile = createProfile();
+    onRequestMetadata?.();
     setExpandedProfileIds((current) => new Set([...current, profile.id]));
     applyMappings({ ...mappings, profiles: [...mappings.profiles, profile] });
   }

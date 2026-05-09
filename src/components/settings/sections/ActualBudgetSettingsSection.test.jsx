@@ -102,6 +102,20 @@ beforeEach(() => {
 });
 
 describe("ActualBudgetSettingsSection", () => {
+  it("does not fetch Actual metadata on mount or connection test", async () => {
+    renderSection();
+
+    expect(await screen.findByDisplayValue("https://actual.example.test")).toBeTruthy();
+    expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Test Connection" }));
+
+    await waitFor(() => {
+      expect(mockApi.testActualBudget).toHaveBeenCalled();
+    });
+    expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+  });
+
   it("owns the moved Actual connection controls", async () => {
     renderSection();
 
@@ -126,6 +140,7 @@ describe("ActualBudgetSettingsSection", () => {
 
     await screen.findByText("Bill Pay Mappings");
     fireEvent.click(screen.getByRole("button", { name: /profile/i }));
+    expect(await screen.findByRole("option", { name: "Citi" })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Profile 1 name"), {
       target: { value: "Citi Costco" },
