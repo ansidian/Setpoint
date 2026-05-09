@@ -234,7 +234,14 @@ function metadataIndex(metadata = {}) {
   };
 }
 
+function hasTargetValidationMetadata(metadata = {}) {
+  return Array.isArray(metadata.accounts)
+    || Array.isArray(metadata.payees)
+    || Array.isArray(metadata.categories);
+}
+
 function targetDiagnostics(targets = {}, metadata = {}) {
+  if (!hasTargetValidationMetadata(metadata)) return [];
   const index = metadataIndex(metadata);
   const checks = [
     ["payee_id", index.payeeIds, "Payee not found"],

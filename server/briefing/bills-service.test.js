@@ -128,7 +128,7 @@ describe("extractBill (Anthropic)", () => {
 });
 
 describe("Bill Pay resolver service", () => {
-  it("loads a triaged server candidate by email id before resolving", async () => {
+  it("loads a triaged server candidate by email id before resolving without Actual metadata", async () => {
     mockDb.execute
       .mockResolvedValueOnce({
         rows: [{
@@ -169,11 +169,6 @@ describe("Bill Pay resolver service", () => {
           body_text: "Statement ready",
         }],
       });
-    mockActual.getMetadata.mockResolvedValueOnce({
-      accounts: [],
-      payees: [{ id: "payee-edison", name: "Southern California Edison" }],
-      categories: [{ id: "cat-utilities", name: "Utilities" }],
-    });
 
     const result = await resolveBillPaySeed("u1", {
       emailId: "msg-1",
@@ -193,6 +188,7 @@ describe("Bill Pay resolver service", () => {
       amount: 64.2,
       due_date: "2026-05-29",
     });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
   });
 
   it("resolves a pasted-text mapping sample without requiring an email id", async () => {
