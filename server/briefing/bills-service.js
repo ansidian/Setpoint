@@ -2,7 +2,6 @@ import {
   sendBill as actualSendBill,
   markBillPaid as actualMarkBillPaid,
   getMetadata as actualGetMetadata,
-  getCalendarBillsRange as actualGetCalendarBillsRange,
   testConnection as actualTestConnection,
   createQuickTxn as actualCreateQuickTxn,
 } from "./actual.js";
@@ -27,7 +26,8 @@ const PROVIDERS = {
 };
 const BILL_MIRROR_LOOKBACK_DAYS = 30;
 const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
-export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 15 * 60 * 1000;
+export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 6 * 60 * 60 * 1000;
+const BILLS_MIRROR_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map();
 let billsMirrorRefreshWorkerTimer = null;
 
@@ -122,6 +122,75 @@ function hasActualMetadataRows(metadata = {}) {
   );
 }
 
+function amountConditionCents(condition) {
+  const rawAmt = condition?.value;
+  return typeof rawAmt === "object" && rawAmt !== null
+    ? (rawAmt.num1 ?? 0)
+    : (rawAmt ?? 0);
+}
+
+function scheduleAmountCents(schedule) {
+  return amountConditionCents(schedule.conditions?.find((condition) => condition.field === "amount"));
+}
+
+function schedulePayeeName(schedule, payeeMap = {}) {
+  const payeeCondition = schedule.conditions?.find((condition) => condition.field === "payee");
+  return payeeCondition ? payeeMap[payeeCondition.value] : schedule.name;
+}
+
+function daysBetweenYmd(a, b) {
+  const ms = new Date(`${a}T00:00:00Z`) - new Date(`${b}T00:00:00Z`);
+  return Math.round(ms / 86400000);
+}
+
+function isSchedulePaid(schedule, recentTransactions = []) {
+  if (!schedule.next_date) return false;
+  const payeeCondition = schedule.conditions?.find((condition) => condition.field === "payee");
+  const payeeId = payeeCondition?.value;
+  const amount = Math.abs(scheduleAmountCents(schedule)) / 100;
+  return recentTransactions.some((transaction) => {
+    const dayDiff = Math.abs(daysBetweenYmd(transaction.date, schedule.next_date));
+    if (transaction.scheduleId && transaction.scheduleId === schedule.id) return dayDiff <= 14;
+    if (!payeeId || transaction.payeeId !== payeeId) return false;
+    if (Math.abs(transaction.amount - amount) > 0.01) return false;
+    return dayDiff <= 3;
+  });
+}
+
+function isBillLikeSchedule(schedule) {
+  return !schedule?.completed && schedule?.type !== "income";
+}
+
+function isWithinDateRange(date, { start, end }) {
+  return !!date && date >= start && date <= end;
+}
+
+function occurrenceFromMetadataSchedule(schedule, payeeMap, recentTransactions) {
+  const amountCents = scheduleAmountCents(schedule);
+  const payeeName = schedulePayeeName(schedule, payeeMap);
+  const paid = isSchedulePaid(schedule, recentTransactions);
+  return {
+    id: `${schedule.id}:${schedule.next_date}`,
+    scheduleId: schedule.id,
+    name: schedule.name || payeeName || "Unknown",
+    payee: payeeName || schedule.name || "Unknown",
+    amount: Math.abs(amountCents) / 100,
+    next_date: schedule.next_date,
+    paid,
+    type: schedule.type || "bill",
+    openActionDisabled: paid,
+  };
+}
+
+function occurrencesFromMetadata(metadata, range) {
+  const normalized = metadataWithPayeeMap(metadata);
+  return normalized.schedules
+    .filter(isBillLikeSchedule)
+    .filter((schedule) => isWithinDateRange(schedule.next_date, range))
+    .map((schedule) => occurrenceFromMetadataSchedule(schedule, normalized.payeeMap, normalized.recentTransactions))
+    .sort((a, b) => a.next_date.localeCompare(b.next_date));
+}
+
 function metadataProjectionArgs(userId, metadata, timestamp) {
   const normalized = metadataWithPayeeMap(metadata);
   return [
@@ -187,6 +256,12 @@ export function isBillsMirrorMaintenanceDue(syncHealth, { now = new Date() } = {
   if (syncHealth.configured !== true) return false;
   if (syncHealth.pendingRefreshAt || syncHealth.refreshStartedAt) return false;
   if (syncHealth.state !== "current" && syncHealth.state !== "degraded") return false;
+  if (syncHealth.state === "degraded") {
+    const lastAttempt = new Date(syncHealth.lastAttemptAt || "").getTime();
+    if (Number.isFinite(lastAttempt) && now.getTime() - lastAttempt < BILLS_MIRROR_FAILURE_BACKOFF_MS) {
+      return false;
+    }
+  }
   const lastSuccess = new Date(syncHealth.lastSuccessAt || "").getTime();
   if (!Number.isFinite(lastSuccess)) return false;
   return now.getTime() - lastSuccess >= BILLS_MIRROR_MAINTENANCE_TTL_MS;
@@ -681,11 +756,8 @@ export async function refreshBillsMirror(userId, {
 
   try {
     const refreshRange = billMirrorRefreshRange({ now });
-    const [data, metadata] = await Promise.all([
-      actualGetCalendarBillsRange(userId, refreshRange),
-      actualGetMetadata(userId),
-    ]);
-    const occurrences = (data.schedules || [])
+    const metadata = metadataWithPayeeMap(await actualGetMetadata(userId));
+    const occurrences = occurrencesFromMetadata(metadata, refreshRange)
       .map(normalizeMirrorOccurrence)
       .filter((occurrence) => occurrence.scheduleId && occurrence.next_date && occurrence.type !== "income");
     const queries = [

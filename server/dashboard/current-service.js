@@ -35,6 +35,7 @@ import {
 } from "./current-sources.js";
 
 const PASSIVE_FAILURE_BACKOFF_MS = [2 * 60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000];
+const BILLS_PASSIVE_PROVIDER_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
 const BACKGROUND_REFRESH_IN_FLIGHT = new Map();
 
@@ -569,6 +570,37 @@ function isInPassiveBackoff(row, now) {
   return now.getTime() - new Date(failedAt).getTime() < passiveBackoffMs(count);
 }
 
+function newestFailureTime(values) {
+  const times = values
+    .filter(Boolean)
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+  return times.length ? Math.max(...times) : null;
+}
+
+function isInBillsProviderFailureBackoff(row, billsMirror, now) {
+  const failureTime = newestFailureTime([
+    row?.last_refresh_failed_at,
+    billsMirror?.syncHealth?.lastAttemptAt,
+  ]);
+  if (!failureTime) return false;
+  const rowFailed = Number(row?.refresh_failure_count || 0) > 0;
+  const mirrorFailed = billsMirror?.syncHealth?.state === "degraded" || billsMirror?.syncHealth?.state === "unavailable";
+  if (!rowFailed && !mirrorFailed) return false;
+  return now.getTime() - failureTime < BILLS_PASSIVE_PROVIDER_FAILURE_BACKOFF_MS;
+}
+
+function suppressBillsPassiveRefreshDuringProviderBackoff(refreshPlan, rows, billsMirror, {
+  now,
+} = {}) {
+  if (!isInBillsProviderFailureBackoff(rows.bills_current, billsMirror, now)) return;
+  const scheduledBefore = refreshPlan.scheduled.length;
+  refreshPlan.scheduled = refreshPlan.scheduled.filter((entry) => entry.key !== "bills_current");
+  if (refreshPlan.scheduled.length !== scheduledBefore) {
+    refreshPlan.skipped.push(skippedEntry("bills_current", "provider_backoff"));
+  }
+}
+
 function refreshReasonForSource(key, row, mode, now) {
   if (!row) return "missing";
   const health = sourceHealthForRow(key, row, now);
@@ -634,6 +666,7 @@ function applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, {
 } = {}) {
   if (!isBillsMirrorMaintenanceDue(billsMirror?.syncHealth, { now })) return;
   if (isInPassiveBackoff(rows.bills_current, now)) return;
+  if (isInBillsProviderFailureBackoff(rows.bills_current, billsMirror, now)) return;
   ensureScheduled(refreshPlan, "bills_current", "bills_mirror_maintenance_due");
   forceKeys?.add("bills_current");
 }
@@ -684,9 +717,10 @@ export async function getCurrentDashboard(userId, {
     { dbClient, now },
   );
   const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
-  const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, todoistHealth });
-  const forceKeys = new Set();
   const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
+  const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, todoistHealth });
+  suppressBillsPassiveRefreshDuringProviderBackoff(refreshPlan, rows, billsMirror, { now });
+  const forceKeys = new Set();
   applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, { forceKeys, now });
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });

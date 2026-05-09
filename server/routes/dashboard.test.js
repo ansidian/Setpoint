@@ -416,6 +416,72 @@ describe("GET /api/dashboard/current", () => {
     }
   });
 
+  it("backs off passive Bills refresh after a recent Actual provider failure", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", EMPTY_DEADLINES_FOR_TEST);
+
+    const failedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_current_data_cache
+              (user_id, cache_key, payload_json, fetched_at, expires_at, status,
+               last_refresh_failed_at, last_refresh_error, refresh_failure_count, updated_at)
+            VALUES (?, 'bills_current', ?, ?, ?, 'degraded', ?, ?, 3, ?)`,
+      args: [
+        "u1",
+        JSON.stringify({
+          bills: [{ id: "cached-bill", payee: "Power" }],
+          allSchedules: [{ id: "cached-bill", payee: "Power" }],
+          payeeMap: {},
+          actualConfigured: true,
+          actualBudgetUrl: "https://actual.example.test",
+          billsSyncHealth: {
+            state: "degraded",
+            configured: true,
+            lastSuccessAt: "2026-05-04T11:40:00.000Z",
+            lastAttemptAt: failedAt,
+            lastError: "Actual worker exited",
+          },
+        }),
+        "2026-05-04T11:40:00.000Z",
+        "2026-05-04T12:40:00.000Z",
+        failedAt,
+        "Actual worker exited",
+        failedAt,
+      ],
+    });
+    testState.getBillsMirrorState.mockResolvedValueOnce({
+      syncHealth: {
+        state: "degraded",
+        configured: true,
+        lastSuccessAt: "2026-05-04T11:40:00.000Z",
+        lastAttemptAt: failedAt,
+        lastError: "Actual worker exited",
+        pendingRefreshAt: null,
+      },
+      actualBudgetUrl: "https://actual.example.test",
+    });
+
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.bills).toEqual([{ id: "cached-bill", payee: "Power" }]);
+    expect(res.body.refresh).toMatchObject({
+      mode: "passive",
+      skipped: expect.arrayContaining([
+        expect.objectContaining({ key: "bills_current", reason: "provider_backoff" }),
+      ]),
+    });
+    expect(res.body.refresh.scheduled).toEqual(expect.not.arrayContaining([
+      expect.objectContaining({ key: "bills_current" }),
+    ]));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(testState.refreshBillsMirror).not.toHaveBeenCalled();
+  });
+
   it("rolls Todoist needs_sync into system status and schedules deadlines refresh", async () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", []);
