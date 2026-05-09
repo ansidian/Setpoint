@@ -18,6 +18,7 @@ import {
   resolveBillPaySample as resolveBillPaySampleCore,
   resolveExtractedBillPay,
 } from "./bill-pay-service.js";
+import { readLocalActualMetadata } from "./actual-local-metadata.js";
 export { resolveBillPaySeed } from "./bill-pay-service.js";
 
 const PROVIDERS = {
@@ -120,6 +121,15 @@ function hasActualMetadataRows(metadata = {}) {
     || metadata.categories?.length
     || metadata.schedules?.length
   );
+}
+
+async function loadActualMetadataForProjection(userId, { refreshLocal = true } = {}) {
+  try {
+    return await readLocalActualMetadata(userId, { refresh: refreshLocal });
+  } catch (err) {
+    console.warn("[EA] Lightweight Actual metadata projection failed; falling back to Actual worker:", err.message);
+    return actualGetMetadata(userId);
+  }
 }
 
 function amountConditionCents(condition) {
@@ -435,7 +445,7 @@ export async function refreshActualMetadataProjection(userId, {
 } = {}) {
   const timestamp = isoNow(now);
   try {
-    const actualMetadata = metadataWithPayeeMap(metadata || await actualGetMetadata(userId));
+    const actualMetadata = metadataWithPayeeMap(metadata || await loadActualMetadataForProjection(userId));
     await dbClient.execute(upsertMetadataProjectionQuery(userId, actualMetadata, timestamp));
     return {
       ...actualMetadata,
@@ -756,7 +766,7 @@ export async function refreshBillsMirror(userId, {
 
   try {
     const refreshRange = billMirrorRefreshRange({ now });
-    const metadata = metadataWithPayeeMap(await actualGetMetadata(userId));
+    const metadata = metadataWithPayeeMap(await loadActualMetadataForProjection(userId));
     const occurrences = occurrencesFromMetadata(metadata, refreshRange)
       .map(normalizeMirrorOccurrence)
       .filter((occurrence) => occurrence.scheduleId && occurrence.next_date && occurrence.type !== "income");
