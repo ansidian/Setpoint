@@ -1,7 +1,7 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
-import { getEventSelectionId } from "../../../../lib/redesign-helpers";
+import { dueDateToMs, getEventSelectionId } from "../../../../lib/redesign-helpers";
 import { formatTime12FromTime24 } from "../../ghostPreview.js";
 import { isPinnedCalendarGhost } from "../../modal/calendarEventSpanLayout.js";
 import { toDeadlineGhostDescriptor } from "../deadlines/DeadlinesCellContent.jsx";
@@ -100,18 +100,14 @@ function toEventGhostDescriptor(ghost) {
     accent,
     leadingColor: ghost.allDay ? "rgba(205,214,244,0.7)" : accent,
     allDay: !!ghost.allDay,
-    sortMs: ghost.startMs || 0,
+    sortMs: ghost.startMs || dueDateToMs(ghost.startDate, ghost.startTime) || 0,
   };
 }
 
 function orderEventDescriptors(items) {
   return [...items].sort((a, b) => {
-    if (a.itemKind === "deadline" || b.itemKind === "deadline") {
-      if (a.itemKind !== "deadline") return -1;
-      if (b.itemKind !== "deadline") return 1;
-      if (a.complete !== b.complete) return a.complete ? 1 : -1;
-    }
-    if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    if (!!a.complete !== !!b.complete) return a.complete ? 1 : -1;
+    if (!!a.allDay !== !!b.allDay) return a.allDay ? -1 : 1;
     if ((a.sortMs || 0) !== (b.sortMs || 0)) return (a.sortMs || 0) - (b.sortMs || 0);
     return String(a.title || "").localeCompare(String(b.title || ""));
   });

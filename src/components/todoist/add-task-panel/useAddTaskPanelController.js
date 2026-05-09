@@ -183,7 +183,11 @@ export default function useAddTaskPanelController({
     });
   }, [editingTask, labels]);
 
-  const parsed = useMemo(() => parseTokens(input, projects, labels), [input, labels, projects]);
+  const seededNlpDueDate = !editingTask ? initialDueDate : null;
+  const parsed = useMemo(
+    () => parseTokens(input, projects, labels, { seededDueDate: seededNlpDueDate }),
+    [input, labels, projects, seededNlpDueDate],
+  );
 
   const resolvedProject = overrides.project ? manualProject : parsed.project || null;
   const resolvedPriority = overrides.priority ? manualPriority : parsed.priority || null;

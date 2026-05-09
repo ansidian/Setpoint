@@ -100,4 +100,110 @@ describe("calendar cell ghost content", () => {
     expect(chip.textContent).toContain("8:30a");
     expect(chip.textContent).toContain("Draft Todoist task");
   });
+
+  it("orders Todoist deadline ghosts chronologically with deadline items in Events cells", () => {
+    render(renderEventsCellContents({
+      items: [
+        {
+          id: "recurring-task",
+          title: "Recurring morning task",
+          due_date: "2026-04-20",
+          due_time: "9:00 AM",
+          source: "todoist",
+          status: "open",
+          is_recurring: true,
+          calendarItemKind: "deadline",
+        },
+      ],
+      ghosts: [{
+        id: "deadline-ghost",
+        kind: "deadline",
+        title: "Draft Todoist task",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        dueTime: "10:00 AM",
+        dueMinutes: 600,
+        source: "todoist",
+        color: "#e8776a",
+      }],
+      layout,
+      day: 20,
+      dateKey: "2026-04-20",
+    }));
+
+    const chips = screen.getAllByText(/Recurring morning task|Draft Todoist task/).map((node) => node.textContent);
+    expect(chips).toEqual(["Recurring morning task", "Draft Todoist task"]);
+  });
+
+  it("orders Todoist deadline ghosts chronologically with event items in Events cells", () => {
+    render(renderEventsCellContents({
+      items: [
+        {
+          id: "later-event",
+          title: "Later calendar event",
+          startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T17:30:00.000Z").getTime(),
+          color: "#4285f4",
+          source: "gmail",
+        },
+      ],
+      ghosts: [{
+        id: "deadline-ghost",
+        kind: "deadline",
+        title: "Draft Todoist task",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        dueTime: "9:00 AM",
+        dueMinutes: 540,
+        source: "todoist",
+        color: "#e8776a",
+      }],
+      layout,
+      day: 20,
+      dateKey: "2026-04-20",
+    }));
+
+    const chips = screen.getAllByText(/Draft Todoist task|Later calendar event/).map((node) => node.textContent);
+    expect(chips).toEqual(["Draft Todoist task", "Later calendar event"]);
+  });
+
+  it("orders event ghosts chronologically even when the ghost only has draft time fields", () => {
+    render(renderEventsCellContents({
+      items: [
+        {
+          id: "earlier-event",
+          title: "Earlier calendar event",
+          startMs: new Date("2026-04-20T21:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T21:30:00.000Z").getTime(),
+          color: "#4285f4",
+          source: "gmail",
+        },
+        {
+          id: "dinner-task",
+          title: "Air fry dinner",
+          due_date: "2026-04-20",
+          due_time: "6:45 PM",
+          source: "todoist",
+          status: "open",
+          calendarItemKind: "deadline",
+        },
+      ],
+      ghosts: [{
+        id: "event-ghost",
+        kind: "event",
+        title: "Draft event",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+        startTime: "20:00",
+        endTime: "20:30",
+        color: "#4285f4",
+      }],
+      layout,
+      day: 20,
+      dateKey: "2026-04-20",
+    }));
+
+    const chips = screen.getAllByText(/Earlier calendar event|Air fry dinner|Draft event/).map((node) => node.textContent);
+    expect(chips).toEqual(["Earlier calendar event", "Air fry dinner", "Draft event"]);
+  });
 });

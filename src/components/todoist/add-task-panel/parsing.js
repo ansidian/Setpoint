@@ -65,6 +65,16 @@ function ymdFromDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function dateFromYmd(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return ymdFromDate(date) === value ? date : null;
+}
+
 function formatTodoistResolvedDueString(resolved) {
   if (!resolved?.date) return null;
   const date = ymdFromDate(resolved.date);
@@ -156,9 +166,10 @@ function getNextDayOfWeek(dayName, fromDate) {
   return date;
 }
 
-function resolveDate(input) {
+function resolveDate(input, { seededDueDate = null } = {}) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const seededDate = dateFromYmd(seededDueDate);
 
   for (const { re, type } of DATE_TIME_PATTERNS) {
     const match = input.match(re);
@@ -258,7 +269,7 @@ function resolveDate(input) {
         break;
       }
       case "bare_time":
-        date = new Date(today);
+        date = seededDate ? new Date(seededDate) : new Date(today);
         time = parseTime(match[1]);
         break;
     }
@@ -288,7 +299,7 @@ export function formatResolvedDate(resolved) {
   return `${prefix}, ${monthDay}${year}${timeStr}`;
 }
 
-export function parseTokens(input, projects, labels) {
+export function parseTokens(input, projects, labels, options = {}) {
   const result = {
     priority: null,
     project: null,
@@ -348,7 +359,7 @@ export function parseTokens(input, projects, labels) {
     return result;
   }
 
-  const resolved = resolveDate(result.stripped);
+  const resolved = resolveDate(result.stripped, options);
   if (resolved) {
     result.datePhrase = resolved.phrase;
     result.dateDueString = formatTodoistResolvedDueString(resolved);
