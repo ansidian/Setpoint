@@ -28,6 +28,7 @@ function activeSnapshot(lanes) {
     },
     carryover: lanes.carryover || [],
     lanes: {
+      queued: lanes.queued || [],
       needs_attention: lanes.needs_attention || [],
       catch_up: lanes.catch_up || [],
       fyi: lanes.fyi || [],
@@ -95,6 +96,29 @@ describe("computeInboxUnreadSignalCount", () => {
       }),
       liveReadOverrides: { "late-fyi": false },
     })).toBe(1);
+  });
+
+  it("counts unread queued arrival rows for the shell Inbox badge", () => {
+    expect(computeInboxUnreadSignalCount({
+      activeSnapshot: activeSnapshot({
+        queued: [snapshotRow({
+          uid: "queued-arrival",
+          lane: "queued",
+          source: "arrival_grace",
+        })],
+      }),
+    })).toBe(1);
+
+    expect(computeInboxUnreadSignalCount({
+      activeSnapshot: activeSnapshot({
+        queued: [snapshotRow({
+          uid: "queued-read",
+          lane: "queued",
+          source: "arrival_grace",
+          read: true,
+        })],
+      }),
+    })).toBe(0);
   });
 });
 
