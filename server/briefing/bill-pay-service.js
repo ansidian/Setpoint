@@ -90,10 +90,9 @@ export async function resolveBillPaySeed(userId, {
   source = "triage",
   dbClient = db,
 } = {}) {
-  const [mappings, serverContext, metadata] = await Promise.all([
+  const [mappings, serverContext] = await Promise.all([
     loadBillPayMappings(userId, { dbClient }),
     loadServerBillCandidate(userId, { emailId, accountId }, { dbClient }),
-    loadBillPayMetadata(userId),
   ]);
   const requestEmail = {
     ...email,
@@ -104,7 +103,6 @@ export async function resolveBillPaySeed(userId, {
   };
   return resolveBillPayMapping({
     mappings,
-    metadata,
     source,
     email: {
       ...(serverContext?.email || {}),
