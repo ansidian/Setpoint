@@ -66,4 +66,19 @@ describe("Todoist task parsing", () => {
     expect(parsed.datePhrase).toBe("at 5pm");
     expect(parsed.dateFormatted).toContain("5 PM");
   });
+
+  it("keeps a seeded calendar date when parsing a bare time", () => {
+    const parsed = parseTokens("Submit assignment at 5pm", [], [], {
+      seededDueDate: "2026-04-23",
+    });
+
+    expect(parsed.stripped).toBe("Submit assignment");
+    expect(parsed.datePhrase).toBe("at 5pm");
+    expect(parsed.dateDueString).toBe("2026-04-23 at 5 PM");
+    expect(parsed.duePreview).toMatchObject({
+      dueDate: "2026-04-23",
+      dueTime: "5 PM",
+      dueTime24: "17:00",
+    });
+  });
 });

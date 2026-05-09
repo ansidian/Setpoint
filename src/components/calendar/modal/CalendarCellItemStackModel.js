@@ -10,17 +10,6 @@ export function splitVisibleCellItems(items, visibleCount) {
   const visibleItems = items.slice(0, count);
   const visibleIds = new Set(visibleItems.map((item) => String(item.id)));
 
-  for (const ghost of items.slice(count).filter((item) => item.isGhost)) {
-    const replaceIndex = [...visibleItems]
-      .reverse()
-      .findIndex((item) => !item.isGhost);
-    if (replaceIndex < 0) break;
-    const index = visibleItems.length - 1 - replaceIndex;
-    visibleIds.delete(String(visibleItems[index].id));
-    visibleItems[index] = ghost;
-    visibleIds.add(String(ghost.id));
-  }
-
   return {
     visibleItems,
     hiddenItems: items.filter((item) => !visibleIds.has(String(item.id))),

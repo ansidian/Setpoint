@@ -1,6 +1,7 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { minutesFromDisplayTime } from "../../ghostPreview.js";
+import { dueDateToMs } from "../../../../lib/redesign-helpers";
 import { getDayState, getDeadlineSelectionId, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
 
 const LG_DEADLINE_CHIP_METRICS = {
@@ -53,6 +54,8 @@ export function toDeadlineGhostDescriptor(ghost) {
   return {
     id: ghost.id,
     isGhost: true,
+    itemKind: "deadline",
+    detailView: "deadlines",
     ghostKind: "deadline",
     ghostStart: ghost.startDate,
     ghostEnd: ghost.endDate,
@@ -61,7 +64,9 @@ export function toDeadlineGhostDescriptor(ghost) {
     recurring: source === "todoist" && !!(ghost.recurring || ghost.is_recurring),
     accent,
     leadingColor: accent,
+    complete: false,
     sortMinutes: Number.isFinite(ghost.dueMinutes) ? ghost.dueMinutes : Number.POSITIVE_INFINITY,
+    sortMs: dueDateToMs(ghost.startDate, ghost.dueTime) ?? Number.POSITIVE_INFINITY,
     completeSort: 0,
   };
 }
