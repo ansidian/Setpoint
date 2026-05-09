@@ -20,6 +20,7 @@ export default function ShellHeader({
   onTab,
   analyticsOpen = false,
   onOpenAnalytics,
+  onPrepareAnalytics,
   onOpenPalette,
   onOpenCustomize,
   onOpenHistory,
@@ -84,6 +85,7 @@ export default function ShellHeader({
         <AnalyticsTriggerButton
           active={analyticsOpen}
           onOpenAnalytics={onOpenAnalytics}
+          onPrepareAnalytics={onPrepareAnalytics}
         />
       )}
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}
@@ -102,6 +104,7 @@ export default function ShellHeader({
           onOpenHistory={onOpenHistory}
           onOpenCalendar={onOpenCalendar}
           onOpenAnalytics={onOpenAnalytics}
+          onPrepareAnalytics={onPrepareAnalytics}
           onOpenCustomize={onOpenCustomize}
         />
       </div>

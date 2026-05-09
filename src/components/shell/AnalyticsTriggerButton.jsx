@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { Kbd } from "./Kbd.jsx";
 
-export function AnalyticsTriggerButton({ active = false, onOpenAnalytics }) {
+export function AnalyticsTriggerButton({ active = false, onOpenAnalytics, onPrepareAnalytics }) {
   const [hover, setHover] = useState(false);
   const [focused, setFocused] = useState(false);
   const [pressed, setPressed] = useState(false);
@@ -15,17 +15,26 @@ export function AnalyticsTriggerButton({ active = false, onOpenAnalytics }) {
       aria-label="Open analytics"
       aria-pressed={active}
       onClick={onOpenAnalytics}
-      onMouseEnter={() => setHover(true)}
+      onMouseEnter={() => {
+        setHover(true);
+        onPrepareAnalytics?.();
+      }}
       onMouseLeave={() => {
         setHover(false);
         setPressed(false);
       }}
-      onFocus={() => setFocused(true)}
+      onFocus={() => {
+        setFocused(true);
+        onPrepareAnalytics?.();
+      }}
       onBlur={() => {
         setFocused(false);
         setPressed(false);
       }}
-      onPointerDown={() => setPressed(true)}
+      onPointerDown={() => {
+        setPressed(true);
+        onPrepareAnalytics?.({ delay: 0 });
+      }}
       onPointerUp={() => setPressed(false)}
       style={{
         display: "inline-flex",

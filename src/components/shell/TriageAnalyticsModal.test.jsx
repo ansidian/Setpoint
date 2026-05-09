@@ -104,10 +104,20 @@ afterEach(() => {
 
 describe("TriageAnalyticsModal", () => {
   it("shows OpenAI triage cache, cost, model, and tier analytics", async () => {
-    render(<TriageAnalyticsModal open onClose={() => {}} />);
+    render(
+      <TriageAnalyticsModal
+        open
+        onClose={() => {}}
+        backdropSnapshot={{ dataUrl: "data:image/jpeg;base64,analytics-backdrop" }}
+      />,
+    );
 
     expect(await screen.findByRole("dialog", { name: /ai analytics/i })).toBeTruthy();
     expect(getTriageCacheStats).toHaveBeenCalledWith({ semantic: true });
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(overlay?.className).toContain("bg-[#0b0b13]/70");
+    expect(overlay?.style.backdropFilter).toBe("none");
+    expect(overlay?.style.backgroundImage).toContain("analytics-backdrop");
 
     await waitFor(() => {
       expect(screen.getAllByText("53.3%").length).toBeGreaterThan(0);
@@ -134,5 +144,15 @@ describe("TriageAnalyticsModal", () => {
     expect(screen.getByText(/actual Ask AI usage is logged as aggregate tokens only/i)).toBeTruthy();
     expect(screen.getByText(/Ask AI spent \$0.0012 in this window/i)).toBeTruthy();
     expect(screen.getByText(/Hit rate can fall when new uncached calls add input tokens/)).toBeTruthy();
+  });
+
+  it("falls back to an opaque non-blurred overlay without a snapshot", async () => {
+    render(<TriageAnalyticsModal open onClose={() => {}} />);
+
+    expect(await screen.findByRole("dialog", { name: /ai analytics/i })).toBeTruthy();
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(overlay?.className).toContain("bg-[#0b0b13]/70");
+    expect(overlay?.style.backdropFilter).toBe("none");
+    expect(overlay?.style.backgroundImage).toBe("");
   });
 });

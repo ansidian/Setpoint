@@ -9,7 +9,7 @@ import {
 import { Link } from "react-router-dom";
 import { Kbd } from "./Kbd.jsx";
 
-function MenuItem({ icon, label, kbd, onClick, danger }) {
+function MenuItem({ icon, label, kbd, onClick, onPrepare, danger }) {
   const Icon = icon;
   const [hover, setHover] = useState(false);
 
@@ -21,7 +21,11 @@ function MenuItem({ icon, label, kbd, onClick, danger }) {
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onClick?.();
       }}
-      onMouseEnter={() => setHover(true)}
+      onMouseEnter={() => {
+        setHover(true);
+        onPrepare?.();
+      }}
+      onFocus={onPrepare}
       onMouseLeave={() => setHover(false)}
       style={{
         display: "flex",
@@ -116,6 +120,7 @@ export function OverflowMenu({
   onOpenHistory,
   onOpenCalendar,
   onOpenAnalytics,
+  onPrepareAnalytics,
   onOpenCustomize,
 }) {
   return (
@@ -160,6 +165,7 @@ export function OverflowMenu({
             <MenuItem
               icon={BarChart3}
               label="Analytics"
+              onPrepare={onPrepareAnalytics}
               onClick={() => {
                 onCloseMenu();
                 onOpenAnalytics?.();
