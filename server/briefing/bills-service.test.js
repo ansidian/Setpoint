@@ -62,7 +62,7 @@ beforeEach(() => {
   mockActualLocal.readLocalActualMetadata.mockReset();
   mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
   mockActual.getPayees.mockResolvedValue([]);
-  mockActual.getMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [] });
+  mockActual.getMetadata.mockResolvedValue({ accounts: [], payees: [], categories: [], schedules: [], recentTransactions: [] });
   mockDb.execute.mockReset();
   mockDb.batch.mockReset();
 });
@@ -429,7 +429,7 @@ describe("Bills mirror", () => {
       ],
       recentTransactions: [],
     };
-    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
+    mockActual.getMetadata.mockResolvedValueOnce(actualMetadata);
     mockDb.batch.mockResolvedValueOnce([]);
     mockDb.execute.mockResolvedValueOnce(rowResult());
 
@@ -438,8 +438,8 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1", { forceWorker: true, forceRefresh: true });
+    expect(mockActualLocal.readLocalActualMetadata).not.toHaveBeenCalled();
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
       expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
@@ -457,6 +457,44 @@ describe("Bills mirror", () => {
         scheduleId: "sched-1",
         payee: "Mortgage Co",
         amount: 1500,
+      }),
+    ]);
+  });
+
+  it("uses the locally synced Actual file if live sync applies messages but exits nonzero", async () => {
+    const syncedMetadata = {
+      accounts: [],
+      payees: [{ id: "payee-water", name: "SGV Water" }],
+      payeeMap: { "payee-water": "SGV Water" },
+      categories: [],
+      schedules: [
+        {
+          id: "water",
+          name: "Water Bill",
+          next_date: "2026-05-26",
+          type: "bill",
+          conditions: [
+            { field: "payee", value: "payee-water" },
+            { field: "amount", value: -5067 },
+          ],
+        },
+      ],
+      recentTransactions: [],
+    };
+    mockActual.getMetadata.mockRejectedValueOnce(new Error("Actual sync exited"));
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(syncedMetadata);
+    mockDb.batch.mockResolvedValueOnce([]);
+
+    const out = await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: false });
+    expect(out.allSchedules).toEqual([
+      expect.objectContaining({
+        name: "Water Bill",
+        next_date: "2026-05-26",
       }),
     ]);
   });
@@ -599,7 +637,7 @@ describe("listAccounts", () => {
         },
       ]))
       .mockResolvedValueOnce(rowResult());
-    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+    mockActual.getMetadata.mockResolvedValueOnce({
       accounts: [{ id: "a1", name: "Checking" }],
       payees: [],
       categories: [],
@@ -608,8 +646,8 @@ describe("listAccounts", () => {
     const out = await getMetadata("u1", { allowRefresh: true });
 
     expect(out.accounts).toEqual([{ id: "a1", name: "Checking" }]);
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", { refresh: true });
-    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1", { forceWorker: true, forceRefresh: true });
+    expect(mockActualLocal.readLocalActualMetadata).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
     }));

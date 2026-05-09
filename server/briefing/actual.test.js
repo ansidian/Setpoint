@@ -222,6 +222,18 @@ describe("actual.js metadata cache", () => {
 
     dateSpy.mockRestore();
   });
+
+  it("force refresh bypasses the metadata cache and reloads the budget session", async () => {
+    const { getMetadata } = await import("./actual.js");
+    const actualApi = (await import("@actual-app/api")).default;
+
+    await getMetadata("user1");
+    await getMetadata("user1", { forceRefresh: true });
+
+    expect(actualApi.shutdown).toHaveBeenCalledTimes(1);
+    expect(actualApi.init).toHaveBeenCalledTimes(2);
+    expect(actualApi.getAccounts).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("actual.js sendBill mutex", () => {

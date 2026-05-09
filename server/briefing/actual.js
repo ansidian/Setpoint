@@ -3,6 +3,7 @@ import { testActualConnectionHttp } from "./actual-connection-test.js";
 import { readLocalActualMetadata } from "./actual-local-metadata.js";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;
+const FORCE_METADATA_WORKER_TIMEOUT_MS = 30_000;
 let metadataCache = { data: null, ts: 0 };
 
 function amountConditionCents(condition) {
@@ -81,12 +82,12 @@ function shouldUseInProcessActual() {
   return process.env.NODE_ENV === "test" || process.env.EA_ACTUAL_WORKER_DISABLED === "1";
 }
 
-async function callActual(operation, args) {
+async function callActual(operation, args, options = {}) {
   if (shouldUseInProcessActual()) {
     const core = await import("./actual-core.js");
     return core[operation](...args);
   }
-  return runActualWorkerOperation(operation, args);
+  return runActualWorkerOperation(operation, args, options);
 }
 
 function clearMetadataCache() {
@@ -97,20 +98,33 @@ export function testConnection(userId, overrides = null) {
   return testActualConnectionHttp(userId, overrides);
 }
 
-export async function getMetadata(userId) {
-  if (shouldUseInProcessActual()) return callActual("getMetadata", [userId]);
+export async function getMetadata(userId, { forceWorker = false, forceRefresh = false } = {}) {
+  if (shouldUseInProcessActual()) return callActual("getMetadata", [userId, { forceRefresh }]);
+  if (forceWorker) {
+    const data = await callActual(
+      "getMetadata",
+      [userId, { forceRefresh }],
+      forceRefresh ? { timeoutMs: FORCE_METADATA_WORKER_TIMEOUT_MS } : {},
+    );
+    metadataCache = { data, ts: Date.now() };
+    return data;
+  }
   const now = Date.now();
-  if (metadataCache.data && now - metadataCache.ts < METADATA_TTL_MS) {
+  if (!forceRefresh && metadataCache.data && now - metadataCache.ts < METADATA_TTL_MS) {
     return metadataCache.data;
   }
   try {
-    const localData = await readLocalActualMetadata(userId);
+    const localData = await readLocalActualMetadata(userId, { refresh: forceRefresh });
     metadataCache = { data: localData, ts: Date.now() };
     return localData;
   } catch (err) {
     console.warn("[EA] Lightweight Actual metadata read failed; falling back to Actual worker:", err.message);
   }
-  const data = await callActual("getMetadata", [userId]);
+  const data = await callActual(
+    "getMetadata",
+    [userId, { forceRefresh }],
+    forceRefresh ? { timeoutMs: FORCE_METADATA_WORKER_TIMEOUT_MS } : {},
+  );
   metadataCache = { data, ts: Date.now() };
   return data;
 }
