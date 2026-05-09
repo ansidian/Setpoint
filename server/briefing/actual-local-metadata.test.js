@@ -143,4 +143,18 @@ describe("readLocalActualMetadata", () => {
       expect.objectContaining({ refresh: true }),
     );
   });
+
+  it("does not download from Actual when local-only metadata is requested", async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    const downloadBudget = vi.fn();
+
+    await expect(readLocalActualMetadata("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+      localOnly: true,
+      downloadBudget,
+    })).rejects.toThrow("Actual Budget local metadata is unavailable");
+
+    expect(downloadBudget).not.toHaveBeenCalled();
+  });
 });
