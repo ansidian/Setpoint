@@ -15,6 +15,7 @@ const settings = {
     volume: 0.9,
     triggers: {
       needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+      email_queued: { enabled: true, soundId: "quick_chime" },
       fyi_finalized: { enabled: true, soundId: "smooth_modern" },
       weak_security_grace: { enabled: true, soundId: "low_tone" },
       triage_failed: { enabled: false, soundId: "low_tone" },
@@ -25,6 +26,7 @@ const settings = {
   triage_notification_sounds: [
     { id: "smooth_modern", label: "Smooth Modern", path: "/sounds/notifications/smooth-modern.mp3" },
     { id: "clear_chime", label: "Clear chime", path: "/sounds/notifications/clear-chime.mp3" },
+    { id: "quick_chime", label: "Quick chime", path: "/sounds/notifications/quick-chime.mp3" },
     { id: "low_tone", label: "Low tone", path: "/sounds/notifications/low-tone.mp3" },
   ],
 };
@@ -38,6 +40,19 @@ function triageEvent(eventKey = "event-1") {
       eventKey,
       emailId: "msg-1",
       reason: "email_triage_finalized",
+    },
+  };
+}
+
+function queueEvent(eventKey = "queued-1") {
+  return {
+    source: "email_triage",
+    reason: "email_triage_queued",
+    details: {
+      triggerType: "email_queued",
+      eventKey,
+      emailId: "msg-queued",
+      reason: "email_triage_queued",
     },
   };
 }
@@ -97,6 +112,25 @@ describe("useTriageNotificationSounds", () => {
 
     await waitFor(() => {
       expect(globalThis.Audio).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("plays configured sounds when mail enters the triage queue", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handleDashboardEvent(queueEvent());
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/quick-chime.mp3");
     });
   });
 

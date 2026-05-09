@@ -76,6 +76,7 @@ function renderCard(initialSettings = {}) {
         volume: 0.8,
         triggers: {
           needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+          email_queued: { enabled: true, soundId: "quick_chime" },
           fyi_finalized: { enabled: true, soundId: "smooth_modern" },
           weak_security_grace: { enabled: true, soundId: "low_tone" },
           triage_failed: { enabled: false, soundId: "low_tone" },
@@ -86,6 +87,7 @@ function renderCard(initialSettings = {}) {
       triage_notification_sounds: [
         { id: "smooth_modern", label: "Smooth Modern", path: "/sounds/notifications/smooth-modern.mp3" },
         { id: "clear_chime", label: "Clear chime", path: "/sounds/notifications/clear-chime.mp3" },
+        { id: "quick_chime", label: "Quick chime", path: "/sounds/notifications/quick-chime.mp3" },
         { id: "hard_pop_click", label: "Hard Pop Click", path: "/sounds/notifications/hard-pop-click.wav" },
         { id: "low_tone", label: "Low tone", path: "/sounds/notifications/low-tone.mp3" },
       ],
@@ -113,6 +115,7 @@ describe("TriageSoundSettingsCard", () => {
 
     expect(screen.getByText("Triage Notification Sounds")).toBeTruthy();
     expect(screen.getByText("Needs attention finalized")).toBeTruthy();
+    expect(screen.getByText("Queued mail")).toBeTruthy();
     expect(screen.getByText("FYI finalized")).toBeTruthy();
     expect(screen.getByText("Weak-security grace")).toBeTruthy();
     expect(screen.getByText("Triage failed")).toBeTruthy();
@@ -134,6 +137,7 @@ describe("TriageSoundSettingsCard", () => {
         volume: 0.8,
         triggers: {
           needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
+          email_queued: { enabled: true, soundId: "quick_chime" },
           fyi_finalized: { enabled: false, soundId: "smooth_modern" },
           weak_security_grace: { enabled: true, soundId: "low_tone" },
           triage_failed: { enabled: false, soundId: "low_tone" },
@@ -175,6 +179,7 @@ describe("TriageSoundSettingsCard", () => {
       triage_sound_settings: expect.objectContaining({
         triggers: expect.objectContaining({
           fyi_finalized: { enabled: true, soundId: "hard_pop_click" },
+          email_queued: { enabled: true, soundId: "quick_chime" },
           task_completed: { enabled: true, soundId: "smooth_modern" },
         }),
       }),

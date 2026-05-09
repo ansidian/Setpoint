@@ -1,4 +1,5 @@
 import db from "../db/connection.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import { loadUserConfig } from "./config-service.js";
 import { fetchAllEmails } from "./email-fetch.js";
 import { indexEmails } from "./email-index.js";
@@ -723,6 +724,20 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
       ARRIVAL_GRACE_SOURCE,
       scheduledFor,
     ],
+  });
+  publishCurrentDashboardEvent(userId, {
+    source: "email_triage",
+    reason: "email_triage_queued",
+    state: "current",
+    occurredAt: now.toISOString(),
+    details: {
+      triggerType: "email_queued",
+      eventKey: `email_triage:${accountId}:${emailId}:email_triage_queued`,
+      emailId,
+      lane: ARRIVAL_GRACE_QUEUED_LANE,
+      triageSource: ARRIVAL_GRACE_SOURCE,
+      reason: "email_triage_queued",
+    },
   });
   return { snapshotId: snapshot.id, triageId: Number(triageRow.id), scheduledFor };
 }

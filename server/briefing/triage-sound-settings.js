@@ -11,6 +11,7 @@ export const TRIAGE_SOUND_LANE_SCOPES = {
 
 export const TRIAGE_SOUND_TRIGGER_KEYS = {
   NEEDS_ATTENTION_FINALIZED: "needs_attention_finalized",
+  EMAIL_QUEUED: "email_queued",
   FYI_FINALIZED: "fyi_finalized",
   WEAK_SECURITY_GRACE: "weak_security_grace",
   TRIAGE_FAILED: "triage_failed",
@@ -33,6 +34,10 @@ export const DEFAULT_TRIAGE_SOUND_SETTINGS = {
     [TRIAGE_SOUND_TRIGGER_KEYS.NEEDS_ATTENTION_FINALIZED]: {
       enabled: true,
       soundId: "clear_chime",
+    },
+    [TRIAGE_SOUND_TRIGGER_KEYS.EMAIL_QUEUED]: {
+      enabled: true,
+      soundId: "quick_chime",
     },
     [TRIAGE_SOUND_TRIGGER_KEYS.FYI_FINALIZED]: {
       enabled: true,
