@@ -12,7 +12,12 @@ vi.mock("../db/connection.js", () => ({
   },
 }));
 vi.mock("./encryption.js", () => ({ decrypt: (value) => value }));
+vi.mock("./reminder-service.js", () => ({
+  deleteSourceReminders: vi.fn(),
+  recomputeUnsentRemindersForSource: vi.fn(),
+}));
 
+const reminderService = await import("./reminder-service.js");
 const {
   getTodoistMirrorHealth,
   listTodoistMirrorActiveTaskIds,
@@ -141,6 +146,7 @@ async function seedSyncState(fields) {
 
 beforeEach(async () => {
   testState.db.current = await createTodoistMirrorTestDb();
+  Object.values(reminderService).forEach((fn) => fn.mockReset?.());
 });
 
 afterEach(async () => {
@@ -266,6 +272,90 @@ describe("syncTodoistMirror", () => {
       color: "blue",
       is_deleted: 0,
     });
+  });
+
+  it("recomputes unsent reminders when sync observes a Todoist due change", async () => {
+    await seedTodoistToken();
+    await seedSyncState({ lastSuccessAt: "2026-05-04T15:00:00.000Z" });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_todoist_items
+              (user_id, item_id, content, checked, is_deleted, due_date, due_datetime, due_timezone, synced_at, updated_at)
+            VALUES (?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
+      args: [
+        "u1",
+        "item-1",
+        "Submit worksheet",
+        "2026-05-05",
+        "2026-05-05T09:30:00",
+        "America/Los_Angeles",
+        "2026-05-04T15:00:00.000Z",
+        "2026-05-04T15:00:00.000Z",
+      ],
+    });
+    const syncApiClient = vi.fn(async () => ({
+      sync_token: "sync-token-2",
+      items: [{
+        id: "item-1",
+        content: "Submit worksheet",
+        checked: false,
+        is_deleted: false,
+        due: {
+          date: "2026-05-06T09:30:00",
+          timezone: "America/Los_Angeles",
+          is_recurring: false,
+        },
+      }],
+      projects: [],
+      labels: [],
+    }));
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T16:00:00.000Z"),
+    });
+
+    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "item-1",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-06T16:30:00.000Z",
+    }, { dbClient: testState.db.current });
+  });
+
+  it("deletes unsent reminders when sync observes provider-side completion", async () => {
+    await seedTodoistToken();
+    await seedSyncState({ lastSuccessAt: "2026-05-04T15:00:00.000Z" });
+    const syncApiClient = vi.fn(async () => ({
+      sync_token: "sync-token-2",
+      items: [{
+        id: "item-2",
+        content: "Done task",
+        checked: true,
+        is_deleted: false,
+        due: {
+          date: "2026-05-06",
+          timezone: "America/Los_Angeles",
+          is_recurring: false,
+        },
+      }],
+      projects: [],
+      labels: [],
+    }));
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T16:00:00.000Z"),
+    });
+
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "item-2",
+      unsentOnly: true,
+    }, { dbClient: testState.db.current });
   });
 
   it("applies incremental updates without deleting absent resources", async () => {

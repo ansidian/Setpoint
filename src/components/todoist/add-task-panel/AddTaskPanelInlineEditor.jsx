@@ -11,6 +11,7 @@ import {
   TodoistSelectedLabelChips,
   TodoistTaskTextSection,
 } from "./AddTaskPanelShared.jsx";
+import TodoistReminderChips from "./TodoistReminderChips.jsx";
 
 function CompactIconButton({
   anchorRef,
@@ -334,12 +335,15 @@ export default function AddTaskPanelInlineEditor({
 }) {
   const {
     autocompleteType,
+    addCustomTodoistReminder,
+    addTodoistReminderPreset,
     canSubmit,
     cancelDelete,
     closeDuePicker,
     confirmDelete,
     confirmDeleteIntent,
     cursorPos,
+    customReminder,
     deleting,
     deleteTask,
     description,
@@ -355,6 +359,7 @@ export default function AddTaskPanelInlineEditor({
     handleInputChange,
     handleKeyDown,
     handleSubmit,
+    hasReminderAnchor,
     input,
     inputRef,
     isEdit,
@@ -365,6 +370,8 @@ export default function AddTaskPanelInlineEditor({
     priorityOptions,
     projects,
     recurrenceSummary,
+    reminderError,
+    removeTodoistReminder,
     requestClose,
     resolvedLabels,
     resolvedPriority,
@@ -375,6 +382,9 @@ export default function AddTaskPanelInlineEditor({
     setManualProject,
     setOverrides,
     submitting,
+    todoistReminders,
+    todoistReminderPresetStates,
+    updateCustomReminder,
     openDuePicker,
   } = state;
 
@@ -452,6 +462,19 @@ export default function AddTaskPanelInlineEditor({
               setManualProject={setManualProject}
               setOpenCompactPanel={setOpenCompactPanel}
               setOverrides={setOverrides}
+            />
+            <TodoistReminderChips
+              compact
+              reminders={todoistReminders}
+              reminderError={reminderError}
+              customReminder={customReminder}
+              disabled={submitting || deleting}
+              hasAnchor={hasReminderAnchor}
+              presetStates={todoistReminderPresetStates}
+              onAddPreset={addTodoistReminderPreset}
+              onUpdateCustomReminder={updateCustomReminder}
+              onAddCustom={addCustomTodoistReminder}
+              onRemoveReminder={removeTodoistReminder}
             />
           </div>
 

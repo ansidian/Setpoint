@@ -9,6 +9,11 @@ import {
   updateTodoistTask,
 } from "./todoist.js";
 import { updateCTMEventStatus } from "./ctm.js";
+import {
+  deleteSourceReminders,
+  recomputeUnsentRemindersForSource,
+} from "./reminder-service.js";
+import { todoistReminderAnchorFromTask } from "./todoist-reminder-source.js";
 import { buildSnapshot } from "./tombstones.js";
 
 function findTodoistTask(tasks, taskId) {
@@ -42,6 +47,28 @@ async function persistCompletedTodoistTask(userId, todoistId, task) {
   });
 }
 
+async function syncTodoistReminderAnchor(userId, task) {
+  const sourceItemId = String(task?.id || "");
+  if (!sourceItemId) return;
+  const anchor = todoistReminderAnchorFromTask(task);
+  if (!anchor?.anchorAt) {
+    await deleteSourceReminders({
+      userId,
+      sourceType: "todoist_task",
+      sourceItemId,
+      unsentOnly: true,
+    });
+    return;
+  }
+  await recomputeUnsentRemindersForSource({
+    userId,
+    sourceType: "todoist_task",
+    sourceItemId,
+    anchorKind: anchor.anchorKind,
+    anchorAt: anchor.anchorAt,
+  });
+}
+
 export async function completeTask(userId, taskId) {
   const { todoistTasks } = await loadCompletionSources(userId);
   const todoistTask = findTodoistTask(todoistTasks, taskId);
@@ -58,6 +85,12 @@ export async function completeTask(userId, taskId) {
     throw wrapped;
   }
   await persistCompletedTodoistTask(userId, taskId, todoistTask);
+  await deleteSourceReminders({
+    userId,
+    sourceType: "todoist_task",
+    sourceItemId: String(taskId),
+    unsentOnly: true,
+  });
 }
 
 export async function updateCTMStatus(_userId, taskId, status) {
@@ -92,9 +125,15 @@ export async function createTask(userId, body) {
 
 export async function updateTask(userId, id, body) {
   const task = await updateTodoistTask(userId, id, body);
+  await syncTodoistReminderAnchor(userId, task);
   return task;
 }
 
 export async function deleteTask(userId, id) {
   await deleteTodoistTask(userId, id);
+  await deleteSourceReminders({
+    userId,
+    sourceType: "todoist_task",
+    sourceItemId: String(id),
+  });
 }

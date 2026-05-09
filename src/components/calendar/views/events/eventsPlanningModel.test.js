@@ -145,4 +145,30 @@ describe("events planning model", () => {
       quiet: false,
     });
   });
+
+  it("carries deadline reminder state into Events planning chips", () => {
+    expect(deadlinePlanningDescriptor(deadline({
+      id: "reminder",
+      title: "Reminder task",
+      due_date: "2026-05-12",
+      source: "todoist",
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 2,
+      nextReminderAt: "2026-05-12T15:30:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingReminderCount: 2,
+        nextReminderAt: "2026-05-12T15:30:00.000Z",
+      },
+    }))).toMatchObject({
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 2,
+      nextReminderAt: "2026-05-12T15:30:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingReminderCount: 2,
+        nextReminderAt: "2026-05-12T15:30:00.000Z",
+      },
+    });
+  });
 });

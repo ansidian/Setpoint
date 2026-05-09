@@ -11,6 +11,9 @@ const mockGetGmailAuthUrl = vi.fn();
 const mockGetCalendarPlaceSuggestions = vi.fn();
 const mockGetCalendarPlaceDetails = vi.fn();
 const mockDeleteTodoistTask = vi.fn();
+const mockListReminders = vi.fn();
+const mockCreateReminder = vi.fn();
+const mockDeleteReminder = vi.fn();
 
 vi.mock("@/api", () => ({
   getCalendarSources: (...args) => mockGetCalendarSources(...args),
@@ -22,6 +25,9 @@ vi.mock("@/api", () => ({
   getCalendarPlaceSuggestions: (...args) => mockGetCalendarPlaceSuggestions(...args),
   getCalendarPlaceDetails: (...args) => mockGetCalendarPlaceDetails(...args),
   deleteTodoistTask: (...args) => mockDeleteTodoistTask(...args),
+  listReminders: (...args) => mockListReminders(...args),
+  createReminder: (...args) => mockCreateReminder(...args),
+  deleteReminder: (...args) => mockDeleteReminder(...args),
 }));
 
 afterEach(() => {
@@ -59,6 +65,9 @@ beforeEach(() => {
     },
   });
   mockCreateCalendarEventsBatch.mockResolvedValue({ created: [], failed: [] });
+  mockListReminders.mockResolvedValue({ reminders: [] });
+  mockCreateReminder.mockResolvedValue({ reminder: { id: "reminder-1" } });
+  mockDeleteReminder.mockResolvedValue({ success: true });
 });
 
 function renderModal({
@@ -309,6 +318,107 @@ describe("Calendar event editor rail", () => {
       expect(refreshRange).toHaveBeenCalledWith("2026-04-20", "2026-04-20");
       expect(upsertEvents).not.toHaveBeenCalled();
     });
+  });
+
+  it("adds pending reminder chips during event create and flushes them after provider creation succeeds", async () => {
+    const { upsertEvents } = renderModal({ focusDate: "2026-05-10" });
+    const savedEvent = {
+      id: "event-reminder-create",
+      title: "Planning block",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-10T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-10T16:30:00.000Z").getTime(),
+      writable: true,
+      allDay: false,
+    };
+    mockCreateCalendarEvent.mockResolvedValue({ event: savedEvent });
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Planning block" },
+    });
+    fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
+
+    expect(screen.getByTestId("calendar-event-reminder-chip").textContent).toMatch(/30 minutes before/i);
+
+    fireEvent.click(getActiveEventSaveButton());
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
+      expect(mockCreateReminder).toHaveBeenCalledWith(expect.objectContaining({
+        sourceType: "calendar_event",
+        sourceItemId: "event-reminder-create",
+        anchorKind: "event_start",
+        anchorAt: "2026-05-10T16:00:00.000Z",
+        offsetMinutes: -30,
+      }));
+      expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
+        ...savedEvent,
+        hasUpcomingReminder: true,
+        upcomingReminderCount: 1,
+        nextReminderAt: "2026-05-10T15:30:00.000Z",
+        reminderState: {
+          hasUpcomingReminder: true,
+          upcomingCount: 1,
+          nextReminderAt: "2026-05-10T15:30:00.000Z",
+        },
+      }));
+    });
+  });
+
+  it("does not flush pending reminders when event creation fails", async () => {
+    renderModal({ focusDate: "2026-05-10" });
+    mockCreateCalendarEvent.mockRejectedValue(new Error("Google Calendar failed"));
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Planning block" },
+    });
+    fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
+    fireEvent.click(getActiveEventSaveButton());
+
+    await waitFor(() => {
+      expect(screen.getByText("Google Calendar failed")).toBeTruthy();
+    });
+    expect(mockCreateReminder).not.toHaveBeenCalled();
+  });
+
+  it("loads existing reminders while editing and keeps sent reminders visually distinct", async () => {
+    const event = {
+      id: "event-reminder-edit",
+      etag: '"etag-reminder-edit"',
+      title: "Planning block",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      writable: true,
+      isRecurring: false,
+      allDay: false,
+    };
+    mockListReminders.mockResolvedValueOnce({
+      reminders: [
+        { id: "reminder-future", status: "pending", offset_minutes: -60 },
+        { id: "reminder-sent", status: "sent", offset_minutes: -30 },
+      ],
+    });
+    renderModal({ events: [event] });
+
+    await openFloatingEventEditorFromSelectedChip();
+
+    await waitFor(() => {
+      expect(mockListReminders).toHaveBeenCalledWith({
+        sourceType: "calendar_event",
+        sourceItemId: "event-reminder-edit",
+        sourceOccurrenceId: null,
+      });
+      expect(screen.getAllByTestId("calendar-event-reminder-chip")).toHaveLength(2);
+    });
+    expect(screen.getByText(/1 hour before/i)).toBeTruthy();
+    expect(screen.getByText(/sent/i)).toBeTruthy();
   });
 
   it("auto focuses the title when opening the edit editor", async () => {

@@ -80,6 +80,15 @@ async function createMigratedDb() {
       snapshot_json TEXT,
       PRIMARY KEY (user_id, todoist_id, due_date)
     );
+
+    CREATE TABLE ea_reminders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_item_id TEXT NOT NULL,
+      source_occurrence_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+    );
   `);
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",

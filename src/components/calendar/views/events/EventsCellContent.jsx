@@ -83,6 +83,10 @@ function toEventDescriptor(ev) {
     leadingColor: ev?.allDay ? "rgba(205,214,244,0.7)" : ev?.color || ev?.sourceColor || "#89b4fa",
     allDay: !!ev?.allDay,
     sortMs: ev?.startMs || 0,
+    hasUpcomingReminder: !!ev?.hasUpcomingReminder,
+    upcomingReminderCount: ev?.upcomingReminderCount || 0,
+    nextReminderAt: ev?.nextReminderAt || null,
+    reminderState: ev?.reminderState || null,
   };
 }
 

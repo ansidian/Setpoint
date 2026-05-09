@@ -85,6 +85,31 @@ export function RailMetaChip({ children, tone = "default", color = null, compact
   );
 }
 
+export function RailReminderIndicator({ children, compact = false }) {
+  return (
+    <span
+      data-testid="calendar-detail-reminder-indicator"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: compact ? "4px 8px" : "5px 10px",
+        borderRadius: 999,
+        border: "1px solid rgba(249,226,175,0.28)",
+        background: "rgba(249,226,175,0.10)",
+        color: "#f9e2af",
+        fontSize: compact ? 10 : 11,
+        fontWeight: 650,
+        letterSpacing: 0.12,
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function RailFactTile({
   label,
   value,

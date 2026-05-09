@@ -95,6 +95,10 @@ vi.mock("../briefing/encryption.js", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
+vi.mock("../briefing/discord-reminders.js", () => ({
+  formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "EA Dashboard reminder test" }] })),
+  sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
+}));
 vi.mock("../briefing/bill-extractors/catalog.js", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
@@ -117,6 +121,11 @@ const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
 const notesRoutes = (await import("./notes.js")).default;
+const discordReminders = await import("../briefing/discord-reminders.js");
+const {
+  __resetCurrentDashboardEventsForTests,
+  subscribeCurrentDashboardEvents,
+} = await import("../dashboard/current-events.js");
 const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../briefing/triage-sound-settings.js");
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
@@ -158,6 +167,8 @@ async function createMigratedDb() {
       todoist_oauth_access_token_expires_at TEXT,
       todoist_oauth_scope TEXT,
       todoist_oauth_token_type TEXT,
+      discord_webhook_url_encrypted TEXT,
+      discord_user_id TEXT,
       schedules_json TEXT,
       email_interests_json TEXT,
       email_ai_provider TEXT,
@@ -167,6 +178,29 @@ async function createMigratedDb() {
       email_triage_mode TEXT DEFAULT 'auto',
       triage_sound_settings_json TEXT,
       bill_pay_mappings_json TEXT
+    );
+
+    CREATE TABLE ea_reminders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_account_id TEXT,
+      source_calendar_id TEXT,
+      source_item_id TEXT NOT NULL,
+      source_occurrence_id TEXT,
+      anchor_kind TEXT NOT NULL,
+      anchor_at TEXT NOT NULL,
+      offset_minutes INTEGER NOT NULL,
+      remind_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      sent_at TEXT,
+      missed_at TEXT,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      retry_after TEXT,
+      last_error TEXT,
+      payload_snapshot_json TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE ea_email_triage (
@@ -219,11 +253,13 @@ async function getSettingsRow() {
 
 beforeEach(async () => {
   testState.db.current = await createMigratedDb();
+  __resetCurrentDashboardEventsForTests();
   vi.clearAllMocks();
 });
 
 afterEach(async () => {
   vi.useRealTimers();
+  __resetCurrentDashboardEventsForTests();
   await testState.db.current?.close?.();
   testState.db.current = null;
 });
@@ -634,6 +670,171 @@ describe("auth boundaries", () => {
       todoist_oauth_scope: null,
       todoist_oauth_token_type: null,
     });
+  });
+
+  it("stores Discord webhook settings encrypted without exposing the raw webhook", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        discord_webhook_url: "https://discord.example/webhook",
+        discord_user_id: "123456789",
+      });
+
+    expect(res.status).toBe(200);
+    const settings = await getSettingsRow();
+    expect(settings).toMatchObject({
+      discord_webhook_url_encrypted: "enc:https://discord.example/webhook",
+      discord_user_id: "123456789",
+    });
+
+    const getRes = await request(makeApp())
+      .get("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.discord_webhook_configured).toBe(true);
+    expect(getRes.body.discord_user_id).toBe("123456789");
+    expect(getRes.body).not.toHaveProperty("discord_webhook_url");
+    expect(getRes.body).not.toHaveProperty("discord_webhook_url_encrypted");
+  });
+
+  it("clears Discord webhook settings", async () => {
+    await seedSession();
+    await testState.db.current.execute({
+      sql: `UPDATE ea_settings
+            SET discord_webhook_url_encrypted = ?,
+                discord_user_id = ?
+            WHERE user_id = ?`,
+      args: ["enc:https://discord.example/webhook", "123", "user-1"],
+    });
+
+    const res = await request(makeApp())
+      .put("/api/ea/settings")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ discord_webhook_url: "", discord_user_id: "" });
+
+    expect(res.status).toBe(200);
+    expect(await getSettingsRow()).toMatchObject({
+      discord_webhook_url_encrypted: null,
+      discord_user_id: null,
+    });
+  });
+
+  it("sends a generic Discord reminder test through the stored webhook", async () => {
+    await seedSession();
+    await testState.db.current.execute({
+      sql: `UPDATE ea_settings
+            SET discord_webhook_url_encrypted = ?,
+                discord_user_id = ?
+            WHERE user_id = ?`,
+      args: ["enc:https://discord.example/webhook", "123", "user-1"],
+    });
+
+    const res = await request(makeApp())
+      .post("/api/ea/settings/discord-reminder-test")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, status: 204 });
+    expect(discordReminders.formatGenericDiscordTestPayload).toHaveBeenCalledWith({
+      discordUserId: "123",
+    });
+    expect(discordReminders.sendDiscordWebhook).toHaveBeenCalledWith(
+      "enc:https://discord.example/webhook",
+      { embeds: [{ title: "EA Dashboard reminder test" }] },
+    );
+  });
+
+  it("reports missing and rate-limited Discord reminder tests", async () => {
+    await seedSession();
+    const missing = await request(makeApp())
+      .post("/api/ea/settings/discord-reminder-test")
+      .set("Cookie", ["ea_session=cookie-session"]);
+    expect(missing.status).toBe(400);
+    expect(missing.body.message).toBe("Discord webhook not configured");
+
+    await testState.db.current.execute({
+      sql: "UPDATE ea_settings SET discord_webhook_url_encrypted = ? WHERE user_id = ?",
+      args: ["enc:https://discord.example/webhook", "user-1"],
+    });
+    discordReminders.sendDiscordWebhook.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      rateLimited: true,
+      retryAfterMs: 2500,
+      error: "Discord 429",
+    });
+
+    const limited = await request(makeApp())
+      .post("/api/ea/settings/discord-reminder-test")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(limited.status).toBe(429);
+    expect(limited.headers["retry-after"]).toBe("3");
+    expect(limited.body.message).toBe("Discord webhook rate limited");
+  });
+
+  it("creates, lists, and deletes reminder rows through authenticated routes", async () => {
+    await seedSession();
+    const dashboardEvents = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => {
+      dashboardEvents.push(event);
+    });
+    const createRes = await request(makeApp())
+      .post("/api/ea/reminders")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({
+        sourceType: "calendar_event",
+        sourceAccountId: "gmail-1",
+        sourceCalendarId: "primary",
+        sourceItemId: "event-1",
+        anchorKind: "event_start",
+        anchorAt: "2026-05-10T17:00:00.000Z",
+        offsetMinutes: -15,
+        payloadSnapshot: { title: "Dentist" },
+      });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.reminder).toMatchObject({
+      user_id: "user-1",
+      source_type: "calendar_event",
+      source_item_id: "event-1",
+      remind_at: "2026-05-10T16:45:00.000Z",
+    });
+
+    const listRes = await request(makeApp())
+      .get("/api/ea/reminders?sourceType=calendar_event&sourceItemId=event-1")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.reminders).toHaveLength(1);
+
+    const deleteRes = await request(makeApp())
+      .delete(`/api/ea/reminders/${createRes.body.reminder.id}`)
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body).toEqual({ success: true });
+    unsubscribe();
+    expect(dashboardEvents).toEqual([
+      expect.objectContaining({
+        source: "reminders",
+        reason: "reminder_created",
+        details: expect.objectContaining({
+          sourceType: "calendar_event",
+          sourceItemId: "event-1",
+        }),
+      }),
+      expect.objectContaining({
+        source: "reminders",
+        reason: "reminder_deleted",
+        details: expect.objectContaining({
+          reminderId: createRes.body.reminder.id,
+        }),
+      }),
+    ]);
   });
 
   it("blocks bearer auth on notes route", async () => {

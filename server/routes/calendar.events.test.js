@@ -39,6 +39,12 @@ vi.mock("../briefing/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
+vi.mock("../briefing/reminder-service.js", () => ({
+  recomputeUnsentRemindersForSource: vi.fn(),
+  deleteSourceReminders: vi.fn(),
+  listUpcomingReminderStatesForSources: vi.fn().mockResolvedValue(new Map()),
+  reminderSourceKey: ({ sourceType, sourceItemId, sourceOccurrenceId = null }) => `${sourceType}:${sourceItemId}:${sourceOccurrenceId || ""}`,
+}));
 vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
 
 const { loadUserConfig } = await import("../briefing/config-service.js");
@@ -52,6 +58,7 @@ const {
   suggestGooglePlaces,
   getGooglePlaceDetails,
 } = await import("../briefing/google-places.js");
+const reminderService = await import("../briefing/reminder-service.js");
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {
@@ -63,6 +70,7 @@ function makeApp() {
 
 describe("calendar event routes", () => {
   beforeEach(() => {
+    process.env.EA_USER_ID = "test-user";
     loadUserConfig.mockResolvedValue({
       accounts: [
         {
@@ -236,7 +244,13 @@ describe("calendar event routes", () => {
   });
 
   it("updates a calendar event", async () => {
-    updateCalendarEvent.mockResolvedValue({ id: "event-1", title: "Updated" });
+    updateCalendarEvent.mockResolvedValue({
+      id: "event-1",
+      title: "Updated",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: Date.parse("2026-04-20T16:00:00.000Z"),
+    });
 
     const res = await request(makeApp())
       .patch("/api/calendar/events/event-1")
@@ -258,6 +272,13 @@ describe("calendar event routes", () => {
       "event-1",
       expect.objectContaining({ sourceCalendarId: "work", etag: '"etag-1"', title: "Updated" }),
     );
+    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "test-user",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1",
+      anchorKind: "event_start",
+      anchorAt: "2026-04-20T16:00:00.000Z",
+    }));
   });
 
   it("rejects moving calendar events across connected accounts", async () => {
@@ -280,7 +301,13 @@ describe("calendar event routes", () => {
   });
 
   it("passes recurring edit scope through to the calendar service", async () => {
-    updateCalendarEvent.mockResolvedValue({ id: "event-1", title: "Weekly sync" });
+    updateCalendarEvent.mockResolvedValue({
+      id: "event-1",
+      title: "Weekly sync",
+      startMs: Date.parse("2026-04-20T17:00:00.000Z"),
+      isRecurring: true,
+      originalStartTime: "2026-04-20T16:00:00.000Z",
+    });
 
     const res = await request(makeApp())
       .patch("/api/calendar/events/event-1")
@@ -294,7 +321,7 @@ describe("calendar event routes", () => {
         endDate: "2026-04-20",
         startTime: "09:00",
         endTime: "09:30",
-        scope: "following",
+        scope: "one",
         recurringEventId: "series-1",
         originalStartTime: "2026-04-20T16:00:00.000Z",
       });
@@ -304,11 +331,16 @@ describe("calendar event routes", () => {
       expect.objectContaining({ id: "gmail-main" }),
       "event-1",
       expect.objectContaining({
-        scope: "following",
+        scope: "one",
         recurringEventId: "series-1",
         originalStartTime: "2026-04-20T16:00:00.000Z",
       }),
     );
+    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith(expect.objectContaining({
+      sourceItemId: "event-1",
+      sourceOccurrenceId: "2026-04-20T16:00:00.000Z",
+      anchorAt: "2026-04-20T17:00:00.000Z",
+    }));
   });
 
   it("deletes a calendar event", async () => {
@@ -328,6 +360,11 @@ describe("calendar event routes", () => {
       "event-1",
       expect.objectContaining({ calendarId: "primary", etag: '"etag-1"' }),
     );
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "test-user",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1",
+    }));
   });
 
   it("passes recurring delete scope through to the calendar service", async () => {
@@ -355,6 +392,10 @@ describe("calendar event routes", () => {
         originalStartTime: "2026-04-20T16:00:00.000Z",
       }),
     );
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith(expect.objectContaining({
+      sourceItemId: "event-1",
+      sourceOccurrenceId: "2026-04-20T16:00:00.000Z",
+    }));
   });
 
   it("surfaces typed calendar errors from create", async () => {

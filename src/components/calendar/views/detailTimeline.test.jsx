@@ -572,6 +572,57 @@ describe("calendar detail timeline", () => {
     expect(timeValue.getAttribute("data-nowrap")).toBe("true");
   });
 
+  it("shows selected event reminder timing in the detail card", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 19,
+        viewYear: 2026,
+        viewMonth: 3,
+        selectedItemId: "event-1",
+        items: [
+          {
+            id: "event-1",
+            title: "Work block",
+            startMs: new Date("2026-04-19T17:50:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T19:05:00.000Z").getTime(),
+            color: "#4285f4",
+            allDay: false,
+            hasUpcomingReminder: true,
+            upcomingReminderCount: 1,
+            nextReminderAt: "2026-04-19T17:20:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByTestId("calendar-detail-reminder-indicator").textContent).toContain("Reminder Apr 19");
+  });
+
+  it("shows selected event reminder timing in the floating detail card", () => {
+    render(
+      eventsView.renderFloatingDetail({
+        selectedItemId: "event-1",
+        items: [
+          {
+            id: "event-1",
+            title: "Work block",
+            startMs: new Date("2026-04-19T17:50:00.000Z").getTime(),
+            endMs: new Date("2026-04-19T19:05:00.000Z").getTime(),
+            color: "#4285f4",
+            allDay: false,
+            hasUpcomingReminder: true,
+            upcomingReminderCount: 2,
+            nextReminderAt: "2026-04-19T17:20:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const indicator = screen.getByTestId("calendar-detail-reminder-indicator");
+    expect(indicator.textContent).toContain("Reminder Apr 19");
+    expect(indicator.textContent).not.toContain("2 reminders");
+  });
+
   it("renders deadlines chronologically, uses End of day, and selects rows in-place", () => {
     const onSelect = vi.fn();
     const briefing = {
@@ -665,6 +716,82 @@ describe("calendar detail timeline", () => {
 
     expect(screen.getByTestId("calendar-selected-deadline-title").textContent).toContain("Ship report");
     expect(screen.getByRole("button", { name: /^complete$/i })).toBeTruthy();
+  });
+
+  it("shows selected deadline reminder timing in the detail card", () => {
+    const briefing = {
+      emails: { accounts: [] },
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          {
+            id: "todo-1",
+            title: "Ship report",
+            due_date: "2026-04-22",
+            due_time: "5:00 PM",
+            source: "todoist",
+            class_name: "Inbox",
+            status: "open",
+            hasUpcomingReminder: true,
+            upcomingReminderCount: 2,
+            nextReminderAt: "2026-04-22T23:30:00.000Z",
+          },
+        ],
+      },
+    };
+
+    render(
+      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesView.renderDetail({
+          selectedDay: 22,
+          viewYear: 2026,
+          viewMonth: 3,
+          items: briefing.todoist.upcoming,
+          selectedItemId: "todo-1",
+          onSelectItem: () => {},
+        })}
+      </DashboardProvider>,
+    );
+
+    const detailCard = screen.getByTestId("calendar-selected-deadline-card");
+    expect(screen.getByTestId("calendar-detail-reminder-indicator").textContent).toContain("Reminder");
+    expect(detailCard.textContent).toContain("Apr 22");
+  });
+
+  it("shows selected deadline reminder timing in the floating detail card", () => {
+    const briefing = {
+      emails: { accounts: [] },
+      ctm: { upcoming: [] },
+      todoist: {
+        upcoming: [
+          {
+            id: "todo-1",
+            title: "Ship report",
+            due_date: "2026-04-22",
+            due_time: "5:00 PM",
+            source: "todoist",
+            class_name: "Inbox",
+            status: "open",
+            hasUpcomingReminder: true,
+            upcomingReminderCount: 2,
+            nextReminderAt: "2026-04-22T23:30:00.000Z",
+          },
+        ],
+      },
+    };
+
+    render(
+      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesView.renderFloatingDetail({
+          items: briefing.todoist.upcoming,
+          selectedItemId: "todo-1",
+        })}
+      </DashboardProvider>,
+    );
+
+    const indicator = screen.getByTestId("calendar-detail-reminder-indicator");
+    expect(indicator.textContent).toContain("Reminder Apr 22");
+    expect(indicator.textContent).not.toContain("2 reminders");
   });
 
   it("uses the selected deadline source color for floating detail gradients", () => {

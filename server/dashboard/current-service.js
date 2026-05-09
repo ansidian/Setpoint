@@ -22,6 +22,10 @@ import { fetchTodoistDueTaskIdSet, fetchTodoistTasks, getTodoistSyncHealth } fro
 import { hydrateRecurringTombstones } from "../briefing/tombstones.js";
 import { fetchWeather } from "../briefing/weather.js";
 import {
+  listUpcomingReminderStatesForSources,
+  reminderSourceKey,
+} from "../briefing/reminder-service.js";
+import {
   CURRENT_CACHE_KEYS,
   EMPTY_DEADLINES,
   expiresAtFor,
@@ -671,11 +675,107 @@ function applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, {
   forceKeys?.add("bills_current");
 }
 
-function composeCurrentDashboardResponse(rows, {
+function emptyReminderState() {
+  return {
+    hasUpcomingReminder: false,
+    upcomingCount: 0,
+    nextReminderAt: null,
+  };
+}
+
+function eventAnchorAt(event) {
+  if (!event?.startMs) return null;
+  return new Date(event.startMs).toISOString();
+}
+
+function eventReminderSource(event) {
+  if (!event?.id) return null;
+  return {
+    sourceType: "calendar_event",
+    sourceItemId: event.id,
+    sourceOccurrenceId: event.isRecurring
+      ? event.originalStartTime || eventAnchorAt(event)
+      : null,
+  };
+}
+
+function todoistReminderSource(task) {
+  if (!task?.id) return null;
+  return {
+    sourceType: "todoist_task",
+    sourceItemId: String(task.id),
+    sourceOccurrenceId: null,
+  };
+}
+
+function applyUpcomingReminderState(item, state = emptyReminderState()) {
+  return {
+    ...item,
+    reminderState: state,
+    hasUpcomingReminder: state.hasUpcomingReminder,
+    upcomingReminderCount: state.upcomingCount,
+    nextReminderAt: state.nextReminderAt,
+  };
+}
+
+async function hydrateCurrentReminderState(userId, {
+  calendar,
+  deadlines,
+}, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const calendarItems = Array.isArray(calendar) ? calendar : [];
+  const deadlinePayload = deadlines || EMPTY_DEADLINES;
+  const todoistItems = Array.isArray(deadlinePayload?.todoist?.upcoming)
+    ? deadlinePayload.todoist.upcoming
+    : [];
+  const calendarSources = calendarItems.map(eventReminderSource);
+  const todoistSources = todoistItems.map(todoistReminderSource);
+  const sources = [...calendarSources, ...todoistSources].filter(Boolean);
+
+  if (!sources.length) {
+    return { calendar, deadlines };
+  }
+
+  let stateByKey;
+  try {
+    stateByKey = await listUpcomingReminderStatesForSources({
+      userId,
+      sources,
+      now,
+    }, { dbClient });
+  } catch (err) {
+    console.error("[Dashboard] reminder state hydration failed:", err.message);
+    return { calendar, deadlines };
+  }
+
+  const hydrateItem = (item, source) => {
+    const state = source
+      ? stateByKey.get(reminderSourceKey(source)) || emptyReminderState()
+      : emptyReminderState();
+    return applyUpcomingReminderState(item, state);
+  };
+
+  return {
+    calendar: calendarItems.map((item, index) => hydrateItem(item, calendarSources[index])),
+    deadlines: {
+      ...deadlinePayload,
+      todoist: {
+        ...(deadlinePayload?.todoist || EMPTY_DEADLINES.todoist),
+        upcoming: todoistItems.map((item, index) => hydrateItem(item, todoistSources[index])),
+      },
+    },
+  };
+}
+
+async function composeCurrentDashboardResponse(userId, rows, {
   activeSnapshot,
   activeSnapshotHealth = null,
   providerHealth,
   refresh = { mode: "passive", scheduled: [], skipped: [] },
+  dbClient = db,
+  now = new Date(),
 } = {}) {
   const billsPayload = parsePayload(rows.bills_current, {
     bills: [],
@@ -688,11 +788,15 @@ function composeCurrentDashboardResponse(rows, {
   const nextProviderHealth = { ...providerHealth };
   if (activeSnapshotHealth) nextProviderHealth.activeSnapshot = activeSnapshotHealth;
   const fetchedAt = new Date().toISOString();
+  const hydratedReminderPayloads = await hydrateCurrentReminderState(userId, {
+    calendar: parsePayload(rows.calendar_current, []),
+    deadlines: parsePayload(rows.deadlines_current, EMPTY_DEADLINES),
+  }, { dbClient, now });
 
   return {
     weather: parsePayload(rows.weather_current, null),
-    calendar: parsePayload(rows.calendar_current, []),
-    deadlines: parsePayload(rows.deadlines_current, EMPTY_DEADLINES),
+    calendar: hydratedReminderPayloads.calendar,
+    deadlines: hydratedReminderPayloads.deadlines,
     bills: billsPayload.bills || [],
     allSchedules: billsPayload.allSchedules || [],
     payeeMap: billsPayload.payeeMap || {},
@@ -726,10 +830,12 @@ export async function getCurrentDashboard(userId, {
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
   scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
-  return composeCurrentDashboardResponse(rows, {
+  return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
     providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
     refresh: { mode: "passive", ...refreshPlan },
+    dbClient,
+    now,
   });
 }
 
@@ -753,7 +859,7 @@ export async function syncCurrentDashboard(userId, {
   if (timer) clearTimeout(timer);
 
   const activeSnapshot = snapshotResult.value || await getActiveSnapshotView(userId);
-  return composeCurrentDashboardResponse(rows, {
+  return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot,
     providerHealth: await loadProviderHealth(userId, rows, { now }),
     refresh: { mode: "force", ...refreshPlan },
@@ -763,6 +869,8 @@ export async function syncCurrentDashboard(userId, {
       timeoutMs: snapshotResult.reason === "timeout" ? timeoutMs : null,
       errorMessage: snapshotResult.error?.message || null,
     },
+    dbClient,
+    now,
   });
 }
 
@@ -800,7 +908,7 @@ export async function requestCurrentDashboardRefresh(userId, {
       : refreshPlan.scheduled,
     skipped: refreshPlan.skipped,
   };
-  return composeCurrentDashboardResponse(rows, {
+  return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
     providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
     refresh,
@@ -810,6 +918,8 @@ export async function requestCurrentDashboardRefresh(userId, {
       timeoutMs: null,
       errorMessage: null,
     },
+    dbClient,
+    now,
   });
 }
 

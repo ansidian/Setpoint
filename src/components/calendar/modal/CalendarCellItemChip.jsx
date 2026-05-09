@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { compactLeadingLabel } from "./CalendarCellItemChipModel.js";
+import { hasUpcomingReminder } from "../reminderDisplay.js";
 
 function chipStyle({
   item,
@@ -22,6 +23,7 @@ function chipStyle({
   const radius = isLarge ? 10 : isMedium ? 9 : 8;
 
   return {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
@@ -64,6 +66,27 @@ function chipStyle({
     fontFamily: "inherit",
     textAlign: "left",
   };
+}
+
+export function CalendarChipReminderMarker({ item }) {
+  if (!hasUpcomingReminder(item)) return null;
+  return (
+    <span
+      data-calendar-chip-reminder-marker="true"
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: 4,
+        right: 5,
+        width: 5,
+        height: 5,
+        borderRadius: 999,
+        background: "#f9e2af",
+        boxShadow: "0 0 0 2px rgba(249,226,175,0.12)",
+        pointerEvents: "none",
+      }}
+    />
+  );
 }
 
 function metadataFontSize(metrics) {
@@ -366,13 +389,14 @@ export function ItemChip({
           metrics,
         })}
       >
-        <ChipContent
-          item={item}
-          selected={false}
-          metrics={metrics}
-          leadingColumnWidth={leadingColumnWidth}
-        />
-      </div>
+      <ChipContent
+        item={item}
+        selected={false}
+        metrics={metrics}
+        leadingColumnWidth={leadingColumnWidth}
+      />
+      <CalendarChipReminderMarker item={item} />
+    </div>
     );
   }
 
@@ -456,6 +480,7 @@ export function ItemChip({
         metrics={metrics}
         leadingColumnWidth={leadingColumnWidth}
       />
+      <CalendarChipReminderMarker item={item} />
     </button>
   );
 }

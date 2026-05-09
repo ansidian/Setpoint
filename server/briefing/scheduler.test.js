@@ -19,6 +19,9 @@ const triageWorkerApi = vi.hoisted(() => ({
 const embeddingWorkerApi = vi.hoisted(() => ({
   processEmailSearchEmbeddingBatchesForAllUsers: vi.fn(),
 }));
+const reminderSchedulerApi = vi.hoisted(() => ({
+  processDueReminderBatch: vi.fn(),
+}));
 
 vi.mock("node-cron", () => ({ default: cronApi }));
 vi.mock("../db/connection.js", () => ({ default: mockDb }));
@@ -29,13 +32,82 @@ vi.mock("./email-index.js", () => ({ indexEmails: vi.fn() }));
 vi.mock("./gmail-sync.js", () => gmailSyncApi);
 vi.mock("./triage-worker.js", () => triageWorkerApi);
 vi.mock("./email-search-embedding-worker.js", () => embeddingWorkerApi);
+vi.mock("./reminder-scheduler.js", () => reminderSchedulerApi);
 
-const { initScheduler, runEmailSearchEmbeddingWorker, runEmailTriageWorker } = await import("./scheduler.js");
+const {
+  initScheduler,
+  runEmailSearchEmbeddingWorker,
+  runEmailTriageWorker,
+  runReminderSchedulerWorker,
+  startReminderSchedulerWorker,
+} = await import("./scheduler.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
   cronApi.schedule.mockImplementation(() => ({ stop: vi.fn() }));
   triageWorkerApi.recoverStaleRunningTriageJobs.mockResolvedValue({ recovered: 0 });
+});
+
+describe("reminder scheduler worker", () => {
+  it("runs through the shared scheduler module and logs aggregate reminder counts", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    reminderSchedulerApi.processDueReminderBatch.mockResolvedValueOnce({
+      processed: 3,
+      sent: 1,
+      missed: 1,
+      failed: 1,
+    });
+
+    await runReminderSchedulerWorker();
+
+    expect(reminderSchedulerApi.processDueReminderBatch).toHaveBeenCalledTimes(1);
+    expect(logSpy).toHaveBeenCalledWith(
+      "[Reminder Scheduler] Processed 3 reminder(s): 1 sent, 1 missed, 1 failed",
+    );
+    expect(errorSpy).not.toHaveBeenCalled();
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it("keeps reminder processing single-flight", async () => {
+    let resolveBatch;
+    const batch = new Promise((resolve) => {
+      resolveBatch = resolve;
+    });
+    reminderSchedulerApi.processDueReminderBatch.mockReturnValueOnce(batch);
+
+    const first = runReminderSchedulerWorker();
+    const second = runReminderSchedulerWorker();
+
+    expect(reminderSchedulerApi.processDueReminderBatch).toHaveBeenCalledTimes(1);
+    resolveBatch({ processed: 0, sent: 0, missed: 0, failed: 0 });
+    await Promise.all([first, second]);
+  });
+
+  it("schedules the reminder worker on a 10-second interval", async () => {
+    vi.useFakeTimers();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    reminderSchedulerApi.processDueReminderBatch.mockResolvedValue({
+      processed: 0,
+      sent: 0,
+      missed: 0,
+      failed: 0,
+    });
+
+    startReminderSchedulerWorker();
+
+    expect(cronApi.schedule).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith("[Reminder Scheduler] Worker scheduled (10000ms interval)");
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(reminderSchedulerApi.processDueReminderBatch).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(reminderSchedulerApi.processDueReminderBatch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(reminderSchedulerApi.processDueReminderBatch).toHaveBeenCalledTimes(2);
+    logSpy.mockRestore();
+    vi.useRealTimers();
+  });
 });
 
 describe("initScheduler", () => {

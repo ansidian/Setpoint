@@ -4,6 +4,11 @@ import {
   fetchTodoistSyncResources,
   TODOIST_MIRROR_RESOURCE_TYPES,
 } from "./todoist-api.js";
+import {
+  deleteSourceReminders,
+  recomputeUnsentRemindersForSource,
+} from "./reminder-service.js";
+import { todoistReminderAnchorFromTask } from "./todoist-reminder-source.js";
 import { getTodoistApiToken } from "./todoist-token.js";
 
 const HEALTH_DEGRADED_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -18,6 +23,10 @@ function boolInt(value) {
 
 function normalizeId(value) {
   return value == null ? null : String(value);
+}
+
+function anchorsEqual(left, right) {
+  return left?.anchorKind === right?.anchorKind && left?.anchorAt === right?.anchorAt;
 }
 
 function dueDate(due) {
@@ -70,6 +79,69 @@ async function loadSyncState(userId, dbClient) {
     args: [userId],
   });
   return result.rows[0] || null;
+}
+
+async function loadExistingReminderRows(userId, items, dbClient) {
+  const ids = [...new Set((items || []).map((item) => normalizeId(item.id)).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = await dbClient.execute({
+    sql: `SELECT item_id, checked, is_deleted, due_date, due_datetime, due_timezone
+          FROM ea_todoist_items
+          WHERE user_id = ? AND item_id IN (${placeholders})`,
+    args: [userId, ...ids],
+  });
+  return new Map(result.rows.map((row) => [String(row.item_id), row]));
+}
+
+async function reconcileTodoistReminderRows(userId, items, previousRows, dbClient) {
+  for (const item of items || []) {
+    const sourceItemId = normalizeId(item.id);
+    if (!sourceItemId) continue;
+
+    if (item.is_deleted) {
+      await deleteSourceReminders({
+        userId,
+        sourceType: "todoist_task",
+        sourceItemId,
+      }, { dbClient });
+      continue;
+    }
+
+    if (item.checked) {
+      await deleteSourceReminders({
+        userId,
+        sourceType: "todoist_task",
+        sourceItemId,
+        unsentOnly: true,
+      }, { dbClient });
+      continue;
+    }
+
+    const nextAnchor = todoistReminderAnchorFromTask(item);
+    if (!nextAnchor?.anchorAt) {
+      await deleteSourceReminders({
+        userId,
+        sourceType: "todoist_task",
+        sourceItemId,
+        unsentOnly: true,
+      }, { dbClient });
+      continue;
+    }
+
+    const previousRow = previousRows.get(sourceItemId);
+    if (!previousRow) continue;
+    const previousAnchor = todoistReminderAnchorFromTask(previousRow);
+    if (anchorsEqual(previousAnchor, nextAnchor)) continue;
+
+    await recomputeUnsentRemindersForSource({
+      userId,
+      sourceType: "todoist_task",
+      sourceItemId,
+      anchorKind: nextAnchor.anchorKind,
+      anchorAt: nextAnchor.anchorAt,
+    }, { dbClient });
+  }
 }
 
 export async function recordTodoistSyncRequest(userId, {
@@ -498,6 +570,7 @@ async function applySyncResponse(userId, response, {
   timestamp,
   isFullSync,
 }) {
+  const previousRows = await loadExistingReminderRows(userId, response.items || [], dbClient);
   const statements = [];
   if (isFullSync) statements.push(...fullSyncTombstoneStatements(userId, timestamp));
   statements.push(...(response.items || []).map((item) => itemStatement(userId, item, timestamp)));
@@ -505,6 +578,7 @@ async function applySyncResponse(userId, response, {
   statements.push(...(response.labels || []).map((label) => labelStatement(userId, label, timestamp)));
   statements.push(stateSuccessStatement(userId, response, timestamp, isFullSync));
   await dbClient.batch(statements);
+  await reconcileTodoistReminderRows(userId, response.items || [], previousRows, dbClient);
 }
 
 export async function syncTodoistMirror(userId, {

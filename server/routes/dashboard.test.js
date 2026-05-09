@@ -149,6 +149,27 @@ async function createMigratedDb() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, cache_key)
     );
+
+    CREATE TABLE ea_reminders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_account_id TEXT,
+      source_calendar_id TEXT,
+      source_item_id TEXT NOT NULL,
+      source_occurrence_id TEXT,
+      anchor_kind TEXT NOT NULL,
+      anchor_at TEXT NOT NULL,
+      offset_minutes INTEGER NOT NULL,
+      remind_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      retry_after TEXT,
+      payload_snapshot_json TEXT,
+      sent_at TEXT,
+      missed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
@@ -339,6 +360,108 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.readBillsMirrorCurrent).not.toHaveBeenCalled();
     expect(testState.getActiveSnapshotView).toHaveBeenCalledWith("u1");
     expect(testState.getTodoistSyncHealth).toHaveBeenCalledWith("u1");
+  });
+
+  it("hydrates reminder indicators onto fresh cached dashboard items", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", [
+      {
+        id: "event-1",
+        title: "Focus",
+        startMs: new Date("2099-05-10T17:00:00.000Z").getTime(),
+      },
+    ]);
+    await seedCache("deadlines_current", {
+      ctm: { upcoming: [], stats: { total: 0 } },
+      todoist: {
+        upcoming: [{ id: "todo-1", title: "Submit form", source: "todoist" }],
+        stats: { total: 1 },
+      },
+    });
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+    await testState.db.current.batch([
+      {
+        sql: `INSERT INTO ea_reminders
+                (id, user_id, source_type, source_item_id, anchor_kind, anchor_at, offset_minutes, remind_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          "event-reminder",
+          "u1",
+          "calendar_event",
+          "event-1",
+          "event_start",
+          "2099-05-10T17:00:00.000Z",
+          -30,
+          "2099-05-10T16:30:00.000Z",
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_reminders
+                (id, user_id, source_type, source_item_id, anchor_kind, anchor_at, offset_minutes, remind_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          "task-reminder-later",
+          "u1",
+          "todoist_task",
+          "todo-1",
+          "todoist_due_datetime",
+          "2099-05-10T17:00:00.000Z",
+          -10,
+          "2099-05-10T16:50:00.000Z",
+        ],
+      },
+      {
+        sql: `INSERT INTO ea_reminders
+                (id, user_id, source_type, source_item_id, anchor_kind, anchor_at, offset_minutes, remind_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          "task-reminder-earliest",
+          "u1",
+          "todoist_task",
+          "todo-1",
+          "todoist_due_datetime",
+          "2099-05-10T17:00:00.000Z",
+          -60,
+          "2099-05-10T16:00:00.000Z",
+        ],
+      },
+    ]);
+
+    const res = await request(makeApp())
+      .get("/api/dashboard/current")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.calendar[0]).toMatchObject({
+      id: "event-1",
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 1,
+      nextReminderAt: "2099-05-10T16:30:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingCount: 1,
+        nextReminderAt: "2099-05-10T16:30:00.000Z",
+      },
+    });
+    expect(res.body.deadlines.todoist.upcoming[0]).toMatchObject({
+      id: "todo-1",
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 2,
+      nextReminderAt: "2099-05-10T16:00:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingCount: 2,
+        nextReminderAt: "2099-05-10T16:00:00.000Z",
+      },
+    });
+    expect(testState.fetchCalendar).not.toHaveBeenCalled();
+    expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
   });
 
   it("schedules a quiet Bills mirror maintenance refresh when the mirror success is old", async () => {
@@ -1039,7 +1162,14 @@ describe("GET /api/dashboard/current", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.weather).toBeNull();
-    expect(res.body.calendar).toEqual([{ id: "event-ok" }]);
+    expect(res.body.calendar).toEqual([
+      expect.objectContaining({
+        id: "event-ok",
+        hasUpcomingReminder: false,
+        upcomingReminderCount: 0,
+        nextReminderAt: null,
+      }),
+    ]);
     expect(res.body.providerHealth.currentData.state).toBe("unavailable");
     expect(res.body.providerHealth.currentData.sources).toEqual(
       expect.arrayContaining([

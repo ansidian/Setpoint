@@ -7,6 +7,54 @@ afterEach(() => {
 });
 
 describe("EventsAgendaDeadlineRow", () => {
+  it("shows reminder timing only for deadline overlay rows with upcoming reminders", () => {
+    render(
+      <>
+        <EventsAgendaDeadlineRow
+          deadline={{
+            id: "todo-reminder",
+            agendaItemId: "todoist:todo-reminder",
+            agendaTitle: "Prep packet",
+            agendaSubtitle: "Todoist",
+            agendaTimeRange: "Todoist",
+            agendaSourceColor: "#e8776a",
+            agendaStatus: "Incomplete",
+            hasUpcomingReminder: true,
+            upcomingReminderCount: 1,
+            nextReminderAt: "2026-05-12T15:30:00.000Z",
+          }}
+          dateKey="2026-05-12"
+          selected={false}
+          registerRow={() => {}}
+          onSelect={() => {}}
+        />
+        <EventsAgendaDeadlineRow
+          deadline={{
+            id: "todo-fired",
+            agendaItemId: "todoist:todo-fired",
+            agendaTitle: "Already pinged",
+            agendaSubtitle: "Todoist",
+            agendaTimeRange: "Todoist",
+            agendaSourceColor: "#e8776a",
+            agendaStatus: "Incomplete",
+            hasUpcomingReminder: false,
+            upcomingReminderCount: 0,
+            nextReminderAt: null,
+          }}
+          dateKey="2026-05-12"
+          selected={false}
+          registerRow={() => {}}
+          onSelect={() => {}}
+        />
+      </>,
+    );
+
+    const indicator = screen.getByTestId("calendar-agenda-reminder-label");
+    expect(indicator.textContent).toContain("Reminder");
+    expect(indicator.textContent).toContain("May 12");
+    expect(screen.getByText("Already pinged").closest("button")?.textContent).not.toContain("Reminder");
+  });
+
   it("renders in-progress and completed deadline status without tooltip chrome", () => {
     const registerRow = vi.fn();
     const onSelect = vi.fn();

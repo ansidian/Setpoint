@@ -11,6 +11,7 @@ import {
 } from "./gmail-sync.js";
 import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email-search-embedding-worker.js";
+import { processDueReminderBatch } from "./reminder-scheduler.js";
 
 const activeJobs = [];
 // Background indexer state lives outside activeJobs so initScheduler's re-runs
@@ -24,6 +25,8 @@ let emailTriageJob = null;
 let emailTriageInFlight = false;
 let emailSearchEmbeddingJob = null;
 let emailSearchEmbeddingInFlight = false;
+let reminderSchedulerTimer = null;
+let reminderSchedulerInFlight = false;
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
 const INDEXER_LOOKBACK_HOURS = 2;
@@ -32,6 +35,7 @@ const GMAIL_WATCH_RENEWAL_CRON = "17 3 * * *";
 const GMAIL_HISTORY_SYNC_CRON = "* * * * *";
 const EMAIL_TRIAGE_CRON = "* * * * *";
 const EMAIL_SEARCH_EMBEDDING_CRON = "*/5 * * * *";
+const REMINDER_SCHEDULER_INTERVAL_MS = 10_000;
 const EMAIL_SEARCH_EMBEDDINGS_DISABLED = process.env.EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED === "1";
 
 export async function initScheduler() {
@@ -281,4 +285,36 @@ export function startBackgroundIndexer() {
       console.error("[Email Search Embeddings] Initial worker failed:", err.message),
     );
   }, 15000);
+}
+
+export async function runReminderSchedulerWorker() {
+  if (reminderSchedulerInFlight) return;
+  reminderSchedulerInFlight = true;
+  try {
+    const result = await processDueReminderBatch();
+    if (result.processed) {
+      console.log(
+        `[Reminder Scheduler] Processed ${result.processed} reminder(s): ${result.sent} sent, ${result.missed} missed, ${result.failed} failed`,
+      );
+    }
+  } catch (err) {
+    console.error("[Reminder Scheduler] Worker failed:", err.message);
+  } finally {
+    reminderSchedulerInFlight = false;
+  }
+}
+
+export function startReminderSchedulerWorker() {
+  if (reminderSchedulerTimer) {
+    clearInterval(reminderSchedulerTimer);
+    reminderSchedulerTimer = null;
+  }
+  reminderSchedulerTimer = setInterval(runReminderSchedulerWorker, REMINDER_SCHEDULER_INTERVAL_MS);
+  reminderSchedulerTimer.unref?.();
+  console.log(`[Reminder Scheduler] Worker scheduled (${REMINDER_SCHEDULER_INTERVAL_MS}ms interval)`);
+  setTimeout(() => {
+    runReminderSchedulerWorker().catch((err) =>
+      console.error("[Reminder Scheduler] Initial worker failed:", err.message),
+    );
+  }, 2000);
 }

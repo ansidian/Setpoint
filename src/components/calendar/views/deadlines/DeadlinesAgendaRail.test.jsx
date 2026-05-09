@@ -21,6 +21,9 @@ function renderRail(props = {}) {
           project_name: "Ops",
           status: "open",
           is_recurring: true,
+          hasUpcomingReminder: true,
+          upcomingReminderCount: 2,
+          nextReminderAt: "2026-05-09T15:30:00.000Z",
         },
         {
           id: "repeat-1",
@@ -103,6 +106,13 @@ describe("DeadlinesAgendaRail", () => {
     fireEvent.click(toggle);
     expect(screen.getByText("Completed review")).toBeTruthy();
     expect(screen.getAllByTestId("calendar-agenda-deadline-row")).toHaveLength(3);
+  });
+
+  it("shows compact reminder timing in deadline agenda rows", () => {
+    renderRail();
+
+    expect(screen.getByTestId("calendar-agenda-reminder-label").textContent).toContain("Reminder");
+    expect(screen.getByTestId("calendar-agenda-reminder-label").textContent).toContain("May 9");
   });
 
   it("notifies when hiding completed deadlines removes the selected row", () => {

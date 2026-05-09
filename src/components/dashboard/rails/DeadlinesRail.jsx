@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Bell } from "lucide-react";
 import { daysUntil } from "../../../lib/bill-utils";
 import { formatFullDate } from "../../../lib/dashboard-helpers";
+import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 import { Skeleton } from "@/components/ui/skeleton";
 import Tooltip from "../../shared/Tooltip";
 import {
@@ -154,6 +155,7 @@ function DeadlineGroup({ label, items, accent, onJump, isMobile, tone, completed
 function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed }) {
   const isTodoist = d.source === "todoist";
   const showPriority = isTodoist && PRIORITY_COLOR[d.priority];
+  const reminderSummary = formatReminderSummary(d);
 
   return (
     <div
@@ -222,6 +224,34 @@ function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed })
         >
           {d.class_name || d.source}
         </div>
+        {reminderSummary ? (
+          <div
+            data-testid="dashboard-reminder-indicator"
+            aria-label={reminderSummary}
+            title={reminderSummary}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              maxWidth: "100%",
+              marginTop: 5,
+              padding: "2px 6px",
+              borderRadius: 999,
+              border: "1px solid rgba(249,226,175,0.28)",
+              background: "rgba(249,226,175,0.10)",
+              color: "#f9e2af",
+              fontSize: 10,
+              fontWeight: 650,
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Bell size={11} aria-hidden />
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {reminderSummary}
+            </span>
+          </div>
+        ) : null}
         {isMobile && (
           <div
             style={{

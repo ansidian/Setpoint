@@ -138,4 +138,35 @@ describe("database migrations", () => {
     expect(columnByName.get("schedules_json").notnull).toBe(1);
     expect(columnByName.get("recent_transactions_json").notnull).toBe(1);
   });
+
+  it("adds encrypted Discord settings and polymorphic reminder storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "010_discord_reminders.sql",
+    ]);
+
+    const settingsColumns = await db.execute("PRAGMA table_info('ea_settings')");
+    const settingsByName = new Map(settingsColumns.rows.map((row) => [row.name, row]));
+    expect(settingsByName.get("discord_webhook_url_encrypted").type).toBe("TEXT");
+    expect(settingsByName.get("discord_user_id").type).toBe("TEXT");
+
+    const reminderColumns = await db.execute("PRAGMA table_info('ea_reminders')");
+    const reminderByName = new Map(reminderColumns.rows.map((row) => [row.name, row]));
+    expect(reminderByName.get("id").pk).toBe(1);
+    expect(reminderByName.get("user_id").notnull).toBe(1);
+    expect(reminderByName.get("source_type").notnull).toBe(1);
+    expect(reminderByName.get("source_item_id").notnull).toBe(1);
+    expect(reminderByName.get("anchor_kind").notnull).toBe(1);
+    expect(reminderByName.get("offset_minutes").notnull).toBe(1);
+    expect(reminderByName.get("remind_at").notnull).toBe(1);
+    expect(reminderByName.get("retry_count").dflt_value).toBe("0");
+
+    const dueIndex = await db.execute("PRAGMA index_info('idx_ea_reminders_due')");
+    expect(dueIndex.rows.map((row) => row.name)).toEqual([
+      "status",
+      "remind_at",
+      "retry_after",
+    ]);
+  });
 });

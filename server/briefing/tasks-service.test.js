@@ -26,15 +26,21 @@ vi.mock("./todoist.js", () => ({
 vi.mock("./ctm.js", () => ({
   updateCTMEventStatus: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("./reminder-service.js", () => ({
+  deleteSourceReminders: vi.fn(),
+  recomputeUnsentRemindersForSource: vi.fn(),
+}));
 
 const todoist = await import("./todoist.js");
 const ctm = await import("./ctm.js");
-const { completeTask, updateCTMStatus } = await import("./tasks-service.js");
+const reminderService = await import("./reminder-service.js");
+const { completeTask, deleteTask, updateCTMStatus, updateTask } = await import("./tasks-service.js");
 
 beforeEach(async () => {
   testState.db.current = await createCompletedTasksTestDb();
   Object.values(todoist).forEach((fn) => fn.mockReset?.());
   ctm.updateCTMEventStatus.mockClear();
+  Object.values(reminderService).forEach((fn) => fn.mockReset?.());
   todoist.fetchTodoistTasksAll.mockResolvedValue([]);
 });
 
@@ -99,6 +105,21 @@ describe("completeTask", () => {
     expect(snapshot._completing).toBeUndefined();
   });
 
+  it("deletes unsent reminders after completing a Todoist task", async () => {
+    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([
+      { id: "td-1", title: "One off", due_date: "2026-04-18", source: "todoist" },
+    ]);
+
+    await completeTask("u1", "td-1");
+
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-1",
+      unsentOnly: true,
+    });
+  });
+
   it("updates CTM status without closing or tombstoning a Todoist task", async () => {
     await updateCTMStatus("u1", "42", "complete");
 
@@ -127,5 +148,78 @@ describe("completeTask", () => {
     // No live row → no Todoist close call
     expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
+  });
+});
+
+describe("updateTask", () => {
+  it("recomputes unsent Todoist reminders when the due date changes through EA", async () => {
+    todoist.updateTodoistTask.mockResolvedValueOnce({
+      id: "td-1",
+      title: "Follow up",
+      due_date: "2026-05-12",
+      due_time: "10:00 AM",
+      class_name: "Inbox",
+    });
+
+    const task = await updateTask("u1", "td-1", { due_string: "2026-05-12 at 10:00 AM" });
+
+    expect(task.id).toBe("td-1");
+    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-1",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-12T17:00:00.000Z",
+    });
+  });
+
+  it("deletes unsent reminders when the task no longer has a due anchor", async () => {
+    todoist.updateTodoistTask.mockResolvedValueOnce({
+      id: "td-1",
+      title: "Follow up",
+      due_date: null,
+      due_time: null,
+    });
+
+    await updateTask("u1", "td-1", { due_string: "" });
+
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-1",
+      unsentOnly: true,
+    });
+  });
+
+  it("anchors date-only Todoist reminders at 9 AM Pacific", async () => {
+    todoist.updateTodoistTask.mockResolvedValueOnce({
+      id: "td-1",
+      title: "Follow up",
+      due_date: "2026-05-12",
+      due_time: null,
+    });
+
+    await updateTask("u1", "td-1", { due_string: "2026-05-12" });
+
+    expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-1",
+      anchorKind: "todoist_date_9am_pacific",
+      anchorAt: "2026-05-12T16:00:00.000Z",
+    });
+  });
+});
+
+describe("deleteTask", () => {
+  it("deletes local reminders when deleting a Todoist task through EA", async () => {
+    await deleteTask("u1", "td-1");
+
+    expect(todoist.deleteTodoistTask).toHaveBeenCalledWith("u1", "td-1");
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-1",
+    });
   });
 });
