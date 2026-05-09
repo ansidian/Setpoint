@@ -105,6 +105,36 @@ function parseLabeledAmount(text, labels) {
   return null;
 }
 
+function toIsoDate(month, day, year) {
+  const numericMonth = Number(month);
+  const numericDay = Number(day);
+  const numericYear = Number(year);
+  if (!Number.isInteger(numericMonth) || !Number.isInteger(numericDay) || !Number.isInteger(numericYear)) {
+    return null;
+  }
+  if (numericMonth < 1 || numericMonth > 12 || numericDay < 1 || numericDay > 31 || numericYear < 1900) {
+    return null;
+  }
+  return [
+    String(numericYear).padStart(4, "0"),
+    String(numericMonth).padStart(2, "0"),
+    String(numericDay).padStart(2, "0"),
+  ].join("-");
+}
+
+function parseLabeledDate(text) {
+  const source = String(text || "");
+  const labels = ["payment due date", "due date", "transaction date", "date"];
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    const re = new RegExp(`${escaped}\\s*(?:is|of)?\\s*[:\\-]?\\s*\\n?\\s*(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})`, "i");
+    const match = source.match(re);
+    const date = match ? toIsoDate(match[1], match[2], match[3]) : null;
+    if (date) return date;
+  }
+  return null;
+}
+
 function amountFromStrategy(strategy, context) {
   if (strategy === "none") return { amount: null, source: "none" };
   if (strategy === "model_amount" || !strategy) {
@@ -114,7 +144,7 @@ function amountFromStrategy(strategy, context) {
   const labelsByStrategy = {
     statement_balance: ["statement balance"],
     minimum_due: ["minimum due", "minimum payment"],
-    amount_due: ["amount due", "total due", "payment due"],
+    amount_due: ["amount due", "total due", "payment due", "amount"],
   };
   const amount = parseLabeledAmount(text, labelsByStrategy[strategy] || []);
   if (amount != null) return { amount, source: strategy };
@@ -201,6 +231,12 @@ function applyTargets(bill, behavior, metadata) {
   return next;
 }
 
+function applyPastedTextDate(bill, context) {
+  if (bill.due_date) return bill;
+  const dueDate = parseLabeledDate(`${context.subject}\n${context.body}`);
+  return dueDate ? { ...bill, due_date: dueDate } : bill;
+}
+
 function resolveAmount({ behavior, context, source }) {
   const strategy = behavior.amountStrategy || "model_amount";
   const resolved = amountFromStrategy(strategy, context);
@@ -265,10 +301,10 @@ export function resolveBillPayMapping({
 
       const amount = resolveAmount({ behavior, context, source });
       return {
-        bill: {
+        bill: applyPastedTextDate({
           ...applyTargets(baseBill, behavior, metadata),
           amount: amount.amount,
-        },
+        }, context),
         mapping: {
           status: "matched",
           ...commonMapping,

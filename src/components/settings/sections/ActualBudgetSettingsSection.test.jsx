@@ -83,7 +83,14 @@ beforeEach(() => {
   mockApi.testActualBudget.mockResolvedValue({ success: true });
   mockApi.updateSettings.mockResolvedValue({ success: true });
   mockApi.resolveBillPayMappingSample.mockResolvedValue({
-    bill: { payee: "Citi", amount: 25, due_date: "2026-05-15", type: "expense" },
+    bill: {
+      payee: "Citi",
+      amount: 25,
+      due_date: "2026-05-15",
+      type: "expense",
+      account_label: "Visa",
+      category_label: "Gas",
+    },
     mapping: {
       status: "matched",
       profileId: "profile-citi",
@@ -201,6 +208,41 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.getByText("Payee missing: Old Payee")).toBeTruthy();
   });
 
+  it("collapses and expands mapping profiles", async () => {
+    renderSection({
+      initialSettings: {
+        bill_pay_mappings: {
+          version: 1,
+          profiles: [{
+            id: "profile-1",
+            name: "Citi",
+            enabled: true,
+            identity: { domain: ["citi.com"] },
+            behaviors: [{
+              id: "behavior-1",
+              name: "Transaction",
+              enabled: true,
+              type: "expense",
+              intent: { subject: ["transaction"] },
+              targets: { payee_id: "payee-citi", payee_label: "Citi" },
+            }],
+          }],
+        },
+      },
+    });
+
+    expect(await screen.findByText("citi.com")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse profile 1" }));
+
+    expect(screen.queryByText("citi.com")).toBeNull();
+    expect(screen.getByText("1 behavior")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand profile 1" }));
+
+    expect(await screen.findByText("citi.com")).toBeTruthy();
+  });
+
   it("submits pasted mapping samples and renders diagnostics", async () => {
     const mappings = {
       version: 1,
@@ -245,9 +287,9 @@ describe("ActualBudgetSettingsSection", () => {
           body: "Minimum due: $25",
           snippet: "Minimum due: $25",
         },
-        candidate: null,
       }));
     });
+    expect(mockApi.resolveBillPayMappingSample.mock.calls[0][0]).not.toHaveProperty("candidate");
     const submitted = mockApi.resolveBillPayMappingSample.mock.calls[0][0];
     expect(submitted.mappings.profiles[0]).toMatchObject({
       id: "profile-citi",
@@ -262,5 +304,8 @@ describe("ActualBudgetSettingsSection", () => {
     expect(screen.getByText("Behavior minimum-due")).toBeTruthy();
     expect(screen.getByText("Amount minimum_due")).toBeTruthy();
     expect(screen.getByText("Identity matches: profile-citi")).toBeTruthy();
+    expect(screen.getByText("Gas")).toBeTruthy();
+    expect(screen.queryByText("From account")).toBeNull();
+    expect(screen.queryByText("To account")).toBeNull();
   });
 });
