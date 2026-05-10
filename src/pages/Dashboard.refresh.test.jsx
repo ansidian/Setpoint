@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   dashboardEventHandler: null,
   handleDashboardEvent: vi.fn(),
   handleCalendarSnapshot: vi.fn(),
+  handleActiveSnapshot: vi.fn(),
   handleTaskCompleted: vi.fn(),
   briefing: null,
   liveData: null,
@@ -94,6 +95,7 @@ vi.mock("../hooks/useTriageNotificationSounds", () => ({
   default: () => ({
     handleDashboardEvent: mocks.handleDashboardEvent,
     handleCalendarSnapshot: mocks.handleCalendarSnapshot,
+    handleActiveSnapshot: mocks.handleActiveSnapshot,
     handleTaskCompleted: mocks.handleTaskCompleted,
   }),
 }));
@@ -136,6 +138,7 @@ describe("Dashboard refresh wiring", () => {
     mocks.dashboardEventHandler = null;
     mocks.handleDashboardEvent.mockReset();
     mocks.handleCalendarSnapshot.mockReset();
+    mocks.handleActiveSnapshot.mockReset();
     mocks.handleTaskCompleted.mockReset();
     mocks.briefing = null;
     mocks.liveData = null;

@@ -297,6 +297,33 @@ function promoteNoiseForInterest(result, matchedInterest) {
   };
 }
 
+function resultForSenderInterest(matchedInterest) {
+  return {
+    action: "finalize",
+    lane: "fyi",
+    category: "updates",
+    urgency: "normal",
+    escalation_badge: null,
+    summary: `Matched email interest: ${matchedInterest}.`,
+    decisionAction: "Review when convenient",
+    deadline_at: null,
+    modelTier: null,
+    reasonCode: "email_interest_sender_fyi",
+    sensitivity: "normal",
+    confidence: 0.88,
+    riskOverride: false,
+    matchedRuleKey: null,
+    ruleId: null,
+    modelSaved: true,
+    audit: false,
+    riskReason: null,
+    matchedTextScope: "sender",
+    matchedInterest,
+    interestPromotion: null,
+    metadata: null,
+  };
+}
+
 function metadataForRule(match, parts) {
   const metadata = match.metadata && typeof match.metadata === "object" ? { ...match.metadata } : {};
   if (metadata.finance_candidate) {
@@ -383,6 +410,11 @@ export function evaluateTriagePreflight(email, {
       };
     }
     return promoteNoiseForInterest(result, senderScopedInterestMatch(email, emailInterests, parts));
+  }
+
+  const matchedInterest = senderScopedInterestMatch(email, emailInterests, parts);
+  if (matchedInterest) {
+    return resultForSenderInterest(matchedInterest);
   }
 
   return {

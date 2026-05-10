@@ -15,6 +15,12 @@ const DEDUPE_STORAGE_KEY = "ea_triage_sound_event_keys";
 const MAX_DEDUPE_KEYS = 200;
 const CALENDAR_LEAD_TIME_MS = 15 * 60 * 1000;
 
+function queuedSnapshotEventKey(item) {
+  const emailId = item?.email_id || item?.uid || item?.id;
+  if (!emailId) return null;
+  return `email_triage:${item?.account_id || "unknown"}:${emailId}:email_triage_queued`;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -46,6 +52,7 @@ export default function useTriageNotificationSounds() {
   const playQueueRef = useRef(Promise.resolve());
   const lastPlayAtRef = useRef(0);
   const taskCompletionSequenceRef = useRef(0);
+  const queuedSnapshotKeysRef = useRef({ initialized: false, keys: new Set() });
 
   const loadSettings = useCallback(() => {
     getSettings()
@@ -145,13 +152,33 @@ export default function useTriageNotificationSounds() {
     }
   }, [handleAppTrigger]);
 
+  const handleActiveSnapshot = useCallback((activeSnapshot) => {
+    if (!activeSnapshot?.snapshot) return;
+    const queuedRows = activeSnapshot?.lanes?.queued || [];
+    const nextKeys = new Set(
+      queuedRows
+        .map(queuedSnapshotEventKey)
+        .filter(Boolean),
+    );
+    if (!queuedSnapshotKeysRef.current.initialized) {
+      queuedSnapshotKeysRef.current = { initialized: true, keys: nextKeys };
+      return;
+    }
+    for (const eventKey of nextKeys) {
+      if (queuedSnapshotKeysRef.current.keys.has(eventKey)) continue;
+      handleAppTrigger("email_queued", eventKey);
+    }
+    queuedSnapshotKeysRef.current = { initialized: true, keys: nextKeys };
+  }, [handleAppTrigger]);
+
   return useMemo(() => ({
     handleDashboardEvent,
     handleCalendarSnapshot,
+    handleActiveSnapshot,
     handleTaskCompleted: (taskId) => {
       taskCompletionSequenceRef.current += 1;
       const occurrenceKey = `${Date.now()}:${taskCompletionSequenceRef.current}`;
       handleAppTrigger("task_completed", `task_completed:${taskId || "unknown"}:${occurrenceKey}`, { allowLocked: true });
     },
-  }), [handleAppTrigger, handleCalendarSnapshot, handleDashboardEvent]);
+  }), [handleActiveSnapshot, handleAppTrigger, handleCalendarSnapshot, handleDashboardEvent]);
 }
