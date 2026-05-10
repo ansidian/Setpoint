@@ -229,6 +229,55 @@ body {
 .system-status-signal--busy {
   animation: systemStatusSignalPulse 1.35s ease-in-out infinite;
 }
+.analytics-trigger-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(205,214,244,0.6);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transform: translateY(0);
+  transition:
+    transform 150ms ease-out,
+    background 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    box-shadow 150ms ease-out;
+  will-change: transform;
+}
+.analytics-trigger-button:hover,
+.analytics-trigger-button:focus-visible {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: rgba(205,214,244,0.9);
+  transform: translateY(-1px);
+}
+.analytics-trigger-button:active {
+  transform: translateY(0);
+}
+.analytics-trigger-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(203,166,218,0.22);
+}
+.analytics-trigger-button[aria-pressed="true"] {
+  border-color: rgba(203,166,218,0.28);
+  background: rgba(203,166,218,0.13);
+  color: #cba6da;
+}
+.analytics-trigger-button[aria-pressed="true"]:hover,
+.analytics-trigger-button[aria-pressed="true"]:focus-visible {
+  border-color: rgba(203,166,218,0.36);
+  background: rgba(203,166,218,0.16);
+  color: #d8b6e3;
+}
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
@@ -241,6 +290,10 @@ body {
   }
   .system-status-signal--busy {
     animation: none !important;
+  }
+  .analytics-trigger-button:hover,
+  .analytics-trigger-button:focus-visible {
+    transform: translateY(0);
   }
 }
 
