@@ -85,7 +85,6 @@ export default function ShellHeader({
         <AnalyticsTriggerButton
           active={analyticsOpen}
           onOpenAnalytics={onOpenAnalytics}
-          onPrepareAnalytics={onPrepareAnalytics}
         />
       )}
       {!isMobile && <PaletteTriggerButton onOpenPalette={onOpenPalette} />}

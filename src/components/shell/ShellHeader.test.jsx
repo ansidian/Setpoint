@@ -138,7 +138,7 @@ describe("ShellHeader system status", () => {
     expect(labels.indexOf("Sync now")).toBeLessThan(labels.indexOf("System status: current"));
   });
 
-  it("opens analytics and tints the shell analytics button while active", () => {
+  it("opens analytics and exposes active state for the shell analytics tint", () => {
     const onOpenAnalytics = vi.fn();
     renderHeader({ onOpenAnalytics, analyticsOpen: true });
 
@@ -147,7 +147,18 @@ describe("ShellHeader system status", () => {
 
     expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
     expect(button.getAttribute("aria-pressed")).toBe("true");
-    expect(button.style.background).toContain("rgba(203, 166, 218");
+    expect(button.className).toContain("analytics-trigger-button");
+  });
+
+  it("does not run analytics warmup from desktop header hover", () => {
+    const onPrepareAnalytics = vi.fn();
+    renderHeader({ onPrepareAnalytics });
+
+    const button = screen.getByRole("button", { name: /open analytics/i });
+
+    fireEvent.pointerEnter(button);
+    fireEvent.focus(button);
+    expect(onPrepareAnalytics).not.toHaveBeenCalled();
   });
 
   it("moves analytics into the mobile overflow menu and keeps Sync now on one row", () => {
