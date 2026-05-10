@@ -60,6 +60,9 @@ export default function Dashboard() {
       lastFetched: liveLastFetched,
     });
   }, [liveCalendar, liveLastFetched, triageNotificationSounds]);
+  useEffect(() => {
+    triageNotificationSounds.handleActiveSnapshot(activeSnapshot.snapshot);
+  }, [activeSnapshot.snapshot, triageNotificationSounds]);
   const bd = currentDashboard.briefingData;
   const [currentSyncing, setCurrentSyncing] = useState(false);
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);

@@ -134,6 +134,64 @@ describe("useTriageNotificationSounds", () => {
     });
   });
 
+  it("plays the queued sound when a queued snapshot row appears after the initial snapshot", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: {
+          queued: [],
+        },
+      });
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: {
+          queued: [{
+            account_id: "icloud",
+            email_id: "icloud-3232",
+          }],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/quick-chime.mp3");
+    });
+  });
+
+  it("does not play queued sounds for rows already present on initial snapshot load", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: {
+          queued: [{
+            account_id: "icloud",
+            email_id: "icloud-3232",
+          }],
+        },
+      });
+    });
+
+    expect(globalThis.Audio).not.toHaveBeenCalled();
+  });
+
   it("attempts task completion sounds from the completion gesture before the session is unlocked", async () => {
     const play = vi.fn(() => Promise.resolve());
     vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {

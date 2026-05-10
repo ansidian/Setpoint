@@ -189,6 +189,56 @@ describe("email triage worker rule finalization", () => {
     });
     });
 
+  it("routes configured sender interests to FYI when no preflight rule matches", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      from_name: "Da Vien Coffee",
+      from_address: "notifications@toast-restaurants.com",
+      subject: "Don't Forget About Tomorrow",
+      body_snippet: "Your app reward is waiting.",
+      body_text: "Your app reward is waiting.",
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_settings SET email_interests_json = ? WHERE user_id = ?",
+      args: [JSON.stringify(["Da Vien"]), "user-1"],
+    });
+    const modelClient = { classify: vi.fn() };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:16:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      processed: true,
+      email_id: "msg-1",
+      lane: "fyi",
+      source: "rule",
+      model_calls: [],
+    });
+    expect(modelClient.classify).not.toHaveBeenCalled();
+
+    const rows = await dbClient.execute({
+      sql: `SELECT lane, category, triage_source, summary, action, decision_metadata_json
+            FROM ea_email_triage WHERE email_id = ?`,
+      args: ["msg-1"],
+    });
+    expect(rows.rows[0]).toMatchObject({
+      lane: "fyi",
+      category: "updates",
+      triage_source: "rule",
+      summary: "Matched email interest: Da Vien.",
+      action: "Review when convenient",
+    });
+    expect(JSON.parse(rows.rows[0].decision_metadata_json)).toMatchObject({
+      preflight: {
+        reasonCode: "email_interest_sender_fyi",
+        matchedInterest: "Da Vien",
+      },
+    });
+  });
+
   it("finalizes one-time verification codes without model calls", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
