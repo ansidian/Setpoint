@@ -11,6 +11,16 @@ const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   getCalendarDeadlines: vi.fn(),
   seedDeadlineRangeData: vi.fn(),
+  calendarRangeEnsureRange: vi.fn(),
+  calendarRangeMarkStale: vi.fn(),
+  calendarRangeRefreshRangeInPlace: vi.fn(),
+  deadlineRangeEnsureRange: vi.fn(),
+  deadlineRangeMarkStale: vi.fn(),
+  deadlineRangeUpdateData: vi.fn(),
+  billsRangeEnsureRange: vi.fn(),
+  billsRangeMarkStale: vi.fn(),
+  billsRangeSeedData: vi.fn(),
+  billsRangeUpdateData: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
@@ -26,9 +36,9 @@ vi.mock("../api", () => ({
 
 vi.mock("../hooks/useCalendarRange", () => ({
   default: () => ({
-    ensureRange: vi.fn().mockResolvedValue([]),
-    markStale: vi.fn(),
-    refreshRangeInPlace: vi.fn(),
+    ensureRange: mocks.calendarRangeEnsureRange,
+    markStale: mocks.calendarRangeMarkStale,
+    refreshRangeInPlace: mocks.calendarRangeRefreshRangeInPlace,
   }),
 }));
 
@@ -37,9 +47,10 @@ vi.mock("../hooks/useCalendarDomainRange", () => ({
     const isDeadlineRange = options.cacheMode === "month";
     return {
       data: null,
-      ensureRange: vi.fn(),
-      markStale: vi.fn(),
-      seedData: isDeadlineRange ? mocks.seedDeadlineRangeData : vi.fn(),
+      ensureRange: isDeadlineRange ? mocks.deadlineRangeEnsureRange : mocks.billsRangeEnsureRange,
+      markStale: isDeadlineRange ? mocks.deadlineRangeMarkStale : mocks.billsRangeMarkStale,
+      seedData: isDeadlineRange ? mocks.seedDeadlineRangeData : mocks.billsRangeSeedData,
+      updateData: isDeadlineRange ? mocks.deadlineRangeUpdateData : mocks.billsRangeUpdateData,
       loading: false,
       error: null,
     };
@@ -91,13 +102,18 @@ const currentPayload = {
 describe("Dashboard current boot", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
-    mocks.getCurrentDashboard.mockReset().mockResolvedValue(currentPayload);
-    mocks.syncCurrentDashboard.mockReset().mockResolvedValue(currentPayload);
-    mocks.getActiveSnapshot.mockReset().mockRejectedValue(new Error("snapshot route should not load separately"));
-    mocks.syncActiveSnapshot.mockReset().mockRejectedValue(new Error("snapshot sync route should not load separately"));
-    mocks.getSettings.mockReset().mockResolvedValue({});
-    mocks.getCalendarDeadlines.mockReset().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
-    mocks.seedDeadlineRangeData.mockReset();
+    for (const mock of Object.values(mocks)) {
+      mock.mockReset();
+    }
+    mocks.getCurrentDashboard.mockResolvedValue(currentPayload);
+    mocks.syncCurrentDashboard.mockResolvedValue(currentPayload);
+    mocks.getActiveSnapshot.mockRejectedValue(new Error("snapshot route should not load separately"));
+    mocks.syncActiveSnapshot.mockRejectedValue(new Error("snapshot sync route should not load separately"));
+    mocks.getSettings.mockResolvedValue({});
+    mocks.getCalendarDeadlines.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.calendarRangeEnsureRange.mockResolvedValue([]);
+    mocks.deadlineRangeEnsureRange.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.billsRangeEnsureRange.mockResolvedValue([]);
   });
 
   afterEach(() => {
