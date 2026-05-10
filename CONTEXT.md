@@ -52,6 +52,46 @@ _Avoid_: Manual second login page, passkey-only login
 The owner preference that the passkey should live outside EA Dashboard and outside the password manager that stores the dashboard password.
 _Avoid_: Bitwarden enforcement, dashboard-stored passkey
 
+**Calendar Search**:
+A modal-local calendar discovery mode that can query beyond the visible month while preserving the current calendar workspace.
+_Avoid_: Visible-month filter, command palette search
+
+**Calendar Search Scope**:
+The active calendar workspace searched by **Calendar Search**.
+_Avoid_: Global calendar corpus, all-feeds search
+
+**Calendar Search Endpoint**:
+A server-owned API that resolves **Calendar Search** queries instead of relying only on the client’s visible calendar cache.
+_Avoid_: Client-only search, month-cache filter
+
+**Calendar Search Coverage**:
+The source-specific boundary of what **Calendar Search** can truthfully search.
+_Avoid_: Infinite calendar history, all provider data
+
+**Calendar Search Activation**:
+The action of choosing a **Calendar Search** result and moving the calendar workspace to that item.
+_Avoid_: Preview-only result, detached detail
+
+**Calendar Search Ranking**:
+The deterministic ordering of **Calendar Search** results by match quality and date.
+_Avoid_: Semantic ranking, fuzzy AI rank
+
+**Calendar Search Typeahead**:
+The debounced query interaction for **Calendar Search**.
+_Avoid_: Submit-only search, search-all-empty-query
+
+**Calendar Search Keyboarding**:
+The keyboard interaction model for opening, navigating, activating, and closing **Calendar Search**.
+_Avoid_: Calendar hotkeys inside search input, Tab search mode
+
+**Search Results Rail**:
+A slim calendar side rail that lists **Calendar Search** results separately from the agenda rail.
+_Avoid_: Search drawer, search modal
+
+**Three-Rail Calendar Workspace**:
+The desktop calendar modal layout with search results on the left, month grid in the center, and agenda/detail rail on the right.
+_Avoid_: Replacing agenda on desktop, search overlay
+
 ## Relationships
 
 - EA Dashboard has one owner; passkey authentication uses that owner identity and does not introduce usernames or multi-account login.
@@ -74,6 +114,21 @@ _Avoid_: Bitwarden enforcement, dashboard-stored passkey
 - **Authenticated Sessions** remain the only remembered access state; there is no separate trusted-browser or remember-device bypass for future logins.
 - **Passkey Management** supports deleting individual **Registered Passkeys** in Settings, while reset-all recovery stays local through **Passkey Reset**.
 - Deleting an individual **Registered Passkey** revokes existing authenticated sessions and may issue a fresh current-browser session for the authenticated browser performing the deletion.
+- **Calendar Search** opens from the calendar modal header or Cmd/Ctrl+F and shows matches in a **Search Results Rail**.
+- **Calendar Search** may fetch a bounded multi-month window instead of only filtering the visible month.
+- **Calendar Search Scope** follows the active view: Events searches events plus visible deadline-overlay data, Bills searches bills only.
+- A **Calendar Search Endpoint** is the preferred implementation path for search because the owner values broader lookup more than a bounded cache-only compromise.
+- **Calendar Search Coverage** is source-specific: Events may use provider-backed Google Calendar search, Events deadlines use server-available deadline data, and Bills searches the local Bills mirror.
+- **Calendar Search Coverage** must be honest in empty or limited states; Bills mirror coverage is not the same as searching all of Actual forever.
+- **Calendar Search Activation** navigates the modal to the result month, selects the result date and item, and opens the existing calendar detail behavior.
+- **Calendar Search Activation** keeps the **Search Results Rail** open with its current query and results while the calendar workspace navigates or loads.
+- **Calendar Search Ranking** prefers exact title/name matches, then prefix or word-start title/name matches, then other field matches; ties put upcoming results first by date ascending and recent past results after by date descending.
+- **Calendar Search Typeahead** runs after a short debounce once the query has at least two characters; Enter activates the highlighted result, not the search request itself.
+- **Calendar Search Typeahead** keeps prior results visible while the next request is pending and ignores stale responses.
+- **Calendar Search Keyboarding** opens search with Cmd/Ctrl+F, uses Up/Down to move the highlighted result while focus stays in the input, Enter to activate, and Escape to clear the query before closing an already-empty rail.
+- **Calendar Search Keyboarding** suspends calendar single-key hotkeys while the search input is focused.
+- A **Search Results Rail** is not the agenda rail; choosing a result should route through the existing calendar selection and detail behavior.
+- A **Three-Rail Calendar Workspace** is the desktop target when search is open; smaller or stacked layouts may replace the agenda rail only when there is not enough room.
 
 ## Example Dialogue
 
@@ -85,3 +140,12 @@ _Avoid_: Bitwarden enforcement, dashboard-stored passkey
 - "Outside Bitwarden" was resolved as **Passkey Storage Separation**: EA Dashboard should recommend and support device or hardware-key passkeys, but should not claim it can reliably detect or block Bitwarden-hosted passkeys through browser WebAuthn.
 - "Pending auth token" was resolved as cookie-held **Pending Password Authentication**, not a JSON token the frontend stores or passes manually.
 - "Delete passkey" includes deleting the final **Registered Passkey**; this is a deliberate recovery path, not an invalid state.
+- "Search in the calendar modal" was resolved as **Calendar Search**, not a visible-month filter: the happy path is broader calendar lookup, with an acceptable bounded multi-month search window when needed for performance.
+- "Global calendar search" was rejected for the first calendar modal search: **Calendar Search Scope** stays active-view based, with Events including its deadline overlay items and Bills staying Bills-only.
+- "Server search" was chosen over a bounded client-cache search as the preferred path for **Calendar Search**, even if individual sources still need explicit provider or mirror boundaries.
+- "Global" in **Calendar Search** was resolved as best available source-wide search with explicit **Calendar Search Coverage**, not live-querying every provider with no boundary.
+- "Selecting a search result" was resolved as **Calendar Search Activation**, not an independent preview surface.
+- "Smart ranking" was rejected for the first **Calendar Search** version; use deterministic **Calendar Search Ranking** instead.
+- "Left search rail" was resolved as a **Three-Rail Calendar Workspace** on desktop, with responsive fallback only for constrained layouts.
+- "Typing in calendar search" was resolved as **Calendar Search Typeahead**, not an Enter-to-submit flow.
+- "Calendar search keyboard behavior" was resolved as **Calendar Search Keyboarding**, with search input focus suspending the modal's single-key calendar hotkeys.
