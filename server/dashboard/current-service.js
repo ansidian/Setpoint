@@ -10,21 +10,16 @@ import {
 } from "../briefing/bills-service.js";
 import { publishCurrentDashboardEvent } from "./current-events.js";
 import { fetchCalendar } from "../briefing/calendar.js";
-import { fetchCTMDeadlines } from "../briefing/ctm.js";
-import {
-  computeDeadlineStats,
-  loadCompletedTaskIds,
-  separateDeadlines,
-} from "../briefing/deadline-helpers.js";
+import { computeDeadlineStats } from "../briefing/deadline-helpers.js";
+import { readCurrentDeadlines } from "../briefing/deadlines-read.js";
 import { loadUserConfig } from "../briefing/config-service.js";
 import { getActiveSnapshotView, syncActiveSnapshot } from "../briefing/snapshot-service.js";
-import { fetchTodoistDueTaskIdSet, fetchTodoistTasks, getTodoistSyncHealth } from "../briefing/todoist.js";
-import { hydrateRecurringTombstones } from "../briefing/tombstones.js";
+import { getTodoistSyncHealth } from "../briefing/todoist.js";
 import { fetchWeather } from "../briefing/weather.js";
 import {
-  listUpcomingReminderStatesForSources,
-  reminderSourceKey,
-} from "../briefing/reminder-service.js";
+  hydrateCalendarEventsWithReminderState,
+  hydrateTodoistTasksWithReminderState,
+} from "../briefing/reminder-hydration.js";
 import {
   CURRENT_CACHE_KEYS,
   EMPTY_DEADLINES,
@@ -359,36 +354,7 @@ async function refreshCalendarCurrent(userId, config, options) {
 }
 
 async function refreshDeadlinesCurrent(userId, _config, options) {
-  const [ctmDeadlines, todoistTasks, todoistDueTaskIds] = await Promise.all([
-    fetchCTMDeadlines().catch((err) => {
-      console.error("[Dashboard] CTM current refresh failed:", err.message);
-      return [];
-    }),
-    fetchTodoistTasks(userId, { refresh: !!options.force }).catch((err) => {
-      console.error("[Dashboard] Todoist current refresh failed:", err.message);
-      return [];
-    }),
-    fetchTodoistDueTaskIdSet(userId, { refresh: !!options.force }).catch((err) => {
-      console.error("[Dashboard] Todoist id-set current refresh failed:", err.message);
-      return null;
-    }),
-  ]);
-  const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
-  const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
-  const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
-    viewBoundary: "today",
-  });
-  const todoistWithCompleted = [...separated.todoist, ...tombstones];
-  const payload = {
-    ctm: {
-      upcoming: separated.ctm,
-      stats: computeDeadlineStats(separated.ctm),
-    },
-    todoist: {
-      upcoming: todoistWithCompleted,
-      stats: computeDeadlineStats(todoistWithCompleted),
-    },
-  };
+  const payload = await readCurrentDeadlines(userId, { force: !!options.force });
   await saveCacheRow(userId, "deadlines_current", payload, options);
   return payload;
 }
@@ -675,49 +641,6 @@ function applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, {
   forceKeys?.add("bills_current");
 }
 
-function emptyReminderState() {
-  return {
-    hasUpcomingReminder: false,
-    upcomingCount: 0,
-    nextReminderAt: null,
-  };
-}
-
-function eventAnchorAt(event) {
-  if (!event?.startMs) return null;
-  return new Date(event.startMs).toISOString();
-}
-
-function eventReminderSource(event) {
-  if (!event?.id) return null;
-  return {
-    sourceType: "calendar_event",
-    sourceItemId: event.id,
-    sourceOccurrenceId: event.isRecurring
-      ? event.originalStartTime || eventAnchorAt(event)
-      : null,
-  };
-}
-
-function todoistReminderSource(task) {
-  if (!task?.id) return null;
-  return {
-    sourceType: "todoist_task",
-    sourceItemId: String(task.id),
-    sourceOccurrenceId: null,
-  };
-}
-
-function applyUpcomingReminderState(item, state = emptyReminderState()) {
-  return {
-    ...item,
-    reminderState: state,
-    hasUpcomingReminder: state.hasUpcomingReminder,
-    upcomingReminderCount: state.upcomingCount,
-    nextReminderAt: state.nextReminderAt,
-  };
-}
-
 async function hydrateCurrentReminderState(userId, {
   calendar,
   deadlines,
@@ -730,43 +653,25 @@ async function hydrateCurrentReminderState(userId, {
   const todoistItems = Array.isArray(deadlinePayload?.todoist?.upcoming)
     ? deadlinePayload.todoist.upcoming
     : [];
-  const calendarSources = calendarItems.map(eventReminderSource);
-  const todoistSources = todoistItems.map(todoistReminderSource);
-  const sources = [...calendarSources, ...todoistSources].filter(Boolean);
-
-  if (!sources.length) {
-    return { calendar, deadlines };
-  }
-
-  let stateByKey;
   try {
-    stateByKey = await listUpcomingReminderStatesForSources({
-      userId,
-      sources,
-      now,
-    }, { dbClient });
+    const [hydratedCalendar, hydratedTodoist] = await Promise.all([
+      hydrateCalendarEventsWithReminderState(userId, calendarItems, { dbClient, now }),
+      hydrateTodoistTasksWithReminderState(userId, todoistItems, { dbClient, now }),
+    ]);
+    return {
+      calendar: hydratedCalendar,
+      deadlines: {
+        ...deadlinePayload,
+        todoist: {
+          ...(deadlinePayload?.todoist || EMPTY_DEADLINES.todoist),
+          upcoming: hydratedTodoist,
+        },
+      },
+    };
   } catch (err) {
     console.error("[Dashboard] reminder state hydration failed:", err.message);
     return { calendar, deadlines };
   }
-
-  const hydrateItem = (item, source) => {
-    const state = source
-      ? stateByKey.get(reminderSourceKey(source)) || emptyReminderState()
-      : emptyReminderState();
-    return applyUpcomingReminderState(item, state);
-  };
-
-  return {
-    calendar: calendarItems.map((item, index) => hydrateItem(item, calendarSources[index])),
-    deadlines: {
-      ...deadlinePayload,
-      todoist: {
-        ...(deadlinePayload?.todoist || EMPTY_DEADLINES.todoist),
-        upcoming: todoistItems.map((item, index) => hydrateItem(item, todoistSources[index])),
-      },
-    },
-  };
 }
 
 async function composeCurrentDashboardResponse(userId, rows, {

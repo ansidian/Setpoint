@@ -1,7 +1,5 @@
 import { Router } from "express";
 import { requireCookieSession } from "../middleware/auth.js";
-import { fetchCTMDeadlinesAll, fetchCTMDeadlinesRange } from "../briefing/ctm.js";
-import { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } from "../briefing/todoist.js";
 import {
   isBillsMirrorMaintenanceDue,
   readBillsMirrorRange,
@@ -9,10 +7,9 @@ import {
 } from "../briefing/bills-service.js";
 import { requestBillsCurrentMaintenanceRefresh } from "../dashboard/current-service.js";
 import {
-  loadCompletedTaskIds,
-  separateDeadlines,
-  computeDeadlineStats,
-} from "../briefing/deadline-helpers.js";
+  readCalendarDeadlines,
+  readCalendarDeadlineRange,
+} from "../briefing/deadlines-read.js";
 import { loadUserConfig } from "../briefing/config-service.js";
 import {
   fetchCalendar,
@@ -27,13 +24,14 @@ import {
   getGooglePlaceDetails,
   suggestGooglePlaces,
 } from "../briefing/google-places.js";
-import { hydrateRecurringTombstones } from "../briefing/tombstones.js";
 import {
   deleteSourceReminders,
-  listUpcomingReminderStatesForSources,
-  reminderSourceKey,
   recomputeUnsentRemindersForSource,
 } from "../briefing/reminder-service.js";
+import {
+  calendarEventAnchorAt,
+  hydrateCalendarEventsWithReminderState,
+} from "../briefing/reminder-hydration.js";
 
 const router = Router();
 router.use(requireCookieSession);
@@ -62,59 +60,10 @@ async function loadCalendarAccount(accountId) {
   return account;
 }
 
-function unavailableTodoistHealth(err) {
-  return {
-    state: "unavailable",
-    configured: null,
-    lastSuccessAt: null,
-    lastError: err?.message || "Todoist sync health unavailable",
-    syncStartedAt: null,
-    ageMs: null,
-  };
-}
-
 router.get("/deadlines", async (_req, res) => {
   try {
     const userId = process.env.EA_USER_ID;
-
-    const [ctmDeadlines, todoistTasks, todoistDueTaskIds, todoistSyncHealth] = await Promise.all([
-      fetchCTMDeadlinesAll().catch((err) => {
-        console.error("[Calendar] CTM fetch failed:", err.message);
-        return [];
-      }),
-      fetchTodoistTasksAll(userId).catch((err) => {
-        console.error("[Calendar] Todoist fetch failed:", err.message);
-        return [];
-      }),
-      fetchTodoistDueTaskIdSet(userId).catch((err) => {
-        console.error("[Calendar] Todoist id-set fetch failed:", err.message);
-        return null;
-      }),
-      getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
-    ]);
-
-    const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
-    const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
-    const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
-      viewBoundary: "yesterday",
-    });
-
-    const todoistWithCompleted = await hydrateUpcomingReminderState(userId, [
-      ...separated.todoist,
-      ...tombstones,
-    ], todoistReminderSource);
-
-    res.json({
-      ctm: {
-        upcoming: separated.ctm,
-        stats: computeDeadlineStats(separated.ctm),
-      },
-      todoist: {
-        upcoming: todoistWithCompleted,
-        stats: computeDeadlineStats(todoistWithCompleted),
-        syncHealth: todoistSyncHealth,
-      },
-    });
+    res.json(await readCalendarDeadlines(userId));
   } catch (err) {
     console.error("[Calendar] deadlines fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch calendar deadlines" });
@@ -177,70 +126,14 @@ function validateCalendarRange(req, res, { enforceHistoryWindow = false } = {}) 
   return { start, end, startDate, endDate };
 }
 
-function quietSourceError(source, err) {
-  return { source, message: err?.message || `${source} unavailable` };
-}
-
-function eventAnchorAt(event) {
-  if (!event?.startMs) return null;
-  return new Date(event.startMs).toISOString();
-}
-
 function eventOccurrenceIdentity({ event, originalStartTime, scope }) {
   if (scope && scope !== "one") return undefined;
   if (originalStartTime) return originalStartTime;
-  if (event?.isRecurring) return event.originalStartTime || eventAnchorAt(event);
+  if (event?.isRecurring) {
+    if (event.originalStartTime) return event.originalStartTime;
+    return calendarEventAnchorAt(event);
+  }
   return undefined;
-}
-
-function emptyReminderState() {
-  return {
-    hasUpcomingReminder: false,
-    upcomingCount: 0,
-    nextReminderAt: null,
-  };
-}
-
-function eventReminderSource(event) {
-  if (!event?.id) return null;
-  return {
-    sourceType: "calendar_event",
-    sourceItemId: event.id,
-    sourceOccurrenceId: event.isRecurring
-      ? event.originalStartTime || eventAnchorAt(event)
-      : null,
-  };
-}
-
-function todoistReminderSource(task) {
-  if (!task?.id) return null;
-  return {
-    sourceType: "todoist_task",
-    sourceItemId: String(task.id),
-    sourceOccurrenceId: null,
-  };
-}
-
-async function hydrateUpcomingReminderState(userId, items, sourceForItem) {
-  const sourcesByIndex = (items || []).map(sourceForItem);
-  const sources = sourcesByIndex.filter(Boolean);
-  const stateByKey = await listUpcomingReminderStatesForSources({
-    userId,
-    sources,
-  });
-  return (items || []).map((item, index) => {
-    const source = sourcesByIndex[index];
-    const state = source
-      ? stateByKey.get(reminderSourceKey(source)) || emptyReminderState()
-      : emptyReminderState();
-    return {
-      ...item,
-      reminderState: state,
-      hasUpcomingReminder: state.hasUpcomingReminder,
-      upcomingReminderCount: state.upcomingCount,
-      nextReminderAt: state.nextReminderAt,
-    };
-  });
 }
 
 router.get("/range", async (req, res) => {
@@ -262,7 +155,7 @@ router.get("/range", async (req, res) => {
       startDate: dayStart,
       endDate: dayEnd,
     });
-    const hydratedEvents = await hydrateUpcomingReminderState(userId, events, eventReminderSource);
+    const hydratedEvents = await hydrateCalendarEventsWithReminderState(userId, events);
 
     res.json({ events: hydratedEvents, fetchedAt: new Date().toISOString() });
   } catch (err) {
@@ -277,45 +170,10 @@ router.get("/deadlines/range", async (req, res) => {
 
   try {
     const userId = process.env.EA_USER_ID;
-    const errors = [];
-    const [ctmResult, todoistResult, todoistDueTaskIdsResult, todoistHealthResult] = await Promise.allSettled([
-      fetchCTMDeadlinesRange({ start: range.start, end: range.end }),
-      fetchTodoistTasksRange(userId, { start: range.start, end: range.end }),
-      fetchTodoistDueTaskIdSet(userId),
-      getTodoistSyncHealth(userId),
-    ]);
-    const ctmDeadlines = ctmResult.status === "fulfilled" ? ctmResult.value : [];
-    const todoistTasks = todoistResult.status === "fulfilled" ? todoistResult.value : [];
-    const todoistSyncHealth = todoistHealthResult.status === "fulfilled"
-      ? todoistHealthResult.value
-      : unavailableTodoistHealth(todoistHealthResult.reason);
-    const todoistDueTaskIds = todoistDueTaskIdsResult.status === "fulfilled" ? todoistDueTaskIdsResult.value : null;
-    if (ctmResult.status === "rejected") errors.push(quietSourceError("ctm", ctmResult.reason));
-    if (todoistResult.status === "rejected") errors.push(quietSourceError("todoist", todoistResult.reason));
-    if (todoistDueTaskIdsResult.status === "rejected") errors.push(quietSourceError("todoist", todoistDueTaskIdsResult.reason));
-
-    const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
-      viewBoundary: "yesterday",
-    }).catch((err) => {
-      errors.push(quietSourceError("todoist", err));
-      return [];
-    });
-    const rangeTombstones = tombstones.filter((task) =>
-      task.due_date && task.due_date >= range.start && task.due_date <= range.end,
-    );
-    const separated = separateDeadlines(ctmDeadlines, [...todoistTasks, ...rangeTombstones], new Set());
-    const hydratedTodoist = await hydrateUpcomingReminderState(userId, separated.todoist, todoistReminderSource);
+    const { payload, errors } = await readCalendarDeadlineRange(userId, range);
 
     res.json({
-      ctm: {
-        upcoming: separated.ctm,
-        stats: computeDeadlineStats(separated.ctm),
-      },
-      todoist: {
-        upcoming: hydratedTodoist,
-        stats: computeDeadlineStats(hydratedTodoist),
-        syncHealth: todoistSyncHealth,
-      },
+      ...payload,
       minDate: range.minDate,
       errors,
       fetchedAt: new Date().toISOString(),
@@ -533,7 +391,7 @@ router.patch("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
-    const anchorAt = eventAnchorAt(event);
+    const anchorAt = calendarEventAnchorAt(event);
     if (anchorAt) {
       await recomputeUnsentRemindersForSource({
         userId: process.env.EA_USER_ID,

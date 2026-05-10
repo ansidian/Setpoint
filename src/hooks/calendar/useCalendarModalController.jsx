@@ -32,6 +32,16 @@ import {
   shouldForceDeadlineOverlay,
   writeStoredBoolean,
 } from "./calendarModalInteractionModel.js";
+import {
+  planningDeadlinesReadyState,
+  planningDeadlineTimedOutState,
+  planningEventsReadyState,
+  planningIdleState,
+  planningInitialState,
+  planningLateDeadlinesReadyState,
+  planningSettledState,
+  planningSlowState,
+} from "./calendarPlanningSessionModel.js";
 
 const VIEWS = {
   events: eventsView,
@@ -242,14 +252,7 @@ export default function useCalendarModalController({
   ));
   const [committedDeadlineOverlayData, setCommittedDeadlineOverlayData] = useState(null);
   const [lateDeadlineOverlayData, setLateDeadlineOverlayData] = useState(null);
-  const [planningReadiness, setPlanningReadiness] = useState({
-    state: "idle",
-    slowSource: null,
-    deadlinesDelayed: false,
-    lateDeadlinesReady: false,
-    eventsReadyAt: null,
-    deadlinesReadyAt: null,
-  });
+  const [planningReadiness, setPlanningReadiness] = useState(planningIdleState);
   const [manualMonthBrowseKey, setManualMonthBrowseKey] = useState(0);
   const [workspaceTransientCloseToken, setWorkspaceTransientCloseToken] = useState(0);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
@@ -1157,41 +1160,34 @@ export default function useCalendarModalController({
       let deadlinesDone = !deadlineOverlayVisible || !deadlinesEnsureRange;
       let deadlinesTimedOut = false;
       const startedAt = performance.now();
-      setPlanningReadiness({
-        state: deadlineOverlayVisible ? "loading" : "ready",
-        slowSource: null,
-        deadlinesDelayed: false,
-        lateDeadlinesReady: false,
-        eventsReadyAt: null,
-        deadlinesReadyAt: deadlinesDone ? startedAt : null,
-      });
+      setPlanningReadiness(planningInitialState({
+        deadlineOverlayVisible,
+        deadlinesDone,
+        startedAt,
+      }));
       setLateDeadlineOverlayData(null);
 
       const softTimer = window.setTimeout(() => {
         if (canceled || !deadlineOverlayVisible) return;
-        setPlanningReadiness((current) => ({
-          ...current,
-          state: "slow",
-          slowSource: !eventsDone ? "events" : !deadlinesDone ? "deadlines" : null,
+        setPlanningReadiness((current) => planningSlowState(current, {
+          eventsDone,
+          deadlinesDone,
         }));
       }, 2000);
       const hardTimer = window.setTimeout(() => {
         if (canceled || !deadlineOverlayVisible || deadlinesDone || !eventsDone) return;
         deadlinesTimedOut = true;
         setCommittedDeadlineOverlayData(null);
-        setPlanningReadiness((current) => ({
-          ...current,
-          state: "degraded",
-          deadlinesDelayed: true,
-          lateDeadlinesReady: false,
-        }));
+        setPlanningReadiness((current) => planningDeadlineTimedOutState(current));
       }, 3000);
 
       const eventsPromise = eventsEnsureRange(start, end)
         .then(() => {
           eventsDone = true;
           if (canceled) return;
-          setPlanningReadiness((current) => ({ ...current, eventsReadyAt: performance.now() }));
+          setPlanningReadiness((current) => planningEventsReadyState(current, {
+            now: performance.now(),
+          }));
         });
       const deadlinesPromise = deadlineOverlayVisible && deadlinesEnsureRange
         ? deadlinesEnsureRange(start, end)
@@ -1200,26 +1196,26 @@ export default function useCalendarModalController({
             if (canceled) return;
             if (deadlinesTimedOut) {
               setLateDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-              setPlanningReadiness((current) => ({
-                ...current,
-                deadlinesReadyAt: performance.now(),
-                lateDeadlinesReady: true,
+              setPlanningReadiness((current) => planningDeadlinesReadyState(current, {
+                now: performance.now(),
+                eventsDone,
+                deadlinesTimedOut: true,
               }));
               return;
             }
             if (eventsDone) {
               setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
               setLateDeadlineOverlayData(null);
-              setPlanningReadiness((current) => ({
-                ...current,
-                state: "ready",
-                deadlinesDelayed: false,
-                lateDeadlinesReady: false,
-                deadlinesReadyAt: performance.now(),
+              setPlanningReadiness((current) => planningDeadlinesReadyState(current, {
+                now: performance.now(),
+                eventsDone,
               }));
             } else {
               setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-              setPlanningReadiness((current) => ({ ...current, deadlinesReadyAt: performance.now() }));
+              setPlanningReadiness((current) => planningDeadlinesReadyState(current, {
+                now: performance.now(),
+                eventsDone,
+              }));
             }
           })
         : Promise.resolve(null);
@@ -1228,20 +1224,18 @@ export default function useCalendarModalController({
         if (canceled) return;
         const failed = results.find((result) => result.status === "rejected");
         if (failed) {
-          setPlanningReadiness((current) => ({
-            ...current,
-            state: "error",
-            slowSource: null,
+          setPlanningReadiness((current) => planningSettledState(current, {
+            failed: true,
           }));
           return;
         }
         if (!deadlineOverlayVisible) return;
         if (deadlinesDone && eventsDone) {
-          setPlanningReadiness((current) => ({
-            ...current,
-            state: "ready",
-            deadlinesDelayed: false,
-            lateDeadlinesReady: false,
+          setPlanningReadiness((current) => planningSettledState(current, {
+            failed: false,
+            deadlineOverlayVisible,
+            deadlinesDone,
+            eventsDone,
           }));
         }
       });
@@ -1251,7 +1245,7 @@ export default function useCalendarModalController({
         setPlanningReadiness((current) => {
           if (!current.deadlinesDelayed) return current;
           setLateDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-          return { ...current, lateDeadlinesReady: true };
+          return planningLateDeadlinesReadyState(current);
         });
       }).catch(() => {});
 

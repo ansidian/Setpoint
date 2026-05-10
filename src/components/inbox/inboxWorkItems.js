@@ -1,3 +1,5 @@
+import { snapshotInboxLaneForItem } from "./activeSnapshotWorkflowModel.js";
+
 // Build a `synthAccount(source)` function bound to the inbox account list.
 // Matches a live/resurfaced/pin-snapshot entry's account_label to an existing
 // inbox account so the sidebar groups them correctly, else synthesizes a
@@ -91,22 +93,7 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       important: [],
       noise: [],
     };
-    const lane = item.handled_at
-      ? "handled"
-      : resurfaced
-      || pendingSecurityGrace
-      ? null
-      : arrivalGraceQueued
-      ? "queued"
-      : untriagedRead
-      ? "untriaged_read"
-      : catchUp
-      ? "catch_up"
-      : item._snapshotCarryover
-      ? "carryover"
-      : item.lane === "action"
-        ? "needs_attention"
-        : item.lane;
+    const lane = snapshotInboxLaneForItem(item);
     return {
       ...item,
       snapshot_item_id: item.snapshot_item_id || item.id,
