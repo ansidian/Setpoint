@@ -19,6 +19,7 @@ import {
   resolveExtractedBillPay,
 } from "./bill-pay-service.js";
 import { readLocalActualMetadata } from "./actual-local-metadata.js";
+import { buildBillOccurrencesFromSchedules } from "./actual-bill-occurrences.js";
 export { resolveBillPaySeed } from "./bill-pay-service.js";
 
 const PROVIDERS = {
@@ -146,73 +147,13 @@ async function loadActualMetadataForProjection(userId, { refreshLocal = true } =
   }
 }
 
-function amountConditionCents(condition) {
-  const rawAmt = condition?.value;
-  return typeof rawAmt === "object" && rawAmt !== null
-    ? (rawAmt.num1 ?? 0)
-    : (rawAmt ?? 0);
-}
-
-function scheduleAmountCents(schedule) {
-  return amountConditionCents(schedule.conditions?.find((condition) => condition.field === "amount"));
-}
-
-function schedulePayeeName(schedule, payeeMap = {}) {
-  const payeeCondition = schedule.conditions?.find((condition) => condition.field === "payee");
-  return payeeCondition ? payeeMap[payeeCondition.value] : schedule.name;
-}
-
-function daysBetweenYmd(a, b) {
-  const ms = new Date(`${a}T00:00:00Z`) - new Date(`${b}T00:00:00Z`);
-  return Math.round(ms / 86400000);
-}
-
-function isSchedulePaid(schedule, recentTransactions = []) {
-  if (!schedule.next_date) return false;
-  const payeeCondition = schedule.conditions?.find((condition) => condition.field === "payee");
-  const payeeId = payeeCondition?.value;
-  const amount = Math.abs(scheduleAmountCents(schedule)) / 100;
-  return recentTransactions.some((transaction) => {
-    const dayDiff = Math.abs(daysBetweenYmd(transaction.date, schedule.next_date));
-    if (transaction.scheduleId && transaction.scheduleId === schedule.id) return dayDiff <= 14;
-    if (!payeeId || transaction.payeeId !== payeeId) return false;
-    if (Math.abs(transaction.amount - amount) > 0.01) return false;
-    return dayDiff <= 3;
-  });
-}
-
-function isBillLikeSchedule(schedule) {
-  return !schedule?.completed && schedule?.type !== "income";
-}
-
-function isWithinDateRange(date, { start, end }) {
-  return !!date && date >= start && date <= end;
-}
-
-function occurrenceFromMetadataSchedule(schedule, payeeMap, recentTransactions) {
-  const amountCents = scheduleAmountCents(schedule);
-  const payeeName = schedulePayeeName(schedule, payeeMap);
-  const paid = isSchedulePaid(schedule, recentTransactions);
-  return {
-    id: `${schedule.id}:${schedule.next_date}`,
-    scheduleId: schedule.id,
-    name: schedule.name || payeeName || "Unknown",
-    payee: payeeName || schedule.name || "Unknown",
-    amount: Math.abs(amountCents) / 100,
-    next_date: schedule.next_date,
-    paid,
-    type: schedule.type || "bill",
-    openActionDisabled: paid,
-  };
-}
-
 function occurrencesFromMetadata(metadata, range) {
   const normalized = metadataWithPayeeMap(metadata);
-  return normalized.schedules
-    .filter(isBillLikeSchedule)
-    .filter((schedule) => isWithinDateRange(schedule.next_date, range))
-    .map((schedule) => occurrenceFromMetadataSchedule(schedule, normalized.payeeMap, normalized.recentTransactions))
-    .sort((a, b) => a.next_date.localeCompare(b.next_date));
+  return buildBillOccurrencesFromSchedules(normalized.schedules, {
+    payeeMap: normalized.payeeMap,
+    recentTransactions: normalized.recentTransactions,
+    range,
+  });
 }
 
 function metadataProjectionArgs(userId, metadata, timestamp) {

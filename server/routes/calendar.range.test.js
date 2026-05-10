@@ -19,11 +19,13 @@ vi.mock("../briefing/calendar.js", () => ({
   pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
 }));
 vi.mock("../briefing/ctm.js", () => ({
+  fetchCTMDeadlines: vi.fn(),
   fetchCTMDeadlinesAll: vi.fn(),
   fetchCTMDeadlinesRange: vi.fn(),
 }));
 vi.mock("../briefing/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: vi.fn(),
+  fetchTodoistTasks: vi.fn(),
   fetchTodoistTasksAll: vi.fn(),
   fetchTodoistTasksRange: vi.fn(),
   getTodoistSyncHealth: vi.fn(),

@@ -46,36 +46,12 @@ import {
   requestInboxAiConfirmation,
   startInboxAiRequest,
 } from "./inboxAiSearchModel.js";
-
-const SNAPSHOT_REOPEN_LANES = new Set(["needs_attention", "fyi", "noise"]);
-const SNAPSHOT_MUTABLE_LANES = new Set(["needs_attention", "carryover", "fyi", "noise", "handled"]);
-const SNAPSHOT_DISMISSIBLE_LANES = new Set(["queued", "needs_attention", "carryover", "fyi", "noise"]);
-const SNAPSHOT_LANE_ORDER = {
-  queued: 0,
-  carryover: 1,
-  needs_attention: 2,
-  action: 2,
-  catch_up: 3,
-  fyi: 4,
-  handled: 5,
-  untriaged_read: 6,
-  noise: 7,
-};
-
-function getSnapshotReopenLane(email) {
-  const lane = email?._lane === "carryover"
-    ? "needs_attention"
-    : email?.lane || email?.lane_at_snapshot || email?._lane;
-  return SNAPSHOT_REOPEN_LANES.has(lane) ? lane : "needs_attention";
-}
-
-function isSnapshotWorkflowLane(email) {
-  return SNAPSHOT_MUTABLE_LANES.has(email?._lane);
-}
-
-function isSnapshotDismissibleLane(email) {
-  return SNAPSHOT_DISMISSIBLE_LANES.has(email?._lane);
-}
+import {
+  SNAPSHOT_LANE_ORDER,
+  getSnapshotReopenLane,
+  isSnapshotDismissibleLane,
+  isSnapshotWorkflowLane,
+} from "./activeSnapshotWorkflowModel.js";
 
 export default function useInboxController({
   emailAccounts = [],

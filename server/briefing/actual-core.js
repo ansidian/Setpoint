@@ -1,6 +1,13 @@
 import actualApi from "@actual-app/api";
 import { decrypt } from "./encryption.js";
+import {
+  buildBillOccurrencesFromSchedules,
+  filterBillSchedulesForRange,
+  isSchedulePaid,
+} from "./actual-bill-occurrences.js";
 import db from "../db/connection.js";
+
+export { isSchedulePaid } from "./actual-bill-occurrences.js";
 
 async function getActualConfig(userId) {
   const result = await db.execute({
@@ -430,74 +437,17 @@ async function upsertTransferSchedule(billData) {
   return { success: true, message: result.reused ? `Updated existing transfer schedule "${name}"` : `Transfer schedule "${name}" created` };
 }
 
-function daysBetweenYmd(a, b) {
-  const ms = new Date(`${a}T00:00:00Z`) - new Date(`${b}T00:00:00Z`);
-  return Math.round(ms / 86400000);
-}
-
 function addDaysYmd(ymd, days) {
   const date = new Date(`${ymd}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function scheduleAmountCents(schedule) {
-  return amountConditionCents(schedule.conditions?.find(c => c.field === "amount"));
-}
-
-function schedulePayeeName(schedule, payeeMap) {
-  const payeeCond = schedule.conditions?.find((c) => c.field === "payee");
-  return payeeCond ? payeeMap[payeeCond.value] : schedule.name;
-}
-
-function baseBillFromSchedule(schedule, payeeMap) {
-  const amountCents = scheduleAmountCents(schedule);
-  const payeeName = schedulePayeeName(schedule, payeeMap);
-  return {
-    scheduleId: schedule.id,
-    name: schedule.name || payeeName || "Unknown",
-    payee: payeeName || schedule.name || "Unknown",
-    amount: Math.abs(amountCents) / 100,
-    type: schedule.type || "bill",
-  };
-}
-
-function isBillLikeSchedule(schedule) {
-  return !schedule?.completed && schedule?.type !== "income";
-}
-
-function isWithinDateRange(date, { start, end }) {
-  return !!date && date >= start && date <= end;
-}
-
 function mapOpenBillInstances(schedules, payeeMap, range) {
-  return schedules
-    .filter(isBillLikeSchedule)
-    .filter((schedule) => isWithinDateRange(schedule.next_date, range))
-    .map((schedule) => {
-      const paid = isSchedulePaid(schedule, range.recentTransactions || []);
-      return {
-        ...baseBillFromSchedule(schedule, payeeMap),
-        id: `${schedule.id}:${schedule.next_date}`,
-        next_date: schedule.next_date,
-        paid,
-        openActionDisabled: paid,
-      };
-    })
-    .sort((a, b) => a.next_date.localeCompare(b.next_date));
-}
-
-export function isSchedulePaid(schedule, recentTransactions) {
-  if (!schedule.next_date) return false;
-  const payeeCond = schedule.conditions?.find(c => c.field === "payee");
-  const payeeId = payeeCond?.value;
-  const amount = Math.abs(scheduleAmountCents(schedule)) / 100;
-  return recentTransactions.some(t => {
-    const dayDiff = Math.abs(daysBetweenYmd(t.date, schedule.next_date));
-    if (t.scheduleId && t.scheduleId === schedule.id) return dayDiff <= 14;
-    if (!payeeId || t.payeeId !== payeeId) return false;
-    if (Math.abs(t.amount - amount) > 0.01) return false;
-    return dayDiff <= 3;
+  return buildBillOccurrencesFromSchedules(schedules, {
+    payeeMap,
+    recentTransactions: range.recentTransactions || [],
+    range,
   });
 }
 
@@ -571,9 +521,7 @@ export function getCalendarBillsRange(userId, { start, end }) {
 
       const payeeMap = Object.fromEntries(rawPayees.map(p => [p.id, p.name]));
       const classifiedSchedules = classifySchedules(schedules, rawPayees);
-      const billSchedules = classifiedSchedules
-        .filter(isBillLikeSchedule)
-        .filter((schedule) => isWithinDateRange(schedule.next_date, { start, end }));
+      const billSchedules = filterBillSchedulesForRange(classifiedSchedules, { start, end });
       const recentTransactions = await getRecentTransactionsForSchedules(billSchedules, payeeMap);
 
       return {

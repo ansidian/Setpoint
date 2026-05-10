@@ -53,10 +53,14 @@ vi.mock("../briefing/calendar.js", () => ({
 }));
 vi.mock("../briefing/ctm.js", () => ({
   fetchCTMDeadlines: (...args) => testState.fetchCTMDeadlines(...args),
+  fetchCTMDeadlinesAll: (...args) => testState.fetchCTMDeadlines(...args),
+  fetchCTMDeadlinesRange: (...args) => testState.fetchCTMDeadlines(...args),
 }));
 vi.mock("../briefing/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: (...args) => testState.fetchTodoistDueTaskIdSet(...args),
   fetchTodoistTasks: (...args) => testState.fetchTodoistTasks(...args),
+  fetchTodoistTasksAll: (...args) => testState.fetchTodoistTasks(...args),
+  fetchTodoistTasksRange: (...args) => testState.fetchTodoistTasks(...args),
   getTodoistSyncHealth: (...args) => testState.getTodoistSyncHealth(...args),
 }));
 vi.mock("../briefing/tombstones.js", () => ({
