@@ -48,6 +48,22 @@ function deadlinePayload({ ctmDeadlines, todoistTasks, todoistSyncHealth = null 
   return payload;
 }
 
+function todoistOccurrenceKey(task) {
+  return `${task?.id || ""}:${task?.due_date || ""}`;
+}
+
+function mergeTodoistRowsWithTombstones(todoistTasks, tombstones) {
+  const merged = [...(todoistTasks || [])];
+  const seen = new Set(merged.map(todoistOccurrenceKey));
+  for (const tombstone of tombstones || []) {
+    const key = todoistOccurrenceKey(tombstone);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(tombstone);
+  }
+  return merged;
+}
+
 export async function readCurrentDeadlines(userId, {
   force = false,
 } = {}) {
@@ -71,7 +87,7 @@ export async function readCurrentDeadlines(userId, {
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
     viewBoundary: "today",
   });
-  const todoistWithCompleted = [...separated.todoist, ...tombstones];
+  const todoistWithCompleted = mergeTodoistRowsWithTombstones(separated.todoist, tombstones);
 
   return deadlinePayload({
     ctmDeadlines: separated.ctm,
@@ -102,8 +118,7 @@ export async function readCalendarDeadlines(userId) {
     viewBoundary: "today",
   });
   const todoistWithCompleted = await hydrateTodoistTasksWithReminderState(userId, [
-    ...separated.todoist,
-    ...tombstones,
+    ...mergeTodoistRowsWithTombstones(separated.todoist, tombstones),
   ]);
 
   return deadlinePayload({
@@ -142,7 +157,11 @@ export async function readCalendarDeadlineRange(userId, range) {
   const rangeTombstones = tombstones.filter((task) =>
     task.due_date && task.due_date >= range.start && task.due_date <= range.end,
   );
-  const separated = separateDeadlines(ctmDeadlines, [...todoistTasks, ...rangeTombstones], new Set());
+  const separated = separateDeadlines(
+    ctmDeadlines,
+    mergeTodoistRowsWithTombstones(todoistTasks, rangeTombstones),
+    new Set(),
+  );
   const hydratedTodoist = await hydrateTodoistTasksWithReminderState(userId, separated.todoist);
 
   return {

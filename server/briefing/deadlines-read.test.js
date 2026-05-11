@@ -91,6 +91,43 @@ describe("deadline read module", () => {
     });
   });
 
+  it("skips completed tombstones already present in the current Todoist mirror rows", async () => {
+    testState.fetchCTMDeadlines.mockResolvedValue([]);
+    testState.fetchTodoistTasks.mockResolvedValue([
+      {
+        id: "todo-done",
+        title: "Completed task",
+        due_date: "2026-05-11",
+        source: "todoist",
+        status: "complete",
+      },
+    ]);
+    testState.fetchTodoistDueTaskIdSet.mockResolvedValue(new Set(["todo-done"]));
+    testState.hydrateRecurringTombstones.mockResolvedValue([
+      {
+        id: "todo-done",
+        title: "Completed task",
+        due_date: "2026-05-11",
+        source: "todoist",
+        status: "complete",
+        _tombstone: true,
+      },
+    ]);
+
+    const payload = await readCurrentDeadlines("u1");
+
+    expect(payload.todoist.upcoming).toEqual([
+      {
+        id: "todo-done",
+        title: "Completed task",
+        due_date: "2026-05-11",
+        source: "todoist",
+        status: "complete",
+      },
+    ]);
+    expect(payload.todoist.stats).toEqual({ total: 1 });
+  });
+
   it("builds the all-calendar deadline payload with Todoist sync health and reminder state", async () => {
     testState.fetchCTMDeadlinesAll.mockResolvedValue([{ id: "ctm-all" }]);
     testState.fetchTodoistTasksAll.mockResolvedValue([
@@ -115,7 +152,7 @@ describe("deadline read module", () => {
     expect(testState.hydrateRecurringTombstones).toHaveBeenCalledWith(
       "u1",
       new Set(["todo-all"]),
-      { viewBoundary: "yesterday" },
+      { viewBoundary: "today" },
     );
     expect(testState.listUpcomingReminderStatesForSources).toHaveBeenCalledWith({
       userId: "u1",
@@ -148,6 +185,7 @@ describe("deadline read module", () => {
     testState.getTodoistSyncHealth.mockResolvedValue({ state: "current", configured: true });
     testState.hydrateRecurringTombstones.mockResolvedValue([
       { id: "done-out", due_date: "2026-05-01", status: "complete" },
+      { id: "todo-range", due_date: "2026-05-06", status: "complete", _tombstone: true },
       { id: "done-in", due_date: "2026-05-07", status: "complete" },
     ]);
 
