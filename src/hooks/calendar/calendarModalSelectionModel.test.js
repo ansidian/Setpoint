@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildCalendarModalSyncSnapshot,
   isDateVisibleInMonthGrid,
@@ -145,6 +145,41 @@ describe("calendarModalSelectionModel", () => {
       nextPendingFocusItemId: null,
       openCreate: true,
     });
+  });
+
+  it("resets an unfocused fresh open request to today instead of keeping a stale item selection", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z"));
+
+    try {
+      const snapshot = buildCalendarModalSyncSnapshot({
+        open: true,
+        view: "events",
+        prevOpen: true,
+        prevView: "events",
+        prevOpenRequestId: 7,
+        openRequestId: 8,
+        focusDate: null,
+        focusItemId: null,
+        viewDate: { month: 3, year: 2026 },
+        selectedDay: 20,
+        selectedDateKey: "2026-04-20",
+        selectedItemId: "event-1",
+        pendingFocusDate: null,
+        pendingFocusItemId: null,
+      });
+
+      expect(snapshot).toMatchObject({
+        nextViewDate: { month: 4, year: 2026 },
+        nextSelectedDay: 11,
+        nextSelectedDateKey: "2026-05-11",
+        nextSelectedItemId: null,
+        nextPendingFocusDate: null,
+        nextPendingFocusItemId: null,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("detects view-date equality by month and year", () => {

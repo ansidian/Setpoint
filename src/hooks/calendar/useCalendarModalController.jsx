@@ -271,6 +271,7 @@ export default function useCalendarModalController({
   const overlayVisibilityRef = useRef(null);
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
+  const agendaSelectionAnchorRef = useRef(null);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
   const {
     floatingDetail,
@@ -789,6 +790,7 @@ export default function useCalendarModalController({
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);
     setSelectedItemId(null);
+    if (!passive) agendaSelectionAnchorRef.current = null;
     if (view === "deadlines") setDeadlineEditor(null);
   }
 
@@ -808,6 +810,11 @@ export default function useCalendarModalController({
     setSelectedDateKey(dateKey);
     const itemId = activeView.getItemId ? activeView.getItemId(selectedItem) : selectedItem.id;
     setSelectedItemId(itemId != null ? String(itemId) : null);
+    agendaSelectionAnchorRef.current = {
+      itemId: itemId != null ? String(itemId) : null,
+      dateKey,
+      anchorKind: anchorKind || "agenda-row",
+    };
     openFloatingDetail({
       mode: "detail",
       view: detailView || view,
@@ -842,13 +849,39 @@ export default function useCalendarModalController({
     });
   }, [suppressAgendaPassiveSync]);
 
+  useEffect(() => {
+    if (open) return;
+    setAgendaScrollCommand(null);
+  }, [open]);
+
   const scrollAgendaToDate = useCallback((dateKey) => {
+    agendaSelectionAnchorRef.current = null;
     requestAgendaScroll({ type: "date", dateKey });
   }, [requestAgendaScroll]);
 
   const scrollAgendaToEvent = useCallback((itemId, dateKey) => {
+    agendaSelectionAnchorRef.current = null;
     requestAgendaScroll({ type: "event", itemId, dateKey });
   }, [requestAgendaScroll]);
+
+  const resolveSelectedAgendaEditAnchor = useCallback((itemId, dateKey) => {
+    const lastAgendaSelection = agendaSelectionAnchorRef.current;
+    if (
+      !lastAgendaSelection
+      || String(lastAgendaSelection.itemId || "") !== String(itemId || "")
+      || lastAgendaSelection.dateKey !== dateKey
+      || !String(lastAgendaSelection.anchorKind || "").startsWith("agenda")
+    ) {
+      return null;
+    }
+    const anchor = agendaRailRef.current?.getItemAnchor?.(itemId, dateKey);
+    if (!anchor) return null;
+    return {
+      anchorElement: anchor,
+      sourceCellElement: anchor,
+      anchorKind: lastAgendaSelection.anchorKind,
+    };
+  }, []);
 
   useEffect(() => {
     const shouldOpenDeadlineCreate = focusItemId === "new" && (
@@ -879,6 +912,9 @@ export default function useCalendarModalController({
       closeEventEditor();
       setDeadlineDraftPreview(null);
       setFloatingDetail(null);
+    }
+    if (snapshot) {
+      setAgendaScrollCommand(null);
     }
     if (snapshot?.resetDeadlineEditor) {
       setFloatingDetail(null);
@@ -1201,6 +1237,7 @@ export default function useCalendarModalController({
     setSelectedDateKey,
     setSelectedItemId,
     requestAgendaScroll,
+    resolveSelectedAgendaEditAnchor,
     openFloatingEventEdit,
     openFloatingDeadlineEdit,
     openFloatingEventCreate,
