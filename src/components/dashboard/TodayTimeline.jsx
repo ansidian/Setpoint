@@ -45,7 +45,7 @@ export default function TodayTimeline({
   });
 
   const groups = useMemo(
-    () => buildTimelineGroups(filtered, now, filters),
+    () => buildTimelineGroups(filtered, now, filters, { minDay: 0 }),
     [filtered, now, filters],
   );
 

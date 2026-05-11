@@ -15,6 +15,7 @@ import {
   reopenSnapshotItem,
   restorePendingTriageEligibilityForEmail,
   restoreSnapshotItemForToday,
+  settleReadArrivalGraceRows,
   syncActiveSnapshot,
 } from "./snapshot-service.js";
 
@@ -709,7 +710,7 @@ describe("active briefing snapshots", () => {
     expect(view.laneCounts.needs_attention).toBe(0);
   });
 
-  it("settles read arrival-grace rows idempotently from active snapshot reconciliation", async () => {
+  it("keeps read arrival-grace rows queued during active snapshot reconciliation", async () => {
     const dbClient = await createMigratedDb();
     const now = new Date("2026-05-03T16:00:00.000Z");
     const snapshot = await getOrCreateActiveSnapshot("user-1", { dbClient, now });
@@ -753,13 +754,13 @@ describe("active briefing snapshots", () => {
     const first = await getActiveSnapshotView("user-1", { dbClient, now });
     const second = await getActiveSnapshotView("user-1", { dbClient, now });
 
-    expect(first.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
-    expect(first.lanes.untriaged_read[0]).toMatchObject({
+    expect(first.lanes.queued.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
+    expect(first.lanes.queued[0]).toMatchObject({
       from_name: "Reader",
       from_address: "reader@example.com",
       from: "Reader",
     });
-    expect(second.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
+    expect(second.lanes.queued.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
     const rows = await dbClient.execute({
       sql: `SELECT t.triage_status,
                    t.triage_source,
@@ -775,14 +776,61 @@ describe("active briefing snapshots", () => {
     });
     expect(rows.rows).toEqual([
       {
-        triage_status: "skipped",
-        triage_source: "arrival_grace_read",
-        job_status: "complete",
-        completed_at: "2026-05-03T16:00:00.000Z",
-        lane_at_snapshot: "untriaged_read",
-        source: "arrival_grace_read",
+        triage_status: "pending",
+        triage_source: "arrival_grace",
+        job_status: "queued",
+        completed_at: null,
+        lane_at_snapshot: "queued",
+        source: "arrival_grace",
       },
     ]);
+  });
+
+  it("settles read arrival-grace rows when Inbox explicitly exits", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-03T16:00:00.000Z");
+    const snapshot = await getOrCreateActiveSnapshot("user-1", { dbClient, now });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_email_index
+              (uid, user_id, account_id, account_label, account_email,
+               from_name, from_address, subject, body_snippet, body_text, email_date, read)
+            VALUES (?, 'user-1', 'gmail-work', 'Work', 'work@example.com',
+                    'Reader', 'reader@example.com', 'Read in grace', 'Read it',
+                    'Read it', '2026-05-03T15:58:00.000Z', 1)`,
+      args: ["msg-arrival-read"],
+    });
+    const triageResult = await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES ('user-1', 'gmail-work', ?, 'pending', 'arrival_grace')
+            RETURNING id`,
+      args: ["msg-arrival-read"],
+    });
+    const triageId = Number(triageResult.rows[0].id);
+    await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               source, source_at)
+            VALUES (?, ?, 'user-1', 'gmail-work', ?, 'queued',
+                    'Queued for triage.', 'Waiting briefly before triage.',
+                    'normal', 'uncategorized', 'Read in grace',
+                    'arrival_grace', '2026-05-03T16:03:00.000Z')`,
+      args: [snapshot.id, triageId, "msg-arrival-read"],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, scheduled_for, idempotency_key)
+            VALUES ('user-1', 'gmail-work', ?, 'email_triage', 'queued',
+                    '2026-05-03T16:03:00.000Z', ?)`,
+      args: ["msg-arrival-read", "email_triage:user-1:gmail-work:msg-arrival-read"],
+    });
+
+    await settleReadArrivalGraceRows("user-1", { dbClient, now });
+    const view = await getActiveSnapshotView("user-1", { dbClient, now });
+
+    expect(view.lanes.untriaged_read.map((item) => item.email_id)).toEqual(["msg-arrival-read"]);
   });
 
   it("restores pending triage eligibility for undo after pending dismissal", async () => {

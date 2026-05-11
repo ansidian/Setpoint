@@ -25,7 +25,9 @@ describe("dashboard shell model", () => {
       focusDate: "2026-05-07",
       focusItemId: "42",
       focusOpenDetail: true,
+      forceEventOverlay: false,
       forceDeadlineOverlay: true,
+      forceCompletedDeadlineOverlay: false,
       shouldLoadDeadlines: true,
       shouldLoadBills: false,
     });

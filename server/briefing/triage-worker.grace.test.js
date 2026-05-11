@@ -94,7 +94,7 @@ describe("email triage worker grace flows", () => {
     await dbClient.close();
     });
 
-  it("settles read arrival-grace rows without model calls when the worker reaches them", async () => {
+  it("defers read arrival-grace rows without model calls when the worker reaches them", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient);
     await dbClient.execute({
@@ -148,7 +148,7 @@ describe("email triage worker grace flows", () => {
       processed: true,
       email_id: "msg-1",
       skipped: true,
-      source: "arrival_grace_read",
+      source: "arrival_grace_read_deferred",
       model_calls: [],
     });
     expect(modelClient.classify).not.toHaveBeenCalled();
@@ -172,14 +172,14 @@ describe("email triage worker grace flows", () => {
     });
     expect(rows.rows).toEqual([
       {
-        triage_status: "skipped",
-        triage_source: "arrival_grace_read",
-        last_triaged_at: "2026-05-03T12:03:30.000Z",
-        job_status: "complete",
-        completed_at: "2026-05-03T12:03:30.000Z",
-        scheduled_for: null,
-        lane_at_snapshot: "untriaged_read",
-        source: "arrival_grace_read",
+        triage_status: "pending",
+        triage_source: "arrival_grace",
+        last_triaged_at: null,
+        job_status: "queued",
+        completed_at: null,
+        scheduled_for: "2026-05-03T12:33:30.000Z",
+        lane_at_snapshot: "queued",
+        source: "arrival_grace",
       },
     ]);
     await dbClient.close();
@@ -490,7 +490,7 @@ describe("email triage worker grace flows", () => {
     });
     });
 
-  it("settles read arrival-grace rows even when triage mode is paused", async () => {
+  it("leaves read arrival-grace rows queued when triage mode is paused", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient);
     await dbClient.batch([
@@ -525,11 +525,8 @@ describe("email triage worker grace flows", () => {
     });
 
     expect(result).toMatchObject({
-      processed: true,
-      email_id: "msg-1",
-      skipped: true,
-      source: "arrival_grace_read",
-      model_calls: [],
+      processed: false,
+      paused: true,
     });
     expect(modelClient.classify).not.toHaveBeenCalled();
     const rows = await dbClient.execute({
@@ -541,10 +538,10 @@ describe("email triage worker grace flows", () => {
     });
     expect(rows.rows).toEqual([
       {
-        triage_status: "skipped",
-        triage_source: "arrival_grace_read",
-        status: "complete",
-        completed_at: "2026-05-03T12:03:30.000Z",
+        triage_status: "pending",
+        triage_source: "arrival_grace",
+        status: "queued",
+        completed_at: null,
       },
     ]);
     });

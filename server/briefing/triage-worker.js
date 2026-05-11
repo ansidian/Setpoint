@@ -1,10 +1,9 @@
 import db from "../db/connection.js";
 import {
   getOrCreateActiveSnapshot,
-  settleReadArrivalGraceRows,
 } from "./snapshot-service.js";
 import { getEmailTriageModeForUser } from "./triage-mode.js";
-import { ARRIVAL_GRACE_SOURCE, ARRIVAL_GRACE_READ_SOURCE } from "./arrival-grace.js";
+import { ARRIVAL_GRACE_SOURCE } from "./arrival-grace.js";
 import { resolveEmailAiModelConfig, inferEmailAiProviderFromModel } from "./email-ai-models.js";
 import {
   evaluateTriagePreflight,
@@ -25,6 +24,7 @@ const DEFAULT_STRONG_MODEL = "claude-sonnet-4-6";
 const STALE_RUNNING_JOB_TYPES = ["email_triage", "gmail_history_sync"];
 const DEFAULT_STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 const WEAK_SECURITY_GRACE_MS = 10 * 60 * 1000;
+const ARRIVAL_GRACE_READ_EXIT_DEFER_MS = 30 * 60 * 1000;
 const TRIAGE_PROMPT_CACHE_VERSION = "v1";
 
 const TRIAGE_TOOL = {
@@ -1006,20 +1006,6 @@ export async function processNextEmailTriageJob({
 
   const mode = await getEmailTriageModeForUser(nextJob.user_id, { dbClient });
   if (mode.effective_email_triage_mode === "paused") {
-    const settled = await settleReadArrivalGraceRows(nextJob.user_id, {
-      dbClient,
-      now,
-      emailIds: nextJob.email_id ? [nextJob.email_id] : [],
-    });
-    if (settled.settled > 0) {
-      return {
-        processed: true,
-        email_id: nextJob.email_id,
-        skipped: true,
-        source: ARRIVAL_GRACE_READ_SOURCE,
-        model_calls: [],
-      };
-    }
     return {
       processed: false,
       paused: true,
@@ -1069,23 +1055,15 @@ export async function processNextEmailTriageJob({
     }
 
     if (email.triage_source === ARRIVAL_GRACE_SOURCE && email.read) {
-      await settleReadArrivalGraceRows(email.user_id, {
-        dbClient,
-        now,
-        emailIds: [email.email_id],
-      });
-      publishCurrentDashboardEvent(email.user_id, {
-        source: "email_triage",
-        reason: ARRIVAL_GRACE_READ_SOURCE,
-        state: "current",
-        occurredAt: nowIso(now),
-      });
+      const nextCheckAt = new Date(now.getTime() + ARRIVAL_GRACE_READ_EXIT_DEFER_MS).toISOString();
+      await deferJob(job, dbClient, nextCheckAt, "Waiting for Inbox exit before settling read arrival-grace email");
       return {
         processed: true,
         job_id: Number(job.id),
         email_id: email.email_id,
         skipped: true,
-        source: ARRIVAL_GRACE_READ_SOURCE,
+        source: "arrival_grace_read_deferred",
+        scheduled_for: nextCheckAt,
         model_calls: [],
       };
     }

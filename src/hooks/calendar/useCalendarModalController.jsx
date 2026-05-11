@@ -197,7 +197,9 @@ export default function useCalendarModalController({
   focusDate,
   focusItemId,
   focusOpenDetail = false,
+  forceEventOverlay = false,
   forceDeadlineOverlay = false,
+  forceCompletedDeadlineOverlay = false,
   openRequestId = 0,
   deadlineActions = {},
 }) {
@@ -265,6 +267,8 @@ export default function useCalendarModalController({
   const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
   const handledDashboardDetailFocusRef = useRef(null);
+  const forcedVisibilityRef = useRef(null);
+  const overlayVisibilityRef = useRef(null);
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
@@ -542,6 +546,14 @@ export default function useCalendarModalController({
   const closeEventEditor = eventEditor.closeEditor;
   const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
 
+  useEffect(() => {
+    overlayVisibilityRef.current = {
+      eventOverlayVisible,
+      deadlineOverlayVisible,
+      completedDeadlineOverlayVisible,
+    };
+  }, [completedDeadlineOverlayVisible, deadlineOverlayVisible, eventOverlayVisible]);
+
   const resolveSelectedCalendarEvent = useCallback(() => {
     if (view !== "events" || activeSelectedItemId == null) return null;
     const events = viewData?.events || [];
@@ -567,8 +579,64 @@ export default function useCalendarModalController({
   useEffect(() => {
     if (!shouldForceDeadlineOverlay({ open, view, forceDeadlineOverlay })) return;
     setDeadlineOverlayVisible(true);
-    writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, true);
   }, [forceDeadlineOverlay, open, openRequestId, view]);
+
+  useEffect(() => {
+    if (!open || view !== "events") return;
+    if (!forceEventOverlay && !forceDeadlineOverlay && !forceCompletedDeadlineOverlay) return;
+    const requestKey = [
+      openRequestId,
+      view,
+      forceEventOverlay ? "events" : "",
+      forceDeadlineOverlay ? "deadlines" : "",
+      forceCompletedDeadlineOverlay ? "completed" : "",
+    ].join(":");
+    if (forcedVisibilityRef.current?.requestKey === requestKey) return;
+    if (forcedVisibilityRef.current) {
+      forcedVisibilityRef.current.requestKey = requestKey;
+      if (forceEventOverlay) setEventOverlayVisible(true);
+      if (forceDeadlineOverlay) setDeadlineOverlayVisible(true);
+      if (forceCompletedDeadlineOverlay) setCompletedDeadlineOverlayVisible(true);
+      return;
+    }
+    const current = overlayVisibilityRef.current || {
+      eventOverlayVisible,
+      deadlineOverlayVisible,
+      completedDeadlineOverlayVisible,
+    };
+    forcedVisibilityRef.current = {
+      requestKey,
+      previous: {
+        ...current,
+        storedDeadlineOverlayVisible: readStoredBoolean(
+          typeof window === "undefined" ? null : window.localStorage,
+          DEADLINE_OVERLAY_STORAGE_KEY,
+          current.deadlineOverlayVisible,
+        ),
+        storedCompletedDeadlineOverlayVisible: readStoredBoolean(
+          typeof window === "undefined" ? null : window.localStorage,
+          COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY,
+          current.completedDeadlineOverlayVisible,
+        ),
+      },
+    };
+    if (forceEventOverlay) setEventOverlayVisible(true);
+    if (forceDeadlineOverlay) setDeadlineOverlayVisible(true);
+    if (forceCompletedDeadlineOverlay) setCompletedDeadlineOverlayVisible(true);
+  // Capture the prior visibility exactly once for each dashboard-originated open request.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceCompletedDeadlineOverlay, forceDeadlineOverlay, forceEventOverlay, open, openRequestId, view]);
+
+  useEffect(() => {
+    if (open || !forcedVisibilityRef.current) return;
+    const previous = forcedVisibilityRef.current.previous;
+    forcedVisibilityRef.current = null;
+    setEventOverlayVisible(previous.eventOverlayVisible);
+    setDeadlineOverlayVisible(previous.deadlineOverlayVisible);
+    setCompletedDeadlineOverlayVisible(previous.completedDeadlineOverlayVisible);
+    writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, previous.storedDeadlineOverlayVisible);
+    writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, previous.storedCompletedDeadlineOverlayVisible);
+  }, [open]);
 
   const eventQuickActions = useCalendarQuickActions({
     editable: eventsEditable,

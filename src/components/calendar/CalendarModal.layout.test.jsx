@@ -776,7 +776,7 @@ describe("CalendarModal responsive layout", () => {
     expect(screen.getByTestId("calendar-floating-detail-caret")).toBeTruthy();
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
     expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 6, 2026");
-    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("true");
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBeNull();
   });
 
   it("does not expose Deadlines as a standalone calendar view", () => {
@@ -901,6 +901,7 @@ describe("CalendarModal responsive layout", () => {
   it("opens a dashboard-focused deadline in Events with the deadline overlay forced on", async () => {
     window.innerWidth = 1900;
     window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
+    window.localStorage.setItem("calendar:eventsCompletedDeadlines", "false");
     const onViewChange = vi.fn();
 
     render(wrapWithDashboard(
@@ -914,6 +915,7 @@ describe("CalendarModal responsive layout", () => {
         focusItemId="todo-1"
         focusOpenDetail
         forceDeadlineOverlay
+        forceCompletedDeadlineOverlay
         eventsData={{
           editable: true,
           getEvents: () => [],
@@ -922,7 +924,7 @@ describe("CalendarModal responsive layout", () => {
         deadlinesData={{
           todoist: {
             upcoming: [
-              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "complete" },
             ],
           },
         }}
@@ -931,7 +933,8 @@ describe("CalendarModal responsive layout", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
-    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("true");
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
+    expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
