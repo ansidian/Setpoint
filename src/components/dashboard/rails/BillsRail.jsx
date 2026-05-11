@@ -85,7 +85,7 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
     .filter((x) => x.days != null && x.days <= 7 && !x.b.paid)
     .reduce((s, x) => s + (x.b.amount || 0), 0);
   const showLoadingPlaceholder = loadingState === "empty_loading";
-  const reservedListMinHeight = (isMobile ? BILL_ROW_MIN_HEIGHT_MOBILE : BILL_ROW_MIN_HEIGHT) * MAX_VISIBLE_BILLS;
+  const loadingListMinHeight = (isMobile ? BILL_ROW_MIN_HEIGHT_MOBILE : BILL_ROW_MIN_HEIGHT) * MAX_VISIBLE_BILLS;
 
   return (
     <div data-sect="bills">
@@ -109,11 +109,12 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
         }
       />
       <div
+        data-testid="bills-rail-list"
         style={{
           marginTop: 10,
           display: "flex",
           flexDirection: "column",
-          minHeight: showLoadingPlaceholder || upcoming.length > 0 ? reservedListMinHeight : undefined,
+          minHeight: showLoadingPlaceholder ? loadingListMinHeight : undefined,
         }}
       >
         {showLoadingPlaceholder ? <BillsRailLoadingPlaceholder isMobile={isMobile} /> : null}
