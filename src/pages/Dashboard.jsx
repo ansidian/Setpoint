@@ -75,6 +75,12 @@ export default function Dashboard() {
       calendarBillsRefreshRequestedRef.current = true;
       calendarBillRange.markStale?.();
     }
+    if (event?.source === "todoist") {
+      calendarDeadlineRange.markStale?.();
+      if (event.state === "current") {
+        refreshCalendarDomainsRef.current?.({ force: true, includeBills: false });
+      }
+    }
   };
   const markCalendarRangeStale = calendarRange.markStale;
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
@@ -210,9 +216,9 @@ export default function Dashboard() {
   }, [billsCurrentRefreshing, calendarBillsData?.pendingUpdate, snapshotCalendarBills]);
 
   useEffect(() => {
-    refreshCalendarDomainsRef.current = ({ force = false } = {}) => {
+    refreshCalendarDomainsRef.current = ({ force = false, includeBills = true } = {}) => {
       loadCalendarDeadlines({ force });
-      loadCalendarBills({ force });
+      if (includeBills) loadCalendarBills({ force });
     };
   }, [loadCalendarBills, loadCalendarDeadlines]);
 

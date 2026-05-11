@@ -230,6 +230,29 @@ describe("Dashboard refresh wiring", () => {
     expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(1);
   });
 
+  it("reloads calendar deadlines after Todoist sync settles", () => {
+    render(
+      <BrowserRouter>
+        <Dashboard />
+      </BrowserRouter>,
+    );
+
+    act(() => {
+      mocks.dashboardEventHandler?.({
+        source: "todoist",
+        reason: "sync_settled",
+        state: "current",
+      });
+    });
+
+    expect(mocks.handleDashboardEvent).toHaveBeenCalledWith(expect.objectContaining({
+      source: "todoist",
+      reason: "sync_settled",
+    }));
+    expect(mocks.markCalendarDomainRangeStale).toHaveBeenCalledTimes(1);
+    expect(mocks.getCalendarDeadlines).toHaveBeenCalledTimes(1);
+  });
+
   it("clears the Bills pending snapshot once current-data refresh settles", () => {
     mocks.briefing = { weather: null, calendar: [], ctm: {}, todoist: {}, emails: { accounts: [] } };
     mocks.liveData = {
