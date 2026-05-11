@@ -1,9 +1,23 @@
-const REMINDER_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Los_Angeles",
+const REMINDER_TIME_ZONE = "America/Los_Angeles";
+const SOON_REMINDER_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+const REMINDER_DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: REMINDER_TIME_ZONE,
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
+});
+const REMINDER_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: REMINDER_TIME_ZONE,
+  hour: "numeric",
+  minute: "2-digit",
+});
+const REMINDER_DAY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: REMINDER_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
 });
 
 export function getUpcomingReminderState(item) {
@@ -22,14 +36,42 @@ export function formatReminderTime(value) {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
+  return REMINDER_DATE_TIME_FORMATTER.format(date);
+}
+
+function formatShortReminderTime(date) {
   return REMINDER_TIME_FORMATTER.format(date);
 }
 
-export function formatReminderSummary(item) {
+function formatRelativeReminderTime(diffMs) {
+  const totalMinutes = Math.max(1, Math.floor(diffMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (!hours) return `${minutes}m`;
+  if (!minutes) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+function isSameReminderDay(left, right) {
+  return REMINDER_DAY_FORMATTER.format(left) === REMINDER_DAY_FORMATTER.format(right);
+}
+
+export function formatReminderSummary(item, { now = new Date() } = {}) {
   const state = getUpcomingReminderState(item);
   if (!state.hasUpcomingReminder) return null;
-  const time = formatReminderTime(state.nextReminderAt);
-  if (time) return `Reminder ${time}`;
+  const nextReminderDate = new Date(state.nextReminderAt);
+  if (!Number.isNaN(nextReminderDate.getTime())) {
+    const nowDate = new Date(now);
+    const nowMs = nowDate.getTime();
+    const diffMs = nextReminderDate.getTime() - nowMs;
+    if (Number.isFinite(nowMs) && diffMs > 0 && diffMs <= SOON_REMINDER_WINDOW_MS) {
+      return `Reminder in ${formatRelativeReminderTime(diffMs)}`;
+    }
+    if (Number.isFinite(nowMs) && isSameReminderDay(nextReminderDate, nowDate)) {
+      return `Reminder ${formatShortReminderTime(nextReminderDate)}`;
+    }
+    return `Reminder ${formatReminderTime(nextReminderDate)}`;
+  }
   return "Reminder set";
 }
 

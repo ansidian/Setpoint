@@ -317,6 +317,53 @@ describe("AddTaskPanel due picker", () => {
     );
   });
 
+  it("preserves retained Todoist reminders after an edit without explicit reminder changes", async () => {
+    const onTaskUpdated = vi.fn();
+    mockListReminders.mockResolvedValueOnce({
+      reminders: [
+        { id: "at-start", offset_minutes: 0, remind_at: "2026-04-21T21:30:00.000Z", status: "pending" },
+      ],
+    });
+    mockUpdateTodoistTask.mockResolvedValueOnce({
+      id: "todo-1",
+      title: "Follow up",
+      due_date: "2026-04-21",
+      due_time: "3:30 PM",
+    });
+
+    render(
+      <PanelHarness
+        onTaskUpdated={onTaskUpdated}
+        editingTask={{
+          id: "todo-1",
+          title: "Follow up",
+          description: "",
+          class_name: "Inbox",
+          priority: 4,
+          labels: [],
+          due_date: "2026-04-21",
+          due_time: "2:30 PM",
+        }}
+      />,
+    );
+    await vi.runAllTimersAsync();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await vi.runAllTimersAsync();
+
+    expect(onTaskUpdated).toHaveBeenCalledWith(expect.objectContaining({
+      id: "todo-1",
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 1,
+      nextReminderAt: "2026-04-21T22:30:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingCount: 1,
+        nextReminderAt: "2026-04-21T22:30:00.000Z",
+      },
+    }));
+  });
+
   it("supports the inline host and seeds a selected calendar day for new tasks", async () => {
     const onDraftPreviewChange = vi.fn();
     render(

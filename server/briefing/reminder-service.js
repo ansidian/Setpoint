@@ -197,6 +197,7 @@ export async function recomputeUnsentRemindersForSource({
   sourceOccurrenceId,
   anchorAt,
   anchorKind,
+  now = new Date(),
 }, options = {}) {
   assertReminderShape({ sourceType, anchorKind });
   const reminders = await listRemindersForSource({
@@ -207,8 +208,17 @@ export async function recomputeUnsentRemindersForSource({
   }, options);
   const pending = reminders.filter((reminder) => reminder.status === "pending");
   const dbClient = client(options);
+  const nowMs = new Date(options.now || now).getTime();
 
   for (const reminder of pending) {
+    const nextRemindAt = computeRemindAt(anchorAt, reminder.offset_minutes);
+    if (Number.isFinite(nowMs) && new Date(nextRemindAt).getTime() <= nowMs) {
+      await dbClient.execute({
+        sql: "DELETE FROM ea_reminders WHERE id = ?",
+        args: [reminder.id],
+      });
+      continue;
+    }
     await dbClient.execute({
       sql: `UPDATE ea_reminders
             SET anchor_kind = ?,
@@ -220,7 +230,7 @@ export async function recomputeUnsentRemindersForSource({
       args: [
         anchorKind,
         new Date(anchorAt).toISOString(),
-        computeRemindAt(anchorAt, reminder.offset_minutes),
+        nextRemindAt,
         reminder.id,
       ],
     });

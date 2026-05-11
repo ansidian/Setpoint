@@ -12,6 +12,17 @@ function pacificDateKeyFromMs(ms) {
   }).format(new Date(ms));
 }
 
+export function resolveFloatingDeadlineItemId(activeView, task) {
+  const itemId = activeView?.getItemId ? activeView.getItemId(task) : task?.id;
+  return itemId != null ? String(itemId) : null;
+}
+
+export function resolveFloatingEventItemId(activeView, savedEvent, currentDetail = null) {
+  const itemId = activeView?.getItemId ? activeView.getItemId(savedEvent) : savedEvent?.id;
+  if (itemId != null) return String(itemId);
+  return currentDetail?.itemId != null ? String(currentDetail.itemId) : null;
+}
+
 export default function useCalendarModalEditorRouting({
   activeSelectedDateKey,
   activeView,
@@ -41,16 +52,16 @@ export default function useCalendarModalEditorRouting({
     }
     const dateKey = savedEvent.startMs ? pacificDateKeyFromMs(savedEvent.startMs) : current.dateKey;
     const parsed = parseYmd(dateKey);
-    const itemId = activeView.getItemId ? activeView.getItemId(savedEvent) : savedEvent.id;
+    const itemId = resolveFloatingEventItemId(activeView, savedEvent, current);
     if (parsed) {
       setSelectedDay(parsed.day);
       setSelectedDateKey(dateKey);
     }
-    setSelectedItemId(String(itemId));
+    setSelectedItemId(itemId);
     setFloatingDetail({
       ...current,
       mode: "detail",
-      itemId: String(itemId),
+      itemId,
       dateKey,
       day: parsed?.day ?? current.day ?? null,
       itemsSnapshot: [savedEvent],
@@ -158,7 +169,7 @@ export default function useCalendarModalEditorRouting({
 
   const openFloatingDeadlineEdit = useCallback((task, options = {}) => {
     if (task?.source !== "todoist") return;
-    const itemId = activeView.getItemId ? activeView.getItemId(task) : task.id;
+    const itemId = resolveFloatingDeadlineItemId(activeView, task);
     const editTaskId = String(task.id);
     const dateKey = options.dateKey || task.due_date || activeSelectedDateKey;
     const fallbackCell = findDateCell(dateKey);
@@ -228,13 +239,14 @@ export default function useCalendarModalEditorRouting({
       setSelectedDay(parsed.day);
       setSelectedDateKey(dateKey);
     }
-    setSelectedItemId(String(task.id));
+    const itemId = resolveFloatingDeadlineItemId(activeView, task) || String(task.id);
+    setSelectedItemId(itemId);
     setDeadlineEditor(null);
     setDeadlineDraftPreview(null);
     setFloatingDetail({
       ...current,
       mode: "detail",
-      itemId: String(task.id),
+      itemId,
       dateKey,
       day: parsed?.day ?? current.day ?? null,
       itemsSnapshot: [task],
@@ -243,7 +255,7 @@ export default function useCalendarModalEditorRouting({
       activeSaveRequestId: null,
       dirty: false,
     });
-  }, [activeSelectedDateKey, floatingDetailRef, setDeadlineDraftPreview, setDeadlineEditor, setFloatingDetail, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
+  }, [activeSelectedDateKey, activeView, floatingDetailRef, setDeadlineDraftPreview, setDeadlineEditor, setFloatingDetail, setSelectedDateKey, setSelectedDay, setSelectedItemId]);
 
   const handleFloatingDeadlineDeleted = useCallback((taskId) => {
     setDeadlineEditor(null);

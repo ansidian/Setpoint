@@ -77,7 +77,7 @@ describe("reminder service", () => {
       sourceItemId: "event-1",
       anchorAt: "2026-05-10T18:00:00.000Z",
       anchorKind: "event_start",
-    }, { dbClient: db });
+    }, { dbClient: db, now: "2026-05-10T16:00:00.000Z" });
 
     expect(await listRemindersForSource({
       userId: "u1",
@@ -93,6 +93,49 @@ describe("reminder service", () => {
       sourceType: "calendar_event",
       sourceItemId: "event-1",
     }, { dbClient: db })).toEqual([]);
+  });
+
+  it("cancels pending reminders that become untriggerable after an anchor moves into the past", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1",
+      anchorKind: "event_start",
+      anchorAt: "2026-05-10T17:00:00.000Z",
+      offsetMinutes: 0,
+    }, { dbClient: db, idFactory: () => "at-start" });
+    await createReminder({
+      userId: "u1",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1",
+      anchorKind: "event_start",
+      anchorAt: "2026-05-10T17:00:00.000Z",
+      offsetMinutes: 60,
+    }, { dbClient: db, idFactory: () => "after-start" });
+
+    await recomputeUnsentRemindersForSource({
+      userId: "u1",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1",
+      anchorKind: "event_start",
+      anchorAt: "2026-05-10T15:00:00.000Z",
+    }, {
+      dbClient: db,
+      now: "2026-05-10T15:30:00.000Z",
+    });
+
+    expect(await listRemindersForSource({
+      userId: "u1",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1",
+    }, { dbClient: db })).toMatchObject([
+      {
+        id: "after-start",
+        anchor_at: "2026-05-10T15:00:00.000Z",
+        remind_at: "2026-05-10T16:00:00.000Z",
+        status: "pending",
+      },
+    ]);
   });
 
   it("keeps sent rows for audit while source cleanup can remove all rows", async () => {
