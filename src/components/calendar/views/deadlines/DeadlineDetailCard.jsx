@@ -29,12 +29,12 @@ import {
 } from "./deadlineDetailModel.js";
 import { formatReminderSummary } from "../../reminderDisplay.js";
 
-function PriorityBadge({ level }) {
+function PriorityBadge({ level, compact = false }) {
   const meta = PRIORITY_META[level];
   if (!meta) return null;
   return (
-    <RailMetaChip tone="accent" color={meta.color}>
-      <Flag size={10} strokeWidth={2.2} />
+    <RailMetaChip tone="accent" color={meta.color} compact={compact}>
+      <Flag size={compact ? 9 : 10} strokeWidth={2.2} />
       {meta.label}
     </RailMetaChip>
   );
@@ -185,6 +185,7 @@ export default function DeadlineDetailCard({
                 compact
                 testId="calendar-selected-deadline-status"
               />
+              {showPriorityChip ? <PriorityBadge level={task.priority} compact /> : null}
               {reminderSummary ? (
                 <RailReminderIndicator compact>
                   <Bell size={10} strokeWidth={2.2} />
@@ -309,17 +310,17 @@ export default function DeadlineDetailCard({
           ) : null}
         </Motion.div>
 
-        {!compact && (showPriorityChip || showPointsChip || !isTodoist || reminderSummary) ? (
+        {(showPriorityChip || showPointsChip || !isTodoist || reminderSummary) ? (
           <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
             {reminderSummary ? (
-              <RailReminderIndicator>
+              <RailReminderIndicator compact={compact}>
                 <Bell size={10} strokeWidth={2.2} />
                 {reminderSummary}
               </RailReminderIndicator>
             ) : null}
-            {showPriorityChip ? <PriorityBadge level={task.priority} /> : null}
-            {showPointsChip ? <RailMetaChip tone="quiet">{task.points_possible} pts</RailMetaChip> : null}
-            {!isTodoist ? <RailMetaChip tone="quiet">{sourceLabel}</RailMetaChip> : null}
+            {showPriorityChip ? <PriorityBadge level={task.priority} compact={compact} /> : null}
+            {showPointsChip ? <RailMetaChip tone="quiet" compact={compact}>{task.points_possible} pts</RailMetaChip> : null}
+            {!isTodoist ? <RailMetaChip tone="quiet" compact={compact}>{sourceLabel}</RailMetaChip> : null}
           </Motion.div>
         ) : null}
 
