@@ -109,7 +109,7 @@ export default function HeroCalloutCard({
                   alignItems: "center",
                   gap: 4,
                   minWidth: 0,
-                  maxWidth: isMobile ? "100%" : 132,
+                  maxWidth: isMobile ? "100%" : 168,
                   padding: "1px 6px",
                   borderRadius: 999,
                   border: "1px solid rgba(249,226,175,0.26)",

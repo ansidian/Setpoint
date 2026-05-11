@@ -217,7 +217,8 @@ export async function saveCalendarEventAction(options, client = defaultClient) {
   }
   const reminderItems = eventReminders?.items || [];
   const remindersChanged = removedIds.length > 0 || reminderCreates.length > 0;
-  const projectedSavedEvent = remindersChanged
+  const shouldProjectReminderState = remindersChanged || reminderItems.length > 0;
+  const projectedSavedEvent = shouldProjectReminderState
     ? applyUpcomingReminderState(
       savedEvent,
       projectUpcomingReminderState(reminderItems, {

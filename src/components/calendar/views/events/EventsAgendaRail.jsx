@@ -15,6 +15,16 @@ function keyForEvent(event, dateKey) {
   return `${event.agendaItemId || event.id}-${dateKey}`;
 }
 
+function agendaEventMatchItemIds(event) {
+  return [
+    event?.agendaItemId,
+    event?.id,
+    event?.iCalUID,
+    event?.htmlLink,
+    event?.openUrl,
+  ].filter(Boolean).map(String).join(" ");
+}
+
 function isSelectedAgendaEvent(event, dateKey, selectedItemId, selectedDateKey) {
   return String(selectedItemId || "") === String(event.agendaItemId || "")
     && selectedDateKey === dateKey;
@@ -115,6 +125,7 @@ function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked })
       type="button"
       data-testid="calendar-agenda-event-chip"
       data-item-id={event.agendaItemId}
+      data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
       draggable={dragAllowed}
       onDragStart={(dragEvent) => {
         if (!dragAllowed) return;
@@ -196,6 +207,7 @@ function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickActions, 
       type="button"
       data-testid="calendar-agenda-event-row"
       data-item-id={event.agendaItemId}
+      data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
       draggable={dragAllowed}
       onDragStart={(dragEvent) => {
         if (!dragAllowed) return;

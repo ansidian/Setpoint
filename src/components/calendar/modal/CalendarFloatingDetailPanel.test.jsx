@@ -227,7 +227,7 @@ describe("CalendarFloatingDetailPanel", () => {
         onPark={() => {}}
         onClose={() => {}}
       >
-        <div>Rent</div>
+      <div>Rent</div>
       </CalendarFloatingDetailPanel>,
     );
 
@@ -238,6 +238,68 @@ describe("CalendarFloatingDetailPanel", () => {
     });
 
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-opacity")).toBe("1");
+  });
+
+  it("does not park agenda-anchored panels during transient row replacement", async () => {
+    const calendarPanel = appendRectElement({
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 900,
+      width: 900,
+      height: 900,
+    });
+    const anchorElement = appendRectElement({
+      top: 400,
+      left: 600,
+      right: 700,
+      bottom: 424,
+      width: 100,
+      height: 24,
+    });
+    const onPark = vi.fn();
+
+    render(
+      <CalendarFloatingDetailPanel
+        detail={{
+          open: true,
+          mode: "edit",
+          placementKey: "agenda-placement",
+          view: "events",
+          itemId: "event-1",
+          dateKey: "2026-05-12",
+          anchorElement,
+          sourceCellElement: anchorElement,
+          anchorKind: "agenda-row",
+          preferredSide: "left",
+          sideIntent: "auto",
+          parked: false,
+          userDragged: false,
+          initialPlacement: resolveFloatingDetailPlacement({
+            anchorRect: anchorElement.getBoundingClientRect(),
+            sourceRect: anchorElement.getBoundingClientRect(),
+            calendarRect: calendarPanel.getBoundingClientRect(),
+            railRect: null,
+            panelHeight: 560,
+            mode: "edit",
+            preferredSide: "left",
+          }),
+        }}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={onPark}
+        onClose={() => {}}
+      >
+        <div>Editor</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    anchorElement.remove();
+    window.dispatchEvent(new Event("scroll"));
+    await nextFrame();
+
+    expect(onPark).not.toHaveBeenCalled();
   });
 
   it("snaps cold side flips until the first measured placement is revealed", async () => {

@@ -77,6 +77,25 @@ describe("EventsAgendaRail", () => {
     }));
   });
 
+  it("exposes alternate event ids for agenda reanchoring after saves", () => {
+    renderRail({
+      selectedDateKey: "2026-05-04",
+      events: [
+        event({
+          id: "provider-id",
+          iCalUID: "ical-id",
+          htmlLink: "https://calendar.example/event",
+          title: "Planning block",
+          start: "2026-05-04T16:00:00.000Z",
+          end: "2026-05-04T17:00:00.000Z",
+        }),
+      ],
+    });
+
+    expect(screen.getByTestId("calendar-agenda-event-row").getAttribute("data-calendar-match-item-ids"))
+      .toContain("ical-id");
+  });
+
   it("shows compact reminder timing in agenda rows", () => {
     renderRail({
       selectedDateKey: "2026-05-04",

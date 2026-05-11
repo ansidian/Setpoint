@@ -41,7 +41,7 @@ describe("DeadlinesRail", () => {
 
     const indicator = screen.getByTestId("dashboard-reminder-indicator");
     expect(indicator.textContent).toContain("Reminder");
-    expect(indicator.textContent).toContain("May 5");
+    expect(indicator.textContent).toContain("in 5h 30m");
     expect(screen.getByText("Already pinged").closest("[role='button']")?.textContent).not.toContain("Reminder");
   });
 });

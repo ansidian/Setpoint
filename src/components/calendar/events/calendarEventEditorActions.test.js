@@ -443,6 +443,50 @@ describe("calendarEventEditorActions", () => {
     });
   });
 
+  it("preserves retained event reminders after a time edit without explicit reminder changes", async () => {
+    const editingEvent = {
+      id: "event-1",
+      etag: '"etag-1"',
+      title: "Old work",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2099-05-05T20:00:00.000Z").getTime(),
+      endMs: new Date("2099-05-05T20:30:00.000Z").getTime(),
+      allDay: false,
+    };
+    const savedEvent = {
+      ...editingEvent,
+      title: "Work",
+      startMs: new Date("2099-05-05T21:00:00.000Z").getTime(),
+      endMs: new Date("2099-05-05T21:30:00.000Z").getTime(),
+    };
+    const client = {
+      update: vi.fn().mockResolvedValue({ event: savedEvent }),
+    };
+
+    const result = await saveCalendarEventAction({
+      draft,
+      effectiveTitle: "Work",
+      editingEvent,
+      intentMode: "single",
+      eventReminders: {
+        items: [{ id: "at-start", offset_minutes: 0, remind_at: "2099-05-05T20:00:00.000Z", status: "pending" }],
+        removedIds: [],
+      },
+    }, client);
+
+    expect(result.savedEvent).toMatchObject({
+      hasUpcomingReminder: true,
+      upcomingReminderCount: 1,
+      nextReminderAt: "2099-05-05T21:00:00.000Z",
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingCount: 1,
+        nextReminderAt: "2099-05-05T21:00:00.000Z",
+      },
+    });
+  });
+
   it("updates events with a new target calendar while preserving source metadata", async () => {
     const editingEvent = {
       id: "event-move",

@@ -114,7 +114,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
   const urgencyColors = { high: "#f38ba8", medium: "#f9e2af", low: accent };
   const dotColor = urgencyColors[urgency] || accent;
   const effectiveRailDotColor = railDotColor || dotColor;
-  const reminderSummary = formatReminderSummary(item.data);
+  const reminderSummary = formatReminderSummary(item.data, { now });
   const opacity = isPast ? 0.38 : 1;
   const railBorderColor = railDotColor
     ? `${effectiveRailDotColor}${isLive ? "" : "55"}`

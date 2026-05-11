@@ -74,6 +74,7 @@ export default function CalendarFloatingDetailPanel({
   const open = !!detail?.open && !!children;
   const mode = detail?.mode || "detail";
   const editorMode = mode === "edit" || mode === "create";
+  const agendaAnchored = String(detail?.anchorKind || "").startsWith("agenda");
   const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
   const placementKey = detail?.placementKey;
   const placement = placementState.key === detail?.placementKey
@@ -92,6 +93,7 @@ export default function CalendarFloatingDetailPanel({
     const exclusionRect = rectFromElement(detail.exclusionElement);
 
     if (!detail.parked && (!anchorRect || (calendarRect && !isRectInside(anchorRect, calendarRect)))) {
+      if (agendaAnchored) return null;
       if (!allowPark) return null;
       onPark?.();
       return null;
@@ -110,7 +112,7 @@ export default function CalendarFloatingDetailPanel({
       forcedSide: detail.forcedSide || null,
       allowRailOverlap: detail.sideIntent === "user-flip",
     });
-  }, [calendarPanelRef, detail, measuredSize.height, mode, onPark, railRef]);
+  }, [agendaAnchored, calendarPanelRef, detail, measuredSize.height, mode, onPark, railRef]);
 
   const updatePlacement = useCallback(({ allowPark = true } = {}) => {
     if (!open || detail?.userDragged || draggingRef.current || manualPlacementActive) return;

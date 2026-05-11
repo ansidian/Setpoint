@@ -57,4 +57,19 @@ describe("reminderDisplay", () => {
       nextReminderAt: "2099-05-11T19:00:00.000Z",
     });
   });
+
+  it("formats reminder summaries for compact dashboard and agenda labels", () => {
+    const item = (nextReminderAt) => ({
+      reminderState: {
+        hasUpcomingReminder: true,
+        upcomingCount: 1,
+        nextReminderAt,
+      },
+    });
+    const now = "2026-05-11T16:00:00.000Z";
+
+    expect(formatReminderSummary(item("2026-05-11T20:32:00.000Z"), { now })).toBe("Reminder in 4h 32m");
+    expect(formatReminderSummary(item("2026-05-12T04:00:00.000Z"), { now })).toBe("Reminder 9:00 PM");
+    expect(formatReminderSummary(item("2026-05-13T20:00:00.000Z"), { now })).toBe("Reminder May 13, 1:00 PM");
+  });
 });

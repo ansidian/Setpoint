@@ -651,14 +651,15 @@ export default function useAddTaskPanelController({
         reminderCreates += 1;
       }
       const remindersChanged = removedReminderIds.length > 0 || reminderCreates > 0;
-      const projectedTask = remindersChanged
+      const shouldProjectReminderState = remindersChanged || todoistReminders.length > 0;
+      const projectedTask = shouldProjectReminderState
         ? applyUpcomingReminderState(
           savedTask,
           projectUpcomingReminderState(todoistReminders, {
             anchorAt: todoistAnchorFromTask(savedTask)?.anchorAt || null,
           }),
         )
-        : task;
+        : savedTask;
       if (isEdit) {
         onTaskUpdated?.(projectedTask);
       } else {
