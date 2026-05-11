@@ -58,6 +58,7 @@ export default function useCalendarModalHotkeys({
   setSelectedDateKey,
   setSelectedItemId,
   requestAgendaScroll,
+  resolveSelectedAgendaEditAnchor,
   openFloatingEventEdit,
   openFloatingDeadlineEdit,
   openFloatingEventCreate,
@@ -212,7 +213,10 @@ export default function useCalendarModalHotkeys({
               const selectedItem = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
               if (isTodoistDeadlineItem(selectedItem)) {
                 if (usesFloatingEditor) {
-                  openFloatingDeadlineEdit(selectedItem, { dateKey: selectedDateKey });
+                  openFloatingDeadlineEdit(selectedItem, {
+                    dateKey: selectedDateKey,
+                    ...resolveSelectedAgendaEditAnchor?.(selectedItemId, selectedDateKey),
+                  });
                 } else {
                   setFloatingDetail(null);
                   setDeadlineEditor({ mode: "edit", taskId: String(selectedItem.id) });
@@ -220,7 +224,10 @@ export default function useCalendarModalHotkeys({
                 }
               } else if (selectedItem && eventEditor.editable) {
                 if (usesFloatingEditor) {
-                  openFloatingEventEdit(selectedItem, { dateKey: selectedDateKey });
+                  openFloatingEventEdit(selectedItem, {
+                    dateKey: selectedDateKey,
+                    ...resolveSelectedAgendaEditAnchor?.(selectedItemId, selectedDateKey),
+                  });
                 } else {
                   setFloatingDetail(null);
                   eventEditor.openEdit(selectedItem);
@@ -232,7 +239,10 @@ export default function useCalendarModalHotkeys({
               const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
               if (task?.source === "todoist") {
                 if (usesFloatingEditor) {
-                  openFloatingDeadlineEdit(task, { dateKey: selectedDateKey });
+                  openFloatingDeadlineEdit(task, {
+                    dateKey: selectedDateKey,
+                    ...resolveSelectedAgendaEditAnchor?.(selectedItemId, selectedDateKey),
+                  });
                 } else {
                   setFloatingDetail(null);
                   setDeadlineEditor({ mode: "edit", taskId: String(selectedItemId) });

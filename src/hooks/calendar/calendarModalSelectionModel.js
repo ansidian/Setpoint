@@ -50,6 +50,9 @@ export function buildCalendarModalSyncSnapshot({
   pendingFocusDate,
   pendingFocusItemId,
 }) {
+  const today = new Date();
+  const todayViewDate = { month: today.getMonth(), year: today.getFullYear() };
+  const todayDateKey = ymdFromParts(today.getFullYear(), today.getMonth(), today.getDate());
   const didOpen = !prevOpen && open;
   const didViewChange = prevView !== view;
   const didOpenRequest = open && prevOpenRequestId !== openRequestId;
@@ -76,16 +79,14 @@ export function buildCalendarModalSyncSnapshot({
       nextSelectedDateKey = ymdFromParts(openingFocus.getFullYear(), openingFocus.getMonth(), openingFocus.getDate());
       nextSelectedItemId = focusItemId ? String(focusItemId) : null;
     } else if (isCleanDeadlineCreateRequest) {
-      const today = new Date();
-      nextViewDate = { month: today.getMonth(), year: today.getFullYear() };
+      nextViewDate = todayViewDate;
       nextSelectedDay = null;
       nextSelectedDateKey = null;
       nextSelectedItemId = null;
     } else {
-      const today = new Date();
-      nextViewDate = { month: today.getMonth(), year: today.getFullYear() };
+      nextViewDate = todayViewDate;
       nextSelectedDay = today.getDate();
-      nextSelectedDateKey = ymdFromParts(today.getFullYear(), today.getMonth(), today.getDate());
+      nextSelectedDateKey = todayDateKey;
       nextSelectedItemId = null;
     }
   }
@@ -105,6 +106,11 @@ export function buildCalendarModalSyncSnapshot({
       nextSelectedItemId = null;
     } else if (focusItemId) {
       nextSelectedItemId = String(focusItemId);
+    } else {
+      nextViewDate = todayViewDate;
+      nextSelectedDay = today.getDate();
+      nextSelectedDateKey = todayDateKey;
+      nextSelectedItemId = null;
     }
   }
 

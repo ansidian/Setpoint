@@ -601,6 +601,184 @@ describe("CalendarModal responsive layout", () => {
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
   });
 
+  it("keeps hotkey edit anchored to the agenda row after canceling its detail", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+              calendarId: "primary",
+              accountId: "gmail-main",
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(await screen.findByTestId("calendar-agenda-event-row"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("agenda-row");
+    });
+
+    fireEvent.keyDown(document, { key: "e" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("agenda-row");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /cancel editor/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("detail");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /close floating detail/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+
+    fireEvent.keyDown(document, { key: "e" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
+      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("agenda-row");
+    });
+  });
+
+  it("does not replay a month-grid chip scroll command on the next unfocused open", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z"));
+
+    try {
+      window.innerWidth = 1900;
+      const eventsData = {
+        editable: true,
+        getEvents: () => ([
+          {
+            id: "event-1",
+            title: "Design review",
+            startMs: new Date("2026-05-14T17:00:00.000Z").getTime(),
+            endMs: new Date("2026-05-14T18:00:00.000Z").getTime(),
+            allDay: false,
+            color: "#4285f4",
+            writable: true,
+            calendarId: "primary",
+            accountId: "gmail-main",
+          },
+        ]),
+      };
+
+      const { rerender } = render(wrapWithDashboard(
+        <CalendarModal
+          open
+          openRequestId={1}
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={eventsData}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      fireEvent.click(within(screen.getByTestId("calendar-cell-14")).getByTestId("calendar-cell-item-chip"));
+      await flushAnimationFrame();
+
+      rerender(wrapWithDashboard(
+        <CalendarModal
+          open={false}
+          openRequestId={1}
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={eventsData}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+      const originalScrollTo = HTMLElement.prototype.scrollTo;
+      const scrollTo = vi.fn();
+      HTMLElement.prototype.scrollTo = function scrollToMock(options) {
+        scrollTo(options);
+      };
+      HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRectMock() {
+        if (this.getAttribute?.("data-testid") === "events-agenda-rail") {
+          return { top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 };
+        }
+        if (
+          this.getAttribute?.("data-agenda-date-header") === "true"
+          && this.getAttribute?.("data-date-key") === "2026-05-11"
+        ) {
+          return { top: 100, bottom: 134, left: 0, right: 280, width: 280, height: 34 };
+        }
+        if (this.getAttribute?.("data-testid") === "calendar-agenda-event-row") {
+          return { top: 800, bottom: 844, left: 0, right: 280, width: 280, height: 44 };
+        }
+        return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+      };
+
+      rerender(wrapWithDashboard(
+        <CalendarModal
+          open
+          openRequestId={2}
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={eventsData}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const rail = await screen.findByTestId("events-agenda-rail");
+      rail.scrollTop = 0;
+
+      await flushAnimationFrame();
+
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      if (originalScrollTo) {
+        HTMLElement.prototype.scrollTo = originalScrollTo;
+      } else {
+        delete HTMLElement.prototype.scrollTo;
+      }
+
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+        top: 100,
+        behavior: "auto",
+      }));
+      expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({
+        top: 756,
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("dims past event days more than future days without dimming today", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
