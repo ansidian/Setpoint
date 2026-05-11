@@ -45,6 +45,17 @@ describe("CalendarEventReminderChips", () => {
     expect(onAddPreset).not.toHaveBeenCalled();
   });
 
+  it("offers an at-start preset for event reminders", () => {
+    const onAddPreset = vi.fn();
+    renderChips({ onAddPreset });
+
+    const atStart = screen.getByTestId("calendar-event-reminder-preset-0");
+    expect(atStart.textContent).toBe("At start");
+
+    fireEvent.click(atStart);
+    expect(onAddPreset).toHaveBeenCalledWith(0);
+  });
+
   it("keeps custom reminder creation available when presets are disabled", () => {
     renderChips({
       presetStates: {

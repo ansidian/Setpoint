@@ -1,6 +1,7 @@
 const PACIFIC_TIME_ZONE = "America/Los_Angeles";
 
 export const EVENT_REMINDER_PRESETS = [
+  { offsetMinutes: 0, label: "At start" },
   { offsetMinutes: -10, label: "10 min" },
   { offsetMinutes: -30, label: "30 min" },
   { offsetMinutes: -60, label: "1 hour" },
