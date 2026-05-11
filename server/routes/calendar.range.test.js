@@ -227,7 +227,7 @@ describe("GET /api/calendar/deadlines", () => {
     expect(hydrateRecurringTombstones).toHaveBeenCalledWith(
       process.env.EA_USER_ID,
       new Set(["todo-open"]),
-      { viewBoundary: "yesterday" },
+      { viewBoundary: "today" },
     );
     expect(db.execute).not.toHaveBeenCalled();
     expect(res.body.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);

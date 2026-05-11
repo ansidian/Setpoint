@@ -1460,7 +1460,6 @@ export async function getActiveSnapshotView(userId, {
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
 } = {}) {
-  await settleReadArrivalGraceRows(userId, { dbClient, now });
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   const items = snapshot ? await loadSnapshotItems(dbClient, snapshot.id) : [];
   const catchUpItems = snapshot ? await loadActiveCatchUpItems(dbClient, userId, snapshot) : [];

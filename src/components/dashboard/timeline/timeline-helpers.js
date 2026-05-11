@@ -37,11 +37,12 @@ export function formatFullDateForOffset(offset, now) {
   });
 }
 
-export function buildTimelineGroups(items, now, filters) {
+export function buildTimelineGroups(items, now, filters, { minDay = null } = {}) {
   const groups = new Map();
   for (const item of items) {
     const ms = item.startMs ?? item.dueAtMs;
     const bucket = dayBucket(ms, now);
+    if (minDay != null && bucket < minDay) continue;
     if (!groups.has(bucket)) groups.set(bucket, []);
     groups.get(bucket).push(item);
   }

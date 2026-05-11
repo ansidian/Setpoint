@@ -220,4 +220,33 @@ describe("reminder service", () => {
       nextReminderAt: null,
     });
   });
+
+  it("batches large source lists so calendar ranges do not exceed SQLite expression depth", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "calendar_event",
+      sourceItemId: "event-1099",
+      anchorKind: "event_start",
+      anchorAt: "2026-05-10T17:00:00.000Z",
+      offsetMinutes: -15,
+    }, { dbClient: db, idFactory: () => "large-range-reminder" });
+
+    const sources = Array.from({ length: 1100 }, (_, index) => ({
+      sourceType: "calendar_event",
+      sourceItemId: `event-${index}`,
+      sourceOccurrenceId: null,
+    }));
+    const states = await listUpcomingReminderStatesForSources({
+      userId: "u1",
+      sources,
+      now: "2026-05-10T16:00:00.000Z",
+    }, { dbClient: db });
+
+    expect(states).toHaveLength(1100);
+    expect(states.get("calendar_event:event-1099:")).toEqual({
+      hasUpcomingReminder: true,
+      upcomingCount: 1,
+      nextReminderAt: "2026-05-10T16:45:00.000Z",
+    });
+  });
 });

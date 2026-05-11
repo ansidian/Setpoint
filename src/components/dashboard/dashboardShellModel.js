@@ -14,12 +14,16 @@ export function resolveCalendarOpenState({
     : requested || currentView;
   const nextFocusItemId = focusItemId ? String(focusItemId) : null;
   const forceDeadlineOverlay = !!options.forceDeadlineOverlay;
+  const forceEventOverlay = !!options.forceEventOverlay;
+  const forceCompletedDeadlineOverlay = !!options.forceCompletedDeadlineOverlay;
   return {
     view,
     focusDate: focusDate || null,
     focusItemId: nextFocusItemId,
     focusOpenDetail: !!options.openDetail && !!nextFocusItemId && nextFocusItemId !== "new",
+    forceEventOverlay,
     forceDeadlineOverlay,
+    forceCompletedDeadlineOverlay,
     shouldLoadDeadlines: forceDeadlineOverlay,
     shouldLoadBills: view === "bills",
   };

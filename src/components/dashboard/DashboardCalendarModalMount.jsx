@@ -14,7 +14,7 @@ export default function DashboardCalendarModalMount({
   calendarFocus,
   calendarFocusItemId,
   calendarFocusOpenDetail,
-  calendarForceDeadlineOverlay,
+  calendarForceOverlays,
   eventsData,
   handleCalendarEventsRangeChange,
   liveData,
@@ -40,7 +40,9 @@ export default function DashboardCalendarModalMount({
         focusDate={calendarFocus}
         focusItemId={calendarFocusItemId}
         focusOpenDetail={calendarFocusOpenDetail}
-        forceDeadlineOverlay={calendarForceDeadlineOverlay}
+        forceEventOverlay={!!calendarForceOverlays?.events}
+        forceDeadlineOverlay={!!calendarForceOverlays?.deadlines}
+        forceCompletedDeadlineOverlay={!!calendarForceOverlays?.completedDeadlines}
         eventsData={eventsData}
         onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
         weatherData={liveData.liveWeather || briefing?.weather || null}

@@ -95,7 +95,7 @@ export function RedesignShell({
   const [calendarFocus, setCalendarFocus] = useState(null);
   const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
   const [calendarFocusOpenDetail, setCalendarFocusOpenDetail] = useState(false);
-  const [calendarForceDeadlineOverlay, setCalendarForceDeadlineOverlay] = useState(false);
+  const [calendarForceOverlays, setCalendarForceOverlays] = useState({ events: false, deadlines: false, completedDeadlines: false });
   const calendarEventsRangeRef = useRef(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const actionChordRef = useRef(null);
@@ -126,13 +126,10 @@ export function RedesignShell({
     if (!request) return;
     setCalendarView(request.view);
     try { localStorage.setItem("calendar:lastView", request.view); } catch { /* ignore */ }
-    if (request.forceDeadlineOverlay) {
-      try { localStorage.setItem("calendar:eventsDeadlineOverlay", "true"); } catch { /* ignore */ }
-    }
     setCalendarFocus(request.focusDate);
     setCalendarFocusItemId(request.focusItemId);
     setCalendarFocusOpenDetail(request.focusOpenDetail);
-    setCalendarForceDeadlineOverlay(request.forceDeadlineOverlay);
+    setCalendarForceOverlays({ events: request.forceEventOverlay, deadlines: request.forceDeadlineOverlay, completedDeadlines: request.forceCompletedDeadlineOverlay });
     setCalendarOpenRequestId((value) => value + 1);
     setCalendarMounted(true);
     setCalendarOpen(true);
@@ -458,6 +455,7 @@ export function RedesignShell({
                   source: "dashboard",
                   openDetail: !!task?.id,
                   forceDeadlineOverlay: true,
+                  forceCompletedDeadlineOverlay: !!task?.id,
                 });
                 return;
               }
@@ -473,11 +471,13 @@ export function RedesignShell({
             onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId, {
               source: "dashboard",
               openDetail: !!itemId && itemId !== "new",
+              forceEventOverlay: !!itemId && itemId !== "new",
             })}
             onOpenDeadlinesCalendar={(date, itemId) => openCalendar("events", date || null, itemId || null, {
               source: "dashboard",
               openDetail: !!itemId,
               forceDeadlineOverlay: true,
+              forceCompletedDeadlineOverlay: !!itemId,
             })}
             onOpenTodoistCreate={openTodoistCreate}
             onJumpSection={jumpToSection}
@@ -583,7 +583,7 @@ export function RedesignShell({
         calendarFocus={calendarFocus}
         calendarFocusItemId={calendarFocusItemId}
         calendarFocusOpenDetail={calendarFocusOpenDetail}
-        calendarForceDeadlineOverlay={calendarForceDeadlineOverlay}
+        calendarForceOverlays={calendarForceOverlays}
         eventsData={eventsData}
         handleCalendarEventsRangeChange={handleCalendarEventsRangeChange}
         liveData={liveData}

@@ -48,6 +48,8 @@ function emptyUpcomingState() {
   };
 }
 
+const UPCOMING_REMINDER_SOURCE_BATCH_SIZE = 250;
+
 export async function createReminder(input, options = {}) {
   const dbClient = client(options);
   const id = options.idFactory?.() || crypto.randomUUID();
@@ -123,36 +125,41 @@ export async function listUpcomingReminderStatesForSources({
   ]));
   if (!normalizedSources.length) return stateByKey;
 
-  const clauses = [];
-  const args = [userId, new Date(now).toISOString()];
-  for (const source of normalizedSources) {
-    clauses.push("(source_type = ? AND source_item_id = ? AND source_occurrence_id IS ?)");
-    args.push(source.sourceType, source.sourceItemId, source.sourceOccurrenceId);
-  }
+  const dbClient = client(options);
+  const nowIso = new Date(now).toISOString();
+  for (let index = 0; index < normalizedSources.length; index += UPCOMING_REMINDER_SOURCE_BATCH_SIZE) {
+    const batch = normalizedSources.slice(index, index + UPCOMING_REMINDER_SOURCE_BATCH_SIZE);
+    const clauses = [];
+    const args = [userId, nowIso];
+    for (const source of batch) {
+      clauses.push("(source_type = ? AND source_item_id = ? AND source_occurrence_id IS ?)");
+      args.push(source.sourceType, source.sourceItemId, source.sourceOccurrenceId);
+    }
 
-  const result = await client(options).execute({
-    sql: `SELECT source_type, source_item_id, source_occurrence_id, remind_at
-          FROM ea_reminders
-          WHERE user_id = ?
-            AND status = 'pending'
-            AND remind_at > ?
-            AND (${clauses.join(" OR ")})
-          ORDER BY remind_at ASC`,
-    args,
-  });
+    const result = await dbClient.execute({
+      sql: `SELECT source_type, source_item_id, source_occurrence_id, remind_at
+            FROM ea_reminders
+            WHERE user_id = ?
+              AND status = 'pending'
+              AND remind_at > ?
+              AND (${clauses.join(" OR ")})
+            ORDER BY remind_at ASC`,
+      args,
+    });
 
-  for (const row of result.rows) {
-    const key = reminderSourceKey({
-      sourceType: row.source_type,
-      sourceItemId: row.source_item_id,
-      sourceOccurrenceId: row.source_occurrence_id || null,
-    });
-    const current = stateByKey.get(key) || emptyUpcomingState();
-    stateByKey.set(key, {
-      hasUpcomingReminder: true,
-      upcomingCount: current.upcomingCount + 1,
-      nextReminderAt: current.nextReminderAt || row.remind_at,
-    });
+    for (const row of result.rows) {
+      const key = reminderSourceKey({
+        sourceType: row.source_type,
+        sourceItemId: row.source_item_id,
+        sourceOccurrenceId: row.source_occurrence_id || null,
+      });
+      const current = stateByKey.get(key) || emptyUpcomingState();
+      stateByKey.set(key, {
+        hasUpcomingReminder: true,
+        upcomingCount: current.upcomingCount + 1,
+        nextReminderAt: current.nextReminderAt || row.remind_at,
+      });
+    }
   }
 
   return stateByKey;

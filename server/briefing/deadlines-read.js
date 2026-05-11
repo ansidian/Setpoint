@@ -99,7 +99,7 @@ export async function readCalendarDeadlines(userId) {
   const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
   const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
-    viewBoundary: "yesterday",
+    viewBoundary: "today",
   });
   const todoistWithCompleted = await hydrateTodoistTasksWithReminderState(userId, [
     ...separated.todoist,

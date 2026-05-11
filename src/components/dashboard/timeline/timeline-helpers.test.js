@@ -15,6 +15,21 @@ describe("timeline helpers", () => {
     expect(buildTimelineGroups([], Date.now(), { events: false, deadlines: false })).toEqual([]);
   });
 
+  it("can clamp dashboard timeline groups to today forward", () => {
+    const now = Date.parse("2026-05-11T16:00:00.000Z");
+    const yesterday = Date.parse("2026-05-10T18:00:00.000Z");
+    const today = Date.parse("2026-05-11T18:00:00.000Z");
+    const tomorrow = Date.parse("2026-05-12T18:00:00.000Z");
+
+    const groups = buildTimelineGroups([
+      { kind: "deadline", dueAtMs: yesterday },
+      { kind: "deadline", dueAtMs: today },
+      { kind: "deadline", dueAtMs: tomorrow },
+    ], now, { events: true, deadlines: true }, { minDay: 0 });
+
+    expect(groups.map(([day]) => day)).toEqual([0, 1]);
+  });
+
   it("insets the now marker from the top edge before the first future row", () => {
     expect(resolveTimelineNowMarkerTop({
       items: [{ kind: "deadline", dueAtMs: 300 }],
