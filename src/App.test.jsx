@@ -28,6 +28,7 @@ vi.mock("./pages/Settings", () => ({
 }));
 
 const { default: App } = await import("./App.jsx");
+const { resolveRouterBasename } = await import("./routerBase.js");
 
 describe("App auth redirects", () => {
   beforeEach(() => {
@@ -46,6 +47,7 @@ describe("App auth redirects", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     window.history.replaceState({}, "", "/");
   });
 
@@ -77,5 +79,21 @@ describe("App auth redirects", () => {
 
     expect(await screen.findByTestId("settings-page")).toBeTruthy();
     expect(window.location.pathname).toBe("/settings");
+  });
+
+  it("bypasses auth checks in demo mode", async () => {
+    vi.stubEnv("VITE_EA_DEMO", "1");
+    mockApi.checkAuth.mockClear();
+
+    render(<App />);
+
+    expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
+    expect(mockApi.checkAuth).not.toHaveBeenCalled();
+  });
+
+  it("derives a router basename from Vite's deployment base", () => {
+    expect(resolveRouterBasename("/")).toBeUndefined();
+    expect(resolveRouterBasename("/ea-dashboard/")).toBe("/ea-dashboard");
+    expect(resolveRouterBasename("/portfolio/demo")).toBe("/portfolio/demo");
   });
 });

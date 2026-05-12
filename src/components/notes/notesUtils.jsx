@@ -1,3 +1,5 @@
+import { isDemoMode } from "../../demo/config.js";
+
 const URL_RE = /(https?:\/\/[^\s]+)/g;
 
 export function linkifyText(text, accentColor) {
@@ -5,7 +7,7 @@ export function linkifyText(text, accentColor) {
   if (parts.length === 1) return text;
 
   return parts.map((part, i) =>
-    /^https?:\/\//.test(part) ? (
+    /^https?:\/\//.test(part) && !isDemoMode() ? (
       <a
         key={i}
         href={part}

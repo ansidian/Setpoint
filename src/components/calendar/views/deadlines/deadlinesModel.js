@@ -1,5 +1,6 @@
 import { parseDueDate } from "../../../../lib/dashboard-helpers";
 import { dueDateToMs } from "../../../../lib/redesign-helpers";
+import { isDemoMode } from "../../../../demo/config.js";
 import { parseYmd } from "../../calendarDateUtils.js";
 
 export const MAX_PILLS = 2;
@@ -34,6 +35,7 @@ export function statusLabel(status) {
 
 export function openInNewTab(url) {
   if (!url) return;
+  if (isDemoMode()) return;
   window.open(url, "_blank", "noopener,noreferrer");
 }
 

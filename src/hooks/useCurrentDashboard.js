@@ -4,6 +4,7 @@ import {
   requestCurrentDashboardRefresh,
   syncCurrentDashboard,
 } from "../api";
+import { isDemoMode } from "../demo/config.js";
 import {
   currentToBriefing,
   currentToLiveData,
@@ -160,7 +161,7 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
   }, [disabled, loadCurrent]);
 
   useEffect(() => {
-    if (disabled || typeof EventSource === "undefined") return undefined;
+    if (disabled || isDemoMode() || typeof EventSource === "undefined") return undefined;
     const source = new EventSource("/api/dashboard/current/events");
     const handleChanged = (event) => {
       if (typeof onDashboardEventRef.current === "function") {

@@ -13,6 +13,8 @@
     "dev:ai-search-turso": "EA_DEV_DB_ADAPTER=turso AI_SEARCH_VECTOR_ADAPTER=turso EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED=1 concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "postinstall": "npm rebuild better-sqlite3",
     "build": "vite build",
+    "build:demo": "VITE_EA_DEMO=1 vite build --outDir dist-demo && cp dist-demo/index.html dist-demo/404.html",
+    "preview:demo": "vite preview --outDir dist-demo",
     "start": "NODE_ENV=production node server/index.js",
     "db:init": "node server/db/migrate.js",
     "lint": "eslint .",

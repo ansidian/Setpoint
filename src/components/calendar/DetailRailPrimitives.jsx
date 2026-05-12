@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isDemoMode } from "../../demo/config.js";
 
 export function RailHeroCard({ accent = "var(--ea-accent)", compact = false, actions, children }) {
   const pad = compact ? 12 : 14;
@@ -233,6 +234,8 @@ export function RailAction({
   onClick,
 }) {
   const [hovered, setHovered] = useState(false);
+  const demoLinkDisabled = !!href && isDemoMode();
+  const resolvedDisabled = disabled || demoLinkDisabled;
   const isGhost = tone === "ghost";
   const isAccent = tone === "accent";
   const isSuccess = tone === "success";
@@ -298,14 +301,14 @@ export function RailAction({
       fontSize: compact ? 11.5 : isGhost ? 12 : 13,
       fontWeight: 600,
       fontFamily: "inherit",
-      cursor: disabled ? "default" : "pointer",
+      cursor: resolvedDisabled ? "default" : "pointer",
       background: hovered ? hoverBackground : background,
       border: hovered ? `1px solid ${hoverBorder}` : border,
       color,
-      opacity: disabled ? 0.58 : 1,
+      opacity: resolvedDisabled ? 0.58 : 1,
       whiteSpace: "nowrap",
       textDecoration: "none",
-      transform: hovered && !disabled ? "translateY(-1px)" : "translateY(0)",
+      transform: hovered && !resolvedDisabled ? "translateY(-1px)" : "translateY(0)",
       boxShadow: hovered ? hoverShadow : "none",
       transition: "background 140ms, border-color 140ms, transform 140ms, box-shadow 140ms, color 140ms",
     },
@@ -332,7 +335,7 @@ export function RailAction({
     </>
   );
 
-  if (href) {
+  if (href && !demoLinkDisabled) {
     return (
       <a
         href={href}
@@ -351,9 +354,10 @@ export function RailAction({
   return (
     <button
       type="button"
-      disabled={disabled}
-      aria-label={label}
+      disabled={resolvedDisabled}
+      aria-label={demoLinkDisabled ? `${label} disabled in demo mode` : label}
       aria-busy={loading ? "true" : undefined}
+      title={demoLinkDisabled ? "External links are disabled in demo mode" : label}
       data-calendar-focus-ring="true"
       {...sharedProps}
     >

@@ -1,4 +1,11 @@
+import { isDemoMode } from "./demo/config.js";
+import { handleDemoApiRequest } from "./demo/apiAdapter.js";
+
 async function apiFetch(path, options = {}) {
+  if (isDemoMode()) {
+    return handleDemoApiRequest(path, options);
+  }
+
   const res = await fetch(path, {
     ...options,
     headers: {
@@ -24,8 +31,12 @@ async function apiFetch(path, options = {}) {
 }
 
 // Auth
-export const checkAuth = () => apiFetch("/api/auth/check");
+export const checkAuth = () => (
+  isDemoMode() ? Promise.resolve({ authenticated: true, demo: true }) : apiFetch("/api/auth/check")
+);
 export async function login(password) {
+  if (isDemoMode()) return { authenticated: true, demo: true };
+
   const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Requested-With": "EADashboard" },
@@ -113,6 +124,8 @@ export const trashEmail = (uid) => apiFetch(`/api/briefing/email/${encodeURIComp
 export const markAllEmailsAsRead = (uids) => apiFetch("/api/briefing/email/mark-all-read", { method: "POST", body: JSON.stringify({ uids }) });
 export const settleArrivalGrace = () => apiFetch("/api/briefing/email/arrival-grace/settle", { method: "POST" });
 export const settleArrivalGraceOnExit = () => {
+  if (isDemoMode()) return;
+
   const path = "/api/briefing/email/arrival-grace/settle";
   if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
     const body = new Blob(["{}"], { type: "application/json" });

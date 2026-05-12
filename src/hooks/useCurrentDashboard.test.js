@@ -113,6 +113,7 @@ describe("useCurrentDashboard", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     setDocumentHidden(false);
     vi.useRealTimers();
@@ -448,6 +449,18 @@ describe("useCurrentDashboard", () => {
 
     expect(FakeEventSource.instances).toHaveLength(0);
     disabled.unmount();
+  });
+
+  it("does not open the dashboard-current event stream in demo mode", async () => {
+    vi.stubEnv("VITE_EA_DEMO", "1");
+    vi.stubGlobal("EventSource", FakeEventSource);
+
+    const { unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(FakeEventSource.instances).toHaveLength(0);
+    unmount();
   });
 
   it("defers SSE-triggered refetch while hidden and catches up when visible", async () => {
