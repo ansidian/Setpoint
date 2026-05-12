@@ -93,7 +93,7 @@ export default function useInboxController({
     loading: false,
     error: null,
   });
-  const [inboxAiSearch, setInboxAiSearch] = useState(EMPTY_INBOX_AI_SEARCH);
+  const inboxAiSearch = sessionState?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH;
   const searchRequestRef = useRef(0);
   const inboxAiRequestRef = useRef(0);
   const liveReadOverridesRef = useRef(liveReadOverrides);
@@ -110,10 +110,19 @@ export default function useInboxController({
       lane: prev?.lane || "__all",
       search: prev?.search || "",
       selectedId: prev?.selectedId || null,
+      inboxAiSearch: prev?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH,
       ...prev,
       [field]: typeof value === "function" ? value(prev?.[field] ?? null) : value,
     }));
   }, [onSessionStateChange]);
+
+  const setInboxAiSearch = useCallback((value) => {
+    setSessionField("inboxAiSearch", (prev) => (
+      typeof value === "function"
+        ? value(prev || EMPTY_INBOX_AI_SEARCH)
+        : value
+    ));
+  }, [setSessionField]);
 
   const setAccountId = useCallback((value) => {
     setSessionField("accountId", value);
@@ -128,7 +137,7 @@ export default function useInboxController({
       prev.status === "idle" ? prev : clearInboxAiSearch(prev)
     ));
     setSessionField("search", value);
-  }, [setSessionField]);
+  }, [setInboxAiSearch, setSessionField]);
 
   useEffect(() => {
     liveReadOverridesRef.current = liveReadOverrides;
@@ -462,11 +471,11 @@ export default function useInboxController({
 
   const requestInboxAiSearch = useCallback((query = search) => {
     setInboxAiSearch((prev) => requestInboxAiConfirmation(prev, query));
-  }, [search]);
+  }, [search, setInboxAiSearch]);
 
   const cancelInboxAiSearch = useCallback(() => {
     setInboxAiSearch((prev) => clearInboxAiSearch(prev));
-  }, []);
+  }, [setInboxAiSearch]);
 
   const confirmInboxAiSearch = useCallback(() => {
     const query = inboxAiSearch.status === "confirming" ? inboxAiSearch.query : search.trim();
@@ -487,7 +496,7 @@ export default function useInboxController({
       .catch((err) => {
         setInboxAiSearch((prev) => failInboxAiRequest(prev, { requestId, error: err }));
       });
-  }, [inboxAiSearch.query, inboxAiSearch.status, search]);
+  }, [inboxAiSearch.query, inboxAiSearch.status, search, setInboxAiSearch]);
 
   useEffect(() => {
     if (!selectedId) return;

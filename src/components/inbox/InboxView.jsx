@@ -4,6 +4,7 @@ import useInboxController from "./useInboxController";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useActiveSnapshot from "../../hooks/useActiveSnapshot";
 import { settleArrivalGrace, settleArrivalGraceOnExit } from "../../api";
+import { EMPTY_INBOX_AI_SEARCH } from "./inboxAiSearchModel";
 import { getInboxTriageActivity } from "./inboxProcessingModel";
 
 const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
@@ -40,6 +41,7 @@ export default function InboxView({
     lane: "__all",
     search: "",
     selectedId: seedSelectedId || null,
+    inboxAiSearch: EMPTY_INBOX_AI_SEARCH,
   }));
   const resolvedSessionState = sessionState || localSessionState;
   const setResolvedSessionState = onSessionStateChange || setLocalSessionState;
@@ -60,6 +62,7 @@ export default function InboxView({
     lane: resolvedSessionState?.lane || "__all",
     search: resolvedSessionState?.search || "",
     selectedId: resolvedSessionState?.selectedId || null,
+    inboxAiSearch: resolvedSessionState?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH,
   }), [resolvedSessionState]);
 
   const localActiveSnapshot = useActiveSnapshot({ disabled: !!controlledActiveSnapshot });
