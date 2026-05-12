@@ -295,6 +295,7 @@ export function RedesignShell({
       lane: "__all",
       search: "",
       selectedId: null,
+      inboxAiSearch: null,
     }));
     setShellTab("inbox");
     setHistoryOpen(false);

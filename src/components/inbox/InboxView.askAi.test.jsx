@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import { askInboxAiSearch, searchEmails } from "../../api";
 import InboxView from "./InboxView.jsx";
@@ -121,6 +122,74 @@ function renderDesktopAskAiInbox() {
   );
 }
 
+function AskAiSessionHarness() {
+  const [showInbox, setShowInbox] = useState(true);
+  const [sessionState, setSessionState] = useState({
+    accountId: "__all",
+    lane: "__all",
+    search: "",
+    selectedId: null,
+  });
+  const activeSnapshot = {
+    snapshot: makeActiveSnapshot({
+      filters: {
+        accounts: [{
+          account_id: "acc-personal",
+          label: "Personal",
+          email: "me@example.com",
+          color: "#cba6da",
+          icon: "Mail",
+          count: 0,
+        }],
+        categories: [],
+      },
+      lanes: { needs_attention: [], fyi: [], noise: [] },
+    }),
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+    sync: vi.fn(),
+  };
+
+  return (
+    <DashboardProvider
+      briefing={{ emails: { accounts: [] } }}
+      setBriefing={() => {}}
+      setCalendarDeadlines={() => {}}
+    >
+      <button type="button" onClick={() => setShowInbox((value) => !value)}>
+        Toggle inbox
+      </button>
+      {showInbox ? (
+        <InboxView
+          accent="#cba6da"
+          customize={{
+            aiVerbosity: "standard",
+            showPreview: true,
+            inboxDensity: "default",
+            sidebarCompact: false,
+            inboxLayout: "two-pane",
+            inboxGrouping: "swimlanes",
+          }}
+          emailAccounts={[]}
+          briefingSummary=""
+          briefingGeneratedAt="2026-05-08 10:00:00"
+          activeSnapshot={activeSnapshot}
+          liveEmails={[]}
+          snoozedEntries={[]}
+          resurfacedEntries={[]}
+          onOpenDashboard={() => {}}
+          onRefresh={() => {}}
+          sessionState={sessionState}
+          onSessionStateChange={setSessionState}
+        />
+      ) : (
+        <div data-testid="dashboard-placeholder">Dashboard</div>
+      )}
+    </DashboardProvider>
+  );
+}
+
 describe("desktop inbox Ask AI flow", () => {
   it("requires Cmd+Enter intent and Enter confirmation before calling Ask AI", async () => {
     askInboxAiSearch.mockResolvedValueOnce(aiResponse({
@@ -191,5 +260,63 @@ describe("desktop inbox Ask AI flow", () => {
     expect(screen.getByText("Second answer wins.")).toBeTruthy();
     expect(screen.queryByText("First answer should be stale.")).toBeNull();
     expect(screen.queryByText("First source")).toBeNull();
+  });
+
+  it("preserves completed Ask AI results across inbox unmounts without rerunning semantic search", async () => {
+    askInboxAiSearch.mockResolvedValueOnce(aiResponse({
+      uid: "source-1",
+      subject: "Amazon return reminder",
+      answer: "The return deadline is May 12.",
+    }));
+
+    render(<AskAiSessionHarness />);
+    const input = screen.getByLabelText("Search indexed mail");
+
+    fireEvent.change(input, { target: { value: "amazon return" } });
+    fireEvent.keyDown(input, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(screen.getByText("The return deadline is May 12.")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
+    expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
+
+    expect(await screen.findByText("The return deadline is May 12.")).toBeTruthy();
+    expect(screen.getByText("Amazon return reminder")).toBeTruthy();
+    expect(askInboxAiSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves in-flight Ask AI results when inbox unmounts before the response returns", async () => {
+    const request = deferred();
+    askInboxAiSearch.mockReturnValueOnce(request.promise);
+
+    render(<AskAiSessionHarness />);
+    const input = screen.getByLabelText("Search indexed mail");
+
+    fireEvent.change(input, { target: { value: "amazon return" } });
+    fireEvent.keyDown(input, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByText("Asking AI over indexed mail")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
+    expect(screen.getByTestId("dashboard-placeholder")).toBeTruthy();
+
+    await act(async () => {
+      request.resolve(aiResponse({
+        uid: "source-1",
+        subject: "Amazon return reminder",
+        answer: "The return deadline is May 12.",
+      }));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
+
+    expect(await screen.findByText("The return deadline is May 12.")).toBeTruthy();
+    expect(screen.getByText("Amazon return reminder")).toBeTruthy();
+    expect(askInboxAiSearch).toHaveBeenCalledTimes(1);
   });
 });
