@@ -17,6 +17,8 @@ const {
   createCalendarEvent,
   deleteCalendarEvent,
   extractStructuredRecurrence,
+  fetchCalendarMirrorEvents,
+  listCalendarsForAccount,
   updateCalendarEvent,
 } = await import("./calendar.js");
 
@@ -111,6 +113,73 @@ function findFetchCall(method, eventId) {
 describe("calendar recurring mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("omits CalendarList entries that are not selected in Google Calendar", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse({
+          items: [
+            { id: "primary", summary: "Primary", accessRole: "owner", primary: true, selected: true },
+            { id: "work", summary: "Work", accessRole: "reader", selected: false },
+            { id: "school", summary: "School", accessRole: "reader" },
+          ],
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    await expect(listCalendarsForAccount(account)).resolves.toEqual([
+      expect.objectContaining({ id: "primary", summary: "Primary" }),
+      expect.objectContaining({ id: "school", summary: "School" }),
+    ]);
+  });
+
+  it("preserves cancelled status for expanded recurring mirror occurrences with start times", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+      if (method === "GET" && path === "calendars/work/events") {
+        return jsonResponse({
+          items: [
+            {
+              id: "series-work_20260512T111500Z",
+              status: "cancelled",
+              recurringEventId: "series-work",
+              originalStartTime: { dateTime: "2026-05-12T04:15:00-07:00" },
+              start: { dateTime: "2026-05-12T04:15:00-07:00" },
+              end: { dateTime: "2026-05-12T08:00:00-07:00" },
+              summary: "Work",
+            },
+          ],
+          nextSyncToken: "sync-1",
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    await expect(fetchCalendarMirrorEvents(account, {
+      id: "work",
+      summary: "Work",
+      backgroundColor: "#cd74e6",
+      writable: true,
+    }, {
+      window: { start: "2026-05-01", end: "2026-06-01" },
+    })).resolves.toMatchObject({
+      events: [
+        {
+          id: "series-work_20260512T111500Z",
+          status: "cancelled",
+          recurringEventId: "series-work",
+          originalStartTime: "2026-05-12T04:15:00-07:00",
+        },
+      ],
+      nextSyncToken: "sync-1",
+    });
   });
 
   it("uses the fetched parent etag when editing an instance with all scope", async () => {

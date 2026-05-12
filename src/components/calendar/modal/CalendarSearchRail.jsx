@@ -160,10 +160,33 @@ function scrollElementNearestInScroller(
   return nextScrollTop;
 }
 
+function deadlineSelectionIdCandidates(result, dateKey) {
+  if (result?.type !== "deadline") return [];
+  const rawId = result.payload?.id || result.itemId || result.activation?.itemId;
+  if (rawId == null) return [];
+  const source = String(
+    result.payload?.source
+    || result.activation?.source
+    || result.coverageKey
+    || "",
+  ).toLowerCase();
+  const sources = new Set([source].filter(Boolean));
+  if (source === "ctm") sources.add("canvas");
+  if (source === "canvas") sources.add("ctm");
+  const id = String(rawId);
+  return [...sources].flatMap((sourceKey) => [
+    `${sourceKey}:${id}`,
+    dateKey ? `${sourceKey}:${id}-${dateKey}` : null,
+  ]).filter(Boolean);
+}
+
 function resultMatchesSelection(result, selectedItemId, selectedDateKey) {
   if (selectedItemId == null || !selectedDateKey) return false;
   const target = activationTargetFromCalendarSearchResult(result);
-  return target?.dateKey === selectedDateKey && String(target.itemId) === String(selectedItemId);
+  if (target?.dateKey !== selectedDateKey) return false;
+  if (String(target.itemId) === String(selectedItemId)) return true;
+  return deadlineSelectionIdCandidates(result, target.dateKey)
+    .some((candidate) => candidate === String(selectedItemId));
 }
 
 function buttonChromeStyle(active = false) {
@@ -726,7 +749,7 @@ export default function CalendarSearchRail({ search, layoutMode = "three-rail", 
             />
             {group.results.map(({ result, index }) => (
               <SearchResultRow
-                key={result.id || `${result.type}-${result.itemId}-${result.itemDate}`}
+                key={`${result.id || `${result.type}-${result.itemId}-${result.itemDate}`}:${index}`}
                 result={result}
                 highlighted={index === search.highlightedIndex}
                 selected={resultMatchesSelection(result, search.selectedItemId, search.selectedDateKey)}

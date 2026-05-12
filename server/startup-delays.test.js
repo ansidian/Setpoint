@@ -9,6 +9,7 @@ describe("startup worker delays", () => {
       backfill: 0,
       snooze: 0,
       billsMirror: 0,
+      calendarSearchMirror: 0,
       reminders: 0,
     });
     expect(buildStartupWorkerDelays({ NODE_ENV: "test" }, () => 0.9).indexer).toBe(0);
@@ -34,6 +35,7 @@ describe("startup worker delays", () => {
       snooze: 122_500,
       todoistSync: 122_500,
       billsMirror: 152_500,
+      calendarSearchMirror: 182_500,
       reminders: 122_500,
     });
   });
@@ -46,6 +48,7 @@ describe("startup worker delays", () => {
       snooze: 60_000,
       todoistSync: 60_000,
       billsMirror: 90_000,
+      calendarSearchMirror: 120_000,
       reminders: 60_000,
       indexer: 180_000,
       backfill: 660_000,
@@ -61,6 +64,7 @@ describe("startup worker delays", () => {
       EA_STARTUP_BACKFILL_OFFSET_MS: "3000",
       EA_STARTUP_TODOIST_SYNC_OFFSET_MS: "4000",
       EA_STARTUP_BILLS_MIRROR_OFFSET_MS: "5000",
+      EA_STARTUP_CALENDAR_SEARCH_MIRROR_OFFSET_MS: "5500",
       EA_STARTUP_REMINDERS_OFFSET_MS: "6000",
     }, () => 0);
 
@@ -70,6 +74,7 @@ describe("startup worker delays", () => {
       backfill: 4000,
       todoistSync: 5000,
       billsMirror: 6000,
+      calendarSearchMirror: 6500,
       reminders: 7000,
     });
   });

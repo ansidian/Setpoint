@@ -23,6 +23,14 @@ vi.mock("../briefing/calendar.js", () => ({
     body: { code: err.code || "unknown", message: err.message || "unknown" },
   })),
 }));
+vi.mock("../briefing/calendar-search-mirror.js", () => ({
+  deleteCalendarSearchMirrorOccurrence: vi.fn(),
+  getCalendarSearchMirrorHealth: vi.fn(),
+  listCalendarSearchMirrorOccurrences: vi.fn(),
+  markCalendarSearchMirrorDirty: vi.fn(),
+  requestCalendarSearchMirrorSync: vi.fn(),
+  upsertCalendarSearchMirrorOccurrence: vi.fn(),
+}));
 vi.mock("../briefing/deadlines-read.js", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
@@ -51,6 +59,7 @@ vi.mock("../briefing/reminder-hydration.js", () => ({
 
 const { loadUserConfig } = await import("../briefing/config-service.js");
 const { fetchCalendar } = await import("../briefing/calendar.js");
+const calendarSearchMirror = await import("../briefing/calendar-search-mirror.js");
 const { readCalendarDeadlineRange } = await import("../briefing/deadlines-read.js");
 const { readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../briefing/bills-service.js");
 const calendarRoutes = (await import("./calendar.js")).default;
@@ -61,8 +70,45 @@ function makeApp() {
   return app;
 }
 
+function event(overrides = {}) {
+  return {
+    id: "event-1",
+    title: "Final presentation",
+    startMs: Date.parse("2026-05-20T17:00:00.000Z"),
+    endMs: Date.parse("2026-05-20T18:00:00.000Z"),
+    time: "10:00 AM",
+    duration: "1h",
+    source: "School",
+    sourceColor: "#4285f4",
+    accountId: "gmail-main",
+    calendarId: "primary",
+    allDay: false,
+    ...overrides,
+  };
+}
+
+const currentMirrorHealth = {
+  state: "current",
+  configured: true,
+  severity: "none",
+  sources: [
+    {
+      accountId: "gmail-main",
+      calendarId: "primary",
+      calendarLabel: "School",
+      state: "current",
+      severity: "none",
+      windowStart: "2025-05-12",
+      windowEnd: "2027-11-12",
+      lastSuccessAt: "2026-05-12T18:00:00.000Z",
+    },
+  ],
+};
+
 describe("GET /api/calendar/search", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
     process.env.EA_USER_ID = "test-user";
     loadUserConfig.mockResolvedValue({
       accounts: [
@@ -70,21 +116,9 @@ describe("GET /api/calendar/search", () => {
       ],
       settings: {},
     });
-    fetchCalendar.mockResolvedValue([
-      {
-        id: "event-1",
-        title: "Final presentation",
-        startMs: Date.parse("2026-05-20T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-20T18:00:00.000Z"),
-        time: "10:00 AM",
-        duration: "1h",
-        source: "School",
-        sourceColor: "#4285f4",
-        accountId: "gmail-main",
-        calendarId: "primary",
-        allDay: false,
-      },
-    ]);
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([event()]);
+    calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValue(currentMirrorHealth);
+    calendarSearchMirror.requestCalendarSearchMirrorSync.mockReturnValue({ queued: true });
     readCalendarDeadlineRange.mockResolvedValue({
       payload: {
         ctm: {
@@ -117,17 +151,24 @@ describe("GET /api/calendar/search", () => {
     vi.useRealTimers();
   });
 
-  it("returns normalized Google event and deadline results for Events search", async () => {
+  it("returns mirror-backed Google event and deadline results for Events search without provider search", async () => {
     const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=final");
 
     expect(res.status).toBe(200);
-    expect(fetchCalendar).toHaveBeenCalledWith(
-      [expect.objectContaining({ id: "gmail-main" })],
-      expect.objectContaining({ query: "final" }),
+    expect(fetchCalendar).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        start: "2025-05-12",
+        end: "2027-11-12",
+        query: "final",
+        limit: 1000,
+        centerDate: "2026-05-12",
+      }),
     );
     expect(readCalendarDeadlineRange).toHaveBeenCalledWith(
       "test-user",
-      expect.objectContaining({ start: expect.any(String), end: expect.any(String) }),
+      { start: "2025-05-12", end: "2027-11-12" },
     );
     expect(res.body.results).toEqual([
       expect.objectContaining({
@@ -146,18 +187,100 @@ describe("GET /api/calendar/search", () => {
         title: "Final presentation",
         sourceLabel: "School",
         sourceColor: "#4285f4",
-        matchReason: "word_start",
-        rankBucket: 1,
+        activation: expect.objectContaining({
+          view: "events",
+          detailView: "events",
+          accountId: "gmail-main",
+          calendarId: "primary",
+        }),
       }),
     ]);
-    expect(res.body.coverage.sources.map((source) => source.key)).toEqual([
-      "google_calendar",
-      "deadlines",
+    expect(res.body.coverage.sources).toEqual([
+      expect.objectContaining({
+        key: "google_calendar",
+        label: "Google Calendar",
+        searched: true,
+        start: "2025-05-12",
+        end: "2027-11-12",
+        strategy: "local_mirror",
+        syncHealth: expect.objectContaining({ state: "current" }),
+      }),
+      expect.objectContaining({
+        key: "deadlines",
+        label: "Deadline overlays",
+        searched: true,
+        start: "2025-05-12",
+        end: "2027-11-12",
+      }),
     ]);
-    expect(res.body.truncated).toBe(false);
+    expect(calendarSearchMirror.requestCalendarSearchMirrorSync).not.toHaveBeenCalled();
   });
 
-  it("returns a cheap empty response for short queries without provider fanout", async () => {
+  it("returns deadline results and requests non-blocking repair when the event mirror is initializing", async () => {
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValueOnce([]);
+    calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValueOnce({
+      state: "initializing",
+      configured: true,
+      severity: "info",
+      sources: [],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=final");
+
+    expect(res.status).toBe(200);
+    expect(fetchCalendar).not.toHaveBeenCalled();
+    expect(res.body.results).toEqual([
+      expect.objectContaining({
+        type: "deadline",
+        itemId: "ctm-1",
+      }),
+    ]);
+    expect(res.body.coverage.sources[0]).toMatchObject({
+      key: "google_calendar",
+      searched: false,
+      syncHealth: { state: "initializing", configured: true, severity: "info", sources: [] },
+      strategy: "local_mirror",
+    });
+    expect(calendarSearchMirror.requestCalendarSearchMirrorSync).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({ reason: "calendar-search-initializing", forceFull: true }),
+    );
+  });
+
+  it("reports stale mirror coverage while returning usable last-known event rows", async () => {
+    calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValueOnce({
+      ...currentMirrorHealth,
+      state: "stale",
+      severity: "warning",
+      sources: [
+        {
+          ...currentMirrorHealth.sources[0],
+          state: "stale",
+          severity: "warning",
+          ageMs: 25 * 60 * 60 * 1000,
+        },
+      ],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=final");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.some((result) => result.type === "event")).toBe(true);
+    expect(res.body.coverage.sources[0]).toMatchObject({
+      key: "google_calendar",
+      searched: true,
+      syncHealth: expect.objectContaining({
+        state: "stale",
+        severity: "warning",
+      }),
+    });
+    expect(calendarSearchMirror.requestCalendarSearchMirrorSync).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({ reason: "calendar-search-stale", forceFull: false }),
+    );
+  });
+
+  it("returns a cheap empty response for short queries without provider or mirror fanout", async () => {
     const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=f");
 
     expect(res.status).toBe(200);
@@ -175,6 +298,7 @@ describe("GET /api/calendar/search", () => {
       },
     });
     expect(fetchCalendar).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences).not.toHaveBeenCalled();
     expect(readCalendarDeadlineRange).not.toHaveBeenCalled();
     expect(readBillsMirrorRange).not.toHaveBeenCalled();
   });
@@ -185,6 +309,7 @@ describe("GET /api/calendar/search", () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("calendar_search_scope_invalid");
     expect(fetchCalendar).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences).not.toHaveBeenCalled();
     expect(readCalendarDeadlineRange).not.toHaveBeenCalled();
     expect(readBillsMirrorRange).not.toHaveBeenCalled();
   });
@@ -221,6 +346,7 @@ describe("GET /api/calendar/search", () => {
 
     expect(res.status).toBe(200);
     expect(fetchCalendar).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences).not.toHaveBeenCalled();
     expect(readCalendarDeadlineRange).not.toHaveBeenCalled();
     expect(readBillsMirrorRange).toHaveBeenCalledWith("test-user", {
       start: "2026-04-12",
@@ -255,239 +381,208 @@ describe("GET /api/calendar/search", () => {
     ]);
   });
 
-  it("fetches Google event search from the today-centered window before broad backfill", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
-    fetchCalendar.mockResolvedValue([]);
-    readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
-      errors: [],
-    });
-
-    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work");
-
-    expect(res.status).toBe(200);
-    expect(fetchCalendar).toHaveBeenCalled();
-    expect(fetchCalendar.mock.calls[0][1]).toMatchObject({
-      startDate: new Date("2026-05-12T08:00:00.000Z"),
-      endDate: new Date("2026-11-12T07:59:59.999Z"),
-      query: "work",
-      limit: 50,
-    });
-    expect(fetchCalendar.mock.calls[1][1]).toMatchObject({
-      startDate: new Date("2026-04-14T08:00:00.000Z"),
-      endDate: new Date("2026-05-11T07:59:59.999Z"),
-      query: "work",
-      limit: 50,
-    });
-    expect(fetchCalendar.mock.calls[2][1]).toMatchObject({
-      startDate: new Date("2026-02-12T08:00:00.000Z"),
-      endDate: new Date("2026-04-13T07:59:59.999Z"),
-      query: "work",
-      limit: 50,
-    });
-    expect(res.body.coverage.sources[0]).toMatchObject({
-      key: "google_calendar",
-      start: "2025-05-12",
-      end: "2027-11-12",
-      prioritizedStart: "2026-02-12",
-      prioritizedEnd: "2026-11-12",
-    });
-  });
-
-  it("does not let frequent past matches exhaust the provider page before near-future matches", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
-    fetchCalendar
-      .mockResolvedValueOnce([
-        {
-          id: "work-today",
-          title: "Work",
-          startMs: Date.parse("2026-05-12T17:00:00.000Z"),
-          endMs: Date.parse("2026-05-12T18:00:00.000Z"),
-          source: "Work",
-        },
-        {
-          id: "work-may-13",
-          title: "Work",
-          startMs: Date.parse("2026-05-13T17:00:00.000Z"),
-          endMs: Date.parse("2026-05-13T18:00:00.000Z"),
-          source: "Work",
-        },
-        {
-          id: "work-may-14",
-          title: "Work",
-          startMs: Date.parse("2026-05-14T17:00:00.000Z"),
-          endMs: Date.parse("2026-05-14T18:00:00.000Z"),
-          source: "Work",
-        },
-        {
-          id: "work-may-15",
-          title: "Work",
-          startMs: Date.parse("2026-05-15T17:00:00.000Z"),
-          endMs: Date.parse("2026-05-15T18:00:00.000Z"),
-          source: "Work",
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: "work-old",
-          title: "Work",
-          startMs: Date.parse("2026-02-12T17:00:00.000Z"),
-          endMs: Date.parse("2026-02-12T18:00:00.000Z"),
-          source: "Work",
-        },
-      ]);
-    readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
-      errors: [],
-    });
-
-    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=3");
-
-    expect(res.status).toBe(200);
-    expect(fetchCalendar).toHaveBeenCalledTimes(2);
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
-      "work-today",
-      "work-may-13",
-      "work-may-14",
-    ]);
-    expect(res.body.totalMatches).toBe(5);
-    expect(res.body.truncated).toBe(true);
-  });
-
-  it("fetches recent-past matches before older centered history", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
-    fetchCalendar
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          id: "work-apr-29",
-          title: "Work",
-          startMs: Date.parse("2026-04-29T17:00:00.000Z"),
-          endMs: Date.parse("2026-04-29T18:00:00.000Z"),
-          source: "Work",
-        },
-        {
-          id: "work-may-04",
-          title: "Work",
-          startMs: Date.parse("2026-05-04T17:00:00.000Z"),
-          endMs: Date.parse("2026-05-04T18:00:00.000Z"),
-          source: "Work",
-        },
-        {
-          id: "work-may-08",
-          title: "Work",
-          startMs: Date.parse("2026-05-08T17:00:00.000Z"),
-          endMs: Date.parse("2026-05-08T18:00:00.000Z"),
-          source: "Work",
-        },
-      ])
-      .mockResolvedValueOnce([
-        {
-          id: "work-feb-12",
-          title: "Work",
-          startMs: Date.parse("2026-02-12T17:00:00.000Z"),
-          endMs: Date.parse("2026-02-12T18:00:00.000Z"),
-          source: "Work",
-        },
-      ]);
-    readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
-      errors: [],
-    });
-
-    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=3");
-
-    expect(res.status).toBe(200);
-    expect(fetchCalendar.mock.calls[1][1]).toMatchObject({
-      startDate: new Date("2026-04-14T08:00:00.000Z"),
-      endDate: new Date("2026-05-11T07:59:59.999Z"),
-    });
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
-      "work-apr-29",
-      "work-may-04",
-      "work-may-08",
-    ]);
-  });
-
-  it("filters deterministic matches but returns a today-centered capped timeline", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
-    const rankingEvents = [
-      {
+  it("keeps Calendar Search Ranking and chronological result shape stable with mirror rows", async () => {
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+      event({
         id: "event-prefix-later",
         title: "Rent review",
         startMs: Date.parse("2026-05-20T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-20T18:00:00.000Z"),
-        source: "Personal",
-      },
-      {
+      }),
+      event({
         id: "event-exact",
         title: "rent",
         startMs: Date.parse("2026-06-01T17:00:00.000Z"),
-        endMs: Date.parse("2026-06-01T18:00:00.000Z"),
-        source: "Personal",
-      },
-      {
+      }),
+      event({
         id: "event-field",
         title: "Budget sync",
         location: "Rent office",
         startMs: Date.parse("2026-05-18T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-18T18:00:00.000Z"),
-        source: "Personal",
-      },
-      {
+      }),
+      event({
         id: "event-past",
         title: "Rent history",
         startMs: Date.parse("2026-05-01T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-01T18:00:00.000Z"),
-        source: "Personal",
-      },
-      {
+      }),
+      event({
         id: "event-prefix-sooner",
         title: "Rent follow-up",
         startMs: Date.parse("2026-05-19T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-19T18:00:00.000Z"),
-        source: "Personal",
-      },
-    ];
-    fetchCalendar.mockResolvedValue(rankingEvents);
+      }),
+    ]);
     readCalendarDeadlineRange.mockResolvedValue({
       payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
       errors: [],
     });
 
-    const first = await request(makeApp()).get("/api/calendar/search?scope=events&q=rent&limit=3");
-    const second = await request(makeApp()).get("/api/calendar/search?scope=events&q=rent&limit=3");
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=rent&limit=3");
 
-    expect(first.status).toBe(200);
-    expect(first.body.results.map((result) => result.itemId)).toEqual([
+    expect(res.status).toBe(200);
+    expect(fetchCalendar).not.toHaveBeenCalled();
+    expect(res.body.results.map((result) => result.itemId)).toEqual([
       "event-field",
       "event-prefix-sooner",
       "event-prefix-later",
     ]);
-    expect(first.body.results.map((result) => result.rankBucket)).toEqual([2, 1, 1]);
-    expect(first.body.totalMatches).toBe(5);
-    expect(first.body.resultCount).toBe(3);
-    expect(first.body.truncated).toBe(true);
-    expect(second.body.results.map((result) => result.itemId)).toEqual(
-      first.body.results.map((result) => result.itemId),
+    expect(res.body.results.map((result) => result.rankBucket)).toEqual([2, 1, 1]);
+    expect(res.body.totalMatches).toBe(5);
+    expect(res.body.resultCount).toBe(3);
+    expect(res.body.truncated).toBe(true);
+  });
+
+  it("does not let old mirror rows consume the candidate limit before near-today matches are ranked", async () => {
+    const oldWorkEvents = Array.from({ length: 6 }, (_, index) => event({
+      id: `work-old-${index}`,
+      title: "Work",
+      startMs: Date.parse(`2025-07-${String(25 + index).padStart(2, "0")}T17:00:00.000Z`),
+    }));
+    const centeredWorkEvents = [
+      event({ id: "work-today", title: "Work", startMs: Date.parse("2026-05-12T17:00:00.000Z") }),
+      event({ id: "work-tomorrow", title: "Work", startMs: Date.parse("2026-05-13T17:00:00.000Z") }),
+      event({ id: "work-yesterday", title: "Work", startMs: Date.parse("2026-05-11T17:00:00.000Z") }),
+    ];
+    const ascendingMirrorRows = [...oldWorkEvents, ...centeredWorkEvents];
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockImplementationOnce(
+      async (_userId, { limit }) => ascendingMirrorRows.slice(0, limit),
     );
+    readCalendarDeadlineRange.mockResolvedValue({
+      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      errors: [],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=3");
+
+    expect(res.status).toBe(200);
+    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        query: "work",
+        limit: expect.any(Number),
+      }),
+    );
+    expect(calendarSearchMirror.listCalendarSearchMirrorOccurrences.mock.calls.at(-1)[1].limit).toBeGreaterThan(3);
+    expect(res.body.results.map((result) => result.itemId)).toEqual([
+      "work-yesterday",
+      "work-today",
+      "work-tomorrow",
+    ]);
+  });
+
+  it("dedupes mirrored event doubles before applying the visible result limit", async () => {
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+      event({
+        id: "work-google-expanded",
+        title: "Work",
+        location: "Back office",
+        startMs: Date.parse("2026-05-12T17:00:00.000Z"),
+        endMs: Date.parse("2026-05-12T20:45:00.000Z"),
+        originalStartTime: "2026-05-12T10:00:00-07:00",
+      }),
+      event({
+        id: "work-google-single",
+        title: "Work",
+        startMs: Date.parse("2026-05-12T17:00:00.000Z"),
+        endMs: Date.parse("2026-05-12T20:45:00.000Z"),
+        originalStartTime: "1778584500000",
+      }),
+      event({
+        id: "work-next-day",
+        title: "Work",
+        startMs: Date.parse("2026-05-13T17:00:00.000Z"),
+        endMs: Date.parse("2026-05-13T20:45:00.000Z"),
+      }),
+    ]);
+    readCalendarDeadlineRange.mockResolvedValue({
+      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      errors: [],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=2");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.map((result) => result.itemId)).toEqual([
+      "work-google-expanded",
+      "work-next-day",
+    ]);
+    expect(res.body.resultCount).toBe(2);
+    expect(res.body.totalMatches).toBe(2);
+    expect(res.body.truncated).toBe(false);
+  });
+
+  it("dedupes overlapping same-day mirrored event doubles even when their end times differ", async () => {
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+      event({
+        id: "work-short",
+        title: "Work",
+        startMs: Date.parse("2026-05-12T17:45:00.000Z"),
+        endMs: Date.parse("2026-05-12T21:45:00.000Z"),
+      }),
+      event({
+        id: "work-edited-series",
+        title: "Work",
+        startMs: Date.parse("2026-05-12T18:15:00.000Z"),
+        endMs: Date.parse("2026-05-12T22:00:00.000Z"),
+      }),
+      event({
+        id: "work-next-day",
+        title: "Work",
+        startMs: Date.parse("2026-05-13T17:00:00.000Z"),
+        endMs: Date.parse("2026-05-13T20:45:00.000Z"),
+      }),
+    ]);
+    readCalendarDeadlineRange.mockResolvedValue({
+      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      errors: [],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=3");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.map((result) => result.itemId)).toEqual([
+      "work-short",
+      "work-next-day",
+    ]);
+    expect(res.body.totalMatches).toBe(2);
+    expect(res.body.truncated).toBe(false);
+  });
+
+  it("does not match Google events by calendar source label alone", async () => {
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValue([
+      event({
+        id: "source-only",
+        title: "asdasd",
+        source: "Work",
+        location: "",
+        description: "",
+        startMs: Date.parse("2026-05-12T17:00:00.000Z"),
+      }),
+      event({
+        id: "title-match",
+        title: "Work",
+        source: "Personal",
+        startMs: Date.parse("2026-05-13T17:00:00.000Z"),
+      }),
+    ]);
+    readCalendarDeadlineRange.mockResolvedValue({
+      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      errors: [],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=work&limit=5");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.map((result) => result.itemId)).toEqual(["title-match"]);
   });
 
   it("uses explicit event colors before calendar source colors in search results", async () => {
-    fetchCalendar.mockResolvedValue([
-      {
+    calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValueOnce([
+      event({
         id: "event-explicit-color",
         title: "Rent review",
-        startMs: Date.parse("2026-05-20T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-20T18:00:00.000Z"),
         source: "Personal",
         sourceColor: "#4285f4",
         color: "#d50000",
-      },
+      }),
     ]);
     readCalendarDeadlineRange.mockResolvedValue({
       payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
@@ -502,46 +597,5 @@ describe("GET /api/calendar/search", () => {
       sourceLabel: "Personal",
       sourceColor: "#d50000",
     });
-  });
-
-  it("keeps match quality as metadata for chronological search results", async () => {
-    const rankingEvents = [
-      {
-        id: "event-prefix-later",
-        title: "Rent review",
-        startMs: Date.parse("2026-05-20T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-20T18:00:00.000Z"),
-        source: "Personal",
-      },
-      {
-        id: "event-exact",
-        title: "rent",
-        startMs: Date.parse("2026-06-01T17:00:00.000Z"),
-        endMs: Date.parse("2026-06-01T18:00:00.000Z"),
-        source: "Personal",
-      },
-      {
-        id: "event-prefix-sooner",
-        title: "Rent follow-up",
-        startMs: Date.parse("2026-05-19T17:00:00.000Z"),
-        endMs: Date.parse("2026-05-19T18:00:00.000Z"),
-        source: "Personal",
-      },
-    ];
-    fetchCalendar.mockResolvedValue(rankingEvents);
-    readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
-      errors: [],
-    });
-
-    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=rent");
-
-    expect(res.status).toBe(200);
-    expect(res.body.results.map((result) => result.itemId)).toEqual([
-      "event-prefix-sooner",
-      "event-prefix-later",
-      "event-exact",
-    ]);
-    expect(res.body.results.map((result) => result.rankBucket)).toEqual([1, 1, 0]);
   });
 });

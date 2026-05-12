@@ -628,6 +628,7 @@ export default function useCalendarModalController({
     if (targetView !== view) onViewChange?.(targetView);
     if (target.detailView === "deadlines" && activationContext?.anchorKind !== "grid-chip") {
       setDeadlineOverlayVisible(true);
+      if (searchResultIsCompletedDeadline(result)) setCompletedDeadlineOverlayVisible(true);
       writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, true);
     }
     closeEventEditor();
@@ -1179,7 +1180,15 @@ export default function useCalendarModalController({
       };
     }
     const targetView = target.view === "bills" ? "bills" : "events";
+    const fallbackRowContext = fallbackContext.anchorElement
+      ? {
+          anchorKind: "search-result-row",
+          anchorElement: fallbackContext.anchorElement,
+          sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement,
+        }
+      : null;
     if (targetView !== view || !searchTargetVisibleInCurrentGrid(target.dateKey)) {
+      if (fallbackRowContext && (result?.type === "event" || result?.type === "deadline")) return fallbackRowContext;
       return { anchorKind: "grid-chip" };
     }
     const location = findItemLocation(activeView, computed, target.itemId, target.dateKey);
@@ -1206,14 +1215,11 @@ export default function useCalendarModalController({
       const targetView = target.view === "bills" ? "bills" : "events";
       if (targetView !== view) return true;
       if (target.detailView === "events" && !eventOverlayVisible) return false;
-      if (target.detailView === "deadlines") {
-        if (!deadlineOverlayVisible) return false;
-        if (!completedDeadlineOverlayVisible && searchResultIsCompletedDeadline(result)) return false;
-      }
+      if (target.detailView === "deadlines") return true;
       if (!searchTargetVisibleInCurrentGrid(target.dateKey)) return true;
       const location = findItemLocation(activeView, computed, target.itemId, target.dateKey);
-      if (!location) return false;
-      return true;
+      if (location) return true;
+      return result?.type === "event" || result?.type === "deadline";
     };
   }, [
     activeView,

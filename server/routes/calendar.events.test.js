@@ -25,6 +25,14 @@ vi.mock("../briefing/calendar.js", () => ({
     body: { code: err.code || "unknown", message: err.message || "unknown" },
   })),
 }));
+vi.mock("../briefing/calendar-search-mirror.js", () => ({
+  deleteCalendarSearchMirrorOccurrence: vi.fn().mockResolvedValue({ deleted: true }),
+  getCalendarSearchMirrorHealth: vi.fn(),
+  listCalendarSearchMirrorOccurrences: vi.fn(),
+  markCalendarSearchMirrorDirty: vi.fn().mockResolvedValue({ marked: true }),
+  requestCalendarSearchMirrorSync: vi.fn(),
+  upsertCalendarSearchMirrorOccurrence: vi.fn().mockResolvedValue({ upserted: true }),
+}));
 vi.mock("../briefing/google-places.js", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
@@ -60,6 +68,7 @@ const {
   updateCalendarEvent,
   deleteCalendarEvent,
 } = await import("../briefing/calendar.js");
+const calendarSearchMirror = await import("../briefing/calendar-search-mirror.js");
 const {
   suggestGooglePlaces,
   getGooglePlaceDetails,
@@ -149,6 +158,11 @@ describe("calendar event routes", () => {
       expect.objectContaining({ id: "gmail-main" }),
       expect.objectContaining({ title: "Planning", calendarId: "primary", colorId: "7" }),
     );
+    expect(calendarSearchMirror.upsertCalendarSearchMirrorOccurrence).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({ id: "event-1", accountId: "gmail-main", calendarId: "primary" }),
+    );
+    expect(calendarSearchMirror.markCalendarSearchMirrorDirty).not.toHaveBeenCalled();
   });
 
   it("returns a typed 404 when creating against an unavailable calendar account", async () => {
@@ -175,6 +189,8 @@ describe("calendar event routes", () => {
     createCalendarEvent.mockResolvedValue({
       id: "event-recurring-1",
       title: "Work",
+      accountId: "gmail-main",
+      calendarId: "primary",
       recurringEventId: "event-recurring-1",
     });
 
@@ -202,6 +218,15 @@ describe("calendar event routes", () => {
       expect.objectContaining({
         title: "Work",
         recurrence: expect.objectContaining({ frequency: "weekly" }),
+      }),
+    );
+    expect(calendarSearchMirror.upsertCalendarSearchMirrorOccurrence).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.markCalendarSearchMirrorDirty).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        reason: "calendar-write",
       }),
     );
   });
@@ -285,6 +310,22 @@ describe("calendar event routes", () => {
       anchorKind: "event_start",
       anchorAt: "2026-04-20T16:00:00.000Z",
     }));
+    expect(calendarSearchMirror.deleteCalendarSearchMirrorOccurrence).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "work",
+        eventId: "event-1",
+      }),
+    );
+    expect(calendarSearchMirror.upsertCalendarSearchMirrorOccurrence).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        id: "event-1",
+        accountId: "gmail-main",
+        calendarId: "primary",
+      }),
+    );
   });
 
   it("rejects moving calendar events across connected accounts", async () => {
@@ -310,6 +351,8 @@ describe("calendar event routes", () => {
     updateCalendarEvent.mockResolvedValue({
       id: "event-1",
       title: "Weekly sync",
+      accountId: "gmail-main",
+      calendarId: "primary",
       startMs: Date.parse("2026-04-20T17:00:00.000Z"),
       isRecurring: true,
       originalStartTime: "2026-04-20T16:00:00.000Z",
@@ -347,6 +390,14 @@ describe("calendar event routes", () => {
       sourceOccurrenceId: "2026-04-20T16:00:00.000Z",
       anchorAt: "2026-04-20T17:00:00.000Z",
     }));
+    expect(calendarSearchMirror.upsertCalendarSearchMirrorOccurrence).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.markCalendarSearchMirrorDirty).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+      }),
+    );
   });
 
   it("deletes a calendar event", async () => {
@@ -371,6 +422,14 @@ describe("calendar event routes", () => {
       sourceType: "calendar_event",
       sourceItemId: "event-1",
     }));
+    expect(calendarSearchMirror.deleteCalendarSearchMirrorOccurrence).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+        eventId: "event-1",
+      }),
+    );
   });
 
   it("passes recurring delete scope through to the calendar service", async () => {
@@ -402,6 +461,14 @@ describe("calendar event routes", () => {
       sourceItemId: "event-1",
       sourceOccurrenceId: "2026-04-20T16:00:00.000Z",
     }));
+    expect(calendarSearchMirror.deleteCalendarSearchMirrorOccurrence).not.toHaveBeenCalled();
+    expect(calendarSearchMirror.markCalendarSearchMirrorDirty).toHaveBeenCalledWith(
+      "test-user",
+      expect.objectContaining({
+        accountId: "gmail-main",
+        calendarId: "primary",
+      }),
+    );
   });
 
   it("surfaces typed calendar errors from create", async () => {

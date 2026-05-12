@@ -40,6 +40,14 @@ import {
   normalizeLimit,
   rankCalendarSearchCandidates,
 } from "../briefing/calendar-search.js";
+import {
+  deleteCalendarSearchMirrorOccurrence,
+  getCalendarSearchMirrorHealth,
+  listCalendarSearchMirrorOccurrences,
+  markCalendarSearchMirrorDirty,
+  requestCalendarSearchMirrorSync,
+  upsertCalendarSearchMirrorOccurrence,
+} from "../briefing/calendar-search-mirror.js";
 
 const router = Router();
 router.use(requireCookieSession);
@@ -83,9 +91,7 @@ const MAX_SPAN_DAYS = 62;
 const SEARCH_MIN_QUERY_LENGTH = 2;
 const SEARCH_HISTORY_MONTHS = 12;
 const SEARCH_FUTURE_MONTHS = 18;
-const SEARCH_CENTER_HISTORY_MONTHS = 3;
-const SEARCH_CENTER_FUTURE_MONTHS = 6;
-const SEARCH_RECENT_PAST_DAYS = 28;
+const SEARCH_MIRROR_CANDIDATE_LIMIT = 1000;
 
 function todayPacific() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
@@ -97,76 +103,12 @@ function addMonthsIso(iso, n) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
 }
 
-function addDaysIso(iso, n) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d + n));
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
-}
-
 function calendarSearchRange({ now = new Date() } = {}) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
   return {
     start: addMonthsIso(today, -SEARCH_HISTORY_MONTHS),
     end: addMonthsIso(today, SEARCH_FUTURE_MONTHS),
   };
-}
-
-function calendarSearchFetchRanges({ now = new Date() } = {}) {
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
-  const broad = calendarSearchRange({ now });
-  const center = {
-    start: addMonthsIso(today, -SEARCH_CENTER_HISTORY_MONTHS),
-    end: addMonthsIso(today, SEARCH_CENTER_FUTURE_MONTHS),
-  };
-  const recentPastStart = addDaysIso(today, -SEARCH_RECENT_PAST_DAYS);
-  const centerPastEnd = addDaysIso(today, -1);
-  const futureStart = addDaysIso(center.end, 1);
-  const olderCenterPastEnd = addDaysIso(recentPastStart, -1);
-  const pastEnd = addDaysIso(center.start, -1);
-  return {
-    broad,
-    center,
-    ordered: [
-      { key: "center_future", start: today, end: center.end, required: true },
-      { key: "center_recent_past", start: recentPastStart, end: centerPastEnd, required: true },
-      { key: "center_older_past", start: center.start, end: olderCenterPastEnd },
-      { key: "future", start: futureStart, end: broad.end },
-      { key: "past", start: broad.start, end: pastEnd },
-    ].filter((range) => range.start <= range.end),
-  };
-}
-
-function calendarEventSearchKey(event) {
-  return [
-    event?.accountId || "",
-    event?.calendarId || "",
-    event?.id || "",
-    event?.originalStartTime || event?.startMs || "",
-  ].join(":");
-}
-
-async function fetchCalendarSearchEvents(calendarAccounts, { ranges, query, limit }) {
-  const seen = new Set();
-  const events = [];
-  for (const range of ranges) {
-    if (!range.required && events.length >= limit) break;
-    const { dayStart } = pacificDayBoundaries(new Date(`${range.start}T12:00:00Z`));
-    const { dayEnd } = pacificDayBoundaries(new Date(`${range.end}T12:00:00Z`));
-    const batch = await fetchCalendar(calendarAccounts, {
-      startDate: dayStart,
-      endDate: dayEnd,
-      query,
-      limit,
-    });
-    for (const event of batch) {
-      const key = calendarEventSearchKey(event);
-      if (key && seen.has(key)) continue;
-      if (key) seen.add(key);
-      events.push(event);
-    }
-    if (!range.required && events.length >= limit) break;
-  }
-  return events;
 }
 
 function calendarSearchResponse({
@@ -191,6 +133,24 @@ function calendarSearchResponse({
     },
     fetchedAt: new Date().toISOString(),
   };
+}
+
+function shouldRequestCalendarSearchMirrorRepair(syncHealth) {
+  return ["initializing", "stale", "degraded", "dirty", "unavailable", "needs_sync"].includes(syncHealth?.state);
+}
+
+function calendarSearchMirrorSearched(syncHealth, events) {
+  if (events?.length) return true;
+  return !["initializing", "unavailable"].includes(syncHealth?.state);
+}
+
+function requestCalendarSearchMirrorRepair(userId, syncHealth) {
+  if (!shouldRequestCalendarSearchMirrorRepair(syncHealth)) return;
+  const hasSuccessfulSource = (syncHealth?.sources || []).some((source) => source.lastSuccessAt);
+  requestCalendarSearchMirrorSync(userId, {
+    reason: `calendar-search-${syncHealth.state}`,
+    forceFull: !hasSuccessfulSource,
+  });
 }
 
 function cheapEmptyCalendarSearchResponse({ query, scope, limit, reason = "query_too_short" }) {
@@ -235,20 +195,20 @@ router.get("/search", async (req, res) => {
   try {
     const userId = process.env.EA_USER_ID;
     if (scope === "events") {
-      const searchRanges = calendarSearchFetchRanges();
-      const range = searchRanges.broad;
-      const { accounts } = await loadUserConfig(userId);
-      const calendarAccounts = accounts.filter(
-        (account) => account.type === "gmail" && account.calendar_enabled,
-      );
-      const [events, deadlineResult] = await Promise.all([
-        fetchCalendarSearchEvents(calendarAccounts, {
-          ranges: searchRanges.ordered,
+      const range = calendarSearchRange();
+      const candidateLimit = Math.max(limit, SEARCH_MIRROR_CANDIDATE_LIMIT);
+      const [events, syncHealth, deadlineResult] = await Promise.all([
+        listCalendarSearchMirrorOccurrences(userId, {
+          start: range.start,
+          end: range.end,
           query,
-          limit,
+          limit: candidateLimit,
+          centerDate: todayPacific(),
         }),
+        getCalendarSearchMirrorHealth(userId),
         readCalendarDeadlineRange(userId, range),
       ]);
+      requestCalendarSearchMirrorRepair(userId, syncHealth);
       const candidates = [
         ...events.map((event) => normalizeEventSearchCandidate(event)),
         ...deadlineSearchCandidates(deadlineResult.payload),
@@ -262,12 +222,11 @@ router.get("/search", async (req, res) => {
           {
             key: "google_calendar",
             label: "Google Calendar",
-            searched: true,
+            searched: calendarSearchMirrorSearched(syncHealth, events),
             start: range.start,
             end: range.end,
-            prioritizedStart: searchRanges.center?.start || range.start,
-            prioritizedEnd: searchRanges.center?.end || range.end,
-            strategy: "provider_q_centered_pages",
+            strategy: "local_mirror",
+            syncHealth,
           },
           {
             key: "deadlines",
@@ -368,6 +327,60 @@ function eventOccurrenceIdentity({ event, originalStartTime, scope }) {
     return calendarEventAnchorAt(event);
   }
   return undefined;
+}
+
+function isRecurringCalendarMirrorWrite(event, { scope, recurringEventId, originalStartTime } = {}) {
+  return !!(
+    event?.isRecurring
+    || event?.recurringEventId
+    || event?.recurrence
+    || scope
+    || recurringEventId
+    || originalStartTime
+  );
+}
+
+function scheduleCalendarMirrorDirty({ userId, accountId, calendarId, reason = "calendar-write" }) {
+  markCalendarSearchMirrorDirty(userId, { accountId, calendarId, reason }).catch((err) => {
+    console.error("[Calendar] search mirror dirty marking failed:", err.message);
+  });
+}
+
+function scheduleCalendarMirrorUpsert(userId, event) {
+  if (!event?.accountId || !event?.calendarId) return;
+  if (isRecurringCalendarMirrorWrite(event)) {
+    scheduleCalendarMirrorDirty({
+      userId,
+      accountId: event.accountId,
+      calendarId: event.calendarId,
+    });
+    return;
+  }
+  upsertCalendarSearchMirrorOccurrence(userId, event).catch((err) => {
+    console.error("[Calendar] search mirror write-through failed:", err.message);
+  });
+}
+
+function scheduleCalendarMirrorDelete(userId, {
+  accountId,
+  calendarId,
+  eventId,
+  scope,
+  recurringEventId,
+  originalStartTime,
+}) {
+  if (!accountId || !calendarId || !eventId) return;
+  if (isRecurringCalendarMirrorWrite(null, { scope, recurringEventId, originalStartTime })) {
+    scheduleCalendarMirrorDirty({ userId, accountId, calendarId });
+    return;
+  }
+  deleteCalendarSearchMirrorOccurrence(userId, {
+    accountId,
+    calendarId,
+    eventId,
+  }).catch((err) => {
+    console.error("[Calendar] search mirror delete write-through failed:", err.message);
+  });
 }
 
 router.get("/range", async (req, res) => {
@@ -533,6 +546,7 @@ router.post("/events", async (req, res) => {
       colorId,
       recurrence,
     });
+    scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
     res.status(201).json({ event });
   } catch (err) {
     handleCalendarRouteError(res, err, "Failed to create calendar event");
@@ -557,6 +571,7 @@ router.post("/events/batch", async (req, res) => {
       try {
         const account = await loadCalendarAccount(item.accountId);
         const event = await createCalendarEvent(account, item);
+        scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
         created.push({ index, event });
       } catch (err) {
         failed.push({
@@ -625,6 +640,14 @@ router.patch("/events/:eventId", async (req, res) => {
       recurringEventId,
       originalStartTime,
     });
+    if (sourceCalendarId && sourceCalendarId !== calendarId && !isRecurringCalendarMirrorWrite(event, { scope, recurringEventId, originalStartTime })) {
+      scheduleCalendarMirrorDelete(process.env.EA_USER_ID, {
+        accountId,
+        calendarId: sourceCalendarId,
+        eventId,
+      });
+    }
+    scheduleCalendarMirrorUpsert(process.env.EA_USER_ID, event);
     const anchorAt = calendarEventAnchorAt(event);
     if (anchorAt) {
       await recomputeUnsentRemindersForSource({
@@ -650,6 +673,14 @@ router.delete("/events/:eventId", async (req, res) => {
     await deleteCalendarEvent(account, eventId, {
       calendarId,
       etag,
+      scope,
+      recurringEventId,
+      originalStartTime,
+    });
+    scheduleCalendarMirrorDelete(process.env.EA_USER_ID, {
+      accountId,
+      calendarId,
+      eventId,
       scope,
       recurringEventId,
       originalStartTime,

@@ -128,6 +128,64 @@ describe("calendarModalSearchModel", () => {
     })).toBe(false);
   });
 
+  it("distinguishes Google event mirror freshness from true no-match states", () => {
+    const initializingCoverage = {
+      sources: [
+        {
+          key: "google_calendar",
+          searched: false,
+          syncHealth: { state: "initializing" },
+        },
+        {
+          key: "deadlines",
+          searched: true,
+        },
+      ],
+    };
+
+    expect(calendarSearchStateLabel({
+      scope: "events",
+      query: "final",
+      coverage: initializingCoverage,
+      results: [],
+    })).toBe("Calendar events indexing");
+
+    expect(calendarSearchStateLabel({
+      scope: "events",
+      query: "final",
+      coverage: initializingCoverage,
+      results: [{ id: "deadline:1", type: "deadline" }],
+    })).toBe("Partial results: deadlines only");
+
+    const staleCoverage = {
+      sources: [
+        {
+          key: "google_calendar",
+          searched: true,
+          syncHealth: { state: "stale", lastError: "raw provider failure" },
+        },
+        {
+          key: "deadlines",
+          searched: true,
+        },
+      ],
+    };
+
+    expect(calendarSearchStateLabel({
+      scope: "events",
+      query: "final",
+      coverage: staleCoverage,
+      results: [{ id: "event:1", type: "event" }],
+    })).toBe("Showing available results");
+
+    expect(calendarSearchStateLabel({
+      scope: "events",
+      query: "final",
+      coverage: staleCoverage,
+      results: [],
+    })).toBe("No matches in available results");
+  });
+
   it("starts search selection on the closest upcoming result or most recent past result", () => {
     const results = [
       { id: "old", itemDate: "2025-11-01" },
