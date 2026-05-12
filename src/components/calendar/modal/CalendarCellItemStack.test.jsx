@@ -401,6 +401,34 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(screen.getByText("+2 more")).toBeTruthy();
   });
 
+  it("opens overflow when the selected item is hidden in the collapsed stack", () => {
+    const onOpenOverflow = vi.fn();
+
+    render(
+      <CalendarCellItemStack
+        day={20}
+        dateKey="2026-05-20"
+        selectedItemId="hidden-selection"
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+          { id: "real-3", selectionId: "hidden-selection", leadingLabel: "11:00 AM", title: "Third hold" },
+          { id: "real-4", leadingLabel: "12:00 PM", title: "Fourth hold" },
+        ]}
+        metrics={metrics}
+        onOpenOverflow={onOpenOverflow}
+      />,
+    );
+
+    expect(onOpenOverflow).toHaveBeenCalledWith(expect.objectContaining({
+      triggerElement: screen.getByTestId("calendar-cell-overflow-trigger-20"),
+      dateKey: "2026-05-20",
+      hiddenItems: expect.arrayContaining([
+        expect.objectContaining({ id: "real-3" }),
+      ]),
+    }));
+  });
+
   it("replaces the overflow trigger with inline hidden chips when inline overflow is open", () => {
     render(
       <CalendarCellItemStack
@@ -450,6 +478,29 @@ describe("CalendarCellItemStack ghost visibility", () => {
       triggerElement: expect.any(HTMLElement),
     }));
     expect(onCloseInlineOverflow).not.toHaveBeenCalled();
+  });
+
+  it("does not move focus into inline overflow when auto focus is disabled", () => {
+    const searchInput = document.createElement("input");
+    document.body.appendChild(searchInput);
+    searchInput.focus();
+
+    render(
+      <CalendarCellItemStack
+        day={20}
+        items={[
+          { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
+          { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
+          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold" },
+        ]}
+        metrics={metrics}
+        inlineOverflowOpen
+        inlineOverflowAutoFocus={false}
+        inlineOverflowVisibleCount={2}
+      />,
+    );
+
+    expect(document.activeElement).toBe(searchInput);
   });
 
   it("closes inline overflow when dragging a hidden chip", () => {

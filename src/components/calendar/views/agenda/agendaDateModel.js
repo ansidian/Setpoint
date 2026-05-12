@@ -21,6 +21,7 @@ function shortDateLabel(dateKey) {
 }
 
 export function formatAgendaHeaderLabel(dateKey, todayKey = pacificYMD(Date.now())) {
+  if (dateKey === addDaysYmd(todayKey, -1)) return `YESTERDAY ${shortDateLabel(dateKey)}`;
   if (dateKey === todayKey) return `TODAY ${shortDateLabel(dateKey)}`;
   if (dateKey === addDaysYmd(todayKey, 1)) return `TOMORROW ${shortDateLabel(dateKey)}`;
   const parsed = parseYmd(dateKey);

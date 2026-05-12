@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BREAKPOINTS, getCalendarLayoutMetrics } from "./calendarLayout.js";
+import { BREAKPOINTS, getCalendarLayoutMetrics, getCalendarSearchLayoutMode } from "./calendarLayout.js";
 
 describe("BREAKPOINTS", () => {
   it("exposes the calendar responsive breakpoints", () => {
@@ -37,6 +37,7 @@ describe("getCalendarLayoutMetrics", () => {
       gridGap: 8,
       weekHeaderGap: 6,
       contextWidth: 380,
+      searchWidth: 304,
       editorWidth: 680,
       cellHeight: 150,
       railHeightOffset: 92,
@@ -60,6 +61,7 @@ describe("getCalendarLayoutMetrics", () => {
       gridGap: 8,
       weekHeaderGap: 6,
       contextWidth: 320,
+      searchWidth: 288,
       editorWidth: 620,
       cellHeight: 140,
       railHeightOffset: 92,
@@ -83,6 +85,7 @@ describe("getCalendarLayoutMetrics", () => {
       gridGap: 6,
       weekHeaderGap: 5,
       contextWidth: 296,
+      searchWidth: 268,
       editorWidth: 560,
       cellHeight: 124,
       railHeightOffset: 82,
@@ -106,6 +109,7 @@ describe("getCalendarLayoutMetrics", () => {
       gridGap: 5,
       weekHeaderGap: 4,
       contextWidth: 272,
+      searchWidth: 260,
       editorWidth: 480,
       cellHeight: 108,
       railHeightOffset: 72,
@@ -129,6 +133,7 @@ describe("getCalendarLayoutMetrics", () => {
       gridGap: 4,
       weekHeaderGap: 4,
       contextWidth: 0,
+      searchWidth: 0,
       editorWidth: 0,
       cellHeight: 76,
       railHeightOffset: 48,
@@ -137,5 +142,13 @@ describe("getCalendarLayoutMetrics", () => {
       headerWrap: true,
       headerStacked: true,
     });
+  });
+
+  it("keeps three rails only where the grid has enough room", () => {
+    expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1900), true)).toBe("three-rail");
+    expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1512), true)).toBe("three-rail");
+    expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1240), true)).toBe("search-replaces-agenda");
+    expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(900), true)).toBe("stacked-replaces-agenda");
+    expect(getCalendarSearchLayoutMode(getCalendarLayoutMetrics(1900), false)).toBe("standard");
   });
 });

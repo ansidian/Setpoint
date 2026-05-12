@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { buildCalendarEventSpanLayout } from "./calendarEventSpanLayout.js";
@@ -71,6 +71,7 @@ export default function CalendarGrid({
   const activeMonthWheelStateRef = monthWheelStateRef || fallbackMonthWheelStateRef;
   const ignoreOverflowScrollUntilRef = useRef(0);
   const [activeSpanSegmentId, setActiveSpanSegmentId] = useState(null);
+  const [suppressedSelectedHiddenAutoOpenKey, setSuppressedSelectedHiddenAutoOpenKey] = useState(null);
   const fillGridHeight = !layout.stacked;
   const gridRowCount = fillGridHeight
     ? Math.max(1, Math.ceil((firstDay + daysInMonth) / 7))
@@ -102,6 +103,9 @@ export default function CalendarGrid({
   }, [deadlineQuickActions, eventDateCells, eventQuickActions]);
   const itemQuickActions = eventDateCells ? eventsPlanningQuickActions : view === "deadlines" ? deadlineQuickActions : null;
   const selectedCellKey = selectedDateKey;
+  const currentSelectionKey = selectedDateKey && selectedItemId != null
+    ? `${selectedDateKey}:${selectedItemId}`
+    : null;
   const floatingEditorOpen = floatingDetailMode === "edit" || floatingDetailMode === "create";
   const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
   const monthCells = buildCalendarMonthCells({
@@ -133,6 +137,7 @@ export default function CalendarGrid({
 
   const closeOverflow = useCallback(
     ({ restoreFocus = false } = {}) => {
+      if (currentSelectionKey) setSuppressedSelectedHiddenAutoOpenKey(currentSelectionKey);
       const anchorKey = overflowState?.anchorKey;
       setOverflowState(null);
       if (!restoreFocus || !anchorKey) return;
@@ -149,11 +154,20 @@ export default function CalendarGrid({
         trigger?.focus?.();
       });
     },
-    [overflowState?.anchorKey, setOverflowState],
+    [currentSelectionKey, overflowState?.anchorKey, setOverflowState],
   );
   const closeOverflowWithoutFocus = useCallback(() => {
+    if (currentSelectionKey) setSuppressedSelectedHiddenAutoOpenKey(currentSelectionKey);
     setOverflowState(null);
-  }, [setOverflowState]);
+  }, [currentSelectionKey, setOverflowState]);
+  useEffect(() => {
+    function handleOverflowCloseRequest() {
+      if (currentSelectionKey) setSuppressedSelectedHiddenAutoOpenKey(currentSelectionKey);
+      setOverflowState(null);
+    }
+    document.addEventListener("calendar-overflow-close", handleOverflowCloseRequest);
+    return () => document.removeEventListener("calendar-overflow-close", handleOverflowCloseRequest);
+  }, [currentSelectionKey, setOverflowState]);
   const validateOverflowHiddenItems = useCallback((composition) => {
     setOverflowState((current) => {
       if (!sameOverflowDate(current, composition.dateKey, composition.day)) {
@@ -238,6 +252,10 @@ export default function CalendarGrid({
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(itemId != null ? String(itemId) : null);
+    const nextSelectionKey = dateKey && itemId != null ? `${dateKey}:${itemId}` : null;
+    if (nextSelectionKey !== suppressedSelectedHiddenAutoOpenKey) {
+      setSuppressedSelectedHiddenAutoOpenKey(null);
+    }
     if (keepOverflowOpen) {
       markOverflowInteraction();
     }
@@ -294,6 +312,7 @@ export default function CalendarGrid({
     visibleCount,
     hiddenStackHeight,
     leadingColumnWidth,
+    focusOnOpen,
     anchorKey,
     cell,
     day,
@@ -329,6 +348,7 @@ export default function CalendarGrid({
         totalCount,
         visibleCount,
         leadingColumnWidth,
+        focusOnOpen: focusOnOpen ?? true,
         label: new Date(
           `${cell.dateKey}T00:00:00`,
         ).toLocaleDateString("en-US", {
@@ -457,6 +477,7 @@ export default function CalendarGrid({
             selectedItemId={selectedItemId}
             shouldFilterCompletedDeadlines={shouldFilterCompletedDeadlines}
             spanLayout={spanLayout}
+            suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
             todayDate={todayDate}
             view={view}
             viewData={viewData}

@@ -17,10 +17,12 @@ import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
 import useCalendarModalEditorRouting from "./useCalendarModalEditorRouting.js";
 import useCalendarModalHotkeys from "./useCalendarModalHotkeys.js";
 import useCalendarModalOutsideDismiss from "./useCalendarModalOutsideDismiss.js";
+import useCalendarModalSearch from "./useCalendarModalSearch.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
 import useCalendarModalWheelContainment from "./useCalendarModalWheelContainment.js";
 import useViewportWidth from "./useViewportWidth.js";
+import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
 import {
   COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY,
   DEADLINE_OVERLAY_STORAGE_KEY,
@@ -87,6 +89,54 @@ function isCompleteItem(item) {
 
 function itemDueDate(item) {
   return item?.agendaDateKey || item?.due_date || item?.next_date || null;
+}
+
+function itemFromCalendarSearchResult(result) {
+  if (!result) return null;
+  if (result.type === "event") {
+    return {
+      ...(result.payload || {}),
+      id: result.itemId,
+      title: result.title,
+      agendaDateKey: result.itemDate,
+      startMs: result.payload?.startMs,
+      endMs: result.payload?.endMs,
+      allDay: !!result.payload?.allDay,
+      location: result.location || "",
+      source: result.sourceLabel || result.meta || "Calendar",
+      sourceColor: result.sourceColor,
+      color: result.sourceColor,
+      time: result.subtitle || "",
+    };
+  }
+  if (result.type === "deadline") {
+    return {
+      ...(result.payload || {}),
+      id: result.itemId,
+      title: result.title,
+      agendaDateKey: result.itemDate,
+      due_date: result.itemDate,
+      class_name: result.subtitle || "",
+      source: result.payload?.source || result.coverageKey || "todoist",
+      status: "open",
+    };
+  }
+  if (result.type === "bill") {
+    return {
+      ...(result.payload || {}),
+      id: result.itemId,
+      name: result.title,
+      title: result.title,
+      agendaDateKey: result.itemDate,
+      next_date: result.itemDate,
+      payee: result.subtitle || "",
+    };
+  }
+  return {
+    id: result.itemId || result.id,
+    title: result.title,
+    agendaDateKey: result.itemDate,
+  };
 }
 
 function rangeMatches(a, b) {
@@ -182,6 +232,13 @@ function findGridChipAnchor(panelElement, itemId, dateKey) {
   }) || null;
 }
 
+function searchResultIsCompletedDeadline(result) {
+  if (result?.type !== "deadline") return false;
+  const status = String(result?.status || result?.payload?.status || result?.activation?.status || "").toLowerCase();
+  if (status) return status === "complete" || status === "completed" || status === "done";
+  return /\bcomplete(?:d)?\b/i.test(String(result?.subtitle || ""));
+}
+
 export default function useCalendarModalController({
   open,
   onClose,
@@ -272,6 +329,8 @@ export default function useCalendarModalController({
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const agendaSelectionAnchorRef = useRef(null);
+  const searchActivationSeqRef = useRef(0);
+  const searchResultGridNavigableRef = useRef(() => true);
   const [monthMotionDirection, setMonthMotionDirection] = useState(0);
   const {
     floatingDetail,
@@ -546,6 +605,125 @@ export default function useCalendarModalController({
 
   const closeEventEditor = eventEditor.closeEditor;
   const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
+  const searchTargetVisibleInCurrentGrid = useCallback((dateKey) => {
+    const range = getVisibleGridRange(viewYear, viewMonth);
+    return !!dateKey && dateKey >= range.start && dateKey <= range.end;
+  }, [viewMonth, viewYear]);
+
+  const activateCalendarSearchResult = useCallback((result, activationContext = null) => {
+    const target = activationTargetFromCalendarSearchResult(result);
+    const parsed = parseYmd(target?.dateKey);
+    if (!target || !parsed) return false;
+    const current = floatingDetailRef.current;
+    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
+      shakeFloatingEditor();
+      return false;
+    }
+    if (eventEditor.isEditorOpen && eventEditor.isDirty) {
+      shakeFloatingEditor();
+      return false;
+    }
+
+    const targetView = target.view === "bills" ? "bills" : "events";
+    if (targetView !== view) onViewChange?.(targetView);
+    if (target.detailView === "deadlines" && activationContext?.anchorKind !== "grid-chip") {
+      setDeadlineOverlayVisible(true);
+      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, true);
+    }
+    closeEventEditor();
+    setDeadlineEditor(null);
+    setDeadlineDraftPreview(null);
+    setFloatingDetail(null);
+    if (!searchTargetVisibleInCurrentGrid(target.dateKey)) {
+      setViewDate({ year: parsed.year, month: parsed.month });
+    }
+    setSelectedDay(parsed.day);
+    setSelectedDateKey(target.dateKey);
+    setSelectedItemId(target.itemId);
+    searchActivationSeqRef.current += 1;
+    const requestKey = `search:${searchActivationSeqRef.current}:${targetView}:${target.dateKey}:${target.itemId}`;
+    setPendingItemDetailFocus({
+      openRequestId: searchActivationSeqRef.current,
+      view: targetView,
+      detailView: target.detailView || targetView,
+      dateKey: target.dateKey,
+      itemId: target.itemId,
+      requestKey,
+      attempts: 0,
+      anchorElement: activationContext?.anchorElement || null,
+      sourceCellElement: activationContext?.sourceCellElement || activationContext?.anchorElement || null,
+      anchorKind: activationContext?.anchorKind || "search-result-row",
+      searchResult: result,
+    });
+    return true;
+  }, [
+    closeEventEditor,
+    eventEditor.isDirty,
+    eventEditor.isEditorOpen,
+    floatingDetailRef,
+    onViewChange,
+    setFloatingDetail,
+    setDeadlineDraftPreview,
+    setDeadlineEditor,
+    setDeadlineOverlayVisible,
+    searchTargetVisibleInCurrentGrid,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+    setViewDate,
+    shakeFloatingEditor,
+    view,
+  ]);
+
+  const isCalendarSearchResultGridNavigable = useCallback((...args) => (
+    searchResultGridNavigableRef.current?.(...args) ?? true
+  ), []);
+
+  const activateCalendarSearchDateHeader = useCallback((dateKey) => {
+    const parsed = parseYmd(dateKey);
+    if (!parsed) return false;
+    const current = floatingDetailRef.current;
+    if (current?.open && (current.mode === "edit" || current.mode === "create")) {
+      if (current.dirty) {
+        shakeFloatingEditor();
+        return false;
+      }
+      if (current.view === "events") eventEditor.closeEditor?.();
+      if (current.view === "deadlines") {
+        setDeadlineEditor(null);
+        setDeadlineDraftPreview(null);
+      }
+    } else {
+      closeEventEditor();
+    }
+    setFloatingDetail(null);
+    if (!searchTargetVisibleInCurrentGrid(dateKey)) {
+      setViewDate({ year: parsed.year, month: parsed.month });
+    }
+    setSelectedDay(parsed.day);
+    setSelectedDateKey(dateKey);
+    setSelectedItemId(null);
+    return true;
+  }, [
+    closeEventEditor,
+    eventEditor,
+    floatingDetailRef,
+    setDeadlineDraftPreview,
+    setDeadlineEditor,
+    setFloatingDetail,
+    searchTargetVisibleInCurrentGrid,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+    setViewDate,
+    shakeFloatingEditor,
+  ]);
+
+  const calendarSearch = useCalendarModalSearch({
+    modalOpen: open,
+    view,
+    onActivateResult: activateCalendarSearchResult,
+  });
 
   useEffect(() => {
     overlayVisibilityRef.current = {
@@ -990,6 +1168,63 @@ export default function useCalendarModalController({
   });
   const { canGoPrev, computed, itemsByDay } = viewModel;
 
+  const getCalendarSearchResultActivationContext = useCallback((result, _index, fallbackContext = {}) => {
+    const target = activationTargetFromCalendarSearchResult(result);
+    const parsed = parseYmd(target?.dateKey);
+    if (!target || !parsed) {
+      return {
+        anchorKind: "search-result-row",
+        anchorElement: fallbackContext.anchorElement || null,
+        sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement || null,
+      };
+    }
+    const targetView = target.view === "bills" ? "bills" : "events";
+    if (targetView !== view || !searchTargetVisibleInCurrentGrid(target.dateKey)) {
+      return { anchorKind: "grid-chip" };
+    }
+    const location = findItemLocation(activeView, computed, target.itemId, target.dateKey);
+    const itemId = activeView.getItemId ? activeView.getItemId(location?.item) : location?.item?.id;
+    const gridAnchor = findGridChipAnchor(panelRef.current, itemId ?? target.itemId, location?.dateKey || target.dateKey);
+    if (gridAnchor) return { anchorKind: "grid-chip" };
+    return {
+      anchorKind: "search-result-row",
+      anchorElement: fallbackContext.anchorElement || null,
+      sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement || null,
+    };
+  }, [
+    activeView,
+    computed,
+    searchTargetVisibleInCurrentGrid,
+    view,
+  ]);
+
+  useLayoutEffect(() => {
+    searchResultGridNavigableRef.current = (result) => {
+      const target = activationTargetFromCalendarSearchResult(result);
+      const parsed = parseYmd(target?.dateKey);
+      if (!target || !parsed) return false;
+      const targetView = target.view === "bills" ? "bills" : "events";
+      if (targetView !== view) return true;
+      if (target.detailView === "events" && !eventOverlayVisible) return false;
+      if (target.detailView === "deadlines") {
+        if (!deadlineOverlayVisible) return false;
+        if (!completedDeadlineOverlayVisible && searchResultIsCompletedDeadline(result)) return false;
+      }
+      if (!searchTargetVisibleInCurrentGrid(target.dateKey)) return true;
+      const location = findItemLocation(activeView, computed, target.itemId, target.dateKey);
+      if (!location) return false;
+      return true;
+    };
+  }, [
+    activeView,
+    completedDeadlineOverlayVisible,
+    computed,
+    deadlineOverlayVisible,
+    eventOverlayVisible,
+    searchTargetVisibleInCurrentGrid,
+    view,
+  ]);
+
   useLayoutEffect(() => {
     if (!open || view !== "bills" || !activeSelectedItemId || !activeSelectedDateKey) return;
     const currentLocation = findItemLocation(
@@ -1069,6 +1304,7 @@ export default function useCalendarModalController({
       return;
     }
     if (String(floatingDetail.anchorKind || "").startsWith("agenda")) return;
+    if (String(floatingDetail.anchorKind || "").startsWith("search")) return;
     const dateKey = floatingDetail.dateKey || activeSelectedDateKey;
     const itemId = floatingDetail.itemId || activeSelectedItemId;
     const anchor = findGridChipAnchor(panelRef.current, itemId, dateKey);
@@ -1137,12 +1373,17 @@ export default function useCalendarModalController({
       return undefined;
     }
 
-    const item = resolvePendingFocusItem({
+    const resolvedItem = resolvePendingFocusItem({
       activeView,
       computed,
       dateKey: pendingItemDetailFocus.dateKey,
       itemId: pendingItemDetailFocus.itemId,
     });
+    const item = resolvedItem || (
+      pendingItemDetailFocus.anchorKind === "search-result-row"
+        ? itemFromCalendarSearchResult(pendingItemDetailFocus.searchResult)
+        : null
+    );
     const resolvedDateKey = itemDueDate(item) || pendingItemDetailFocus.dateKey;
     const resolvedItemId = item
       ? String(activeView.getItemId ? activeView.getItemId(item) : item.id)
@@ -1172,6 +1413,72 @@ export default function useCalendarModalController({
       return () => window.clearTimeout(retryTimeout);
     }
 
+    if (pendingItemDetailFocus.anchorKind === "grid-chip") {
+      const anchorElement = findGridChipAnchor(panelRef.current, resolvedItemId, resolvedDateKey);
+      if (!anchorElement) {
+        retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
+        return () => window.clearTimeout(retryTimeout);
+      }
+      const parsed = parseYmd(resolvedDateKey);
+      if (!parsed) {
+        setPendingItemDetailFocus(null);
+        return undefined;
+      }
+      suppressAgendaPassiveSync();
+      setSelectedDay(parsed.day);
+      setSelectedDateKey(resolvedDateKey);
+      setSelectedItemId(resolvedItemId != null ? String(resolvedItemId) : null);
+      openFloatingDetail({
+        mode: "detail",
+        view: pendingItemDetailFocus.detailView || pendingItemDetailFocus.view,
+        itemId: resolvedItemId,
+        dateKey: resolvedDateKey,
+        day: parsed.day,
+        anchorElement,
+        sourceCellElement: anchorElement.closest?.("[role='gridcell']") || null,
+        anchorKind: "chip",
+        itemsSnapshot: [item],
+      });
+      handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
+      setPendingItemDetailFocus(null);
+      return undefined;
+    }
+
+    if (pendingItemDetailFocus.anchorKind === "search-result-row") {
+      const anchorElement = pendingItemDetailFocus.anchorElement?.isConnected
+        ? pendingItemDetailFocus.anchorElement
+        : null;
+      if (!anchorElement) {
+        retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
+        return () => window.clearTimeout(retryTimeout);
+      }
+      const parsed = parseYmd(resolvedDateKey);
+      if (!parsed) {
+        setPendingItemDetailFocus(null);
+        return undefined;
+      }
+      suppressAgendaPassiveSync();
+      setSelectedDay(parsed.day);
+      setSelectedDateKey(resolvedDateKey);
+      setSelectedItemId(resolvedItemId != null ? String(resolvedItemId) : null);
+      openFloatingDetail({
+        mode: "detail",
+        view: pendingItemDetailFocus.detailView || pendingItemDetailFocus.view,
+        itemId: resolvedItemId,
+        dateKey: resolvedDateKey,
+        day: parsed.day,
+        anchorElement,
+        sourceCellElement: pendingItemDetailFocus.sourceCellElement?.isConnected
+          ? pendingItemDetailFocus.sourceCellElement
+          : anchorElement,
+        anchorKind: "search-result-row",
+        itemsSnapshot: [item],
+      });
+      handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
+      setPendingItemDetailFocus(null);
+      return undefined;
+    }
+
     const firstRaf = window.requestAnimationFrame(() => {
       suppressAgendaPassiveSync();
       const activated = agendaRailRef.current?.activateItem?.(
@@ -1194,9 +1501,13 @@ export default function useCalendarModalController({
     activeView,
     computed,
     floatingDetailRef,
+    openFloatingDetail,
     open,
     pendingItemDetailFocus,
     shakeFloatingEditor,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
     suppressAgendaPassiveSync,
     usesFloatingEditor,
     view,
@@ -1253,6 +1564,7 @@ export default function useCalendarModalController({
     navigateMonthRef,
     onCopySelectedEvent: copySelectedCalendarEvent,
     onPasteCopiedEvent: pasteCopiedCalendarEvent,
+    openCalendarSearch: calendarSearch.openSearch,
   });
 
   useEffect(() => {
@@ -1406,6 +1718,22 @@ export default function useCalendarModalController({
     return () => window.cancelAnimationFrame(id);
   }, [eventEditor.isEditorOpen, floatingDetailRef, setFloatingDetail]);
 
+  const calendarSearchShell = useMemo(() => ({
+    ...calendarSearch,
+    selectedDateKey: activeSelectedDateKey,
+    selectedItemId: activeSelectedItemId,
+    activateDateHeader: activateCalendarSearchDateHeader,
+    getResultActivationContext: getCalendarSearchResultActivationContext,
+    isResultNavigable: isCalendarSearchResultGridNavigable,
+  }), [
+    activateCalendarSearchDateHeader,
+    activeSelectedDateKey,
+    activeSelectedItemId,
+    calendarSearch,
+    getCalendarSearchResultActivationContext,
+    isCalendarSearchResultGridNavigable,
+  ]);
+
   if (!open) return null;
 
   const shellProps = buildCalendarModalShellProps({
@@ -1456,6 +1784,7 @@ export default function useCalendarModalController({
       handleFloatingDeadlineSaved, handleFloatingDeadlineDeleted,
     },
     handlers: { navigateMonth, handleViewChange, suppressOutsideClick, closeCalendarModal, closeEventEditor, focusDeadlineTask },
+    search: calendarSearchShell,
   });
 
   return (

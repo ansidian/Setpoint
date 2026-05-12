@@ -20,6 +20,7 @@ export function getCalendarLayoutMetrics(viewportWidth) {
       gridGap: 8,
       weekHeaderGap: 6,
       contextWidth: 380,
+      searchWidth: 304,
       editorWidth: 680,
       cellHeight: 150,
       railHeightOffset: 92,
@@ -44,6 +45,7 @@ export function getCalendarLayoutMetrics(viewportWidth) {
       gridGap: 8,
       weekHeaderGap: 6,
       contextWidth: 320,
+      searchWidth: 288,
       editorWidth: 620,
       cellHeight: 140,
       railHeightOffset: 92,
@@ -68,6 +70,7 @@ export function getCalendarLayoutMetrics(viewportWidth) {
       gridGap: 6,
       weekHeaderGap: 5,
       contextWidth: 296,
+      searchWidth: 268,
       editorWidth: 560,
       cellHeight: 124,
       railHeightOffset: 82,
@@ -92,6 +95,7 @@ export function getCalendarLayoutMetrics(viewportWidth) {
       gridGap: 5,
       weekHeaderGap: 4,
       contextWidth: 272,
+      searchWidth: 260,
       editorWidth: 480,
       cellHeight: 108,
       railHeightOffset: 72,
@@ -115,6 +119,7 @@ export function getCalendarLayoutMetrics(viewportWidth) {
     gridGap: 4,
     weekHeaderGap: 4,
     contextWidth: 0,
+    searchWidth: 0,
     editorWidth: 0,
     cellHeight: 76,
     railHeightOffset: 48,
@@ -123,4 +128,12 @@ export function getCalendarLayoutMetrics(viewportWidth) {
     headerWrap: true,
     headerStacked: true,
   };
+}
+
+export function getCalendarSearchLayoutMode(layout, searchOpen = false) {
+  if (!searchOpen) return "standard";
+  if (layout.stacked) return "stacked-replaces-agenda";
+  return layout.tier === "uhd" || layout.tier === "xl" || layout.tier === "lg"
+    ? "three-rail"
+    : "search-replaces-agenda";
 }

@@ -134,6 +134,13 @@ export const getCalendarDeadlinesRange = (start, end) =>
   apiFetch(`/api/calendar/deadlines/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const getCalendarBillsRange = (start, end) =>
   apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+export const getCalendarSearch = ({ scope, q, limit } = {}) => {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  if (q) params.set("q", q);
+  if (limit) params.set("limit", String(limit));
+  return apiFetch(`/api/calendar/search?${params.toString()}`);
+};
 // Calendar range fetch — used by useCalendarRange hook
 export const getCalendarRange = (start, end) =>
   apiFetch(`/api/calendar/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);

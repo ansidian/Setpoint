@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Receipt, RefreshCw, X } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search, X } from "lucide-react";
 
 const VIEW_OPTIONS = [
   { key: "events", label: "Events", Icon: CalendarIcon, hint: "1" },
@@ -53,9 +53,9 @@ function handleHeaderButtonHover(event, active) {
   event.currentTarget.style.transform = "translateY(-1px)";
 }
 
-function resetHeaderButtonHover(event) {
-  event.currentTarget.style.background = "rgba(255,255,255,0.03)";
-  event.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+function resetHeaderButtonHover(event, active = false) {
+  event.currentTarget.style.background = active ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.03)";
+  event.currentTarget.style.borderColor = active ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.06)";
   event.currentTarget.style.transform = "translateY(0)";
 }
 
@@ -121,6 +121,7 @@ export default function CalendarModalHeader({
   setDeadlineEditor,
   onClose,
   viewLabel,
+  search,
 }) {
   const titleSize = layout.tier === "uhd" ? 40 : layout.tier === "xl" ? 40 : layout.tier === "lg" ? 36 : layout.tier === "md" ? 32 : 28;
   const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay, selectedDateKey);
@@ -342,6 +343,26 @@ export default function CalendarModalHeader({
               />
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={search?.openSearch}
+            aria-label={search?.open ? "Focus calendar search" : "Open calendar search"}
+            aria-pressed={search?.open ? "true" : "false"}
+            data-testid="calendar-search-header-button"
+            onMouseEnter={(event) => handleHeaderButtonHover(event, true)}
+            onMouseLeave={(event) => resetHeaderButtonHover(event, !!search?.open)}
+            data-calendar-focus-ring="true"
+            style={{
+              ...headerButtonBaseStyle(),
+              background: search?.open ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.03)",
+              borderColor: search?.open ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.06)",
+              color: search?.open ? "#cba6da" : "rgba(205,214,244,0.7)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <Search size={16} />
+          </button>
           <button
             type="button"
             onClick={onClose}

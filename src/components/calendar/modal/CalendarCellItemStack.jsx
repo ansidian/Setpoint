@@ -46,19 +46,23 @@ export default function CalendarCellItemStack({
   overflowOpen = false,
   overflowAnchorKey,
   inlineOverflowOpen = false,
+  inlineOverflowAutoFocus = true,
   inlineOverflowVisibleCount = null,
   inlineOverflowExternal = false,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onHiddenItemsChange,
   onBeforeItemAction,
+  suppressedSelectedHiddenAutoOpenKey = null,
 }) {
   const stackItems = useMemo(() => items || [], [items]);
   const [activeChipId, setActiveChipId] = useState(null);
   const [moreActive, setMoreActive] = useState(false);
   const stackRef = useRef(null);
+  const moreButtonRef = useRef(null);
   const inlineOverflowRef = useRef(null);
   const hiddenItemsNotificationRef = useRef(null);
+  const lastAutoOpenedHiddenKeyRef = useRef(null);
   const reservedHeight = getReservedCellItemLaneHeight(Math.max(0, reservedLaneCount), metrics);
   const measuredMetrics = useMemo(() => ({
     ...metrics,
@@ -148,17 +152,61 @@ export default function CalendarCellItemStack({
       onCloseInlineOverflow?.();
       return;
     }
+    if (!inlineOverflowAutoFocus) return;
     const firstChip = inlineOverflowRef.current?.querySelector(
       "button[data-testid='calendar-cell-item-chip']",
     );
     firstChip?.focus?.();
-  }, [hiddenCount, inlineOverflowOpen, onCloseInlineOverflow]);
+  }, [hiddenCount, inlineOverflowAutoFocus, inlineOverflowOpen, onCloseInlineOverflow]);
 
-  if (!stackItems.length) return null;
   const itemMatchesSelected = (item) => {
     if (String(item.id) === String(selectedItemId)) return true;
+    if (item.selectionId != null && String(item.selectionId) === String(selectedItemId)) return true;
     return (item.matchItemIds || []).some((id) => String(id) === String(selectedItemId));
   };
+  const selectedHiddenItem = selectedItemId == null
+    ? null
+    : hiddenItems.find((item) => itemMatchesSelected(item)) || null;
+  const selectedHiddenKey = selectedHiddenItem
+    ? `${dateKey || ""}:${selectedHiddenItem.selectionId ?? selectedHiddenItem.id}`
+    : null;
+
+  useLayoutEffect(() => {
+    if (!selectedHiddenKey) {
+      lastAutoOpenedHiddenKeyRef.current = null;
+      return;
+    }
+    if (selectedHiddenKey === suppressedSelectedHiddenAutoOpenKey) return;
+    if (overflowOpen || inlineOverflowOpen) return;
+    if (lastAutoOpenedHiddenKeyRef.current === selectedHiddenKey) return;
+    const triggerElement = moreButtonRef.current;
+    if (!triggerElement) return;
+    lastAutoOpenedHiddenKeyRef.current = selectedHiddenKey;
+    onOpenOverflow?.({
+      triggerElement,
+      hiddenItems,
+      totalCount: stackItems.length,
+      visibleCount,
+      dateKey,
+      hiddenStackHeight,
+      leadingColumnWidth,
+      focusOnOpen: false,
+    });
+  }, [
+    dateKey,
+    hiddenItems,
+    hiddenStackHeight,
+    inlineOverflowOpen,
+    leadingColumnWidth,
+    onOpenOverflow,
+    overflowOpen,
+    selectedHiddenKey,
+    suppressedSelectedHiddenAutoOpenKey,
+    stackItems.length,
+    visibleCount,
+  ]);
+
+  if (!stackItems.length) return null;
 
   return (
     <div
@@ -258,6 +306,7 @@ export default function CalendarCellItemStack({
         <MoreButton
           day={day}
           hiddenCount={hiddenCount}
+          buttonRef={moreButtonRef}
           pastTone={pastTone}
           active={moreActive}
           metrics={metrics}
