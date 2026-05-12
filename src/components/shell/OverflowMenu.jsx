@@ -144,7 +144,7 @@ export function OverflowMenu({
           <MenuItem
             icon={History}
             label="Snapshots"
-            kbd={isMobile ? null : "H"}
+            kbd={isMobile ? null : "Y"}
             onClick={() => {
               onCloseMenu();
               onOpenHistory?.();

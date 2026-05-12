@@ -118,6 +118,16 @@ describe("ShellHeader system status", () => {
     expect(screen.getByRole("button", { name: /system status: needs_sync/i })).toBeTruthy();
   });
 
+  it("labels the snapshots dropdown shortcut as Y", () => {
+    renderHeader();
+
+    fireEvent.click(screen.getByRole("button", { name: /open more actions/i }));
+
+    const snapshotsItem = screen.getByRole("button", { name: /snapshots/i });
+    expect(within(snapshotsItem).getByText("Y")).toBeTruthy();
+    expect(within(snapshotsItem).queryByText("H")).toBeNull();
+  });
+
   it("keeps shell controls accessible without native hover tooltips", () => {
     renderHeader();
 
