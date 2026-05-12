@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { publicAssetUrl } from "@/publicAsset";
 
 const STORAGE_KEYS = {
   emails: "ea_notified_emails",
@@ -27,7 +28,7 @@ const hasNotificationAPI = typeof Notification !== "undefined";
 function notify(title, body) {
   if (!hasNotificationAPI || Notification.permission !== "granted") return;
   try {
-    new Notification(title, { body, icon: "/favicon.ico" });
+    new Notification(title, { body, icon: publicAssetUrl("favicon.svg") });
   } catch {
     // notification failed silently
   }

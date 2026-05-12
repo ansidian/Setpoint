@@ -1,28 +1,41 @@
 # EA Dashboard
 
-A personal executive assistant dashboard that consolidates emails, calendars, weather, academic deadlines, tasks, and finances into one current operational view. Built to solve the problem of managing multiple email accounts and calendar events where things often get lost in the noise.
+![EA Dashboard](public/repo-hero.png)
 
-This is a work-in-progress personal project — not built with public use in mind. If you want to run it yourself, it's a BYOK (bring your own key) system via Anthropic and/or OpenAI.
+A personal executive-assistant dashboard that consolidates email, calendar, tasks, reminders, weather, bills, and notes into one current operational view. It is built to solve the daily problem of managing multiple inboxes, calendars, tasks, and financial signals without losing important work in the noise.
 
-Built with the help of Claude Opus 4.6.
+EA Dashboard is a private BYOK system. Bring your own OpenAI or Anthropic API key: email triage and bill extraction can run on either provider, while semantic inbox search uses OpenAI embeddings and answer generation.
+
+## Live Demo
+
+<p align="center">
+  <a href="https://ansidian.github.io/ea-dashboard/">
+    <img alt="Open live demo" src="https://img.shields.io/badge/Live%20Demo-Open%20Portfolio%20Build-7c3aed?style=for-the-badge">
+  </a>
+  <img alt="Static fictional data" src="https://img.shields.io/badge/Data-Fictional%20Static%20Seed-475569?style=for-the-badge">
+  <img alt="No login required" src="https://img.shields.io/badge/Auth-No%20Login%20Required-0f766e?style=for-the-badge">
+</p>
+
+The live demo is a static GitHub Pages build with rolling fictional data. It bypasses auth for the portfolio build and does not call the private backend, provider APIs, email accounts, calendars, Actual Budget, or AI services.
 
 ## What it does
 
 The dashboard fetches data from multiple sources, continuously indexes incoming email, and maintains active inbox snapshots that surface what actually matters:
 
 - **Email triage** — Pulls from multiple Gmail and iCloud accounts, classifies emails as actionable/FYI/noise, extracts urgency flags, and groups by account. The Settings page controls whether continuous triage runs real models, uses no-model local rules, or pauses job draining.
-- **Bill & transaction detection** — Extracts financial data (payee, amount, due date) from emails with optional one-click logging to Actual Budget
-- **Calendar consolidation** — Aggregates Google Calendar events across all connected accounts with color coding, conflict detection, and a live now-marker timeline
-- **Academic deadlines** — Fetches Canvas LMS assignments via [Canvas-LMS-Task-Manager](https://github.com/ansidian/Canvas-LMS-Task-Manager), with status tracking (incomplete/in-progress/complete)
-- **Todoist integration** — Personal tasks merged and deduplicated with academic deadlines
-- **Weather** — Current conditions and hourly forecasts via Pirate Weather
-- **Continuous snapshots** — Incoming mail is indexed and attached to active snapshot windows so the Inbox can update between scheduled boundaries
-- **Current data cache** — Boot-critical weather, calendar, deadline, bill, and provider-health data is cached for graceful degradation
-- **Snapshot boundaries** — Cron-based schedule entries advance active snapshot windows without running a batch generator
-- **Inbox search** — The Inbox tab searches the persisted email index (FTS5) across indexed INBOX mail for every account, with a resumable 365-day default backfill for historical coverage
-- **Snapshot history** — Browse prior inbox snapshot windows from the current snapshot store
-- **Important senders** — Configure priority senders for real-time browser notifications
-- **Multi-account support** — Multiple Gmail (OAuth) and iCloud (app passwords) accounts with custom labels, colors, and icons
+- **Semantic inbox search** — Searches the persisted email index with SQLite FTS5, OpenAI embeddings, and an Ask AI answer path over retrieved mail.
+- **Bill detection and bill pay** — Extracts payee, amount, due date, and payment context from emails, resolves bill-pay mappings, and connects bill actions to Actual Budget.
+- **Calendar workspace** — Aggregates Google Calendar events across connected accounts with event creation/editing, deadline and bill overlays, reminders, and a local search mirror for fast calendar search.
+- **Todoist integration** — Syncs personal tasks, supports Todoist OAuth refresh and webhooks, creates/edits/deletes tasks, and preserves completed recurring occurrences long enough for the UI to stay stable.
+- **Weather** — Shows current conditions and forecasts via Pirate Weather.
+- **Continuous snapshots** — Indexes incoming mail and attaches it to active snapshot windows so the Inbox can update between scheduled boundaries.
+- **Current data cache** — Caches boot-critical weather, calendar, deadline, bill, inbox, and provider-health data for graceful degradation.
+- **Snapshot boundaries** — Cron-based schedule entries advance active email snapshot windows without running a batch generator.
+- **Snapshot history** — Browses prior inbox snapshot windows from the current snapshot store.
+- **Important senders and notifications** — Configures priority senders, browser notifications, triage notification sounds, and private Discord reminder delivery.
+- **Notes and quick capture** — Keeps local operational notes beside the current dashboard view.
+- **Multi-account support** — Supports multiple Gmail OAuth and iCloud IMAP accounts with custom labels, colors, and icons.
+- **Operational controls** — Includes settings for provider credentials, model selection, account order, schedules, Actual Budget, Todoist, reminders, and scoped API tokens.
 
 ## Tech stack
 
@@ -32,14 +45,13 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 | UI | shadcn/ui, Radix, Framer Motion |
 | Backend | Express.js (Node.js 24.x) |
 | Database | Turso (LibSQL) |
-| AI | Anthropic and OpenAI providers for email triage and bill signals |
-| Search | SQLite FTS5 email index |
+| AI | BYOK Anthropic and OpenAI providers for email triage and bill extraction; OpenAI for semantic inbox search |
+| Search | SQLite FTS5 email index, OpenAI embeddings, optional Turso/libSQL native vectors |
 | Email | Gmail (OAuth 2.0), iCloud (IMAP) |
 | Calendar | Google Calendar API |
 | Weather | Pirate Weather API |
 | Finances | Actual Budget API |
 | Tasks | Todoist API |
-| Academic | Canvas LMS via CTM API |
 
 For a detailed look at how everything fits together, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -61,10 +73,10 @@ TURSO_AUTH_TOKEN=
 # Encryption key for stored credentials (64-char hex)
 EA_ENCRYPTION_KEY=
 
-# Email AI providers
+# Email AI providers (BYOK)
 ANTHROPIC_API_KEY=
 
-# OpenAI (optional; enables OpenAI email AI, bill extraction, and inbox-search embeddings)
+# OpenAI (enables OpenAI email AI, bill extraction, embeddings, and Ask AI)
 OPENAI_API_KEY=
 
 # Google OAuth (Gmail + Calendar)
@@ -77,10 +89,6 @@ GMAIL_PUBSUB_PUSH_TOKEN=long-random-webhook-token
 # Todoist OAuth refresh + webhook verification
 TODOIST_CLIENT_ID=todoist-developer-app-client-id
 TODOIST_CLIENT_SECRET=todoist-developer-app-client-secret
-
-# CTM API (Canvas LMS deadlines — optional)
-CTM_API_URL=https://your-ctm-instance/api
-CTM_API_KEY=
 
 # Pirate Weather (optional)
 PIRATE_WEATHER_API_KEY=
@@ -200,4 +208,4 @@ databases are expected to already contain the same current snapshot schema.
 
 ## License
 
-[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — free to use and adapt for non-commercial purposes with attribution.
+[Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/) — free to use and adapt for non-commercial purposes with attribution.
