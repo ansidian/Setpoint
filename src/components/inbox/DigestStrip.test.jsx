@@ -57,4 +57,19 @@ describe("DigestStrip", () => {
     expect(screen.queryByText("Briefing snapshot")).toBeNull();
     expect(screen.getByTestId("digest-live-slot").textContent).not.toContain("Retrieving live mail");
   });
+
+  it("treats visible queued lane messages as current instead of syncing", () => {
+    renderStrip(0, false, {
+      activeSnapshotMode: true,
+      accountCount: 2,
+      counts: { queued: 3, action: 2, fyi: 1, noise: 3 },
+      processingCount: 0,
+    });
+
+    const status = screen.getByTestId("digest-live-slot").textContent;
+    expect(status).toContain("Triage · current");
+    expect(status).toContain("3 messages visible in Queue");
+    expect(status).not.toContain("Triage · syncing");
+    expect(status).not.toContain("processing");
+  });
 });
