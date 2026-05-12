@@ -212,7 +212,7 @@ describe("triage preflight engine", () => {
     expect(unrelatedSender.matchedInterest).toBeNull();
   });
 
-  it("does not let email interests override hard risk, grace, model routing, or no-match mail", () => {
+  it("does not let email interests override hard risk, grace, or model-routing mail", () => {
     const hardRisk = evaluateTriagePreflight(email({
       from_name: "Da Vien Coffee",
       from_address: "billing@davien.example",
@@ -242,7 +242,7 @@ describe("triage preflight engine", () => {
       matchedInterest: null,
     });
 
-    const noMatch = evaluateTriagePreflight(email({
+    const senderInterest = evaluateTriagePreflight(email({
       from_name: "Da Vien Coffee",
       from_address: "hello@davien.example",
       subject: "A normal update",
@@ -250,11 +250,12 @@ describe("triage preflight engine", () => {
     }), {
       emailInterests: ["Da Vien"],
     });
-    expect(noMatch).toMatchObject({
-      action: "route_model",
-      modelTier: "cheap",
-      reasonCode: "no_preflight_match",
-      matchedInterest: null,
+    expect(senderInterest).toMatchObject({
+      action: "finalize",
+      lane: "fyi",
+      category: "updates",
+      reasonCode: "email_interest_sender_fyi",
+      matchedInterest: "Da Vien",
     });
   });
 
