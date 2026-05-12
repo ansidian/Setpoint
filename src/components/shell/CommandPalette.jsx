@@ -17,7 +17,7 @@ export default function CommandPalette({ open, ...rest }) {
   return <CommandPaletteInner {...rest} />;
 }
 
-function CommandPaletteInner({ accent, onClose, onAction }) {
+function CommandPaletteInner({ accent, backdropSnapshot = null, onClose, onAction }) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef(null);
@@ -86,7 +86,16 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
       style={{
         position: "fixed", inset: 0, zIndex: 100,
         background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(6px)",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
+        ...(backdropSnapshot?.dataUrl
+          ? {
+              backgroundImage: `linear-gradient(rgba(0,0,0,0.34), rgba(0,0,0,0.44)), url("${backdropSnapshot.dataUrl}")`,
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "cover",
+            }
+          : {}),
         display: "grid", placeItems: "start center",
         paddingTop: 120,
       }}
