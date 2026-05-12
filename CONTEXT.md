@@ -137,12 +137,15 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - A **Calendar Search Mirror** may answer Events search, but it does not replace live Google Calendar reads for the normal Events calendar range or dashboard surfaces.
 - A **Calendar Search Mirror** owns the same rolling Events search window as **Calendar Search Coverage**: 12 months back and 18 months forward from today.
 - A **Calendar Search Mirror** stores **Calendar Search Occurrences** expanded by Google Calendar over the rolling window, not raw recurring series that EA Dashboard expands itself.
+- A **Calendar Search Occurrence** is searchable by event title, location, description, and calendar source label, while preserving activation fields needed to reopen the existing calendar detail behavior.
 - Calendar writes continue to use Google Calendar as the provider of record; a **Calendar Search Mirror** is refreshed or marked stale after writes.
+- Simple non-recurring calendar writes may update matching **Calendar Search Occurrences** immediately, but recurring writes mark the affected Google calendar dirty and rely on **Calendar Search Mirror Sync** for repair.
 - **Calendar Search Mirror Freshness** is bounded eventual consistency: normal search may return recently stale mirrored results with honest coverage, while uninitialized, old, or degraded mirrors trigger background repair instead of pretending to be live Google.
 - **Calendar Search Mirror Sync** uses quiet incremental polling and write-triggered dirtying first; Google Calendar push notifications are deferred unless polling cannot meet the freshness contract.
 - **Calendar Search** does not automatically fall back to live Google provider search when the **Calendar Search Mirror** is stale, empty, or degraded; it returns honest coverage and schedules repair instead.
 - **Calendar Search** opens immediately when the **Calendar Search Mirror** is uninitialized; initial indexing is reported through coverage rather than blocking the search request.
 - **Calendar Search Coverage** is per source: Events search may return deadline-overlay matches while Google event mirror coverage is initializing, stale, or degraded.
+- A mirror-backed **Calendar Search Endpoint** preserves **Calendar Search Ranking**; the mirror changes freshness and provider-call behavior, not the result ordering contract.
 - **Calendar Search Coverage** is source-specific: Events may use provider-backed Google Calendar search, Events deadlines use server-available deadline data, and Bills searches the local Bills mirror.
 - **Calendar Search Coverage** must be honest in empty or limited states; Bills mirror coverage is not the same as searching all of Actual forever.
 - **Calendar Search Activation** navigates the modal to the result month, selects the result date and item, and opens the existing calendar detail behavior.
