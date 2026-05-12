@@ -3,6 +3,7 @@ import { Receipt } from "lucide-react";
 import { getBillExtractModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
+import { isDemoMode } from "@/demo/config";
 
 const FALLBACK_PROVIDERS = [
   {
@@ -27,8 +28,19 @@ const FALLBACK_PROVIDERS = [
   },
 ];
 
+const DEMO_PROVIDERS = [
+  {
+    provider: "demo",
+    label: "Demo",
+    available: true,
+    defaultModel: "demo-bill-extract-model",
+    models: [{ id: "demo-bill-extract-model", label: "Demo bill model" }],
+  },
+];
+
 export default function BillExtractionAiCard({ settings, setSettings, patch }) {
-  const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
+  const demoMode = isDemoMode();
+  const [providers, setProviders] = useState(demoMode ? DEMO_PROVIDERS : FALLBACK_PROVIDERS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,8 +57,8 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }) {
     return () => { cancelled = true; };
   }, []);
 
-  const selectedProvider = settings?.bill_extract_provider || "anthropic";
-  const selectedModel = settings?.bill_extract_model || "claude-haiku-4-5";
+  const selectedProvider = demoMode ? "demo" : settings?.bill_extract_provider || "anthropic";
+  const selectedModel = demoMode ? "demo-bill-extract-model" : settings?.bill_extract_model || "claude-haiku-4-5";
 
   const providerEntry = providers.find((p) => p.provider === selectedProvider) || providers[0];
 
@@ -78,7 +90,9 @@ export default function BillExtractionAiCard({ settings, setSettings, patch }) {
         />
 
         <div className="flex items-center gap-2">
-          {providerEntry?.available ? (
+          {demoMode ? (
+            <StatusPill tone="neutral">Demo-only model</StatusPill>
+          ) : providerEntry?.available ? (
             <StatusPill tone="success">{providerEntry.label} key configured</StatusPill>
           ) : (
             <StatusPill tone="warning">

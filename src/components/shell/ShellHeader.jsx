@@ -8,6 +8,7 @@ import {
   ShellTabs,
 } from "./ShellHeaderChrome";
 import { SystemStatusButton } from "./SystemStatusButton.jsx";
+import { isDemoMode } from "../../demo/config.js";
 
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.
@@ -32,6 +33,7 @@ export default function ShellHeader({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const demoMode = isDemoMode();
 
   useEffect(() => {
     function onDoc(event) {
@@ -74,6 +76,40 @@ export default function ShellHeader({
       }}
     >
       <ShellBrand isMobile={isMobile} />
+      {demoMode ? (
+        <span
+          aria-label="Demo data: mocked data"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            height: isMobile ? 24 : 26,
+            padding: isMobile ? "0 8px" : "0 10px",
+            borderRadius: 999,
+            border: "1px solid rgba(137,180,250,0.24)",
+            background: "rgba(137,180,250,0.08)",
+            color: "#89b4fa",
+            fontSize: isMobile ? 10 : 10.5,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: 999,
+              background: "#89b4fa",
+              boxShadow: "0 0 8px rgba(137,180,250,0.45)",
+            }}
+          />
+          Demo data
+        </span>
+      ) : null}
       <ShellTabs
         isMobile={isMobile}
         tab={tab}

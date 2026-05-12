@@ -45,6 +45,7 @@ function renderHeader(overrides = {}) {
 describe("ShellHeader system status", () => {
   afterEach(() => {
     cleanup();
+    vi.unstubAllEnvs();
   });
 
   it("shows a compact current status button and opens provider rows", () => {
@@ -136,6 +137,16 @@ describe("ShellHeader system status", () => {
     expect(labels.indexOf("Open analytics")).toBeLessThan(labels.indexOf("Open command palette"));
     expect(labels.indexOf("Open command palette")).toBeLessThan(labels.indexOf("Sync now"));
     expect(labels.indexOf("Sync now")).toBeLessThan(labels.indexOf("System status: current"));
+  });
+
+  it("shows a quiet demo data marker in demo mode", () => {
+    vi.stubEnv("VITE_EA_DEMO", "1");
+
+    renderHeader();
+
+    const marker = screen.getByLabelText(/demo data: mocked data/i);
+    expect(marker).toBeTruthy();
+    expect(marker.textContent).toBe("Demo data");
   });
 
   it("opens analytics and exposes active state for the shell analytics tint", () => {

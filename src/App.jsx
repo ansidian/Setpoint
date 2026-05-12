@@ -1,6 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { checkAuth } from "./api";
+import { isDemoMode } from "./demo/config.js";
+import { resolveRouterBasename } from "./routerBase.js";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Login = lazy(() => import("./pages/Login"));
@@ -36,13 +38,16 @@ function SettingsShortcut({ enabled }) {
 }
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(null); // null = loading
+  const demoMode = isDemoMode();
+  const [authenticated, setAuthenticated] = useState(demoMode ? true : null); // null = loading
 
   useEffect(() => {
+    if (demoMode) return undefined;
+
     checkAuth()
       .then((res) => setAuthenticated(res.authenticated))
       .catch(() => setAuthenticated(false));
-  }, []);
+  }, [demoMode]);
 
   if (authenticated === null) {
     return <AuthSpinner />;
@@ -51,7 +56,7 @@ export default function App() {
   return (
     <>
       <MouseSpotlightCanvas />
-      <BrowserRouter>
+      <BrowserRouter basename={resolveRouterBasename()}>
         <SettingsShortcut enabled={authenticated === true} />
         <Routes>
           <Route path="/login" element={

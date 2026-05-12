@@ -3,6 +3,7 @@ import { Bot } from "lucide-react";
 import { getModels } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import ProviderModelSelect from "@/components/settings/shared/ProviderModelSelect";
+import { isDemoMode } from "@/demo/config";
 
 const FALLBACK_PROVIDERS = [
   {
@@ -30,13 +31,24 @@ const FALLBACK_PROVIDERS = [
   },
 ];
 
+const DEMO_PROVIDERS = [
+  {
+    provider: "demo",
+    label: "Demo",
+    available: true,
+    defaultModel: "demo-triage-model",
+    models: [{ id: "demo-triage-model", label: "Demo triage model" }],
+  },
+];
+
 function inferProvider(model) {
   if (model?.startsWith("gpt-")) return "openai";
   return "anthropic";
 }
 
 export default function EmailAiModelCard({ settings, setSettings, patch }) {
-  const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
+  const demoMode = isDemoMode();
+  const [providers, setProviders] = useState(demoMode ? DEMO_PROVIDERS : FALLBACK_PROVIDERS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,7 +65,9 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
     return () => { cancelled = true; };
   }, []);
 
-  const selectedProvider = settings?.email_ai_provider
+  const selectedProvider = demoMode
+    ? "demo"
+    : settings?.email_ai_provider
     || inferProvider(settings?.email_ai_model);
   const providerEntry = providers.find((entry) => entry.provider === selectedProvider) || providers[0];
   const selectedModel = settings?.email_ai_model
@@ -91,7 +105,9 @@ export default function EmailAiModelCard({ settings, setSettings, patch }) {
         />
 
         <div className="flex items-center gap-2">
-          {providerEntry?.available ? (
+          {demoMode ? (
+            <StatusPill tone="neutral">Demo-only model</StatusPill>
+          ) : providerEntry?.available ? (
             <StatusPill tone="success">{providerEntry.label} key configured</StatusPill>
           ) : (
             <StatusPill tone="warning">Set {providerEntry?.envVar || "ANTHROPIC_API_KEY"}</StatusPill>

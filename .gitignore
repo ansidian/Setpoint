@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-demo
 .env
 server/db/*.db
 morning-briefing.jsx

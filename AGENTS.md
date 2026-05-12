@@ -92,6 +92,13 @@ For dropdowns, popovers, and panels, follow the repo pattern in `src/components/
 - Prod DB is Turso; dev DB is `server/db/ea.db`, and can be probed through Turso CLI.
 - Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/briefing/actual.js`, not the CLI.
 
+## Demo Mode Contract
+
+- Demo mode is build-time only (`VITE_EA_DEMO=1`) and must not become a URL/query/runtime toggle.
+- Future `src/api.js` exports must have explicit demo behavior: demo data, in-memory mutation, inert demo-safe response, or intentional `DEMO_API_UNHANDLED` failure.
+- Demo mode must never fall through to real `/api/*`, SSE/EventSource, provider auth/test flows, AI calls, webhooks, Actual SDK work, token management, bill-pay provider actions, or external service navigation.
+- Demo data may mutate in memory for the walkthrough, but it must reset on page refresh and must not persist to localStorage, IndexedDB, or a server.
+
 ## Commit Style
 
 Single-line messages prefixed `feat:`, `fix:`, or `chore:`. One commit per logical change; split unrelated edits.
