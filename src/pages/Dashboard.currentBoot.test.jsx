@@ -135,6 +135,9 @@ describe("Dashboard current boot", () => {
     expect(screen.getByTestId("snapshot-id").textContent).toBe("42");
     expect(mocks.getCurrentDashboard).toHaveBeenCalledTimes(1);
     expect(mocks.getActiveSnapshot).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mocks.seedDeadlineRangeData).toHaveBeenCalledWith(currentPayload.deadlines);
+    });
   });
 
   it("seeds the deadline month range from current dashboard data", async () => {
@@ -146,6 +149,8 @@ describe("Dashboard current boot", () => {
 
     await waitFor(() => expect(screen.getByTestId("dashboard-shell")).toBeTruthy());
 
-    expect(mocks.seedDeadlineRangeData).toHaveBeenCalledWith(currentPayload.deadlines);
+    await waitFor(() => {
+      expect(mocks.seedDeadlineRangeData).toHaveBeenCalledWith(currentPayload.deadlines);
+    });
   });
 });
