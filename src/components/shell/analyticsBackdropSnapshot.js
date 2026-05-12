@@ -2,7 +2,7 @@ const MAX_CAPTURE_WIDTH = 1600;
 const MAX_CAPTURE_HEIGHT = 1000;
 const MAX_CAPTURE_PIXEL_RATIO = 0.55;
 const MIN_CAPTURE_PIXEL_RATIO = 0.25;
-const BLUR_RADIUS = 8;
+const BLUR_RADIUS = 5;
 const JPEG_QUALITY = 0.82;
 
 let htmlToImageImportPromise = null;
@@ -49,7 +49,7 @@ function blurCanvas(sourceCanvas) {
   if (!context) return null;
 
   const pad = Math.ceil(BLUR_RADIUS * 2);
-  context.filter = `blur(${BLUR_RADIUS}px) saturate(0.88) brightness(0.74)`;
+  context.filter = `blur(${BLUR_RADIUS}px) saturate(0.92) brightness(0.82)`;
   context.drawImage(
     sourceCanvas,
     -pad,

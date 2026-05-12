@@ -71,4 +71,21 @@ describe("CommandPalette", () => {
       kind: "analytics",
     }));
   });
+
+  it("uses the preblurred backdrop snapshot instead of a live backdrop filter", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        backdropSnapshot={{ dataUrl: "data:image/jpeg;base64,palette-backdrop" }}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    const overlay = screen.getByPlaceholderText("Jump to anything…").closest("[style*='position: fixed']");
+
+    expect(overlay?.style.backdropFilter).toBe("none");
+    expect(overlay?.style.backgroundImage).toContain("palette-backdrop");
+  });
 });

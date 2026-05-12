@@ -4,25 +4,19 @@ import {
   prewarmAnalyticsBackdropCapture,
 } from "./analyticsBackdropSnapshot.js";
 
-export function useAnalyticsModalController({
+export function usePreparedBackdropSnapshot({
   sourceRef,
-  loadModal,
+  loadSurface = () => {},
   refreshing,
   refreshKey,
   tab,
 }) {
-  const [open, setOpen] = useState(false);
   const [backdropSnapshot, setBackdropSnapshot] = useState(null);
-  const requestRef = useRef(0);
-  const openRef = useRef(false);
+  const activeRef = useRef(false);
   const preparedBackdropRef = useRef(null);
   const capturePromiseRef = useRef(null);
   const prepareTimerRef = useRef(null);
   const prepareIdleRef = useRef(null);
-
-  useEffect(() => {
-    openRef.current = open;
-  }, [open]);
 
   const clearPrepareSchedule = useCallback(() => {
     if (prepareTimerRef.current) {
@@ -35,70 +29,71 @@ export function useAnalyticsModalController({
     }
   }, []);
 
-  const runBackdropCapture = useCallback(async () => {
+  const runBackdropCapture = useCallback(async ({ allowActive = false, publishActive = false } = {}) => {
     if (capturePromiseRef.current) return capturePromiseRef.current;
-    if (openRef.current) return null;
+    if (activeRef.current && !allowActive) return null;
     const source = sourceRef.current;
     if (!source) return null;
 
     capturePromiseRef.current = captureAnalyticsBackdropSnapshot(source);
     const snapshot = await capturePromiseRef.current;
     capturePromiseRef.current = null;
-    if (snapshot && !openRef.current) preparedBackdropRef.current = snapshot;
+    if (snapshot) {
+      preparedBackdropRef.current = snapshot;
+      if (activeRef.current && publishActive) setBackdropSnapshot(snapshot);
+    }
     return snapshot;
   }, [sourceRef]);
 
-  const prepareSurface = useCallback(({ delay = 0 } = {}) => {
-    void loadModal();
+  const prepareBackdropSnapshot = useCallback(({ delay = 0 } = {}) => {
+    void loadSurface();
     prewarmAnalyticsBackdropCapture();
-    if (openRef.current || capturePromiseRef.current) return;
+    if (activeRef.current || capturePromiseRef.current) return;
 
     clearPrepareSchedule();
     prepareTimerRef.current = window.setTimeout(() => {
       prepareTimerRef.current = null;
-      if (openRef.current) return;
+      if (activeRef.current) return;
       if (window.requestIdleCallback) {
         prepareIdleRef.current = window.requestIdleCallback(() => {
           prepareIdleRef.current = null;
-          if (!openRef.current) void runBackdropCapture();
+          if (!activeRef.current) void runBackdropCapture();
         }, { timeout: 1500 });
         return;
       }
       void runBackdropCapture();
     }, delay);
-  }, [clearPrepareSchedule, loadModal, runBackdropCapture]);
+  }, [clearPrepareSchedule, loadSurface, runBackdropCapture]);
 
   useEffect(() => {
-    prepareSurface({ delay: 700 });
+    prepareBackdropSnapshot({ delay: 700 });
     return clearPrepareSchedule;
-  }, [clearPrepareSchedule, prepareSurface]);
+  }, [clearPrepareSchedule, prepareBackdropSnapshot]);
 
   useEffect(() => {
-    if (refreshing || open) return;
-    prepareSurface({ delay: 900 });
-  }, [open, prepareSurface, refreshKey, refreshing, tab]);
+    if (refreshing || activeRef.current) return;
+    prepareBackdropSnapshot({ delay: 900 });
+  }, [prepareBackdropSnapshot, refreshKey, refreshing, tab]);
 
-  const closeAnalytics = useCallback(() => {
-    requestRef.current += 1;
-    openRef.current = false;
-    setOpen(false);
-    setBackdropSnapshot(null);
-    prepareSurface({ delay: 500 });
-  }, [prepareSurface]);
-
-  const openAnalytics = useCallback(() => {
-    requestRef.current += 1;
-    openRef.current = true;
+  const activateBackdropSnapshot = useCallback(({ captureIfMissing = false } = {}) => {
+    activeRef.current = true;
     clearPrepareSchedule();
     setBackdropSnapshot(preparedBackdropRef.current);
-    setOpen(true);
-  }, [clearPrepareSchedule]);
+    if (!preparedBackdropRef.current && captureIfMissing) {
+      void runBackdropCapture({ allowActive: true, publishActive: true });
+    }
+  }, [clearPrepareSchedule, runBackdropCapture]);
+
+  const deactivateBackdropSnapshot = useCallback(({ delay = 500 } = {}) => {
+    activeRef.current = false;
+    setBackdropSnapshot(null);
+    prepareBackdropSnapshot({ delay });
+  }, [prepareBackdropSnapshot]);
 
   return {
-    analyticsOpen: open,
-    analyticsBackdropSnapshot: backdropSnapshot,
-    closeAnalytics,
-    openAnalytics,
-    prepareAnalyticsSurface: prepareSurface,
+    backdropSnapshot,
+    prepareBackdropSnapshot,
+    activateBackdropSnapshot,
+    deactivateBackdropSnapshot,
   };
 }
