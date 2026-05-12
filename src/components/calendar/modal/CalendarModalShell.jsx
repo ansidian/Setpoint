@@ -12,6 +12,8 @@ import CalendarModalAgendaRailContent from "./CalendarModalAgendaRailContent.jsx
 import CalendarModalBackdrop from "./CalendarModalBackdrop.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 import CalendarModalTexture from "./CalendarModalTexture.jsx";
+import CalendarSearchRail from "./CalendarSearchRail.jsx";
+import { getCalendarSearchLayoutMode } from "../calendarLayout.js";
 
 export default function CalendarModalShell({
   panelRef,
@@ -93,6 +95,7 @@ export default function CalendarModalShell({
   onFloatingDeadlineSaved,
   onFloatingDeadlineDeleted,
   suppressFocusRing = false,
+  search,
 }) {
   const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(true);
   const monthWheelStateRef = useRef({ lastNavigateAt: -Infinity, ignoreUntil: -Infinity, lastWheelAt: -Infinity, lastWheelDelta: 0 });
@@ -107,6 +110,10 @@ export default function CalendarModalShell({
     : eventEditor;
   const railDeadlineEditor = floatingEditorOpen && view === "deadlines" ? null : deadlineEditor;
   const useAgendaRail = !layout.stacked && (view === "events" || view === "bills" || view === "deadlines");
+  const searchOpen = !!search?.open;
+  const searchLayoutMode = getCalendarSearchLayoutMode(layout, searchOpen);
+  const showSearchRail = searchOpen;
+  const showContextRail = !searchOpen || searchLayoutMode === "three-rail";
   const workspaceMode = useAgendaRail ? "agenda"
     : view === "events" && railEventEditor.isEditorOpen ? "editor"
       : view === "deadlines" && railDeadlineEditor?.mode ? "editor"
@@ -245,8 +252,12 @@ export default function CalendarModalShell({
     && !selectedItemResolves
     && Array.isArray(floatingDetail.itemsSnapshot)
       ? floatingDetail.itemsSnapshot
-      : floatingDetail?.view && floatingDetail.view !== view && !selectedItemResolves && Array.isArray(floatingDetail.itemsSnapshot)
+    : String(floatingDetail?.anchorKind || "").startsWith("search")
+      && !selectedItemResolves
+      && Array.isArray(floatingDetail.itemsSnapshot)
         ? floatingDetail.itemsSnapshot
+    : floatingDetail?.view && floatingDetail.view !== view && !selectedItemResolves && Array.isArray(floatingDetail.itemsSnapshot)
+      ? floatingDetail.itemsSnapshot
       : selectedItems;
   const floatingDetailView = floatingDetail?.view === "deadlines" ? deadlinesView : activeView;
   const floatingDetailContent = !layout.stacked && floatingDetail?.open
@@ -453,13 +464,22 @@ export default function CalendarModalShell({
             }}
             onClose={onClose}
             viewLabel={activeView.label}
+            search={search}
           />
 
           <div
             data-testid="calendar-modal-body"
+            data-search-layout={searchLayoutMode}
             style={{
               display: "grid",
-              gridTemplateColumns: layout.stacked ? "minmax(0, 1fr)" : `minmax(0, 1fr) ${contextWidth}px`,
+              gridTemplateColumns: layout.stacked
+                ? "minmax(0, 1fr)"
+                : searchOpen && searchLayoutMode === "three-rail"
+                  ? `${layout.searchWidth}px minmax(0, 1fr) ${contextWidth}px`
+                  : searchOpen
+                    ? `${layout.searchWidth}px minmax(0, 1fr)`
+                    : `minmax(0, 1fr) ${contextWidth}px`,
+              gridTemplateRows: layout.stacked && searchOpen ? "auto minmax(0, 1fr)" : undefined,
               gap: layout.contentGap,
               alignItems: "stretch",
               flex: 1,
@@ -467,6 +487,9 @@ export default function CalendarModalShell({
               overflow: layout.stacked ? "visible" : "hidden",
             }}
           >
+            {showSearchRail ? (
+              <CalendarSearchRail search={search} layoutMode={searchLayoutMode} weatherData={weatherData} />
+            ) : null}
             <div
               style={{
                 minWidth: 0,
@@ -515,7 +538,7 @@ export default function CalendarModalShell({
                   onOpenFloatingDetail={onOpenFloatingDetail}
                   onCloseFloatingDetail={onCloseFloatingDetail}
                   onReanchorFloatingDetail={onReanchorFloatingDetail}
-                  floatingDetailOpen={!!floatingDetail?.open}
+                  floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
                   floatingDetailParked={!!floatingDetail?.parked}
                   floatingDetailMode={floatingDetail?.mode || null}
                   floatingDetailDateKey={floatingDetailGridDateKey}
@@ -536,40 +559,42 @@ export default function CalendarModalShell({
               </div>
             </div>
 
-            <aside
-              ref={contextRailRef}
-              data-testid="calendar-modal-rail"
-              data-context-mode={workspaceMode}
-              style={{
-                position: layout.stacked ? "relative" : layout.stickyRail ? "sticky" : "relative",
-                top: 0,
-                minHeight: 0,
-                height: layout.stacked ? "auto" : "100%",
-                background: "linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02))",
-                border: "1px solid rgba(255,255,255,0.05)",
-                borderRadius: 16,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-              }}
-            >
-              <AnimatedRailContent contentKind={contentKind} contentKey={contentKey} layoutTier={layout.tier}>
-                {workspaceMode === "editor" ? (
-                  <div
-                    data-testid="calendar-modal-editor-expanded"
-                    style={{
-                      flex: 1,
-                      minHeight: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {contextContent}
-                  </div>
-                ) : contextContent}
-              </AnimatedRailContent>
-            </aside>
+            {showContextRail ? (
+              <aside
+                ref={contextRailRef}
+                data-testid="calendar-modal-rail"
+                data-context-mode={workspaceMode}
+                style={{
+                  position: layout.stacked ? "relative" : layout.stickyRail ? "sticky" : "relative",
+                  top: 0,
+                  minHeight: 0,
+                  height: layout.stacked ? "auto" : "100%",
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02))",
+                  border: "1px solid rgba(255,255,255,0.05)",
+                  borderRadius: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                }}
+              >
+                <AnimatedRailContent contentKind={contentKind} contentKey={contentKey} layoutTier={layout.tier}>
+                  {workspaceMode === "editor" ? (
+                    <div
+                      data-testid="calendar-modal-editor-expanded"
+                      style={{
+                        flex: 1,
+                        minHeight: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                    >
+                      {contextContent}
+                    </div>
+                  ) : contextContent}
+                </AnimatedRailContent>
+              </aside>
+            ) : null}
           </div>
           <CalendarFloatingDetailPanel
             detail={floatingDetail}

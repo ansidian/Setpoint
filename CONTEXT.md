@@ -64,6 +64,22 @@ _Avoid_: Global calendar corpus, all-feeds search
 A server-owned API that resolves **Calendar Search** queries instead of relying only on the client’s visible calendar cache.
 _Avoid_: Client-only search, month-cache filter
 
+**Calendar Search Mirror**:
+A local Google Calendar event read model used to answer **Calendar Search** without making provider search calls.
+_Avoid_: Calendar source of truth, live calendar replacement
+
+**Calendar Search Occurrence**:
+A dated Google Calendar event instance stored in the **Calendar Search Mirror** for searching and activation.
+_Avoid_: Raw recurring series, calendar rule
+
+**Calendar Search Mirror Freshness**:
+The bounded staleness contract that tells **Calendar Search** whether mirrored Google Calendar results are current enough to show.
+_Avoid_: Perfect sync, silent drift
+
+**Calendar Search Mirror Sync**:
+The quiet background process that refreshes **Calendar Search Occurrences** from Google Calendar for the search mirror.
+_Avoid_: Calendar push channel, live search fallback
+
 **Calendar Search Coverage**:
 The source-specific boundary of what **Calendar Search** can truthfully search.
 _Avoid_: Infinite calendar history, all provider data
@@ -73,8 +89,8 @@ The action of choosing a **Calendar Search** result and moving the calendar work
 _Avoid_: Preview-only result, detached detail
 
 **Calendar Search Ranking**:
-The deterministic ordering of **Calendar Search** results by match quality and date.
-_Avoid_: Semantic ranking, fuzzy AI rank
+The deterministic timeline ordering of **Calendar Search** results by result date.
+_Avoid_: Semantic ranking, fuzzy AI rank, match-quality-first order
 
 **Calendar Search Typeahead**:
 The debounced query interaction for **Calendar Search**.
@@ -118,16 +134,29 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - **Calendar Search** may fetch a bounded multi-month window instead of only filtering the visible month.
 - **Calendar Search Scope** follows the active view: Events searches events plus visible deadline-overlay data, Bills searches bills only.
 - A **Calendar Search Endpoint** is the preferred implementation path for search because the owner values broader lookup more than a bounded cache-only compromise.
+- A **Calendar Search Mirror** may answer Events search, but it does not replace live Google Calendar reads for the normal Events calendar range or dashboard surfaces.
+- A **Calendar Search Mirror** owns the same rolling Events search window as **Calendar Search Coverage**: 12 months back and 18 months forward from today.
+- A **Calendar Search Mirror** stores **Calendar Search Occurrences** expanded by Google Calendar over the rolling window, not raw recurring series that EA Dashboard expands itself.
+- Calendar writes continue to use Google Calendar as the provider of record; a **Calendar Search Mirror** is refreshed or marked stale after writes.
+- **Calendar Search Mirror Freshness** is bounded eventual consistency: normal search may return recently stale mirrored results with honest coverage, while uninitialized, old, or degraded mirrors trigger background repair instead of pretending to be live Google.
+- **Calendar Search Mirror Sync** uses quiet incremental polling and write-triggered dirtying first; Google Calendar push notifications are deferred unless polling cannot meet the freshness contract.
+- **Calendar Search** does not automatically fall back to live Google provider search when the **Calendar Search Mirror** is stale, empty, or degraded; it returns honest coverage and schedules repair instead.
+- **Calendar Search** opens immediately when the **Calendar Search Mirror** is uninitialized; initial indexing is reported through coverage rather than blocking the search request.
+- **Calendar Search Coverage** is per source: Events search may return deadline-overlay matches while Google event mirror coverage is initializing, stale, or degraded.
 - **Calendar Search Coverage** is source-specific: Events may use provider-backed Google Calendar search, Events deadlines use server-available deadline data, and Bills searches the local Bills mirror.
 - **Calendar Search Coverage** must be honest in empty or limited states; Bills mirror coverage is not the same as searching all of Actual forever.
 - **Calendar Search Activation** navigates the modal to the result month, selects the result date and item, and opens the existing calendar detail behavior.
 - **Calendar Search Activation** keeps the **Search Results Rail** open with its current query and results while the calendar workspace navigates or loads.
-- **Calendar Search Ranking** prefers exact title/name matches, then prefix or word-start title/name matches, then other field matches; ties put upcoming results first by date ascending and recent past results after by date descending.
+- **Calendar Search Ranking** filters by deterministic match quality but displays matching results in date order from oldest to newest so the **Search Results Rail** reads like a timeline.
+- **Calendar Search Endpoint** should query provider-backed event sources from a today-centered window before backfilling the broader coverage window, so broad recurring-event searches do not exhaust provider limits on old matches.
 - **Calendar Search Typeahead** runs after a short debounce once the query has at least two characters; Enter activates the highlighted result, not the search request itself.
 - **Calendar Search Typeahead** keeps prior results visible while the next request is pending and ignores stale responses.
 - **Calendar Search Keyboarding** opens search with Cmd/Ctrl+F, uses Up/Down to move the highlighted result while focus stays in the input, Enter to activate, and Escape to clear the query before closing an already-empty rail.
 - **Calendar Search Keyboarding** suspends calendar single-key hotkeys while the search input is focused.
 - A **Search Results Rail** is not the agenda rail; choosing a result should route through the existing calendar selection and detail behavior.
+- A **Search Results Rail** uses agenda-like date headers and source-colored result markers; it should not render standalone source-type text when a more specific result detail such as event location, course/project, or bill metadata is available.
+- A **Search Results Rail** dims result rows dated before today in the dashboard timezone, but date headers remain full-strength timeline anchors.
+- A **Search Results Rail** keeps chronological result order but initially centers completed result sets near today, preferring today's date group, then the first future group, then the most recent past group.
 - A **Three-Rail Calendar Workspace** is the desktop target when search is open; smaller or stacked layouts may replace the agenda rail only when there is not enough room.
 
 ## Example Dialogue
@@ -144,8 +173,11 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - "Global calendar search" was rejected for the first calendar modal search: **Calendar Search Scope** stays active-view based, with Events including its deadline overlay items and Bills staying Bills-only.
 - "Server search" was chosen over a bounded client-cache search as the preferred path for **Calendar Search**, even if individual sources still need explicit provider or mirror boundaries.
 - "Global" in **Calendar Search** was resolved as best available source-wide search with explicit **Calendar Search Coverage**, not live-querying every provider with no boundary.
+- "Calendar event mirror" was resolved as a **Calendar Search Mirror** first, not a new source of truth for all calendar event reads.
+- "Does not drift from Google" was resolved as **Calendar Search Mirror Freshness** with bounded, visible staleness and repair, not a claim of perfect lockstep sync.
+- "Provider fallback" for mirrored Events search was rejected for normal **Calendar Search Typeahead**; falling back to live Google would reintroduce provider latency and quota limits.
 - "Selecting a search result" was resolved as **Calendar Search Activation**, not an independent preview surface.
-- "Smart ranking" was rejected for the first **Calendar Search** version; use deterministic **Calendar Search Ranking** instead.
+- "Smart ranking" was rejected for **Calendar Search** display order; use deterministic **Calendar Search Ranking** as an oldest-to-newest timeline after filtering matches.
 - "Left search rail" was resolved as a **Three-Rail Calendar Workspace** on desktop, with responsive fallback only for constrained layouts.
 - "Typing in calendar search" was resolved as **Calendar Search Typeahead**, not an Enter-to-submit flow.
 - "Calendar search keyboard behavior" was resolved as **Calendar Search Keyboarding**, with search input focus suspending the modal's single-key calendar hotkeys.

@@ -211,7 +211,7 @@ export default function CalendarCellOverflowPopover({
     if (!popover) return undefined;
     function handleKeyDown(event) {
       if (event.key !== "Escape") return;
-      if (floatingDetailOpen) return;
+      if (floatingDetailOpen && document.querySelector("[data-testid='calendar-floating-detail-panel']")) return;
       onClose?.();
       event.preventDefault();
       event.stopPropagation();

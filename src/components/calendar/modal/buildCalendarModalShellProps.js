@@ -9,6 +9,7 @@ export default function buildCalendarModalShellProps({
   agenda,
   floating,
   handlers,
+  search,
 }) {
   return {
     panelRef: refs.panelRef,
@@ -90,5 +91,6 @@ export default function buildCalendarModalShellProps({
     onFloatingDeadlineSaved: floating.handleFloatingDeadlineSaved,
     onFloatingDeadlineDeleted: floating.handleFloatingDeadlineDeleted,
     suppressFocusRing: viewState.suppressFocusRing,
+    search,
   };
 }

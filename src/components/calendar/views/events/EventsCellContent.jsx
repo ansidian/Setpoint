@@ -131,11 +131,13 @@ export function renderEventsCellContents({
   overflowOpen,
   overflowAnchorKey,
   inlineOverflowOpen,
+  inlineOverflowAutoFocus,
   inlineOverflowVisibleCount,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onHiddenItemsChange,
   onBeforeItemAction,
+  suppressedSelectedHiddenAutoOpenKey,
   layout,
   day,
   dateKey,
@@ -177,11 +179,13 @@ export function renderEventsCellContents({
       overflowOpen={overflowOpen}
       overflowAnchorKey={overflowAnchorKey}
       inlineOverflowOpen={inlineOverflowOpen}
+      inlineOverflowAutoFocus={inlineOverflowAutoFocus}
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
       onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
+      suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
     />
   );
 }

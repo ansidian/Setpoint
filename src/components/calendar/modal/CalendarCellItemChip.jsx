@@ -290,6 +290,7 @@ function ChipContent({ item, selected, metrics, leadingColumnWidth = 0 }) {
 export function MoreButton({
   hiddenCount,
   onClick,
+  buttonRef,
   pastTone,
   day,
   active,
@@ -307,6 +308,7 @@ export function MoreButton({
   return (
     <button
       type="button"
+      ref={buttonRef}
       data-testid={`calendar-cell-overflow-trigger-${day}`}
       data-calendar-overflow-trigger="true"
       data-calendar-overflow-anchor-key={anchorKey || undefined}

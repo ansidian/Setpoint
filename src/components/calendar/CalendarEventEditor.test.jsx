@@ -16,6 +16,7 @@ const mockCreateReminder = vi.fn();
 const mockDeleteReminder = vi.fn();
 
 vi.mock("@/api", () => ({
+  getCalendarSearch: vi.fn(),
   getCalendarSources: (...args) => mockGetCalendarSources(...args),
   createCalendarEvent: (...args) => mockCreateCalendarEvent(...args),
   createCalendarEventsBatch: (...args) => mockCreateCalendarEventsBatch(...args),
@@ -321,14 +322,14 @@ describe("Calendar event editor rail", () => {
   });
 
   it("adds pending reminder chips during event create and flushes them after provider creation succeeds", async () => {
-    const { upsertEvents } = renderModal({ focusDate: "2026-05-10" });
+    const { upsertEvents } = renderModal({ focusDate: "2099-05-10" });
     const savedEvent = {
       id: "event-reminder-create",
       title: "Planning block",
       accountId: "gmail-main",
       calendarId: "primary",
-      startMs: new Date("2026-05-10T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-05-10T16:30:00.000Z").getTime(),
+      startMs: new Date("2099-05-10T16:00:00.000Z").getTime(),
+      endMs: new Date("2099-05-10T16:30:00.000Z").getTime(),
       writable: true,
       allDay: false,
     };
@@ -351,25 +352,25 @@ describe("Calendar event editor rail", () => {
         sourceType: "calendar_event",
         sourceItemId: "event-reminder-create",
         anchorKind: "event_start",
-        anchorAt: "2026-05-10T16:00:00.000Z",
+        anchorAt: "2099-05-10T16:00:00.000Z",
         offsetMinutes: -30,
       }));
       expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({
         ...savedEvent,
         hasUpcomingReminder: true,
         upcomingReminderCount: 1,
-        nextReminderAt: "2026-05-10T15:30:00.000Z",
+        nextReminderAt: "2099-05-10T15:30:00.000Z",
         reminderState: {
           hasUpcomingReminder: true,
           upcomingCount: 1,
-          nextReminderAt: "2026-05-10T15:30:00.000Z",
+          nextReminderAt: "2099-05-10T15:30:00.000Z",
         },
       }));
     });
   });
 
   it("does not flush pending reminders when event creation fails", async () => {
-    renderModal({ focusDate: "2026-05-10" });
+    renderModal({ focusDate: "2099-05-10" });
     mockCreateCalendarEvent.mockRejectedValue(new Error("Google Calendar failed"));
 
     fireEvent.click(screen.getByRole("button", { name: /new event/i }));

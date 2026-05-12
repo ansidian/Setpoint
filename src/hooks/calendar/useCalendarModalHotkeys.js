@@ -18,6 +18,17 @@ function isSuspendedHotkeyTarget(target) {
     && !!target.closest("[data-suspend-calendar-hotkeys='true']");
 }
 
+function visibleOverflowPopoverOwnsEscape() {
+  return typeof document !== "undefined"
+    && !!document.querySelector("[data-testid='calendar-cell-overflow-popover']")
+    && !document.querySelector("[data-testid='calendar-floating-detail-panel']");
+}
+
+function closeVisibleOverflowPopover() {
+  if (typeof document === "undefined") return;
+  document.dispatchEvent(new CustomEvent("calendar-overflow-close"));
+}
+
 function isTodoistDeadlineItem(item) {
   const isDeadline = item?.calendarItemKind === "deadline" || (!!item?.due_date && !item?.startMs);
   return isDeadline && item?.source === "todoist";
@@ -71,6 +82,7 @@ export default function useCalendarModalHotkeys({
   navigateMonthRef,
   onCopySelectedEvent,
   onPasteCopiedEvent,
+  openCalendarSearch,
 }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -91,7 +103,26 @@ export default function useCalendarModalHotkeys({
       const normalizedKey = String(event.key || "").toLowerCase();
 
       if (commandKey && normalizedKey === "f") {
+        openCalendarSearch?.();
         consumeCalendarKey();
+        return;
+      }
+
+      if (commandKey && !event.altKey && !event.shiftKey && normalizedKey === "1") {
+        if (view !== "events") handleViewChange("events");
+        consumeCalendarKey();
+        return;
+      }
+
+      if (commandKey && !event.altKey && !event.shiftKey && normalizedKey === "2") {
+        if (view !== "bills") handleViewChange("bills");
+        consumeCalendarKey();
+        return;
+      }
+
+      if (event.key === "Escape" && visibleOverflowPopoverOwnsEscape()) {
+        closeVisibleOverflowPopover();
+        consumeCalendarKey({ preventDefault: false });
         return;
       }
 
@@ -319,5 +350,5 @@ export default function useCalendarModalHotkeys({
     return () => document.removeEventListener("keydown", handleKey, true);
     // The editor routing helpers intentionally read the latest modal refs inside this document listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent]);
+  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, openCalendarSearch]);
 }

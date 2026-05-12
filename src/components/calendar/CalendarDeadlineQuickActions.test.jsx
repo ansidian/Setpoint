@@ -6,6 +6,7 @@ import CalendarModal from "./CalendarModal.jsx";
 const mockDeleteTodoistTask = vi.fn();
 
 vi.mock("@/api", () => ({
+  getCalendarSearch: vi.fn(),
   getCalendarSources: vi.fn().mockResolvedValue({ accounts: [] }),
   getCalendarPlaceSuggestions: vi.fn(),
   getCalendarPlaceDetails: vi.fn(),

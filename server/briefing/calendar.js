@@ -608,7 +608,7 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
   };
 }
 
-export async function fetchCalendar(gmailAccounts, { startDate, endDate } = {}) {
+export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, limit } = {}) {
   const allEvents = [];
   if (!gmailAccounts?.length) return allEvents;
 
@@ -636,6 +636,8 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate } = {}) 
             timeMax: rangeEnd.toISOString(),
             singleEvents: true,
             orderBy: "startTime",
+            q: query,
+            maxResults: limit,
           },
         }).catch((err) => {
           if (err.code === "calendar_google_forbidden" || err.code === "calendar_google_error") {

@@ -139,7 +139,8 @@ describe("events agenda model", () => {
     ]);
   });
 
-  it("formats today, tomorrow, and weekday headers", () => {
+  it("formats yesterday, today, tomorrow, and weekday headers", () => {
+    expect(formatAgendaHeaderLabel("2026-05-09", "2026-05-10")).toBe("YESTERDAY 5/9/26");
     expect(formatAgendaHeaderLabel("2026-05-10", "2026-05-10")).toBe("TODAY 5/10/26");
     expect(formatAgendaHeaderLabel("2026-05-11", "2026-05-10")).toBe("TOMORROW 5/11/26");
     expect(formatAgendaHeaderLabel("2026-05-12", "2026-05-10")).toBe("TUESDAY 5/12/26");

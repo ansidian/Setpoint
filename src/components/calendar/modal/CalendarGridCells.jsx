@@ -28,6 +28,7 @@ export default function CalendarGridCells({
   selectedItemId,
   shouldFilterCompletedDeadlines,
   spanLayout,
+  suppressedSelectedHiddenAutoOpenKey,
   todayDate,
   view,
   viewData,
@@ -133,6 +134,9 @@ export default function CalendarGridCells({
             overflowOpen,
             overflowAnchorKey: anchorKey,
             inlineOverflowOpen,
+            inlineOverflowAutoFocus: inlineOverflowOpen
+              ? resolvedOverflow?.focusOnOpen !== false
+              : true,
             inlineOverflowVisibleCount: inlineOverflowOpen
               ? resolvedOverflow?.visibleCount
               : null,
@@ -141,6 +145,7 @@ export default function CalendarGridCells({
             onCloseInlineOverflow,
             onHiddenItemsChange,
             onBeforeItemAction,
+            suppressedSelectedHiddenAutoOpenKey,
             pinnedIds: eventDateCells ? spanLayout.pinnedIds : null,
             reservedLaneCount,
             layout,
