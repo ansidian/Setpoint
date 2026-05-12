@@ -4,6 +4,7 @@ import useInboxController from "./useInboxController";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useActiveSnapshot from "../../hooks/useActiveSnapshot";
 import { settleArrivalGrace, settleArrivalGraceOnExit } from "../../api";
+import { getInboxTriageActivity } from "./inboxProcessingModel";
 
 const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
   snapshot: { id: "loading" },
@@ -106,7 +107,11 @@ export default function InboxView({
   })), [accent, activeSnapshotView?.filters?.accounts]);
 
   const displayedAccounts = snapshotInboxMode ? snapshotAccounts : emailAccounts;
-  const processingCount = activeSnapshotView?.processing?.total || 0;
+  const triageActivity = useMemo(() => getInboxTriageActivity(
+    activeSnapshotView?.processing,
+    { loading: activeSnapshot.loading },
+  ), [activeSnapshot.loading, activeSnapshotView?.processing]);
+  const processingCount = triageActivity.processingCount;
 
   const handleRefresh = async () => {
     if (readOnly) return;
@@ -137,8 +142,8 @@ export default function InboxView({
     briefingGeneratedAt: activeSnapshotView?.snapshot?.updated_at || briefingGeneratedAt,
     emailAccounts: displayedAccounts,
     liveEmailsLoading: snapshotInboxMode
-      ? activeSnapshot.loading || !!processingCount
-      : liveEmailsLoading || activeSnapshot.loading || !!processingCount,
+      ? triageActivity.syncing
+      : liveEmailsLoading || triageActivity.syncing,
     processingCount,
     activeSnapshotError: activeSnapshot.error,
     onOpenDashboard,

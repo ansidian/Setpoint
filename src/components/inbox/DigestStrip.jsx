@@ -24,6 +24,7 @@ export default function DigestStrip({
     { key: "fyi",    count: counts.fyi,    verb: "for your info", ...LANE.fyi },
     { key: "noise",  count: counts.noise,  verb: "filtered", ...LANE.noise },
   ];
+  const queuedCount = counts.queued || 0;
   const activityActive = !readOnly && (liveCount > 0 || liveLoading || processingCount > 0);
   const headline = activeSnapshotMode ? readOnly ? "Snapshot" : "Active snapshot" : "Inbox snapshot";
   const resolvedSummary = activeSnapshotMode
@@ -39,7 +40,9 @@ export default function DigestStrip({
         ? processingCount > 0
           ? `${pluralize(processingCount, "message")} processing`
           : "Updating active lanes"
-        : "No pending triage"
+        : queuedCount > 0
+          ? `${pluralize(queuedCount, "message")} visible in Queue`
+          : "No pending triage"
     : liveLoading
       ? "Retrieving live mail"
       : liveCount > 0
