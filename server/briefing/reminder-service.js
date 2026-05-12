@@ -48,7 +48,7 @@ function emptyUpcomingState() {
   };
 }
 
-const UPCOMING_REMINDER_SOURCE_BATCH_SIZE = 250;
+const UPCOMING_REMINDER_SOURCE_BATCH_SIZE = 50;
 
 export async function createReminder(input, options = {}) {
   const dbClient = client(options);
