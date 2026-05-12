@@ -4,6 +4,7 @@ import { login } from "../api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { publicAssetUrl } from "@/publicAsset";
 
 export default function Login({ onLogin }) {
   const [password, setPassword] = useState("");
@@ -55,7 +56,7 @@ export default function Login({ onLogin }) {
           <Card className="bg-card/85 backdrop-blur-[2px]">
             <CardHeader className="items-center gap-3 border-b border-white/[0.04] pb-5 text-center">
               <img
-                src="/ea-dashboard-header-logo-v3.svg"
+                src={publicAssetUrl("ea-dashboard-header-logo-v3.svg")}
                 alt="EA Dashboard"
                 style={{ height: 32, filter: "drop-shadow(0 2px 8px rgba(203,166,218,0.18))" }}
               />
