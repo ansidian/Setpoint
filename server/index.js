@@ -21,6 +21,7 @@ import { startSnoozeWaker } from "./briefing/snooze-waker.js";
 import { startEmailBackfillWorker } from "./briefing/email-backfill-worker.js";
 import { startTodoistMirrorSyncWorker } from "./briefing/todoist-webhook.js";
 import { startBillsMirrorRefreshWorker } from "./briefing/bills-service.js";
+import { startCalendarSearchMirrorSyncWorker } from "./briefing/calendar-search-mirror.js";
 import { migrate } from "./db/migrate.js";
 import { migrateCbcEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
@@ -127,6 +128,7 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("snooze", startupDelays.snooze, () => startSnoozeWaker());
       scheduleStartupWorker("todoist-sync", startupDelays.todoistSync, () => startTodoistMirrorSyncWorker());
       scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
+      scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
       scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
     });
   }).catch((err) => {

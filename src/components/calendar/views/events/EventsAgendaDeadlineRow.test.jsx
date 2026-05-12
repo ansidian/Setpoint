@@ -4,10 +4,14 @@ import EventsAgendaDeadlineRow from "./EventsAgendaDeadlineRow.jsx";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe("EventsAgendaDeadlineRow", () => {
   it("shows reminder timing only for deadline overlay rows with upcoming reminders", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T19:00:00.000Z"));
+
     render(
       <>
         <EventsAgendaDeadlineRow

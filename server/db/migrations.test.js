@@ -169,4 +169,41 @@ describe("database migrations", () => {
       "retry_after",
     ]);
   });
+
+  it("adds Calendar Search Mirror state and occurrence storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "011_calendar_search_mirror.sql",
+    ]);
+
+    const stateColumns = await db.execute("PRAGMA table_info('ea_calendar_search_mirror_state')");
+    const stateByName = new Map(stateColumns.rows.map((row) => [row.name, row]));
+    expect(stateByName.get("user_id").pk).toBe(1);
+    expect(stateByName.get("account_id").pk).toBe(2);
+    expect(stateByName.get("calendar_id").pk).toBe(3);
+    expect(stateByName.get("window_start").notnull).toBe(1);
+    expect(stateByName.get("window_end").notnull).toBe(1);
+    expect(stateByName.get("sync_token").type).toBe("TEXT");
+    expect(stateByName.get("dirty_since").type).toBe("TEXT");
+    expect(stateByName.get("failed_check_count").dflt_value).toBe("0");
+
+    const occurrenceColumns = await db.execute("PRAGMA table_info('ea_calendar_search_occurrences')");
+    const occurrenceByName = new Map(occurrenceColumns.rows.map((row) => [row.name, row]));
+    expect(occurrenceByName.get("user_id").pk).toBe(1);
+    expect(occurrenceByName.get("account_id").pk).toBe(2);
+    expect(occurrenceByName.get("calendar_id").pk).toBe(3);
+    expect(occurrenceByName.get("event_id").pk).toBe(4);
+    expect(occurrenceByName.get("original_start_key").pk).toBe(5);
+    expect(occurrenceByName.get("searchable_text").notnull).toBe(1);
+    expect(occurrenceByName.get("start_ms").notnull).toBe(1);
+    expect(occurrenceByName.get("status").dflt_value).toBe("'confirmed'");
+
+    const rangeIndex = await db.execute("PRAGMA index_info('idx_calendar_search_occurrences_range')");
+    expect(rangeIndex.rows.map((row) => row.name)).toEqual([
+      "user_id",
+      "start_ms",
+      "status",
+    ]);
+  });
 });

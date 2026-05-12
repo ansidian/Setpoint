@@ -30,6 +30,27 @@ export function shouldShowCalendarSearchSkeleton({
   return !!pending && normalizedCalendarSearchQuery(query).length >= MIN_QUERY_LENGTH && !(results || []).length;
 }
 
+function sourceCoverage(coverage, key) {
+  return coverage?.sources?.find((source) => source.key === key) || null;
+}
+
+function googleCalendarCoverageState(coverage) {
+  return sourceCoverage(coverage, "google_calendar")?.syncHealth?.state || null;
+}
+
+function isGoogleCalendarCoverageLimited(coverage) {
+  return ["initializing", "unavailable"].includes(googleCalendarCoverageState(coverage));
+}
+
+function isGoogleCalendarCoverageAged(coverage) {
+  return ["stale", "degraded", "dirty", "needs_sync"].includes(googleCalendarCoverageState(coverage));
+}
+
+function hasOnlyDeadlineResults(results) {
+  const visibleResults = Array.isArray(results) ? results : [];
+  return visibleResults.length > 0 && visibleResults.every((result) => result?.type === "deadline");
+}
+
 export function calendarSearchStateLabel({
   scope = "events",
   query = "",
@@ -45,9 +66,15 @@ export function calendarSearchStateLabel({
   if (trimmed.length < MIN_QUERY_LENGTH) return "Type 2 characters";
   if (pending && visibleResults.length) return "Updating";
   if (pending) return "Searching";
+  if (scope === "events" && isGoogleCalendarCoverageLimited(coverage)) {
+    return hasOnlyDeadlineResults(visibleResults) ? "Partial results: deadlines only" : "Calendar events indexing";
+  }
+  if (scope === "events" && isGoogleCalendarCoverageAged(coverage)) {
+    return visibleResults.length ? "Showing available results" : "No matches in available results";
+  }
   if (!visibleResults.length) return scope === "bills" ? "No bills found" : "No events or deadlines found";
   if (truncated) return "Limited results";
-  const mirror = coverage?.sources?.find((source) => source.key === "bills_mirror");
+  const mirror = sourceCoverage(coverage, "bills_mirror");
   if (mirror) return "Bills mirror";
   return "";
 }

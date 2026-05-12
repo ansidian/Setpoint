@@ -156,6 +156,9 @@ async function googleCalendarFetch(auth, path, { method = "GET", query, body, he
   if (res.status === 412) {
     throwCalendarError(409, "calendar_event_conflict", "This event changed elsewhere. Reload and try again.");
   }
+  if (res.status === 410) {
+    throwCalendarError(410, "calendar_sync_token_invalid", "Google Calendar sync token expired.");
+  }
   if (res.status === 401 || res.status === 403) {
     const text = await res.text().catch(() => "");
     throwCalendarError(403, "calendar_google_forbidden", text || "Google Calendar rejected this request");
@@ -180,7 +183,12 @@ function buildSyntheticPrimaryCalendar(account, writable) {
     accessRole: writable ? "writer" : "reader",
     primary: true,
     writable,
+    syntheticCalendarListFallback: true,
   };
+}
+
+function calendarListEntrySelected(raw) {
+  return raw?.selected !== false && raw?.hidden !== true && raw?.deleted !== true;
 }
 
 function normalizeCalendarEntry(account, raw, hasWriteScope) {
@@ -222,6 +230,7 @@ export async function listCalendarsForAccount(account) {
   }
 
   return rawCalendars
+    .filter(calendarListEntrySelected)
     .map((entry) => normalizeCalendarEntry(account, entry, auth.hasWriteScope))
     .sort((a, b) => {
       if (a.primary !== b.primary) return a.primary ? -1 : 1;
@@ -590,6 +599,7 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
     recurringEventId: event.recurringEventId || (Array.isArray(event.recurrence) && event.recurrence.length ? event.id : null),
     originalStartTime: normalizeOriginalStartTime(event.originalStartTime),
     recurringKind: recurrenceKindForEvent(event),
+    status: event.status || "confirmed",
     recurrence: recurrence
       ? {
           ...recurrence,
@@ -687,6 +697,85 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, 
     ...event,
     passed: isFutureRange ? false : (event.allDay ? false : event.endMs <= nowMs),
   }));
+}
+
+function normalizeCancelledGoogleOccurrence({ account, calendar, event }) {
+  const originalStartTime = normalizeOriginalStartTime(event.originalStartTime);
+  return {
+    id: event.id,
+    etag: event.etag || null,
+    title: event.summary || "(Deleted event)",
+    time: "",
+    duration: "",
+    location: event.location || "",
+    description: event.description || "",
+    source: calendar.summary,
+    sourceColor: calendar.backgroundColor || account.color || "#4285f4",
+    accountId: account.id,
+    accountLabel: account.label,
+    accountEmail: account.email,
+    calendarId: calendar.id,
+    calendarName: calendar.summary,
+    allDay: false,
+    startMs: originalStartTime ? Date.parse(originalStartTime) || 0 : 0,
+    endMs: originalStartTime ? Date.parse(originalStartTime) || 0 : 0,
+    isRecurring: !!(event.recurringEventId || event.originalStartTime),
+    recurringEventId: event.recurringEventId || null,
+    originalStartTime,
+    recurringKind: recurrenceKindForEvent(event),
+    status: "cancelled",
+  };
+}
+
+export async function fetchCalendarMirrorEvents(account, calendar, { window, syncToken = null, pageSize = 2500 } = {}) {
+  const auth = await getAuthorizedAccount(account);
+  const events = [];
+  let pageToken = null;
+  let nextSyncToken = null;
+
+  do {
+    const query = syncToken
+      ? {
+          syncToken,
+          showDeleted: true,
+          maxResults: pageSize,
+          pageToken,
+        }
+      : {
+          timeMin: new Date(`${window.start}T00:00:00.000Z`).toISOString(),
+          timeMax: new Date(`${window.end}T23:59:59.999Z`).toISOString(),
+          singleEvents: true,
+          orderBy: "startTime",
+          showDeleted: true,
+          maxResults: pageSize,
+          pageToken,
+        };
+
+    const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
+      query,
+    });
+    const data = await res.json();
+    nextSyncToken = data.nextSyncToken || nextSyncToken;
+    for (const event of data.items || []) {
+      if (event.status === "cancelled" && (!event.start?.dateTime && !event.start?.date)) {
+        events.push(normalizeCancelledGoogleOccurrence({ account, calendar, event }));
+      } else {
+        events.push(normalizeGoogleEvent({
+          account,
+          calendar,
+          event,
+          isMultiDayRange: true,
+        }));
+      }
+    }
+    pageToken = data.nextPageToken || null;
+  } while (pageToken);
+
+  return {
+    events,
+    nextSyncToken,
+    fullSync: !syncToken,
+  };
 }
 
 export async function getCalendarSourceGroups(accounts) {

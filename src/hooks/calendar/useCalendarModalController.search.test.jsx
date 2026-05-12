@@ -100,6 +100,7 @@ describe("useCalendarModalController search wiring", () => {
   beforeEach(() => {
     latestShellProps = null;
     window.innerWidth = 1440;
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -349,5 +350,117 @@ describe("useCalendarModalController search wiring", () => {
       anchorElement: row,
       sourceCellElement: row,
     });
+  });
+
+  it("keeps mirrored event search rows navigable when the current grid has not materialized the event", async () => {
+    renderHarness({ focusDate: "2026-05-12" });
+
+    await waitFor(() => {
+      expect(latestShellProps.viewYear).toBe(2026);
+      expect(latestShellProps.viewMonth).toBe(4);
+    });
+
+    const result = {
+      type: "event",
+      itemId: "mirror-work-1",
+      itemDate: "2026-05-12",
+      activation: {
+        view: "events",
+        detailView: "events",
+        dateKey: "2026-05-12",
+        itemId: "mirror-work-1",
+      },
+    };
+    const row = document.createElement("button");
+
+    expect(latestShellProps.search.isResultNavigable(result)).toBe(true);
+    expect(latestShellProps.search.getResultActivationContext(result, 0, {
+      anchorElement: row,
+      sourceCellElement: row,
+    })).toEqual({
+      anchorKind: "search-result-row",
+      anchorElement: row,
+      sourceCellElement: row,
+    });
+  });
+
+  it("keeps deadline search results navigable even when the deadline overlay is currently hidden", async () => {
+    window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
+    renderHarness();
+
+    await waitFor(() => expect(latestShellProps.search.open).toBe(false));
+
+    const result = {
+      type: "deadline",
+      itemId: "todo-1",
+      itemDate: "2026-05-12",
+      status: "open",
+      activation: {
+        view: "events",
+        detailView: "deadlines",
+        dateKey: "2026-05-12",
+        itemId: "todo-1",
+      },
+      payload: { id: "todo-1", source: "todoist", status: "open" },
+    };
+
+    expect(latestShellProps.search.isResultNavigable(result)).toBe(true);
+  });
+
+  it("opens floating detail from the search row for mirrored events outside the current grid", async () => {
+    renderHarness();
+    const row = document.createElement("button");
+    document.body.appendChild(row);
+
+    await waitFor(() => {
+      expect(latestShellProps.viewYear).toBe(2026);
+      expect(latestShellProps.viewMonth).toBe(4);
+    });
+
+    const result = {
+      type: "event",
+      itemId: "mirror-work-1",
+      itemDate: "2026-07-14",
+      title: "Work",
+      sourceLabel: "Work",
+      sourceColor: "#4285f4",
+      activation: {
+        view: "events",
+        detailView: "events",
+        dateKey: "2026-07-14",
+        itemId: "mirror-work-1",
+      },
+      payload: {
+        id: "mirror-work-1",
+        startMs: Date.parse("2026-07-14T17:00:00.000Z"),
+        endMs: Date.parse("2026-07-14T18:00:00.000Z"),
+        allDay: false,
+      },
+    };
+
+    const context = latestShellProps.search.getResultActivationContext(result, 0, {
+      anchorElement: row,
+      sourceCellElement: row,
+    });
+
+    expect(context).toMatchObject({ anchorKind: "search-result-row" });
+
+    act(() => {
+      latestShellProps.search.activateResult(result, context);
+    });
+
+    await waitFor(() => {
+      expect(latestShellProps.floatingDetail).toMatchObject({
+        open: true,
+        mode: "detail",
+        view: "events",
+        itemId: "mirror-work-1",
+        dateKey: "2026-07-14",
+        anchorKind: "search-result-row",
+      });
+      expect(latestShellProps.floatingDetail.anchorElement).toBe(row);
+    });
+
+    row.remove();
   });
 });

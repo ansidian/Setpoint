@@ -18,6 +18,14 @@ vi.mock("../briefing/calendar.js", () => ({
   fetchCalendar: vi.fn(),
   pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
 }));
+vi.mock("../briefing/calendar-search-mirror.js", () => ({
+  deleteCalendarSearchMirrorOccurrence: vi.fn(),
+  getCalendarSearchMirrorHealth: vi.fn(),
+  listCalendarSearchMirrorOccurrences: vi.fn(),
+  markCalendarSearchMirrorDirty: vi.fn(),
+  requestCalendarSearchMirrorSync: vi.fn(),
+  upsertCalendarSearchMirrorOccurrence: vi.fn(),
+}));
 vi.mock("../briefing/ctm.js", () => ({
   fetchCTMDeadlines: vi.fn(),
   fetchCTMDeadlinesAll: vi.fn(),

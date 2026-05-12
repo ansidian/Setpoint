@@ -78,6 +78,80 @@ function compareCenteredResults(a, b, centerMs) {
   return compareTimelineResults(a, b);
 }
 
+function candidateDedupeKey(result) {
+  if (!result) return null;
+  const title = normalizeText(result.title);
+  if (result.type === "event") {
+    const payload = result.payload || {};
+    return [
+      "event",
+      payload.accountId || result.activation?.accountId || "",
+      payload.calendarId || result.activation?.calendarId || "",
+      result.itemDate || "",
+      payload.startMs || "",
+      payload.endMs || "",
+      title,
+    ].join("|");
+  }
+  if (result.type === "deadline") {
+    return [
+      "deadline",
+      result.payload?.source || result.activation?.source || result.coverageKey || "",
+      result.itemId || "",
+      result.itemDate || "",
+    ].join("|");
+  }
+  if (result.type === "bill") {
+    return [
+      "bill",
+      result.payload?.scheduleId || result.activation?.scheduleId || result.itemId || "",
+      result.itemDate || "",
+    ].join("|");
+  }
+  return [
+    result.type || "result",
+    result.itemId || result.id || "",
+    result.itemDate || "",
+    title,
+  ].join("|");
+}
+
+function eventDedupeBaseKey(result) {
+  if (!result || result.type !== "event") return null;
+  const payload = result.payload || {};
+  return [
+    "event",
+    payload.accountId || result.activation?.accountId || "",
+    payload.calendarId || result.activation?.calendarId || "",
+    result.itemDate || "",
+    normalizeText(result.title),
+  ].join("|");
+}
+
+function eventTimeRange(result) {
+  const payload = result?.payload || {};
+  const startMs = Number(payload.startMs);
+  const rawEndMs = Number(payload.endMs);
+  if (!Number.isFinite(startMs)) return null;
+  const endMs = Number.isFinite(rawEndMs) && rawEndMs > startMs ? rawEndMs : startMs;
+  return { startMs, endMs };
+}
+
+function eventRangesOverlap(left, right) {
+  const a = eventTimeRange(left);
+  const b = eventTimeRange(right);
+  if (!a || !b) return false;
+  return a.startMs < b.endMs && b.startMs < a.endMs;
+}
+
+function isDuplicateEventResult(result, acceptedResults) {
+  const baseKey = eventDedupeBaseKey(result);
+  if (!baseKey) return false;
+  return acceptedResults.some((accepted) => (
+    eventDedupeBaseKey(accepted) === baseKey && eventRangesOverlap(result, accepted)
+  ));
+}
+
 export function rankCalendarSearchCandidates(candidates, {
   query,
   limit,
@@ -85,10 +159,17 @@ export function rankCalendarSearchCandidates(candidates, {
 } = {}) {
   const centerMs = dateSortMs(dateKeyFromMs(now.getTime()));
   const matched = [];
+  const seen = new Set();
+  const acceptedEventResults = [];
   for (const candidate of candidates) {
     const match = classifyMatch(candidate, query);
     if (!match) continue;
     const { matchFields: _matchFields, ...result } = candidate;
+    if (isDuplicateEventResult(result, acceptedEventResults)) continue;
+    const dedupeKey = candidateDedupeKey(result);
+    if (dedupeKey && seen.has(dedupeKey)) continue;
+    if (dedupeKey) seen.add(dedupeKey);
+    if (result.type === "event") acceptedEventResults.push(result);
     matched.push({
       ...result,
       matchReason: match.reason,
@@ -146,7 +227,7 @@ export function normalizeEventSearchCandidate(event, { coverageKey = "google_cal
     },
     matchFields: {
       primary: [event.title],
-      secondary: [event.location, event.description, sourceLabel, subtitle],
+      secondary: [event.location, event.description, subtitle],
     },
   };
 }

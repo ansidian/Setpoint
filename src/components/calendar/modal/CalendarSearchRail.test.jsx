@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarSearchRail from "./CalendarSearchRail.jsx";
 
@@ -32,9 +32,21 @@ function makeSearch(overrides = {}) {
   };
 }
 
+function installRafTimer() {
+  const requestSpy = vi.spyOn(window, "requestAnimationFrame")
+    .mockImplementation((callback) => window.setTimeout(() => callback(performance.now()), 0));
+  const cancelSpy = vi.spyOn(window, "cancelAnimationFrame")
+    .mockImplementation((id) => window.clearTimeout(id));
+  return () => {
+    requestSpy.mockRestore();
+    cancelSpy.mockRestore();
+  };
+}
+
 describe("CalendarSearchRail", () => {
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.useRealTimers();
   });
@@ -70,6 +82,48 @@ describe("CalendarSearchRail", () => {
     expect(row.getAttribute("data-selected")).toBe("true");
     expect(row.style.border).toContain("rgba(228, 67, 50, 0.75)");
     expect(row.style.background).toContain("rgba(228, 67, 50, 0.18)");
+  });
+
+  it("matches deadline rows against source-qualified selection ids from floating detail", () => {
+    const baseSearch = makeSearch({
+      query: "final",
+      results: [
+        {
+          id: "deadline:todoist:todo-1:2026-05-20",
+          type: "deadline",
+          itemId: "todo-1",
+          itemDate: "2026-05-20",
+          title: "Final project",
+          subtitle: "CS 4220",
+          sourceLabel: "Todoist",
+          sourceColor: "#e44332",
+          payload: { id: "todo-1", source: "todoist" },
+          activation: {
+            view: "events",
+            detailView: "deadlines",
+            dateKey: "2026-05-20",
+            itemId: "todo-1",
+          },
+        },
+      ],
+      selectedDateKey: "2026-05-20",
+      selectedItemId: "todoist:todo-1",
+    });
+    const { rerender } = render(<CalendarSearchRail search={baseSearch} layoutMode="three-rail" />);
+
+    expect(screen.getByTestId("calendar-search-result-row").getAttribute("data-selected")).toBe("true");
+
+    rerender(
+      <CalendarSearchRail
+        search={{
+          ...baseSearch,
+          selectedItemId: "todoist:todo-1-2026-05-20",
+        }}
+        layoutMode="three-rail"
+      />,
+    );
+
+    expect(screen.getByTestId("calendar-search-result-row").getAttribute("data-selected")).toBe("true");
   });
 
   it("does not use the keyboard highlight as the selected color state", () => {
@@ -178,6 +232,96 @@ describe("CalendarSearchRail", () => {
 
     expect(screen.getByTestId("calendar-search-input").getAttribute("placeholder")).toBe("Search bills");
     expect(screen.getByTestId("calendar-search-state").textContent).toBe("No bills found");
+  });
+
+  it("shows initializing and partial coverage states without raw sync details", () => {
+    const initializingCoverage = {
+      sources: [
+        {
+          key: "google_calendar",
+          searched: false,
+          syncHealth: {
+            state: "initializing",
+            lastError: "calendar_search_occurrences token failed",
+          },
+        },
+        { key: "deadlines", searched: true },
+      ],
+    };
+    const { rerender } = render(
+      <CalendarSearchRail
+        search={makeSearch({
+          query: "final",
+          coverage: initializingCoverage,
+          results: [],
+        })}
+        layoutMode="three-rail"
+      />,
+    );
+
+    expect(screen.getByTestId("calendar-search-state").textContent).toBe("Calendar events indexing");
+    expect(screen.queryByText(/calendar_search_occurrences|token/i)).toBeNull();
+
+    rerender(
+      <CalendarSearchRail
+        search={makeSearch({
+          query: "final",
+          coverage: initializingCoverage,
+          results: [
+            {
+              id: "deadline:1",
+              type: "deadline",
+              itemId: "deadline-1",
+              itemDate: "2026-05-20",
+              title: "Final project",
+              sourceColor: "#e44332",
+            },
+          ],
+        })}
+        layoutMode="three-rail"
+      />,
+    );
+
+    expect(screen.getByTestId("calendar-search-state").textContent).toBe("Partial results: deadlines only");
+    expect(screen.getByText("Final project")).toBeTruthy();
+  });
+
+  it("labels stale or degraded mirror results as available results", () => {
+    render(
+      <CalendarSearchRail
+        search={makeSearch({
+          query: "rent",
+          coverage: {
+            sources: [
+              {
+                key: "google_calendar",
+                searched: true,
+                syncHealth: {
+                  state: "degraded",
+                  lastError: "raw Google quota body",
+                },
+              },
+              { key: "deadlines", searched: true },
+            ],
+          },
+          results: [
+            {
+              id: "event:1",
+              type: "event",
+              itemId: "event-1",
+              itemDate: "2026-05-20",
+              title: "Rent review",
+              sourceColor: "#4285f4",
+            },
+          ],
+        })}
+        layoutMode="three-rail"
+      />,
+    );
+
+    expect(screen.getByTestId("calendar-search-state").textContent).toBe("Showing available results");
+    expect(screen.queryByText(/quota|Google/i)).toBeNull();
+    expect(screen.getByText("Rent review")).toBeTruthy();
   });
 
   it("shows stable skeleton rows only while pending without visible results", () => {
@@ -705,6 +849,7 @@ describe("CalendarSearchRail", () => {
   it("centers completed search results around today instead of starting at the oldest match", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
+    const restoreRaf = installRafTimer();
     const search = makeSearch({
       open: true,
       query: "work",
@@ -748,7 +893,9 @@ describe("CalendarSearchRail", () => {
     targetHeader.getBoundingClientRect = vi.fn(() => ({ top: 760, bottom: 794, height: 34 }));
     scroller.scrollTo = scrollTo;
 
-    vi.advanceTimersByTime(20);
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
 
     expect(scrollTo).toHaveBeenCalledWith({
       top: 527,
@@ -756,11 +903,13 @@ describe("CalendarSearchRail", () => {
     });
     expect(search.setScrollTop).toHaveBeenCalledWith(527);
     expect(search.markResultsAutoCentered).toHaveBeenCalled();
+    restoreRaf();
   });
 
   it("centers completed search results on the most recent result when every match is past", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
+    const restoreRaf = installRafTimer();
     const search = makeSearch({
       open: true,
       query: "work",
@@ -796,13 +945,16 @@ describe("CalendarSearchRail", () => {
     targetHeader.getBoundingClientRect = vi.fn(() => ({ top: 560, bottom: 594, height: 34 }));
     scroller.scrollTo = scrollTo;
 
-    vi.advanceTimersByTime(20);
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
 
     expect(scrollTo).toHaveBeenCalledWith({
       top: 327,
       behavior: "auto",
     });
     expect(search.setScrollTop).toHaveBeenCalledWith(327);
+    restoreRaf();
   });
 
   it("restores and reports result scroll position when auto-centering is disabled", () => {
