@@ -3,6 +3,7 @@ import {
   buildCalendarEventPayload,
   buildBatchCreateItems,
   deleteCalendarEventAction,
+  formatCalendarEditorError,
   saveCalendarEventAction,
 } from "./calendarEventEditorActions";
 
@@ -19,6 +20,23 @@ describe("calendarEventEditorActions", () => {
     location: "Office",
     description: "Notes",
   };
+
+  it("formats calendar editor errors without leaking raw provider bodies", () => {
+    expect(formatCalendarEditorError({
+      code: "calendar_event_conflict",
+      message: "This event changed elsewhere. Reload and try again.",
+    })).toBe("This event changed in Google Calendar. Refresh the calendar and try again.");
+
+    expect(formatCalendarEditorError({
+      code: "calendar_google_error",
+      message: "{\"error\":{\"code\":409,\"message\":\"The requested identifier already exists.\"}}",
+    })).toBe("Google Calendar could not save this event. Refresh the calendar and try again.");
+
+    expect(formatCalendarEditorError({
+      code: "calendar_google_error",
+      message: "Google Calendar already has this event in the target calendar. Refreshing will show the latest copy.",
+    })).toBe("Google Calendar already has this event in the target calendar. Refreshing will show the latest copy.");
+  });
 
   it("builds batch create requests and reports partial failures for review", async () => {
     const createdEvent = {

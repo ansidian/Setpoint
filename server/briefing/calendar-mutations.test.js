@@ -265,6 +265,177 @@ describe("calendar recurring mutations", () => {
     expect(patchCall[1].headers["If-Match"]).toBe('"moved-current"');
   });
 
+  it("recovers cross-calendar update retries after Google already moved the event", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      if (method === "GET" && path === "calendars/primary/events/event-1") {
+        return jsonResponse({
+          error: {
+            code: 404,
+            message: "Not Found",
+            errors: [{ reason: "notFound" }],
+          },
+        }, 404);
+      }
+      if (method === "GET" && path === "calendars/school/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"target-current"',
+          summary: "Planning",
+          start: { dateTime: "2026-04-27T09:00:00-07:00" },
+          end: { dateTime: "2026-04-27T09:30:00-07:00" },
+        });
+      }
+      if (method === "PATCH" && path === "calendars/school/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"patched-current"',
+          ...JSON.parse(init.body || "{}"),
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    const updated = await updateCalendarEvent(account, "event-1", {
+      sourceCalendarId: "primary",
+      calendarId: "school",
+      etag: '"stale-source"',
+      title: "Planning moved",
+      allDay: false,
+      startDate: "2026-04-27",
+      endDate: "2026-04-27",
+      startTime: "10:00",
+      endTime: "10:30",
+    });
+
+    expect(updated.calendarId).toBe("school");
+    expect(updated.title).toBe("Planning moved");
+    expect(fetch.mock.calls.some(([url, init = {}]) => {
+      return (init.method || "GET") === "POST" && String(url).includes("/events/event-1/move");
+    })).toBe(false);
+    const patchCall = fetch.mock.calls.find(([url, init = {}]) => {
+      return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
+    });
+    expect(patchCall[1].headers["If-Match"]).toBe('"target-current"');
+  });
+
+  it("recovers when Google reports the moved event already exists in the target calendar", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      if (method === "GET" && path === "calendars/primary/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"source-current"',
+          summary: "Planning",
+          start: { dateTime: "2026-04-27T09:00:00-07:00" },
+          end: { dateTime: "2026-04-27T09:30:00-07:00" },
+        });
+      }
+      if (method === "POST" && path === "calendars/primary/events/event-1/move") {
+        return jsonResponse({
+          error: {
+            code: 409,
+            message: "The requested identifier already exists.",
+            errors: [{ reason: "duplicate" }],
+          },
+        }, 409);
+      }
+      if (method === "GET" && path === "calendars/school/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"target-current"',
+          summary: "Planning",
+          start: { dateTime: "2026-04-27T09:00:00-07:00" },
+          end: { dateTime: "2026-04-27T09:30:00-07:00" },
+        });
+      }
+      if (method === "PATCH" && path === "calendars/school/events/event-1") {
+        return jsonResponse({
+          id: "event-1",
+          etag: '"patched-current"',
+          ...JSON.parse(init.body || "{}"),
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    const updated = await updateCalendarEvent(account, "event-1", {
+      sourceCalendarId: "primary",
+      calendarId: "school",
+      etag: '"stale-source"',
+      title: "Planning moved",
+      allDay: false,
+      startDate: "2026-04-27",
+      endDate: "2026-04-27",
+      startTime: "10:00",
+      endTime: "10:30",
+    });
+
+    expect(updated.calendarId).toBe("school");
+    const patchCall = fetch.mock.calls.find(([url, init = {}]) => {
+      return (init.method || "GET") === "PATCH" && String(url).includes("/calendars/school/events/event-1");
+    });
+    expect(patchCall[1].headers["If-Match"]).toBe('"target-current"');
+  });
+
+  it("normalizes raw Google save errors without exposing the provider body", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      if (method === "POST" && path === "calendars/primary/events") {
+        return jsonResponse({
+          error: {
+            code: 500,
+            message: "Huge provider stack with request internals",
+            errors: [{ reason: "backendError" }],
+          },
+        }, 500);
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    let error;
+    try {
+      await createCalendarEvent(account, {
+        calendarId: "primary",
+        title: "Planning",
+        allDay: false,
+        startDate: "2026-04-27",
+        endDate: "2026-04-27",
+        startTime: "10:00",
+        endTime: "10:30",
+      });
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toMatchObject({
+      status: 502,
+      code: "calendar_google_error",
+      message: "Google Calendar could not save this event. Refresh the calendar and try again.",
+      googleMessage: "Huge provider stack with request internals",
+    });
+    expect(error.message).not.toContain("Huge provider stack");
+    expect(error.rawGoogleError).toContain("Huge provider stack");
+  });
+
   it("sends a valid event color when creating an event", async () => {
     fetch.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));

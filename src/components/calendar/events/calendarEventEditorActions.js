@@ -32,6 +32,30 @@ const defaultClient = {
   deleteReminder,
 };
 
+function looksLikeRawProviderError(message) {
+  const text = String(message || "").trim();
+  return text.startsWith("{")
+    || text.startsWith("[")
+    || text.includes('"error"')
+    || text.length > 260;
+}
+
+export function formatCalendarEditorError(error, fallback = "Failed to save event.") {
+  const code = error?.code || null;
+  const message = error?.message || "";
+
+  if (code === "calendar_event_conflict") {
+    return "This event changed in Google Calendar. Refresh the calendar and try again.";
+  }
+  if (code === "calendar_google_forbidden") {
+    return "Google Calendar blocked this change. Reconnect Gmail if it keeps happening.";
+  }
+  if (code === "calendar_google_error" && looksLikeRawProviderError(message)) {
+    return "Google Calendar could not save this event. Refresh the calendar and try again.";
+  }
+  return message || fallback;
+}
+
 export function buildCalendarEventPayload({ draft, effectiveTitle }) {
   const payload = {
     accountId: draft.accountId,
