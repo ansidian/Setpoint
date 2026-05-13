@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
 import ShellHeader from "../shell/ShellHeader";
-import { AnalyticsModalMount } from "../shell/AnalyticsModalMount.jsx";
 import { loadTriageAnalyticsModal } from "../shell/triageAnalyticsModalLoader.js";
 import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
@@ -12,18 +11,13 @@ import {
   computeInboxUnreadSignalCount,
 } from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
-import DashboardCalendarModalMount from "./DashboardCalendarModalMount";
+import DashboardShellOverlays from "./DashboardShellOverlays.jsx";
 import {
   buildDashboardEventsData,
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
 } from "./dashboardShellModel.js";
 export { DashboardBody };
-const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
-const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
-const CommandPalette = lazy(() => import("../shell/CommandPalette"));
-const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
-const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 const InboxView = lazy(() => import("../inbox/InboxView"));
 
 export function RedesignShell({
@@ -531,93 +525,54 @@ export function RedesignShell({
         )}
       </div>
 
-      {isMobile && deadlinePopover && (
-        <Suspense fallback={null}>
-          <DeadlineDetailPopover
-            task={deadlinePopover.task}
-            anchor={deadlinePopover.anchor}
-            accent={accent}
-            onClose={() => setDeadlinePopover(null)}
-          />
-        </Suspense>
-      )}
-
-      {isMobile && addTaskOpen && (
-        <Suspense fallback={null}>
-          <AddTaskPanel
-            host="anchored"
-            onClose={() => setAddTaskOpen(false)}
-            onTaskAdded={(task) => {
-              handleAddTask(task);
-              queueCalendarDeadlineRefresh();
-              setAddTaskOpen(false);
-            }}
-          />
-        </Suspense>
-      )}
-
-      {paletteOpen && (
-        <Suspense fallback={null}>
-          <CommandPalette
-            open={paletteOpen}
-            accent={accent}
-            backdropSnapshot={shellBackdropSnapshot}
-            onClose={closePalette}
-            onAction={handlePaletteAction}
-          />
-        </Suspense>
-      )}
-
-      <AnalyticsModalMount
-        open={analyticsOpen}
-        onClose={closeAnalytics}
-        backdropSnapshot={shellBackdropSnapshot}
-      />
-
-      {customizeOpen && (
-        <Suspense fallback={null}>
-          <CustomizePanel
-            open={customizeOpen}
-            onClose={() => setCustomizeOpen(false)}
-            customize={customize}
-            tab={tab}
-            isMobile={isMobile}
-          />
-        </Suspense>
-      )}
-
-      {historyOpen && (
-        <Suspense fallback={null}>
-          <BriefingHistoryPanel
-            activeId={historicalSnapshotView?.snapshot?.id ?? activeSnapshot?.snapshot?.snapshot?.id ?? null}
-            triggerRef={historyTriggerRef}
-            onSelectSnapshot={handleSelectSnapshot}
-            onClose={() => setHistoryOpen(false)}
-          />
-        </Suspense>
-      )}
-      <DashboardCalendarModalMount
+      <DashboardShellOverlays
         isMobile={isMobile}
-        calendarMounted={calendarMounted}
-        calendarOpen={calendarOpen}
-        calendarOpenRequestId={calendarOpenRequestId}
-        dismissCalendar={dismissCalendar}
-        calendarView={calendarView}
-        changeCalendarView={changeCalendarView}
-        calendarFocus={calendarFocus}
-        calendarFocusItemId={calendarFocusItemId}
-        calendarFocusOpenDetail={calendarFocusOpenDetail}
-        calendarForceOverlays={calendarForceOverlays}
-        eventsData={eventsData}
-        handleCalendarEventsRangeChange={handleCalendarEventsRangeChange}
-        liveData={liveData}
-        briefing={briefing}
-        calendarBillsData={calendarBillsData}
-        calendarBillRange={calendarBillRange}
-        calendarDeadlines={calendarDeadlines}
-        calendarDeadlinesLoading={calendarDeadlinesLoading}
-        calendarDeadlineRange={calendarDeadlineRange}
-        calendarDeadlineActions={calendarDeadlineActions}
+        deadlinePopover={deadlinePopover}
+        setDeadlinePopover={setDeadlinePopover}
+        accent={accent}
+        addTaskOpen={addTaskOpen}
+        setAddTaskOpen={setAddTaskOpen}
+        handleAddTask={handleAddTask}
+        queueCalendarDeadlineRefresh={queueCalendarDeadlineRefresh}
+        paletteOpen={paletteOpen}
+        shellBackdropSnapshot={shellBackdropSnapshot}
+        closePalette={closePalette}
+        handlePaletteAction={handlePaletteAction}
+        analyticsOpen={analyticsOpen}
+        closeAnalytics={closeAnalytics}
+        customizeOpen={customizeOpen}
+        setCustomizeOpen={setCustomizeOpen}
+        customize={customize}
+        tab={tab}
+        historyOpen={historyOpen}
+        historicalSnapshotView={historicalSnapshotView}
+        activeSnapshot={activeSnapshot}
+        historyTriggerRef={historyTriggerRef}
+        handleSelectSnapshot={handleSelectSnapshot}
+        setHistoryOpen={setHistoryOpen}
+        calendarMountProps={{
+          isMobile,
+          calendarMounted,
+          calendarOpen,
+          calendarOpenRequestId,
+          dismissCalendar,
+          calendarView,
+          changeCalendarView,
+          calendarFocus,
+          calendarFocusItemId,
+          calendarFocusOpenDetail,
+          calendarForceOverlays,
+          eventsData,
+          handleCalendarEventsRangeChange,
+          liveData,
+          briefing,
+          calendarBillsData,
+          calendarBillRange,
+          calendarDeadlines,
+          calendarDeadlinesLoading,
+          calendarDeadlineRange,
+          calendarDeadlineActions,
+        }}
       />
     </div>
   );
