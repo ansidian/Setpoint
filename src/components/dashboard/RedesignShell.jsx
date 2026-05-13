@@ -119,7 +119,7 @@ export function RedesignShell({
     deactivateBackdropSnapshot({ delay: 500 });
   }, [deactivateBackdropSnapshot]);
   const openAnalytics = useCallback(() => {
-    activateBackdropSnapshot();
+    activateBackdropSnapshot({ captureIfStale: true });
     setAnalyticsOpen(true);
   }, [activateBackdropSnapshot]);
   const closePalette = useCallback(() => {
@@ -127,7 +127,7 @@ export function RedesignShell({
     deactivateBackdropSnapshot({ delay: 500 });
   }, [deactivateBackdropSnapshot]);
   const openPalette = useCallback(() => {
-    activateBackdropSnapshot({ captureIfMissing: true });
+    activateBackdropSnapshot({ captureIfMissing: true, captureIfStale: true });
     setPaletteOpen(true);
   }, [activateBackdropSnapshot]);
   const dismissCalendar = useBrowserBackDismiss({
