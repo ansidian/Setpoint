@@ -684,7 +684,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
 
   const scheduledFor = triageRow.scheduled_for || arrivalGraceDeadline(now);
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
-  await dbClient.execute({
+  const write = await dbClient.execute({
     sql: `INSERT INTO ea_briefing_snapshot_items
             (snapshot_id, triage_id, user_id, account_id, email_id,
              lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
@@ -694,9 +694,22 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
              account_label_at_snapshot, account_email_at_snapshot,
              account_color_at_snapshot, account_icon_at_snapshot, sort_order,
              is_carryover, source, source_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'Queued for triage.',
-                  'Waiting briefly before triage.', 'normal', NULL,
-                  'uncategorized', NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+          SELECT ?, ?, ?, ?, ?, ?, 'Queued for triage.',
+                 'Waiting briefly before triage.', 'normal', NULL,
+                 'uncategorized', NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?
+          WHERE EXISTS (
+            SELECT 1
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j
+              ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+             AND j.job_type = 'email_triage'
+            WHERE t.id = ?
+              AND t.triage_status = 'pending'
+              AND t.triage_source = 'arrival_grace'
+              AND j.status IN ('queued', 'running')
+          )
           ON CONFLICT(snapshot_id, triage_id) DO UPDATE SET
             lane_at_snapshot = excluded.lane_at_snapshot,
             summary_at_snapshot = excluded.summary_at_snapshot,
@@ -718,7 +731,20 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
             provider_removed_at = NULL,
             source = excluded.source,
             source_at = excluded.source_at,
-            updated_at = datetime('now')`,
+            updated_at = datetime('now')
+          WHERE EXISTS (
+            SELECT 1
+            FROM ea_email_triage t
+            JOIN ea_triage_jobs j
+              ON j.user_id = t.user_id
+             AND j.account_id = t.account_id
+             AND j.email_id = t.email_id
+             AND j.job_type = 'email_triage'
+            WHERE t.id = excluded.triage_id
+              AND t.triage_status = 'pending'
+              AND t.triage_source = 'arrival_grace'
+              AND j.status IN ('queued', 'running')
+          )`,
     args: [
       snapshot.id,
       Number(triageRow.id),
@@ -736,8 +762,11 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
       email.account_icon || "Mail",
       ARRIVAL_GRACE_SOURCE,
       scheduledFor,
+      Number(triageRow.id),
     ],
   });
+  if (Number(write.rowsAffected || 0) === 0) return null;
+
   publishCurrentDashboardEvent(userId, {
     source: "email_triage",
     reason: "email_triage_queued",
