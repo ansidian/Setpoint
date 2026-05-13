@@ -102,6 +102,16 @@ export default function useCalendarModalHotkeys({
       const commandKey = event.metaKey || event.ctrlKey;
       const normalizedKey = String(event.key || "").toLowerCase();
 
+      if (
+        floatingDetail?.open
+        && floatingDetail.mode === "detail"
+        && (normalizedKey === "meta" || normalizedKey === "control")
+      ) {
+        setFloatingDetail(null);
+        consumeCalendarKey();
+        return;
+      }
+
       if (commandKey && normalizedKey === "f") {
         openCalendarSearch?.();
         consumeCalendarKey();
