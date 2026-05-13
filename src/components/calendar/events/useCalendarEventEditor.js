@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { getGmailAuthUrl, listReminders } from "@/api";
 import {
   deleteCalendarEventAction,
+  formatCalendarEditorError,
   saveCalendarEventAction,
 } from "./calendarEventEditorActions";
 import { parseCalendarTitle } from "./parseCalendarTitle";
@@ -707,7 +708,7 @@ export default function useCalendarEventEditor({
         kind: result.kind,
       });
     } catch (err) {
-      setError(err.message || "Failed to save event.");
+      setError(formatCalendarEditorError(err, "Failed to save event."));
       setErrorCode(err.code || null);
     } finally {
       setSaving(false);

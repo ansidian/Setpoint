@@ -14,16 +14,17 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
 class CalendarServiceError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, details = {}) {
     super(message);
     this.name = "CalendarServiceError";
     this.status = status;
     this.code = code;
+    Object.assign(this, details);
   }
 }
 
-function throwCalendarError(status, code, message) {
-  throw new CalendarServiceError(status, code, message);
+function throwCalendarError(status, code, message, details) {
+  throw new CalendarServiceError(status, code, message, details);
 }
 
 /**
@@ -160,15 +161,70 @@ async function googleCalendarFetch(auth, path, { method = "GET", query, body, he
     throwCalendarError(410, "calendar_sync_token_invalid", "Google Calendar sync token expired.");
   }
   if (res.status === 401 || res.status === 403) {
-    const text = await res.text().catch(() => "");
-    throwCalendarError(403, "calendar_google_forbidden", text || "Google Calendar rejected this request");
+    const details = await readGoogleErrorDetails(res);
+    throwCalendarError(
+      403,
+      "calendar_google_forbidden",
+      "Google Calendar rejected this request. Reconnect Gmail if it keeps happening.",
+      details,
+    );
   }
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throwCalendarError(502, "calendar_google_error", text || `Google Calendar request failed: ${res.status}`);
+    const details = await readGoogleErrorDetails(res);
+    throwCalendarError(502, "calendar_google_error", googleCalendarUserMessage(details), details);
   }
 
   return res;
+}
+
+async function readGoogleErrorDetails(res) {
+  const rawGoogleError = await res.text().catch(() => "");
+  let parsed = null;
+  if (rawGoogleError) {
+    try {
+      parsed = JSON.parse(rawGoogleError);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  const googleError = parsed?.error || null;
+  const googleReason = googleError?.errors?.[0]?.reason || googleError?.status || null;
+  const googleMessage = typeof googleError?.message === "string"
+    ? googleError.message
+    : rawGoogleError || `Google Calendar request failed: ${res.status}`;
+
+  return {
+    googleStatus: Number(googleError?.code) || res.status,
+    googleReason,
+    googleMessage,
+    rawGoogleError,
+  };
+}
+
+function googleCalendarUserMessage(details = {}) {
+  const googleStatus = Number(details.googleStatus) || 0;
+  const googleReason = String(details.googleReason || "").toLowerCase();
+  const googleMessage = String(details.googleMessage || "");
+  const normalizedMessage = googleMessage.toLowerCase();
+
+  if (googleStatus === 404 || googleReason === "notfound") {
+    return "Google Calendar could not find this event. Refresh the calendar and try again.";
+  }
+  if (googleStatus === 409 || normalizedMessage.includes("already exists")) {
+    return "Google Calendar already has this event in the target calendar. Refreshing will show the latest copy.";
+  }
+  return "Google Calendar could not save this event. Refresh the calendar and try again.";
+}
+
+function isGoogleEventNotFoundError(err) {
+  return err?.code === "calendar_google_error"
+    && (Number(err.googleStatus) === 404 || String(err.googleReason || "").toLowerCase() === "notfound");
+}
+
+function isGoogleEventAlreadyExistsError(err) {
+  return err?.code === "calendar_google_error"
+    && (Number(err.googleStatus) === 409 || String(err.googleMessage || "").toLowerCase().includes("already exists"));
 }
 
 function ifMatchHeaders(etag) {
@@ -1027,38 +1083,80 @@ export async function createCalendarEvent(account, input) {
   return normalizeGoogleEvent({ account, calendar, event });
 }
 
+async function getMutableEventContextIfExists(account, calendarId, eventId) {
+  try {
+    return await getMutableEventContext(account, calendarId, eventId);
+  } catch (err) {
+    if (isGoogleEventNotFoundError(err)) return null;
+    throw err;
+  }
+}
+
+async function patchSingleCalendarEvent(account, { auth, calendar, event, eventId, input }) {
+  const payload = toCalendarMutationPayload(input);
+  const targetEventId = event?.id || eventId;
+  const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events/${encodeURIComponent(targetEventId)}`, {
+    method: "PATCH",
+    body: payload,
+    headers: ifMatchHeaders(event?.etag || input.etag),
+  });
+  return normalizeGoogleEvent({ account, calendar, event: await res.json() });
+}
+
 export async function updateCalendarEvent(account, eventId, input) {
   const scope = input.scope || null;
   const sourceCalendarId = input.sourceCalendarId || input.calendarId;
   const targetCalendarId = input.calendarId;
   const calendarChanged = sourceCalendarId !== targetCalendarId;
-  const { auth, calendar, event } = await getMutableEventContext(account, sourceCalendarId, eventId);
+  let sourceContext;
+  try {
+    sourceContext = await getMutableEventContext(account, sourceCalendarId, eventId);
+  } catch (err) {
+    if (calendarChanged && isGoogleEventNotFoundError(err)) {
+      const recoveredTargetContext = await getMutableEventContextIfExists(account, targetCalendarId, eventId);
+      if (recoveredTargetContext && !isRecurringEventResource(recoveredTargetContext.event)) {
+        return patchSingleCalendarEvent(account, {
+          ...recoveredTargetContext,
+          eventId,
+          input,
+        });
+      }
+    }
+    throw err;
+  }
+  const { auth, calendar, event } = sourceContext;
 
   if (!isRecurringEventResource(event)) {
     let targetCalendar = calendar;
     let targetEvent = event;
-    let targetEventId = eventId;
 
     if (calendarChanged) {
       const targetContext = await getWritableCalendarContext(account, targetCalendarId);
       targetCalendar = targetContext.calendar;
-      targetEvent = await moveCalendarEvent(
-        auth,
-        sourceCalendarId,
-        eventId,
-        targetCalendarId,
-        event.etag || input.etag,
-      );
-      targetEventId = targetEvent.id || eventId;
+      try {
+        targetEvent = await moveCalendarEvent(
+          auth,
+          sourceCalendarId,
+          eventId,
+          targetCalendarId,
+          event.etag || input.etag,
+        );
+      } catch (err) {
+        if (!isGoogleEventNotFoundError(err) && !isGoogleEventAlreadyExistsError(err)) throw err;
+        const recoveredTargetContext = await getMutableEventContextIfExists(account, targetCalendarId, eventId);
+        if (!recoveredTargetContext || isRecurringEventResource(recoveredTargetContext.event)) throw err;
+        targetCalendar = recoveredTargetContext.calendar;
+        targetEvent = recoveredTargetContext.event;
+      }
     }
 
-    const payload = toCalendarMutationPayload(input);
-    const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(targetCalendar.id)}/events/${encodeURIComponent(targetEventId)}`, {
-      method: "PATCH",
-      body: payload,
-      headers: ifMatchHeaders(targetEvent.etag || event.etag || input.etag),
+    return patchSingleCalendarEvent(account, {
+      auth,
+      calendar: targetCalendar,
+      event: targetEvent,
+      eventId,
+      input,
     });
-    return normalizeGoogleEvent({ account, calendar: targetCalendar, event: await res.json() });
   }
 
   if (calendarChanged) {
