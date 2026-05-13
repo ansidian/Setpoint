@@ -130,6 +130,49 @@ describe("CalendarModal event grid behavior", () => {
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
   });
 
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+  ])("dismisses a selected event chip floating detail when pressing %s", async (key, modifiers) => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const dayCell = screen.getByTestId("calendar-cell-20");
+    fireEvent.click(within(dayCell).getByTestId("calendar-cell-item-chip"));
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key, ...modifiers });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+  });
+
   it("updates between empty-day selections without remounting the empty rail", async () => {
     window.innerWidth = 1900;
 
