@@ -159,7 +159,6 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     return scrollElementIntoView(row || headerRefs.current.get(dateKey), {
       block: row ? "nearest" : "start",
       offsetTop: row ? itemScrollTopOffset : 0,
-      forceSmooth: !!row,
     });
   }, [itemScrollTopOffset, scrollElementIntoView]);
 
@@ -184,16 +183,19 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
 
   useImperativeHandle(ref, () => ({
     scrollToDate(dateKey, commandId = null) {
+      releaseEntryAnchor();
       const handled = scrollToDateHeader(dateKey);
       if (handled && commandId) handledScrollCommandIdRef.current = commandId;
       return handled;
     },
     scrollToEvent(itemId, dateKey, commandId = null) {
+      releaseEntryAnchor();
       const handled = scrollToItem(itemId, dateKey);
       if (handled && commandId) handledScrollCommandIdRef.current = commandId;
       return handled;
     },
     scrollToItem(itemId, dateKey, commandId = null) {
+      releaseEntryAnchor();
       const handled = scrollToItem(itemId, dateKey);
       if (handled && commandId) handledScrollCommandIdRef.current = commandId;
       return handled;
@@ -202,17 +204,20 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
       return findRowAnchor(rowRefs, itemId, dateKey);
     },
     activateItem(itemId, dateKey) {
+      releaseEntryAnchor();
       return activateItem(itemId, dateKey);
     },
     scrollToToday(commandId = null) {
+      releaseEntryAnchor();
       const handled = scrollToDateStart(todayKey);
       if (handled && commandId) handledScrollCommandIdRef.current = commandId;
       return handled;
     },
     scrollToFirst() {
+      releaseEntryAnchor();
       return scrollElementIntoView(headerRefs.current.get(firstVisibleDateKey), { block: "start" });
     },
-  }), [activateItem, firstVisibleDateKey, scrollElementIntoView, scrollToDateHeader, scrollToDateStart, scrollToItem, todayKey]);
+  }), [activateItem, firstVisibleDateKey, releaseEntryAnchor, scrollElementIntoView, scrollToDateHeader, scrollToDateStart, scrollToItem, todayKey]);
 
   useEffect(() => {
     if (!scrollCommand || showSkeleton) return undefined;
@@ -236,6 +241,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
   }, [groups, releaseEntryAnchor, scrollCommand, scrollToDateHeader, scrollToDateStart, scrollToItem, showSkeleton, todayKey]);
 
   useEffect(() => {
+    if (entryScrollTargetDateKey === false) return undefined;
     if (isLoading || !entryScrollReady) return undefined;
     if (entryAnchorRef.current.released) return undefined;
     const id = window.requestAnimationFrame(() => {
@@ -264,7 +270,7 @@ const AgendaRailShell = forwardRef(function AgendaRailShell({
     if (isLoading || !entryScrollReady || scrollRafRef.current) return;
     scrollRafRef.current = window.requestAnimationFrame(() => {
       scrollRafRef.current = 0;
-      if (entryScrollTargetDateKey && !entryAnchorRef.current.released) return;
+      if (entryScrollTargetDateKey !== false && entryScrollTargetDateKey && !entryAnchorRef.current.released) return;
       if (performance.now() < suppressPassiveUntilRef.current) return;
       const scroller = scrollerRef.current;
       if (!scroller) return;

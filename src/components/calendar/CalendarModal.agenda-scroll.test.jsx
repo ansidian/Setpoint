@@ -378,6 +378,104 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
     expect(screen.getByTestId("calendar-cell-29").getAttribute("aria-selected")).toBe("true");
   });
 
+  it("releases cold agenda landing before scrolling a grid chip selection into the agenda", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-14T16:00:00.000Z"));
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const scrollTo = vi.fn(function scrollToMock(options) {
+      if (options?.behavior === "auto" && Number.isFinite(options.top)) {
+        this.scrollTop = options.top;
+      }
+    });
+
+    try {
+      HTMLElement.prototype.scrollTo = scrollTo;
+      HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRectMock() {
+        if (this.getAttribute?.("data-testid") === "events-agenda-rail") {
+          return { top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 };
+        }
+        if (
+          this.getAttribute?.("data-agenda-date-header") === "true"
+          && this.getAttribute?.("data-date-key") === "2026-05-01"
+        ) {
+          return { top: -120, bottom: -86, left: 0, right: 280, width: 280, height: 34 };
+        }
+        if (
+          this.getAttribute?.("data-agenda-date-header") === "true"
+          && this.getAttribute?.("data-date-key") === "2026-05-14"
+        ) {
+          return { top: 360, bottom: 394, left: 0, right: 280, width: 280, height: 34 };
+        }
+        if (this.getAttribute?.("data-testid") === "calendar-agenda-event-row") {
+          return { top: 760, bottom: 804, left: 0, right: 280, width: 280, height: 44 };
+        }
+        if (this.querySelector?.("[data-testid='calendar-agenda-event-row']")) {
+          return { top: 760, bottom: 804, left: 0, right: 280, width: 280, height: 44 };
+        }
+        return originalGetBoundingClientRect.call(this);
+      };
+
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={{
+            getEvents: () => ([
+              {
+                id: "event-15",
+                title: "May 15 workshop",
+                startMs: new Date("2026-05-15T20:00:00.000Z").getTime(),
+                endMs: new Date("2026-05-15T21:00:00.000Z").getTime(),
+                allDay: false,
+                color: "#89b4fa",
+                writable: true,
+              },
+            ]),
+          }}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const agendaRail = await screen.findByTestId("events-agenda-rail");
+      agendaRail.scrollTop = 0;
+      await flushAnimationFrame();
+
+      expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+        top: 360,
+        behavior: "auto",
+      }));
+      scrollTo.mockClear();
+
+      fireEvent.click(within(screen.getByTestId("calendar-cell-15")).getByTestId("calendar-cell-item-chip"));
+      await flushAnimationFrame();
+      await flushAnimationFrame();
+
+      const itemScrollCall = scrollTo.mock.calls.find(([options]) => (
+        options?.behavior === "smooth" && options.top > 0
+      ));
+      expect(itemScrollCall).toBeTruthy();
+      expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({
+        top: 360,
+        behavior: "auto",
+      }));
+      expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-event-title").textContent).toContain("May 15 workshop");
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      if (originalScrollTo) {
+        HTMLElement.prototype.scrollTo = originalScrollTo;
+      } else {
+        delete HTMLElement.prototype.scrollTo;
+      }
+      vi.useRealTimers();
+    }
+  });
+
   it("switches the selected deadline in-place when a different agenda row is clicked", async () => {
     window.innerWidth = 1900;
 
