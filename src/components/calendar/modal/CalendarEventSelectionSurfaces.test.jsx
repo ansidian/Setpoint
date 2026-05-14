@@ -65,6 +65,47 @@ describe("Calendar Event Selection Set surfaces", () => {
     expect(onSelectItem).not.toHaveBeenCalled();
   });
 
+  it("keeps special-date month-grid chips out of the Calendar Event Selection Set", () => {
+    const onSelectItem = vi.fn();
+    const toggleEventSelection = vi.fn(() => true);
+    render(
+      <ItemChip
+        item={chipItem({
+          specialDate: true,
+          specialDateAccent: "#ff887c",
+          title: "Maya's birthday",
+          writable: false,
+        })}
+        selected={false}
+        active={false}
+        pastTone={null}
+        metrics={{ itemHeight: 36, gap: 4 }}
+        quickActions={{
+          isEventSelectionSelected: () => true,
+          toggleEventSelection,
+        }}
+        onSelectItem={onSelectItem}
+        dateKey="2026-05-04"
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
+
+    fireEvent.click(chip, { metaKey: true });
+
+    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(onSelectItem).not.toHaveBeenCalled();
+
+    fireEvent.click(chip);
+
+    expect(onSelectItem).toHaveBeenCalledWith("event-1", expect.objectContaining({
+      dateKey: "2026-05-04",
+      anchorKind: "chip",
+    }));
+    expect(onSelectItem.mock.calls[0][1].preserveEventSelection).toBeFalsy();
+  });
+
   it("routes modifier-clicks on inline overflow chips into the Calendar Event Selection Set", () => {
     const onSelectItem = vi.fn();
     const toggleEventSelection = vi.fn(() => true);
@@ -95,6 +136,94 @@ describe("Calendar Event Selection Set surfaces", () => {
       anchorKind: "overflow-row",
     }));
     expect(onSelectItem).not.toHaveBeenCalled();
+  });
+
+  it("keeps special-date inline overflow chips out of the Calendar Event Selection Set", () => {
+    const onSelectItem = vi.fn();
+    const toggleEventSelection = vi.fn(() => true);
+    render(
+      <CalendarInlineOverflowLayer
+        overflow={{
+          inlineAnchor: { top: 0, left: 0, width: 280 },
+          dateKey: "2026-05-04",
+          items: [chipItem({
+            title: "Maya's birthday",
+            specialDate: true,
+            specialDateAccent: "#ff887c",
+            writable: false,
+          })],
+        }}
+        selectedItemId={null}
+        onSelectItem={onSelectItem}
+        quickActions={{
+          isEventSelectionSelected: () => true,
+          toggleEventSelection,
+        }}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    expect(chip.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
+
+    fireEvent.click(chip, { metaKey: true });
+
+    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(onSelectItem).not.toHaveBeenCalled();
+
+    fireEvent.click(chip);
+
+    expect(onSelectItem).toHaveBeenCalledWith("event-1", expect.objectContaining({
+      dateKey: "2026-05-04",
+      anchorKind: "overflow-row",
+    }));
+    expect(onSelectItem.mock.calls[0][1].preserveEventSelection).toBeFalsy();
+  });
+
+  it("renders special-date fallback overflow rows as markers outside batch selection", async () => {
+    const onSelectItem = vi.fn();
+    const toggleEventSelection = vi.fn(() => true);
+    render(
+      <CalendarCellOverflowPopover
+        popover={{
+          day: 4,
+          label: "May 4",
+          viewLabel: "Events",
+          dateKey: "2026-05-04",
+          triggerElement: document.body.appendChild(document.createElement("button")),
+          items: [chipItem({
+            title: "Maya's birthday",
+            specialDate: true,
+            specialDateAccent: "#ff887c",
+            writable: false,
+          })],
+        }}
+        selectedItemId={null}
+        onSelectItem={onSelectItem}
+        onClose={vi.fn()}
+        quickActions={{
+          isEventSelectionSelected: () => true,
+          toggleEventSelection,
+        }}
+      />,
+    );
+
+    const row = await screen.findByTestId("calendar-cell-overflow-item");
+    expect(row.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(row.getAttribute("data-calendar-event-selection")).toBeNull();
+
+    fireEvent.click(row, { metaKey: true });
+
+    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(onSelectItem).not.toHaveBeenCalled();
+
+    fireEvent.click(row);
+
+    expect(onSelectItem).toHaveBeenCalledWith("event-1", expect.objectContaining({
+      dateKey: "2026-05-04",
+      anchorKind: "overflow-row",
+    }));
+    expect(onSelectItem.mock.calls[0][1].preserveEventSelection).toBeFalsy();
   });
 
   it("keeps fallback overflow open on outside clicks while building a Calendar Event Selection Set", async () => {

@@ -94,10 +94,13 @@ export function renderDeadlinesCellContents({
   inlineOverflowOpen,
   inlineOverflowAutoFocus,
   inlineOverflowVisibleCount,
+  inlineOverflowExternal,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onHiddenItemsChange,
   onBeforeItemAction,
+  onOverflowReanchorRequestHandled,
+  overflowReanchorDateKey,
   suppressedSelectedHiddenAutoOpenKey,
   quickActions,
   layout,
@@ -131,10 +134,13 @@ export function renderDeadlinesCellContents({
       inlineOverflowOpen={inlineOverflowOpen}
       inlineOverflowAutoFocus={inlineOverflowAutoFocus}
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      inlineOverflowExternal={inlineOverflowExternal}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
       onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
+      onOverflowReanchorRequestHandled={onOverflowReanchorRequestHandled}
+      overflowReanchorDateKey={overflowReanchorDateKey}
       suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
       quickActions={quickActions}
     />

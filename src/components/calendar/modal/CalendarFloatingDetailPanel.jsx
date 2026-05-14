@@ -76,6 +76,7 @@ export default function CalendarFloatingDetailPanel({
   const mode = detail?.mode || "detail";
   const editorMode = mode === "edit" || mode === "create";
   const agendaAnchored = String(detail?.anchorKind || "").startsWith("agenda");
+  const overflowAnchored = String(detail?.anchorKind || "") === "overflow-row";
   const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
   const placementKey = detail?.placementKey;
   const placement = placementState.key === detail?.placementKey
@@ -93,10 +94,14 @@ export default function CalendarFloatingDetailPanel({
     const sourceRect = rectFromElement(detail.sourceCellElement);
     const exclusionRect = rectFromElement(detail.exclusionElement);
 
-    if (!detail.parked && (!anchorRect || (calendarRect && !isRectInside(anchorRect, calendarRect)))) {
+    if (!detail.parked && !anchorRect) {
       if (agendaAnchored) return null;
       if (!allowPark) return null;
       onPark?.();
+      return null;
+    }
+
+    if (!detail.parked && !overflowAnchored && calendarRect && !isRectInside(anchorRect, calendarRect)) {
       return null;
     }
 
@@ -113,7 +118,7 @@ export default function CalendarFloatingDetailPanel({
       forcedSide: detail.forcedSide || null,
       allowRailOverlap: detail.sideIntent === "user-flip",
     });
-  }, [agendaAnchored, calendarPanelRef, detail, measuredSize.height, mode, onPark, railRef]);
+  }, [agendaAnchored, calendarPanelRef, detail, measuredSize.height, mode, onPark, overflowAnchored, railRef]);
 
   const updatePlacement = useCallback(({ allowPark = true } = {}) => {
     if (!open || detail?.userDragged || draggingRef.current || manualPlacementActive) return;
@@ -368,12 +373,14 @@ export default function CalendarFloatingDetailPanel({
       }
     : anchoredPlacement;
   const manualTransitionActive = manualPlacementActive || dragging || manualDragActive;
-  const snapTransitionActive = snapPlacementKey === placementKey
+  const snapTransitionActive = !detail?.parked
+    && snapPlacementKey === placementKey
     && (
       snapPlacementIntent === "user-flip"
       || !(detail?.sideIntent === "user-flip" && hasRevealedMeasuredPlacement)
     );
   const awaitingMeasuredPlacement = open
+    && !detail?.parked
     && !!placementKey
     && typeof ResizeObserver !== "undefined"
     && !manualPlacementActive

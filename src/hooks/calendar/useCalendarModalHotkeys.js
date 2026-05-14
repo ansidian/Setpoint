@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { ymdFromParts } from "../../components/calendar/calendarDateUtils.js";
 import { ymdFromView } from "./calendarModalSelectionModel.js";
 import {
-  isFloatingDetailFlipSuppressedTarget,
+  isFloatingDetailPanelTarget,
   isGridOriginFloatingDetail,
 } from "./calendarFloatingDetailModel.js";
 
@@ -180,6 +180,21 @@ export default function useCalendarModalHotkeys({
         return;
       }
 
+      if (event.key === " ") {
+        const currentDetail = floatingDetailRef.current;
+        if (!commandKey
+          && !event.altKey
+          && !event.shiftKey
+          && isGridOriginFloatingDetail(currentDetail)
+          && !currentDetail.dirty
+          && !isFloatingDetailPanelTarget(event.target)
+        ) {
+          flipFloatingDetailSide?.();
+          consumeCalendarKey();
+          return;
+        }
+      }
+
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       if ((event.key === "Delete" || event.key === "Backspace") && view === "events") {
@@ -189,20 +204,8 @@ export default function useCalendarModalHotkeys({
         }
       }
 
-      if (event.key === " ") {
-        const currentDetail = floatingDetailRef.current;
-        if (isGridOriginFloatingDetail(currentDetail)
-          && !currentDetail.dirty
-          && !isFloatingDetailFlipSuppressedTarget(event.target, currentDetail)
-        ) {
-          flipFloatingDetailSide();
-          consumeCalendarKey();
-          return;
-        }
-      }
-
       if (
-        (event.key === "Enter" || event.key === " ")
+        event.key === "Enter"
         && event.target instanceof HTMLElement
         && event.target.closest("button, [role='button'], [role='gridcell']")
       ) {

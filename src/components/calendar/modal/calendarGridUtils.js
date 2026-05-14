@@ -56,6 +56,19 @@ export function sameOverflowDate(overflow, dateKey, day) {
   return overflow.day === day;
 }
 
+export function overflowStateIsLiveInScope(overflow, { view, viewYear, viewMonth } = {}) {
+  if (!overflow) return false;
+  if (overflow.view !== view || overflow.viewYear !== viewYear || overflow.viewMonth !== viewMonth) {
+    return false;
+  }
+  if (!overflow.sourceCellElement?.isConnected) {
+    return false;
+  }
+  if (overflow.mode === "inline") return !!overflow.inlineAnchor;
+  if (!overflow.triggerElement?.isConnected) return false;
+  return true;
+}
+
 export function spanCoversOverflowDate(overflow, segment) {
   if (!overflow || !segment) return false;
   if (overflow.dateKey && segment.segmentStart && segment.segmentEnd) {
@@ -122,6 +135,32 @@ export function resolveInlineOverflowAnchor(triggerElement, containerElement) {
     left: triggerRect.left - containerRect.left - 4,
     width: triggerRect.width + 8,
   };
+}
+
+export function resolveOverflowPresentation({
+  triggerElement,
+  hiddenStackHeight,
+  layout,
+  containerElement,
+}) {
+  if (layout?.stacked) return { mode: "fallback", inlineAnchor: null };
+  if (!triggerElement?.isConnected) return null;
+  if (!Number.isFinite(hiddenStackHeight) || hiddenStackHeight <= 0) return null;
+
+  const panel = triggerElement.closest("[data-testid='calendar-modal-panel']");
+  const panelRect = panel?.getBoundingClientRect?.();
+  if (!panelRect) return null;
+
+  const inlineFits = canUseInlineOverflow({
+    triggerElement,
+    hiddenStackHeight,
+    layout,
+  });
+  if (!inlineFits) return { mode: "fallback", inlineAnchor: null };
+
+  const inlineAnchor = resolveInlineOverflowAnchor(triggerElement, containerElement);
+  if (!inlineAnchor) return null;
+  return { mode: "inline", inlineAnchor };
 }
 
 export function formatCellDate(viewYear, viewMonth, day) {

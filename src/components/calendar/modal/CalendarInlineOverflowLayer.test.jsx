@@ -96,4 +96,27 @@ describe("CalendarInlineOverflowLayer", () => {
     );
     expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
   });
+
+  it("moves focus to the clicked hidden item", () => {
+    render(
+      <CalendarInlineOverflowLayer
+        overflow={{
+          inlineAnchor: { top: 0, left: 0, width: 320 },
+          dateKey: "2026-05-12",
+          items: [
+            { id: "event-1", leadingLabel: "9:00 AM", title: "Check-in" },
+            { id: "event-2", leadingLabel: "5:30 PM", title: "Wash Car" },
+          ],
+        }}
+        selectedItemId={null}
+        onSelectItem={vi.fn()}
+      />,
+    );
+
+    const chips = screen.getAllByTestId("calendar-cell-item-chip");
+
+    fireEvent.click(chips[1]);
+
+    expect(document.activeElement).toBe(chips[1]);
+  });
 });

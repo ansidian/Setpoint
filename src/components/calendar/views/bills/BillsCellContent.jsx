@@ -75,10 +75,13 @@ export function renderBillsCellContents({
   inlineOverflowOpen,
   inlineOverflowAutoFocus,
   inlineOverflowVisibleCount,
+  inlineOverflowExternal,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onHiddenItemsChange,
   onBeforeItemAction,
+  onOverflowReanchorRequestHandled,
+  overflowReanchorDateKey,
   suppressedSelectedHiddenAutoOpenKey,
   layout,
   day,
@@ -104,10 +107,13 @@ export function renderBillsCellContents({
       inlineOverflowOpen={inlineOverflowOpen}
       inlineOverflowAutoFocus={inlineOverflowAutoFocus}
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      inlineOverflowExternal={inlineOverflowExternal}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
       onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
+      onOverflowReanchorRequestHandled={onOverflowReanchorRequestHandled}
+      overflowReanchorDateKey={overflowReanchorDateKey}
       suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
     />
   );

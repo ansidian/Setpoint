@@ -184,7 +184,7 @@ export default function CalendarCell({
         onSelectDay?.();
       }}
       onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.key !== "Enter") return;
         event.preventDefault();
         onSelectDay?.();
       }}

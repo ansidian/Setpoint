@@ -5,6 +5,10 @@ import {
 } from "../calendarDateUtils.js";
 import { formatTime12FromTime24 } from "../ghostPreview.js";
 import { getEventSelectionId } from "../../../lib/redesign-helpers";
+import {
+  googleSpecialDateAccent,
+  isGoogleSpecialDateEvent,
+} from "../googleSpecialDateModel.js";
 
 function localDateFromMs(ms) {
   return Number.isFinite(ms) ? pacificYMD(ms) : null;
@@ -208,11 +212,17 @@ function itemLeadingLabel(segment) {
 }
 
 export function spanSegmentDisplay(segment) {
+  const specialDate = isGoogleSpecialDateEvent(segment?.item);
+  const color = specialDate
+    ? googleSpecialDateAccent(segment?.item)
+    : segment?.item?.color || segment?.item?.sourceColor || "#89b4fa";
   return {
     title: eventTitle(segment?.item),
-    leadingLabel: itemLeadingLabel(segment),
-    recurring: !!segment?.item?.isRecurring || !!segment?.item?.recurring,
-    color: segment?.item?.color || segment?.item?.sourceColor || "#89b4fa",
+    leadingLabel: specialDate ? "" : itemLeadingLabel(segment),
+    recurring: specialDate ? false : !!segment?.item?.isRecurring || !!segment?.item?.recurring,
+    color,
+    specialDate,
+    specialDateAccent: color,
   };
 }
 

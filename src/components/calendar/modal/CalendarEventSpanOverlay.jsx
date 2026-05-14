@@ -1,4 +1,5 @@
 import { Repeat } from "lucide-react";
+import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 import { spanSegmentDisplay } from "./calendarEventSpanLayout.js";
@@ -96,6 +97,11 @@ function spanTitleFit(title) {
   return { fontSize: 10, lineHeight: 1.08, lineClamp: 2 };
 }
 
+function specialDateSpanTitleFit(title) {
+  const fit = spanTitleFit(title);
+  return { ...fit, lineClamp: 2 };
+}
+
 export default function CalendarEventSpanOverlay({
   segments,
   layout,
@@ -130,16 +136,19 @@ export default function CalendarEventSpanOverlay({
       {segments.map((segment) => {
         const display = spanSegmentDisplay(segment);
         const compactLabel = compactLeadingLabel(display.leadingLabel);
-        const leadingColumnWidth = getChipLeadingColumnWidth([{ leadingLabel: display.leadingLabel }]);
-        const titleFit = spanTitleFit([compactLabel, display.title].filter(Boolean).join(" "));
+        const leadingColumnWidth = display.specialDate ? 24 : getChipLeadingColumnWidth([{ leadingLabel: display.leadingLabel }]);
+        const titleFit = display.specialDate
+          ? specialDateSpanTitleFit(display.title)
+          : spanTitleFit([compactLabel, display.title].filter(Boolean).join(" "));
         const selected = segment.eventId && String(segment.eventId) === String(selectedItemId);
-        const batchSelected = !!quickActions?.isEventSelectionSelected?.(segment.item);
+        const batchSelected = !display.specialDate && !!quickActions?.isEventSelectionSelected?.(segment.item);
         const active = activeSegmentId === segment.id;
         const commonProps = {
           "data-testid": segment.kind === "ghost" ? "calendar-ghost-chip" : "calendar-event-span-segment",
           "data-calendar-focus-ring": segment.kind === "event" ? "true" : undefined,
           "data-item-id": segment.eventId || undefined,
           "data-calendar-event-selection": batchSelected ? "true" : undefined,
+          "data-calendar-event-activation": segment.kind === "event" ? "true" : undefined,
           "data-segment-start": segment.segmentStart || undefined,
           "data-segment-end": segment.segmentEnd || undefined,
           "data-span-segment-id": segment.id,
@@ -161,7 +170,15 @@ export default function CalendarEventSpanOverlay({
               lineHeight: titleFit.lineHeight,
             }}
           >
-            {leadingColumnWidth ? (
+            {display.specialDate ? (
+              <GoogleSpecialDateBadge
+                item={segment.item}
+                color={display.specialDateAccent}
+                selected={selected}
+                active={active}
+                variant="span"
+              />
+            ) : leadingColumnWidth ? (
               <span
                 data-calendar-span-meta="true"
                 style={{
@@ -198,6 +215,7 @@ export default function CalendarEventSpanOverlay({
             >
               {display.recurring ? (
                 <Repeat
+                  data-calendar-span-recurring="true"
                   aria-hidden="true"
                   size={10}
                   strokeWidth={2.4}
@@ -257,6 +275,7 @@ export default function CalendarEventSpanOverlay({
               event.stopPropagation();
               if (isEventSelectionModifier(event)) {
                 event.preventDefault();
+                if (display.specialDate) return;
                 quickActions?.toggleEventSelection?.({
                   event: segment.item,
                   dateKey: clickedSegmentDate(segment, event),

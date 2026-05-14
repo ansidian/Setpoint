@@ -39,6 +39,34 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(content?.contains(title)).toBe(true);
   });
 
+  it("renders Google special dates as cake-badge markers without all-day or recurring metadata", () => {
+    render(
+      <CalendarCellItemStack
+        day={22}
+        items={[
+          {
+            id: "birthday-1",
+            leadingLabel: "All day",
+            title: "Maya's birthday",
+            recurring: true,
+            specialDate: true,
+            specialDateAccent: "#ff887c",
+          },
+        ]}
+        metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 1 }}
+      />,
+    );
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    const title = chip.querySelector("[data-calendar-chip-title='true']");
+    expect(chip.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(chip.querySelector("[data-calendar-chip-meta='true']")).toBeNull();
+    expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeNull();
+    expect(title?.getAttribute("data-calendar-chip-title-fit")).toMatch(/\/2$/);
+    expect(chip.textContent).toContain("Maya's birthday");
+    expect(chip.textContent).not.toContain("All day");
+  });
+
   it("uses two readable title lines with a compact run-in prefix for long month chips", () => {
     render(
       <CalendarCellItemStack

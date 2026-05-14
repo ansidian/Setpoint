@@ -51,6 +51,34 @@ describe("calendar cell ghost content", () => {
     expect(container.innerHTML).toBe("");
   });
 
+  it("maps Google birthday events to special-date month chips", () => {
+    render(renderEventsCellContents({
+      items: [{
+        id: "birthday-1",
+        title: "Maya's birthday",
+        eventType: "birthday",
+        birthdayProperties: { type: "birthday" },
+        allDay: true,
+        writable: false,
+        isRecurring: true,
+        startMs: new Date("2026-04-22T07:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-23T07:00:00.000Z").getTime(),
+        sourceColor: "#ff887c",
+        color: "#ff887c",
+      }],
+      layout,
+      day: 22,
+      dateKey: "2026-04-22",
+    }));
+
+    const chip = screen.getByTestId("calendar-cell-item-chip");
+    expect(chip.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(chip.querySelector("[data-calendar-chip-meta='true']")).toBeNull();
+    expect(chip.querySelector("[data-calendar-chip-recurring='true']")).toBeNull();
+    expect(chip.textContent).toContain("Maya's birthday");
+    expect(chip.textContent).not.toContain("All day");
+  });
+
   it("renders deadline ghosts with deadline source color and due-time ordering", () => {
     render(renderDeadlinesCellContents({
       items: [

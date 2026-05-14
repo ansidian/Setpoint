@@ -1,6 +1,11 @@
 import { Search, X } from "lucide-react";
 import { getLocationDisplayLabel } from "../../../lib/calendar-links.js";
 import { calendarSearchPlaceholder } from "../../../hooks/calendar/calendarModalSearchModel.js";
+import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
+import {
+  googleSpecialDateAccent,
+  isGoogleSpecialDateEvent,
+} from "../googleSpecialDateModel.js";
 import { formatAgendaHeaderLabel } from "../views/agenda/agendaDateModel.js";
 import { colorWithAlpha } from "../views/events/eventsAgendaColor.js";
 import { WeatherHeader } from "../views/events/EventsAgendaRailParts.jsx";
@@ -20,12 +25,14 @@ function resultIsPast(result, todayKey) {
 }
 
 function resultPrimaryMeta(result) {
+  if (isGoogleSpecialDateEvent(result)) return "";
   const value = String(result?.subtitle || result?.meta || "").trim();
   if (!value || value === result?.sourceLabel) return "";
   return value.replace(/^All day\b/, "all-day");
 }
 
 function resultDetail(result) {
+  if (isGoogleSpecialDateEvent(result)) return "";
   if (result?.type === "event" && result?.location) {
     return getLocationDisplayLabel(result.location);
   }
@@ -176,7 +183,8 @@ export function SearchResultRow({
   rowRef,
   todayKey,
 }) {
-  const color = result.sourceColor || "#89b4fa";
+  const specialDate = isGoogleSpecialDateEvent(result);
+  const color = specialDate ? googleSpecialDateAccent(result) : result.sourceColor || "#89b4fa";
   const past = resultIsPast(result, todayKey);
   const primaryMeta = resultPrimaryMeta(result);
   const detail = resultDetail(result);
@@ -203,7 +211,7 @@ export function SearchResultRow({
         width: "100%",
         minHeight: 58,
         display: "grid",
-        gridTemplateColumns: "14px minmax(0, 1fr)",
+        gridTemplateColumns: specialDate ? "24px minmax(0, 1fr)" : "14px minmax(0, 1fr)",
         alignItems: "start",
         gap: 8,
         padding: "8px 9px",
@@ -218,18 +226,28 @@ export function SearchResultRow({
         transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
       }}
     >
-      <span
-        aria-hidden="true"
-        style={{
-          width: 8,
-          height: 8,
-          marginTop: 5,
-          borderRadius: 999,
-          border: `1.5px solid ${color}`,
-          background: "transparent",
-          boxShadow: selected ? `0 0 8px ${color}55` : "none",
-        }}
-      />
+      {specialDate ? (
+        <GoogleSpecialDateBadge
+          item={result}
+          color={color}
+          selected={selected}
+          active={highlighted}
+          variant="search"
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          style={{
+            width: 8,
+            height: 8,
+            marginTop: 5,
+            borderRadius: 999,
+            border: `1.5px solid ${color}`,
+            background: "transparent",
+            boxShadow: selected ? `0 0 8px ${color}55` : "none",
+          }}
+        />
+      )}
       <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
         {primaryMeta ? (
           <span

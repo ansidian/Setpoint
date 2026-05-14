@@ -53,6 +53,8 @@ export default function CalendarCellItemStack({
   onCloseInlineOverflow,
   onHiddenItemsChange,
   onBeforeItemAction,
+  onOverflowReanchorRequestHandled,
+  overflowReanchorDateKey = null,
   suppressedSelectedHiddenAutoOpenKey = null,
 }) {
   const stackItems = useMemo(() => items || [], [items]);
@@ -63,6 +65,7 @@ export default function CalendarCellItemStack({
   const inlineOverflowRef = useRef(null);
   const hiddenItemsNotificationRef = useRef(null);
   const lastAutoOpenedHiddenKeyRef = useRef(null);
+  const lastReanchorOverflowRequestRef = useRef(null);
   const reservedHeight = getReservedCellItemLaneHeight(Math.max(0, reservedLaneCount), metrics);
   const measuredMetrics = useMemo(() => ({
     ...metrics,
@@ -114,6 +117,8 @@ export default function CalendarCellItemStack({
     getChipLeadingColumnWidth(stackItems)
   ), [stackItems]);
   const hiddenCount = hiddenItems.length;
+  const reanchorOverflowRequested =
+    !!dateKey && overflowReanchorDateKey === dateKey;
   const hiddenStackHeight = hiddenCount > 0
     ? (hiddenCount * (metrics?.itemHeight ?? 24)) + ((hiddenCount - 1) * (metrics?.gap ?? 4))
     : 0;
@@ -170,12 +175,58 @@ export default function CalendarCellItemStack({
   const selectedHiddenKey = selectedHiddenItem
     ? `${dateKey || ""}:${selectedHiddenItem.selectionId ?? selectedHiddenItem.id}`
     : null;
+  const selectedHiddenItemActionId =
+    selectedHiddenItem?.selectionId ?? selectedHiddenItem?.id ?? selectedItemId;
+
+  useLayoutEffect(() => {
+    if (!reanchorOverflowRequested) {
+      lastReanchorOverflowRequestRef.current = null;
+      return;
+    }
+    if (hiddenCount <= 0 || overflowOpen || inlineOverflowOpen) {
+      onOverflowReanchorRequestHandled?.(dateKey);
+      return;
+    }
+    const triggerElement = moreButtonRef.current;
+    if (!triggerElement) return;
+    const requestSignature = `${dateKey || ""}:${hiddenSignature}:${visibleCount}`;
+    if (lastReanchorOverflowRequestRef.current === requestSignature) return;
+    lastReanchorOverflowRequestRef.current = requestSignature;
+    onOpenOverflow?.({
+      triggerElement,
+      hiddenItems,
+      totalCount: stackItems.length,
+      visibleCount,
+      dateKey,
+      hiddenStackHeight,
+      leadingColumnWidth,
+      focusOnOpen: false,
+      forceOpen: true,
+      reanchorItemId: selectedHiddenItemActionId,
+    });
+  }, [
+    dateKey,
+    hiddenCount,
+    hiddenItems,
+    hiddenSignature,
+    hiddenStackHeight,
+    inlineOverflowOpen,
+    leadingColumnWidth,
+    onOpenOverflow,
+    onOverflowReanchorRequestHandled,
+    overflowOpen,
+    reanchorOverflowRequested,
+    selectedHiddenItemActionId,
+    stackItems.length,
+    visibleCount,
+  ]);
 
   useLayoutEffect(() => {
     if (!selectedHiddenKey) {
       lastAutoOpenedHiddenKeyRef.current = null;
       return;
     }
+    if (reanchorOverflowRequested) return;
     if (selectedHiddenKey === suppressedSelectedHiddenAutoOpenKey) return;
     if (overflowOpen || inlineOverflowOpen) return;
     if (lastAutoOpenedHiddenKeyRef.current === selectedHiddenKey) return;
@@ -200,6 +251,7 @@ export default function CalendarCellItemStack({
     leadingColumnWidth,
     onOpenOverflow,
     overflowOpen,
+    reanchorOverflowRequested,
     selectedHiddenKey,
     suppressedSelectedHiddenAutoOpenKey,
     stackItems.length,
@@ -252,7 +304,17 @@ export default function CalendarCellItemStack({
             onInlineOverflowInteraction?.();
             event.stopPropagation();
           }}
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            const isSpaceKey = event.key === " " || event.code === "Space";
+            if (
+              isSpaceKey
+              && event.target instanceof HTMLElement
+              && event.target.closest("[data-calendar-event-activation='true']")
+            ) {
+              return;
+            }
+            event.stopPropagation();
+          }}
           style={{
             position: "relative",
             zIndex: 3,
