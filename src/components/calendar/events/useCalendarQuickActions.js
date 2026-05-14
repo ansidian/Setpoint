@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from "@/api";
+import { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent, updateCalendarEvent } from "@/api";
 import { googleEventColorForId } from "../../../../shared/calendar-event-colors.js";
 import {
   addDaysYmd,
@@ -7,6 +7,7 @@ import {
   pacificTime24,
   pacificYMD,
 } from "../calendarDateUtils.js";
+import { planCalendarEventClipboardPaste } from "./calendarEventSelectionModel.js";
 
 const DAY_MS = 86400000;
 let optimisticCloneCounter = 0;
@@ -120,6 +121,43 @@ export function buildOptimisticCloneEvent(event, targetDate = null) {
   };
 }
 
+function payloadDateTimeMs(date, time, { allDay = false, end = false } = {}) {
+  const datePart = allDay && end ? addDaysYmd(date, 1) : date;
+  const timePart = allDay ? "00:00" : time || "00:00";
+  const parsed = new Date(`${datePart}T${timePart}:00`).getTime();
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+export function buildOptimisticClipboardPasteEvent(item, index = 0) {
+  const colorId = item.colorId || null;
+  return {
+    id: optimisticCloneId({ id: `clipboard-${index}` }),
+    title: item.title || "",
+    accountId: item.accountId,
+    calendarId: item.calendarId,
+    startMs: payloadDateTimeMs(item.startDate, item.startTime, { allDay: !!item.allDay }),
+    endMs: payloadDateTimeMs(item.endDate || item.startDate, item.endTime, {
+      allDay: !!item.allDay,
+      end: true,
+    }),
+    allDay: !!item.allDay,
+    location: item.location || "",
+    description: item.description || "",
+    colorId,
+    color: googleEventColorForId(colorId)?.hex || undefined,
+    writable: true,
+    etag: null,
+    htmlLink: null,
+    openUrl: null,
+    isRecurring: false,
+    recurringEventId: null,
+    originalStartTime: null,
+    recurrence: null,
+    passed: false,
+    _optimisticCalendarClone: true,
+  };
+}
+
 export function buildColorUpdatePayload(event, colorId, scope) {
   return {
     ...buildReschedulePayload(event, event, scope),
@@ -167,7 +205,9 @@ export default function useCalendarQuickActions({
   refreshRange,
   onSelectEvent,
   onEventDeleted,
+  onBatchDeleted,
   onCopyEvent,
+  resolveEventActionScope,
 }) {
   const [draggingEventId, setDraggingEventId] = useState(null);
   const [dropTargetDate, setDropTargetDate] = useState(null);
@@ -258,6 +298,17 @@ export default function useCalendarQuickActions({
     }
   }, [onEventDeleted, refreshRange, removeEvent, upsertEvents]);
 
+  const runBatchDelete = useCallback(async ({ events }) => {
+    const scopedEvents = Array.isArray(events) ? events : [];
+    if (!scopedEvents.length) return;
+    for (const event of scopedEvents) {
+      await runDelete({
+        event,
+        scope: event?.isRecurring ? "one" : undefined,
+      });
+    }
+  }, [runDelete]);
+
   const runClone = useCallback(async ({ event, targetDate = null }) => {
     if (!editable || !event?.writable) return;
     const optimisticEvent = buildOptimisticCloneEvent(event, targetDate);
@@ -314,6 +365,70 @@ export default function useCalendarQuickActions({
     }
   }, [editable, onSelectEvent, removeEvent, upsertEvents]);
 
+  const runClipboardPaste = useCallback(async ({ clipboard, targetDate = null }) => {
+    if (!editable || !targetDate) return false;
+    const plan = planCalendarEventClipboardPaste(clipboard, targetDate);
+    if (!plan?.items?.length) return false;
+
+    const optimisticEvents = plan.items.map((item, index) => buildOptimisticClipboardPasteEvent(item, index));
+    for (const event of optimisticEvents) {
+      upsertEvents?.(event);
+    }
+    const firstOptimistic = optimisticEvents[0];
+    if (firstOptimistic) {
+      onSelectEvent?.(eventSelectionId(firstOptimistic), pacificYMD(firstOptimistic.startMs));
+    }
+
+    if (plan.items.length === 1) {
+      const optimisticEvent = optimisticEvents[0];
+      try {
+        const result = await createCalendarEvent(plan.items[0]);
+        removeEvent?.(optimisticEvent.id);
+        if (result?.event) {
+          upsertEvents?.(result.event);
+          onSelectEvent?.(eventSelectionId(result.event), pacificYMD(result.event.startMs));
+        }
+      } catch {
+        removeEvent?.(optimisticEvent.id);
+      }
+      return true;
+    }
+
+    try {
+      const result = await createCalendarEventsBatch(plan.items);
+      const createdByIndex = new Map((result?.created || [])
+        .filter((entry) => Number.isInteger(entry?.index) && entry?.event)
+        .map((entry) => [entry.index, entry.event]));
+      const failedIndexes = new Set((result?.failed || [])
+        .filter((entry) => Number.isInteger(entry?.index))
+        .map((entry) => entry.index));
+
+      for (let index = 0; index < optimisticEvents.length; index += 1) {
+        const optimisticEvent = optimisticEvents[index];
+        const createdEvent = createdByIndex.get(index);
+        if (createdEvent) {
+          removeEvent?.(optimisticEvent.id);
+          upsertEvents?.(createdEvent);
+          continue;
+        }
+        if (failedIndexes.has(index) || !createdByIndex.has(index)) {
+          removeEvent?.(optimisticEvent.id);
+        }
+      }
+
+      const firstCreated = [...createdByIndex.entries()]
+        .sort(([a], [b]) => a - b)[0]?.[1];
+      if (firstCreated) {
+        onSelectEvent?.(eventSelectionId(firstCreated), pacificYMD(firstCreated.startMs));
+      }
+    } catch {
+      for (const event of optimisticEvents) {
+        removeEvent?.(event.id);
+      }
+    }
+    return true;
+  }, [editable, onSelectEvent, removeEvent, upsertEvents]);
+
   const runColorUpdate = useCallback(async ({ event, colorId, scope }) => {
     if (!editable || !event?.writable || !colorId) return;
     const color = googleEventColorForId(colorId)?.hex || event.color;
@@ -330,6 +445,16 @@ export default function useCalendarQuickActions({
       upsertEvents?.(event);
     }
   }, [editable, refreshRange, upsertEvents]);
+
+  const runScopedColorUpdate = useCallback(async ({ events, colorId }) => {
+    const scopedEvents = Array.isArray(events) ? events : [];
+    if (!scopedEvents.length || !colorId) return;
+    await Promise.all(scopedEvents.map((event) => runColorUpdate({
+      event,
+      colorId,
+      scope: event?.isRecurring ? "one" : undefined,
+    })));
+  }, [runColorUpdate]);
 
   const beginDrag = useCallback((event) => {
     if (!dragEnabled || !event?.writable) return false;
@@ -379,10 +504,15 @@ export default function useCalendarQuickActions({
   const openContextMenu = useCallback(({ event, item, x, y }) => {
     const sourceEvent = event || item?.sourceEvent || (item?.sourceItem?.startMs ? item.sourceItem : null);
     if (!editable || !sourceEvent?.writable) return false;
+    const resolvedScope = resolveEventActionScope?.(sourceEvent);
+    const actionScope = resolvedScope?.events?.length
+      ? resolvedScope
+      : { kind: "single", events: [sourceEvent], identities: [] };
     setPrompt(null);
     setStatus(null);
     setContextMenu({
       event: sourceEvent,
+      actionScope,
       x,
       y,
       confirm: false,
@@ -391,7 +521,7 @@ export default function useCalendarQuickActions({
       pendingColorId: null,
     });
     return true;
-  }, [editable]);
+  }, [editable, resolveEventActionScope]);
 
   const openDeleteMenu = useCallback(({ event, x, y }) => {
     if (!editable || !event?.writable) return;
@@ -407,11 +537,40 @@ export default function useCalendarQuickActions({
     });
   }, [editable]);
 
+  const requestBatchDelete = useCallback(({ events, x, y } = {}) => {
+    const scopedEvents = (Array.isArray(events) ? events : []).filter((event) => event?.writable);
+    if (!editable || !scopedEvents.length) return false;
+    setPrompt(null);
+    setStatus(null);
+    setContextMenu({
+      event: scopedEvents[0],
+      actionScope: {
+        kind: "selection",
+        events: scopedEvents.map((event) => ({ ...event })),
+        identities: [],
+      },
+      x: Number.isFinite(Number(x)) ? Number(x) : (typeof window === "undefined" ? 96 : Math.max(96, window.innerWidth / 2 - 110)),
+      y: Number.isFinite(Number(y)) ? Number(y) : (typeof window === "undefined" ? 96 : Math.max(96, window.innerHeight / 2 - 110)),
+      confirm: true,
+      busy: false,
+      error: null,
+      pendingColorId: null,
+    });
+    return true;
+  }, [editable]);
+
   const copyContextEvent = useCallback(() => {
     const event = contextMenu?.event;
-    if (event) onCopyEvent?.(event);
+    const scopedEvents = contextMenu?.actionScope?.kind === "selection"
+      ? contextMenu.actionScope.events
+      : null;
+    if (scopedEvents?.length) {
+      onCopyEvent?.(scopedEvents);
+    } else if (event) {
+      onCopyEvent?.(event);
+    }
     setContextMenu(null);
-  }, [contextMenu?.event, onCopyEvent]);
+  }, [contextMenu?.actionScope, contextMenu?.event, onCopyEvent]);
 
   const duplicateContextEvent = useCallback(() => {
     const event = contextMenu?.event;
@@ -422,6 +581,9 @@ export default function useCalendarQuickActions({
   const requestDelete = useCallback(() => {
     setContextMenu((current) => {
       if (!current) return current;
+      if (current.actionScope?.kind === "selection" && current.actionScope.events?.length) {
+        return { ...current, confirm: true, error: null };
+      }
       if (current.event?.isRecurring) {
         setPrompt({
           kind: "delete",
@@ -440,9 +602,17 @@ export default function useCalendarQuickActions({
   const confirmContextDelete = useCallback(async () => {
     const event = contextMenu?.event;
     if (!event) return;
+    const scopedEvents = contextMenu?.actionScope?.kind === "selection"
+      ? contextMenu.actionScope.events
+      : null;
     setContextMenu((current) => (current ? { ...current, busy: true, error: null } : current));
     try {
-      await runDelete({ event });
+      if (scopedEvents?.length) {
+        await runBatchDelete({ events: scopedEvents });
+        onBatchDeleted?.(scopedEvents);
+      } else {
+        await runDelete({ event });
+      }
       setContextMenu(null);
     } catch (err) {
       setContextMenu((current) => (current ? {
@@ -451,11 +621,19 @@ export default function useCalendarQuickActions({
         error: err.message || "Failed to delete event.",
       } : current));
     }
-  }, [contextMenu?.event, runDelete]);
+  }, [contextMenu?.actionScope, contextMenu?.event, onBatchDeleted, runBatchDelete, runDelete]);
 
   const chooseEventColor = useCallback((colorId) => {
     const event = contextMenu?.event;
     if (!event || !colorId) return;
+    const scopedEvents = contextMenu?.actionScope?.kind === "selection"
+      ? contextMenu.actionScope.events
+      : null;
+    if (scopedEvents?.length) {
+      setContextMenu(null);
+      runScopedColorUpdate({ events: scopedEvents, colorId });
+      return;
+    }
     if (event.isRecurring) {
       setPrompt({
         kind: "color",
@@ -471,7 +649,7 @@ export default function useCalendarQuickActions({
     }
     setContextMenu(null);
     runColorUpdate({ event, colorId });
-  }, [contextMenu?.event, contextMenu?.x, contextMenu?.y, runColorUpdate]);
+  }, [contextMenu?.actionScope, contextMenu?.event, contextMenu?.x, contextMenu?.y, runColorUpdate, runScopedColorUpdate]);
 
   const setPromptScope = useCallback((scope) => {
     setPrompt((current) => (current ? { ...current, selectedScope: scope, error: null } : current));
@@ -527,8 +705,13 @@ export default function useCalendarQuickActions({
     copyEvent: onCopyEvent,
     copyContextEvent,
     duplicateContextEvent,
-    pasteEvent: (event, targetDate) => runClone({ event, targetDate }),
+    pasteEvent: (event, targetDate) => (
+      event?.kind === "calendar-event-clipboard"
+        ? runClipboardPaste({ clipboard: event, targetDate })
+        : runClone({ event, targetDate })
+    ),
     requestDelete,
+    requestBatchDelete,
     confirmContextDelete,
     chooseEventColor,
     setPromptScope,
@@ -556,7 +739,9 @@ export default function useCalendarQuickActions({
     duplicateContextEvent,
     onCopyEvent,
     prompt,
+    requestBatchDelete,
     requestDelete,
+    runClipboardPaste,
     runClone,
     chooseEventColor,
     setPromptScope,

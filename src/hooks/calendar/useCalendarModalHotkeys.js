@@ -82,6 +82,8 @@ export default function useCalendarModalHotkeys({
   navigateMonthRef,
   onCopySelectedEvent,
   onPasteCopiedEvent,
+  onDeleteSelectedEvents,
+  onBeginEventSelectionSetFromSelected,
   openCalendarSearch,
 }) {
   useEffect(() => {
@@ -107,7 +109,9 @@ export default function useCalendarModalHotkeys({
         && floatingDetail.mode === "detail"
         && (normalizedKey === "meta" || normalizedKey === "control")
       ) {
-        setFloatingDetail(null);
+        if (!onBeginEventSelectionSetFromSelected?.()) {
+          setFloatingDetail(null);
+        }
         consumeCalendarKey();
         return;
       }
@@ -177,6 +181,13 @@ export default function useCalendarModalHotkeys({
       }
 
       if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if ((event.key === "Delete" || event.key === "Backspace") && view === "events") {
+        if (onDeleteSelectedEvents?.()) {
+          consumeCalendarKey();
+          return;
+        }
+      }
 
       if (event.key === " ") {
         const currentDetail = floatingDetailRef.current;
@@ -360,5 +371,5 @@ export default function useCalendarModalHotkeys({
     return () => document.removeEventListener("keydown", handleKey, true);
     // The editor routing helpers intentionally read the latest modal refs inside this document listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, openCalendarSearch]);
+  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, onDeleteSelectedEvents, onBeginEventSelectionSetFromSelected, openCalendarSearch]);
 }

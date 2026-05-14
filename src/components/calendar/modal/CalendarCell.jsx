@@ -17,6 +17,10 @@ function weatherIconColor(icon) {
   return "rgba(166,173,200,0.66)";
 }
 
+function isEventSelectionModifier(event) {
+  return !!(event?.metaKey || event?.ctrlKey);
+}
+
 export default function CalendarCell({
   view,
   viewYear,
@@ -175,7 +179,10 @@ export default function CalendarCell({
 
   return (
     <div
-      onClick={() => onSelectDay?.()}
+      onClick={(event) => {
+        if (isEventSelectionModifier(event)) return;
+        onSelectDay?.();
+      }}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
@@ -295,6 +302,7 @@ export default function CalendarCell({
           aria-label={`Select ${dateKey ? formatCellDateKey(dateKey) : formatCellDate(viewYear, viewMonth, day)}`}
           onClick={(event) => {
             event.stopPropagation();
+            if (isEventSelectionModifier(event)) return;
             onSelectDateHeader?.();
           }}
           onKeyDown={(event) => {

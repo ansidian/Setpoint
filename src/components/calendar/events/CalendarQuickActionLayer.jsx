@@ -179,11 +179,11 @@ function ActionButton({ children, tone = "default", disabled, onClick, testId })
   );
 }
 
-function ColorDotButton({ color, selected, disabled, onClick }) {
+function ColorDotButton({ color, selected, disabled, onClick, scopeCount = 1 }) {
   const [active, setActive] = useState(false);
   const interactive = active && !disabled;
   const checkColor = checkColorForDot(color.hex);
-  const tooltipLabel = color.label;
+  const tooltipLabel = scopeCount > 1 ? `${color.label} for ${scopeCount} events` : color.label;
 
   const button = (
     <button
@@ -263,6 +263,7 @@ function ColorDotButton({ color, selected, disabled, onClick }) {
 
 function ColorGrid({ menu, quickActions }) {
   const selectedColorId = selectedEventColorId(menu.event);
+  const scopeCount = menu.actionScope?.kind === "selection" ? menu.actionScope.events?.length || 1 : 1;
   return (
     <div
       data-testid="calendar-event-color-grid"
@@ -280,6 +281,7 @@ function ColorGrid({ menu, quickActions }) {
           selected={selectedColorId === color.colorId}
           disabled={menu.busy}
           onClick={() => quickActions.chooseEventColor(color.colorId)}
+          scopeCount={scopeCount}
         />
       ))}
     </div>
@@ -377,6 +379,11 @@ function ContextMenu({ quickActions }) {
 
   if (!menu) return null;
   const pos = menuStyle(menu);
+  const scopedEventCount = menu.actionScope?.kind === "selection" ? menu.actionScope.events?.length || 1 : 1;
+  const copyLabel = scopedEventCount > 1 ? `Copy ${scopedEventCount} events` : "Copy";
+  const deleteLabel = scopedEventCount > 1 ? `Delete ${scopedEventCount} events` : "Delete";
+  const confirmDeleteLabel = scopedEventCount > 1 ? `Delete ${scopedEventCount} events` : "Confirm delete";
+  const confirmDeleteQuestion = scopedEventCount > 1 ? `Delete ${scopedEventCount} events?` : "Delete this event?";
 
   return createPortal(
     <div
@@ -409,10 +416,10 @@ function ContextMenu({ quickActions }) {
       {menu.confirm ? (
         <>
           <div style={{ color: "rgba(205,214,244,0.68)", fontSize: 11, lineHeight: 1.4, padding: "4px 6px" }}>
-            Delete this event?
+            {confirmDeleteQuestion}
           </div>
           <ActionButton tone="danger" disabled={menu.busy} onClick={quickActions.confirmContextDelete} testId="calendar-event-context-confirm-delete">
-            {menu.busy ? "Deleting..." : "Confirm delete"}
+            {menu.busy ? "Deleting..." : confirmDeleteLabel}
           </ActionButton>
           <ActionButton disabled={menu.busy} onClick={quickActions.closeContextMenu}>
             Cancel
@@ -421,13 +428,13 @@ function ContextMenu({ quickActions }) {
       ) : (
         <>
           <ActionButton disabled={menu.busy} onClick={quickActions.copyContextEvent} testId="calendar-event-context-copy">
-            Copy
+            {copyLabel}
           </ActionButton>
           <ActionButton disabled={menu.busy} onClick={quickActions.duplicateContextEvent} testId="calendar-event-context-duplicate">
             Duplicate
           </ActionButton>
           <ActionButton tone="danger" disabled={menu.busy} onClick={quickActions.requestDelete} testId="calendar-event-context-delete">
-            Delete
+            {deleteLabel}
           </ActionButton>
           <div
             aria-hidden="true"

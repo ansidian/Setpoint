@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarEventSpanOverlay from "./CalendarEventSpanOverlay.jsx";
 import { getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
@@ -99,5 +99,63 @@ describe("CalendarEventSpanOverlay", () => {
       titles[1]?.getAttribute("data-calendar-span-title-fit"),
     );
     expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
+  });
+
+  it("routes modifier-clicks on span segments into the Calendar Event Selection Set", () => {
+    const event = {
+      id: "event-span",
+      title: "Conference",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+      writable: true,
+      color: "#89b4fa",
+    };
+    const toggleEventSelection = vi.fn(() => true);
+    const onSelectSegment = vi.fn();
+    render(
+      <CalendarEventSpanOverlay
+        segments={[{
+          id: "event-span:2026-04-20:2026-04-22",
+          kind: "event",
+          eventId: "event-span",
+          row: 1,
+          columnStart: 2,
+          columnEnd: 5,
+          lane: 0,
+          segmentStart: "2026-04-20",
+          segmentEnd: "2026-04-22",
+          item: event,
+        }]}
+        layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
+        gridRowCount={6}
+        quickActions={{
+          isEventSelectionSelected: (candidate) => candidate?.id === "event-span",
+          toggleEventSelection,
+        }}
+        onSelectSegment={onSelectSegment}
+      />,
+    );
+
+    const segment = screen.getByTestId("calendar-event-span-segment");
+    segment.getBoundingClientRect = () => ({
+      left: 0,
+      right: 300,
+      top: 0,
+      bottom: 36,
+      width: 300,
+      height: 36,
+    });
+    expect(segment.getAttribute("data-calendar-event-selection")).toBe("true");
+
+    fireEvent.click(segment, { ctrlKey: true, clientX: 4 });
+
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event,
+      dateKey: "2026-04-20",
+      anchorKind: "span",
+    }));
+    expect(onSelectSegment).not.toHaveBeenCalled();
   });
 });

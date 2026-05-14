@@ -32,7 +32,7 @@ function clickedSegmentDate(segment, event) {
   return date;
 }
 
-function spanSegmentStyle(segment, layout, selected, active) {
+function spanSegmentStyle(segment, layout, selected, active, batchSelected = false) {
   const { rowTop, height, gap } = spanLaneMetrics(layout);
   const { color } = spanSegmentDisplay(segment);
   const ghost = segment.kind === "ghost";
@@ -47,18 +47,24 @@ function spanSegmentStyle(segment, layout, selected, active) {
     borderRadius: radius,
     border: ghost
       ? `1px dotted color-mix(in srgb, ${color} 54%, transparent)`
+      : batchSelected
+        ? `1px solid color-mix(in srgb, ${color} 70%, rgba(255,255,255,0.16))`
       : selected
         ? `1px solid color-mix(in srgb, ${color} 52%, rgba(255,255,255,0.1))`
         : active
           ? "1px solid rgba(255,255,255,0.13)"
           : "1px solid rgba(255,255,255,0.06)",
-    background: selected
+    background: batchSelected
+      ? `linear-gradient(180deg, color-mix(in srgb, ${color} 24%, transparent), color-mix(in srgb, ${color} 10%, rgba(22,22,30,0.2)))`
+      : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${color} 19%, transparent), color-mix(in srgb, ${color} 9%, transparent))`
       : active
         ? "rgba(255,255,255,0.07)"
         : "rgba(255,255,255,0.035)",
-    color: selected ? "#f6f7fb" : "rgba(205,214,244,0.84)",
-    boxShadow: selected
+    color: selected || batchSelected ? "#f6f7fb" : "rgba(205,214,244,0.84)",
+    boxShadow: batchSelected
+      ? `inset 0 0 0 1px color-mix(in srgb, ${color} 30%, transparent), 0 0 0 1px rgba(255,255,255,0.035)`
+      : selected
       ? `inset 0 1px 0 color-mix(in srgb, ${color} 18%, rgba(255,255,255,0.02))`
       : "none",
     display: "flex",
@@ -77,6 +83,10 @@ function spanSegmentStyle(segment, layout, selected, active) {
     cursor: ghost ? "default" : "pointer",
     transition: "background 140ms, border-color 140ms, box-shadow 140ms, color 140ms",
   };
+}
+
+function isEventSelectionModifier(event) {
+  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 function spanTitleFit(title) {
@@ -123,15 +133,17 @@ export default function CalendarEventSpanOverlay({
         const leadingColumnWidth = getChipLeadingColumnWidth([{ leadingLabel: display.leadingLabel }]);
         const titleFit = spanTitleFit([compactLabel, display.title].filter(Boolean).join(" "));
         const selected = segment.eventId && String(segment.eventId) === String(selectedItemId);
+        const batchSelected = !!quickActions?.isEventSelectionSelected?.(segment.item);
         const active = activeSegmentId === segment.id;
         const commonProps = {
           "data-testid": segment.kind === "ghost" ? "calendar-ghost-chip" : "calendar-event-span-segment",
           "data-calendar-focus-ring": segment.kind === "event" ? "true" : undefined,
           "data-item-id": segment.eventId || undefined,
+          "data-calendar-event-selection": batchSelected ? "true" : undefined,
           "data-segment-start": segment.segmentStart || undefined,
           "data-segment-end": segment.segmentEnd || undefined,
           "data-span-segment-id": segment.id,
-          style: spanSegmentStyle(segment, layout, selected, active),
+          style: spanSegmentStyle(segment, layout, selected, active, batchSelected),
         };
         const content = (
           <span
@@ -243,6 +255,17 @@ export default function CalendarEventSpanOverlay({
             draggable={dragAllowed}
             onClick={(event) => {
               event.stopPropagation();
+              if (isEventSelectionModifier(event)) {
+                event.preventDefault();
+                quickActions?.toggleEventSelection?.({
+                  event: segment.item,
+                  dateKey: clickedSegmentDate(segment, event),
+                  anchorElement: event.currentTarget,
+                  sourceCellElement: event.currentTarget.closest?.("[role='gridcell']") || null,
+                  anchorKind: "span",
+                });
+                return;
+              }
               onSelectSegment?.(segment, {
                 triggerElement: event.currentTarget,
                 dateKey: clickedSegmentDate(segment, event),

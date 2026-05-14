@@ -4,6 +4,8 @@ import "./CalendarModal.test-setup.js";
 import CalendarModal from "./CalendarModal.jsx";
 import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
 
+const { createCalendarEvent, createCalendarEventsBatch } = await import("@/api");
+
 describe("CalendarModal event grid behavior", () => {
   it("renders event rows into the month grid when events exist", () => {
     window.innerWidth = 1900;
@@ -133,7 +135,7 @@ describe("CalendarModal event grid behavior", () => {
   it.each([
     ["Meta", { metaKey: true }],
     ["Control", { ctrlKey: true }],
-  ])("dismisses a selected event chip floating detail when pressing %s", async (key, modifiers) => {
+  ])("seeds a selected event chip into the Calendar Event Selection Set when pressing %s", async (key, modifiers) => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -148,6 +150,70 @@ describe("CalendarModal event grid behavior", () => {
             {
               id: "event-1",
               title: "Design review",
+              accountId: "gmail-main",
+              calendarId: "primary",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+            {
+              id: "event-2",
+              title: "Budget sync",
+              accountId: "gmail-main",
+              calendarId: "primary",
+              startMs: new Date("2026-04-21T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#cba6da",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const firstChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    const secondChip = within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip");
+    fireEvent.click(firstChip);
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key, ...modifiers });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+      expect(firstChip.getAttribute("data-calendar-event-selection")).toBe("true");
+    });
+    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+
+    fireEvent.click(secondChip, modifiers);
+
+    await waitFor(() => {
+      expect(firstChip.getAttribute("data-calendar-event-selection")).toBe("true");
+      expect(secondChip.getAttribute("data-calendar-event-selection")).toBe("true");
+    });
+  });
+
+  it("builds and clears a Calendar Event Selection Set from modifier-clicked grid chips", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              accountId: "gmail-main",
+              calendarId: "primary",
               startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
               endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
               allDay: false,
@@ -161,16 +227,206 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const dayCell = screen.getByTestId("calendar-cell-20");
-    fireEvent.click(within(dayCell).getByTestId("calendar-cell-item-chip"));
-    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+    const eventCell = screen.getByTestId("calendar-cell-20");
+    const chip = within(eventCell).getByTestId("calendar-cell-item-chip");
 
-    fireEvent.keyDown(document, { key, ...modifiers });
+    fireEvent.click(chip, { metaKey: true });
 
     await waitFor(() => {
-      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+      expect(chip.getAttribute("data-calendar-event-selection")).toBe("true");
     });
-    expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
+    expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("calendar-cell-21"), { metaKey: true });
+    expect(chip.getAttribute("data-calendar-event-selection")).toBe("true");
+
+    fireEvent.click(screen.getByTestId("calendar-cell-21"));
+
+    await waitFor(() => {
+      expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
+    });
+  });
+
+  it("copies the seeded selected event with the Calendar Event Selection Set and clears only the visual set after keyboard paste", async () => {
+    window.innerWidth = 1900;
+    const clipboard = {
+      readText: vi.fn(),
+      writeText: vi.fn(),
+    };
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: clipboard,
+    });
+    createCalendarEventsBatch.mockResolvedValue({ created: [], failed: [] });
+    const events = [
+      {
+        id: "event-single-focus",
+        title: "Focused single event",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-20T18:30:00.000Z").getTime(),
+        allDay: false,
+        color: "#4285f4",
+        writable: true,
+      },
+      {
+        id: "event-batch-later",
+        title: "Batch later",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-22T18:00:00.000Z").getTime(),
+        allDay: false,
+        color: "#46d6db",
+        writable: true,
+      },
+      {
+        id: "event-batch-early",
+        title: "Batch early",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-21T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-21T16:30:00.000Z").getTime(),
+        allDay: false,
+        color: "#46d6db",
+        writable: true,
+      },
+    ];
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => events,
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const focusedChip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    fireEvent.click(focusedChip);
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    const laterChip = within(screen.getByTestId("calendar-cell-22")).getByTestId("calendar-cell-item-chip");
+    const earlyChip = within(screen.getByTestId("calendar-cell-21")).getByTestId("calendar-cell-item-chip");
+    expect(laterChip.textContent).toContain("Batch later");
+    expect(earlyChip.textContent).toContain("Batch early");
+    fireEvent.click(laterChip, { metaKey: true });
+    fireEvent.click(earlyChip, { metaKey: true });
+
+    await waitFor(() => {
+      expect(focusedChip.getAttribute("data-calendar-event-selection")).toBe("true");
+      expect(laterChip.getAttribute("data-calendar-event-selection")).toBe("true");
+      expect(earlyChip.getAttribute("data-calendar-event-selection")).toBe("true");
+    });
+
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+    fireEvent.keyDown(document, { key: "v", metaKey: true });
+
+    await waitFor(() => {
+      expect(createCalendarEventsBatch).toHaveBeenCalledTimes(1);
+    });
+    expect(createCalendarEventsBatch).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({
+        title: "Focused single event",
+        startDate: "2026-04-20",
+        endDate: "2026-04-20",
+      }),
+      expect.objectContaining({
+        title: "Batch early",
+        startDate: "2026-04-21",
+        endDate: "2026-04-21",
+      }),
+      expect.objectContaining({
+        title: "Batch later",
+        startDate: "2026-04-22",
+        endDate: "2026-04-22",
+      }),
+    ]);
+    expect(clipboard.readText).not.toHaveBeenCalled();
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(focusedChip.getAttribute("data-calendar-event-selection")).toBeNull();
+      expect(laterChip.getAttribute("data-calendar-event-selection")).toBeNull();
+      expect(earlyChip.getAttribute("data-calendar-event-selection")).toBeNull();
+    });
+
+    fireEvent.keyDown(document, { key: "v", metaKey: true });
+
+    await waitFor(() => {
+      expect(createCalendarEventsBatch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("falls back to the current selected writable event for keyboard copy when the visual selection set is empty", async () => {
+    window.innerWidth = 1900;
+    createCalendarEvent.mockResolvedValue({
+      event: {
+        id: "google-created-single",
+        title: "Focused single event",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-21T18:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-21T18:30:00.000Z").getTime(),
+        allDay: false,
+        writable: true,
+      },
+    });
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          editable: true,
+          getEvents: () => ([
+            {
+              id: "event-single-fallback",
+              title: "Focused single event",
+              accountId: "gmail-main",
+              calendarId: "primary",
+              startMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:30:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+    fireEvent.click(screen.getByTestId("calendar-cell-21"));
+    fireEvent.keyDown(document, { key: "v", metaKey: true });
+
+    await waitFor(() => {
+      expect(createCalendarEvent).toHaveBeenCalledTimes(1);
+    });
+    expect(createCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Focused single event",
+      startDate: "2026-04-21",
+      endDate: "2026-04-21",
+      startTime: "11:00",
+      endTime: "11:30",
+    }));
+    expect(createCalendarEventsBatch).not.toHaveBeenCalled();
   });
 
   it("updates between empty-day selections without remounting the empty rail", async () => {

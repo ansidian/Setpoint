@@ -6,6 +6,7 @@ import { hasUpcomingReminder } from "../reminderDisplay.js";
 function chipStyle({
   item,
   selected,
+  batchSelected = false,
   pastTone,
   active,
   metrics,
@@ -39,6 +40,8 @@ function chipStyle({
     borderRadius: radius,
     border: ghost
       ? `1px dotted color-mix(in srgb, ${accent} 54%, transparent)`
+      : batchSelected
+      ? `1px solid color-mix(in srgb, ${accent} 68%, rgba(255,255,255,0.16))`
       : selected
       ? `1px solid color-mix(in srgb, ${accent} 48%, rgba(255,255,255,0.08))`
       : active
@@ -46,19 +49,23 @@ function chipStyle({
       : quiet
         ? "1px solid rgba(255,255,255,0.035)"
         : "1px solid rgba(255,255,255,0.045)",
-    background: selected
+    background: batchSelected
+      ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 24%, transparent), color-mix(in srgb, ${accent} 10%, rgba(22,22,30,0.2)))`
+      : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 18%, transparent), color-mix(in srgb, ${accent} 8%, transparent))`
       : active
         ? "rgba(255,255,255,0.065)"
       : quiet
         ? "rgba(255,255,255,0.018)"
         : "rgba(255,255,255,0.03)",
-    boxShadow: selected
+    boxShadow: batchSelected
+      ? `inset 0 0 0 1px color-mix(in srgb, ${accent} 30%, transparent), 0 0 0 1px rgba(255,255,255,0.035)`
+      : selected
       ? `inset 0 1px 0 color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.02))`
       : active
         ? "inset 0 1px 0 rgba(255,255,255,0.04)"
         : "none",
-    color: selected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
+    color: selected || batchSelected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
     cursor: ghost ? "default" : "pointer",
     pointerEvents: ghost ? "none" : "auto",
     opacity: isPast ? (selected ? 0.92 : 0.82) : quiet ? 0.88 : 1,
@@ -116,6 +123,10 @@ function chipContentFit(item, metrics) {
 function metadataColor(item, selected) {
   if (selected) return item.leadingColor || item.accent || "var(--ea-accent)";
   return item.leadingColor || "rgba(205,214,244,0.62)";
+}
+
+function isEventSelectionModifier(event) {
+  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 export function CalendarChipStatusIcon({ item, selected, metrics }) {
@@ -373,6 +384,7 @@ export function ItemChip({
   const layoutId = !reducedMotion && item.layoutId ? String(item.layoutId) : undefined;
   const selectionId = item.selectionId != null ? String(item.selectionId) : String(item.id);
   const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+  const batchSelected = !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
 
   if (ghost) {
     return (
@@ -386,6 +398,7 @@ export function ItemChip({
         style={chipStyle({
           item,
           selected: false,
+          batchSelected: false,
           pastTone,
           active: false,
           metrics,
@@ -413,10 +426,22 @@ export function ItemChip({
       data-calendar-layout-id={layoutId}
       data-date-key={dateKey || undefined}
       data-hovered={active ? "true" : "false"}
+      data-calendar-event-selection={batchSelected ? "true" : undefined}
       draggable={dragAllowed}
       data-calendar-focus-ring="true"
       onClick={(event) => {
         event.stopPropagation();
+        if (isEventSelectionModifier(event)) {
+          event.preventDefault();
+          quickActions?.toggleEventSelection?.({
+            event: item.sourceEvent || item.sourceItem,
+            dateKey,
+            anchorElement: event.currentTarget,
+            sourceCellElement: stackRef?.current?.closest?.("[role='gridcell']") || null,
+            anchorKind: inlineOverflowItem ? "overflow-row" : "chip",
+          });
+          return;
+        }
         onSelectItem?.(selectionId, {
           triggerElement: event.currentTarget,
           sourceCellElement: stackRef?.current?.closest?.("[role='gridcell']") || null,
@@ -471,6 +496,7 @@ export function ItemChip({
       style={chipStyle({
         item,
         selected,
+        batchSelected,
         pastTone,
         active,
         metrics,

@@ -24,6 +24,7 @@ export default function useCalendarGridEffects({
   gridShellRef,
   ignoreOverflowScrollUntilRef,
   layout,
+  eventSelectionActive = false,
   navigateMonth,
   onReanchorFloatingDetail,
   resolvedOverflow,
@@ -52,6 +53,7 @@ export default function useCalendarGridEffects({
   useEffect(() => {
     if (resolvedOverflow?.mode !== "inline") return undefined;
     function handlePointerDown(event) {
+      if (eventSelectionActive) return;
       if (resolvedOverflow.sourceCellElement?.contains(event.target)) return;
       if (resolvedOverflow.triggerElement?.contains(event.target)) return;
       if (isCalendarInlineOverflowTarget(event.target)) return;
@@ -67,7 +69,7 @@ export default function useCalendarGridEffects({
     }
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [gridShellRef, resolvedOverflow, setOverflowState]);
+  }, [eventSelectionActive, gridShellRef, resolvedOverflow, setOverflowState]);
 
   useEffect(() => {
     if (!floatingDetailParked) return;
