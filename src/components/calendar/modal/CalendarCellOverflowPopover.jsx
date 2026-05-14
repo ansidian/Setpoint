@@ -50,6 +50,7 @@ function itemButtonStyle({
   selected,
   active,
   ghost,
+  batchSelected = false,
 }) {
   return {
     position: "relative",
@@ -61,17 +62,23 @@ function itemButtonStyle({
     borderRadius: 10,
     border: ghost
       ? `1px dotted color-mix(in srgb, ${accent} 54%, transparent)`
+      : batchSelected
+      ? `1px solid color-mix(in srgb, ${accent} 68%, rgba(255,255,255,0.16))`
       : selected
       ? `1px solid color-mix(in srgb, ${accent} 42%, rgba(255,255,255,0.08))`
       : active
         ? "1px solid rgba(255,255,255,0.12)"
         : "1px solid rgba(255,255,255,0.05)",
-    background: selected
+    background: batchSelected
+      ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 22%, transparent), color-mix(in srgb, ${accent} 9%, rgba(22,22,30,0.2)))`
+      : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, transparent), color-mix(in srgb, ${accent} 6%, transparent))`
       : active
         ? "rgba(255,255,255,0.062)"
         : "rgba(255,255,255,0.024)",
-    boxShadow: active && !selected
+    boxShadow: batchSelected
+      ? `inset 0 0 0 1px color-mix(in srgb, ${accent} 28%, transparent), 0 0 0 1px rgba(255,255,255,0.035)`
+      : active && !selected
       ? "inset 0 1px 0 rgba(255,255,255,0.04)"
       : "none",
     color: "#eef2ff",
@@ -81,6 +88,10 @@ function itemButtonStyle({
     textAlign: "left",
     transition: "border-color 140ms, background 140ms, box-shadow 140ms",
   };
+}
+
+function isEventSelectionModifier(event) {
+  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 function OverflowMetadata({ item, selected, accent, leadingColumnWidth }) {
@@ -195,6 +206,7 @@ export default function CalendarCellOverflowPopover({
   useEffect(() => {
     if (!popover) return undefined;
     function handlePointerDown(event) {
+      if (quickActions?.eventSelectionActive) return;
       if (isOverflowTriggerTarget(event.target)) return;
       if (popover.triggerElement?.contains(event.target)) return;
       if (popoverRef.current?.contains(event.target)) return;
@@ -205,7 +217,7 @@ export default function CalendarCellOverflowPopover({
     }
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [popover, onClose]);
+  }, [popover, onClose, quickActions?.eventSelectionActive]);
 
   useEffect(() => {
     if (!popover) return undefined;
@@ -359,6 +371,7 @@ export default function CalendarCellOverflowPopover({
               const active = !ghost && itemId === String(activeItemId);
               const accent = item.accent || "var(--ea-accent)";
               const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+              const batchSelected = !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
               const Shell = ghost ? "div" : "button";
 
               return (
@@ -369,9 +382,22 @@ export default function CalendarCellOverflowPopover({
                   data-item-id={itemId}
                   data-date-key={popover.dateKey || undefined}
                   data-hovered={active ? "true" : "false"}
+                  data-calendar-event-selection={batchSelected ? "true" : undefined}
                   draggable={dragAllowed}
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (isEventSelectionModifier(event)) {
+                      event.preventDefault();
+                      quickActions?.toggleEventSelection?.({
+                        event: item.sourceEvent || item.sourceItem,
+                        dateKey: popover.dateKey || null,
+                        anchorElement: event.currentTarget,
+                        sourceCellElement: popover.sourceCellElement || null,
+                        exclusionElement: popoverRef.current,
+                        anchorKind: "overflow-row",
+                      });
+                      return;
+                    }
                     onSelectItem?.(item.id, {
                       triggerElement: event.currentTarget,
                       sourceCellElement: popover.sourceCellElement || null,
@@ -436,6 +462,7 @@ export default function CalendarCellOverflowPopover({
                       selected,
                       active,
                       ghost,
+                      batchSelected,
                     }),
                     display: "grid",
                     gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",

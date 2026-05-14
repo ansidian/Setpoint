@@ -220,6 +220,7 @@ export default function CalendarGrid({
     if (view === "deadlines") {
       setDeadlineEditor(null);
     }
+    if (eventDateCells) eventQuickActions?.clearEventSelection?.();
 
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
@@ -249,6 +250,7 @@ export default function CalendarGrid({
     if (view === "deadlines") {
       setDeadlineEditor(null);
     }
+    if (eventDateCells) eventQuickActions?.clearEventSelection?.();
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(itemId != null ? String(itemId) : null);
@@ -381,6 +383,7 @@ export default function CalendarGrid({
     gridShellRef,
     ignoreOverflowScrollUntilRef,
     layout,
+    eventSelectionActive: !!eventQuickActions?.eventSelectionActive,
     navigateMonth,
     onReanchorFloatingDetail,
     resolvedOverflow,

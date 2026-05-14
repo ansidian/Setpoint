@@ -3,11 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api", () => ({
   createCalendarEvent: vi.fn(),
+  createCalendarEventsBatch: vi.fn(),
   deleteCalendarEvent: vi.fn(),
   updateCalendarEvent: vi.fn(),
 }));
 
-const { createCalendarEvent, deleteCalendarEvent } = await import("@/api");
+const { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent } = await import("@/api");
 const {
   default: useCalendarQuickActions,
   buildCloneEventPayload,
@@ -15,6 +16,10 @@ const {
   buildOptimisticCloneEvent,
   buildReschedulePayload,
 } = await import("./useCalendarQuickActions");
+const {
+  createCalendarEventClipboard,
+  createCalendarEventSelectionSet,
+} = await import("./calendarEventSelectionModel.js");
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -186,6 +191,95 @@ describe("useCalendarQuickActions helpers", () => {
 });
 
 describe("useCalendarQuickActions clone races", () => {
+  it("pastes multi-event internal clipboards through batch create and removes failed optimistic rows without retry", async () => {
+    createCalendarEventsBatch.mockResolvedValue({
+      created: [
+        {
+          index: 0,
+          event: {
+            id: "google-created-first",
+            title: "First copied event",
+            accountId: "gmail-main",
+            calendarId: "primary",
+            startMs: new Date("2026-06-01T16:00:00.000Z").getTime(),
+            endMs: new Date("2026-06-01T16:30:00.000Z").getTime(),
+            allDay: false,
+            writable: true,
+          },
+        },
+      ],
+      failed: [
+        {
+          index: 1,
+          message: "Provider rejected the second event.",
+        },
+      ],
+    });
+    const first = {
+      id: "event-copy-first",
+      title: "First copied event",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-18T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-18T16:30:00.000Z").getTime(),
+      allDay: false,
+      writable: true,
+    };
+    const second = {
+      id: "event-copy-second",
+      title: "Second copied event",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-20T17:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-20T18:00:00.000Z").getTime(),
+      allDay: false,
+      writable: true,
+      colorId: "7",
+    };
+    const clipboard = createCalendarEventClipboard(createCalendarEventSelectionSet([second, first]));
+    const upsertEvents = vi.fn();
+    const removeEvent = vi.fn();
+    const onSelectEvent = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents,
+      removeEvent,
+      onSelectEvent,
+    }));
+
+    await act(async () => {
+      await result.current.pasteEvent(clipboard, "2026-06-01");
+    });
+
+    expect(createCalendarEventsBatch).toHaveBeenCalledTimes(1);
+    expect(createCalendarEventsBatch).toHaveBeenCalledWith([
+      expect.objectContaining({
+        title: "First copied event",
+        startDate: "2026-06-01",
+        endDate: "2026-06-01",
+        startTime: "09:00",
+        endTime: "09:30",
+      }),
+      expect.objectContaining({
+        title: "Second copied event",
+        startDate: "2026-06-03",
+        endDate: "2026-06-03",
+        startTime: "10:00",
+        endTime: "11:00",
+        colorId: "7",
+      }),
+    ]);
+    expect(createCalendarEvent).not.toHaveBeenCalled();
+    const optimisticEvents = upsertEvents.mock.calls
+      .map(([event]) => event)
+      .filter((event) => String(event.id).startsWith("optimistic-calendar-copy-"));
+    expect(optimisticEvents).toHaveLength(2);
+    expect(removeEvent).toHaveBeenCalledWith(optimisticEvents[0].id);
+    expect(removeEvent).toHaveBeenCalledWith(optimisticEvents[1].id);
+    expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({ id: "google-created-first" }));
+    expect(onSelectEvent).toHaveBeenCalledWith("google-created-first", "2026-06-01");
+  });
+
   it("treats deleting a pending optimistic clone as cancellation until the provider create reconciles", async () => {
     let resolveCreate;
     createCalendarEvent.mockReturnValue(new Promise((resolve) => {

@@ -4,6 +4,18 @@ import deadlinesView from "../../components/calendar/views/deadlinesView.jsx";
 import eventsView from "../../components/calendar/views/eventsView.jsx";
 import { getCalendarLayoutMetrics } from "../../components/calendar/calendarLayout.js";
 import useCalendarEventEditor from "../../components/calendar/events/useCalendarEventEditor.js";
+import {
+  addCalendarEventSelection,
+  calendarEventSelectionIdentity,
+  calendarEventSelectionSize,
+  clearCalendarEventSelection,
+  createCalendarEventClipboard,
+  createCalendarEventSelectionSet,
+  getOrderedCalendarEventSelection,
+  isCalendarEventSelected,
+  resolveCalendarEventActionScope,
+  toggleCalendarEventSelection,
+} from "../../components/calendar/events/calendarEventSelectionModel.js";
 import useCalendarQuickActions from "../../components/calendar/events/useCalendarQuickActions.js";
 import useDeadlineQuickActions from "../../components/calendar/views/deadlines/useDeadlineQuickActions.js";
 import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
@@ -371,6 +383,17 @@ export default function useCalendarModalController({
   const eventsStaleRefreshPending = !!eventsData?.staleRefreshPending;
   const eventsRevision = eventsData?.revision;
   const [calendarEventClipboard, setCalendarEventClipboard] = useState(null);
+  const [calendarEventSelectionSet, setCalendarEventSelectionSet] = useState(() => createCalendarEventSelectionSet());
+  const calendarEventSelectionRef = useRef(calendarEventSelectionSet);
+  useEffect(() => {
+    calendarEventSelectionRef.current = calendarEventSelectionSet;
+  }, [calendarEventSelectionSet]);
+  const calendarEventSelectionCount = calendarEventSelectionSize(calendarEventSelectionSet);
+  const clearCalendarEventSelectionSet = useCallback(() => {
+    setCalendarEventSelectionSet((current) => (
+      calendarEventSelectionSize(current) > 0 ? clearCalendarEventSelection() : current
+    ));
+  }, []);
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -746,15 +769,37 @@ export default function useCalendarModalController({
   }, [activeSelectedItemId, activeView, view, viewData?.events]);
 
   const copyCalendarEvent = useCallback((event) => {
-    if (!event?.startMs || !event?.calendarId || !event?.accountId) return false;
-    setCalendarEventClipboard({ ...event });
+    const clipboard = createCalendarEventClipboard(event);
+    if (!clipboard) return false;
+    setCalendarEventClipboard(clipboard);
     setFloatingDetail(null);
     return true;
   }, [setFloatingDetail]);
 
   const copySelectedCalendarEvent = useCallback(() => {
-    copyCalendarEvent(resolveSelectedCalendarEvent());
-  }, [copyCalendarEvent, resolveSelectedCalendarEvent]);
+    const selectionClipboard = createCalendarEventClipboard(calendarEventSelectionRef.current);
+    if (selectionClipboard) {
+      setCalendarEventClipboard(selectionClipboard);
+      setFloatingDetail(null);
+      return true;
+    }
+    return copyCalendarEvent(resolveSelectedCalendarEvent());
+  }, [copyCalendarEvent, resolveSelectedCalendarEvent, setFloatingDetail]);
+
+  const addSelectedCalendarEventToSelectionSet = useCallback(() => {
+    const selectedEvent = resolveSelectedCalendarEvent();
+    if (!calendarEventSelectionIdentity(selectedEvent)) return false;
+    closeEventEditor();
+    setFloatingDetail(null);
+    setSelectedItemId(null);
+    setCalendarEventSelectionSet((selection) => addCalendarEventSelection(selection, selectedEvent));
+    return true;
+  }, [
+    closeEventEditor,
+    resolveSelectedCalendarEvent,
+    setFloatingDetail,
+    setSelectedItemId,
+  ]);
 
   useEffect(() => {
     if (!shouldForceDeadlineOverlay({ open, view, forceDeadlineOverlay })) return;
@@ -818,13 +863,19 @@ export default function useCalendarModalController({
     writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, previous.storedCompletedDeadlineOverlayVisible);
   }, [open]);
 
-  const eventQuickActions = useCalendarQuickActions({
+  const resolveContextEventActionScope = useCallback((event) => (
+    resolveCalendarEventActionScope(calendarEventSelectionSet, event)
+  ), [calendarEventSelectionSet]);
+
+  const baseEventQuickActions = useCalendarQuickActions({
     editable: eventsEditable,
     layout: activeLayout,
     refreshRange: eventsRefreshRange,
     upsertEvents: eventsUpsertEvents,
     removeEvent: eventsRemoveEvent,
     onCopyEvent: copyCalendarEvent,
+    onBatchDeleted: clearCalendarEventSelectionSet,
+    resolveEventActionScope: resolveContextEventActionScope,
     onSelectEvent: (itemId, dateKey) => {
       const parsed = parseYmd(dateKey);
       if (parsed) {
@@ -847,10 +898,70 @@ export default function useCalendarModalController({
     },
   });
 
+  const toggleCalendarEventSelectionSet = useCallback(({ event } = {}) => {
+    if (view !== "events") return false;
+    const eventIdentity = calendarEventSelectionIdentity(event);
+    if (!eventIdentity) return false;
+    const selectedEvent = resolveSelectedCalendarEvent();
+    const selectedIdentity = calendarEventSelectionIdentity(selectedEvent);
+    const current = floatingDetailRef.current;
+    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
+      shakeFloatingEditor();
+      return true;
+    }
+    closeEventEditor();
+    setFloatingDetail(null);
+    setSelectedItemId(null);
+    setCalendarEventSelectionSet((selection) => {
+      const seededSelection = calendarEventSelectionSize(selection) === 0
+        && selectedIdentity
+        && selectedIdentity !== eventIdentity
+        ? addCalendarEventSelection(selection, selectedEvent)
+        : selection;
+      return toggleCalendarEventSelection(seededSelection, event);
+    });
+    return true;
+  }, [
+    closeEventEditor,
+    floatingDetailRef,
+    resolveSelectedCalendarEvent,
+    setFloatingDetail,
+    setSelectedItemId,
+    shakeFloatingEditor,
+    view,
+  ]);
+
+  const eventQuickActions = useMemo(() => ({
+    ...baseEventQuickActions,
+    eventSelectionActive: calendarEventSelectionCount > 0,
+    eventSelectionCount: calendarEventSelectionCount,
+    clearEventSelection: clearCalendarEventSelectionSet,
+    isEventSelectionSelected: (event) => isCalendarEventSelected(calendarEventSelectionSet, event),
+    toggleEventSelection: toggleCalendarEventSelectionSet,
+  }), [
+    baseEventQuickActions,
+    calendarEventSelectionCount,
+    calendarEventSelectionSet,
+    clearCalendarEventSelectionSet,
+    toggleCalendarEventSelectionSet,
+  ]);
+
+  const requestSelectedCalendarEventDelete = useCallback(() => {
+    const events = getOrderedCalendarEventSelection(calendarEventSelectionRef.current);
+    if (!events.length) return false;
+    return !!eventQuickActions.requestBatchDelete?.({ events });
+  }, [eventQuickActions]);
+
   const pasteCopiedCalendarEvent = useCallback(() => {
     if (!calendarEventClipboard || !activeSelectedDateKey) return;
-    eventQuickActions.pasteEvent?.(calendarEventClipboard, activeSelectedDateKey);
-  }, [activeSelectedDateKey, calendarEventClipboard, eventQuickActions]);
+    const pasteResult = eventQuickActions.pasteEvent?.(calendarEventClipboard, activeSelectedDateKey);
+    if (pasteResult) clearCalendarEventSelectionSet();
+  }, [
+    activeSelectedDateKey,
+    calendarEventClipboard,
+    clearCalendarEventSelectionSet,
+    eventQuickActions,
+  ]);
 
   const deadlineQuickActions = useDeadlineQuickActions({
     enabled: open && (view === "deadlines" || (view === "events" && deadlineOverlayVisible)),
@@ -969,7 +1080,10 @@ export default function useCalendarModalController({
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);
     setSelectedItemId(null);
-    if (!passive) agendaSelectionAnchorRef.current = null;
+    if (!passive) {
+      agendaSelectionAnchorRef.current = null;
+      clearCalendarEventSelectionSet();
+    }
     if (view === "deadlines") setDeadlineEditor(null);
   }
 
@@ -985,6 +1099,7 @@ export default function useCalendarModalController({
       return;
     }
     closeEventEditor();
+    clearCalendarEventSelectionSet();
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);
     const itemId = activeView.getItemId ? activeView.getItemId(selectedItem) : selectedItem.id;
@@ -1570,6 +1685,8 @@ export default function useCalendarModalController({
     navigateMonthRef,
     onCopySelectedEvent: copySelectedCalendarEvent,
     onPasteCopiedEvent: pasteCopiedCalendarEvent,
+    onDeleteSelectedEvents: requestSelectedCalendarEventDelete,
+    onBeginEventSelectionSetFromSelected: addSelectedCalendarEventToSelectionSet,
     openCalendarSearch: calendarSearch.openSearch,
   });
 

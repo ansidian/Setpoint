@@ -100,6 +100,14 @@ _Avoid_: Submit-only search, search-all-empty-query
 The keyboard interaction model for opening, navigating, activating, and closing **Calendar Search**.
 _Avoid_: Calendar hotkeys inside search input, Tab search mode
 
+**Calendar Event Selection Set**:
+A transient set of selected Google Calendar events used for batch calendar actions within the Events workspace.
+_Avoid_: Multi-select chips, selected deadlines, bulk edit set
+
+**Calendar Event Clipboard**:
+A modal-local copied event payload used to paste one or more Google Calendar events inside the calendar workspace.
+_Avoid_: OS clipboard, exported calendar data
+
 **Search Results Rail**:
 A slim calendar side rail that lists **Calendar Search** results separately from the agenda rail.
 _Avoid_: Search drawer, search modal
@@ -156,6 +164,27 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - **Calendar Search Typeahead** keeps prior results visible while the next request is pending and ignores stale responses.
 - **Calendar Search Keyboarding** opens search with Cmd/Ctrl+F, uses Up/Down to move the highlighted result while focus stays in the input, Enter to activate, and Escape to clear the query before closing an already-empty rail.
 - **Calendar Search Keyboarding** suspends calendar single-key hotkeys while the search input is focused.
+- A **Calendar Event Selection Set** is separate from the single selected calendar item that opens detail, and it contains only writable Google Calendar events.
+- Modifier-clicking a selected Google Calendar event toggles its membership in the **Calendar Event Selection Set**.
+- A **Calendar Event Selection Set** has a distinct visual state from the single selected calendar item that opens detail.
+- A **Calendar Event Selection Set** can be changed from any eligible Google event representation in the Events workspace, including grid chips, overflow chips, span segments, and agenda rows.
+- A **Calendar Event Selection Set** identifies recurring Google Calendar occurrences separately from their series and treats a multi-day non-recurring event as one event.
+- A **Calendar Event Selection Set** is built by explicit modifier toggles, not range selection.
+- Context-menu copy, delete, and color actions apply to the **Calendar Event Selection Set** when opened from an event inside the set; outside the set they apply only to the context event.
+- Batch delete and color actions on a **Calendar Event Selection Set** affect selected recurring occurrences only, not broader recurring series scopes.
+- Batch delete of a **Calendar Event Selection Set**, including keyboard-initiated delete, requires confirmation before deletion.
+- Batch delete clears the **Calendar Event Selection Set** after completion, while batch color leaves the set selected.
+- Dirty calendar editor protection takes precedence over changing a **Calendar Event Selection Set**.
+- Ordinary single-item calendar selection replaces a **Calendar Event Selection Set**, but modifier-held day clicks do not; month navigation alone does not.
+- While building a **Calendar Event Selection Set**, overflow panels are selection helpers: opening overflow does not clear the set, and outside clicks do not dismiss overflow.
+- Copying a **Calendar Event Selection Set** creates a **Calendar Event Clipboard** inside EA Dashboard rather than writing event data to the operating-system clipboard.
+- A non-empty **Calendar Event Selection Set** takes precedence over single selected event detail when copying.
+- Pasting a **Calendar Event Clipboard** preserves the selected events' relative date offsets from the earliest copied event date.
+- A **Calendar Event Clipboard** pastes onto the calendar's active selected date.
+- A **Calendar Event Clipboard** is ordered by source event date and time, not by click order.
+- Pasting a **Calendar Event Clipboard** clears the **Calendar Event Selection Set** while leaving the copied clipboard available for later paste.
+- Pasting recurring events from a **Calendar Event Clipboard** creates standalone Google Calendar events, not new recurring series.
+- Copying and pasting a **Calendar Event Clipboard** is a silent power-user flow; partial failures do not roll back successful Google Calendar creates and do not automatically retry.
 - A **Search Results Rail** is not the agenda rail; choosing a result should route through the existing calendar selection and detail behavior.
 - A **Search Results Rail** uses agenda-like date headers and source-colored result markers; it should not render standalone source-type text when a more specific result detail such as event location, course/project, or bill metadata is available.
 - A **Search Results Rail** dims result rows dated before today in the dashboard timezone, but date headers remain full-strength timeline anchors.
@@ -184,3 +213,6 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - "Left search rail" was resolved as a **Three-Rail Calendar Workspace** on desktop, with responsive fallback only for constrained layouts.
 - "Typing in calendar search" was resolved as **Calendar Search Typeahead**, not an Enter-to-submit flow.
 - "Calendar search keyboard behavior" was resolved as **Calendar Search Keyboarding**, with search input focus suspending the modal's single-key calendar hotkeys.
+- "Multi-select chip events" was resolved as a **Calendar Event Selection Set**, not an extension of single-item detail selection or deadline overlay selection.
+- "Cmd-C/Cmd-V for selected event chips" was resolved as a **Calendar Event Clipboard**, not integration with the operating-system clipboard.
+- "Retry failed multi-event paste creates" was rejected for the initial **Calendar Event Clipboard** because duplicate-safe create idempotency is out of scope.

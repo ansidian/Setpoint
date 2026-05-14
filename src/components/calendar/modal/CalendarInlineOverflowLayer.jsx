@@ -6,7 +6,7 @@ import {
 } from "./CalendarCellItemChip.jsx";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
-function inlineOverflowItemStyle({ item, selected, active }) {
+function inlineOverflowItemStyle({ item, selected, active, batchSelected = false }) {
   const accent = item.accent || "var(--ea-accent)";
   const quiet = item.complete || item.quiet;
   return {
@@ -20,26 +20,34 @@ function inlineOverflowItemStyle({ item, selected, active }) {
     padding: "4px 10px",
     overflow: "hidden",
     borderRadius: 10,
-    border: selected
+    border: batchSelected
+      ? `1px solid color-mix(in srgb, ${accent} 68%, rgba(255,255,255,0.16))`
+      : selected
       ? `1px solid color-mix(in srgb, ${accent} 48%, rgba(255,255,255,0.08))`
       : active
         ? "1px solid rgba(255,255,255,0.12)"
         : quiet
           ? "1px solid rgba(255,255,255,0.035)"
           : "1px solid rgba(255,255,255,0.045)",
-    background: selected
+    background: batchSelected
+      ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 24%, transparent), color-mix(in srgb, ${accent} 10%, rgba(22,22,30,0.2)))`
+      : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 18%, transparent), color-mix(in srgb, ${accent} 8%, transparent))`
       : active
         ? "rgba(255,255,255,0.065)"
         : quiet
           ? "rgba(255,255,255,0.018)"
           : "rgba(255,255,255,0.03)",
-    color: selected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
+    color: selected || batchSelected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
     cursor: "pointer",
     textAlign: "left",
     fontFamily: "inherit",
     transition: "background 140ms, border-color 140ms, color 140ms",
   };
+}
+
+function isEventSelectionModifier(event) {
+  return !!(event?.metaKey || event?.ctrlKey);
 }
 
 function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {
@@ -213,6 +221,7 @@ export default function CalendarInlineOverflowLayer({
       {overflow.items.map((item) => {
         const itemId = String(item.id);
         const selected = itemId === String(selectedItemId);
+        const batchSelected = !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
         const active = itemId === String(activeItemId);
         const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
         return (
@@ -224,10 +233,23 @@ export default function CalendarInlineOverflowLayer({
             data-item-id={itemId}
             data-date-key={overflow.dateKey || undefined}
             data-hovered={active ? "true" : "false"}
+            data-calendar-event-selection={batchSelected ? "true" : undefined}
             draggable={dragAllowed}
             data-calendar-focus-ring="true"
             onClick={(event) => {
               event.stopPropagation();
+              if (isEventSelectionModifier(event)) {
+                event.preventDefault();
+                quickActions?.toggleEventSelection?.({
+                  event: item.sourceEvent || item.sourceItem,
+                  dateKey: overflow.dateKey || null,
+                  anchorElement: event.currentTarget,
+                  sourceCellElement: overflow.sourceCellElement || null,
+                  exclusionElement: layerRef.current,
+                  anchorKind: "overflow-row",
+                });
+                return;
+              }
               onSelectItem?.(item.id, {
                 triggerElement: event.currentTarget,
                 sourceCellElement: overflow.sourceCellElement || null,
@@ -281,7 +303,7 @@ export default function CalendarInlineOverflowLayer({
             onPointerLeave={() => setActiveItemId((current) => (current === itemId ? null : current))}
             onFocus={() => setActiveItemId(itemId)}
             onBlur={() => setActiveItemId((current) => (current === itemId ? null : current))}
-            style={inlineOverflowItemStyle({ item, selected, active })}
+            style={inlineOverflowItemStyle({ item, selected, active, batchSelected })}
           >
             <InlineOverflowChipContent
               item={item}

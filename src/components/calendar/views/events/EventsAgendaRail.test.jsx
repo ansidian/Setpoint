@@ -77,6 +77,53 @@ describe("EventsAgendaRail", () => {
     }));
   });
 
+  it("routes modifier-clicks on timed rows and all-day chips into the Calendar Event Selection Set", () => {
+    const toggleEventSelection = vi.fn(() => true);
+    const onEventAction = vi.fn();
+    renderRail({
+      onEventAction,
+      events: [
+        event({
+          id: "timed-event",
+          title: "Planning block",
+          start: "2026-05-04T16:00:00.000Z",
+          end: "2026-05-04T17:00:00.000Z",
+        }),
+        event({
+          id: "all-day-event",
+          title: "Conference",
+          allDay: true,
+          start: "2026-05-05T07:00:00.000Z",
+          end: "2026-05-06T07:00:00.000Z",
+        }),
+      ],
+      eventQuickActions: {
+        isEventSelectionSelected: (candidate) => candidate?.id === "timed-event" || candidate?.id === "all-day-event",
+        toggleEventSelection,
+      },
+    });
+
+    const row = screen.getByTestId("calendar-agenda-event-row");
+    const chip = screen.getByTestId("calendar-agenda-event-chip");
+    expect(row.getAttribute("data-calendar-event-selection")).toBe("true");
+    expect(chip.getAttribute("data-calendar-event-selection")).toBe("true");
+
+    fireEvent.click(row, { metaKey: true });
+    fireEvent.click(chip, { ctrlKey: true });
+
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ id: "timed-event" }),
+      dateKey: "2026-05-04",
+      anchorKind: "agenda-row",
+    }));
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ id: "all-day-event" }),
+      dateKey: "2026-05-05",
+      anchorKind: "agenda-chip",
+    }));
+    expect(onEventAction).not.toHaveBeenCalled();
+  });
+
   it("exposes alternate event ids for agenda reanchoring after saves", () => {
     renderRail({
       selectedDateKey: "2026-05-04",
