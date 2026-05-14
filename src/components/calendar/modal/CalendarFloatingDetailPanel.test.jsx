@@ -408,6 +408,89 @@ describe("CalendarFloatingDetailPanel", () => {
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-x-type")).toBe("spring");
   });
 
+  it("does not reuse the first reveal snap when the user flips after the panel is visible", async () => {
+    const calendarPanel = appendRectElement({
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 900,
+      width: 900,
+      height: 900,
+    });
+    const anchorElement = appendRectElement({
+      top: 400,
+      left: 380,
+      right: 420,
+      bottom: 424,
+      width: 40,
+      height: 24,
+    });
+    const makeDetail = ({ forcedSide = null, sideIntent = "auto" } = {}) => ({
+      open: true,
+      mode: "detail",
+      placementKey: "event-placement-visible-flip",
+      view: "events",
+      itemId: "event-1",
+      dateKey: "2026-04-20",
+      anchorElement,
+      sourceCellElement: anchorElement,
+      exclusionElement: null,
+      anchorKind: "chip",
+      preferredSide: null,
+      forcedSide,
+      sideIntent,
+      parked: false,
+      userDragged: false,
+      initialPlacement: resolveFloatingDetailPlacement({
+        anchorRect: anchorElement.getBoundingClientRect(),
+        sourceRect: anchorElement.getBoundingClientRect(),
+        exclusionRect: null,
+        calendarRect: calendarPanel.getBoundingClientRect(),
+        railRect: null,
+        panelHeight: 300,
+        mode: "detail",
+        forcedSide,
+        allowRailOverlap: sideIntent === "user-flip",
+      }),
+    });
+
+    const { rerender } = render(
+      <CalendarFloatingDetailPanel
+        detail={makeDetail()}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Design review</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-opacity")).toBe("1");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-x-duration")).toBe("0.01");
+
+    rerender(
+      <CalendarFloatingDetailPanel
+        detail={makeDetail({ forcedSide: "left", sideIntent: "user-flip" })}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Design review</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-x-type")).toBe("spring");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-y-type")).toBe("spring");
+  });
+
   it("keeps chip-to-chip repositions visible after the panel has measured once", async () => {
     const calendarPanel = appendRectElement({
       top: 0,
