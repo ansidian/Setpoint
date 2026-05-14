@@ -66,6 +66,7 @@ describe("useTriageNotificationSounds", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    vi.useRealTimers();
     sessionStorage.clear();
   });
 
@@ -259,5 +260,37 @@ describe("useTriageNotificationSounds", () => {
       expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
       expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/smooth-modern.mp3");
     });
+  });
+
+  it("schedules the upcoming calendar sound when an event enters the 15-minute window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-06T17:00:00.000Z"));
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await act(async () => {});
+
+    act(() => {
+      result.current.handleCalendarSnapshot({
+        lastFetched: "2026-05-06T17:00:00.000Z",
+        liveCalendar: [{
+          id: "event-1",
+          title: "Class",
+          startMs: Date.now() + 16 * 60 * 1000,
+        }],
+      });
+    });
+
+    expect(globalThis.Audio).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60 * 1000);
+    });
+
+    expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
   });
 });
