@@ -12,6 +12,8 @@ export const CALENDAR_FULL_SCOPE = "https://www.googleapis.com/auth/calendar";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_BIRTHDAY_SOURCE_LABEL = "Birthdays";
+const GOOGLE_BIRTHDAY_SOURCE_COLOR = "#ff887c";
 
 class CalendarServiceError extends Error {
   constructor(status, code, message, details = {}) {
@@ -585,6 +587,51 @@ function recurrenceKindForEvent(event) {
   return null;
 }
 
+function normalizeGoogleEventType(event) {
+  return String(event?.eventType || "default");
+}
+
+function normalizeBirthdayProperties(value) {
+  if (!value) return null;
+  return {
+    type: value.type || "birthday",
+    customTypeName: value.customTypeName || "",
+    contact: value.contact || "",
+  };
+}
+
+function googleEventReadOnlyReason(event) {
+  const eventType = normalizeGoogleEventType(event);
+  if (eventType === "default") return null;
+  return eventType === "birthday" ? "birthday" : "google_event_type";
+}
+
+function googleEventDisplaySource(event, calendar, account) {
+  if (normalizeGoogleEventType(event) === "birthday") {
+    return {
+      label: GOOGLE_BIRTHDAY_SOURCE_LABEL,
+      color: GOOGLE_BIRTHDAY_SOURCE_COLOR,
+    };
+  }
+  return {
+    label: calendar.summary,
+    color: calendar.backgroundColor || account.color || "#4285f4",
+  };
+}
+
+function assertMutableGoogleEvent(event) {
+  const reason = googleEventReadOnlyReason(event);
+  if (!reason) return;
+  throwCalendarError(
+    403,
+    "calendar_event_read_only",
+    reason === "birthday"
+      ? "Birthday events are read-only in the dashboard."
+      : "This Google Calendar event type is read-only in the dashboard.",
+    { eventType: normalizeGoogleEventType(event), readOnlyReason: reason },
+  );
+}
+
 export function normalizeGoogleCalendarLink(rawUrl, accountEmail) {
   if (!rawUrl || !accountEmail) return rawUrl || null;
 
@@ -622,11 +669,16 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
   const colorId = normalizeGoogleEventColorId(event.colorId);
   const explicitColor = googleEventColorForId(colorId)?.hex || null;
   const inheritedColor = calendar.backgroundColor || account.color || "#4285f4";
-  const inheritedEventColor = googleEventColorForSourceHex(inheritedColor);
+  const eventType = normalizeGoogleEventType(event);
+  const readOnlyReason = googleEventReadOnlyReason(event);
+  const displaySource = googleEventDisplaySource(event, calendar, account);
+  const sourceEventColor = googleEventColorForSourceHex(displaySource.color);
 
   return {
     id: event.id,
     etag: event.etag || null,
+    eventType,
+    birthdayProperties: normalizeBirthdayProperties(event.birthdayProperties),
     htmlLink: openUrl,
     openUrl,
     title: event.summary || "(No title)",
@@ -636,21 +688,22 @@ export function normalizeGoogleEvent({ account, calendar, event, isMultiDayRange
     description: event.description || "",
     attendees: normalizeAttendees(event.attendees),
     hangoutLink: findConferenceLink(event),
-    source: calendar.summary,
-    sourceColor: calendar.backgroundColor || account.color || "#4285f4",
-    sourceColorId: inheritedEventColor?.colorId || null,
+    source: displaySource.label,
+    sourceColor: displaySource.color,
+    sourceColorId: sourceEventColor?.colorId || null,
     accountId: account.id,
     accountLabel: account.label,
     accountEmail: account.email,
     calendarId: calendar.id,
-    calendarName: calendar.summary,
+    calendarName: displaySource.label,
     colorId,
-    color: explicitColor || inheritedEventColor?.hex || inheritedColor,
+    color: explicitColor || sourceEventColor?.hex || displaySource.color || inheritedColor,
     flag: null,
     allDay: isAllDay,
     startMs,
     endMs,
-    writable: !!calendar.writable,
+    writable: !!calendar.writable && !readOnlyReason,
+    readOnlyReason,
     isRecurring: isRecurringEventResource(event),
     recurringEventId: event.recurringEventId || (Array.isArray(event.recurrence) && event.recurrence.length ? event.id : null),
     originalStartTime: normalizeOriginalStartTime(event.originalStartTime),
@@ -956,6 +1009,7 @@ async function getMutableEventContext(account, calendarId, eventId) {
   const { auth, calendar } = await getWritableCalendarContext(account, calendarId);
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
   const event = await res.json();
+  assertMutableGoogleEvent(event);
   return { auth, calendar, event };
 }
 
