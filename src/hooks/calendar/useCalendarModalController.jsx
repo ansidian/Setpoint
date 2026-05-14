@@ -328,6 +328,7 @@ export default function useCalendarModalController({
   const [workspaceTransientCloseToken, setWorkspaceTransientCloseToken] = useState(0);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
   const [agendaScrollCommand, setAgendaScrollCommand] = useState(null);
+  const [agendaEntryScrollReleased, setAgendaEntryScrollReleased] = useState(false);
   const [pendingItemDetailFocus, setPendingItemDetailFocus] = useState(null);
   const panelRef = useRef(null);
   const scrollRef = useRef(null);
@@ -371,6 +372,7 @@ export default function useCalendarModalController({
     if (isInitialDeadlineCreateRequest && view === "deadlines") return null;
     return todayDateKey;
   }, [focusDate, isInitialDeadlineCreateRequest, open, todayDateKey, view]);
+  const effectiveAgendaEntryTargetDateKey = agendaEntryScrollReleased ? false : agendaEntryTargetDateKey;
   const eventsEnsureRange = eventsData?.ensureRange || null;
   const eventsRefreshRange = eventsData?.refreshRange || null;
   const eventsUpsertEvents = eventsData?.upsertEvents || null;
@@ -1081,6 +1083,7 @@ export default function useCalendarModalController({
     setSelectedDateKey(dateKey);
     setSelectedItemId(null);
     if (!passive) {
+      setAgendaEntryScrollReleased(true);
       agendaSelectionAnchorRef.current = null;
       clearCalendarEventSelectionSet();
     }
@@ -1100,6 +1103,7 @@ export default function useCalendarModalController({
     }
     closeEventEditor();
     clearCalendarEventSelectionSet();
+    setAgendaEntryScrollReleased(true);
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);
     const itemId = activeView.getItemId ? activeView.getItemId(selectedItem) : selectedItem.id;
@@ -1125,6 +1129,7 @@ export default function useCalendarModalController({
   const requestAgendaScroll = useCallback((command) => {
     if (!command) return;
     suppressAgendaPassiveSync();
+    setAgendaEntryScrollReleased(true);
     const scrollCommand = {
       ...command,
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -1142,6 +1147,10 @@ export default function useCalendarModalController({
       }
     });
   }, [suppressAgendaPassiveSync]);
+
+  useEffect(() => {
+    setAgendaEntryScrollReleased(false);
+  }, [agendaEntryTargetDateKey, openRequestId, view]);
 
   useEffect(() => {
     if (open) return;
@@ -1893,7 +1902,7 @@ export default function useCalendarModalController({
     quickActions: { eventQuickActions, deadlineQuickActions },
     agenda: {
       agendaScrollCommand,
-      agendaEntryTargetDateKey,
+      agendaEntryTargetDateKey: effectiveAgendaEntryTargetDateKey,
       onAgendaPassiveDateChange: (dateKey) => selectAgendaDate(dateKey, { passive: true }),
       onAgendaDateAction: (dateKey) => selectAgendaDate(dateKey),
       onAgendaEventAction: selectAgendaEvent,

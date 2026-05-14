@@ -277,6 +277,96 @@ describe("AgendaRailShell", () => {
     expect(onPassiveDateChange).toHaveBeenCalledTimes(1);
   });
 
+  it("does not replay cold-entry anchoring after an imperative item scroll", async () => {
+    const railRef = createRef();
+    const renderHeader = ({ group, registerHeader }) => (
+      <button
+        type="button"
+        ref={(node) => registerHeader(group.dateKey, node)}
+        data-testid={`header-${group.dateKey}`}
+      >
+        {group.dateKey}
+      </button>
+    );
+    const renderGroup = ({ group, registerRow }) => (
+      group.dateKey === "2026-05-15" ? (
+        <span
+          ref={(node) => registerRow(`event-15-${group.dateKey}`, node, group.dateKey)}
+          data-testid="far-agenda-row"
+          data-item-id="event-15"
+        >
+          Far event
+        </span>
+      ) : null
+    );
+
+    const { rerender } = render(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={[
+          { dateKey: "2026-05-01" },
+          { dateKey: "2026-05-14" },
+          { dateKey: "2026-05-15" },
+        ]}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-14"
+        selectedDateKey="2026-05-14"
+        entryScrollTargetDateKey="2026-05-14"
+        entryScrollReady
+        renderHeader={renderHeader}
+        renderGroup={renderGroup}
+      />,
+    );
+
+    const rail = screen.getByTestId("agenda-shell");
+    const may14Header = screen.getByTestId("header-2026-05-14");
+    const row = screen.getByTestId("far-agenda-row");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 0;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 320, left: 0, right: 280, width: 280, height: 320 });
+    may14Header.getBoundingClientRect = () => ({ top: 360, bottom: 394, left: 0, right: 280, width: 280, height: 34 });
+    row.getBoundingClientRect = () => ({ top: 760, bottom: 804, left: 0, right: 280, width: 280, height: 44 });
+
+    await flushRailEffects();
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: 360,
+      behavior: "auto",
+    }));
+    scrollTo.mockClear();
+
+    expect(railRef.current.scrollToItem("event-15", "2026-05-15", "grid-chip-click")).toBe(true);
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      top: 854,
+      behavior: "smooth",
+    }));
+
+    may14Header.getBoundingClientRect = () => ({ top: 40, bottom: 74, left: 0, right: 280, width: 280, height: 34 });
+    row.getBoundingClientRect = () => ({ top: 44, bottom: 88, left: 0, right: 280, width: 280, height: 44 });
+    rerender(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={[
+          { dateKey: "2026-05-01" },
+          { dateKey: "2026-05-14" },
+          { dateKey: "2026-05-15" },
+        ].map((group) => ({ ...group }))}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-14"
+        selectedDateKey="2026-05-15"
+        entryScrollTargetDateKey="2026-05-14"
+        entryScrollReady
+        renderHeader={renderHeader}
+        renderGroup={renderGroup}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
   it("scrolls today's first row below the sticky date header", async () => {
     const renderGroup = ({ group, registerRow }) => (
       group.dateKey === "2026-05-01" ? (
@@ -427,7 +517,7 @@ describe("AgendaRailShell", () => {
     }));
   });
 
-  it("does not force scrollTop after requesting smooth item scroll", async () => {
+  it("lands distant item scrolls directly instead of forcing a long smooth animation", async () => {
     const renderGroup = ({ group, registerRow }) => (
       group.dateKey === "2026-05-01" ? (
         <span
@@ -474,9 +564,9 @@ describe("AgendaRailShell", () => {
 
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({
       top: 794,
-      behavior: "smooth",
+      behavior: "auto",
     }));
-    expect(rail.scrollTop).toBe(120);
+    expect(rail.scrollTop).toBe(794);
   });
 
   it("does not replay a command already handled through the imperative rail ref", async () => {
