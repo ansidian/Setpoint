@@ -21,6 +21,10 @@ function queuedSnapshotEventKey(item) {
   return `email_triage:${item?.account_id || "unknown"}:${emailId}:email_triage_queued`;
 }
 
+function calendarUpcomingEventKey(event) {
+  return `event_upcoming:${event?.id || event?.title}:${event?.startMs}`;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
@@ -53,6 +57,7 @@ export default function useTriageNotificationSounds() {
   const lastPlayAtRef = useRef(0);
   const taskCompletionSequenceRef = useRef(0);
   const queuedSnapshotKeysRef = useRef({ initialized: false, keys: new Set() });
+  const calendarUpcomingTimersRef = useRef([]);
 
   const loadSettings = useCallback(() => {
     getSettings()
@@ -76,6 +81,13 @@ export default function useTriageNotificationSounds() {
       window.removeEventListener("ea-settings-changed", handleSettingsChanged);
     };
   }, [loadSettings]);
+
+  useEffect(() => () => {
+    for (const timerId of calendarUpcomingTimersRef.current) {
+      clearTimeout(timerId);
+    }
+    calendarUpcomingTimersRef.current = [];
+  }, []);
 
   const schedulePlayback = useCallback((sound, volume, { markUnlocked = false, immediate = false } = {}) => {
     const play = async () => {
@@ -142,13 +154,24 @@ export default function useTriageNotificationSounds() {
     const { liveCalendar, lastFetched } = liveData || {};
     if (!lastFetched) return;
     const now = Date.now();
+    for (const timerId of calendarUpcomingTimersRef.current) {
+      clearTimeout(timerId);
+    }
+    calendarUpcomingTimersRef.current = [];
     for (const event of liveCalendar || []) {
       if (event.passed || event.allDay || !event.startMs) continue;
       const timeUntil = event.startMs - now;
+      if (timeUntil <= 0) continue;
+      const eventKey = calendarUpcomingEventKey(event);
       if (timeUntil > 0 && timeUntil <= CALENDAR_LEAD_TIME_MS) {
-        const eventKey = `event_upcoming:${event.id || event.title}:${event.startMs}`;
         handleAppTrigger("event_upcoming", eventKey, { coalesce: true });
+        continue;
       }
+      const timerId = setTimeout(() => {
+        handleAppTrigger("event_upcoming", eventKey, { coalesce: true });
+      }, timeUntil - CALENDAR_LEAD_TIME_MS);
+      timerId.unref?.();
+      calendarUpcomingTimersRef.current.push(timerId);
     }
   }, [handleAppTrigger]);
 
