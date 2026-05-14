@@ -1,6 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { Lock } from "lucide-react";
-import { login } from "../api";
+import { KeyRound, Lock } from "lucide-react";
+import {
+  login,
+  getPasskeyAuthenticationOptions,
+  verifyPasskeyAuthentication,
+  cancelPasskeyAuthentication,
+} from "../api";
+import { startPasskeyAuthentication } from "../auth/passkeyBrowser.js";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -11,20 +17,68 @@ export default function Login({ onLogin }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [phase, setPhase] = useState("password");
+  const [passkeyState, setPasskeyState] = useState("idle");
   const inputRef = useRef(null);
+  const passkeyAttemptRef = useRef(0);
 
   useEffect(() => {
-    if (!locked) inputRef.current?.focus();
-  }, [locked]);
+    if (!locked && phase === "password") inputRef.current?.focus();
+  }, [locked, phase]);
+
+  async function beginPasskeyPrompt() {
+    const attemptId = passkeyAttemptRef.current + 1;
+    passkeyAttemptRef.current = attemptId;
+    setPasskeyState("prompting");
+    setError(null);
+
+    try {
+      const options = await getPasskeyAuthenticationOptions();
+      const credential = await startPasskeyAuthentication(options);
+      const result = await verifyPasskeyAuthentication(credential);
+      if (attemptId !== passkeyAttemptRef.current) return;
+      if (result?.authenticated) {
+        onLogin();
+        return;
+      }
+      throw new Error("Passkey verification failed");
+    } catch (err) {
+      if (attemptId !== passkeyAttemptRef.current) return;
+      setPasskeyState("failed");
+      setError(err.message || "Passkey check did not finish");
+    }
+  }
+
+  async function handleBackToPassword() {
+    passkeyAttemptRef.current += 1;
+    setLoading(false);
+    setPasskeyState("idle");
+    setPhase("password");
+    setPassword("");
+    setError(null);
+    await cancelPasskeyAuthentication().catch(() => null);
+    inputRef.current?.focus();
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!password || loading || locked) return;
+    if (phase !== "password" || !password || loading || locked) return;
     setLoading(true);
 
     try {
-      await login(password);
-      onLogin();
+      const result = await login(password);
+      if (result?.passkeyRequired) {
+        setPhase("passkey");
+        setPassword("");
+        setLoading(false);
+        beginPasskeyPrompt();
+        return;
+      }
+      if (result?.authenticated) {
+        onLogin();
+        return;
+      }
+      throw new Error("Invalid password");
     } catch (err) {
       const msg = err.message || "";
       if (msg.toLowerCase().includes("too many")) {
@@ -39,9 +93,11 @@ export default function Login({ onLogin }) {
       }
       inputRef.current?.focus();
     } finally {
-      setLoading(false);
+      if (phase === "password") setLoading(false);
     }
   }
+
+  const passkeyPrompting = phase === "passkey" && passkeyState === "prompting";
 
   return (
     <div className="relative isolate min-h-screen overflow-hidden px-4 py-8 text-foreground">
@@ -70,23 +126,45 @@ export default function Login({ onLogin }) {
 
             <CardContent className="pt-5">
               <div className="space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-medium tracking-[1.5px] uppercase text-muted-foreground">
-                    Password
-                  </label>
-                  <Input
-                    ref={inputRef}
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (error && !locked) setError(null);
-                    }}
-                    disabled={locked}
-                    autoFocus
-                  />
-                </div>
+                {phase === "password" ? (
+                  <div>
+                    <label
+                      htmlFor="dashboard-password"
+                      className="mb-1.5 block text-[11px] font-medium tracking-[1.5px] uppercase text-muted-foreground"
+                    >
+                      Password
+                    </label>
+                    <Input
+                      id="dashboard-password"
+                      ref={inputRef}
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (error && !locked) setError(null);
+                      }}
+                      disabled={locked}
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3 text-left">
+                    <div className="flex items-start gap-2.5">
+                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-[#cba6da]/20 bg-[#cba6da]/10 text-[#cba6da]">
+                        <KeyRound size={15} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-medium text-foreground">
+                          Passkey required
+                        </div>
+                        <div className="mt-1 text-[12px] leading-relaxed text-muted-foreground/75">
+                          Complete the browser prompt to finish signing in.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {error ? (
                   <div
@@ -104,14 +182,37 @@ export default function Login({ onLogin }) {
                   </div>
                 ) : null}
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  size="lg"
-                  disabled={loading || !password || locked}
-                >
-                  {loading ? "Signing in..." : locked ? "Locked" : "Sign in"}
-                </Button>
+                {phase === "password" ? (
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    size="lg"
+                    disabled={loading || !password || locked}
+                  >
+                    {loading ? "Signing in..." : locked ? "Locked" : "Sign in"}
+                  </Button>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      size="lg"
+                      disabled={passkeyPrompting}
+                      onClick={beginPasskeyPrompt}
+                    >
+                      {passkeyPrompting ? "Waiting..." : "Retry passkey"}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      variant="secondary"
+                      size="lg"
+                      onClick={handleBackToPassword}
+                    >
+                      Back
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

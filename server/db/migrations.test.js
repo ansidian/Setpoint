@@ -206,4 +206,35 @@ describe("database migrations", () => {
       "status",
     ]);
   });
+
+  it("adds passkey auth foundation storage", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "012_passkey_auth.sql",
+    ]);
+
+    const passkeyColumns = await db.execute("PRAGMA table_info('ea_passkey_credentials')");
+    const passkeyByName = new Map(passkeyColumns.rows.map((row) => [row.name, row]));
+    expect(passkeyByName.get("credential_id").notnull).toBe(1);
+    expect(passkeyByName.get("user_id").notnull).toBe(1);
+    expect(passkeyByName.get("label").notnull).toBe(1);
+    expect(passkeyByName.get("public_key").notnull).toBe(1);
+    expect(passkeyByName.get("sign_count").notnull).toBe(1);
+
+    const pendingColumns = await db.execute("PRAGMA table_info('ea_pending_auth')");
+    const pendingByName = new Map(pendingColumns.rows.map((row) => [row.name, row]));
+    expect(pendingByName.get("token_hash").pk).toBe(1);
+    expect(pendingByName.get("user_id").notnull).toBe(1);
+    expect(pendingByName.get("expires_at").notnull).toBe(1);
+
+    const challengeColumns = await db.execute("PRAGMA table_info('ea_webauthn_challenges')");
+    const challengeByName = new Map(challengeColumns.rows.map((row) => [row.name, row]));
+    expect(challengeByName.get("challenge_hash").pk).toBe(1);
+    expect(challengeByName.get("challenge_type").notnull).toBe(1);
+    expect(challengeByName.get("expires_at").notnull).toBe(1);
+
+    const pendingIndex = await db.execute("PRAGMA index_info('idx_ea_pending_auth_user_expires')");
+    expect(pendingIndex.rows.map((row) => row.name)).toEqual(["user_id", "expires_at"]);
+  });
 });
