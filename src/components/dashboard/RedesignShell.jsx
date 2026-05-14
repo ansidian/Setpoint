@@ -519,6 +519,7 @@ export function RedesignShell({
               onRefresh={onQuickRefresh}
               sessionState={inboxSession}
               onSessionStateChange={setInboxSession}
+              commitPendingUndoSignal={calendarOpenRequestId}
               isMobile={isMobile}
             />
           </Suspense>

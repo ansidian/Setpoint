@@ -6,6 +6,7 @@ const ERROR_TOAST_MS = 4_000;
 export default function useInboxUndoSlot({ onActiveSnapshotRefresh }) {
   const [undo, setUndo] = useState(null);
   const undoSlotRef = useRef(null);
+  const settleUndoSlotRef = useRef(null);
 
   const showError = useCallback((slot, fallbackMessage) => {
     setUndo({
@@ -17,19 +18,41 @@ export default function useInboxUndoSlot({ onActiveSnapshotRefresh }) {
     setTimeout(() => setUndo(null), ERROR_TOAST_MS);
   }, []);
 
-  const finalizeUndoSlot = useCallback((slot = undoSlotRef.current) => {
+  const settleUndoSlot = useCallback((slot = undoSlotRef.current, {
+    clearUi = true,
+    reportErrors = true,
+    useExitCommit = false,
+  } = {}) => {
     if (!slot) return;
     if (slot.timerId) clearTimeout(slot.timerId);
+    slot.timerId = null;
     undoSlotRef.current = null;
-    setUndo(null);
+    if (clearUi) setUndo(null);
     if (slot.commit && !slot.committed) {
       slot.committed = true;
-      slot.commit().catch((err) => {
-        showError(slot, err?.message || "Action failed. Refreshed inbox state.");
-        onActiveSnapshotRefresh?.();
-      });
+      const commit = useExitCommit && slot.commitOnExit ? slot.commitOnExit : slot.commit;
+      try {
+        Promise.resolve(commit()).catch((err) => {
+          if (!reportErrors) return;
+          showError(slot, err?.message || "Action failed. Refreshed inbox state.");
+          onActiveSnapshotRefresh?.();
+        });
+      } catch (err) {
+        if (reportErrors) {
+          showError(slot, err?.message || "Action failed. Refreshed inbox state.");
+          onActiveSnapshotRefresh?.();
+        }
+      }
     }
   }, [onActiveSnapshotRefresh, showError]);
+
+  useEffect(() => {
+    settleUndoSlotRef.current = settleUndoSlot;
+  }, [settleUndoSlot]);
+
+  const finalizeUndoSlot = useCallback((slot = undoSlotRef.current) => {
+    settleUndoSlot(slot);
+  }, [settleUndoSlot]);
 
   const replaceUndoSlot = useCallback((slotConfig) => {
     finalizeUndoSlot();
@@ -75,15 +98,33 @@ export default function useInboxUndoSlot({ onActiveSnapshotRefresh }) {
   }, [onActiveSnapshotRefresh, showError]);
 
   useEffect(() => () => {
-    const slot = undoSlotRef.current;
-    if (slot?.timerId) clearTimeout(slot.timerId);
-    undoSlotRef.current = null;
+    settleUndoSlotRef.current?.(undoSlotRef.current, {
+      clearUi: false,
+      reportErrors: false,
+    });
+  }, []);
+
+  useEffect(() => {
+    const settleOnPageExit = () => {
+      settleUndoSlotRef.current?.(undoSlotRef.current, {
+        clearUi: true,
+        reportErrors: false,
+        useExitCommit: true,
+      });
+    };
+    window.addEventListener("pagehide", settleOnPageExit);
+    window.addEventListener("beforeunload", settleOnPageExit);
+    return () => {
+      window.removeEventListener("pagehide", settleOnPageExit);
+      window.removeEventListener("beforeunload", settleOnPageExit);
+    };
   }, []);
 
   return {
     undo,
     undoSlotRef,
     replaceUndoSlot,
+    finalizeUndoSlot,
     onUndo,
   };
 }
