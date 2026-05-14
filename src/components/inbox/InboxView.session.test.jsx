@@ -13,6 +13,7 @@ import {
   settleArrivalGraceOnExit,
   snoozeEmail,
   trashEmail,
+  trashEmailOnExit,
   unsnoozeEmail,
 } from "../../api";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
@@ -26,6 +27,7 @@ vi.mock("../../api", async () => {
     markEmailAsRead: vi.fn().mockResolvedValue({}),
     markEmailAsUnread: vi.fn().mockResolvedValue({}),
     trashEmail: vi.fn().mockResolvedValue({}),
+    trashEmailOnExit: vi.fn(),
     snoozeEmail: vi.fn().mockResolvedValue({}),
     unsnoozeEmail: vi.fn().mockResolvedValue({}),
     markAllEmailsAsRead: vi.fn().mockResolvedValue({}),
@@ -115,6 +117,87 @@ function makeSessionSnapshot(includeAction = true) {
       noise: [],
     },
   });
+}
+
+function makeProviderTrashSnapshot({ refresh = vi.fn() } = {}) {
+  return {
+    snapshot: makeActiveSnapshot({
+      lanes: {
+        needs_attention: [
+          {
+            id: 42,
+            snapshot_item_id: 42,
+            triage_id: 8,
+            account_id: "gmail-a",
+            email_id: "gmail-a-msg-1",
+            uid: "gmail-a-msg-1",
+            lane: "needs_attention",
+            subject: "Review the lease",
+            from_name: "Dana",
+            from_address: "dana@example.com",
+            summary: "Needs your review.",
+            email_date: "2026-05-03T14:00:00.000Z",
+            read: false,
+          },
+        ],
+        fyi: [],
+        noise: [],
+      },
+    }),
+    loading: false,
+    error: null,
+    refresh,
+    sync: vi.fn(),
+  };
+}
+
+function ProviderTrashInbox({ activeSnapshot, commitPendingUndoSignal }) {
+  return (
+    <InboxView
+      accent="#cba6da"
+      customize={{
+        aiVerbosity: "standard",
+        showPreview: true,
+        inboxDensity: "default",
+        sidebarCompact: false,
+        inboxLayout: "two-pane",
+        inboxGrouping: "swimlanes",
+      }}
+      emailAccounts={[]}
+      briefingSummary=""
+      briefingGeneratedAt="2026-05-03 15:00:00"
+      activeSnapshot={activeSnapshot}
+      liveEmails={[]}
+      snoozedEntries={[]}
+      resurfacedEntries={[]}
+      onOpenDashboard={() => {}}
+      onRefresh={() => {}}
+      sessionState={{
+        accountId: "__all",
+        lane: "__all",
+        search: "",
+        selectedId: "gmail-a-msg-1",
+      }}
+      onSessionStateChange={() => {}}
+      commitPendingUndoSignal={commitPendingUndoSignal}
+    />
+  );
+}
+
+function renderProviderTrashInbox(props = {}) {
+  const activeSnapshot = props.activeSnapshot || makeProviderTrashSnapshot();
+  return render(
+    <DashboardProvider
+      briefing={{ emails: { accounts: [] } }}
+      setBriefing={() => {}}
+      setCalendarDeadlines={() => {}}
+    >
+      <ProviderTrashInbox
+        activeSnapshot={activeSnapshot}
+        commitPendingUndoSignal={props.commitPendingUndoSignal}
+      />
+    </DashboardProvider>,
+  );
 }
 
 function InboxSessionHarness({ initialSelectedId = null, activeSnapshotRefresh = vi.fn() }) {
@@ -370,6 +453,74 @@ describe("InboxView session state", () => {
 
     expect(trashEmail).toHaveBeenCalledWith("gmail-a-msg-1");
     expect(dismissEmail).not.toHaveBeenCalled();
+  });
+
+  it("commits pending provider trash when leaving the inbox before undo expires", async () => {
+    vi.useFakeTimers();
+    const refreshSnapshot = vi.fn().mockResolvedValue({});
+    const { unmount } = renderProviderTrashInbox({
+      activeSnapshot: makeProviderTrashSnapshot({ refresh: refreshSnapshot }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /trash email/i }));
+    expect(trashEmail).not.toHaveBeenCalled();
+
+    await act(async () => {
+      unmount();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(trashEmail).toHaveBeenCalledWith("gmail-a-msg-1");
+    expect(refreshSnapshot).toHaveBeenCalled();
+  });
+
+  it("uses keepalive provider trash when the page exits before undo expires", async () => {
+    vi.useFakeTimers();
+    renderProviderTrashInbox();
+
+    fireEvent.click(screen.getByRole("button", { name: /trash email/i }));
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(trashEmailOnExit).toHaveBeenCalledWith("gmail-a-msg-1");
+    expect(trashEmail).not.toHaveBeenCalled();
+  });
+
+  it("commits pending provider trash when an intentional departure signal fires", async () => {
+    vi.useFakeTimers();
+    const activeSnapshot = makeProviderTrashSnapshot();
+
+    function DepartureHarness() {
+      const [departureSignal, setDepartureSignal] = useState(0);
+      return (
+        <DashboardProvider
+          briefing={{ emails: { accounts: [] } }}
+          setBriefing={() => {}}
+          setCalendarDeadlines={() => {}}
+        >
+          <button type="button" onClick={() => setDepartureSignal((value) => value + 1)}>
+            Open calendar
+          </button>
+          <ProviderTrashInbox
+            activeSnapshot={activeSnapshot}
+            commitPendingUndoSignal={departureSignal}
+          />
+        </DashboardProvider>
+      );
+    }
+
+    render(<DepartureHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: /trash email/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open calendar/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(trashEmail).toHaveBeenCalledWith("gmail-a-msg-1");
+    expect(screen.queryByRole("button", { name: /^undo$/i })).toBeNull();
   });
 
   it("cancels delayed provider trash when undo is clicked", async () => {

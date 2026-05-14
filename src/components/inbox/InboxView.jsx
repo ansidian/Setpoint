@@ -34,6 +34,7 @@ export default function InboxView({
   seedSelectedId,
   sessionState,
   onSessionStateChange,
+  commitPendingUndoSignal,
   isMobile = false,
 }) {
   const [localSessionState, setLocalSessionState] = useState(() => ({
@@ -135,6 +136,7 @@ export default function InboxView({
     briefingGeneratedAt: activeSnapshotView?.snapshot?.updated_at || briefingGeneratedAt,
     sessionState: normalizedSessionState,
     onSessionStateChange: setResolvedSessionState,
+    commitPendingUndoSignal,
     onActiveSnapshotRefresh: activeSnapshot.refresh,
     readOnly,
   });

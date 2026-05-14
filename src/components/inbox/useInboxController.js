@@ -6,6 +6,7 @@ import {
   markEmailAsRead,
   markEmailAsUnread,
   trashEmail,
+  trashEmailOnExit,
   snoozeEmail,
   unsnoozeEmail,
   markAllEmailsAsRead,
@@ -65,6 +66,7 @@ export default function useInboxController({
   isMobile = false,
   sessionState,
   onSessionStateChange = () => {},
+  commitPendingUndoSignal,
   onActiveSnapshotRefresh = () => {},
   readOnly = false,
 }) {
@@ -101,8 +103,16 @@ export default function useInboxController({
     undo,
     undoSlotRef,
     replaceUndoSlot,
+    finalizeUndoSlot,
     onUndo,
   } = useInboxUndoSlot({ onActiveSnapshotRefresh });
+  const commitPendingUndoSignalRef = useRef(commitPendingUndoSignal);
+
+  useEffect(() => {
+    if (commitPendingUndoSignalRef.current === commitPendingUndoSignal) return;
+    commitPendingUndoSignalRef.current = commitPendingUndoSignal;
+    finalizeUndoSlot();
+  }, [commitPendingUndoSignal, finalizeUndoSlot]);
 
   const setSessionField = useCallback((field, value) => {
     onSessionStateChange((prev) => ({
@@ -615,6 +625,7 @@ export default function useInboxController({
             await trashEmail(command.uid);
             await onActiveSnapshotRefresh();
           },
+          commitOnExit: () => trashEmailOnExit(command.uid),
           undo: async () => {
             setLiveTrashedUids((prev) => applyLiveTrashOptimistic(prev, command.uid, false));
             setSelectedId(command.restoreSelectedId);
@@ -629,6 +640,7 @@ export default function useInboxController({
             await trashEmail(command.uid);
             await onActiveSnapshotRefresh();
           },
+          commitOnExit: () => trashEmailOnExit(command.uid),
           undo: async () => {
             if (command.itemId) setSnapshotOptimistic((prev) => applySnapshotTrashOptimistic(prev, command.itemId, false));
             setSelectedId(command.restoreSelectedId);
@@ -642,6 +654,7 @@ export default function useInboxController({
           commit: async () => {
             await trashEmail(command.uid);
           },
+          commitOnExit: () => trashEmailOnExit(command.uid),
           undo: async () => {
             setSelectedId(command.restoreSelectedId);
           },
