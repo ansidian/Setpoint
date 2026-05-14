@@ -29,6 +29,7 @@ import { getMissingRequiredEnv } from "./env.js";
 import { resolveWebAuthnConfig } from "./auth/webauthn-config.js";
 import { buildStartupWorkerDelays } from "./startup-delays.js";
 import { logTiming, timeAsync } from "./timing.js";
+import { installProductionFrontend } from "./static-assets.js";
 
 
 // fail fast if critical env vars are missing
@@ -85,16 +86,7 @@ app.use("/api/gmail", gmailPushRoutes);
 
 // Serve static frontend in production (behind auth)
 if (process.env.NODE_ENV === "production") {
-  // Static assets are public — they're just the built frontend bundle
-  app.use(express.static(join(__dirname, "../dist")));
-
-  // Serve index.html for client-side routes.
-  app.get("*", (req, res) => {
-    if (req.path.startsWith("/api/")) {
-      return res.status(404).json({ message: "Not found" });
-    }
-    res.sendFile(join(__dirname, "../dist/index.html"));
-  });
+  installProductionFrontend(app, join(__dirname, "../dist"));
 }
 
 function scheduleStartupWorker(worker, delayMs, fn) {
