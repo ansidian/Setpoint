@@ -218,6 +218,39 @@ describe("calendar detail timeline", () => {
     expect(screen.getByRole("button", { name: /edit details/i })).toBeTruthy();
   });
 
+  it("labels Google birthday events as read-only special events", () => {
+    render(
+      eventsView.renderDetail({
+        selectedDay: 22,
+        viewYear: 2026,
+        viewMonth: 4,
+        selectedItemId: "birthday-1_20260522",
+        items: [
+          {
+            id: "birthday-1_20260522",
+            title: "Maya",
+            eventType: "birthday",
+            birthdayProperties: { type: "birthday", contact: "people/c12345" },
+            startMs: new Date("2026-05-22T19:00:00.000Z").getTime(),
+            endMs: new Date("2026-05-23T19:00:00.000Z").getTime(),
+            color: "#5484ed",
+            htmlLink: "https://calendar.google.com/calendar/u/0/r/eventedit/birthday-1",
+            openUrl: "https://calendar.google.com/calendar/u/0/r/eventedit/birthday-1",
+            writable: false,
+            allDay: true,
+            isRecurring: true,
+          },
+        ],
+      }),
+    );
+
+    const card = screen.getByTestId("calendar-selected-event-card");
+    expect(card.textContent).toContain("Birthday");
+    expect(card.textContent).toContain("Read-only");
+    expect(screen.queryByRole("button", { name: /edit details/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /open calendar/i })).toBeNull();
+  });
+
   it("uses the selected event source color for floating detail gradients", () => {
     render(
       eventsView.renderFloatingDetail({

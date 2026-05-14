@@ -436,6 +436,53 @@ describe("calendar recurring mutations", () => {
     expect(error.rawGoogleError).toContain("Huge provider stack");
   });
 
+  it("rejects birthday event mutations before patching or deleting Google Calendar", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+
+      if (method === "GET" && path === "users/me/calendarList") {
+        return jsonResponse(calendarList);
+      }
+      if (method === "GET" && path === "calendars/primary/events/birthday-1") {
+        return jsonResponse({
+          id: "birthday-1",
+          etag: '"birthday-current"',
+          summary: "Maya's Birthday",
+          eventType: "birthday",
+          birthdayProperties: { type: "birthday", contact: "people/c12345" },
+          start: { date: "2026-05-22" },
+          end: { date: "2026-05-23" },
+        });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    await expect(updateCalendarEvent(account, "birthday-1", {
+      calendarId: "primary",
+      title: "Maya's Birthday",
+      allDay: true,
+      startDate: "2026-05-22",
+      endDate: "2026-05-22",
+    })).rejects.toMatchObject({
+      status: 403,
+      code: "calendar_event_read_only",
+    });
+
+    await expect(deleteCalendarEvent(account, "birthday-1", {
+      calendarId: "primary",
+    })).rejects.toMatchObject({
+      status: 403,
+      code: "calendar_event_read_only",
+    });
+
+    expect(fetch.mock.calls.some(([url, init = {}]) => {
+      const method = init.method || "GET";
+      return ["PATCH", "DELETE"].includes(method) && String(url).includes("/events/birthday-1");
+    })).toBe(false);
+  });
+
   it("sends a valid event color when creating an event", async () => {
     fetch.mockImplementation(async (url, init = {}) => {
       const parsed = new URL(String(url));

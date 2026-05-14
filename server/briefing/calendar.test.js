@@ -222,4 +222,49 @@ describe("normalizeGoogleEvent", () => {
     expect(event.color).toBe("#dbadff");
     expect(event.sourceColor).toBe("#7a367a");
   });
+
+  it("preserves birthday event type metadata and marks birthdays read-only", () => {
+    const event = normalizeGoogleEvent({
+      account: {
+        id: "acct-1",
+        email: "me@example.com",
+        label: "Google",
+        color: "#4285f4",
+      },
+      calendar: {
+        id: "primary",
+        summary: "Personal",
+        writable: true,
+        backgroundColor: "#4285f4",
+      },
+      event: {
+        id: "birthday-1_20260522",
+        summary: "Maya's Birthday",
+        eventType: "birthday",
+        birthdayProperties: {
+          type: "birthday",
+          contact: "people/c12345",
+        },
+        start: { date: "2026-05-22" },
+        end: { date: "2026-05-23" },
+        recurringEventId: "birthday-1",
+        originalStartTime: { date: "2026-05-22" },
+      },
+    });
+
+    expect(event.eventType).toBe("birthday");
+    expect(event.birthdayProperties).toEqual({
+      type: "birthday",
+      customTypeName: "",
+      contact: "people/c12345",
+    });
+    expect(event.source).toBe("Birthdays");
+    expect(event.calendarName).toBe("Birthdays");
+    expect(event.calendarId).toBe("primary");
+    expect(event.sourceColor).toBe("#ff887c");
+    expect(event.sourceColorId).toBe("4");
+    expect(event.color).toBe("#ff887c");
+    expect(event.writable).toBe(false);
+    expect(event.readOnlyReason).toBe("birthday");
+  });
 });

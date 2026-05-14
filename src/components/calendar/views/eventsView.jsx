@@ -190,8 +190,36 @@ function eventMeta(ev) {
   return formatEventDuration(ev.startMs, ev.endMs) || ev.duration || "";
 }
 
+function birthdayEventLabel(ev) {
+  const type = ev?.birthdayProperties?.type || "birthday";
+  if (type === "anniversary") return "Anniversary";
+  if (type === "custom") return ev?.birthdayProperties?.customTypeName || "Special date";
+  if (type === "other") return "Special date";
+  if (type === "self") return "Birthday";
+  return "Birthday";
+}
+
+function specialEventLabel(ev) {
+  const eventType = ev?.eventType || "default";
+  if (eventType === "birthday") return birthdayEventLabel(ev);
+  if (eventType === "fromGmail") return "From Gmail";
+  if (eventType === "focusTime") return "Focus time";
+  if (eventType === "outOfOffice") return "Out of office";
+  if (eventType === "workingLocation") return "Working location";
+  return null;
+}
+
 function isEditableEvent(ev) {
-  return !!ev?.writable;
+  return !!ev?.writable && (ev.eventType || "default") === "default";
+}
+
+function isReadOnlyBirthdayEvent(ev) {
+  return ev?.eventType === "birthday" || ev?.readOnlyReason === "birthday";
+}
+
+function calendarActionUrl(ev) {
+  if (isReadOnlyBirthdayEvent(ev)) return null;
+  return ev?.openUrl || ev?.htmlLink || null;
 }
 
 function orderDetailEvents(items = []) {
@@ -253,6 +281,8 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
   const durationLabel = !ev.allDay ? eventMeta(ev) : null;
   const accessoryLabel = location || attendeeSummary || null;
   const reminderSummary = formatReminderSummary(ev);
+  const typeLabel = specialEventLabel(ev);
+  const showRecurring = ev.isRecurring && !typeLabel;
 
   return (
     <Motion.div
@@ -340,7 +370,7 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
           </Motion.div>
         </Motion.div>
 
-        {(durationLabel || ev.allDay || ev.isRecurring || !editable || reminderSummary) ? (
+        {(durationLabel || ev.allDay || typeLabel || showRecurring || !editable || reminderSummary) ? (
           <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
             {durationLabel ? <RailMetaChip tone="quiet" compact>{durationLabel}</RailMetaChip> : null}
             {reminderSummary ? (
@@ -349,8 +379,9 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
                 {reminderSummary}
               </RailReminderIndicator>
             ) : null}
+            {typeLabel ? <RailMetaChip tone="quiet" compact>{typeLabel}</RailMetaChip> : null}
             {ev.allDay ? <RailMetaChip tone="quiet" compact>All day</RailMetaChip> : null}
-            {ev.isRecurring ? <RailMetaChip tone="quiet" compact>Recurring</RailMetaChip> : null}
+            {showRecurring ? <RailMetaChip tone="quiet" compact>Recurring</RailMetaChip> : null}
             {!editable ? <RailMetaChip tone="quiet" compact>Read-only</RailMetaChip> : null}
           </Motion.div>
         ) : null}
@@ -364,7 +395,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b
   const editable = isEditableEvent(ev);
   const zoomUrl = extractZoomMeetingUrl(ev);
   const eventUrl = extractNonZoomEventUrl(ev);
-  const calendarUrl = ev.openUrl || ev.htmlLink;
+  const calendarUrl = calendarActionUrl(ev);
   const size = compact ? "compact" : "default";
   const hasPrimaryActions = zoomUrl || eventUrl || editable;
 
@@ -417,16 +448,17 @@ function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b
 
 function hasEventActions(ev) {
   if (!ev) return false;
-  return Boolean(isEditableEvent(ev) || extractZoomMeetingUrl(ev) || extractNonZoomEventUrl(ev) || ev.openUrl || ev.htmlLink);
+  return Boolean(isEditableEvent(ev) || extractZoomMeetingUrl(ev) || extractNonZoomEventUrl(ev) || calendarActionUrl(ev));
 }
 
 function toRailItem(ev, onSelectItem, selectedItemId) {
   const reminderSummary = formatReminderSummary(ev);
+  const typeLabel = specialEventLabel(ev);
   const meta = [
     eventMeta(ev),
     reminderSummary,
-    ev.isRecurring ? "Recurring" : null,
-    ev.writable === false ? "Read-only" : null,
+    typeLabel || (ev.isRecurring ? "Recurring" : null),
+    !isEditableEvent(ev) && (ev.writable === false || typeLabel) ? "Read-only" : null,
   ].filter(Boolean).join(" · ");
   const selectionId = getPlanningItemId(ev);
   const isSelected = String(selectionId) === String(selectedItemId);

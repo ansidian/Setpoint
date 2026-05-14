@@ -91,7 +91,9 @@ function toCandidate(item, kind) {
     startDate: range.startDate,
     endDate: range.endDate,
     interactive: kind === "event",
-    readOnly: kind === "event" ? item?.writable === false : true,
+    readOnly: kind === "event"
+      ? item?.writable === false || (!!item?.eventType && item.eventType !== "default")
+      : true,
   };
 }
 
