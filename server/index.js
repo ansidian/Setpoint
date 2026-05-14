@@ -26,6 +26,7 @@ import { migrate } from "./db/migrate.js";
 import { migrateCbcEncryption } from "./db/migrate-encryption.js";
 import { applySecurityMiddleware, getTrustProxySetting } from "./security.js";
 import { getMissingRequiredEnv } from "./env.js";
+import { resolveWebAuthnConfig } from "./auth/webauthn-config.js";
 import { buildStartupWorkerDelays } from "./startup-delays.js";
 import { logTiming, timeAsync } from "./timing.js";
 
@@ -34,6 +35,12 @@ import { logTiming, timeAsync } from "./timing.js";
 const missing = getMissingRequiredEnv();
 if (missing.length) {
   console.error(`[EA] Missing required env vars: ${missing.join(", ")}`);
+  process.exit(1);
+}
+try {
+  resolveWebAuthnConfig();
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 

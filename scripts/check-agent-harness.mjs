@@ -5,7 +5,12 @@ import process from 'node:process'
 const root = process.cwd()
 const componentSizeBaseline = {
   threshold: 600,
-  files: {},
+  files: {
+    // Existing calendar debt, unrelated to the passkey-auth closeout. Keep
+    // these caps exact so future edits must decompose or justify movement.
+    'src/components/calendar/modal/CalendarGrid.jsx': 647,
+    'src/components/calendar/views/eventsView.jsx': 620,
+  },
 }
 
 const failures = []

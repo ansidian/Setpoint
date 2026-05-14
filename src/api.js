@@ -5,17 +5,18 @@ async function apiFetch(path, options = {}) {
   if (isDemoMode()) {
     return handleDemoApiRequest(path, options);
   }
+  const { redirectOnAuthFailure = true, ...fetchOptions } = options;
 
   const res = await fetch(path, {
-    ...options,
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
       "X-Requested-With": "EADashboard",
-      ...options.headers,
+      ...fetchOptions.headers,
     },
   });
 
-  if (res.status === 401) {
+  if (res.status === 401 && redirectOnAuthFailure) {
     window.location.href = "/login";
     throw new Error("Not authenticated");
   }
@@ -48,7 +49,47 @@ export async function login(password) {
   }
   return res.json();
 }
+export const getPasskeyAuthenticationOptions = () => (
+  apiFetch("/api/auth/passkey/authentication/options", {
+    method: "POST",
+    redirectOnAuthFailure: false,
+  })
+);
+export const verifyPasskeyAuthentication = (credential) => (
+  apiFetch("/api/auth/passkey/authentication/verify", {
+    method: "POST",
+    redirectOnAuthFailure: false,
+    body: JSON.stringify(credential),
+  })
+);
+export const cancelPasskeyAuthentication = () => (
+  apiFetch("/api/auth/passkey/authentication/cancel", {
+    method: "POST",
+    redirectOnAuthFailure: false,
+  })
+);
 export const logout = () => apiFetch("/api/auth/logout", { method: "POST" });
+export const listPasskeys = () => apiFetch("/api/auth/passkeys");
+export const getPasskeyRegistrationOptions = (label) => (
+  apiFetch("/api/auth/passkeys/registration/options", {
+    method: "POST",
+    redirectOnAuthFailure: false,
+    body: JSON.stringify({ label }),
+  })
+);
+export const verifyPasskeyRegistration = (credential) => (
+  apiFetch("/api/auth/passkeys/registration/verify", {
+    method: "POST",
+    redirectOnAuthFailure: false,
+    body: JSON.stringify(credential),
+  })
+);
+export const deletePasskeyCredential = (credentialId) => (
+  apiFetch(`/api/auth/passkeys/${encodeURIComponent(credentialId)}`, {
+    method: "DELETE",
+    redirectOnAuthFailure: false,
+  })
+);
 export const listApiTokens = () => apiFetch("/api/auth/api-tokens");
 export const createApiToken = (label, scopes) => apiFetch("/api/auth/api-tokens", { method: "POST", body: JSON.stringify({ label, scopes }) });
 export const revokeApiToken = (id) => apiFetch(`/api/auth/api-tokens/${id}`, { method: "DELETE" });

@@ -35,7 +35,7 @@ The dashboard fetches data from multiple sources, continuously indexes incoming 
 - **Important senders and notifications** — Configures priority senders, browser notifications, triage notification sounds, and private Discord reminder delivery.
 - **Notes and quick capture** — Keeps local operational notes beside the current dashboard view.
 - **Multi-account support** — Supports multiple Gmail OAuth and iCloud IMAP accounts with custom labels, colors, and icons.
-- **Operational controls** — Includes settings for provider credentials, model selection, account order, schedules, Actual Budget, Todoist, reminders, and scoped API tokens.
+- **Operational controls** — Includes settings for provider credentials, model selection, account order, schedules, Actual Budget, Todoist, reminders, passkeys, and scoped API tokens.
 
 ## Tech stack
 
@@ -65,6 +65,12 @@ This project requires your own API keys and credentials.
 # Auth (run `node server/hash-password.js <your-password>` to generate)
 EA_PASSWORD_HASH=$2b$12$...
 EA_USER_ID=your-user-id
+
+# WebAuthn passkeys. Production requires all three and must use your HTTPS app origin.
+# Local dev defaults to EA Dashboard / localhost / http://localhost:5173 when unset.
+EA_WEBAUTHN_RP_NAME=EA Dashboard
+EA_WEBAUTHN_RP_ID=your-app-domain.com
+EA_WEBAUTHN_ORIGIN=https://your-app-domain.com
 
 # Database (Turso)
 TURSO_DATABASE_URL=libsql://your-ea-db.turso.io
@@ -112,6 +118,33 @@ first dashboard requests before catch-up jobs start. The default worker delay is
 extra 10 minutes before email backfill. Backfill only resumes interrupted jobs
 on startup by default; set `EA_EMAIL_BACKFILL_QUEUE_ON_STARTUP=1` to queue a
 new broad backfill automatically.
+
+### Dashboard auth and passkey recovery
+
+The private app uses a dashboard password plus WebAuthn passkeys. If no
+registered passkey exists, a valid password creates an authenticated browser
+session and Settings -> System shows setup mode. After the first passkey is
+registered, future password login creates a short-lived pending password
+authentication and the browser must complete passkey authentication before the
+server issues the `ea_session` cookie.
+
+Production startup fails fast unless `EA_WEBAUTHN_RP_NAME`,
+`EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are set. `EA_WEBAUTHN_RP_ID` is
+the hostname only, not a URL. `EA_WEBAUTHN_ORIGIN` must be the HTTPS origin
+served to the browser and must match the RP ID hostname.
+
+If all passkeys are lost, use the local operator reset script against the
+intended database:
+
+```bash
+npm run auth:reset-passkeys -- --dry-run
+npm run auth:reset-passkeys -- --confirm
+```
+
+The reset clears registered passkeys, pending password-auth attempts, WebAuthn
+challenges, and browser sessions. The next successful password login returns
+the dashboard to passkey setup mode. Scoped API tokens are separate automation
+credentials and do not grant dashboard login.
 
 ### Opt-in Turso semantic search verification
 

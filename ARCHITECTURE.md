@@ -60,7 +60,7 @@ graph TB
 | Weather | Pirate Weather | Forecast data |
 | Tasks | CTM API, Todoist API | Academic deadlines + personal tasks |
 | Finance | @actual-app/api behind provider worker + EA mirrors | Budget tracking, bill management |
-| Auth | bcrypt, cookie sessions | Password login, session tokens |
+| Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password plus passkey login, session tokens |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
 | Scheduling | node-cron | Snapshot boundary checks and background workers |
 
@@ -99,14 +99,14 @@ ea-dashboard/
 │   │   ├── current-service.js      # Current dashboard envelope from durable current cache + active snapshot
 │   │   └── current-events.js       # SSE notifications for current dashboard changes
 │   ├── routes/
-│   │   ├── auth.js                 # Login, session check, logout (rate-limited)
+│   │   ├── auth.js                 # Password/passkey login, passkey management, API tokens, logout
 │   │   ├── briefing/               # Thin HTTP handlers for email, snapshot, tasks, bills, and dev reindexing
 │   │   ├── dashboard.js            # Current dashboard, current sync/refresh, health, SSE events
-│   │   ├── accounts.js             # Account CRUD, Gmail OAuth, settings, schedules, API tokens
+│   │   ├── accounts.js             # Account CRUD, Gmail OAuth, settings, schedules
 │   │   ├── calendar.js             # Read-only calendar endpoints (mounted at /api/calendar)
 │   │   └── notes.js                # Local notes endpoints
 │   ├── middleware/
-│   │   └── auth.js                 # Session + Bearer-token validation, requireAuth middleware
+│   │   └── auth.js                 # Cookie-session + scoped Bearer-token validation
 │   └── db/
 │       ├── connection.js           # Turso client (remote prod, local dev file)
 │       ├── ctm-connection.js       # Read-only CTM database client
@@ -120,7 +120,7 @@ ea-dashboard/
 │   ├── pages/
 │   │   ├── Dashboard.jsx           # Main page: current dashboard display, refresh gestures
 │   │   ├── Settings.jsx            # Account management, config, integrations
-│   │   └── Login.jsx               # Password auth with lockout
+│   │   └── Login.jsx               # Password login plus passkey prompt when enforced
 │   ├── context/
 │   │   └── DashboardContext.jsx    # Email/task state, computed values, action handlers
 │   ├── hooks/
@@ -287,10 +287,10 @@ graph LR
 
 | Group | Mount | Endpoints | Key Responsibilities |
 |-------|-------|-----------|---------------------|
-| Auth | `/api/auth` | 3 | Login (rate-limited 5/15min), session check, logout |
+| Auth | `/api/auth` | 13 | Password/passkey login, passkey management, session check/logout, scoped API tokens |
 | Briefing | `/api/briefing` | domain routers | Email ops (read/trash/snooze/dismiss), snapshots, FTS email search, task ops, Actual Budget |
 | Dashboard | `/api/dashboard` | 5 | Current dashboard envelope, current refresh/sync, health, SSE change events |
-| Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders, API tokens |
+| Accounts | `/api/ea` | 16 | Account CRUD, Gmail OAuth, settings, schedules, geocode, suspend, important senders |
 | Calendar | `/api/calendar` | 1 | Read-only calendar slice exposed separately from briefing |
 
 ### Authentication
@@ -303,8 +303,20 @@ sequenceDiagram
 
     B->>S: POST /api/auth/login {password}
     S->>S: bcrypt.compare(password, EA_PASSWORD_HASH)
-    S->>DB: INSERT ea_sessions (token, expires_at)
-    S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
+    alt No registered passkeys
+        S->>DB: INSERT ea_sessions (token, expires_at)
+        S->>B: Set-Cookie: ea_session (httpOnly, secure, sameSite=strict)
+    else Registered passkeys exist
+        S->>DB: INSERT ea_pending_auth (10-min pending password auth)
+        S->>B: Set-Cookie: ea_pending_auth (httpOnly, secure, sameSite=strict)
+        B->>S: POST /api/auth/passkey/authentication/options
+        S->>DB: INSERT ea_webauthn_challenges
+        S->>B: WebAuthn authentication options
+        B->>S: POST /api/auth/passkey/authentication/verify
+        S->>DB: Consume challenge and update passkey usage
+        S->>DB: INSERT ea_sessions (token, expires_at)
+        S->>B: Set-Cookie: ea_session, clear ea_pending_auth
+    end
 
     B->>S: GET /api/dashboard/current (cookie)
     S->>DB: SELECT FROM ea_sessions WHERE token = ?
@@ -312,10 +324,19 @@ sequenceDiagram
     S->>B: 200 current dashboard envelope (or 401 if expired)
 ```
 
-Two auth paths exist, but they no longer feed a single shared "any auth works" guard:
+The browser auth model has four distinct states:
 
-1. **Cookie session** — browser receives raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the browser SPA and required by normal dashboard routes.
-2. **Bearer API token** — `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check — they carry their own unforgeable secret.
+1. **Authenticated Session** - `ea_session` cookie. The browser receives a raw 32-byte hex session token, but `ea_sessions` stores only `sha256:<digest>`. Used by the SPA and required by normal dashboard routes. Once issued, it is trusted until expiry or logout; the app does not prompt for passkey on every request.
+2. **Pending Password Authentication** - `ea_pending_auth` cookie plus a row in `ea_pending_auth`. Created only after a correct password when at least one passkey is registered. It can request and verify WebAuthn authentication options, but it cannot access dashboard routes or passkey registration endpoints.
+3. **Registered Passkey** - row in `ea_passkey_credentials` containing credential ID, public key, sign count, label, transports, backup state, and device type. Public key material never leaves the server in management responses.
+4. **Passkey Reset** - local operator recovery via `npm run auth:reset-passkeys -- --confirm`. It clears registered passkeys, pending auth, WebAuthn challenges, and browser sessions so the next password login returns to setup mode.
+
+Two credential paths exist, but they no longer feed a single shared "any auth works" guard:
+
+1. **Cookie session** - normal dashboard access after password-only setup login or password plus passkey login.
+2. **Scoped API token** - `Authorization: Bearer <token>` validated against `ea_api_tokens` (token hash, scopes, expiry). Used only by explicitly opted-in external integration endpoints (currently `POST /api/briefing/actual/quick-txn`). New tokens expire by default after 90 days unless overridden by env. Bearer requests are exempt from the `x-requested-with` CSRF check because they carry their own unforgeable secret.
+
+Production WebAuthn configuration is explicit and fail-fast: `EA_WEBAUTHN_RP_NAME`, `EA_WEBAUTHN_RP_ID`, and `EA_WEBAUTHN_ORIGIN` are required when `NODE_ENV=production`. Development defaults are `EA Dashboard`, `localhost`, and `http://localhost:5173`.
 
 Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in `ea_csrf_tokens`, plus a short-lived `SameSite=Lax` browser-bind cookie for callback binding.
 
@@ -534,6 +555,7 @@ erDiagram
 |---|------|---------|
 | 1 | `001_ea_tables.sql` | Accounts, settings, auth, email index/FTS, snapshot, triage, current-data cache, Todoist mirror, notes, and Actual helper tables |
 | 9 | `009_actual_metadata_mirror.sql` | Projected Actual accounts, payees, categories, schedules, and recent transactions for fast EA reads |
+| 12 | `012_passkey_auth.sql` | Passkey credentials, pending password-auth state, and WebAuthn challenges |
 
 ## Key Patterns
 
@@ -586,7 +608,14 @@ When a recurring Todoist task is completed, the Todoist API advances it to the n
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| POST | `/api/auth/login` | No | Password login (rate-limited 5/15min) |
+| POST | `/api/auth/login` | No | Password login. Creates `ea_session` only when no passkeys exist; otherwise creates pending password auth |
+| POST | `/api/auth/passkey/authentication/options` | Pending password auth | Create passkey authentication challenge |
+| POST | `/api/auth/passkey/authentication/verify` | Pending password auth | Verify passkey assertion and issue `ea_session` |
+| POST | `/api/auth/passkey/authentication/cancel` | Pending password auth | Cancel pending password auth and clear challenges |
+| GET | `/api/auth/passkeys` | Cookie | List registered passkey metadata |
+| POST | `/api/auth/passkeys/registration/options` | Cookie | Create passkey registration challenge |
+| POST | `/api/auth/passkeys/registration/verify` | Cookie | Verify and store registered passkey |
+| DELETE | `/api/auth/passkeys/:credentialId` | Cookie | Delete one registered passkey and rotate browser sessions |
 | GET | `/api/auth/check` | Cookie | Session validation |
 | POST | `/api/auth/logout` | Cookie | Destroy session |
 
@@ -712,6 +741,8 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 ### API Tokens (Bearer auth)
 
 Token management endpoints live under `/api/auth`. Bearer tokens authenticate by `Authorization: Bearer <token>` and bypass the `x-requested-with` CSRF check, but they are not general dashboard auth. They are accepted only on explicitly opted-in automation endpoints, currently `POST /api/briefing/actual/quick-txn`. Raw tokens are shown once on creation; only `token_hash` is persisted, and new tokens receive a default 90-day expiry.
+
+Passkeys and API tokens are separate auth surfaces. A registered passkey can unlock the browser session after a successful dashboard password; a scoped API token can only call specifically opted-in automation endpoints and cannot satisfy the dashboard route guard.
 
 ## Deployment
 
