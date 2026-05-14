@@ -69,6 +69,7 @@ export default function CalendarFloatingDetailPanel({
   const [feedbackActive, setFeedbackActive] = useState(false);
   const [measuredPlacementKey, setMeasuredPlacementKey] = useState(null);
   const [snapPlacementKey, setSnapPlacementKey] = useState(null);
+  const [snapPlacementIntent, setSnapPlacementIntent] = useState(null);
   const [hasRevealedMeasuredPlacement, setHasRevealedMeasuredPlacement] = useState(false);
 
   const open = !!detail?.open && !!children;
@@ -161,6 +162,7 @@ export default function CalendarFloatingDetailPanel({
           measuredPlacementKeysRef.current.add(placementKey);
           if (!hasRevealedMeasuredPlacement) {
             snapNextMeasuredPlacementKeyRef.current = placementKey;
+            setSnapPlacementIntent(detail?.sideIntent || "auto");
           }
           setMeasuredPlacementKey(placementKey);
         }
@@ -170,11 +172,14 @@ export default function CalendarFloatingDetailPanel({
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [hasRevealedMeasuredPlacement, open, placementKey]);
+  }, [detail?.sideIntent, hasRevealedMeasuredPlacement, open, placementKey]);
 
   useEffect(() => {
     if (!snapPlacementKey || typeof window === "undefined") return undefined;
-    const frame = window.requestAnimationFrame(() => setSnapPlacementKey(null));
+    const frame = window.requestAnimationFrame(() => {
+      setSnapPlacementKey(null);
+      setSnapPlacementIntent(null);
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [snapPlacementKey]);
 
@@ -363,7 +368,11 @@ export default function CalendarFloatingDetailPanel({
       }
     : anchoredPlacement;
   const manualTransitionActive = manualPlacementActive || dragging || manualDragActive;
-  const snapTransitionActive = snapPlacementKey === placementKey;
+  const snapTransitionActive = snapPlacementKey === placementKey
+    && (
+      snapPlacementIntent === "user-flip"
+      || !(detail?.sideIntent === "user-flip" && hasRevealedMeasuredPlacement)
+    );
   const awaitingMeasuredPlacement = open
     && !!placementKey
     && typeof ResizeObserver !== "undefined"
