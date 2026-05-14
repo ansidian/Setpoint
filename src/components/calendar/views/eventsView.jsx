@@ -2,6 +2,7 @@
 import { Bell, Calendar as CalendarIcon, CheckCircle2, CircleDashed, ExternalLink, Pencil, Video } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import TimelineDetailRail from "../TimelineDetailRail.jsx";
+import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import {
   RailAction,
   RailActionGroup,
@@ -26,6 +27,11 @@ import {
   orderPlanningItems,
 } from "./events/eventsPlanningModel.js";
 import { normalizeStatus, statusLabel } from "./deadlines/deadlinesModel.js";
+import {
+  googleSpecialDateAccent,
+  googleSpecialDateLabel,
+  isGoogleSpecialDateEvent,
+} from "../googleSpecialDateModel.js";
 
 const MEETING_PROVIDER_PREFIX = /^\s*(?:\(|\[)?\s*(?:zoom|google meet|meet|teams|webex)(?:\)|\])?\s*[:-]?\s*/i;
 const PACIFIC_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -190,18 +196,9 @@ function eventMeta(ev) {
   return formatEventDuration(ev.startMs, ev.endMs) || ev.duration || "";
 }
 
-function birthdayEventLabel(ev) {
-  const type = ev?.birthdayProperties?.type || "birthday";
-  if (type === "anniversary") return "Anniversary";
-  if (type === "custom") return ev?.birthdayProperties?.customTypeName || "Special date";
-  if (type === "other") return "Special date";
-  if (type === "self") return "Birthday";
-  return "Birthday";
-}
-
 function specialEventLabel(ev) {
+  if (isGoogleSpecialDateEvent(ev)) return googleSpecialDateLabel(ev);
   const eventType = ev?.eventType || "default";
-  if (eventType === "birthday") return birthdayEventLabel(ev);
   if (eventType === "fromGmail") return "From Gmail";
   if (eventType === "focusTime") return "Focus time";
   if (eventType === "outOfOffice") return "Out of office";
@@ -214,7 +211,7 @@ function isEditableEvent(ev) {
 }
 
 function isReadOnlyBirthdayEvent(ev) {
-  return ev?.eventType === "birthday" || ev?.readOnlyReason === "birthday";
+  return isGoogleSpecialDateEvent(ev);
 }
 
 function calendarActionUrl(ev) {
@@ -236,6 +233,7 @@ export function getDefaultSelectedItemId(items = []) {
 }
 
 function eventAccent(ev) {
+  if (isGoogleSpecialDateEvent(ev)) return googleSpecialDateAccent(ev);
   return ev?.color || ev?.sourceColor || "#89b4fa";
 }
 
@@ -272,17 +270,18 @@ function DeadlineTimelineStatus({ task, compact = false }) {
 
 function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
   const motion = useDetailRailMotion();
+  const specialDate = isGoogleSpecialDateEvent(ev);
   const editable = isEditableEvent(ev);
   const displayTitle = sanitizeEventDisplayTitle(ev.title);
   const location = ev.location ? getLocationDisplayLabel(ev.location) : null;
   const attendeeSummary = ev.attendees?.length
     ? `${ev.attendees.length} attendee${ev.attendees.length === 1 ? "" : "s"}`
     : null;
-  const durationLabel = !ev.allDay ? eventMeta(ev) : null;
-  const accessoryLabel = location || attendeeSummary || null;
-  const reminderSummary = formatReminderSummary(ev);
+  const durationLabel = !ev.allDay && !specialDate ? eventMeta(ev) : null;
+  const accessoryLabel = specialDate ? null : location || attendeeSummary || null;
+  const reminderSummary = specialDate ? "" : formatReminderSummary(ev);
   const typeLabel = specialEventLabel(ev);
-  const showRecurring = ev.isRecurring && !typeLabel;
+  const showRecurring = ev.isRecurring && !typeLabel && !specialDate;
 
   return (
     <Motion.div
@@ -309,7 +308,26 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
           Selected event
         </Motion.div>
 
-        <Motion.div layout transition={motion.layout} style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+        <Motion.div
+          layout
+          transition={motion.layout}
+          style={{
+            display: specialDate ? "grid" : "flex",
+            gridTemplateColumns: specialDate ? "32px minmax(0, 1fr)" : undefined,
+            alignItems: specialDate ? "center" : undefined,
+            flexDirection: specialDate ? undefined : "column",
+            gap: specialDate ? 8 : 6,
+            flexShrink: 0,
+          }}
+        >
+          {specialDate ? (
+            <GoogleSpecialDateBadge
+              item={ev}
+              color={accent}
+              selected
+              variant="detail"
+            />
+          ) : null}
           <Motion.div
             layout="position"
             transition={motion.layout}
@@ -328,46 +346,48 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
           >
             {displayTitle}
           </Motion.div>
-          <Motion.div
-            layout
-            transition={motion.layout}
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "baseline",
-              gap: "2px 8px",
-            }}
-          >
-            <span
-              data-testid="calendar-selected-event-time"
-              data-nowrap="true"
+          {!specialDate ? (
+            <Motion.div
+              layout
+              transition={motion.layout}
               style={{
-                fontSize: 12.5,
-                lineHeight: 1.35,
-                color: accent,
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-                fontVariantNumeric: "tabular-nums",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "baseline",
+                gap: "2px 8px",
               }}
             >
-              {compactEventTimeRange(ev)}
-            </span>
-            {accessoryLabel ? (
               <span
+                data-testid="calendar-selected-event-time"
+                data-nowrap="true"
                 style={{
-                  fontSize: 11.5,
-                  lineHeight: 1.4,
-                  color: "rgba(205,214,244,0.56)",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 1,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
+                  fontSize: 12.5,
+                  lineHeight: 1.35,
+                  color: accent,
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {accessoryLabel}
+                {compactEventTimeRange(ev)}
               </span>
-            ) : null}
-          </Motion.div>
+              {accessoryLabel ? (
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    lineHeight: 1.4,
+                    color: "rgba(205,214,244,0.56)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {accessoryLabel}
+                </span>
+              ) : null}
+            </Motion.div>
+          ) : null}
         </Motion.div>
 
         {(durationLabel || ev.allDay || typeLabel || showRecurring || !editable || reminderSummary) ? (
@@ -380,7 +400,7 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
               </RailReminderIndicator>
             ) : null}
             {typeLabel ? <RailMetaChip tone="quiet" compact>{typeLabel}</RailMetaChip> : null}
-            {ev.allDay ? <RailMetaChip tone="quiet" compact>All day</RailMetaChip> : null}
+            {ev.allDay && !specialDate ? <RailMetaChip tone="quiet" compact>All day</RailMetaChip> : null}
             {showRecurring ? <RailMetaChip tone="quiet" compact>Recurring</RailMetaChip> : null}
             {!editable ? <RailMetaChip tone="quiet" compact>Read-only</RailMetaChip> : null}
           </Motion.div>
@@ -392,6 +412,7 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
 
 function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b4fa" }) {
   if (!ev) return null;
+  if (isGoogleSpecialDateEvent(ev)) return null;
   const editable = isEditableEvent(ev);
   const zoomUrl = extractZoomMeetingUrl(ev);
   const eventUrl = extractNonZoomEventUrl(ev);
@@ -448,16 +469,18 @@ function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b
 
 function hasEventActions(ev) {
   if (!ev) return false;
+  if (isGoogleSpecialDateEvent(ev)) return false;
   return Boolean(isEditableEvent(ev) || extractZoomMeetingUrl(ev) || extractNonZoomEventUrl(ev) || calendarActionUrl(ev));
 }
 
 function toRailItem(ev, onSelectItem, selectedItemId) {
-  const reminderSummary = formatReminderSummary(ev);
+  const specialDate = isGoogleSpecialDateEvent(ev);
+  const reminderSummary = specialDate ? "" : formatReminderSummary(ev);
   const typeLabel = specialEventLabel(ev);
   const meta = [
-    eventMeta(ev),
+    specialDate ? null : eventMeta(ev),
     reminderSummary,
-    typeLabel || (ev.isRecurring ? "Recurring" : null),
+    typeLabel || (!specialDate && ev.isRecurring ? "Recurring" : null),
     !isEditableEvent(ev) && (ev.writable === false || typeLabel) ? "Read-only" : null,
   ].filter(Boolean).join(" · ");
   const selectionId = getPlanningItemId(ev);
@@ -481,12 +504,12 @@ function toRailItem(ev, onSelectItem, selectedItemId) {
 
   return {
     id: selectionId,
-    timeLabel: ev.allDay ? "All day" : pacificTime(ev.startMs),
+    timeLabel: specialDate ? "" : ev.allDay ? "All day" : pacificTime(ev.startMs),
     title: sanitizeEventDisplayTitle(ev.title),
     subtitle: eventSubtitle(ev),
     meta,
     selected: isSelected,
-    dotColor: ev.color || ev.sourceColor || "#4285f4",
+    dotColor: specialDate ? googleSpecialDateAccent(ev) : ev.color || ev.sourceColor || "#4285f4",
     onClick: !isSelected && onSelectItem ? () => onSelectItem(selectionId) : undefined,
   };
 }
@@ -532,16 +555,18 @@ function renderDetail({
       summary={`${eventItems.length} event${eventItems.length !== 1 ? "s" : ""}${deadlineItems.length ? ` · ${deadlineItems.length} deadline${deadlineItems.length === 1 ? "" : "s"}` : ""}`}
       accent="#89b4fa"
       headerContent={selectedEvent ? (
-        <EventSelectedCard
-          ev={selectedEvent}
-          actions={hasEventActions(selectedEvent) ? (
-            <EventSelectedActions
-              ev={selectedEvent}
-              onEditEvent={onEditEvent}
-              compact
-            />
-          ) : null}
-        />
+          <EventSelectedCard
+            ev={selectedEvent}
+            accent={eventAccent(selectedEvent)}
+            actions={hasEventActions(selectedEvent) ? (
+              <EventSelectedActions
+                ev={selectedEvent}
+                onEditEvent={onEditEvent}
+                compact
+                accent={eventAccent(selectedEvent)}
+              />
+            ) : null}
+          />
       ) : null}
       sections={[
         { id: "all-day", label: "All day", items: allDayItems },

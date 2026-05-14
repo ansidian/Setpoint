@@ -84,6 +84,32 @@ describe("CalendarSearchRail", () => {
     expect(row.style.background).toContain("rgba(228, 67, 50, 0.18)");
   });
 
+  it("renders birthday search results as special-date markers without all-day metadata", () => {
+    const search = makeSearch({
+      query: "birthday",
+      results: [
+        {
+          id: "event:birthday-1",
+          type: "event",
+          itemId: "birthday-1",
+          itemDate: "2026-05-22",
+          title: "Maya's birthday",
+          subtitle: "All day · All day",
+          sourceLabel: "Birthdays",
+          sourceColor: "#ff887c",
+        },
+      ],
+    });
+
+    render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
+
+    const row = screen.getByTestId("calendar-search-result-row");
+    expect(row.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(row.textContent).toContain("Maya's birthday");
+    expect(row.textContent).not.toMatch(/all.day/i);
+    expect(row.getAttribute("data-source-color")).toBe("#ff887c");
+  });
+
   it("matches deadline rows against source-qualified selection ids from floating detail", () => {
     const baseSearch = makeSearch({
       query: "final",

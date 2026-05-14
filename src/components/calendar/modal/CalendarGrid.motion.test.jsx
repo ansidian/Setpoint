@@ -97,9 +97,16 @@ function renderGrid(itemsByDay, overrides = {}) {
     navigateMonth: vi.fn(),
     ...overrides,
   };
+  const wrapGrid = (ui) => (
+    <div data-testid="calendar-modal-panel">
+      {ui}
+    </div>
+  );
+  const result = render(wrapGrid(<CalendarGrid {...props} />));
 
   return {
-    ...render(<CalendarGrid {...props} />),
+    ...result,
+    rerender: (ui) => result.rerender(wrapGrid(ui)),
     props,
   };
 }
@@ -513,6 +520,151 @@ describe("CalendarGrid overflow motion coverage", () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+    });
+  });
+
+  it("clears an active Calendar Event Selection Set when selecting a birthday span", () => {
+    const clearEventSelection = vi.fn();
+    const setSelectedItemId = vi.fn();
+    const birthday = {
+      id: "birthday-1",
+      title: "Maya's birthday",
+      eventType: "birthday",
+      birthdayProperties: { type: "birthday" },
+      allDay: true,
+      writable: false,
+      startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
+      sourceColor: "#ff887c",
+      color: "#ff887c",
+    };
+
+    renderGrid(
+      { 20: [birthday] },
+      {
+        viewData: { isLoading: false, events: [birthday] },
+        eventQuickActions: {
+          eventSelectionActive: true,
+          clearEventSelection,
+        },
+        setSelectedItemId,
+      },
+    );
+
+    fireEvent.click(screen.getByTestId("calendar-event-span-segment"), { clientX: 4 });
+
+    expect(clearEventSelection).toHaveBeenCalledTimes(1);
+    expect(setSelectedItemId).toHaveBeenCalledWith("birthday-1");
+  });
+
+  it("reanchors parked birthday detail from its floating-detail item id when selection drifted", async () => {
+    const onReanchorFloatingDetail = vi.fn();
+    const onDirectItemAction = vi.fn();
+    const setSelectedDay = vi.fn();
+    const setSelectedDateKey = vi.fn();
+    const setSelectedItemId = vi.fn();
+    const birthday = {
+      id: "birthday-1",
+      title: "Maya's birthday",
+      eventType: "birthday",
+      birthdayProperties: { type: "birthday" },
+      allDay: true,
+      writable: false,
+      startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
+      sourceColor: "#ff887c",
+      color: "#ff887c",
+    };
+    const unrelatedEvent = buildEvent(21, 0);
+
+    renderGrid(
+      { 20: [birthday], 21: [unrelatedEvent] },
+      {
+        viewData: { isLoading: false, events: [birthday] },
+        floatingDetailParked: true,
+        floatingDetailDateKey: "2026-04-20",
+        floatingDetailItemId: "birthday-1",
+        selectedDay: 21,
+        selectedDateKey: "2026-04-21",
+        selectedItemId: "21-0",
+        onDirectItemAction,
+        onReanchorFloatingDetail,
+        setSelectedDay,
+        setSelectedDateKey,
+        setSelectedItemId,
+      },
+    );
+
+    expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("calendar-cell-21").getAttribute("aria-selected")).toBe("false");
+
+    await waitFor(() => {
+      expect(onReanchorFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
+        itemId: "birthday-1",
+        dateKey: "2026-04-20",
+        anchorKind: "chip",
+      }));
+    });
+    expect(setSelectedDay).toHaveBeenCalledWith(20);
+    expect(setSelectedDateKey).toHaveBeenCalledWith("2026-04-20");
+    expect(setSelectedItemId).toHaveBeenCalledWith("birthday-1");
+    expect(onDirectItemAction).toHaveBeenCalledWith("birthday-1", "2026-04-20");
+  });
+
+  it("does not revive stale overflow anchors after month navigation", async () => {
+    const dayEvents = Array.from({ length: 5 }, (_, index) => buildEvent(20, index));
+    const { props, rerender } = renderGrid({ 20: dayEvents });
+
+    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
+    expect(await screen.findByTestId("calendar-cell-overflow-popover")).toBeTruthy();
+
+    rerender(
+      <CalendarGrid
+        {...props}
+        itemsByDay={{}}
+        viewMonth={VIEW_MONTH + 1}
+        currentMonth={VIEW_MONTH + 1}
+      />,
+    );
+
+    expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+
+    rerender(<CalendarGrid {...props} itemsByDay={{ 20: dayEvents }} />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+      expect(screen.getByTestId("calendar-cell-overflow-trigger-20")).toBeTruthy();
+    });
+  });
+
+  it("opens overflow when a parked floating detail targets a hidden item", async () => {
+    const dayEvents = Array.from({ length: 8 }, (_, index) => buildEvent(20, index));
+    const onReanchorFloatingDetail = vi.fn();
+
+    renderGrid(
+      { 20: dayEvents },
+      {
+        floatingDetailParked: true,
+        floatingDetailDateKey: "2026-04-20",
+        floatingDetailItemId: "20-7",
+        onReanchorFloatingDetail,
+      },
+    );
+
+    expect(screen.getByTestId("calendar-cell-overflow-trigger-20")).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("calendar-cell-overflow-popover") ||
+        screen.queryByTestId("calendar-cell-inline-overflow"),
+      ).toBeTruthy();
+    });
+    expect(screen.getByText("Day 20 event 8")).toBeTruthy();
+    await waitFor(() => {
+      expect(onReanchorFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
+        itemId: "20-7",
+        dateKey: "2026-04-20",
+        anchorKind: "overflow-row",
+      }));
     });
   });
 

@@ -197,6 +197,103 @@ describe("CalendarModal event grid behavior", () => {
     });
   });
 
+  it.each([
+    ["Meta", { metaKey: true }],
+    ["Control", { ctrlKey: true }],
+  ])("keeps selected birthday detail open when pressing %s for selection", async (key, modifiers) => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "birthday-1",
+              title: "Maya's birthday",
+              eventType: "birthday",
+              birthdayProperties: { type: "birthday" },
+              accountId: "gmail-main",
+              calendarId: "birthdays",
+              startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
+              allDay: true,
+              sourceLabel: "Birthdays",
+              color: "#ff887c",
+              writable: false,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const chip = await screen.findByTestId("calendar-event-span-segment");
+    fireEvent.click(chip, { clientX: 4 });
+    const detail = await screen.findByTestId("calendar-floating-detail-panel");
+
+    fireEvent.keyDown(document, { key, ...modifiers });
+
+    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(detail);
+    expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
+  });
+
+  it.each([
+    ["plain Space", {}],
+    ["Control+Space", { ctrlKey: true }],
+  ])("does not bind %s as a calendar chip command", async (_label, modifiers) => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              accountId: "gmail-main",
+              calendarId: "primary",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    chip.focus();
+
+    const spaceEvent = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+      ...modifiers,
+    });
+    act(() => {
+      chip.dispatchEvent(spaceEvent);
+    });
+
+    expect(spaceEvent.defaultPrevented).toBe(false);
+    expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
+    expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+  });
+
   it("builds and clears a Calendar Event Selection Set from modifier-clicked grid chips", async () => {
     window.innerWidth = 1900;
 
@@ -591,7 +688,7 @@ describe("CalendarModal event grid behavior", () => {
     });
   });
 
-  it("consumes modal hotkeys without leaving selected items in focus-ring mode", async () => {
+  it("consumes navigation hotkeys without leaving selected items in focus-ring mode", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -624,12 +721,12 @@ describe("CalendarModal event grid behavior", () => {
     fireEvent.click(chip);
     chip.focus();
 
-    const spaceEvent = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+    const navigationEvent = new KeyboardEvent("keydown", { key: "n", bubbles: true, cancelable: true });
     act(() => {
-      chip.dispatchEvent(spaceEvent);
+      chip.dispatchEvent(navigationEvent);
     });
 
-    expect(spaceEvent.defaultPrevented).toBe(true);
+    expect(navigationEvent.defaultPrevented).toBe(true);
     await waitFor(() => {
       expect(panel.getAttribute("data-calendar-suppress-focus-ring")).toBe("true");
     });

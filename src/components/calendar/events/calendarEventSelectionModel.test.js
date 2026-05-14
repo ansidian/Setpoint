@@ -100,6 +100,23 @@ describe("calendarEventSelectionModel", () => {
       resultKind: "calendar-search-result",
       payload: base,
     })).toBe(false);
+    expect(isCalendarEventSelectionEligible({
+      ...base,
+      id: "birthday-1",
+      title: "Maya's birthday",
+      eventType: "birthday",
+      birthdayProperties: { type: "birthday" },
+      allDay: true,
+      writable: true,
+    })).toBe(false);
+    expect(isCalendarEventSelectionEligible({
+      ...base,
+      id: "birthday-source-1",
+      title: "Rin's birthday",
+      sourceLabel: "Birthdays",
+      allDay: true,
+      writable: true,
+    })).toBe(false);
 
     const trip = googleEvent({
       id: "trip-1",

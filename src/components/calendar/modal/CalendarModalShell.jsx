@@ -252,6 +252,9 @@ export default function CalendarModalShell({
     && !selectedItemResolves
     && Array.isArray(floatingDetail.itemsSnapshot)
       ? floatingDetail.itemsSnapshot
+    : !selectedItemResolves
+      && Array.isArray(floatingDetail?.itemsSnapshot)
+        ? floatingDetail.itemsSnapshot
     : String(floatingDetail?.anchorKind || "").startsWith("search")
       && !selectedItemResolves
       && Array.isArray(floatingDetail.itemsSnapshot)
@@ -538,8 +541,11 @@ export default function CalendarModalShell({
                   onOpenFloatingDetail={onOpenFloatingDetail}
                   onCloseFloatingDetail={onCloseFloatingDetail}
                   onReanchorFloatingDetail={onReanchorFloatingDetail}
+                  floatingDetailAnchorElement={floatingDetail?.anchorElement || null}
+                  floatingDetailAnchorKind={floatingDetail?.anchorKind || null}
                   floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
                   floatingDetailParked={!!floatingDetail?.parked}
+                  floatingDetailItemId={floatingDetail?.itemId || null}
                   floatingDetailMode={floatingDetail?.mode || null}
                   floatingDetailDateKey={floatingDetailGridDateKey}
                   floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}

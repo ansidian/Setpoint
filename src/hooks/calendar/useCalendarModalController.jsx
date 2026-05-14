@@ -35,6 +35,8 @@ import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
 import useCalendarModalWheelContainment from "./useCalendarModalWheelContainment.js";
 import useViewportWidth from "./useViewportWidth.js";
 import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
+import { floatingDetailOwnsGridSelection } from "./calendarFloatingDetailModel.js";
+import { isGoogleSpecialDateEvent } from "../../components/calendar/googleSpecialDateModel.js";
 import {
   COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY,
   DEADLINE_OVERLAY_STORAGE_KEY,
@@ -790,7 +792,9 @@ export default function useCalendarModalController({
 
   const addSelectedCalendarEventToSelectionSet = useCallback(() => {
     const selectedEvent = resolveSelectedCalendarEvent();
-    if (!calendarEventSelectionIdentity(selectedEvent)) return false;
+    if (!calendarEventSelectionIdentity(selectedEvent)) {
+      return isGoogleSpecialDateEvent(selectedEvent) ? "ignored" : false;
+    }
     closeEventEditor();
     setFloatingDetail(null);
     setSelectedItemId(null);
@@ -1064,6 +1068,7 @@ export default function useCalendarModalController({
     const parsed = parseYmd(dateKey);
     if (!parsed) return;
     const current = floatingDetailRef.current;
+    if (passive && floatingDetailOwnsGridSelection(current)) return;
     if (current?.open && (current.mode === "edit" || current.mode === "create")) {
       if (passive) return;
       if (current.dirty) {
@@ -1078,7 +1083,7 @@ export default function useCalendarModalController({
     } else if (!passive) {
       closeEventEditor();
     }
-    setFloatingDetail(null);
+    if (!passive) setFloatingDetail(null);
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);
     setSelectedItemId(null);
@@ -1090,7 +1095,7 @@ export default function useCalendarModalController({
     if (view === "deadlines") setDeadlineEditor(null);
   }
 
-  function selectAgendaEvent({ event, item, dateKey, anchorElement, sourceCellElement, anchorKind, detailView }) {
+  function selectAgendaEvent({ event, item, dateKey, anchorElement, sourceCellElement, anchorKind, detailView, preserveEventSelection = false }) {
     const selectedItem = item || event;
     if (!selectedItem) return;
     suppressAgendaPassiveSync();
@@ -1102,7 +1107,7 @@ export default function useCalendarModalController({
       return;
     }
     closeEventEditor();
-    clearCalendarEventSelectionSet();
+    if (!preserveEventSelection) clearCalendarEventSelectionSet();
     setAgendaEntryScrollReleased(true);
     setSelectedDay(parsed.day);
     setSelectedDateKey(dateKey);

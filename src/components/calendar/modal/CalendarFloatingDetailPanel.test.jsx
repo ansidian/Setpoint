@@ -240,6 +240,97 @@ describe("CalendarFloatingDetailPanel", () => {
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-opacity")).toBe("1");
   });
 
+  it("keeps the first park animated while the initial measured snap is pending", async () => {
+    const calendarPanel = appendRectElement({
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 900,
+      width: 900,
+      height: 900,
+    });
+    const rail = appendRectElement({
+      top: 80,
+      left: 580,
+      right: 880,
+      bottom: 860,
+      width: 300,
+      height: 780,
+    });
+    const anchorElement = appendRectElement({
+      top: 420,
+      left: 120,
+      right: 220,
+      bottom: 444,
+      width: 100,
+      height: 24,
+    });
+    const detail = {
+      open: true,
+      mode: "detail",
+      placementKey: "event-placement-first-park",
+      view: "events",
+      itemId: "event-1",
+      dateKey: "2026-05-14",
+      anchorElement,
+      sourceCellElement: anchorElement,
+      exclusionElement: null,
+      preferredSide: null,
+      forcedSide: null,
+      sideIntent: "auto",
+      parked: false,
+      userDragged: false,
+      initialPlacement: resolveFloatingDetailPlacement({
+        anchorRect: anchorElement.getBoundingClientRect(),
+        sourceRect: anchorElement.getBoundingClientRect(),
+        exclusionRect: null,
+        calendarRect: calendarPanel.getBoundingClientRect(),
+        railRect: rail.getBoundingClientRect(),
+        panelHeight: 300,
+        mode: "detail",
+      }),
+    };
+
+    const { rerender } = render(
+      <CalendarFloatingDetailPanel
+        detail={detail}
+        label="Events"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: rail }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Wash Car</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-y-duration")).toBe("0.01");
+
+    rerender(
+      <CalendarFloatingDetailPanel
+        detail={{
+          ...detail,
+          anchorElement: null,
+          sourceCellElement: null,
+          anchorKind: "parked",
+          parked: true,
+        }}
+        label="Events"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: rail }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <div>Wash Car</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-y-type")).toBe("spring");
+  });
+
   it("does not park agenda-anchored panels during transient row replacement", async () => {
     const calendarPanel = appendRectElement({
       top: 0,
@@ -300,6 +391,67 @@ describe("CalendarFloatingDetailPanel", () => {
     await nextFrame();
 
     expect(onPark).not.toHaveBeenCalled();
+  });
+
+  it("does not park a grid-anchored detail while a connected anchor has transient outside geometry", async () => {
+    const calendarPanel = appendRectElement({
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 900,
+      width: 900,
+      height: 900,
+    });
+    const anchorElement = appendRectElement({
+      top: 180,
+      left: -28,
+      right: -4,
+      bottom: 208,
+      width: 24,
+      height: 28,
+    });
+    const onPark = vi.fn();
+
+    render(
+      <CalendarFloatingDetailPanel
+        detail={{
+          open: true,
+          mode: "detail",
+          placementKey: "sunday-reanchor-placement",
+          view: "events",
+          itemId: "event-1",
+          dateKey: "2026-04-19",
+          anchorElement,
+          sourceCellElement: anchorElement,
+          anchorKind: "chip",
+          preferredSide: null,
+          sideIntent: "auto",
+          parked: false,
+          userDragged: false,
+          initialPlacement: resolveFloatingDetailPlacement({
+            anchorRect: anchorElement.getBoundingClientRect(),
+            sourceRect: anchorElement.getBoundingClientRect(),
+            calendarRect: calendarPanel.getBoundingClientRect(),
+            railRect: null,
+            panelHeight: 300,
+            mode: "detail",
+          }),
+        }}
+        label="Event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={onPark}
+        onClose={() => {}}
+      >
+        <div>Detail</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    window.dispatchEvent(new Event("scroll"));
+    await nextFrame();
+
+    expect(onPark).not.toHaveBeenCalled();
+    expect(screen.getAllByTestId("calendar-floating-detail-panel")).toHaveLength(1);
   });
 
   it("snaps cold side flips until the first measured placement is revealed", async () => {

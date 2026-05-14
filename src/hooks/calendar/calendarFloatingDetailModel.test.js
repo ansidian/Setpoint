@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  floatingDetailOwnsGridSelection,
   formatFloatingDetailLabel,
   formatFloatingEditorLabel,
   isGridOriginFloatingDetail,
+  isFloatingDetailTriggerTarget,
   preservedReanchorSide,
 } from "./calendarFloatingDetailModel";
 
@@ -21,6 +23,38 @@ describe("calendarFloatingDetailModel", () => {
       mode: "detail",
       anchorKind: "chip",
       parked: true,
+      userDragged: false,
+    })).toBe(false);
+  });
+
+  it("keeps grid-origin parked details in charge of grid selection", () => {
+    expect(floatingDetailOwnsGridSelection({
+      open: true,
+      mode: "detail",
+      anchorKind: "span",
+      itemId: "birthday-1",
+      dateKey: "2026-05-10",
+      parked: false,
+      userDragged: false,
+    })).toBe(true);
+
+    expect(floatingDetailOwnsGridSelection({
+      open: true,
+      mode: "detail",
+      anchorKind: "parked",
+      itemId: "birthday-1",
+      dateKey: "2026-05-10",
+      parked: true,
+      userDragged: false,
+    })).toBe(true);
+
+    expect(floatingDetailOwnsGridSelection({
+      open: true,
+      mode: "detail",
+      anchorKind: "agenda-row",
+      itemId: "event-1",
+      dateKey: "2026-05-10",
+      parked: false,
       userDragged: false,
     })).toBe(false);
   });
@@ -51,5 +85,15 @@ describe("calendarFloatingDetailModel", () => {
     expect(formatFloatingDetailLabel("events", "2026-05-02", 2026, 4, null)).toBe("Event · Sat, May 2");
     expect(formatFloatingEditorLabel("create", "deadlines", null, 2026, 4, 3)).toBe("New deadline · Sun, May 3");
     expect(formatFloatingEditorLabel("edit", "bills", null, 2026, 4, null)).toBe("Edit bill · Selected");
+  });
+
+  it("treats overflow triggers as floating-detail-safe targets", () => {
+    const trigger = document.createElement("button");
+    trigger.setAttribute("data-calendar-overflow-trigger", "true");
+    document.body.appendChild(trigger);
+
+    expect(isFloatingDetailTriggerTarget(trigger)).toBe(true);
+
+    trigger.remove();
   });
 });

@@ -228,7 +228,7 @@ describe("calendar detail timeline", () => {
         items: [
           {
             id: "birthday-1_20260522",
-            title: "Maya",
+            title: "Maya's birthday",
             eventType: "birthday",
             birthdayProperties: { type: "birthday", contact: "people/c12345" },
             startMs: new Date("2026-05-22T19:00:00.000Z").getTime(),
@@ -245,8 +245,11 @@ describe("calendar detail timeline", () => {
     );
 
     const card = screen.getByTestId("calendar-selected-event-card");
+    expect(card.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
     expect(card.textContent).toContain("Birthday");
     expect(card.textContent).toContain("Read-only");
+    expect(card.textContent).not.toContain("All day");
+    expect(card.textContent).not.toContain("Recurring");
     expect(screen.queryByRole("button", { name: /edit details/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /open calendar/i })).toBeNull();
   });

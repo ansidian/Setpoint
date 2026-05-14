@@ -10,6 +10,11 @@ import {
   Users,
   Video,
 } from "lucide-react";
+import GoogleSpecialDateBadge from "../../calendar/GoogleSpecialDateBadge.jsx";
+import {
+  googleSpecialDateAccent,
+  isGoogleSpecialDateEvent,
+} from "../../calendar/googleSpecialDateModel.js";
 import {
   eventState,
   formatEventDuration,
@@ -66,23 +71,26 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
 
   if (item.kind === "event") {
     const event = item.data;
+    const specialDate = isGoogleSpecialDateEvent(event);
     const isAllDayEvent = !!event.allDay;
     const state = isAllDayEvent ? "future" : eventState(event, now);
     isPast = state === "past";
     isLive = state === "live";
-    Icon = /zoom|video/i.test(event.location || "") || event.hangoutLink ? Video
+    Icon = specialDate ? null
+      : /zoom|video/i.test(event.location || "") || event.hangoutLink ? Video
       : /flight|airport|plane/i.test(event.title || "") ? Plane
       : /coffee|lunch|dinner/i.test(event.title || "") ? Coffee
       : event.attendees?.length > 1 ? Users
       : Calendar;
-    leftLabel = isAllDayEvent ? "All day" : formatEventTime(event.startMs);
+    leftLabel = specialDate ? "" : isAllDayEvent ? "All day" : formatEventTime(event.startMs);
     title = event.title;
-    sub = event.attendees?.length
+    sub = specialDate ? ""
+      : event.attendees?.length
       ? `with ${event.attendees.slice(0, 3).join(", ")}${event.attendees.length > 3 ? ` +${event.attendees.length - 3}` : ""}`
       : event.location || event.subtitle;
     meta = isAllDayEvent ? "" : formatEventDuration(event.startMs, event.endMs);
     urgency = isLive ? "high" : "low";
-    railDotColor = event.color || event.sourceColor || accent;
+    railDotColor = specialDate ? googleSpecialDateAccent(event) : event.color || event.sourceColor || accent;
     jumpPayload = { kind: "event", id: getEventSelectionId(event), data: event };
   } else if (item.kind === "deadline") {
     const deadline = item.data;
@@ -115,6 +123,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
   const dotColor = urgencyColors[urgency] || accent;
   const effectiveRailDotColor = railDotColor || dotColor;
   const reminderSummary = formatReminderSummary(item.data, { now });
+  const isSpecialDateEvent = item.kind === "event" && isGoogleSpecialDateEvent(item.data);
   const opacity = isPast ? 0.38 : 1;
   const railBorderColor = railDotColor
     ? `${effectiveRailDotColor}${isLive ? "" : "55"}`
@@ -217,16 +226,28 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
             marginBottom: 2,
           }}
         >
-          <Icon size={isMobile ? 10 : 11} color={iconColor || "rgba(205,214,244,0.55)"} />
+          {isSpecialDateEvent ? (
+            <GoogleSpecialDateBadge
+              item={item.data}
+              color={effectiveRailDotColor}
+              variant="chip"
+            />
+          ) : (
+            <Icon size={isMobile ? 10 : 11} color={iconColor || "rgba(205,214,244,0.55)"} />
+          )}
           <div
+            data-dashboard-timeline-title="true"
             style={{
               fontSize: isMobile ? 12.5 : 13,
               fontWeight: 500,
               color: "#cdd6f4",
               overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: isMobile ? "normal" : "nowrap",
-              lineHeight: isMobile ? 1.35 : "normal",
+              textOverflow: isSpecialDateEvent ? "clip" : "ellipsis",
+              whiteSpace: isMobile || isSpecialDateEvent ? "normal" : "nowrap",
+              lineHeight: isMobile || isSpecialDateEvent ? 1.32 : "normal",
+              display: isSpecialDateEvent ? "-webkit-box" : "block",
+              WebkitLineClamp: isSpecialDateEvent ? 2 : undefined,
+              WebkitBoxOrient: isSpecialDateEvent ? "vertical" : undefined,
               flex: 1,
               minWidth: 0,
               textDecoration: isPast ? "line-through" : "none",

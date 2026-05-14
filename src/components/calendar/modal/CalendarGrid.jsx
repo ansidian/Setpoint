@@ -10,13 +10,21 @@ import useCalendarGridEffects from "./useCalendarGridEffects.js";
 import {
   GRID_ROWS,
   buildCalendarMonthCells,
-  canUseInlineOverflow,
   createMonthWheelState,
+  overflowStateIsLiveInScope,
   overflowHiddenSignature,
-  resolveInlineOverflowAnchor,
+  resolveOverflowPresentation,
   sameOverflowDate,
   spanCoversOverflowDate,
 } from "./calendarGridUtils.js";
+
+function overflowItemMatchesId(item, itemId) {
+  if (itemId == null) return false;
+  const target = String(itemId);
+  if (String(item?.id) === target) return true;
+  if (item?.selectionId != null && String(item.selectionId) === target) return true;
+  return (item?.matchItemIds || []).some((id) => String(id) === target);
+}
 
 export default function CalendarGrid({
   view,
@@ -55,8 +63,11 @@ export default function CalendarGrid({
   onOpenFloatingDetail,
   onCloseFloatingDetail,
   onReanchorFloatingDetail,
+  floatingDetailAnchorElement = null,
+  floatingDetailAnchorKind = null,
   floatingDetailOpen = false,
   floatingDetailParked = false,
+  floatingDetailItemId = null,
   floatingDetailMode = null,
   floatingDetailDateKey = null,
   floatingEditorDirty = false,
@@ -72,6 +83,7 @@ export default function CalendarGrid({
   const ignoreOverflowScrollUntilRef = useRef(0);
   const [activeSpanSegmentId, setActiveSpanSegmentId] = useState(null);
   const [suppressedSelectedHiddenAutoOpenKey, setSuppressedSelectedHiddenAutoOpenKey] = useState(null);
+  const [overflowReanchorDateKey, setOverflowReanchorDateKey] = useState(null);
   const fillGridHeight = !layout.stacked;
   const gridRowCount = fillGridHeight
     ? Math.max(1, Math.ceil((firstDay + daysInMonth) / 7))
@@ -81,14 +93,18 @@ export default function CalendarGrid({
     : trailingEmpty;
   const [overflowState, setOverflowState] = useState(null);
   const resolvedOverflow =
-    overflowState &&
-    overflowState.view === view &&
-    overflowState.viewYear === viewYear &&
-    overflowState.viewMonth === viewMonth
+    overflowStateIsLiveInScope(overflowState, { view, viewYear, viewMonth })
       ? overflowState
       : null;
   const resolvedPopover =
     resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
+  const gridSelectedDateKey =
+    floatingDetailParked && floatingDetailDateKey
+      ? floatingDetailDateKey
+      : selectedDateKey;
+  const gridSelectedItemId = floatingDetailParked
+    ? (floatingDetailItemId != null ? String(floatingDetailItemId) : null)
+    : selectedItemId;
   const eventDateCells = view === "events";
   const shouldFilterCompletedDeadlines = view === "deadlines" && !showCompletedDeadlines;
   const eventsPlanningQuickActions = useMemo(() => {
@@ -102,9 +118,9 @@ export default function CalendarGrid({
     };
   }, [deadlineQuickActions, eventDateCells, eventQuickActions]);
   const itemQuickActions = eventDateCells ? eventsPlanningQuickActions : view === "deadlines" ? deadlineQuickActions : null;
-  const selectedCellKey = selectedDateKey;
-  const currentSelectionKey = selectedDateKey && selectedItemId != null
-    ? `${selectedDateKey}:${selectedItemId}`
+  const selectedCellKey = gridSelectedDateKey;
+  const currentSelectionKey = gridSelectedDateKey && gridSelectedItemId != null
+    ? `${gridSelectedDateKey}:${gridSelectedItemId}`
     : null;
   const floatingEditorOpen = floatingDetailMode === "edit" || floatingDetailMode === "create";
   const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
@@ -182,12 +198,59 @@ export default function CalendarGrid({
       ) {
         return current;
       }
+      const keepOpenItemId = current.keepOpenItemId ?? gridSelectedItemId;
+      if (
+        keepOpenItemId != null
+        && (composition.hiddenItems || []).some((item) => overflowItemMatchesId(item, keepOpenItemId))
+      ) {
+        return {
+          ...current,
+          items: composition.hiddenItems,
+          hiddenSignature: nextSignature,
+          totalCount: composition.totalCount,
+          visibleCount: composition.visibleCount,
+          leadingColumnWidth: composition.leadingColumnWidth,
+          keepOpenItemId: String(keepOpenItemId),
+        };
+      }
       return null;
     });
-  }, [setOverflowState]);
+  }, [gridSelectedItemId, setOverflowState]);
   const markOverflowInteraction = useCallback(() => {
     ignoreOverflowScrollUntilRef.current = performance.now() + 220;
   }, []);
+  const clearOverflowReanchorRequest = useCallback((dateKey) => {
+    setOverflowReanchorDateKey((current) => (
+      !dateKey || current === dateKey ? null : current
+    ));
+  }, []);
+  const handleReanchorFloatingDetail = useCallback((payload) => {
+    if (payload?.day != null) {
+      setSelectedDay?.(payload.day);
+    }
+    if (payload?.dateKey) {
+      setSelectedDateKey?.(payload.dateKey);
+    }
+    if (payload?.itemId != null) {
+      setSelectedItemId?.(String(payload.itemId));
+      if (payload.dateKey) {
+        onDirectItemAction?.(payload.itemId, payload.dateKey);
+      }
+    } else if (payload?.mode !== "detail") {
+      setSelectedItemId?.(null);
+      if (payload?.dateKey) {
+        onDirectDateAction?.(payload.dateKey);
+      }
+    }
+    onReanchorFloatingDetail?.(payload);
+  }, [
+    onDirectDateAction,
+    onDirectItemAction,
+    onReanchorFloatingDetail,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+  ]);
 
   function handleSelectDay(
     day,
@@ -250,7 +313,7 @@ export default function CalendarGrid({
     if (view === "deadlines") {
       setDeadlineEditor(null);
     }
-    if (eventDateCells) eventQuickActions?.clearEventSelection?.();
+    if (eventDateCells && !anchorMeta?.preserveEventSelection) eventQuickActions?.clearEventSelection?.();
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(itemId != null ? String(itemId) : null);
@@ -260,6 +323,15 @@ export default function CalendarGrid({
     }
     if (keepOverflowOpen) {
       markOverflowInteraction();
+      if (itemId != null) {
+        setOverflowState((current) => {
+          if (!sameOverflowDate(current, dateKey, day)) return current;
+          return {
+            ...current,
+            keepOpenItemId: String(itemId),
+          };
+        });
+      }
     }
     if (dateKey) onDirectItemAction?.(itemId, dateKey);
     if (!keepOverflowOpen) {
@@ -315,6 +387,8 @@ export default function CalendarGrid({
     hiddenStackHeight,
     leadingColumnWidth,
     focusOnOpen,
+    forceOpen,
+    reanchorItemId,
     anchorKey,
     cell,
     day,
@@ -323,27 +397,32 @@ export default function CalendarGrid({
       triggerElement?.closest?.("[role='gridcell']");
     setOverflowState((current) => {
       if (current?.anchorKey === anchorKey) {
-        return null;
+        const sameLiveOverflow = overflowStateIsLiveInScope(current, {
+          view,
+          viewYear,
+          viewMonth,
+        });
+        if (sameLiveOverflow) {
+          if (!forceOpen) return null;
+          if (reanchorItemId == null) return current;
+          return {
+            ...current,
+            keepOpenItemId: String(reanchorItemId),
+          };
+        }
       }
-      const mode = canUseInlineOverflow({
+      const presentation = resolveOverflowPresentation({
         triggerElement,
         hiddenStackHeight,
         layout,
-      })
-        ? "inline"
-        : "fallback";
-      const inlineAnchor =
-        mode === "inline"
-          ? resolveInlineOverflowAnchor(
-              triggerElement,
-              gridBodyRef.current,
-            )
-          : null;
+        containerElement: gridBodyRef.current,
+      });
+      if (!presentation) return current;
       return {
-        mode,
+        mode: presentation.mode,
         triggerElement,
         sourceCellElement,
-        inlineAnchor,
+        inlineAnchor: presentation.inlineAnchor,
         boundarySides: cell.boundarySides,
         boundaryColor: cell.boundaryColor,
         items: hiddenItems,
@@ -368,15 +447,30 @@ export default function CalendarGrid({
         viewMonth,
         anchorKey,
         hiddenSignature: overflowHiddenSignature(hiddenItems),
+        keepOpenItemId: forceOpen && reanchorItemId != null ? String(reanchorItemId) : null,
       };
     });
   }, [activeView.label, layout, view, viewMonth, viewYear]);
+  const openOverflowForReanchor = useCallback((dateKey) => {
+    if (!dateKey || resolvedOverflow?.dateKey === dateKey) return false;
+    if (overflowReanchorDateKey === dateKey) return true;
+    const trigger = gridShellRef.current?.querySelector?.(
+      `[role='gridcell'][data-date-key='${dateKey}'] [data-calendar-overflow-trigger='true']`,
+    );
+    if (!trigger) return false;
+    markOverflowInteraction();
+    setOverflowReanchorDateKey(dateKey);
+    return true;
+  }, [markOverflowInteraction, overflowReanchorDateKey, resolvedOverflow?.dateKey]);
 
   useCalendarGridEffects({
     activeMonthWheelStateRef,
     canGoPrev,
     closeOverflow,
+    floatingDetailAnchorElement,
+    floatingDetailAnchorKind,
     floatingDetailDateKey,
+    floatingDetailItemId,
     floatingDetailMode,
     floatingDetailOpen,
     floatingDetailParked,
@@ -385,11 +479,13 @@ export default function CalendarGrid({
     layout,
     eventSelectionActive: !!eventQuickActions?.eventSelectionActive,
     navigateMonth,
-    onReanchorFloatingDetail,
+    onOpenOverflowForReanchor: openOverflowForReanchor,
+    onRefreshFloatingDetailAnchor: onReanchorFloatingDetail,
+    onReanchorFloatingDetail: handleReanchorFloatingDetail,
     resolvedOverflow,
-    selectedDateKey,
+    selectedDateKey: gridSelectedDateKey,
     selectedDay,
-    selectedItemId,
+    selectedItemId: gridSelectedItemId,
     setOverflowState,
     suppressOutsideClick,
     view,
@@ -472,12 +568,14 @@ export default function CalendarGrid({
             onHiddenItemsChange={validateOverflowHiddenItems}
             onInlineOverflowInteraction={markOverflowInteraction}
             onOpenOverflow={handleOpenOverflow}
+            onOverflowReanchorRequestHandled={clearOverflowReanchorRequest}
             onSelectDay={handleSelectDay}
             onSelectItem={handleSelectItem}
+            overflowReanchorDateKey={overflowReanchorDateKey}
             resolvedOverflow={resolvedOverflow}
             selectedCellKey={selectedCellKey}
             selectedDay={selectedDay}
-            selectedItemId={selectedItemId}
+            selectedItemId={gridSelectedItemId}
             shouldFilterCompletedDeadlines={shouldFilterCompletedDeadlines}
             spanLayout={spanLayout}
             suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
@@ -519,7 +617,7 @@ export default function CalendarGrid({
           onSetActiveSpanSegment={setActiveSpanSegmentId}
           resolvedOverflow={resolvedOverflow}
           resolvedTrailingEmpty={resolvedTrailingEmpty}
-          selectedItemId={selectedItemId}
+          selectedItemId={gridSelectedItemId}
           showGridSkeleton={showGridSkeleton}
           spanSegments={spanLayout.spanSegments}
         />
@@ -527,7 +625,7 @@ export default function CalendarGrid({
 
       <CalendarCellOverflowPopover
         popover={resolvedPopover}
-        selectedItemId={selectedItemId}
+        selectedItemId={gridSelectedItemId}
         onSelectItem={(itemId, anchorMeta) => {
           if (resolvedPopover?.day == null) return;
           handleSelectItem(

@@ -124,6 +124,52 @@ describe("EventsAgendaRail", () => {
     expect(onEventAction).not.toHaveBeenCalled();
   });
 
+  it("renders birthday all-day agenda items as special-date markers outside batch selection", () => {
+    const onEventAction = vi.fn();
+    const toggleEventSelection = vi.fn(() => true);
+    renderRail({
+      onEventAction,
+      events: [
+        event({
+          id: "birthday-event",
+          title: "Maya's birthday",
+          eventType: "birthday",
+          birthdayProperties: { type: "birthday" },
+          allDay: true,
+          writable: false,
+          isRecurring: true,
+          sourceColor: "#ff887c",
+          color: "#ff887c",
+          start: "2026-05-05T07:00:00.000Z",
+          end: "2026-05-06T07:00:00.000Z",
+        }),
+      ],
+      eventQuickActions: {
+        isEventSelectionSelected: () => true,
+        toggleEventSelection,
+      },
+    });
+
+    const chip = screen.getByTestId("calendar-agenda-event-chip");
+    expect(chip.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
+    expect(chip.textContent).toContain("Maya's birthday");
+    expect(chip.textContent).not.toContain("All day");
+
+    fireEvent.click(chip, { metaKey: true });
+
+    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(onEventAction).not.toHaveBeenCalled();
+
+    fireEvent.click(chip);
+
+    expect(onEventAction).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ id: "birthday-event" }),
+      anchorKind: "agenda-chip",
+    }));
+    expect(onEventAction.mock.calls[0][0].preserveEventSelection).toBeFalsy();
+  });
+
   it("exposes alternate event ids for agenda reanchoring after saves", () => {
     renderRail({
       selectedDateKey: "2026-05-04",

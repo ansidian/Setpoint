@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { CURRENT_MONTH_BOUNDARY_COLOR } from "./calendarGridUtils.js";
+import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import {
   CalendarChipRecurringIcon,
   CalendarChipStatusIcon,
@@ -7,7 +8,8 @@ import {
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
 
 function inlineOverflowItemStyle({ item, selected, active, batchSelected = false }) {
-  const accent = item.accent || "var(--ea-accent)";
+  const specialDate = item.specialDate === true;
+  const accent = specialDate ? item.specialDateAccent || item.accent || "var(--ea-accent)" : item.accent || "var(--ea-accent)";
   const quiet = item.complete || item.quiet;
   return {
     display: "flex",
@@ -20,7 +22,13 @@ function inlineOverflowItemStyle({ item, selected, active, batchSelected = false
     padding: "4px 10px",
     overflow: "hidden",
     borderRadius: 10,
-    border: batchSelected
+    border: specialDate
+      ? selected
+        ? `1px solid color-mix(in srgb, ${accent} 42%, rgba(255,255,255,0.08))`
+        : active
+          ? `1px solid color-mix(in srgb, ${accent} 28%, rgba(255,255,255,0.08))`
+          : `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.045))`
+      : batchSelected
       ? `1px solid color-mix(in srgb, ${accent} 68%, rgba(255,255,255,0.16))`
       : selected
       ? `1px solid color-mix(in srgb, ${accent} 48%, rgba(255,255,255,0.08))`
@@ -29,7 +37,13 @@ function inlineOverflowItemStyle({ item, selected, active, batchSelected = false
         : quiet
           ? "1px solid rgba(255,255,255,0.035)"
           : "1px solid rgba(255,255,255,0.045)",
-    background: batchSelected
+    background: specialDate
+      ? selected
+        ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, rgba(255,255,255,0.02)), color-mix(in srgb, ${accent} 7%, rgba(22,22,30,0.18)))`
+        : active
+          ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 10%, rgba(255,255,255,0.02)), color-mix(in srgb, ${accent} 5%, rgba(22,22,30,0.12)))`
+          : `linear-gradient(180deg, color-mix(in srgb, ${accent} 7%, rgba(255,255,255,0.018)), rgba(255,255,255,0.018))`
+      : batchSelected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 24%, transparent), color-mix(in srgb, ${accent} 10%, rgba(22,22,30,0.2)))`
       : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 18%, transparent), color-mix(in srgb, ${accent} 8%, transparent))`
@@ -51,7 +65,7 @@ function isEventSelectionModifier(event) {
 }
 
 function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {
-  if (!leadingColumnWidth) return null;
+  if (!leadingColumnWidth || item.specialDate) return null;
   const color = selected
     ? item.leadingColor || item.accent || "var(--ea-accent)"
     : item.leadingColor || "rgba(205,214,244,0.62)";
@@ -97,9 +111,10 @@ function InlineOverflowPrefix({ item, selected, leadingColumnWidth }) {
 }
 
 function InlineOverflowChipContent({ item, selected, leadingColumnWidth }) {
-  const length = [compactLeadingLabel(item.leadingLabel), item.title].filter(Boolean).join(" ").length;
+  const specialDate = item.specialDate === true;
+  const length = [specialDate ? "" : compactLeadingLabel(item.leadingLabel), item.title].filter(Boolean).join(" ").length;
   const fontSize = length <= 22 ? 11 : length <= 58 ? 10.5 : 10;
-  const lineClamp = length <= 22 ? 1 : 2;
+  const lineClamp = specialDate ? 2 : length <= 22 ? 1 : 2;
   const lineHeight = 1.08;
   const maxHeight = Number((fontSize * lineHeight * lineClamp).toFixed(2));
   const TitleTag = item.complete ? "s" : "span";
@@ -125,9 +140,11 @@ function InlineOverflowChipContent({ item, selected, leadingColumnWidth }) {
       style={{
         minWidth: 0,
         display: "grid",
-        gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
+        gridTemplateColumns: specialDate
+          ? "24px minmax(0, 1fr)"
+          : leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
         alignItems: "center",
-        columnGap: leadingColumnWidth ? 5 : 0,
+        columnGap: specialDate ? 6 : leadingColumnWidth ? 5 : 0,
         maxHeight,
         overflow: "hidden",
         fontSize,
@@ -140,6 +157,14 @@ function InlineOverflowChipContent({ item, selected, leadingColumnWidth }) {
         selected={selected}
         leadingColumnWidth={leadingColumnWidth}
       />
+      {specialDate ? (
+        <GoogleSpecialDateBadge
+          item={item}
+          color={item.specialDateAccent || item.accent}
+          selected={selected}
+          variant="chip"
+        />
+      ) : null}
       <span
         style={{
           minWidth: 0,
@@ -196,7 +221,17 @@ export default function CalendarInlineOverflowLayer({
         onInteraction?.();
         event.stopPropagation();
       }}
-      onKeyDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        const isSpaceKey = event.key === " " || event.code === "Space";
+        if (
+          isSpaceKey
+          && event.target instanceof HTMLElement
+          && event.target.closest("[data-calendar-event-activation='true']")
+        ) {
+          return;
+        }
+        event.stopPropagation();
+      }}
       style={{
         position: "absolute",
         top: overflow.inlineAnchor.top,
@@ -221,9 +256,10 @@ export default function CalendarInlineOverflowLayer({
       {overflow.items.map((item) => {
         const itemId = String(item.id);
         const selected = itemId === String(selectedItemId);
-        const batchSelected = !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
+        const specialDate = item.specialDate === true;
+        const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
         const active = itemId === String(activeItemId);
-        const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
+        const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent && !specialDate;
         return (
           <button
             key={item.id}
@@ -234,12 +270,16 @@ export default function CalendarInlineOverflowLayer({
             data-date-key={overflow.dateKey || undefined}
             data-hovered={active ? "true" : "false"}
             data-calendar-event-selection={batchSelected ? "true" : undefined}
+            data-calendar-event-activation="true"
             draggable={dragAllowed}
             data-calendar-focus-ring="true"
             onClick={(event) => {
               event.stopPropagation();
+              const target = event.currentTarget;
+              target.focus({ preventScroll: true });
               if (isEventSelectionModifier(event)) {
                 event.preventDefault();
+                if (specialDate) return;
                 quickActions?.toggleEventSelection?.({
                   event: item.sourceEvent || item.sourceItem,
                   dateKey: overflow.dateKey || null,
@@ -251,7 +291,7 @@ export default function CalendarInlineOverflowLayer({
                 return;
               }
               onSelectItem?.(item.id, {
-                triggerElement: event.currentTarget,
+                triggerElement: target,
                 sourceCellElement: overflow.sourceCellElement || null,
                 exclusionElement: layerRef.current,
                 dateKey: overflow.dateKey || null,
@@ -261,6 +301,7 @@ export default function CalendarInlineOverflowLayer({
               });
             }}
             onContextMenu={(event) => {
+              if (specialDate) return;
               if (quickActions?.openContextMenu?.({
                 item,
                 task: item.sourceItem,

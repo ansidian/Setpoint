@@ -4,6 +4,7 @@ import {
   pacificTime24,
   pacificYMD,
 } from "../calendarDateUtils.js";
+import { isGoogleSpecialDateEvent } from "../googleSpecialDateModel.js";
 
 function stablePart(value) {
   return String(value ?? "").trim();
@@ -20,7 +21,8 @@ function isExcludedSelectionSource(event) {
     || event?.ghostKind != null
     || event?._calendarGhost === true
     || event?.resultKind === "calendar-search-result"
-    || event?.searchResult === true;
+    || event?.searchResult === true
+    || isGoogleSpecialDateEvent(event);
 }
 
 function calendarEventOccurrenceKey(event) {

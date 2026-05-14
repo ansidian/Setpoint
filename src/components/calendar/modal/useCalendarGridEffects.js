@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import {
   MONTH_WHEEL_COOLDOWN_MS,
   createMonthWheelState,
@@ -13,11 +13,78 @@ import {
   normalizeWheelDeltaY,
 } from "./calendarGridUtils.js";
 
+const FLOATING_DETAIL_GRID_ANCHOR_SELECTOR = [
+  "[data-testid='calendar-cell-item-chip']",
+  "[data-testid='calendar-event-span-segment']",
+].join(", ");
+const FLOATING_DETAIL_OVERFLOW_ANCHOR_SELECTOR = "[data-testid='calendar-cell-overflow-item']";
+const GRID_ORIGIN_ANCHOR_KINDS = new Set(["chip", "span", "overflow-row"]);
+
+function dateCellFor(gridShell, dateKey) {
+  if (!gridShell || !dateKey) return null;
+  return gridShell.querySelector?.(`[role='gridcell'][data-date-key='${dateKey}']`) || null;
+}
+
+function segmentCoversDate(anchor, dateKey) {
+  const segmentStart = anchor?.getAttribute?.("data-segment-start");
+  const segmentEnd = anchor?.getAttribute?.("data-segment-end");
+  return !!dateKey && !!segmentStart && !!segmentEnd && segmentStart <= dateKey && dateKey <= segmentEnd;
+}
+
+function anchorMatchesDate(anchor, dateKey) {
+  if (!anchor || !dateKey) return false;
+  const directDateKey = anchor.getAttribute?.("data-date-key");
+  if (directDateKey) return directDateKey === dateKey;
+  const sourceCellElement = anchor.closest?.("[role='gridcell']");
+  if (sourceCellElement?.getAttribute("data-date-key") === dateKey) return true;
+  return segmentCoversDate(anchor, dateKey);
+}
+
+function sourceCellForAnchor(anchor, gridShell, dateKey, resolvedOverflow) {
+  const sourceCellElement = anchor?.closest?.("[role='gridcell']");
+  if (sourceCellElement) return sourceCellElement;
+  if (resolvedOverflow?.dateKey === dateKey && resolvedOverflow.sourceCellElement?.isConnected) {
+    return resolvedOverflow.sourceCellElement;
+  }
+  return dateCellFor(gridShell, dateKey);
+}
+
+function anchorKindForReanchor(anchor) {
+  if (anchor?.getAttribute?.("data-testid") === "calendar-cell-overflow-item") return "overflow-row";
+  if (anchor?.getAttribute?.("data-inline-overflow-item") === "true") return "overflow-row";
+  return "chip";
+}
+
+function findFloatingDetailAnchor({ gridShell, itemId, dateKey, resolvedOverflow }) {
+  if (!gridShell || itemId == null || !dateKey) return null;
+  const targetId = String(itemId);
+  const gridAnchors = [
+    ...(gridShell.querySelectorAll?.(FLOATING_DETAIL_GRID_ANCHOR_SELECTOR) || []),
+  ];
+  const overflowAnchors = resolvedOverflow?.dateKey === dateKey && typeof document !== "undefined"
+    ? [...document.querySelectorAll(FLOATING_DETAIL_OVERFLOW_ANCHOR_SELECTOR)]
+    : [];
+  const anchor = [...gridAnchors, ...overflowAnchors].find((element) => (
+    element.getAttribute("data-item-id") === targetId && anchorMatchesDate(element, dateKey)
+  ));
+  if (!anchor) return null;
+  const sourceCellElement = sourceCellForAnchor(anchor, gridShell, dateKey, resolvedOverflow);
+  if (!sourceCellElement?.isConnected) return null;
+  return {
+    anchorElement: anchor,
+    sourceCellElement,
+    anchorKind: anchorKindForReanchor(anchor),
+  };
+}
+
 export default function useCalendarGridEffects({
   activeMonthWheelStateRef,
   canGoPrev,
   closeOverflow,
+  floatingDetailAnchorElement,
+  floatingDetailAnchorKind,
   floatingDetailDateKey,
+  floatingDetailItemId,
   floatingDetailMode,
   floatingDetailOpen,
   floatingDetailParked,
@@ -26,6 +93,8 @@ export default function useCalendarGridEffects({
   layout,
   eventSelectionActive = false,
   navigateMonth,
+  onOpenOverflowForReanchor,
+  onRefreshFloatingDetailAnchor,
   onReanchorFloatingDetail,
   resolvedOverflow,
   selectedDateKey,
@@ -71,39 +140,87 @@ export default function useCalendarGridEffects({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [eventSelectionActive, gridShellRef, resolvedOverflow, setOverflowState]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!floatingDetailOpen || floatingDetailParked) return;
+    if (floatingDetailMode && floatingDetailMode !== "detail") return;
+    if (!GRID_ORIGIN_ANCHOR_KINDS.has(floatingDetailAnchorKind)) return;
+    if (floatingDetailAnchorElement?.isConnected) return;
+    const targetDateKey = floatingDetailDateKey || selectedDateKey;
+    const targetItemId = floatingDetailItemId ?? selectedItemId;
+    if (targetItemId == null || !targetDateKey) return;
+    const anchor = findFloatingDetailAnchor({
+      gridShell: gridShellRef.current,
+      itemId: targetItemId,
+      dateKey: targetDateKey,
+      resolvedOverflow,
+    });
+    if (!anchor) {
+      return;
+    }
+    onRefreshFloatingDetailAnchor?.({
+      mode: "detail",
+      view,
+      itemId: String(targetItemId),
+      dateKey: targetDateKey,
+      day:
+        Number(anchor.sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) ||
+        selectedDay,
+      anchorElement: anchor.anchorElement,
+      sourceCellElement: anchor.sourceCellElement,
+      exclusionElement: null,
+      anchorKind: anchor.anchorKind,
+    });
+  }, [
+    floatingDetailAnchorElement,
+    floatingDetailAnchorKind,
+    floatingDetailDateKey,
+    floatingDetailItemId,
+    floatingDetailMode,
+    floatingDetailOpen,
+    floatingDetailParked,
+    gridShellRef,
+    onRefreshFloatingDetailAnchor,
+    resolvedOverflow,
+    selectedDateKey,
+    selectedDay,
+    selectedItemId,
+    view,
+  ]);
+
+  useLayoutEffect(() => {
     if (!floatingDetailParked) return;
     const reanchorMode = floatingDetailMode === "edit" || floatingDetailMode === "create"
       ? floatingDetailMode
       : "detail";
     const targetDateKey = floatingDetailDateKey || selectedDateKey;
     if (!targetDateKey) return;
-    if (selectedItemId) {
-      const chips = [
-        ...(gridShellRef.current?.querySelectorAll(
-          "[data-testid='calendar-cell-item-chip'], [data-testid='calendar-event-span-segment']",
-        ) || []),
-      ];
-      const anchor = chips.find(
-        (element) =>
-          element.getAttribute("data-item-id") === String(selectedItemId),
-      );
-      if (!anchor) return;
-      const sourceCellElement = anchor.closest("[role='gridcell']");
-      if (sourceCellElement?.getAttribute("data-date-key") !== targetDateKey)
+    const targetItemId = floatingDetailItemId ?? selectedItemId;
+    if (targetItemId != null) {
+      const anchor = findFloatingDetailAnchor({
+        gridShell: gridShellRef.current,
+        itemId: targetItemId,
+        dateKey: targetDateKey,
+        resolvedOverflow,
+      });
+      if (!anchor) {
+        if (resolvedOverflow?.dateKey !== targetDateKey) {
+          const overflowOpened = onOpenOverflowForReanchor?.(targetDateKey);
+          if (overflowOpened) return;
+        }
         return;
+      }
       onReanchorFloatingDetail?.({
         mode: reanchorMode,
         view,
-        itemId: String(selectedItemId),
+        itemId: String(targetItemId),
         dateKey: targetDateKey,
         day:
-          Number(sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) ||
+          Number(anchor.sourceCellElement?.getAttribute("data-date-key")?.slice(-2)) ||
           selectedDay,
-        anchorElement: anchor,
-        sourceCellElement,
+        anchorElement: anchor.anchorElement,
+        sourceCellElement: anchor.sourceCellElement,
         exclusionElement: null,
-        anchorKind: "chip",
+        anchorKind: anchor.anchorKind,
       });
       return;
     }
@@ -127,9 +244,12 @@ export default function useCalendarGridEffects({
     });
   }, [
     floatingDetailDateKey,
+    floatingDetailItemId,
     floatingDetailMode,
     floatingDetailParked,
+    onOpenOverflowForReanchor,
     onReanchorFloatingDetail,
+    resolvedOverflow,
     selectedDateKey,
     selectedDay,
     selectedItemId,

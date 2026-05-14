@@ -101,6 +101,45 @@ describe("CalendarEventSpanOverlay", () => {
     expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
   });
 
+  it("renders Google birthday spans as special-date markers without all-day or recurring metadata", () => {
+    render(
+      <CalendarEventSpanOverlay
+        segments={[{
+          id: "event:birthday-1:2026-04-22:2026-04-22",
+          kind: "event",
+          eventId: "birthday-1",
+          row: 1,
+          columnStart: 4,
+          columnEnd: 5,
+          lane: 0,
+          segmentStart: "2026-04-22",
+          segmentEnd: "2026-04-22",
+          item: {
+            id: "birthday-1",
+            title: "Maya's birthday",
+            eventType: "birthday",
+            birthdayProperties: { type: "birthday" },
+            allDay: true,
+            isRecurring: true,
+            writable: false,
+            sourceColor: "#ff887c",
+            color: "#ff887c",
+          },
+        }]}
+        layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
+        gridRowCount={6}
+      />,
+    );
+
+    const segment = screen.getByTestId("calendar-event-span-segment");
+    expect(segment.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(segment.querySelector("[data-calendar-span-meta='true']")).toBeNull();
+    expect(segment.querySelector("svg[data-calendar-span-recurring='true']")).toBeNull();
+    expect(segment.querySelector("[data-calendar-span-title-fit]")?.getAttribute("data-calendar-span-title-fit")).toMatch(/\/2$/);
+    expect(segment.textContent).toContain("Maya's birthday");
+    expect(segment.textContent).not.toContain("All day");
+  });
+
   it("routes modifier-clicks on span segments into the Calendar Event Selection Set", () => {
     const event = {
       id: "event-span",
@@ -156,6 +195,57 @@ describe("CalendarEventSpanOverlay", () => {
       dateKey: "2026-04-20",
       anchorKind: "span",
     }));
+    expect(onSelectSegment).not.toHaveBeenCalled();
+  });
+
+  it("keeps special-date span modifier-clicks out of selection and selection changes", () => {
+    const birthday = {
+      id: "birthday-1",
+      title: "Maya's birthday",
+      eventType: "birthday",
+      birthdayProperties: { type: "birthday" },
+      allDay: true,
+      writable: false,
+      startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
+      color: "#ff887c",
+      sourceColor: "#ff887c",
+    };
+    const onSelectSegment = vi.fn();
+    const toggleEventSelection = vi.fn(() => true);
+
+    render(
+      <CalendarEventSpanOverlay
+        segments={[{
+          id: "birthday-1:2026-04-20:2026-04-20",
+          kind: "event",
+          eventId: "birthday-1",
+          row: 1,
+          columnStart: 2,
+          columnEnd: 3,
+          lane: 0,
+          segmentStart: "2026-04-20",
+          segmentEnd: "2026-04-20",
+          item: birthday,
+          readOnly: true,
+        }]}
+        layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
+        gridRowCount={6}
+        quickActions={{
+          isEventSelectionSelected: () => true,
+          toggleEventSelection,
+        }}
+        onSelectSegment={onSelectSegment}
+      />,
+    );
+
+    const segment = screen.getByTestId("calendar-event-span-segment");
+    expect(segment.querySelector("[data-calendar-special-date-badge='true']")).toBeTruthy();
+    expect(segment.getAttribute("data-calendar-event-selection")).toBeNull();
+
+    fireEvent.click(segment, { ctrlKey: true, clientX: 4 });
+
+    expect(toggleEventSelection).not.toHaveBeenCalled();
     expect(onSelectSegment).not.toHaveBeenCalled();
   });
 });

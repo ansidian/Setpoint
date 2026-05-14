@@ -2,6 +2,7 @@ import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/reac
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { resolveOverflowPopoverPosition } from "./CalendarCellOverflowPopover.position.js";
+import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import {
   CalendarChipRecurringIcon,
   CalendarChipReminderMarker,
@@ -51,6 +52,7 @@ function itemButtonStyle({
   active,
   ghost,
   batchSelected = false,
+  specialDate = false,
 }) {
   return {
     position: "relative",
@@ -60,7 +62,13 @@ function itemButtonStyle({
     gap: 5,
     padding: "11px 12px",
     borderRadius: 10,
-    border: ghost
+    border: specialDate && !ghost
+      ? selected
+        ? `1px solid color-mix(in srgb, ${accent} 42%, rgba(255,255,255,0.08))`
+        : active
+          ? `1px solid color-mix(in srgb, ${accent} 28%, rgba(255,255,255,0.08))`
+          : `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.045))`
+      : ghost
       ? `1px dotted color-mix(in srgb, ${accent} 54%, transparent)`
       : batchSelected
       ? `1px solid color-mix(in srgb, ${accent} 68%, rgba(255,255,255,0.16))`
@@ -69,14 +77,24 @@ function itemButtonStyle({
       : active
         ? "1px solid rgba(255,255,255,0.12)"
         : "1px solid rgba(255,255,255,0.05)",
-    background: batchSelected
+    background: specialDate && !ghost
+      ? selected
+        ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, rgba(255,255,255,0.02)), color-mix(in srgb, ${accent} 7%, rgba(22,22,30,0.18)))`
+        : active
+          ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 10%, rgba(255,255,255,0.02)), color-mix(in srgb, ${accent} 5%, rgba(22,22,30,0.12)))`
+          : `linear-gradient(180deg, color-mix(in srgb, ${accent} 7%, rgba(255,255,255,0.018)), rgba(255,255,255,0.018))`
+      : batchSelected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 22%, transparent), color-mix(in srgb, ${accent} 9%, rgba(22,22,30,0.2)))`
       : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, transparent), color-mix(in srgb, ${accent} 6%, transparent))`
       : active
         ? "rgba(255,255,255,0.062)"
         : "rgba(255,255,255,0.024)",
-    boxShadow: batchSelected
+    boxShadow: specialDate && !ghost
+      ? selected || active
+        ? `inset 0 1px 0 color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.02))`
+        : "none"
+      : batchSelected
       ? `inset 0 0 0 1px color-mix(in srgb, ${accent} 28%, transparent), 0 0 0 1px rgba(255,255,255,0.035)`
       : active && !selected
       ? "inset 0 1px 0 rgba(255,255,255,0.04)"
@@ -95,7 +113,7 @@ function isEventSelectionModifier(event) {
 }
 
 function OverflowMetadata({ item, selected, accent, leadingColumnWidth }) {
-  if (!leadingColumnWidth) return null;
+  if (!leadingColumnWidth || item.specialDate) return null;
   const color = selected
     ? item.leadingColor || accent
     : item.leadingColor || accent;
@@ -369,9 +387,10 @@ export default function CalendarCellOverflowPopover({
               const selected = itemId === String(selectedItemId);
               const ghost = !!item.isGhost;
               const active = !ghost && itemId === String(activeItemId);
-              const accent = item.accent || "var(--ea-accent)";
-              const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
-              const batchSelected = !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
+              const specialDate = item.specialDate === true;
+              const accent = specialDate ? item.specialDateAccent || item.accent || "var(--ea-accent)" : item.accent || "var(--ea-accent)";
+              const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent && !specialDate;
+              const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
               const Shell = ghost ? "div" : "button";
 
               return (
@@ -383,11 +402,14 @@ export default function CalendarCellOverflowPopover({
                   data-date-key={popover.dateKey || undefined}
                   data-hovered={active ? "true" : "false"}
                   data-calendar-event-selection={batchSelected ? "true" : undefined}
+                  data-calendar-event-activation="true"
                   draggable={dragAllowed}
                   onClick={(event) => {
                     event.stopPropagation();
+                    event.currentTarget.focus({ preventScroll: true });
                     if (isEventSelectionModifier(event)) {
                       event.preventDefault();
+                      if (specialDate) return;
                       quickActions?.toggleEventSelection?.({
                         event: item.sourceEvent || item.sourceItem,
                         dateKey: popover.dateKey || null,
@@ -409,6 +431,7 @@ export default function CalendarCellOverflowPopover({
                     });
                   }}
                   onContextMenu={(event) => {
+                    if (specialDate) return;
                     if (quickActions?.openContextMenu?.({
                       item,
                       task: item.sourceItem,
@@ -463,20 +486,33 @@ export default function CalendarCellOverflowPopover({
                       active,
                       ghost,
                       batchSelected,
+                      specialDate,
                     }),
                     display: "grid",
-                    gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
+                    gridTemplateColumns: specialDate
+                      ? "28px minmax(0, 1fr)"
+                      : leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
                     alignItems: "center",
-                    columnGap: leadingColumnWidth ? 8 : 0,
+                    columnGap: specialDate ? 8 : leadingColumnWidth ? 8 : 0,
                   }}
                 >
                   <CalendarChipReminderMarker item={item} />
-                  <OverflowMetadata
-                    item={item}
-                    selected={selected}
-                    accent={accent}
-                    leadingColumnWidth={leadingColumnWidth}
-                  />
+                  {specialDate ? (
+                    <GoogleSpecialDateBadge
+                      item={item}
+                      color={item.specialDateAccent || accent}
+                      selected={selected}
+                      active={active}
+                      variant="agenda"
+                    />
+                  ) : (
+                    <OverflowMetadata
+                      item={item}
+                      selected={selected}
+                      accent={accent}
+                      leadingColumnWidth={leadingColumnWidth}
+                    />
+                  )}
                   <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                     <span
                       style={{
@@ -499,8 +535,11 @@ export default function CalendarCellOverflowPopover({
                           minWidth: 0,
                           flex: "1 1 auto",
                           overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          textOverflow: specialDate ? "clip" : "ellipsis",
+                          whiteSpace: specialDate ? "normal" : "nowrap",
+                          display: specialDate ? "-webkit-box" : "block",
+                          WebkitLineClamp: specialDate ? 2 : undefined,
+                          WebkitBoxOrient: specialDate ? "vertical" : undefined,
                           textDecoration: item.complete ? "line-through" : "none",
                           textDecorationColor: "rgba(205,214,244,0.28)",
                         }}

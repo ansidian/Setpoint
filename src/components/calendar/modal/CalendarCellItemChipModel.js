@@ -14,6 +14,7 @@ function isCompactTimeLabel(value) {
 
 function estimateLeadingLabelWidth(value) {
   const source = value && typeof value === "object" ? value : { leadingLabel: value };
+  if (source.specialDate) return 0;
   const label = compactLeadingLabel(source.leadingLabel);
   if (!label) return 0;
   const compactTime = isCompactTimeLabel(label);

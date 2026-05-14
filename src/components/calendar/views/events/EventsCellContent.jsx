@@ -2,6 +2,10 @@ import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { dueDateToMs, getEventSelectionId } from "../../../../lib/redesign-helpers";
+import {
+  googleSpecialDateAccent,
+  isGoogleSpecialDateEvent,
+} from "../../googleSpecialDateModel.js";
 import { formatTime12FromTime24 } from "../../ghostPreview.js";
 import { isPinnedCalendarGhost } from "../../modal/calendarEventSpanLayout.js";
 import { toDeadlineGhostDescriptor } from "../deadlines/DeadlinesCellContent.jsx";
@@ -70,19 +74,23 @@ function eventDetail(ev) {
 }
 
 function toEventDescriptor(ev) {
+  const specialDate = isGoogleSpecialDateEvent(ev);
+  const accent = specialDate ? googleSpecialDateAccent(ev) : ev?.color || ev?.sourceColor || "#4285f4";
   return {
     id: getEventSelectionId(ev),
     sourceItem: ev,
     sourceEvent: ev,
     writable: !!ev?.writable,
-    recurring: !!ev?.isRecurring,
+    recurring: specialDate ? false : !!ev?.isRecurring,
     title: sanitizeEventDisplayTitle(ev?.title),
     detail: eventDetail(ev),
-    leadingLabel: ev?.allDay ? "All day" : pacificTime(ev?.startMs),
-    accent: ev?.color || ev?.sourceColor || "#4285f4",
-    leadingColor: ev?.allDay ? "rgba(205,214,244,0.7)" : ev?.color || ev?.sourceColor || "#89b4fa",
+    leadingLabel: specialDate ? "" : ev?.allDay ? "All day" : pacificTime(ev?.startMs),
+    accent,
+    leadingColor: specialDate ? accent : ev?.allDay ? "rgba(205,214,244,0.7)" : ev?.color || ev?.sourceColor || "#89b4fa",
     allDay: !!ev?.allDay,
     sortMs: ev?.startMs || 0,
+    specialDate,
+    specialDateAccent: accent,
     hasUpcomingReminder: !!ev?.hasUpcomingReminder,
     upcomingReminderCount: ev?.upcomingReminderCount || 0,
     nextReminderAt: ev?.nextReminderAt || null,
@@ -133,10 +141,13 @@ export function renderEventsCellContents({
   inlineOverflowOpen,
   inlineOverflowAutoFocus,
   inlineOverflowVisibleCount,
+  inlineOverflowExternal,
   onInlineOverflowInteraction,
   onCloseInlineOverflow,
   onHiddenItemsChange,
   onBeforeItemAction,
+  onOverflowReanchorRequestHandled,
+  overflowReanchorDateKey,
   suppressedSelectedHiddenAutoOpenKey,
   layout,
   day,
@@ -181,10 +192,13 @@ export function renderEventsCellContents({
       inlineOverflowOpen={inlineOverflowOpen}
       inlineOverflowAutoFocus={inlineOverflowAutoFocus}
       inlineOverflowVisibleCount={inlineOverflowVisibleCount}
+      inlineOverflowExternal={inlineOverflowExternal}
       onInlineOverflowInteraction={onInlineOverflowInteraction}
       onCloseInlineOverflow={onCloseInlineOverflow}
       onHiddenItemsChange={onHiddenItemsChange}
       onBeforeItemAction={onBeforeItemAction}
+      onOverflowReanchorRequestHandled={onOverflowReanchorRequestHandled}
+      overflowReanchorDateKey={overflowReanchorDateKey}
       suppressedSelectedHiddenAutoOpenKey={suppressedSelectedHiddenAutoOpenKey}
     />
   );

@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleDashed, Repeat } from "lucide-react";
 import { useReducedMotion } from "motion/react";
+import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { compactLeadingLabel } from "./CalendarCellItemChipModel.js";
 import { hasUpcomingReminder } from "../reminderDisplay.js";
 
@@ -11,11 +12,12 @@ function chipStyle({
   active,
   metrics,
 }) {
-  const accent = item.accent || "var(--ea-accent)";
   const ghost = !!item.isGhost;
+  const specialDate = item.specialDate === true;
+  const accent = specialDate ? item.specialDateAccent || item.accent || "var(--ea-accent)" : item.accent || "var(--ea-accent)";
   const isPast = pastTone === "items";
   const quiet = item.complete || item.quiet;
-  const hasMetadata = !!(item.leadingLabel || item.recurring);
+  const hasMetadata = !!(item.leadingLabel || item.recurring || specialDate);
   const itemHeight = metrics?.itemHeight ?? 24;
   const isLarge = itemHeight >= 28;
   const isMedium = itemHeight >= 26;
@@ -38,7 +40,15 @@ function chipStyle({
       : `0 ${horizontalPadding}px`,
     height: itemHeight,
     borderRadius: radius,
-    border: ghost
+    border: specialDate && !ghost
+      ? batchSelected
+        ? `1px solid color-mix(in srgb, ${accent} 58%, rgba(255,255,255,0.13))`
+        : selected
+          ? `1px solid color-mix(in srgb, ${accent} 42%, rgba(255,255,255,0.08))`
+          : active
+            ? `1px solid color-mix(in srgb, ${accent} 28%, rgba(255,255,255,0.08))`
+            : `1px solid color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.045))`
+      : ghost
       ? `1px dotted color-mix(in srgb, ${accent} 54%, transparent)`
       : batchSelected
       ? `1px solid color-mix(in srgb, ${accent} 68%, rgba(255,255,255,0.16))`
@@ -49,7 +59,13 @@ function chipStyle({
       : quiet
         ? "1px solid rgba(255,255,255,0.035)"
         : "1px solid rgba(255,255,255,0.045)",
-    background: batchSelected
+    background: specialDate && !ghost
+      ? selected
+        ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 14%, rgba(255,255,255,0.02)), color-mix(in srgb, ${accent} 7%, rgba(22,22,30,0.18)))`
+        : active
+          ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 10%, rgba(255,255,255,0.02)), color-mix(in srgb, ${accent} 5%, rgba(22,22,30,0.12)))`
+          : `linear-gradient(180deg, color-mix(in srgb, ${accent} 7%, rgba(255,255,255,0.018)), rgba(255,255,255,0.018))`
+      : batchSelected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 24%, transparent), color-mix(in srgb, ${accent} 10%, rgba(22,22,30,0.2)))`
       : selected
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 18%, transparent), color-mix(in srgb, ${accent} 8%, transparent))`
@@ -58,7 +74,11 @@ function chipStyle({
       : quiet
         ? "rgba(255,255,255,0.018)"
         : "rgba(255,255,255,0.03)",
-    boxShadow: batchSelected
+    boxShadow: specialDate && !ghost
+      ? selected || active
+        ? `inset 0 1px 0 color-mix(in srgb, ${accent} 16%, rgba(255,255,255,0.02))`
+        : "none"
+      : batchSelected
       ? `inset 0 0 0 1px color-mix(in srgb, ${accent} 30%, transparent), 0 0 0 1px rgba(255,255,255,0.035)`
       : selected
       ? `inset 0 1px 0 color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.02))`
@@ -108,12 +128,15 @@ function chipContentFit(item, metrics) {
   const itemHeight = metrics?.itemHeight ?? 24;
   const compactLabel = compactLeadingLabel(item.leadingLabel);
   const length = [compactLabel, item.title].filter(Boolean).join(" ").trim().length;
+  const specialDate = item.specialDate === true;
 
   if (itemHeight >= 36) {
+    if (specialDate) return { fontSize: length <= 58 ? 10.5 : 10, lineHeight: 1.08, lineClamp: 2 };
     if (length <= 22) return { fontSize: 11, lineHeight: 1.08, lineClamp: 1 };
     if (length <= 58) return { fontSize: 10.5, lineHeight: 1.08, lineClamp: 2 };
     return { fontSize: 10, lineHeight: 1.08, lineClamp: 2 };
   }
+  if (specialDate && itemHeight >= 32) return { fontSize: 10, lineHeight: 1.06, lineClamp: 2 };
   if (itemHeight >= 32) return { fontSize: length <= 22 ? 10.5 : 10, lineHeight: 1.06, lineClamp: length <= 22 ? 1 : 2 };
   if (itemHeight >= 28) return { fontSize: 10.5, lineHeight: 1.05, lineClamp: 1 };
   if (itemHeight >= 26) return { fontSize: 10.25, lineHeight: 1.05, lineClamp: 1 };
@@ -157,7 +180,7 @@ export function CalendarChipStatusIcon({ item, selected, metrics }) {
 }
 
 export function CalendarChipRecurringIcon({ item, selected, metrics }) {
-  if (!item.recurring) return null;
+  if (!item.recurring || item.specialDate) return null;
   const itemHeight = metrics?.itemHeight ?? 24;
   const color = metadataColor(item, selected);
 
@@ -177,7 +200,7 @@ export function CalendarChipRecurringIcon({ item, selected, metrics }) {
 }
 
 function ChipPrefix({ item, selected, metrics, leadingColumnWidth }) {
-  if (!leadingColumnWidth) return null;
+  if (!leadingColumnWidth || item.specialDate) return null;
   const color = metadataColor(item, selected);
   const compactLabel = compactLeadingLabel(item.leadingLabel);
   const preserveLeadingLabel = item.preserveLeadingLabel === true;
@@ -223,6 +246,8 @@ function ChipPrefix({ item, selected, metrics, leadingColumnWidth }) {
 function ChipContent({ item, selected, metrics, leadingColumnWidth = 0 }) {
   const fit = chipContentFit(item, metrics);
   const TitleTag = item.complete ? "s" : "span";
+  const specialDate = item.specialDate === true;
+  const specialDateColumnWidth = (metrics?.itemHeight ?? 24) >= 36 ? 24 : 22;
   const lineHeightPx = Number((fit.fontSize * fit.lineHeight).toFixed(2));
   const maxHeight = Number((lineHeightPx * fit.lineClamp).toFixed(2));
   const titleClampStyle = fit.lineClamp > 1
@@ -251,10 +276,12 @@ function ChipContent({ item, selected, metrics, leadingColumnWidth = 0 }) {
         minWidth: 0,
         minHeight: 0,
         display: "grid",
-        gridTemplateColumns: leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
+        gridTemplateColumns: specialDate
+          ? `${specialDateColumnWidth}px minmax(0, 1fr)`
+          : leadingColumnWidth ? `${leadingColumnWidth}px minmax(0, 1fr)` : "minmax(0, 1fr)",
         alignItems: "center",
         flex: "0 1 auto",
-        columnGap: leadingColumnWidth ? 5 : 0,
+        columnGap: specialDate ? 6 : leadingColumnWidth ? 5 : 0,
         maxHeight,
         overflow: "hidden",
         fontSize: fit.fontSize,
@@ -268,6 +295,14 @@ function ChipContent({ item, selected, metrics, leadingColumnWidth = 0 }) {
         metrics={metrics}
         leadingColumnWidth={leadingColumnWidth}
       />
+      {specialDate ? (
+        <GoogleSpecialDateBadge
+          item={item}
+          color={item.specialDateAccent || item.accent}
+          selected={selected}
+          variant="chip"
+        />
+      ) : null}
       <span
         style={{
           minWidth: 0,
@@ -383,8 +418,9 @@ export function ItemChip({
   const reducedMotion = useReducedMotion();
   const layoutId = !reducedMotion && item.layoutId ? String(item.layoutId) : undefined;
   const selectionId = item.selectionId != null ? String(item.selectionId) : String(item.id);
-  const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent;
-  const batchSelected = !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
+  const specialDate = item.specialDate === true;
+  const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent && !specialDate;
+  const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
 
   if (ghost) {
     return (
@@ -427,12 +463,15 @@ export function ItemChip({
       data-date-key={dateKey || undefined}
       data-hovered={active ? "true" : "false"}
       data-calendar-event-selection={batchSelected ? "true" : undefined}
+      data-calendar-event-activation="true"
       draggable={dragAllowed}
       data-calendar-focus-ring="true"
       onClick={(event) => {
         event.stopPropagation();
+        event.currentTarget.focus({ preventScroll: true });
         if (isEventSelectionModifier(event)) {
           event.preventDefault();
+          if (specialDate) return;
           quickActions?.toggleEventSelection?.({
             event: item.sourceEvent || item.sourceItem,
             dateKey,
@@ -452,6 +491,7 @@ export function ItemChip({
         });
       }}
       onContextMenu={(event) => {
+        if (specialDate) return;
         if (quickActions?.openContextMenu?.({
           item,
           task: item.sourceItem,
@@ -489,10 +529,10 @@ export function ItemChip({
         event.dataTransfer.setData("text/plain", String(item.title || ""));
       }}
       onDragEnd={() => quickActions?.endDrag?.()}
-      onPointerEnter={() => onSetActive(String(item.id))}
-      onPointerLeave={() => onClearActive(String(item.id))}
-      onFocus={() => onSetActive(String(item.id))}
-      onBlur={() => onClearActive(String(item.id))}
+      onPointerEnter={() => onSetActive?.(String(item.id))}
+      onPointerLeave={() => onClearActive?.(String(item.id))}
+      onFocus={() => onSetActive?.(String(item.id))}
+      onBlur={() => onClearActive?.(String(item.id))}
       style={chipStyle({
         item,
         selected,

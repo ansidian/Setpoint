@@ -1,5 +1,10 @@
 import { Bell, Video } from "lucide-react";
 import { extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links.js";
+import GoogleSpecialDateBadge from "../../GoogleSpecialDateBadge.jsx";
+import {
+  googleSpecialDateAccent,
+  isGoogleSpecialDateEvent,
+} from "../../googleSpecialDateModel.js";
 import { colorWithAlpha, contrastText } from "./eventsAgendaColor.js";
 import { formatReminderSummary } from "../../reminderDisplay.js";
 
@@ -22,12 +27,13 @@ function isEventSelectionModifier(event) {
 }
 
 export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked }) {
-  const color = event.agendaSourceColor;
+  const specialDate = isGoogleSpecialDateEvent(event);
+  const color = specialDate ? googleSpecialDateAccent(event) : event.agendaSourceColor;
   const safeText = contrastText(color);
-  const solid = safeText === "#16161e";
-  const dragAllowed = !!quickActions?.dragEnabled && !!event.writable;
+  const solid = !specialDate && safeText === "#16161e";
+  const dragAllowed = !!quickActions?.dragEnabled && !!event.writable && !specialDate;
   const reminderSummary = formatReminderSummary(event);
-  const batchSelected = !!quickActions?.isEventSelectionSelected?.(event);
+  const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(event);
   return (
     <button
       type="button"
@@ -35,6 +41,7 @@ export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlo
       data-item-id={event.agendaItemId}
       data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
       data-calendar-event-selection={batchSelected ? "true" : undefined}
+      data-calendar-event-activation="true"
       draggable={dragAllowed}
       onDragStart={(dragEvent) => {
         if (!dragAllowed) return;
@@ -59,6 +66,7 @@ export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlo
         if (isEventSelectionModifier(clickEvent)) {
           clickEvent.preventDefault();
           clickEvent.stopPropagation();
+          if (specialDate) return;
           quickActions?.toggleEventSelection?.({
             event,
             dateKey: event.agendaDateKey,
@@ -73,22 +81,29 @@ export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlo
       style={{
         minWidth: 0,
         maxWidth: "100%",
-        display: "inline-flex",
+        display: specialDate ? "grid" : "inline-flex",
+        gridTemplateColumns: specialDate ? "24px minmax(0, 1fr)" : undefined,
         alignItems: "center",
-        gap: 6,
-        minHeight: 24,
-        padding: "4px 8px",
-        borderRadius: 7,
+        gap: specialDate ? 7 : 6,
+        minHeight: specialDate ? 36 : 24,
+        padding: specialDate ? "5px 9px 5px 7px" : "4px 8px",
+        borderRadius: specialDate ? 9 : 7,
         border: batchSelected
           ? `1px solid ${colorWithAlpha(color, 0.94)}`
-          : selected ? `1px solid ${color}` : `1px solid ${colorWithAlpha(color, solid ? 0.5 : 0.72)}`,
+          : selected
+            ? `1px solid ${colorWithAlpha(color, specialDate ? 0.58 : 1)}`
+            : `1px solid ${colorWithAlpha(color, specialDate ? 0.24 : solid ? 0.5 : 0.72)}`,
         background: batchSelected
           ? `linear-gradient(180deg, ${colorWithAlpha(color, 0.34)}, ${colorWithAlpha(color, 0.16)})`
-          : selected
-          ? colorWithAlpha(color, 0.28)
-          : solid
-            ? color
-            : colorWithAlpha(color, 0.14),
+          : specialDate
+            ? selected
+              ? `linear-gradient(180deg, ${colorWithAlpha(color, 0.18)}, ${colorWithAlpha(color, 0.08)})`
+              : colorWithAlpha(color, 0.08)
+            : selected
+              ? colorWithAlpha(color, 0.28)
+              : solid
+                ? color
+                : colorWithAlpha(color, 0.14),
         color: solid && !selected && !batchSelected ? safeText : "#e9e7f6",
         fontSize: 11,
         fontWeight: 700,
@@ -103,13 +118,28 @@ export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlo
         eventObject.currentTarget.style.transform = "translateY(0)";
       }}
     >
-      {!solid ? (
+      {specialDate ? (
+        <GoogleSpecialDateBadge
+          item={event}
+          color={color}
+          selected={selected}
+          variant="agenda"
+        />
+      ) : !solid ? (
         <span
           aria-hidden="true"
           style={{ width: 6, height: 6, borderRadius: 999, background: color, flexShrink: 0 }}
         />
       ) : null}
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: specialDate ? "clip" : "ellipsis",
+        whiteSpace: specialDate ? "normal" : "nowrap",
+        display: specialDate ? "-webkit-box" : "block",
+        WebkitLineClamp: specialDate ? 2 : undefined,
+        WebkitBoxOrient: specialDate ? "vertical" : undefined,
+      }}>
         {event.agendaTitle}
       </span>
       {reminderSummary ? (
@@ -137,6 +167,7 @@ export function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickAc
       data-item-id={event.agendaItemId}
       data-calendar-match-item-ids={agendaEventMatchItemIds(event)}
       data-calendar-event-selection={batchSelected ? "true" : undefined}
+      data-calendar-event-activation="true"
       draggable={dragAllowed}
       onDragStart={(dragEvent) => {
         if (!dragAllowed) return;
