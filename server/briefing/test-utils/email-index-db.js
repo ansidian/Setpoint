@@ -40,20 +40,30 @@ export async function seedEmailAccount(db, account = {}) {
     credentials_encrypted: null,
     ...account,
   };
+  const columns = ["id", "user_id", "type", "email", "label", "color", "credentials_encrypted", "sort_order"];
+  const args = [
+    row.id,
+    row.user_id,
+    row.type,
+    row.email,
+    row.label,
+    row.color,
+    row.credentials_encrypted,
+    row.sort_order,
+  ];
+  if (account.created_at !== undefined) {
+    columns.push("created_at");
+    args.push(row.created_at);
+  }
+  if (account.updated_at !== undefined) {
+    columns.push("updated_at");
+    args.push(row.updated_at);
+  }
   await db.execute({
     sql: `INSERT INTO ea_accounts
-            (id, user_id, type, email, label, color, credentials_encrypted, sort_order)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
-      row.id,
-      row.user_id,
-      row.type,
-      row.email,
-      row.label,
-      row.color,
-      row.credentials_encrypted,
-      row.sort_order,
-    ],
+            (${columns.join(", ")})
+          VALUES (${columns.map(() => "?").join(", ")})`,
+    args,
   });
   return row;
 }
