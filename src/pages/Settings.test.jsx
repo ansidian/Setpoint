@@ -141,17 +141,15 @@ describe("Settings page", () => {
     });
     expect(window.location.search).toBe("?tab=system");
 
-    await act(async () => {
+    act(() => {
       window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await waitFor(() => {
       expect(screen.getByTestId("settings-briefing-section")).toBeTruthy();
     });
 
-    await act(async () => {
+    act(() => {
       window.history.forward();
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await waitFor(() => {
       expect(screen.getByTestId("settings-system-section")).toBeTruthy();

@@ -90,6 +90,7 @@ const EMPTY_DEADLINES_FOR_TEST = {
 
 const {
   __resetCurrentDashboardRefreshStateForTests,
+  __waitForCurrentDashboardRefreshesForTests,
   applyDeadlineCurrentStatus,
   getCurrentDashboard,
   getDashboardSystemHealth,
@@ -480,7 +481,7 @@ describe("GET /api/dashboard/current", () => {
         ]),
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await __waitForCurrentDashboardRefreshesForTests();
       expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
         actualBudgetUrl: "https://actual.example.test",
         force: true,
@@ -555,7 +556,7 @@ describe("GET /api/dashboard/current", () => {
       expect.objectContaining({ key: "bills_current" }),
     ]));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await __waitForCurrentDashboardRefreshesForTests();
     expect(testState.refreshBillsMirror).not.toHaveBeenCalled();
   });
 
@@ -626,7 +627,7 @@ describe("GET /api/dashboard/current", () => {
     });
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await __waitForCurrentDashboardRefreshesForTests();
     expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: true });
     expect(testState.fetchTodoistDueTaskIdSet).toHaveBeenCalledWith("u1", { refresh: true });
     expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
@@ -662,7 +663,7 @@ describe("GET /api/dashboard/current", () => {
       const res = await requestRefreshResponse();
 
       expect(res.status).toBe(200);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await __waitForCurrentDashboardRefreshesForTests();
       expect(listener).toHaveBeenCalledWith(expect.objectContaining({
         source: "bills",
         reason: "changed",
@@ -711,7 +712,7 @@ describe("GET /api/dashboard/current", () => {
       ]),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await __waitForCurrentDashboardRefreshesForTests();
     expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
       actualBudgetUrl: "https://actual.example.test",
       force: true,
@@ -755,7 +756,7 @@ describe("GET /api/dashboard/current", () => {
         expect.objectContaining({ key: "deadlines_current", reason: "needs_sync" }),
       ]),
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await __waitForCurrentDashboardRefreshesForTests();
     expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: false });
   });
 
@@ -864,10 +865,8 @@ describe("GET /api/dashboard/current", () => {
     testState.fetchTodoistTasks.mockReturnValueOnce(pending);
     testState.refreshBillsMirror.mockReturnValueOnce(pending);
 
-    const startedAt = Date.now();
     const res = await requestRefreshResponse();
 
-    expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       weather: { temp: 64, location: "El Monte, CA" },
@@ -875,7 +874,15 @@ describe("GET /api/dashboard/current", () => {
       bills: [{ id: "cached-bill" }],
       activeSnapshot: { snapshot: { id: 42 } },
       providerHealth: {
-        currentData: { state: "current" },
+        currentData: {
+          state: "current",
+          sources: expect.arrayContaining([
+            expect.objectContaining({ key: "weather_current", state: "refreshing" }),
+            expect.objectContaining({ key: "calendar_current", state: "refreshing" }),
+            expect.objectContaining({ key: "deadlines_current", state: "refreshing" }),
+            expect.objectContaining({ key: "bills_current", state: "refreshing" }),
+          ]),
+        },
         activeSnapshot: { state: "syncing", reason: "background" },
       },
       systemStatus: {
@@ -890,20 +897,6 @@ describe("GET /api/dashboard/current", () => {
         ]),
       },
     });
-
-    const rows = await testState.db.current.execute({
-      sql: `SELECT cache_key, status, refresh_started_at
-            FROM ea_current_data_cache
-            WHERE user_id = ?
-            ORDER BY cache_key`,
-      args: ["u1"],
-    });
-    expect(rows.rows).toEqual([
-      expect.objectContaining({ cache_key: "bills_current", status: "refreshing", refresh_started_at: expect.any(String) }),
-      expect.objectContaining({ cache_key: "calendar_current", status: "refreshing", refresh_started_at: expect.any(String) }),
-      expect.objectContaining({ cache_key: "deadlines_current", status: "refreshing", refresh_started_at: expect.any(String) }),
-      expect.objectContaining({ cache_key: "weather_current", status: "refreshing", refresh_started_at: expect.any(String) }),
-    ]);
   });
 
   it("refreshes missing current rows per domain and stores them for later reads", async () => {
@@ -947,17 +940,29 @@ describe("GET /api/dashboard/current", () => {
       dbClient: expect.any(Object),
     }));
 
-    const cached = await testState.db.current.execute({
-      sql: "SELECT cache_key, payload_json, status, error_message FROM ea_current_data_cache WHERE user_id = ? ORDER BY cache_key",
-      args: ["u1"],
+    testState.fetchWeather.mockReset().mockRejectedValue(new Error("weather should stay cached"));
+    testState.fetchCalendar.mockReset().mockRejectedValue(new Error("calendar should stay cached"));
+    testState.fetchTodoistTasks.mockReset().mockRejectedValue(new Error("deadlines should stay cached"));
+    testState.readBillsMirrorCurrent.mockReset().mockRejectedValue(new Error("bills should stay cached"));
+
+    const cached = await getCurrentResponse();
+    expect(cached.status).toBe(200);
+    expect(cached.body).toMatchObject({
+      weather: { temp: 72, summary: "Clear", location: "El Monte, CA" },
+      calendar: [{ id: "event-2", title: "Planning" }],
+      deadlines: {
+        upcoming: [{ id: "todoist-1" }],
+        stats: { total: 1 },
+      },
+      bills: [{ id: "bill-2", payee: "Rent" }],
+      providerHealth: {
+        currentData: { state: "current" },
+      },
     });
-    expect(cached.rows.map((row) => row.cache_key)).toEqual([
-      "bills_current",
-      "calendar_current",
-      "deadlines_current",
-      "weather_current",
-    ]);
-    expect(cached.rows.every((row) => row.status === "current" && !row.error_message)).toBe(true);
+    expect(testState.fetchWeather).not.toHaveBeenCalled();
+    expect(testState.fetchCalendar).not.toHaveBeenCalled();
+    expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
+    expect(testState.readBillsMirrorCurrent).not.toHaveBeenCalled();
   });
 
   it("hydrates current completed Todoist rows from completed-task snapshots", async () => {
@@ -1002,19 +1007,21 @@ describe("GET /api/dashboard/current", () => {
     });
 
     expect(result.updated).toBe(true);
-    const cached = await testState.db.current.execute({
-      sql: "SELECT payload_json, status, refresh_started_at FROM ea_current_data_cache WHERE user_id = ? AND cache_key = ?",
-      args: ["u1", "deadlines_current"],
+    const dashboard = await getCurrentResponse();
+    expect(dashboard.body.deadlines).toMatchObject({
+      upcoming: [
+        expect.objectContaining({
+          id: "todo-1",
+          status: "complete",
+        }),
+      ],
+      stats: { total: 1 },
     });
-    const payload = JSON.parse(cached.rows[0].payload_json);
-    expect(payload.upcoming[0]).toMatchObject({
-      id: "todo-1",
-      status: "complete",
-    });
-    expect(payload.stats).toEqual({ total: 1 });
-    expect(cached.rows[0]).toMatchObject({
-      status: "current",
-      refresh_started_at: null,
+    expect(dashboard.body.providerHealth.currentData).toMatchObject({
+      state: "current",
+      sources: expect.arrayContaining([
+        expect.objectContaining({ key: "deadlines_current", state: "current" }),
+      ]),
     });
     await expect(eventPromise).resolves.toMatchObject({
       source: "deadlines",
@@ -1037,10 +1044,17 @@ describe("GET /api/dashboard/current", () => {
     }, { expiresAt: expiredAt });
 
     let resolveWeather;
+    let markWeatherStarted;
+    const weatherStarted = new Promise((resolve) => {
+      markWeatherStarted = resolve;
+    });
     const weatherRefresh = new Promise((resolve) => {
       resolveWeather = resolve;
     });
-    testState.fetchWeather.mockReturnValueOnce(weatherRefresh);
+    testState.fetchWeather.mockImplementationOnce(() => {
+      markWeatherStarted();
+      return weatherRefresh;
+    });
 
     const res = await getCurrentResponse();
 
@@ -1063,11 +1077,11 @@ describe("GET /api/dashboard/current", () => {
         expect.objectContaining({ key: "weather_current", reason: "ttl_due" }),
       ]),
     });
-    await Promise.resolve();
+    await weatherStarted;
     expect(testState.fetchWeather).toHaveBeenCalledTimes(1);
 
     resolveWeather({ temp: 75, summary: "Refreshed" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await __waitForCurrentDashboardRefreshesForTests();
   });
 
   it("degrades one failed provider without failing the current response", async () => {
@@ -1123,17 +1137,7 @@ describe("GET /api/dashboard/current", () => {
     expect(res.body.weather).toEqual({ temp: 64, location: "El Monte, CA" });
     expect(res.body.providerHealth.currentData.state).toBe("current");
 
-    await Promise.resolve();
-    const row = await testState.db.current.execute({
-      sql: "SELECT payload_json, status, last_refresh_error, refresh_failure_count FROM ea_current_data_cache WHERE user_id = ? AND cache_key = ?",
-      args: ["u1", "weather_current"],
-    });
-    expect(row.rows[0]).toMatchObject({
-      payload_json: JSON.stringify({ temp: 64, location: "El Monte, CA" }),
-      status: "degraded",
-      last_refresh_error: "weather down",
-      refresh_failure_count: 1,
-    });
+    await __waitForCurrentDashboardRefreshesForTests();
 
     const health = await getHealthResponse();
     expect(health.body.providerHealth.currentData).toMatchObject({

@@ -42,6 +42,10 @@ export function __resetCurrentDashboardRefreshStateForTests() {
   BACKGROUND_REFRESH_IN_FLIGHT.clear();
 }
 
+export async function __waitForCurrentDashboardRefreshesForTests() {
+  await Promise.allSettled([...BACKGROUND_REFRESH_IN_FLIGHT.values()]);
+}
+
 function isFresh(row, now = new Date()) {
   if (!row?.expires_at) return false;
   return new Date(row.expires_at).getTime() > now.getTime();

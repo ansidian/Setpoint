@@ -80,8 +80,8 @@ describe("CalendarSearchRail", () => {
     expect(row.getAttribute("data-source-color")).toBe("#e44332");
     expect(row.getAttribute("data-highlighted")).toBe("true");
     expect(row.getAttribute("data-selected")).toBe("true");
-    expect(row.style.border).toContain("rgba(228, 67, 50, 0.75)");
-    expect(row.style.background).toContain("rgba(228, 67, 50, 0.18)");
+    expect(row.getAttribute("data-visual-state")).toBe("selected");
+    expect(row.querySelector("[data-calendar-search-source-dot='true']")?.getAttribute("data-source-color")).toBe("#e44332");
   });
 
   it("renders birthday search results as special-date markers without all-day metadata", () => {
@@ -173,11 +173,10 @@ describe("CalendarSearchRail", () => {
     const row = screen.getByTestId("calendar-search-result-row");
     expect(row.getAttribute("data-highlighted")).toBe("true");
     expect(row.getAttribute("data-selected")).toBe("false");
-    expect(row.style.border).toBe("1px solid rgba(255, 255, 255, 0.055)");
-    expect(row.style.background).toBe("rgba(255, 255, 255, 0.025)");
+    expect(row.getAttribute("data-visual-state")).toBe("highlighted");
   });
 
-  it("uses agenda row hover without promoting hover to the selected color state", () => {
+  it("keeps pointer hover separate from selected and highlighted state", () => {
     const search = makeSearch({
       query: "final",
       results: [
@@ -198,22 +197,18 @@ describe("CalendarSearchRail", () => {
     render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
 
     const row = screen.getByTestId("calendar-search-result-row");
-    expect(row.style.background).toBe("rgba(255, 255, 255, 0.025)");
-    expect(row.style.transition).toBe(
-      "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
-    );
+    expect(row.getAttribute("data-visual-state")).toBe("idle");
 
     fireEvent.mouseEnter(row);
 
     expect(search.setHighlightedIndex).not.toHaveBeenCalled();
-    expect(row.style.transform).toBe("translateY(-1px)");
-    expect(row.style.borderColor).toBe("rgba(255, 255, 255, 0.12)");
-    expect(row.style.background).toBe("rgba(255, 255, 255, 0.025)");
+    expect(row.getAttribute("data-highlighted")).toBe("false");
+    expect(row.getAttribute("data-selected")).toBe("false");
+    expect(row.getAttribute("data-visual-state")).toBe("idle");
 
     fireEvent.mouseLeave(row);
 
-    expect(row.style.transform).toBe("translateY(0)");
-    expect(row.style.borderColor).toBe("rgba(255, 255, 255, 0.055)");
+    expect(row.getAttribute("data-visual-state")).toBe("idle");
   });
 
   it("keeps old results visible while pending", () => {
@@ -794,7 +789,7 @@ describe("CalendarSearchRail", () => {
     expect(screen.getByTestId("calendar-search-results").getAttribute("data-calendar-local-scroll")).toBe("true");
     expect(screen.getByText("SUNDAY 5/10/26")).toBeTruthy();
     expect(screen.getByText("THURSDAY 5/14/26")).toBeTruthy();
-    expect(screen.getAllByTestId("calendar-search-date-header")[0].style.background).toBe("rgb(31, 31, 36)");
+    expect(screen.getAllByTestId("calendar-search-date-header")[0].getAttribute("data-date-tone")).toBe("normal");
     expect(screen.getByText("Conference Room B")).toBeTruthy();
     expect(screen.getByText("CS 4220")).toBeTruthy();
     expect(screen.queryByText("Personal")).toBeNull();
@@ -865,7 +860,7 @@ describe("CalendarSearchRail", () => {
     expect(screen.getByText("76°/58°")).toBeTruthy();
 
     const todayHeader = screen.getByRole("button", { name: "Select today 5/11/26" });
-    expect(todayHeader.style.color).toBe("rgb(4, 149, 255)");
+    expect(todayHeader.getAttribute("data-date-tone")).toBe("today");
 
     fireEvent.keyDown(todayHeader, { key: "Enter" });
     expect(search.activateDateHeader).toHaveBeenCalledWith("2026-05-11");

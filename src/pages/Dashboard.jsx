@@ -17,6 +17,10 @@ import { RedesignShell, DashboardBody } from "../components/dashboard/RedesignSh
 import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState";
+import {
+  resolveDashboardCurrentEventPlan,
+  resolveDashboardRefreshPlan,
+} from "./Dashboard.refreshModel";
 
 const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
 const SYNC_WATCHDOG_MS = 45_000;
@@ -71,41 +75,57 @@ export default function Dashboard() {
   const calendarBillsRefreshRequestedRef = useRef(false);
   dashboardEventHandlerRef.current = (event) => {
     triageNotificationSounds.handleDashboardEvent(event);
-    if (event?.source === "bills") {
+    const plan = resolveDashboardCurrentEventPlan(event);
+    if (plan.markBillsRefreshRequested) {
       calendarBillsRefreshRequestedRef.current = true;
+    }
+    if (plan.markBillRangeStale) {
       calendarBillRange.markStale?.();
     }
-    if (event?.source === "todoist") {
+    if (plan.markDeadlineRangeStale) {
       calendarDeadlineRange.markStale?.();
-      if (event.state === "current") {
-        refreshCalendarDomainsRef.current?.({ force: true, includeBills: false });
-      }
+    }
+    if (plan.refreshCalendarDomains) {
+      refreshCalendarDomainsRef.current?.(plan.refreshCalendarDomains);
     }
   };
   const markCalendarRangeStale = calendarRange.markStale;
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
-  const handleTimerQuickRefresh = useCallback(() => {
-    if (currentSyncing) return Promise.resolve();
+  const runDashboardRefresh = useCallback((trigger) => {
+    const plan = resolveDashboardRefreshPlan({
+      trigger,
+      currentSyncing,
+      calendarWorkspace: calendarWorkspaceRef.current,
+    });
+    if (!plan.shouldRun) return Promise.resolve();
     setLastQuickRefreshAt(Date.now());
     setCurrentSyncing(true);
-    return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
-  }, [activeSnapshot, currentSyncing]);
-  const handleExplicitQuickRefresh = useCallback(() => {
-    if (currentSyncing) return Promise.resolve();
-    setLastQuickRefreshAt(Date.now());
-    setCurrentSyncing(true);
-    const calendarWorkspace = calendarWorkspaceRef.current;
-    if (calendarWorkspace.open && calendarWorkspace.view === "events" && calendarWorkspace.eventsRange) {
-      refreshCalendarRangeInPlace?.(calendarWorkspace.eventsRange.start, calendarWorkspace.eventsRange.end);
-    } else {
+    if (plan.refreshVisibleEvents) {
+      refreshCalendarRangeInPlace?.(plan.refreshVisibleEvents.start, plan.refreshVisibleEvents.end);
+    }
+    if (plan.markCalendarEventsStale) {
       markCalendarRangeStale?.();
     }
-    calendarBillsRefreshRequestedRef.current = true;
-    calendarDeadlineRange.markStale?.();
-    calendarBillRange.markStale?.();
-    refreshCalendarDomainsRef.current?.({ force: true });
+    if (plan.markBillsRefreshRequested) {
+      calendarBillsRefreshRequestedRef.current = true;
+    }
+    if (plan.markDeadlineRangeStale) {
+      calendarDeadlineRange.markStale?.();
+    }
+    if (plan.markBillRangeStale) {
+      calendarBillRange.markStale?.();
+    }
+    if (plan.refreshCalendarDomains) {
+      refreshCalendarDomainsRef.current?.(plan.refreshCalendarDomains);
+    }
     return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
   }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, markCalendarRangeStale, refreshCalendarRangeInPlace]);
+  const handleTimerQuickRefresh = useCallback(() => (
+    runDashboardRefresh("timer")
+  ), [runDashboardRefresh]);
+  const handleExplicitQuickRefresh = useCallback(() => {
+    return runDashboardRefresh("explicit");
+  }, [runDashboardRefresh]);
   useAutoRefresh({
     lastQuickRefreshAt,
     onQuickRefresh: handleTimerQuickRefresh,

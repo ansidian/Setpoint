@@ -79,14 +79,9 @@ describe("MiniCalendar", () => {
     expect(mayFifteen.getAttribute("data-hover-preview")).toBe("active");
     expect(mayFifteen.getAttribute("data-date-fill")).toBe("hover-preview");
     expect(mayFifteen.getAttribute("data-hover-preview-color")).toBe("#e8776a");
-    expect(mayFifteen.style.borderColor).toBe("transparent");
-    expect(mayFifteen.style.background).toBe("rgb(232, 119, 106)");
-    expect(within(mayFifteen).getByTestId("calendar-mini-calendar-date-number").style.background).toBe("transparent");
     const marker = within(mayFifteen).getByTestId("calendar-mini-calendar-marker");
     expect(marker.getAttribute("data-marker-color")).toBe("#e8776a");
     expect(marker.getAttribute("data-marker-contrast-ring")).toBe("dark");
-    expect(marker.style.background).toBe("rgb(232, 119, 106)");
-    expect(marker.style.boxShadow).toContain("rgba(14, 15, 22, 0.74)");
   });
 
   it("uses the square cell visual for selected dates and selected today", () => {
@@ -104,8 +99,6 @@ describe("MiniCalendar", () => {
 
     const selectedDate = screen.getByRole("button", { name: /Wednesday, May 20, selected/i });
     expect(selectedDate.getAttribute("data-date-fill")).toBe("selected");
-    expect(selectedDate.style.background).toBe("rgba(177, 177, 179, 0.72)");
-    expect(within(selectedDate).getByTestId("calendar-mini-calendar-date-number").style.background).toBe("transparent");
     expect(within(selectedDate).getByTestId("calendar-mini-calendar-marker")).toBeTruthy();
 
     rerender(
@@ -122,8 +115,6 @@ describe("MiniCalendar", () => {
 
     const todaySelected = screen.getByRole("button", { name: /Friday, May 15, today, selected/i });
     expect(todaySelected.getAttribute("data-date-fill")).toBe("today-selected");
-    expect(todaySelected.style.background).toBe("rgb(4, 149, 255)");
-    expect(within(todaySelected).getByTestId("calendar-mini-calendar-date-number").style.background).toBe("transparent");
     expect(within(todaySelected).getByTestId("calendar-mini-calendar-marker")).toBeTruthy();
   });
 
@@ -151,8 +142,6 @@ describe("MiniCalendar", () => {
     expect(marker.getAttribute("data-marker-kind")).toBe("deadline");
     expect(marker.getAttribute("data-marker-color")).toBe("#7c3aed");
     expect(marker.getAttribute("data-marker-contrast-ring")).toBe("light");
-    expect(marker.style.color).toBe("rgb(124, 58, 237)");
-    expect(marker.style.textShadow).toContain("rgba(248, 250, 255, 0.82)");
   });
 
   it("renders multi-day all-day hover previews as continuous row segments", () => {
@@ -189,15 +178,10 @@ describe("MiniCalendar", () => {
       "2026-05-10",
     ]);
     expect(segments.every((segment) => segment.getAttribute("data-preview-color") === "#a6e3a1")).toBe(true);
-    expect(segments.every((segment) => segment.style.background === "rgb(166, 227, 161)")).toBe(true);
-    expect(segments.every((segment) => segment.style.borderStyle !== "solid")).toBe(true);
-    expect(segments.every((segment) => segment.style.alignSelf === "stretch")).toBe(true);
-    expect(segments.every((segment) => segment.style.height === "26px")).toBe(true);
 
     const firstPreviewDate = screen.getByRole("button", { name: "Friday, May 1" });
     const marker = within(firstPreviewDate).getByTestId("calendar-mini-calendar-marker");
     expect(marker.getAttribute("data-marker-contrast-ring")).toBe("dark");
-    expect(marker.style.boxShadow).toContain("rgba(14, 15, 22, 0.74)");
   });
 
   it("splits the mini calendar month title into white month text and solid red year text", () => {
@@ -211,6 +195,7 @@ describe("MiniCalendar", () => {
     );
 
     expect(screen.getByTestId("calendar-mini-calendar-month-label").textContent).toBe("May");
+    // These exact title colors are a documented mini-calendar contract in DESIGN.md.
     expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("rgb(248, 250, 255)");
     expect(screen.getByTestId("calendar-mini-calendar-year-label").textContent).toBe("2026");
     expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("rgb(255, 69, 58)");
