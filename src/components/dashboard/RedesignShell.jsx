@@ -14,22 +14,14 @@ import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays.jsx";
 import {
   buildDashboardEventsData,
+  dashboardBillCalendarRequest,
+  dashboardDeadlineCalendarRequest,
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
 } from "./dashboardShellModel.js";
 import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
 export { DashboardBody };
 const InboxView = lazy(() => import("../inbox/InboxView"));
-
-function deadlineOccurrenceFocusId(taskOrId, dateKey) {
-  const id = typeof taskOrId === "object" ? taskOrId?.id : taskOrId;
-  const dueDate = typeof taskOrId === "object" ? taskOrId?.due_date : dateKey;
-  if (!id) return null;
-  const stringId = String(id);
-  if (stringId.startsWith("deadline:")) return stringId;
-  if (!dueDate) return stringId;
-  return `deadline:${stringId}:${dueDate}`;
-}
 
 export function RedesignShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
@@ -465,13 +457,8 @@ export function RedesignShell({
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {
               if (!isMobile) {
-                const focusItemId = deadlineOccurrenceFocusId(task);
-                openCalendar("events", task?.due_date || null, focusItemId, {
-                  source: "dashboard",
-                  openDetail: !!focusItemId,
-                  forceDeadlineOverlay: true,
-                  forceCompletedDeadlineOverlay: !!focusItemId,
-                });
+                const request = dashboardDeadlineCalendarRequest(task);
+                openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
                 return;
               }
               setDeadlinePopover((prev) => {
@@ -479,23 +466,18 @@ export function RedesignShell({
                 return { task, anchor };
               });
             }}
-            onOpenBillsCalendar={(date, itemId) => openCalendar("bills", date || null, itemId || null, {
-              source: "dashboard",
-              openDetail: !!itemId,
-            })}
+            onOpenBillsCalendar={(date, itemId) => {
+              const request = dashboardBillCalendarRequest(date, itemId);
+              openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+            }}
             onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId, {
               source: "dashboard",
               openDetail: !!itemId && itemId !== "new",
               forceEventOverlay: !!itemId && itemId !== "new",
             })}
             onOpenDeadlinesCalendar={(date, itemId) => {
-              const focusItemId = deadlineOccurrenceFocusId(itemId, date);
-              openCalendar("events", date || null, focusItemId, {
-                source: "dashboard",
-                openDetail: !!focusItemId,
-                forceDeadlineOverlay: true,
-                forceCompletedDeadlineOverlay: !!focusItemId,
-              });
+              const request = dashboardDeadlineCalendarRequest(itemId, date);
+              openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
             }}
             onOpenDeadlineCreate={openDeadlineCreate}
             onJumpSection={jumpToSection}

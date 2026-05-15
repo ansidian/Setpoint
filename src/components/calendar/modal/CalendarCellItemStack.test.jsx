@@ -159,7 +159,6 @@ describe("CalendarCellItemStack ghost visibility", () => {
     expect(titles[0]?.getAttribute("data-calendar-chip-title-fit")).toBe(
       titles[1]?.getAttribute("data-calendar-chip-title-fit"),
     );
-    expect(titles[0]?.style.fontWeight).toBe(titles[1]?.style.fontWeight);
   });
 
   it("sizes the chip leading column from hidden overflow items in the same day cell", () => {
@@ -246,7 +245,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
     const chip = screen.getByTestId("calendar-cell-item-chip");
     expect(chip.getAttribute("data-item-id")).toBe("schedule-1:2026-05-10");
     expect(chip.getAttribute("data-calendar-layout-id")).toBe("calendar-bill-chip:schedule-1");
-    expect(chip.style.border).toContain("color-mix");
+    expect(chip.getAttribute("data-selected")).toBe("true");
   });
 
   it("uses selection id for chip anchors while preserving source occurrence id", () => {

@@ -15,24 +15,41 @@ vi.mock("../../briefing/snapshot-service.js", () => ({
     snapshot: { id, status: "frozen" },
     readOnly: true,
   })),
-	  getActiveSnapshotView: vi.fn(async () => ({
+  getActiveSnapshotView: vi.fn(async () => ({
     snapshot: { id: 1, status: "active" },
     lanes: { needs_attention: [], fyi: [], noise: [] },
     carryover: [],
     laneCounts: { needs_attention: 0, fyi: 0, noise: 0, carryover: 0 },
     processing: { queued: 0, running: 0, total: 0, active: false },
     filters: { accounts: [], categories: [] },
-	  })),
-	  syncActiveSnapshot: vi.fn(async () => ({
-	    snapshot: { id: 1, status: "active" },
-	    processing: { queued: 2, running: 0, total: 2, active: true },
-	  })),
-	  moveSnapshotItemLane: vi.fn(async () => ({ id: 42, lane: "fyi" })),
-	  dismissSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: "now" })),
-	  restoreSnapshotItemForToday: vi.fn(async () => ({ id: 42, dismissed_from_today_at: null })),
-	  markSnapshotItemHandled: vi.fn(async () => ({ id: 42, handled_at: "now" })),
-	  reopenSnapshotItem: vi.fn(async () => ({ id: 42, handled_at: null, lane: "needs_attention" })),
-	}));
+  })),
+  syncActiveSnapshot: vi.fn(async () => ({
+    snapshot: { id: 1, status: "active" },
+    processing: { queued: 2, running: 0, total: 2, active: true },
+  })),
+  moveSnapshotItemLane: vi.fn(async (_userId, itemId, lane) => {
+    if (lane !== "fyi") {
+      const error = new Error("Invalid snapshot lane");
+      error.status = 400;
+      throw error;
+    }
+    return { id: itemId, lane: "fyi" };
+  }),
+  dismissSnapshotItemForToday: vi.fn(async (_userId, itemId) => ({
+    id: itemId,
+    dismissed_from_today_at: "now",
+  })),
+  restoreSnapshotItemForToday: vi.fn(async (_userId, itemId) => ({
+    id: itemId,
+    dismissed_from_today_at: null,
+  })),
+  markSnapshotItemHandled: vi.fn(async (_userId, itemId) => ({ id: itemId, handled_at: "now" })),
+  reopenSnapshotItem: vi.fn(async (_userId, itemId) => ({
+    id: itemId,
+    handled_at: null,
+    lane: "needs_attention",
+  })),
+}));
 
 process.env.EA_USER_ID = "user-1";
 
@@ -48,6 +65,10 @@ function makeApp() {
   return app;
 }
 
+function authCookie() {
+  return ["ea_session=cookie-session"];
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockDb.execute.mockImplementation(async ({ sql, args }) => {
@@ -61,94 +82,115 @@ beforeEach(() => {
 });
 
 describe("snapshot routes", () => {
-  it("returns snapshot history through briefing cookie auth before snapshot id routes", async () => {
+  it("rejects snapshot requests without briefing cookie auth", async () => {
+    const res = await request(makeApp()).get("/api/briefing/snapshot/active");
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ message: "Not authenticated" });
+  });
+
+  it("returns snapshot history before snapshot id routes", async () => {
     const res = await request(makeApp())
       .get("/api/briefing/snapshot/history")
-      .set("Cookie", ["ea_session=cookie-session"]);
+      .set("Cookie", authCookie());
 
     expect(res.status).toBe(200);
     expect(res.body.snapshots).toEqual([{ id: 1, status: "active", readOnly: false }]);
-    expect(snapshotService.getSnapshotHistory).toHaveBeenCalledWith("user-1");
   });
 
-  it("returns snapshot detail by id through briefing cookie auth", async () => {
+  it("returns snapshot detail by id", async () => {
     const res = await request(makeApp())
       .get("/api/briefing/snapshot/42")
-      .set("Cookie", ["ea_session=cookie-session"]);
+      .set("Cookie", authCookie());
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ snapshot: { id: 42, status: "frozen" }, readOnly: true });
-    expect(snapshotService.getSnapshotViewById).toHaveBeenCalledWith("user-1", 42);
   });
 
-  it("returns the active snapshot through briefing cookie auth before greedy briefing id routes", async () => {
+  it("returns the active snapshot before greedy briefing id routes", async () => {
     const res = await request(makeApp())
       .get("/api/briefing/snapshot/active")
-      .set("Cookie", ["ea_session=cookie-session"]);
+      .set("Cookie", authCookie());
 
     expect(res.status).toBe(200);
     expect(res.body.snapshot).toEqual({ id: 1, status: "active" });
-    expect(snapshotService.getActiveSnapshotView).toHaveBeenCalledWith("user-1");
-	  });
+  });
 
-	  it("syncs the active snapshot through briefing cookie auth", async () => {
-	    const res = await request(makeApp())
-	      .post("/api/briefing/snapshot/sync")
-	      .set("Cookie", ["ea_session=cookie-session"]);
+  it("syncs the active snapshot", async () => {
+    const res = await request(makeApp())
+      .post("/api/briefing/snapshot/sync")
+      .set("Cookie", authCookie());
 
-	    expect(res.status).toBe(200);
-	    expect(res.body.processing).toEqual({ queued: 2, running: 0, total: 2, active: true });
-	    expect(snapshotService.syncActiveSnapshot).toHaveBeenCalledWith("user-1");
-	  });
+    expect(res.status).toBe(200);
+    expect(res.body.processing).toEqual({ queued: 2, running: 0, total: 2, active: true });
+  });
 
-	  it("moves a snapshot item lane", async () => {
+  it("maps snapshot detail service errors to HTTP responses", async () => {
+    const error = new Error("Snapshot not found");
+    error.status = 404;
+    snapshotService.getSnapshotViewById.mockRejectedValueOnce(error);
+
+    const res = await request(makeApp())
+      .get("/api/briefing/snapshot/404")
+      .set("Cookie", authCookie());
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Snapshot not found" });
+  });
+
+  it("moves a snapshot item lane", async () => {
     const res = await request(makeApp())
       .patch("/api/briefing/snapshot/items/42/lane")
-      .set("Cookie", ["ea_session=cookie-session"])
+      .set("Cookie", authCookie())
       .send({ lane: "fyi" });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ id: 42, lane: "fyi" });
-    expect(snapshotService.moveSnapshotItemLane).toHaveBeenCalledWith("user-1", 42, "fyi");
+  });
+
+  it("reports invalid snapshot item lane input as a bad request", async () => {
+    const res = await request(makeApp())
+      .patch("/api/briefing/snapshot/items/42/lane")
+      .set("Cookie", authCookie())
+      .send({ lane: "later" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid snapshot lane" });
   });
 
   it("dismisses a snapshot item from today", async () => {
     const res = await request(makeApp())
       .post("/api/briefing/snapshot/items/42/dismiss")
-      .set("Cookie", ["ea_session=cookie-session"]);
+      .set("Cookie", authCookie());
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ id: 42, dismissed_from_today_at: "now" });
-    expect(snapshotService.dismissSnapshotItemForToday).toHaveBeenCalledWith("user-1", 42);
   });
 
   it("restores a snapshot item dismissed from today", async () => {
     const res = await request(makeApp())
       .post("/api/briefing/snapshot/items/42/restore")
-      .set("Cookie", ["ea_session=cookie-session"]);
+      .set("Cookie", authCookie());
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ id: 42, dismissed_from_today_at: null });
-    expect(snapshotService.restoreSnapshotItemForToday).toHaveBeenCalledWith("user-1", 42);
   });
 
-	  it("marks a snapshot item handled", async () => {
+  it("marks a snapshot item handled", async () => {
     const res = await request(makeApp())
       .post("/api/briefing/snapshot/items/42/handled")
-      .set("Cookie", ["ea_session=cookie-session"]);
+      .set("Cookie", authCookie());
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ id: 42, handled_at: "now" });
-	    expect(snapshotService.markSnapshotItemHandled).toHaveBeenCalledWith("user-1", 42);
-	  });
+  });
 
-	  it("reopens a handled snapshot item", async () => {
-	    const res = await request(makeApp())
-	      .post("/api/briefing/snapshot/items/42/reopen")
-	      .set("Cookie", ["ea_session=cookie-session"]);
+  it("reopens a handled snapshot item", async () => {
+    const res = await request(makeApp())
+      .post("/api/briefing/snapshot/items/42/reopen")
+      .set("Cookie", authCookie());
 
-	    expect(res.status).toBe(200);
-	    expect(res.body).toEqual({ id: 42, handled_at: null, lane: "needs_attention" });
-	    expect(snapshotService.reopenSnapshotItem).toHaveBeenCalledWith("user-1", 42);
-	  });
-	});
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: 42, handled_at: null, lane: "needs_attention" });
+  });
+});

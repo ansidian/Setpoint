@@ -404,7 +404,7 @@ describe("RedesignShell mobile behavior", () => {
     });
   });
 
-  it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {
+  it("opens the desktop calendar from deadline clicks and loads deadline data", async () => {
     mockIsMobile = false;
     const props = makeProps();
     props.bd.briefing.deadlines.upcoming = [
@@ -434,16 +434,12 @@ describe("RedesignShell mobile behavior", () => {
 
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");
-	      expect(modal.textContent).toBe("open");
-	      expect(modal.getAttribute("data-view")).toBe("events");
-	      expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
-	      expect(modal.getAttribute("data-focus-item-id")).toBe("deadline:todo-42:2026-04-20");
-	      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
-	      expect(modal.getAttribute("data-force-deadline-overlay")).toBe("true");
-	    });
+      expect(modal.textContent).toBe("open");
+    });
+    expect(props.loadCalendarDeadlines).toHaveBeenCalledTimes(1);
   });
 
-  it("routes desktop bill clicks into the calendar modal with focused item detail state", async () => {
+  it("opens the desktop calendar from bill clicks and refreshes bill data", async () => {
     mockIsMobile = false;
     const props = makeProps();
     props.liveData.liveBills = [
@@ -470,11 +466,8 @@ describe("RedesignShell mobile behavior", () => {
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");
       expect(modal.textContent).toBe("open");
-      expect(modal.getAttribute("data-view")).toBe("bills");
-      expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
-      expect(modal.getAttribute("data-focus-item-id")).toBe("bill-rent");
-      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
     });
+    expect(props.loadCalendarBills).toHaveBeenCalledWith({ refreshLive: true });
   });
 
   it("uses browser back to close the desktop calendar modal", async () => {

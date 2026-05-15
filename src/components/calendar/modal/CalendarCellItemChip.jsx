@@ -461,6 +461,9 @@ export function ItemChip({
       data-source-item-id={String(item.id)}
       data-calendar-layout-id={layoutId}
       data-date-key={dateKey || undefined}
+      data-selected={selected ? "true" : "false"}
+      data-special-date={specialDate ? "true" : "false"}
+      data-complete={item.complete ? "true" : "false"}
       data-hovered={active ? "true" : "false"}
       data-calendar-event-selection={batchSelected ? "true" : undefined}
       data-calendar-event-activation="true"

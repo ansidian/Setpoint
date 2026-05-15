@@ -685,17 +685,15 @@ describe("Calendar Search Mirror service", () => {
       requestSyncFn,
     })).toEqual({ started: true });
 
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(requestSyncFn).toHaveBeenCalledWith("test-user", {
-      reason: "calendar-search-startup",
-      debounceMs: 0,
-      forceFull: true,
+    await vi.waitFor(() => {
+      expect(requestSyncFn).toHaveBeenCalledWith("test-user", {
+        reason: "calendar-search-startup",
+        debounceMs: 0,
+        forceFull: true,
+      });
     });
 
     await vi.advanceTimersByTimeAsync(CALENDAR_SEARCH_MIRROR_SYNC_BACKSTOP_MS);
-
     expect(requestSyncFn).toHaveBeenCalledWith("test-user", {
       reason: "calendar-search-backstop",
     });

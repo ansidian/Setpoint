@@ -32,6 +32,44 @@ export function resolveCalendarOpenState({
   };
 }
 
+export function deadlineOccurrenceFocusId(taskOrId, dateKey) {
+  const id = typeof taskOrId === "object" ? taskOrId?.id : taskOrId;
+  const dueDate = typeof taskOrId === "object" ? taskOrId?.due_date : dateKey;
+  if (!id) return null;
+  const stringId = String(id);
+  if (stringId.startsWith("deadline:")) return stringId;
+  if (!dueDate) return stringId;
+  return `deadline:${stringId}:${dueDate}`;
+}
+
+export function dashboardDeadlineCalendarRequest(taskOrId, dateKey) {
+  const focusItemId = deadlineOccurrenceFocusId(taskOrId, dateKey);
+  const focusDate = typeof taskOrId === "object" ? taskOrId?.due_date : dateKey;
+  return {
+    viewKey: "events",
+    focusDate: focusDate || null,
+    focusItemId,
+    options: {
+      source: "dashboard",
+      openDetail: !!focusItemId,
+      forceDeadlineOverlay: true,
+      forceCompletedDeadlineOverlay: !!focusItemId,
+    },
+  };
+}
+
+export function dashboardBillCalendarRequest(date, itemId) {
+  return {
+    viewKey: "bills",
+    focusDate: date || null,
+    focusItemId: itemId || null,
+    options: {
+      source: "dashboard",
+      openDetail: !!itemId,
+    },
+  };
+}
+
 export function resolveDashboardShellHotkey({
   key,
   metaKey = false,

@@ -47,9 +47,8 @@ describe("useBrowserBackDismiss", () => {
     expect(result.current.parentOpen).toBe(true);
     expect(window.history.state.eaTestParentDismiss).toBeTruthy();
 
-    await act(async () => {
+    act(() => {
       window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     await waitFor(() => {
@@ -70,9 +69,8 @@ describe("useBrowserBackDismiss", () => {
     expect(result.current.parentOpen).toBe(true);
     expect(result.current.childOpen).toBe(true);
 
-    await act(async () => {
+    act(() => {
       window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     await waitFor(() => {
@@ -80,9 +78,8 @@ describe("useBrowserBackDismiss", () => {
       expect(result.current.parentOpen).toBe(true);
     });
 
-    await act(async () => {
+    act(() => {
       window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     await waitFor(() => {

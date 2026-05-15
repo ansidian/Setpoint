@@ -60,9 +60,8 @@ describe("App auth redirects", () => {
     expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
     expect(window.location.pathname).toBe("/");
 
-    await act(async () => {
+    act(() => {
       window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     await waitFor(() => {

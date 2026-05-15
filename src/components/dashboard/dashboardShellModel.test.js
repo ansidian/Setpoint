@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDashboardEventsData,
+  dashboardBillCalendarRequest,
+  dashboardDeadlineCalendarRequest,
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
 } from "./dashboardShellModel.js";
@@ -68,6 +70,46 @@ describe("dashboard shell model", () => {
     expect(resolveDashboardShellHotkey({ key: "c", calendarOpen: true })).toEqual({ action: "ignore" });
     expect(resolveDashboardShellHotkey({ key: "a" })).toEqual({ action: "toggle-analytics" });
     expect(resolveDashboardShellHotkey({ key: "y" })).toEqual({ action: "toggle-history" });
+  });
+
+  it("builds dashboard deadline and bill calendar requests through stable shell commands", () => {
+    expect(dashboardDeadlineCalendarRequest({
+      id: "todo-42",
+      due_date: "2026-04-20",
+    })).toEqual({
+      viewKey: "events",
+      focusDate: "2026-04-20",
+      focusItemId: "deadline:todo-42:2026-04-20",
+      options: {
+        source: "dashboard",
+        openDetail: true,
+        forceDeadlineOverlay: true,
+        forceCompletedDeadlineOverlay: true,
+      },
+    });
+
+    expect(dashboardDeadlineCalendarRequest(
+      "deadline:todo-42:2026-04-20",
+      "2026-04-21",
+    )).toMatchObject({
+      viewKey: "events",
+      focusDate: "2026-04-21",
+      focusItemId: "deadline:todo-42:2026-04-20",
+      options: {
+        openDetail: true,
+        forceDeadlineOverlay: true,
+      },
+    });
+
+    expect(dashboardBillCalendarRequest("2026-04-20", "bill-rent")).toEqual({
+      viewKey: "bills",
+      focusDate: "2026-04-20",
+      focusItemId: "bill-rent",
+      options: {
+        source: "dashboard",
+        openDetail: true,
+      },
+    });
   });
 
   it("clears action chords from editable targets instead of dispatching commands", () => {

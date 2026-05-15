@@ -196,6 +196,7 @@ export function SearchResultRow({
       data-testid="calendar-search-result-row"
       data-highlighted={highlighted ? "true" : "false"}
       data-selected={selected ? "true" : "false"}
+      data-visual-state={selected ? "selected" : highlighted ? "highlighted" : "idle"}
       data-past={past ? "true" : "false"}
       data-source-color={color}
       onMouseEnter={(event) => {
@@ -236,6 +237,8 @@ export function SearchResultRow({
         />
       ) : (
         <span
+          data-calendar-search-source-dot="true"
+          data-source-color={color}
           aria-hidden="true"
           style={{
             width: 8,
@@ -309,6 +312,7 @@ export function SearchDateHeader({ dateKey, todayKey, weather, onActivate, regis
       data-testid="calendar-search-date-header"
       data-agenda-date-header="true"
       data-date-key={dateKey}
+      data-date-tone={isToday ? "today" : "normal"}
       aria-label={`Select ${label.toLowerCase()}`}
       style={{
         position: "sticky",
