@@ -137,7 +137,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 idx.uid, idx.account_id, idx.account_label, idx.account_email,
                 idx.account_color, idx.account_icon,
                 idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-                idx.email_date, idx.read,
+                idx.email_date, idx.email_date_utc, idx.read,
                 snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
                 snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
                 rank
@@ -157,7 +157,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 idx.uid, idx.account_id, idx.account_label, idx.account_email,
                 idx.account_color, idx.account_icon,
                 idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-                idx.email_date, idx.read,
+                idx.email_date, idx.email_date_utc, idx.read,
                 NULL AS subject_highlight,
                 NULL AS body_highlight,
                 0 AS rank
@@ -165,7 +165,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
               FROM ea_email_index idx
               ${snapshotJoin}
               WHERE idx.user_id = ?${readPredicate}
-              ORDER BY idx.email_date DESC
+              ORDER BY idx.email_date_utc DESC, idx.email_date DESC
               LIMIT ?`,
         args: readFilter == null
           ? [userId, fetchLimit]

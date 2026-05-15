@@ -1,4 +1,5 @@
 import db from "../db/connection.js";
+import { normalizeEmailDateUtc } from "./email-date.js";
 
 export const EMAIL_INDEX_BODY_TEXT_MAX_CHARS = 20_000;
 const EMAIL_INDEX_LOOKUP_CHUNK_SIZE = 500;
@@ -78,8 +79,8 @@ export async function getEmailIndexHealth(userId, { mailboxScope = "inbox" } = {
     db.execute({
       sql: `SELECT account_id,
                    COUNT(*) AS indexed_count,
-                   MIN(NULLIF(email_date, '')) AS oldest_indexed_date,
-                   MAX(NULLIF(email_date, '')) AS newest_indexed_date,
+                   MIN(NULLIF(email_date_utc, '')) AS oldest_indexed_date,
+                   MAX(NULLIF(email_date_utc, '')) AS newest_indexed_date,
                    MAX(indexed_at) AS last_indexed_at
             FROM ea_email_index
             WHERE user_id = ?
@@ -209,7 +210,8 @@ async function loadExistingIndexRows(userId, uids, { dbClient }) {
   for (let i = 0; i < uids.length; i += EMAIL_INDEX_LOOKUP_CHUNK_SIZE) {
     const chunk = uids.slice(i, i + EMAIL_INDEX_LOOKUP_CHUNK_SIZE);
     const result = await dbClient.execute({
-      sql: `SELECT rowid, uid, from_name, from_address, subject, body_snippet, body_text, read
+      sql: `SELECT rowid, uid, from_name, from_address, subject, body_snippet, body_text,
+                   email_date, email_date_utc, read
             FROM ea_email_index
             WHERE user_id = ?
               AND uid IN (${chunk.map(() => "?").join(",")})`,
@@ -245,6 +247,8 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
     const subject = email.subject || "";
     const bodySnippet = email.body_preview || "";
     const bodyText = String(email.body_text || "").slice(0, EMAIL_INDEX_BODY_TEXT_MAX_CHARS);
+    const emailDate = email.date || "";
+    const emailDateUtc = normalizeEmailDateUtc(emailDate);
     const read = email.read ? 1 : 0;
     const existing = existingRows.get(uid);
     const searchableChanged = !existing
@@ -253,13 +257,18 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
       || existing.subject !== subject
       || existing.body_snippet !== bodySnippet
       || existing.body_text !== bodyText;
+    const indexMetadataChanged = !existing
+      || existing.email_date !== emailDate
+      || existing.email_date_utc !== emailDateUtc;
     if (!searchableChanged) {
-      if (Number(existing.read) === read) return [];
+      if (!indexMetadataChanged && Number(existing.read) === read) return [];
       return [{
         sql: `UPDATE ea_email_index
-              SET read = ?
+              SET email_date = ?,
+                  email_date_utc = ?,
+                  read = ?
               WHERE uid = ? AND user_id = ?`,
-        args: [read, uid, userId],
+        args: [emailDate, emailDateUtc, read, uid, userId],
       }];
     }
 
@@ -268,7 +277,7 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
       email.account_email, email.account_color || "#818cf8",
       email.account_icon || "Mail", fromName, fromAddress,
       subject, bodySnippet, bodyText,
-      email.date || "", read,
+      emailDate, emailDateUtc, read,
     ];
     return [
       // Upsert: insert new rows and refresh provider-derived presentation state
@@ -277,8 +286,8 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
         sql: `INSERT INTO ea_email_index
               (uid, user_id, account_id, account_label, account_email,
                account_color, account_icon, from_name, from_address,
-               subject, body_snippet, body_text, email_date, read)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               subject, body_snippet, body_text, email_date, email_date_utc, read)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(uid) DO UPDATE SET
                 account_id = excluded.account_id,
                 account_label = excluded.account_label,
@@ -291,6 +300,7 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
                 body_snippet = excluded.body_snippet,
                 body_text = excluded.body_text,
                 email_date = excluded.email_date,
+                email_date_utc = excluded.email_date_utc,
                 read = excluded.read`,
         args,
       },

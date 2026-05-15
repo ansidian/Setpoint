@@ -237,4 +237,24 @@ describe("database migrations", () => {
     const pendingIndex = await db.execute("PRAGMA index_info('idx_ea_pending_auth_user_expires')");
     expect(pendingIndex.rows.map((row) => row.name)).toEqual(["user_id", "expires_at"]);
   });
+
+  it("adds normalized email date storage for temporal search filters", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "004_email_read_state_search_index.sql",
+      "013_email_index_normalized_date.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_email_index')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+    expect(columnByName.get("email_date_utc").type).toBe("TEXT");
+    expect(columnByName.get("email_date_utc").notnull).toBe(1);
+
+    const dateIndex = await db.execute("PRAGMA index_info('idx_email_index_user_date_utc')");
+    expect(dateIndex.rows.map((row) => row.name)).toEqual(["user_id", "email_date_utc"]);
+
+    const readDateIndex = await db.execute("PRAGMA index_info('idx_email_index_user_read_date_utc')");
+    expect(readDateIndex.rows.map((row) => row.name)).toEqual(["user_id", "read", "email_date_utc"]);
+  });
 });

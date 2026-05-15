@@ -45,6 +45,27 @@ function rowToEmbeddingCandidate(row) {
   };
 }
 
+function buildEmbeddingQueryFilters({ readFilter = null, dateWindow = null } = {}) {
+  const filters = [];
+  const args = [];
+  if (readFilter != null) {
+    filters.push("idx.read = ?");
+    args.push(readFilter);
+  }
+  if (dateWindow?.after) {
+    filters.push("NULLIF(idx.email_date_utc, '') >= ?");
+    args.push(dateWindow.after);
+  }
+  if (dateWindow?.before) {
+    filters.push("NULLIF(idx.email_date_utc, '') <= ?");
+    args.push(dateWindow.before);
+  }
+  return {
+    sql: filters.length ? ` AND ${filters.join(" AND ")}` : "",
+    args,
+  };
+}
+
 export async function detectEmailSearchVectorCapability(db) {
   try {
     await db.execute("SELECT vector_distance_cos(vector32('[1,0]'), vector32('[1,0]')) AS distance");
@@ -110,7 +131,7 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
     const result = await db.execute({
       sql: `SELECT idx.uid, idx.user_id, idx.account_id, idx.account_label, idx.account_email,
                    idx.account_color, idx.account_icon, idx.from_name, idx.from_address,
-                   idx.subject, idx.body_snippet, idx.body_text, idx.email_date, idx.read,
+                   idx.subject, idx.body_snippet, idx.body_text, idx.email_date, idx.email_date_utc, idx.read,
                    emb.source_hash AS existing_source_hash,
                    emb.document_version AS existing_document_version,
                    emb.embedding_model AS existing_embedding_model,
@@ -152,7 +173,7 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
                 WHEN triage.urgency = 'high' THEN 2
                 ELSE 3
               END ASC,
-              idx.email_date DESC
+              idx.email_date_utc DESC, idx.email_date DESC
             LIMIT ?`,
       args: [
         userId,
@@ -172,17 +193,26 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
       .slice(0, maxResults);
   }
 
-  async function querySimilarEmbeddings(userId, queryEmbedding, { limit = 20 } = {}) {
+  async function querySimilarEmbeddings(userId, queryEmbedding, {
+    limit = 20,
+    readFilter = null,
+    dateWindow = null,
+  } = {}) {
     const maxResults = Math.min(parseInt(limit, 10) || 20, 100);
+    const filters = buildEmbeddingQueryFilters({ readFilter, dateWindow });
     if (mode === "native") {
       const result = await db.execute({
-        sql: `SELECT uid, user_id, account_id, document_text, document_json, source_hash,
-                     vector_distance_cos(embedding, vector32(?)) AS distance
-              FROM ea_email_search_embeddings
-              WHERE user_id = ?
-                AND document_version = ?
-                AND embedding_model = ?
-                AND embedding_dimensions = ?
+        sql: `SELECT emb.uid, emb.user_id, emb.account_id, emb.document_text,
+                     emb.document_json, emb.source_hash,
+                     vector_distance_cos(emb.embedding, vector32(?)) AS distance
+              FROM ea_email_search_embeddings emb
+              JOIN ea_email_index idx
+                ON idx.uid = emb.uid
+               AND idx.user_id = emb.user_id
+              WHERE emb.user_id = ?
+                AND emb.document_version = ?
+                AND emb.embedding_model = ?
+                AND emb.embedding_dimensions = ?${filters.sql}
               ORDER BY distance ASC
               LIMIT ?`,
         args: [
@@ -191,6 +221,7 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
           EMAIL_SEARCH_EMBEDDING_DOCUMENT_VERSION,
           EMAIL_SEARCH_EMBEDDING_MODEL,
           EMAIL_SEARCH_EMBEDDING_DIMENSIONS,
+          ...filters.args,
           maxResults,
         ],
       });
@@ -206,17 +237,22 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
     }
 
     const result = await db.execute({
-      sql: `SELECT uid, user_id, account_id, document_json, source_hash, embedding
-            FROM ea_email_search_embeddings
-            WHERE user_id = ?
-              AND document_version = ?
-              AND embedding_model = ?
-              AND embedding_dimensions = ?`,
+      sql: `SELECT emb.uid, emb.user_id, emb.account_id, emb.document_json,
+                   emb.source_hash, emb.embedding
+            FROM ea_email_search_embeddings emb
+            JOIN ea_email_index idx
+              ON idx.uid = emb.uid
+             AND idx.user_id = emb.user_id
+            WHERE emb.user_id = ?
+              AND emb.document_version = ?
+              AND emb.embedding_model = ?
+              AND emb.embedding_dimensions = ?${filters.sql}`,
       args: [
         userId,
         EMAIL_SEARCH_EMBEDDING_DOCUMENT_VERSION,
         EMAIL_SEARCH_EMBEDDING_MODEL,
         EMAIL_SEARCH_EMBEDDING_DIMENSIONS,
+        ...filters.args,
       ],
     });
 

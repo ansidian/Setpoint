@@ -27,6 +27,7 @@ async function createRetrievalTestDb() {
     "004_email_read_state_search_index.sql",
     "005_email_search_embeddings.sql",
     "006_email_search_embedding_state.sql",
+    "013_email_index_normalized_date.sql",
   ]);
   return db;
 }
@@ -260,5 +261,86 @@ describe("retrieveInboxAiSearch", () => {
       from: { address: "ChaseVisaCard@message.card.visa.com" },
       provenance: { vector: true },
     });
+  });
+
+  it("uses a rolling server-owned window for relative date queries", async () => {
+    db = await createRetrievalTestDb();
+    const sameEvening = await seedIndexedEmail(db, {
+      uid: "same-evening-result",
+      subject: "Deployment summary",
+      body_text: "This changed late in the local evening.",
+      email_date: "Fri, 15 May 2026 01:08:02 +0000",
+    });
+    await upsertEmbedding(db, sameEvening, [1, 0, 0]);
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "what changed in the last week",
+      now: "2026-05-15T04:00:00.000Z",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      plan: {
+        semantic_query: "changes in the last week",
+        lexical_queries: ["changed"],
+        date_window: {
+          after: "2026-05-08T00:00:00.000Z",
+          before: "2026-05-15T00:00:00.000Z",
+        },
+      },
+      limit: 5,
+    });
+
+    expect(result.parsed_query.date_window).toEqual({
+      after: "2026-05-08T04:00:00.000Z",
+      before: "2026-05-15T04:00:00.000Z",
+    });
+    expect(result.candidates.map((candidate) => candidate.uid)).toEqual(["same-evening-result"]);
+  });
+
+  it("honors planner date windows and drops weak body-only lexical evidence", async () => {
+    db = await createRetrievalTestDb();
+    const oldApplication = await seedIndexedEmail(db, {
+      uid: "old-crowdstrike",
+      subject: "CrowdStrike Job Application Confirmation",
+      body_text: "We received your job application.",
+      email_date: "2025-07-31T20:13:45.000Z",
+    });
+    const recentApplication = await seedIndexedEmail(db, {
+      uid: "recent-stubhub",
+      from_address: "no-reply@stubhub.com",
+      subject: "Thank you for applying to StubHub",
+      body_text: "Thank you for applying for the Software Engineer I job at StubHub.",
+      email_date: "Thu, 14 May 2026 18:11:11 +0000",
+    });
+    const jobSearchNoise = await seedIndexedEmail(db, {
+      uid: "recent-simplify-welcome",
+      from_address: "noreply@simplify.jobs",
+      subject: "Hey Andy - welcome to Simplify!",
+      body_text: "I know the job search can be both exciting and challenging. Simplify can help you apply faster.",
+      email_date: "Tue, 12 May 2026 02:37:12 +0000",
+    });
+    await upsertEmbedding(db, oldApplication, [1, 0, 0]);
+    await upsertEmbedding(db, recentApplication, [0.9, 0.1, 0]);
+    await upsertEmbedding(db, jobSearchNoise, [0.25, 0.97, 0]);
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "how many job applications have i applied to in the last week",
+      now: "2026-05-15T04:00:00.000Z",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      plan: {
+        semantic_query: "job application confirmations in the last week",
+        lexical_queries: ["job application"],
+        intents: ["count applications", "find application confirmations"],
+        date_window: {
+          after: "2026-05-08T00:00:00.000Z",
+          before: "2026-05-15T00:00:00.000Z",
+        },
+      },
+      limit: 5,
+    });
+
+    expect(result.candidates.map((candidate) => candidate.uid)).toEqual(["recent-stubhub"]);
   });
 });

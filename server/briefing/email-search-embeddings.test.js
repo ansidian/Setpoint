@@ -35,6 +35,7 @@ async function createEmbeddingTestDb() {
     "001_ea_tables.sql",
     "004_email_read_state_search_index.sql",
     "005_email_search_embeddings.sql",
+    "013_email_index_normalized_date.sql",
   ]);
   return db;
 }

@@ -1,9 +1,11 @@
 import db from "../db/connection.js";
 import { createEmailSearchEmbeddingClient } from "./email-search-embedding-client.js";
+import { resolveEmailSearchDateWindow } from "./email-search-date-window.js";
 import {
   createEmailSearchEmbeddingStore,
   detectEmailSearchVectorCapability,
 } from "./email-search-embedding-store.js";
+import { filterEmailSearchCandidatesForEvidence } from "./email-search-evidence.js";
 import { parseEmailSearchQuery, sanitizeFtsQuery } from "./email-search-query.js";
 import { rankEmailSearchRows } from "./email-search-ranking.js";
 
@@ -73,11 +75,11 @@ function buildPlanFilters(plan, readFilter, alias = "idx") {
     args.push(readFilter);
   }
   if (plan?.date_window?.after) {
-    filters.push(`${alias}.email_date >= ?`);
+    filters.push(`NULLIF(${alias}.email_date_utc, '') >= ?`);
     args.push(plan.date_window.after);
   }
   if (plan?.date_window?.before) {
-    filters.push(`${alias}.email_date <= ?`);
+    filters.push(`NULLIF(${alias}.email_date_utc, '') <= ?`);
     args.push(plan.date_window.before);
   }
   return {
@@ -130,7 +132,7 @@ async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, 
               idx.uid, idx.account_id, idx.account_label, idx.account_email,
               idx.account_color, idx.account_icon,
               idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-              idx.email_date, idx.read,
+              idx.email_date, idx.email_date_utc, idx.read,
               rank
               ${RANKING_COLUMNS}
             FROM ea_email_fts
@@ -153,13 +155,13 @@ async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, 
             idx.uid, idx.account_id, idx.account_label, idx.account_email,
             idx.account_color, idx.account_icon,
             idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-            idx.email_date, idx.read,
+            idx.email_date, idx.email_date_utc, idx.read,
             0 AS rank
             ${RANKING_COLUMNS}
           FROM ea_email_index idx
           ${SNAPSHOT_JOIN}
           WHERE idx.user_id = ?${filters.sql}
-          ORDER BY idx.email_date DESC
+          ORDER BY idx.email_date_utc DESC, idx.email_date DESC
           LIMIT ?`,
     args: [userId, ...filters.args, fetchLimit],
   });
@@ -178,14 +180,14 @@ async function loadRowsByUid(dbClient, userId, uids, { readFilter, plan }) {
             idx.uid, idx.account_id, idx.account_label, idx.account_email,
             idx.account_color, idx.account_icon,
             idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-            idx.email_date, idx.read,
+            idx.email_date, idx.email_date_utc, idx.read,
             0 AS rank
             ${RANKING_COLUMNS}
           FROM ea_email_index idx
           ${SNAPSHOT_JOIN}
           WHERE idx.user_id = ?
             AND idx.uid IN (${uids.map(() => "?").join(",")})${filters.sql}
-          ORDER BY idx.email_date DESC`,
+          ORDER BY idx.email_date_utc DESC, idx.email_date DESC`,
     args: [userId, ...uids, ...filters.args],
   });
   return result.rows;
@@ -243,19 +245,29 @@ export async function retrieveInboxAiSearch(userId, {
   embeddingClient = createEmailSearchEmbeddingClient(),
   capability = null,
   plan = null,
+  now = Date.now(),
 } = {}) {
   const maxResults = clampLimit(limit);
   const { textQuery: rawTextQuery, readFilter: explicitReadFilter } = parseEmailSearchQuery(q);
+  const dateWindow = resolveEmailSearchDateWindow(q, plan?.date_window, { now });
+  const effectivePlan = plan || dateWindow ? {
+    ...(plan || {}),
+    date_window: dateWindow,
+  } : null;
   const planReadFilter = readFilterFromPlan(plan);
   const readFilter = explicitReadFilter == null ? planReadFilter : explicitReadFilter;
   const textQuery = plan?.lexical_queries?.[0] || plan?.semantic_query || rawTextQuery;
   const vectorQuery = plan?.semantic_query || rawTextQuery;
   const resolvedCapability = capability || await detectEmailSearchVectorCapability(dbClient);
+  const vectorLimit = effectivePlan?.date_window?.after || effectivePlan?.date_window?.before
+    ? 100
+    : Math.max(maxResults * 2, 20);
+  const candidatePoolLimit = Math.max(maxResults * 4, 50);
 
   const lexicalPromise = loadLexicalRows(dbClient, userId, {
     textQuery,
     readFilter,
-    plan,
+    plan: effectivePlan,
     limit: maxResults,
   });
   const vectorPromise = (async () => {
@@ -264,7 +276,9 @@ export async function retrieveInboxAiSearch(userId, {
       const [queryEmbedding] = await embeddingClient.embed([vectorQuery]);
       const store = createEmailSearchEmbeddingStore(dbClient, resolvedCapability);
       const matches = await store.querySimilarEmbeddings(userId, queryEmbedding, {
-        limit: Math.max(maxResults * 2, 20),
+        limit: vectorLimit,
+        readFilter,
+        dateWindow: effectivePlan?.date_window,
       });
       return { status: "ok", matches };
     } catch (err) {
@@ -278,13 +292,14 @@ export async function retrieveInboxAiSearch(userId, {
   })();
 
   const [lexicalRows, vector] = await Promise.all([lexicalPromise, vectorPromise]);
-  const vectorRows = await loadRowsByUid(dbClient, userId, vector.matches.map((match) => match.uid), { readFilter, plan });
-  const candidates = mergeCandidates({
+  const vectorRows = await loadRowsByUid(dbClient, userId, vector.matches.map((match) => match.uid), { readFilter, plan: effectivePlan });
+  const candidatePool = mergeCandidates({
     lexicalRows,
     vectorMatches: vector.matches,
     vectorRows,
-    limit: maxResults,
+    limit: candidatePoolLimit,
   });
+  const candidates = filterEmailSearchCandidatesForEvidence(candidatePool, { q, plan: effectivePlan }).slice(0, maxResults);
 
   return {
     mode: vector.status === "ok" && vector.matches.length ? "hybrid" : "lexical",
@@ -292,6 +307,7 @@ export async function retrieveInboxAiSearch(userId, {
     parsed_query: {
       text: textQuery,
       read_filter: readFilter,
+      date_window: effectivePlan?.date_window || null,
       planned: !!plan,
     },
     lexical: {

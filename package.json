@@ -27,6 +27,7 @@
     "email-search:eval": "node server/scripts/email-search-retrieval-eval.js",
     "email-search:eval:seed": "node server/scripts/seed-email-search-retrieval-eval.js",
     "email-search:answer-eval": "node server/scripts/email-search-answer-eval.js",
+    "email-search:date-backfill": "node server/scripts/backfill-email-date-utc.js",
     "ai-search:embedding-status": "node server/scripts/email-search-embedding-status.js",
     "ai-search:backfill": "node server/scripts/email-search-embedding-backfill.js",
     "test:e2e": "playwright test",
