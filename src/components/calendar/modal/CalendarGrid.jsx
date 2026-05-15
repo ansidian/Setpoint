@@ -60,6 +60,7 @@ export default function CalendarGrid({
   floatingDetailMode = null,
   floatingDetailDateKey = null,
   floatingEditorDirty = false,
+  onCancelFloatingEditor,
   onShakeFloatingEditor,
   onDirectDateAction,
   onDirectItemAction,
@@ -210,7 +211,11 @@ export default function CalendarGrid({
     if (isSelected && (!clearItemSelection || selectedItemId == null)) return;
 
     closeEventEditor();
-    if (onCloseFloatingDetail?.() === false) return;
+    if (floatingEditorOpen && floatingDetailMode === "create" && onCancelFloatingEditor) {
+      onCancelFloatingEditor();
+    } else if (onCloseFloatingDetail?.() === false) {
+      return;
+    }
     if (eventDateCells) eventQuickActions?.clearEventSelection?.();
 
     setSelectedDay(day);
