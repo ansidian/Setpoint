@@ -282,6 +282,49 @@ describe("EventsAgendaRail", () => {
     expect(onPassiveDateChange).not.toHaveBeenCalled();
   });
 
+  it("passively selects the date header tucked under the agenda row offset", async () => {
+    const onPassiveDateChange = vi.fn();
+    renderRail({
+      todayDate: 14,
+      selectedDateKey: "2026-05-01",
+      entryScrollTargetDateKey: false,
+      onPassiveDateChange,
+      events: [
+        event({
+          id: "event-13",
+          title: "Previous day",
+          start: "2026-05-13T16:00:00.000Z",
+          end: "2026-05-13T17:00:00.000Z",
+        }),
+        event({
+          id: "event-14",
+          title: "Today planning",
+          start: "2026-05-14T16:00:00.000Z",
+          end: "2026-05-14T17:00:00.000Z",
+        }),
+      ],
+    });
+    const rail = screen.getByTestId("events-agenda-rail");
+    const may13Header = screen.getByRole("button", { name: /select wednesday, may 13/i });
+    const may14Header = screen.getByRole("button", { name: /select thursday, may 14/i });
+    const may13Section = may13Header.closest("section");
+    const may14Section = may14Header.closest("section");
+
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 260, left: 0, right: 280, width: 280, height: 260 });
+    may13Section.getBoundingClientRect = () => ({ top: -72, bottom: -4, left: 0, right: 280, width: 280, height: 68 });
+    may14Section.getBoundingClientRect = () => ({ top: 10, bottom: 88, left: 0, right: 280, width: 280, height: 78 });
+
+    await act(async () => {
+      fireEvent.scroll(rail);
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
+    });
+
+    expect(onPassiveDateChange).toHaveBeenCalledWith("2026-05-14");
+    expect(onPassiveDateChange).not.toHaveBeenCalledWith("2026-05-13");
+  });
+
   it("pre-selects the month-start anchor on month entry", async () => {
     const onPassiveDateChange = vi.fn();
     renderRail({
