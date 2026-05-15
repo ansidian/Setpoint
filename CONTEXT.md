@@ -132,6 +132,62 @@ _Avoid_: Event chip, source legend, decorative dot
 A toggleable layer of deadline items inside the Events workspace.
 _Avoid_: Deadlines view, separate deadlines workspace, Canvas view
 
+**Deadline Item**:
+An actionable dated task shown through the **Deadline Overlay**.
+_Avoid_: Provider source, Canvas assignment, Todoist view item
+
+**Deadline Item Identifier**:
+The stable identity of a **Deadline Item**, exposed as `id` on deadline read rows and as `deadlineId` in route/helper parameters.
+_Avoid_: Public `todoistId`, public `taskId`, source-prefixed item id
+
+**Deadline Occurrence**:
+A dated instance of a **Deadline Item** shown in calendar and search surfaces.
+_Avoid_: Provider task id, source-prefixed task id
+
+**Deadline Occurrence Date**:
+The dashboard/Pacific `YYYY-MM-DD` date that identifies a **Deadline Occurrence**.
+_Avoid_: UTC date, provider due timezone, locale-formatted date
+
+**Todoist Provider**:
+The external task system that backs deadline creation, editing, completion, deletion, and provider navigation.
+_Avoid_: Todoist view, Todoist deadline category, deadline source badge
+
+**Deadline Detail**:
+The focused item-detail treatment for one deadline inside the Events workspace.
+_Avoid_: Deadlines view, deadlines workspace, deadline view
+
+**Deadline Creation**:
+The action of creating a new **Deadline Item** from EA Dashboard.
+_Avoid_: Todoist task creation, CTM task creation
+
+**Deadline Edit**:
+The action of changing one whole **Deadline Item** from EA Dashboard.
+_Avoid_: Todoist task update, CTM status edit, single-occurrence deadline edit
+
+**Deadline Deletion**:
+The action of removing one whole **Deadline Item** from EA Dashboard.
+_Avoid_: Todoist task deletion, CTM removal, single-occurrence deadline delete
+
+**Deadline Mutation Payload**:
+The public app/API request body used for **Deadline Creation**, **Deadline Edit**, and **Deadline Deletion**.
+_Avoid_: Todoist task payload, provider payload, `content`/`project_id`/`label_ids` public contract
+
+**Deadline Completion**:
+The action of marking one **Deadline Occurrence** complete.
+_Avoid_: Task status update, CTM status, generic task completion
+
+**Completed Deadline Occurrence**:
+A completed **Deadline Occurrence** shown after completion.
+_Avoid_: Tombstone, ghost, completed Todoist row
+
+**Completed Deadline History**:
+The local EA Dashboard record of completed **Deadline Occurrences**, especially recurring provider-backed deadlines whose provider task advances to the next occurrence.
+_Avoid_: One-row task completion flag, undated completion row, Todoist activity log, short-lived tombstone only, dashboard-visible backlog
+
+**Completed Deadline Snapshot Cleanup**:
+The optional EA Dashboard-local cleanup of one persisted **Completed Deadline Occurrence** when a cleanup path is retained.
+_Avoid_: Product Dismiss button, tombstone UI, ghost UI, delete completed task, Todoist uncomplete/reopen/delete
+
 **Agenda Row Hover Preview**:
 A temporary **Mini Calendar** date emphasis shown while hovering or focusing an agenda rail item. It wraps the previewed date number and its **Mini Calendar Activity Markers** as one visual target.
 _Avoid_: Hover selection, delayed tooltip, agenda preview mode
@@ -160,7 +216,7 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - Deleting an individual **Registered Passkey** revokes existing authenticated sessions and may issue a fresh current-browser session for the authenticated browser performing the deletion.
 - **Calendar Search** opens from the calendar modal header or Cmd/Ctrl+F and shows matches in a **Search Results Rail**.
 - **Calendar Search** may fetch a bounded multi-month window instead of only filtering the visible month.
-- **Calendar Search Scope** follows the active view: Events searches events plus visible deadline-overlay data, Bills searches bills only.
+- **Calendar Search Scope** follows the active view: Events searches events plus deadline data, Bills searches bills only.
 - A **Calendar Search Endpoint** is the preferred implementation path for search because the owner values broader lookup more than a bounded cache-only compromise.
 - A **Calendar Search Mirror** may answer Events search, but it does not replace live Google Calendar reads for the normal Events calendar range or dashboard surfaces.
 - A **Calendar Search Mirror** owns the same rolling Events search window as **Calendar Search Coverage**: 12 months back and 18 months forward from today.
@@ -175,8 +231,11 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - **Calendar Search Coverage** is per source: Events search may return deadline-overlay matches while Google event mirror coverage is initializing, stale, or degraded.
 - A mirror-backed **Calendar Search Endpoint** preserves **Calendar Search Ranking**; the mirror changes freshness and provider-call behavior, not the result ordering contract.
 - **Calendar Search Coverage** is source-specific: Events may use provider-backed Google Calendar search, Events deadlines use server-available deadline data, and Bills searches the local Bills mirror.
+- **Calendar Search** is workspace discovery, not only a filter over currently visible layers. Events search may include **Deadline Occurrences** and **Completed Deadline History** even when the **Deadline Overlay** is hidden.
 - **Calendar Search Coverage** must be honest in empty or limited states; Bills mirror coverage is not the same as searching all of Actual forever.
 - **Calendar Search Activation** navigates the modal to the result month, selects the result date and item, and opens the existing calendar detail behavior.
+- **Calendar Search Activation** for a deadline result targets Events with **Deadline Detail** focus; **Mini Calendar Activity Markers** and ordinary agenda visibility still obey the **Deadline Overlay** toggle.
+- **Calendar Search Activation** for a deadline result may temporarily focus that deadline even when the **Deadline Overlay** is hidden, but it does not permanently turn the overlay back on or change the owner’s overlay toggle preference.
 - **Calendar Search Activation** keeps the **Search Results Rail** open with its current query and results while the calendar workspace navigates or loads.
 - **Calendar Search Ranking** filters by deterministic match quality but displays matching results in date order from oldest to newest so the **Search Results Rail** reads like a timeline.
 - **Calendar Search Endpoint** should query provider-backed event sources from a today-centered window before backfilling the broader coverage window, so broad recurring-event searches do not exhaust provider limits on old matches.
@@ -231,7 +290,29 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - Double-clicking a date in the **Mini Calendar** creates a calendar event seeded to that date, regardless of the active calendar workspace.
 - The first click in a Mini Calendar double-click still performs **Mini Calendar Activation** immediately; the second click additionally opens event creation.
 - Dirty calendar editor protection takes precedence over **Mini Calendar Activation** and Mini Calendar event creation.
-- A **Deadline Overlay** belongs to the Events workspace; it is not a separate top-level calendar workspace.
+- A **Deadline Overlay** belongs to the Events workspace; it is not a separate top-level calendar workspace or a workspace alias.
+- A **Deadline Overlay** contains zero or more **Deadline Occurrences**.
+- A **Deadline Item Identifier** names one **Deadline Item**; do not broadly rename deadline read-row `id` fields to `deadlineId` during this cleanup.
+- A **Deadline Occurrence** is distinguished by its **Deadline Item Identifier** and **Deadline Occurrence Date**.
+- A **Deadline Detail** focuses exactly one **Deadline Occurrence** inside the Events workspace; it is not a separate top-level calendar workspace or a workspace alias.
+- **Deadline Creation**, **Deadline Edit**, and **Deadline Deletion** operate on whole **Deadline Items** and may be backed by the **Todoist Provider** internally.
+- **Deadline Edit** and **Deadline Deletion** do not target individual **Deadline Occurrences**.
+- **Deadline Creation** and **Deadline Edit** receive **Deadline Mutation Payloads** with deadline-domain field names; Todoist-shaped provider fields are mapped inside provider internals.
+- **Deadline Completion** applies to exactly one **Deadline Occurrence** and may be backed by the **Todoist Provider** internally.
+- **Deadline Completion** is idempotent: completing an already completed occurrence still succeeds.
+- **Deadline Completion** may produce a **Completed Deadline Occurrence** when the completed item should remain visible for its dated occurrence.
+- A **Completed Deadline Occurrence** is a completed **Deadline Occurrence**.
+- **Completed Deadline History** is keyed by **Deadline Item Identifier** and **Deadline Occurrence Date**; multiple completed occurrences for one recurring **Deadline Item** must be able to coexist.
+- **Completed Deadline History** remains stored in `ea_completed_tasks`, keyed by `user_id`, `todoist_id`, and `due_date`, while product/API language treats those rows as completed deadline occurrences.
+- **Completed Deadline History** requires a **Deadline Occurrence Date**; undated legacy completion rows are not valid completed deadline occurrences.
+- **Completed Deadline History** is written by EA Dashboard completion in this cleanup; Todoist Provider completed-task backfill is out of scope unless missed completions become a recurring problem.
+- **Completed Deadline History** is durable storage, not a promise that every surface renders all history. Dashboard deadline surfaces render completed occurrences due today or in the future, not past history, while Calendar range reads may render historical completed occurrences for the requested range.
+- **Calendar Search** in Events includes matching **Completed Deadline History** within its honest search coverage/window by using the same range-aware deadline history model as Calendar range reads.
+- **Calendar Search** in Events may include **Deadline Occurrences** even when the **Deadline Overlay** is hidden; overlay visibility controls ordinary Events rendering and activity markers, not search eligibility.
+- Activating a hidden-overlay deadline search result is a targeted **Deadline Detail** feature: closing the detail returns to the normal hidden-overlay Events state.
+- **Completed Deadline Snapshot Cleanup** is not a primary product action; prefer deleting hidden legacy cleanup UI/API when no current surface needs it.
+- If **Completed Deadline Snapshot Cleanup** is retained, it applies to exactly one **Completed Deadline Occurrence**, is idempotent, is local to EA Dashboard, and does not mutate the **Todoist Provider**.
+- **Todoist Provider** may be named for external-provider actions such as opening, configuring, or syncing Todoist, but not as the product category for **Deadline Items**.
 - When the **Deadline Overlay** is visible, deadline items participate in Events workspace **Mini Calendar Activity Markers**.
 - **Mini Calendar Activity Markers** follow the active workspace's visible overlay and filter state; hidden deadline items do not contribute markers.
 - In a **Three-Rail Calendar Workspace**, the **Mini Calendar** remains with the visible agenda rail while **Calendar Search** is open; when search replaces the agenda rail on narrower layouts, the **Mini Calendar** is hidden with that rail.
@@ -255,13 +336,15 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - "Pending auth token" was resolved as cookie-held **Pending Password Authentication**, not a JSON token the frontend stores or passes manually.
 - "Delete passkey" includes deleting the final **Registered Passkey**; this is a deliberate recovery path, not an invalid state.
 - "Search in the calendar modal" was resolved as **Calendar Search**, not a visible-month filter: the happy path is broader calendar lookup, with an acceptable bounded multi-month search window when needed for performance.
-- "Global calendar search" was rejected for the first calendar modal search: **Calendar Search Scope** stays active-view based, with Events including its deadline overlay items and Bills staying Bills-only.
+- "Global calendar search" was rejected for the first calendar modal search: **Calendar Search Scope** stays active-view based, with Events including deadline items and Bills staying Bills-only.
 - "Server search" was chosen over a bounded client-cache search as the preferred path for **Calendar Search**, even if individual sources still need explicit provider or mirror boundaries.
 - "Global" in **Calendar Search** was resolved as best available source-wide search with explicit **Calendar Search Coverage**, not live-querying every provider with no boundary.
 - "Calendar event mirror" was resolved as a **Calendar Search Mirror** first, not a new source of truth for all calendar event reads.
 - "Does not drift from Google" was resolved as **Calendar Search Mirror Freshness** with bounded, visible staleness and repair, not a claim of perfect lockstep sync.
 - "Provider fallback" for mirrored Events search was rejected for normal **Calendar Search Typeahead**; falling back to live Google would reintroduce provider latency and quota limits.
 - "Selecting a search result" was resolved as **Calendar Search Activation**, not an independent preview surface.
+- "Search only visible deadline overlay data" was rejected; Events **Calendar Search** can discover deadline results even when the **Deadline Overlay** is hidden.
+- "Activating a hidden-overlay deadline search result turns the overlay back on" was rejected; activation should focus the target as a search result while preserving the overlay toggle preference. This is a small feature addition relative to current behavior.
 - "Smart ranking" was rejected for **Calendar Search** display order; use deterministic **Calendar Search Ranking** as an oldest-to-newest timeline after filtering matches.
 - "Left search rail" was resolved as a **Three-Rail Calendar Workspace** on desktop, with responsive fallback only for constrained layouts.
 - "Typing in calendar search" was resolved as **Calendar Search Typeahead**, not an Enter-to-submit flow.
@@ -273,4 +356,22 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - "Clicking a mini calendar date" was resolved as **Mini Calendar Activation**, not a selection-only preview.
 - "Mini calendar dots" was resolved as **Mini Calendar Activity Markers**, not detailed event chips or a standalone source legend.
 - Binary **Mini Calendar Activity Markers** were rejected as too weak; marker count or density is the useful orientation signal, with a hard cap of four.
-- "Deadlines view" was resolved as **Deadline Overlay** for the current calendar product language; deadlines live inside Events behind a show/hide control.
+- "Deadlines view" was rejected as current product language; use **Deadline Overlay** for deadline items shown inside Events, and do not treat it as a workspace alias.
+- "Deadline source" was rejected as product-facing deadline language; use **Deadline Item** unless discussing provider integration internals.
+- "Todoist deadline" was resolved as provider-backed **Deadline Item** in product UI, while **Todoist Provider** remains valid for external-provider actions and settings.
+- "Deadline id" was resolved as **Deadline Item Identifier**: read rows may keep `id`, while route/helper parameters use `deadlineId`.
+- "Deadline selection id" was resolved as **Deadline Occurrence** identity, not a provider task id alone.
+- "Occurrence date" was resolved as **Deadline Occurrence Date**, the dashboard/Pacific `YYYY-MM-DD` date shown in EA Dashboard.
+- "Todoist task create/edit/delete" was resolved as **Deadline Creation**, **Deadline Edit**, and **Deadline Deletion** for product/API surfaces.
+- "Todoist-shaped create/edit payload" was resolved as **Deadline Mutation Payload** for product/API surfaces, with Todoist provider field names kept behind the provider boundary.
+- "Single-occurrence recurring deadline edit/delete" was rejected for this cleanup; **Deadline Edit** and **Deadline Deletion** are item-level operations.
+- "Complete task" was resolved as **Deadline Completion** for product/API surfaces that complete a deadline occurrence.
+- "Recurring completed Todoist tombstones" was resolved as **Completed Deadline History**, not a single task-level row or one-day tombstone.
+- "Completed history repair later" was rejected for the CTM/deadline cleanup; **Completed Deadline History** repair is part of making the new occurrence contract real.
+- "Calendar search completed deadline history" was resolved as yes for Events search: include matching **Completed Deadline History** within the same range/coverage-aware model as Calendar reads, while dashboard surfaces still avoid past completed-history backlog.
+- "New completed-deadline table" was rejected for this cleanup; migrate `ea_completed_tasks` in place to an occurrence key.
+- "Undated completed task rows" were rejected for the new deadline contract; completed deadline history requires an occurrence date.
+- "Todoist completed-task backfill now" was rejected for this cleanup; known missing historical rows are a one-off data repair concern, not a required sync subsystem.
+- "Tombstone" was resolved as an internal persistence term; product/API surfaces should use **Completed Deadline Occurrence** and avoid exposing tombstone/ghost language.
+- "Dismiss completed deadline" was resolved as legacy **Completed Deadline Snapshot Cleanup**, not a required visible product action and not a Todoist provider mutation.
+- "Deadline detail" was resolved as **Deadline Detail**, not a "Deadlines view" or hidden deadline workspace.
