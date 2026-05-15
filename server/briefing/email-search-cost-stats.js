@@ -12,15 +12,12 @@ export const INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION = {
 };
 const INBOX_AI_SEARCH_PRICE_MODEL_KEYS = Object.keys(INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION)
   .sort((a, b) => b.length - a.length);
-const ASK_AI_EVENT_TYPES = ["answer", "planner", "query_embedding"];
+const ASK_AI_EVENT_TYPES = ["planner", "query_embedding"];
 const CORPUS_EMBEDDING_EVENT_TYPES = ["corpus_embedding"];
 
 const ESTIMATED_QUERY_CHARS = 120;
 const ESTIMATED_PLANNER_INPUT_TOKENS = 500;
 const ESTIMATED_PLANNER_OUTPUT_TOKENS = 350;
-const ESTIMATED_ANSWER_SOURCE_CHARS = 8 * 1200;
-const ESTIMATED_ANSWER_OVERHEAD_CHARS = 800;
-const ESTIMATED_ANSWER_OUTPUT_TOKENS = 500;
 
 function semanticStatus({ total, stale, missing, stateStatus, mode }) {
   if (stateStatus === "unavailable") return "unavailable";
@@ -169,21 +166,15 @@ function perAskEstimate() {
     inputTokens: ESTIMATED_PLANNER_INPUT_TOKENS,
     outputTokens: ESTIMATED_PLANNER_OUTPUT_TOKENS,
   };
-  const answer = {
-    model: "gpt-5.4-mini",
-    inputTokens: estimateTokensFromChars(ESTIMATED_ANSWER_SOURCE_CHARS + ESTIMATED_ANSWER_OVERHEAD_CHARS),
-    outputTokens: ESTIMATED_ANSWER_OUTPUT_TOKENS,
-  };
   const queryEmbedding = {
     model: EMAIL_SEARCH_EMBEDDING_MODEL,
     inputTokens: queryEmbeddingTokens,
   };
   const queryEmbeddingCost = estimateCost({ model: queryEmbedding.model, inputTokens: queryEmbedding.inputTokens });
   const plannerCost = estimateCost(planner);
-  const answerCost = estimateCost(answer);
 
   return {
-    note: "Successful Ask AI estimate: planner + query embedding + capped answer over up to 8 sources. Actual answer calls are lower when fewer sources or shorter output are used.",
+    note: "Successful Ask AI estimate: planner + query embedding only. Result status text is deterministic local formatting over retrieved source rows.",
     queryEmbedding: {
       ...queryEmbedding,
       estimatedCostUsd: queryEmbeddingCost,
@@ -192,11 +183,7 @@ function perAskEstimate() {
       ...planner,
       estimatedCostUsd: plannerCost,
     },
-    answer: {
-      ...answer,
-      estimatedCostUsd: answerCost,
-    },
-    estimatedCostUsd: roundMoney(queryEmbeddingCost + plannerCost + answerCost),
+    estimatedCostUsd: roundMoney(queryEmbeddingCost + plannerCost),
   };
 }
 

@@ -149,16 +149,10 @@ function activateBudgetSnapshot() {
   };
 }
 
-function mobileAiResponse({ uid = "ai-source-1", subject = "AI source row", answer = "Grounded mobile answer.", confidence = "medium" } = {}) {
+function mobileAiResponse({ uid = "ai-source-1", subject = "AI source row" } = {}) {
   return {
     answer_status: "ok",
-    answer: {
-      answer,
-      confidence,
-      cited_source_uids: [uid],
-      missing_info: [],
-      low_confidence_reason: "",
-    },
+    answer: null,
     retrieval: {
       mode: "hybrid",
       vector_status: "ok",
@@ -277,8 +271,6 @@ describe("InboxView mobile", () => {
   it("runs confirmed mobile Ask AI and opens source rows through the existing reader", async () => {
     askInboxAiSearch.mockResolvedValueOnce(mobileAiResponse({
       subject: "Amazon return reminder",
-      answer: "The return deadline is May 12.",
-      confidence: "medium",
     }));
 
     renderInbox({ isMobile: true, liveEmails: [] });
@@ -290,10 +282,8 @@ describe("InboxView mobile", () => {
 
     expect(askInboxAiSearch).toHaveBeenCalledWith("amazon return");
     await waitFor(() => {
-      expect(screen.getByText("The return deadline is May 12.")).toBeTruthy();
+      expect(screen.getByText("Semantic + indexed mail · 2 candidates")).toBeTruthy();
     });
-    expect(screen.getByText("Semantic + indexed mail · 2 candidates")).toBeTruthy();
-    expect(screen.getByText("medium confidence")).toBeTruthy();
     expect(screen.getByText("Amazon return reminder")).toBeTruthy();
     expect(screen.queryByText(/planner/i)).toBeNull();
   });

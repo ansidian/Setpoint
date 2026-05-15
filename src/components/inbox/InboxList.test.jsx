@@ -317,7 +317,7 @@ describe("InboxList", () => {
     expect(screen.getByRole("button", { name: /cancel ask ai/i })).toBeTruthy();
   });
 
-  it("renders Ask AI answer status, non-high confidence, and reusable source rows without debug planner chrome", () => {
+  it("renders Ask AI retrieval status and reusable source rows without debug planner chrome", () => {
     renderInboxList({
       indexedSearchActive: true,
       inboxAiSearchActive: true,
@@ -339,10 +339,7 @@ describe("InboxList", () => {
       inboxAiSearch: {
         status: "answer",
         query: "amazon return",
-        answer: {
-          answer: "Amazon says the return deadline is May 12.",
-          confidence: "medium",
-        },
+        answer: null,
         retrieval: {
           vector_status: "ok",
           total_candidates: 3,
@@ -351,8 +348,6 @@ describe("InboxList", () => {
     });
 
     expect(screen.getByText("Semantic + indexed mail · 3 candidates")).toBeTruthy();
-    expect(screen.getByText("medium confidence")).toBeTruthy();
-    expect(screen.getByText("Amazon says the return deadline is May 12.")).toBeTruthy();
     expect(screen.getByText("Amazon return reminder")).toBeTruthy();
     expect(screen.getByText(/AI source/)).toBeTruthy();
     expect(screen.queryByText(/planner/i)).toBeNull();

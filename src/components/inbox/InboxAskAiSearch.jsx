@@ -158,8 +158,6 @@ export function InboxAiStatusBlock({ aiSearch, accent }) {
   if (!aiSearch || aiSearch.status === "idle" || aiSearch.status === "confirming") return null;
 
   const semanticStatus = inboxAiSemanticStatus(aiSearch.retrieval);
-  const confidence = aiSearch.answer?.confidence;
-  const showConfidence = confidence && confidence !== "high";
   const isLoading = aiSearch.status === "loading";
   const isError = aiSearch.status === "error";
   const isNoSources = aiSearch.status === "no_sources";
@@ -196,37 +194,7 @@ export function InboxAiStatusBlock({ aiSearch, accent }) {
         >
           {isLoading ? "Asking AI over indexed mail" : semanticStatus}
         </span>
-        {showConfidence && (
-          <span
-            style={{
-              flexShrink: 0,
-              padding: "2px 6px",
-              borderRadius: 999,
-              border: "1px solid rgba(249,226,175,0.22)",
-              background: "rgba(249,226,175,0.09)",
-              color: "rgba(249,226,175,0.92)",
-              fontSize: 9,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: 0.7,
-            }}
-          >
-            {confidence} confidence
-          </span>
-        )}
       </div>
-      {aiSearch.answer?.answer && (
-        <div
-          style={{
-            marginTop: 8,
-            color: "rgba(205,214,244,0.88)",
-            fontSize: 12,
-            lineHeight: 1.5,
-          }}
-        >
-          {aiSearch.answer.answer}
-        </div>
-      )}
       {isLoading && (
         <div style={{ marginTop: 10 }}>
           <AiSkeletonRows />
