@@ -85,6 +85,7 @@ export default function useCalendarModalHotkeys({
   onDeleteSelectedEvents,
   onBeginEventSelectionSetFromSelected,
   openCalendarSearch,
+  cancelCalendarSearch,
 }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -153,6 +154,11 @@ export default function useCalendarModalHotkeys({
       if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
         setDeadlineEditor(null);
         setDeadlineDraftPreview(null);
+        consumeCalendarKey();
+        return;
+      }
+
+      if (event.key === "Escape" && cancelCalendarSearch?.()) {
         consumeCalendarKey();
         return;
       }
@@ -374,5 +380,5 @@ export default function useCalendarModalHotkeys({
     return () => document.removeEventListener("keydown", handleKey, true);
     // The editor routing helpers intentionally read the latest modal refs inside this document listener.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, onDeleteSelectedEvents, onBeginEventSelectionSetFromSelected, openCalendarSearch]);
+  }, [open, canGoPrev, currentMonth, currentYear, todayDate, view, viewYear, viewMonth, closeCalendarModal, closeEventEditor, eventEditor, deadlineEditor, selectedItemId, selectedDay, selectedDateKey, activeView, itemsByDay, itemsByDate, setDeadlineEditor, floatingDetail?.open, floatingDetail?.mode, handleViewChange, usesFloatingEditor, onCopySelectedEvent, onPasteCopiedEvent, onDeleteSelectedEvents, onBeginEventSelectionSetFromSelected, openCalendarSearch, cancelCalendarSearch]);
 }

@@ -119,6 +119,40 @@ describe("useCalendarModalController search wiring", () => {
     });
   });
 
+  it("cancels open calendar search with Escape before closing the modal", async () => {
+    const onClose = vi.fn();
+    renderHarness({ onClose });
+
+    act(() => {
+      latestShellProps.search.openSearch();
+      latestShellProps.search.setQuery("planning");
+    });
+
+    await waitFor(() => {
+      expect(latestShellProps.search.open).toBe(true);
+      expect(latestShellProps.search.query).toBe("planning");
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(latestShellProps.search.open).toBe(true);
+      expect(latestShellProps.search.query).toBe("");
+    });
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(latestShellProps.search.open).toBe(false);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("lets command-number view switching work while calendar search is focused", async () => {
     const onViewChange = vi.fn();
     renderHarness({ view: "events", onViewChange });

@@ -1732,6 +1732,7 @@ export default function useCalendarModalController({
     onDeleteSelectedEvents: requestSelectedCalendarEventDelete,
     onBeginEventSelectionSetFromSelected: addSelectedCalendarEventToSelectionSet,
     openCalendarSearch: calendarSearch.openSearch,
+    cancelCalendarSearch: calendarSearch.cancelSearch,
   });
 
   useEffect(() => {
