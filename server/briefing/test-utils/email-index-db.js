@@ -2,6 +2,7 @@ import { createClient } from "@libsql/client";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { normalizeEmailDateUtc } from "../email-date.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../db/migrations");
@@ -12,6 +13,7 @@ const migrationFiles = [
   "005_email_search_embeddings.sql",
   "006_email_search_embedding_state.sql",
   "007_email_search_ai_usage.sql",
+  "013_email_index_normalized_date.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>
@@ -71,16 +73,18 @@ export async function seedIndexedEmail(db, email = {}) {
     body_snippet: "Historical indexed receipt",
     body_text: "Historical indexed receipt",
     email_date: "2026-05-01T12:00:00Z",
+    email_date_utc: null,
     read: 1,
     ...email,
   };
+  const emailDateUtc = row.email_date_utc ?? normalizeEmailDateUtc(row.email_date);
   await db.batch([
     {
       sql: `INSERT INTO ea_email_index
               (uid, user_id, account_id, account_label, account_email,
                account_color, account_icon, from_name, from_address,
-               subject, body_snippet, body_text, email_date, read)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               subject, body_snippet, body_text, email_date, email_date_utc, read)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         row.uid,
         row.user_id,
@@ -95,6 +99,7 @@ export async function seedIndexedEmail(db, email = {}) {
         row.body_snippet,
         row.body_text,
         row.email_date,
+        emailDateUtc,
         row.read,
       ],
     },

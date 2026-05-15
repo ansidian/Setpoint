@@ -86,10 +86,12 @@ function sourceRow(candidate) {
 export function buildInboxAiAnswerPayload({
   query,
   candidates,
+  dateWindow = null,
   maxSources = MAX_ANSWER_SOURCES,
 } = {}) {
   return {
     query,
+    date_window: dateWindow,
     sources: (candidates || []).slice(0, maxSources).map(sourceRow),
   };
 }
@@ -179,6 +181,7 @@ async function callOpenAiAnswer({ apiKey, fetchImpl, model, payload }) {
         "Answer the user's inbox question using only the provided indexed email sources.",
         "Use source_label, not uid, when naming sources in the answer text.",
         "Return cited_source_uids for factual claims. If the sources are incomplete, say what is missing.",
+        "If date_window is present, do not count or cite messages outside that window.",
         "Do not invent actions, provider state, or facts not grounded in the sources.",
       ].join("\n"),
       input: JSON.stringify(payload),
@@ -271,6 +274,7 @@ export async function answerInboxAiSearch(userId, {
     vector_status: retrieval.vector?.status || "unknown",
     lexical_status: retrieval.lexical?.status || "unknown",
     total_candidates: retrieval.total ?? sources.length,
+    date_window: retrieval.parsed_query?.date_window || plan?.date_window || null,
   };
 
   if (!sources.length) {
@@ -285,7 +289,11 @@ export async function answerInboxAiSearch(userId, {
   }
 
   try {
-    const payload = buildInboxAiAnswerPayload({ query: q, candidates: sources });
+    const payload = buildInboxAiAnswerPayload({
+      query: q,
+      candidates: sources,
+      dateWindow: retrievalSummary.date_window,
+    });
     const response = await callOpenAiAnswer({ apiKey, fetchImpl, model, payload });
     await safeRecordUsage(recordUsage, userId, {
       eventType: "answer",

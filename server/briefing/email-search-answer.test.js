@@ -24,6 +24,7 @@ function retrieval(candidates = [sourceCandidate]) {
     mode: "hybrid",
     lexical: { status: "ok", count: candidates.length },
     vector: { status: "ok", count: candidates.length },
+    parsed_query: { date_window: null },
     candidates,
   };
 }
@@ -44,8 +45,16 @@ describe("inbox AI answer service", () => {
     const payload = buildInboxAiAnswerPayload({
       query: "what payment is due?",
       candidates: [sourceCandidate],
+      dateWindow: {
+        after: "2026-05-08T00:00:00.000Z",
+        before: "2026-05-15T00:00:00.000Z",
+      },
     });
 
+    expect(payload.date_window).toEqual({
+      after: "2026-05-08T00:00:00.000Z",
+      before: "2026-05-15T00:00:00.000Z",
+    });
     expect(payload.sources).toEqual([
       expect.objectContaining({
         uid: "source-1",
@@ -95,11 +104,13 @@ describe("inbox AI answer service", () => {
         mode: "hybrid",
         vector_status: "ok",
         lexical_status: "ok",
+        date_window: null,
       },
     });
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.store).toBe(false);
     expect(body.instructions).toContain("Use source_label, not uid");
+    expect(body.instructions).toContain("do not count or cite messages outside that window");
     expect(body.text.format).toMatchObject({
       type: "json_schema",
       name: "inbox_ai_answer",

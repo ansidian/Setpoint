@@ -85,8 +85,8 @@ describe("email index health", () => {
         account_id: "gmail-work",
         label: "Work",
         indexed_count: 2,
-        oldest_indexed_date: "2026-01-03T12:00:00Z",
-        newest_indexed_date: "2026-05-01T08:00:00Z",
+        oldest_indexed_date: "2026-01-03T12:00:00.000Z",
+        newest_indexed_date: "2026-05-01T08:00:00.000Z",
         last_indexed_at: expect.any(String),
         backfill: expect.objectContaining({
           mailbox_scope: "inbox",
@@ -334,6 +334,52 @@ describe("email indexing", () => {
       args: ["gmail-work-msg-read-only"],
     });
     expect(indexed.rows[0].read).toBe(1);
+  });
+
+  it("normalizes provider email dates for temporal search without rewriting unchanged FTS content", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-date",
+      subject: "Same subject",
+      body_snippet: "Same preview",
+      body_text: "Same body",
+      email_date: "2026-05-01T12:00:00.000Z",
+      read: 1,
+    });
+    const dbClient = {
+      execute: (...args) => testState.db.current.execute(...args),
+      batch: vi.fn((...args) => testState.db.current.batch(...args)),
+    };
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-date",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Same subject",
+        body_preview: "Same preview",
+        body_text: "Same body",
+        date: "Thu, 14 May 2026 18:11:11 +0000",
+        read: true,
+      },
+    ], { dbClient });
+
+    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].sql).toContain("email_date_utc");
+    expect(statements[0].sql).not.toContain("ea_email_fts");
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT email_date, email_date_utc FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-date"],
+    });
+    expect(indexed.rows[0]).toEqual({
+      email_date: "Thu, 14 May 2026 18:11:11 +0000",
+      email_date_utc: "2026-05-14T18:11:11.000Z",
+    });
   });
 
   it("keeps FTS rowids aligned with email index rowids across content updates", async () => {

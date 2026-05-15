@@ -102,7 +102,7 @@ export function scoreEmailSearchRow(row, { query = "", now = Date.now() } = {}) 
     add(details, "provider_state_removed", -100);
   }
 
-  const emailMs = parseTime(row.email_date);
+  const emailMs = parseTime(row.email_date_utc || row.email_date);
   if (emailMs && nowMs) {
     const ageDays = Math.max(0, (nowMs - emailMs) / DAY_MS);
     add(details, "recency", Math.max(0, 20 - Math.min(20, ageDays * 0.35)));
@@ -144,7 +144,7 @@ export function rankEmailSearchRows(rows, {
     })
     .sort((a, b) => {
       if (b.search_score !== a.search_score) return b.search_score - a.search_score;
-      const dateDiff = parseTime(b.email_date) - parseTime(a.email_date);
+      const dateDiff = parseTime(b.email_date_utc || b.email_date) - parseTime(a.email_date_utc || a.email_date);
       if (dateDiff) return dateDiff;
       const rankDiff = Number(a.rank || 0) - Number(b.rank || 0);
       if (rankDiff) return rankDiff;
