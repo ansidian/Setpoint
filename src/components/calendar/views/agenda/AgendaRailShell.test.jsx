@@ -517,6 +517,96 @@ describe("AgendaRailShell", () => {
     }));
   });
 
+  it("keeps passive scroll from overriding a new today command until today lands", async () => {
+    const onPassiveDateChange = vi.fn();
+    const { rerender } = render(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    });
+
+    const rail = screen.getByTestId("agenda-shell");
+    const firstSection = rail.querySelector("section[data-date-key='2026-05-01']");
+    const secondSection = rail.querySelector("section[data-date-key='2026-05-02']");
+    const scrollTo = vi.fn();
+    rail.scrollTop = 320;
+    rail.scrollTo = scrollTo;
+    rail.getBoundingClientRect = () => ({ top: 0, bottom: 240, left: 0, right: 280, width: 280, height: 240 });
+    firstSection.getBoundingClientRect = () => ({ top: -120, bottom: -20, left: 0, right: 280, width: 280, height: 100 });
+    secondSection.getBoundingClientRect = () => ({ top: 4, bottom: 104, left: 0, right: 280, width: 280, height: 100 });
+
+    fireEvent.scroll(rail);
+
+    rerender(
+      <AgendaRailShell
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        scrollCommand={{ type: "today", id: "today-after-far-month" }}
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={() => null}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).not.toHaveBeenCalledWith("2026-05-02");
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    });
+
+    fireEvent.scroll(rail);
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).not.toHaveBeenCalledWith("2026-05-02");
+
+    firstSection.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 280, width: 280, height: 100 });
+    secondSection.getBoundingClientRect = () => ({ top: 120, bottom: 220, left: 0, right: 280, width: 280, height: 100 });
+
+    fireEvent.scroll(rail);
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).not.toHaveBeenCalledWith("2026-05-02");
+
+    firstSection.getBoundingClientRect = () => ({ top: -120, bottom: -20, left: 0, right: 280, width: 280, height: 100 });
+    secondSection.getBoundingClientRect = () => ({ top: 4, bottom: 104, left: 0, right: 280, width: 280, height: 100 });
+
+    fireEvent.scroll(rail);
+    await flushRailEffects();
+
+    expect(onPassiveDateChange).toHaveBeenCalledWith("2026-05-02");
+  });
+
   it("lands distant item scrolls directly instead of forcing a long smooth animation", async () => {
     const renderGroup = ({ group, registerRow }) => (
       group.dateKey === "2026-05-01" ? (
