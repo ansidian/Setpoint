@@ -446,6 +446,7 @@ export default function CalendarModalShell({
                   floatingDetailMode={floatingDetail?.mode || null}
                   floatingDetailDateKey={floatingDetailGridDateKey}
                   floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+                  onCancelFloatingEditor={onCancelFloatingEditor}
                   onShakeFloatingEditor={onShakeFloatingEditor}
                   onDirectDateAction={onGridDateAction}
                   onDirectItemAction={onGridEventAction}

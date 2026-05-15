@@ -350,7 +350,7 @@ describe("CalendarModal Todoist editor behavior", () => {
     expect(within(screen.getByTestId("calendar-agenda-deadline-row")).getByText("First task")).toBeTruthy();
   });
 
-  it("does not restore the hero deadline detail when a clean grid-seeded create is cancelled by selecting another day", async () => {
+  it("clears the draft ghost when a clean grid-seeded create is cancelled by selecting another day", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -385,6 +385,7 @@ describe("CalendarModal Todoist editor behavior", () => {
     fireEvent.keyDown(document, { key: "C", shiftKey: true });
     const inlineEditor = await screen.findByTestId("todoist-inline-editor");
     expect(within(inlineEditor).getByTestId("todoist-draft-preview-summary").textContent).toContain("April 22, 2026");
+    expect(await screen.findByTestId("calendar-ghost-chip")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("calendar-cell-23"));
 
@@ -392,6 +393,7 @@ describe("CalendarModal Todoist editor behavior", () => {
       expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
     });
     expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    expect(screen.queryByTestId("calendar-ghost-chip")).toBeNull();
     expect(screen.getAllByText("Hero task").length).toBeGreaterThan(0);
     expect(screen.getByTestId("calendar-cell-23").getAttribute("aria-selected")).toBe("true");
   });
