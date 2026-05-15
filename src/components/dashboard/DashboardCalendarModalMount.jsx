@@ -3,6 +3,15 @@ import { makeCalendarBillsData } from "./calendarBillsData";
 
 const CalendarModal = lazy(() => import("../calendar/CalendarModal"));
 
+function deadlineDataForCalendarModal(deadlines, isLoading) {
+  return {
+    upcoming: Array.isArray(deadlines?.upcoming) ? deadlines.upcoming : [],
+    stats: deadlines?.stats || null,
+    syncHealth: deadlines?.syncHealth || null,
+    isLoading,
+  };
+}
+
 export default function DashboardCalendarModalMount({
   isMobile,
   calendarMounted,
@@ -48,11 +57,10 @@ export default function DashboardCalendarModalMount({
         weatherData={liveData.liveWeather || briefing?.weather || null}
         billsData={calendarBillsData || makeCalendarBillsData(liveData)}
         billsRangeData={calendarBillRange}
-        deadlinesData={{
-          ctm: seededDeadlines?.ctm || { upcoming: [], stats: null },
-          todoist: seededDeadlines?.todoist || { upcoming: [], stats: null },
-          isLoading: calendarDeadlinesLoading && !calendarDeadlines,
-        }}
+        deadlinesData={deadlineDataForCalendarModal(
+          seededDeadlines,
+          calendarDeadlinesLoading && !calendarDeadlines,
+        )}
         deadlinesRangeData={calendarDeadlineRange}
         deadlineActions={calendarDeadlineActions}
       />

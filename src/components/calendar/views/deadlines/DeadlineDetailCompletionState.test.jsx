@@ -2,22 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 
-const completeTask = vi.fn();
-const updateTaskStatus = vi.fn();
-const dismissTombstone = vi.fn();
+const completeDeadlineOccurrence = vi.fn();
 
-vi.mock("../../../api", async () => {
-  const actual = await vi.importActual("../../../api");
+vi.mock("../../../../api", async () => {
+  const actual = await vi.importActual("../../../../api");
   return {
     ...actual,
-    completeTask,
-    updateTaskStatus,
-    dismissTombstone,
+    completeDeadlineOccurrence,
   };
 });
 
-const { DashboardProvider } = await import("../../../context/DashboardContext.jsx");
-const { default: deadlinesView } = await import("./deadlinesView.jsx");
+const { DashboardProvider } = await import("../../../../context/DashboardContext.jsx");
+const { renderDeadlinesDetail } = await import("./DeadlinesDetailRail.jsx");
 
 afterEach(() => {
   cleanup();
@@ -27,8 +23,7 @@ afterEach(() => {
 function DeferredCompleteHarness() {
   const [briefing, setBriefing] = useState({
     emails: { accounts: [] },
-    ctm: { upcoming: [] },
-    todoist: {
+    deadlines: {
       upcoming: [
         {
           id: "todo-1",
@@ -46,11 +41,11 @@ function DeferredCompleteHarness() {
 
   return (
     <DashboardProvider briefing={briefing} setBriefing={setBriefing} setCalendarDeadlines={() => {}}>
-      {deadlinesView.renderDetail({
+      {renderDeadlinesDetail({
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
-        items: briefing.todoist.upcoming,
+        items: briefing.deadlines.upcoming,
         selectedItemId: "todo-1",
         onSelectItem: () => {},
       })}
@@ -58,10 +53,10 @@ function DeferredCompleteHarness() {
   );
 }
 
-describe("deadlinesView Todoist completion feedback", () => {
-  it("shows an immediate pending state while the Todoist close is in flight", async () => {
+describe("deadline detail completion feedback", () => {
+  it("shows an immediate pending state while deadline completion is in flight", async () => {
     let resolveComplete;
-    completeTask.mockImplementationOnce(() => new Promise((resolve) => {
+    completeDeadlineOccurrence.mockImplementationOnce(() => new Promise((resolve) => {
       resolveComplete = resolve;
     }));
 
@@ -78,7 +73,7 @@ describe("deadlinesView Todoist completion feedback", () => {
 
   it("returns to the ready action when Todoist completion fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    completeTask.mockRejectedValueOnce(new Error("Todoist unavailable"));
+    completeDeadlineOccurrence.mockRejectedValueOnce(new Error("Todoist unavailable"));
 
     render(<DeferredCompleteHarness />);
 

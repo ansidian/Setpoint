@@ -257,4 +257,67 @@ describe("database migrations", () => {
     const readDateIndex = await db.execute("PRAGMA index_info('idx_email_index_user_read_date_utc')");
     expect(readDateIndex.rows.map((row) => row.name)).toEqual(["user_id", "read", "email_date_utc"]);
   });
+
+  it("stores completed deadline history as required dated occurrences", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "014_completed_deadline_occurrences.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_completed_tasks')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+    expect(columnByName.get("user_id").pk).toBe(1);
+    expect(columnByName.get("todoist_id").pk).toBe(2);
+    expect(columnByName.get("due_date").pk).toBe(3);
+    expect(columnByName.get("due_date").notnull).toBe(1);
+
+    await db.execute({
+      sql: `INSERT INTO ea_completed_tasks (user_id, todoist_id, due_date, snapshot_json)
+            VALUES (?, ?, ?, ?)`,
+      args: ["u1", "td-rec", "2026-05-12", "{}"],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_completed_tasks (user_id, todoist_id, due_date, snapshot_json)
+            VALUES (?, ?, ?, ?)`,
+      args: ["u1", "td-rec", "2026-05-14", "{}"],
+    });
+
+    const rows = await db.execute("SELECT todoist_id, due_date FROM ea_completed_tasks ORDER BY due_date");
+    expect(rows.rows).toEqual([
+      expect.objectContaining({ todoist_id: "td-rec", due_date: "2026-05-12" }),
+      expect.objectContaining({ todoist_id: "td-rec", due_date: "2026-05-14" }),
+    ]);
+  });
+
+  it("drops legacy undated completed-task rows when migrating completed deadline occurrences", async () => {
+    db = createClient({ url: "file::memory:" });
+    await db.executeMultiple(`
+      CREATE TABLE ea_completed_tasks (
+        user_id TEXT NOT NULL,
+        todoist_id TEXT NOT NULL,
+        completed_at TEXT DEFAULT (datetime('now')),
+        due_date TEXT,
+        snapshot_json TEXT,
+        PRIMARY KEY (user_id, todoist_id)
+      );
+    `);
+    await db.execute({
+      sql: `INSERT INTO ea_completed_tasks (user_id, todoist_id, completed_at, due_date, snapshot_json)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: ["u1", "legacy-undated", "2026-05-12T12:00:00.000Z", null, "{}"],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_completed_tasks (user_id, todoist_id, completed_at, due_date, snapshot_json)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: ["u1", "dated", "2026-05-12T12:00:00.000Z", "2026-05-12", "{}"],
+    });
+
+    await applyMigrations(db, ["014_completed_deadline_occurrences.sql"]);
+
+    const rows = await db.execute("SELECT todoist_id, due_date FROM ea_completed_tasks ORDER BY todoist_id");
+    expect(rows.rows).toEqual([
+      expect.objectContaining({ todoist_id: "dated", due_date: "2026-05-12" }),
+    ]);
+  });
 });

@@ -1,19 +1,25 @@
 import { createContext, useContext, useState, useCallback, useRef, useMemo } from "react";
-import { dismissEmail, completeTask, updateTaskStatus, dismissTombstone } from "../api";
+import { completeDeadlineOccurrence, dismissEmail } from "../api";
 import { markBriefingAccountEmailsRead, setBriefingEmailReadState } from "../lib/briefing-email-state";
 import {
   EMPTY_DEADLINES,
-  applyTaskComplete,
-  applyTaskCompleting,
-  applyTaskStatus,
-  applyTodoistTaskDelete,
-  applyTodoistTaskUpsert,
-  clearTaskCompleting,
-  dismissTodoistTombstone,
-  taskMatches,
+  applyDeadlineComplete,
+  applyDeadlineCompleting,
+  applyDeadlineDelete,
+  applyDeadlineUpsert,
+  clearDeadlineCompleting,
+  deadlineMatches,
 } from "./dashboardTaskProjection.js";
 
 const DashboardContext = createContext(null);
+
+function updateBriefingDeadlines(root, updater) {
+  if (!root) return root;
+  return {
+    ...root,
+    deadlines: updater(root.deadlines || EMPTY_DEADLINES),
+  };
+}
 
 export function DashboardProvider({
   briefing,
@@ -58,92 +64,64 @@ export function DashboardProvider({
     });
   }, [selectedEmail, setBriefing]);
 
-  const removeCompletedTask = useCallback((taskId, sectionName = null) => {
+  const removeCompletedTask = useCallback((taskId) => {
     // Keep completed tasks visible everywhere (dashboard + calendar): flip
     // status to "complete" and clear the transient _completing flash flag so
     // the row renders with the strikethrough/dim treatment.
-    const finalizeComplete = (root) => applyTaskComplete(root, taskId, sectionName);
-    setBriefing(prev => finalizeComplete(prev));
+    const finalizeComplete = (root) => applyDeadlineComplete(root, taskId);
+    setBriefing(prev => updateBriefingDeadlines(prev, finalizeComplete));
     setCalendarDeadlines?.(prev => (prev ? finalizeComplete(prev) : prev));
   }, [setBriefing, setCalendarDeadlines]);
 
   const handleCompleteTask = useCallback(async (taskId, taskSnapshot = null) => {
-    const existingTask = briefing?.todoist?.upcoming?.find((t) => taskMatches(t, taskId, "todoist"))
-      || (taskMatches(taskSnapshot, taskId, "todoist") ? taskSnapshot : null);
-    if (!existingTask || existingTask._completing || existingTask.status === "complete") return;
+    const existingTask = briefing?.deadlines?.upcoming?.find((t) => deadlineMatches(t, taskId))
+      || (deadlineMatches(taskSnapshot, taskId) ? taskSnapshot : null);
+    if (!existingTask || !existingTask.due_date || existingTask._completing || existingTask.status === "complete") return;
 
-    const flagCompleting = (root) => applyTaskCompleting(root, taskId, "todoist");
-    setBriefing(prev => flagCompleting(prev));
+    const flagCompleting = (root) => applyDeadlineCompleting(root, taskId);
+    setBriefing(prev => updateBriefingDeadlines(prev, flagCompleting));
     setCalendarDeadlines?.(prev => (prev ? flagCompleting(prev) : prev));
     if (expandedTask === taskId) setExpandedTask(null);
     onTaskCompletionIntent?.(taskId);
 
     // Await the server so we can revert the optimistic flag on failure.
     // Swallowing this caused the "marked complete, refresh flips back" bug
-    // upstream — if Todoist close fails, the row must return to its pre-click
+    // upstream: if provider completion fails, the row must return to its pre-click
     // state instead of lingering as half-complete until the next refresh.
     try {
-      await completeTask(taskId);
+      await completeDeadlineOccurrence(taskId, existingTask.due_date);
     } catch (err) {
       console.error("[Briefing] Complete task failed:", err.message);
-      const clearCompleting = (root) => clearTaskCompleting(root, taskId, "todoist");
-      setBriefing(prev => clearCompleting(prev));
+      const clearCompleting = (root) => clearDeadlineCompleting(root, taskId);
+      setBriefing(prev => updateBriefingDeadlines(prev, clearCompleting));
       setCalendarDeadlines?.(prev => (prev ? clearCompleting(prev) : prev));
       return;
     }
 
     onTaskCompleted?.(taskId);
-    setTimeout(() => removeCompletedTask(taskId, "todoist"), 600);
-  }, [briefing?.todoist?.upcoming, expandedTask, onTaskCompleted, onTaskCompletionIntent, setBriefing, setCalendarDeadlines, removeCompletedTask]);
-
-  const handleDismissGhost = useCallback((todoistId) => {
-    dismissTombstone(todoistId).catch(() => {});
-    const stripTombstone = (root) => dismissTodoistTombstone(root, todoistId);
-    setBriefing((prev) => stripTombstone(prev));
-    setCalendarDeadlines?.((prev) => (prev ? stripTombstone(prev) : prev));
-  }, [setBriefing, setCalendarDeadlines]);
+    setTimeout(() => removeCompletedTask(taskId), 600);
+  }, [briefing?.deadlines?.upcoming, expandedTask, onTaskCompleted, onTaskCompletionIntent, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const handleUpdateTask = useCallback((updatedTask) => {
-    setBriefing(prev => applyTodoistTaskUpsert(prev, updatedTask, { merge: true }));
-    setCalendarDeadlines?.(prev => (prev ? applyTodoistTaskUpsert(prev, updatedTask, { merge: true }) : prev));
+    const upsert = (root) => applyDeadlineUpsert(root, updatedTask, { merge: true });
+    setBriefing(prev => updateBriefingDeadlines(prev, upsert));
+    setCalendarDeadlines?.(prev => (prev ? upsert(prev) : prev));
   }, [setBriefing, setCalendarDeadlines]);
 
   // State-only: the panel owns the network call (matching create/update) so
   // it can surface "Failed to delete" inline without a second roundtrip.
   const handleDeleteTask = useCallback((taskId) => {
-    setBriefing((prev) => applyTodoistTaskDelete(prev, taskId));
-    setCalendarDeadlines?.((prev) => (prev ? applyTodoistTaskDelete(prev, taskId) : prev));
+    const remove = (root) => applyDeadlineDelete(root, taskId);
+    setBriefing((prev) => updateBriefingDeadlines(prev, remove));
+    setCalendarDeadlines?.((prev) => (prev ? remove(prev) : prev));
     if (String(expandedTask) === String(taskId)) setExpandedTask(null);
   }, [expandedTask, setBriefing, setCalendarDeadlines]);
 
   const handleAddTask = useCallback((task) => {
-    setBriefing(prev => applyTodoistTaskUpsert(prev, task));
-    setCalendarDeadlines?.(prev => applyTodoistTaskUpsert(
-      prev || EMPTY_DEADLINES,
-      task,
-    ));
+    const upsert = (root) => applyDeadlineUpsert(root, task);
+    setBriefing(prev => updateBriefingDeadlines(prev, upsert));
+    setCalendarDeadlines?.(prev => upsert(prev || EMPTY_DEADLINES));
   }, [setBriefing, setCalendarDeadlines]);
-
-  const handleUpdateTaskStatus = useCallback(async (taskId, status) => {
-    const statusUpdate = updateTaskStatus(taskId, status);
-
-    if (status === "complete") {
-      onTaskCompletionIntent?.(taskId);
-      statusUpdate.then(() => onTaskCompleted?.(taskId)).catch(() => {});
-      const flagCompleting = (root) => applyTaskCompleting(root, taskId, "ctm");
-      setBriefing(prev => flagCompleting(prev));
-      setCalendarDeadlines?.(prev => (prev ? flagCompleting(prev) : prev));
-      setTimeout(() => removeCompletedTask(taskId, "ctm"), 600);
-      if (String(expandedTask) === String(taskId)) setExpandedTask(null);
-      return;
-    }
-
-    statusUpdate.catch(() => {});
-
-    const applyStatus = (root) => applyTaskStatus(root, taskId, status, "ctm");
-    setBriefing(prev => applyStatus(prev));
-    setCalendarDeadlines?.(prev => (prev ? applyStatus(prev) : prev));
-  }, [expandedTask, onTaskCompleted, onTaskCompletionIntent, setBriefing, setCalendarDeadlines, removeCompletedTask]);
 
   const emailAccounts = useMemo(
     () => briefing?.emails?.accounts || [],
@@ -188,11 +166,9 @@ export function DashboardProvider({
     setExpandedTask,
     handleDismiss,
     handleCompleteTask,
-    handleDismissGhost,
     handleAddTask,
     handleUpdateTask,
     handleDeleteTask,
-    handleUpdateTaskStatus,
     markAccountEmailsRead,
     markEmailRead,
     markEmailUnread,
@@ -210,11 +186,9 @@ export function DashboardProvider({
     expandedTask,
     handleDismiss,
     handleCompleteTask,
-    handleDismissGhost,
     handleAddTask,
     handleUpdateTask,
     handleDeleteTask,
-    handleUpdateTaskStatus,
     markAccountEmailsRead,
     markEmailRead,
     markEmailUnread,

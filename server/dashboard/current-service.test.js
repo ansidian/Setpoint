@@ -5,11 +5,11 @@ const testState = vi.hoisted(() => ({
   db: { current: null },
   fetchWeather: vi.fn(),
   fetchCalendar: vi.fn(),
-  fetchCTMDeadlines: vi.fn(),
   fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasks: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
+  filterCompletedTodoistTasks: vi.fn(),
   readBillsMirrorCurrent: vi.fn(),
   refreshBillsMirror: vi.fn(),
   getBillsMirrorState: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock("../briefing/config-service.js", () => ({
 }));
 vi.mock("../briefing/deadline-helpers.js", () => ({
   loadCompletedTaskIds: vi.fn(async () => new Set()),
-  separateDeadlines: vi.fn((ctm, todoist) => ({ ctm, todoist })),
+  filterCompletedTodoistTasks: (...args) => testState.filterCompletedTodoistTasks(...args),
   computeDeadlineStats: vi.fn((items) => ({ total: items.length })),
 }));
 vi.mock("../briefing/weather.js", () => ({
@@ -50,11 +50,6 @@ vi.mock("../briefing/weather.js", () => ({
 }));
 vi.mock("../briefing/calendar.js", () => ({
   fetchCalendar: (...args) => testState.fetchCalendar(...args),
-}));
-vi.mock("../briefing/ctm.js", () => ({
-  fetchCTMDeadlines: (...args) => testState.fetchCTMDeadlines(...args),
-  fetchCTMDeadlinesAll: (...args) => testState.fetchCTMDeadlines(...args),
-  fetchCTMDeadlinesRange: (...args) => testState.fetchCTMDeadlines(...args),
 }));
 vi.mock("../briefing/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: (...args) => testState.fetchTodoistDueTaskIdSet(...args),
@@ -89,8 +84,8 @@ vi.mock("../briefing/snapshot-service.js", () => ({
 process.env.EA_USER_ID = "u1";
 
 const EMPTY_DEADLINES_FOR_TEST = {
-  ctm: { upcoming: [], stats: null },
-  todoist: { upcoming: [], stats: null },
+  upcoming: [],
+  stats: null,
 };
 
 const {
@@ -198,9 +193,11 @@ describe("GET /api/dashboard/current", () => {
     delete process.env.EA_DASHBOARD_SYNC_SNAPSHOT_TIMEOUT_MS;
     testState.fetchWeather.mockReset().mockResolvedValue({ temp: 72 });
     testState.fetchCalendar.mockReset().mockResolvedValue([]);
-    testState.fetchCTMDeadlines.mockReset().mockResolvedValue([]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
     testState.fetchTodoistDueTaskIdSet.mockReset().mockResolvedValue(new Set());
+    testState.filterCompletedTodoistTasks.mockReset().mockImplementation((tasks, completedIds) => (
+      (tasks || []).filter((task) => !completedIds?.has(task.id) && !completedIds?.has(String(task.id)))
+    ));
     testState.getTodoistSyncHealth.mockReset().mockResolvedValue({
       state: "current",
       configured: true,
@@ -252,8 +249,8 @@ describe("GET /api/dashboard/current", () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", [{ id: "event-1", title: "Focus" }]);
     await seedCache("deadlines_current", {
-      ctm: { upcoming: [{ id: "ctm-1" }], stats: { total: 1 } },
-      todoist: { upcoming: [], stats: { total: 0 } },
+      upcoming: [{ id: "deadline-1", title: "Submit form" }],
+      stats: { total: 1 },
     });
     await seedCache("bills_current", {
       bills: [{ id: "bill-1", payee: "Power" }],
@@ -269,10 +266,6 @@ describe("GET /api/dashboard/current", () => {
     expect(res.body).toMatchObject({
       weather: { temp: 71, location: "El Monte, CA" },
       calendar: [{ id: "event-1", title: "Focus" }],
-      deadlines: {
-        ctm: { upcoming: [{ id: "ctm-1" }], stats: { total: 1 } },
-        todoist: { upcoming: [], stats: { total: 0 } },
-      },
       bills: [{ id: "bill-1", payee: "Power" }],
       allSchedules: [],
       payeeMap: {},
@@ -297,9 +290,12 @@ describe("GET /api/dashboard/current", () => {
         ]),
       },
     });
+    expect(res.body.deadlines).toMatchObject({
+      upcoming: [{ id: "deadline-1", title: "Submit form" }],
+      stats: { total: 1 },
+    });
     expect(testState.fetchWeather).not.toHaveBeenCalled();
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
-    expect(testState.fetchCTMDeadlines).not.toHaveBeenCalled();
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
     expect(testState.readBillsMirrorCurrent).not.toHaveBeenCalled();
     expect(testState.getActiveSnapshotView).toHaveBeenCalledWith("u1");
@@ -316,11 +312,8 @@ describe("GET /api/dashboard/current", () => {
       },
     ]);
     await seedCache("deadlines_current", {
-      ctm: { upcoming: [], stats: { total: 0 } },
-      todoist: {
-        upcoming: [{ id: "todo-1", title: "Submit form", source: "todoist" }],
-        stats: { total: 1 },
-      },
+      upcoming: [{ id: "todo-1", title: "Submit form" }],
+      stats: { total: 1 },
     });
     await seedCache("bills_current", {
       bills: [],
@@ -391,7 +384,7 @@ describe("GET /api/dashboard/current", () => {
         nextReminderAt: "2099-05-10T16:30:00.000Z",
       },
     });
-    expect(res.body.deadlines.todoist.upcoming[0]).toMatchObject({
+    expect(res.body.deadlines.upcoming[0]).toMatchObject({
       id: "todo-1",
       hasUpcomingReminder: true,
       upcomingReminderCount: 2,
@@ -404,6 +397,29 @@ describe("GET /api/dashboard/current", () => {
     });
     expect(testState.fetchCalendar).not.toHaveBeenCalled();
     expect(testState.fetchTodoistTasks).not.toHaveBeenCalled();
+  });
+
+  it("treats malformed deadline cache rows as unusable and returns the domain fallback", async () => {
+    await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
+    await seedCache("calendar_current", []);
+    await seedCache("deadlines_current", { sections: [{ id: "old" }] });
+    await seedCache("bills_current", {
+      bills: [],
+      allSchedules: [],
+      payeeMap: {},
+      actualConfigured: true,
+      actualBudgetUrl: "https://actual.example.test",
+    });
+
+    const res = await getCurrentResponse();
+
+    expect(res.status).toBe(200);
+    expect(res.body.deadlines).toEqual(EMPTY_DEADLINES_FOR_TEST);
+    expect(res.body.providerHealth.currentData.state).toBe("unavailable");
+    expect(res.body.refresh.scheduled).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "deadlines_current", reason: "no_usable_payload" }),
+    ]));
+    expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: false });
   });
 
   it("schedules a quiet Bills mirror maintenance refresh when the mirror success is old", async () => {
@@ -845,7 +861,6 @@ describe("GET /api/dashboard/current", () => {
     const pending = new Promise(() => {});
     testState.fetchWeather.mockReturnValueOnce(pending);
     testState.fetchCalendar.mockReturnValueOnce(pending);
-    testState.fetchCTMDeadlines.mockReturnValueOnce(pending);
     testState.fetchTodoistTasks.mockReturnValueOnce(pending);
     testState.refreshBillsMirror.mockReturnValueOnce(pending);
 
@@ -894,8 +909,7 @@ describe("GET /api/dashboard/current", () => {
   it("refreshes missing current rows per domain and stores them for later reads", async () => {
     testState.fetchWeather.mockResolvedValueOnce({ temp: 72, summary: "Clear" });
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-2", title: "Planning" }]);
-    testState.fetchCTMDeadlines.mockResolvedValueOnce([{ id: "ctm-2" }]);
-    testState.fetchTodoistTasks.mockResolvedValueOnce([{ id: "todoist-1" }]);
+    testState.fetchTodoistTasks.mockResolvedValueOnce([{ id: "todoist-1", source: "todoist" }]);
     testState.readBillsMirrorCurrent.mockResolvedValueOnce({
       bills: [{ id: "bill-2", payee: "Rent" }],
       allSchedules: [{ id: "schedule-1" }],
@@ -912,8 +926,8 @@ describe("GET /api/dashboard/current", () => {
       weather: { temp: 72, summary: "Clear", location: "El Monte, CA" },
       calendar: [{ id: "event-2", title: "Planning" }],
       deadlines: {
-        ctm: { upcoming: [{ id: "ctm-2" }], stats: { total: 1 } },
-        todoist: { upcoming: [{ id: "todoist-1" }], stats: { total: 1 } },
+        upcoming: [{ id: "todoist-1" }],
+        stats: { total: 1 },
       },
       bills: [{ id: "bill-2", payee: "Rent" }],
       allSchedules: [{ id: "schedule-1" }],
@@ -928,7 +942,6 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.fetchCalendar).toHaveBeenCalledWith([
       { id: "gmail-a", type: "gmail", calendar_enabled: true, label: "Work" },
     ]);
-    expect(testState.fetchCTMDeadlines).toHaveBeenCalledTimes(1);
     expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: false });
     expect(testState.readBillsMirrorCurrent).toHaveBeenCalledWith("u1", expect.objectContaining({
       dbClient: expect.any(Object),
@@ -964,8 +977,9 @@ describe("GET /api/dashboard/current", () => {
       new Set(["todo-open", "todo-done"]),
       { viewBoundary: "today" },
     );
-    expect(res.body.deadlines.todoist.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
-    expect(res.body.deadlines.todoist.stats).toEqual({ total: 2 });
+    expect(res.body.deadlines.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
+    expect(res.body.deadlines.upcoming[0]).not.toHaveProperty("source");
+    expect(res.body.deadlines.stats).toEqual({ total: 2 });
   });
 
   it("writes successful deadline status mutations through to current dashboard cache", async () => {
@@ -976,24 +990,15 @@ describe("GET /api/dashboard/current", () => {
       });
     });
     await seedCache("deadlines_current", {
-      ctm: {
-        upcoming: [
-          { id: "ctm-1", title: "Submit essay", status: "incomplete", source: "canvas" },
-        ],
-        stats: { total: 1 },
-      },
-      todoist: {
-        upcoming: [
-          { id: "todo-1", title: "Buy stamps", status: "incomplete", source: "todoist" },
-        ],
-        stats: { total: 1 },
-      },
+      upcoming: [
+        { id: "todo-1", title: "Buy stamps", status: "incomplete" },
+      ],
+      stats: { total: 1 },
     });
 
-    const result = await applyDeadlineCurrentStatus("u1", "ctm-1", "complete", {
+    const result = await applyDeadlineCurrentStatus("u1", "todo-1", "complete", {
       dbClient: testState.db.current,
       now: new Date("2026-05-08T12:00:00.000Z"),
-      source: "ctm",
     });
 
     expect(result.updated).toBe(true);
@@ -1002,12 +1007,11 @@ describe("GET /api/dashboard/current", () => {
       args: ["u1", "deadlines_current"],
     });
     const payload = JSON.parse(cached.rows[0].payload_json);
-    expect(payload.ctm.upcoming[0]).toMatchObject({
-      id: "ctm-1",
+    expect(payload.upcoming[0]).toMatchObject({
+      id: "todo-1",
       status: "complete",
     });
-    expect(payload.todoist.upcoming[0].status).toBe("incomplete");
-    expect(payload.ctm.stats).toEqual({ total: 1 });
+    expect(payload.stats).toEqual({ total: 1 });
     expect(cached.rows[0]).toMatchObject({
       status: "current",
       refresh_started_at: null,
@@ -1015,7 +1019,7 @@ describe("GET /api/dashboard/current", () => {
     await expect(eventPromise).resolves.toMatchObject({
       source: "deadlines",
       reason: "task_status_updated",
-      details: { taskId: "ctm-1", status: "complete" },
+      details: { taskId: "todo-1", status: "complete" },
     });
   });
 
@@ -1069,7 +1073,6 @@ describe("GET /api/dashboard/current", () => {
   it("degrades one failed provider without failing the current response", async () => {
     testState.fetchWeather.mockRejectedValueOnce(new Error("weather down"));
     testState.fetchCalendar.mockResolvedValueOnce([{ id: "event-ok" }]);
-    testState.fetchCTMDeadlines.mockResolvedValueOnce([]);
     testState.fetchTodoistTasks.mockResolvedValueOnce([]);
 
     const res = await getCurrentResponse();
@@ -1153,7 +1156,6 @@ describe("POST /api/dashboard/current/sync", () => {
     testState.db.current = await createMigratedDb();
     testState.fetchWeather.mockReset().mockResolvedValue({ temp: 80, summary: "Synced" });
     testState.fetchCalendar.mockReset().mockResolvedValue([{ id: "synced-event" }]);
-    testState.fetchCTMDeadlines.mockReset().mockResolvedValue([]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
     testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
     testState.refreshBillsMirror.mockReset().mockResolvedValue({

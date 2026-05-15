@@ -157,7 +157,8 @@ export default function useCalendarModalEditorRouting({
     setDeadlineDraftPreview(null);
     openFloatingDetail({
       mode: "create",
-      view: "deadlines",
+      view: "events",
+      detailKind: "deadline",
       dateKey,
       day: parsed?.day ?? null,
       anchorElement: dateCell,
@@ -168,7 +169,7 @@ export default function useCalendarModalEditorRouting({
   }, [activeSelectedDateKey, findDateCell, openFloatingDetail, selectedDay, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId, viewMonth, viewYear]);
 
   const openFloatingDeadlineEdit = useCallback((task, options = {}) => {
-    if (task?.source !== "todoist") return;
+    if (!task?.id) return;
     const itemId = resolveFloatingDeadlineItemId(activeView, task);
     const editTaskId = String(task.id);
     const dateKey = options.dateKey || task.due_date || activeSelectedDateKey;
@@ -183,12 +184,13 @@ export default function useCalendarModalEditorRouting({
     setDeadlineDraftPreview(null);
     const current = floatingDetailRef.current;
     const reuseCurrentAnchor = current?.open
-      && current.view === "deadlines"
+      && current.detailKind === "deadline"
       && String(current.itemId) === String(itemId)
       && !current.parked;
     openFloatingDetail({
       mode: "edit",
-      view: "deadlines",
+      view: "events",
+      detailKind: "deadline",
       itemId: itemId != null ? String(itemId) : null,
       dateKey,
       day: parsed?.day ?? null,
@@ -208,7 +210,7 @@ export default function useCalendarModalEditorRouting({
     if (current.view === "events") {
       eventEditorRef.current?.closeEditor?.();
     }
-    if (current.view === "deadlines") {
+    if (current.detailKind === "deadline") {
       setDeadlineEditor(null);
       setDeadlineDraftPreview(null);
     }
@@ -228,7 +230,7 @@ export default function useCalendarModalEditorRouting({
 
   const handleFloatingDeadlineSaved = useCallback((task) => {
     const current = floatingDetailRef.current;
-    if (!current?.open || current.view !== "deadlines" || (current.mode !== "edit" && current.mode !== "create")) return;
+    if (!current?.open || current.detailKind !== "deadline" || (current.mode !== "edit" && current.mode !== "create")) return;
     if (!task?.id) {
       setFloatingDetail(null);
       return;

@@ -65,7 +65,6 @@ describe("calendar ghost previews", () => {
         title: "Ship report",
         dueDate: "2026-04-21",
         dueTime: "9:00 AM",
-        source: "todoist",
         priority: 1,
         isEditing: true,
         placementChanged: true,
@@ -79,7 +78,6 @@ describe("calendar ghost previews", () => {
       endDate: "2026-04-21",
       color: "#e8776a",
       dueMinutes: 540,
-      source: "todoist",
       crowdedCount: 3,
     });
   });

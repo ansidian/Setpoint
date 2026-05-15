@@ -100,7 +100,7 @@ describe("Dashboard boot", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
     mocks.getCalendarDeadlines.mockReset();
-    mocks.getCalendarDeadlines.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.getCalendarDeadlines.mockResolvedValue({ upcoming: [] });
   });
 
   afterEach(() => {

@@ -13,7 +13,7 @@ import {
 describe("calendarModalSearchModel", () => {
   it("maps active calendar views to server search scopes", () => {
     expect(searchScopeForCalendarView("events")).toBe("events");
-    expect(searchScopeForCalendarView("deadlines")).toBe("events");
+    expect(searchScopeForCalendarView("legacy")).toBe("events");
     expect(searchScopeForCalendarView("bills")).toBe("bills");
   });
 
@@ -65,19 +65,19 @@ describe("calendarModalSearchModel", () => {
   it("shapes activation targets from normalized search results", () => {
     expect(activationTargetFromCalendarSearchResult({
       type: "deadline",
-      itemId: "todo-1",
+      itemId: "deadline:todo-1:2026-06-01",
       itemDate: "2026-06-01",
       activation: {
         view: "events",
-        detailView: "deadlines",
+        detailKind: "deadline",
         dateKey: "2026-06-01",
-        itemId: "todo-1",
+        itemId: "deadline:todo-1:2026-06-01",
       },
     })).toEqual({
       view: "events",
-      detailView: "deadlines",
+      detailKind: "deadline",
       dateKey: "2026-06-01",
-      itemId: "todo-1",
+      itemId: "deadline:todo-1:2026-06-01",
     });
   });
 

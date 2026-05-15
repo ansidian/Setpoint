@@ -37,10 +37,13 @@ describe("demo mode in-memory mutations", () => {
     expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-newsletter")).toBe(false);
 
     await api.completeTask("demo-task-link");
-    expect((await api.getCurrentDashboard()).deadlines.todoist.upcoming.find((task) => task.id === "demo-task-link").status).toBe("complete");
+    expect((await api.getCurrentDashboard()).deadlines.upcoming.find((task) => task.id === "demo-task-link").status).toBe("complete");
 
-    await api.updateTaskStatus("demo-ctm-brief", "in_progress");
-    expect((await api.getCurrentDashboard()).deadlines.ctm.upcoming.find((task) => task.id === "demo-ctm-brief").status).toBe("in_progress");
+    const createdDeadline = await api.createDeadline({ title: "Demo launch checklist", due_date: "2026-05-16" });
+    await api.updateDeadline(createdDeadline.id, { title: "Demo launch checklist updated" });
+    expect((await api.getCurrentDashboard()).deadlines.upcoming.find((task) => task.id === createdDeadline.id).title).toBe("Demo launch checklist updated");
+    await api.completeDeadlineOccurrence(createdDeadline.id, "2026-05-16");
+    expect((await api.getCurrentDashboard()).deadlines.upcoming.find((task) => task.id === createdDeadline.id).status).toBe("complete");
 
     await api.markBillPaid("demo-electric:2026-05-15");
     expect((await api.getCalendarBillsRange("2026-05-01", "2026-05-31")).schedules.find((bill) => bill.scheduleId === "demo-electric").paid).toBe(true);

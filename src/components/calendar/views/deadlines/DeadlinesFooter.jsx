@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { getDayState, normalizeStatus, SOURCE_COLORS } from "./deadlinesModel.js";
+import { DEADLINE_COLOR, deadlineItemsFromData, getDayState, normalizeStatus } from "./deadlinesModel.js";
 
 function LegendDot({ color, label }) {
   return (
@@ -25,10 +25,7 @@ export function renderDeadlinesFooter({ viewYear, viewMonth, currentYear, curren
   let dueToday = 0;
   let dueThisWeek = 0;
   if (isCurrentMonth) {
-    const allItems = [
-      ...(data?.ctm?.upcoming || []),
-      ...(data?.todoist?.upcoming || []),
-    ];
+    const allItems = deadlineItemsFromData(data);
     const today = new Date(currentYear, currentMonth, todayDate);
     today.setHours(0, 0, 0, 0);
     const weekStart = new Date(today);
@@ -86,8 +83,7 @@ export function renderDeadlinesFooter({ viewYear, viewMonth, currentYear, curren
       {isCurrentMonth && <StatRow value={dueThisWeek} label="Due this week" />}
       <StatRow value={total} label="Total this month" />
       <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 8 }}>
-        <LegendDot color={SOURCE_COLORS.canvas} label="Canvas" />
-        <LegendDot color={SOURCE_COLORS.todoist} label="Todoist" />
+        <LegendDot color={DEADLINE_COLOR} label="Deadline" />
       </div>
     </div>
   );

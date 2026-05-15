@@ -2,8 +2,7 @@ const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 
 const SOURCE_COLORS = {
   google_calendar: "#4285f4",
-  ctm: "#f97316",
-  todoist: "#e44332",
+  deadline: "#e44332",
   bills: "#22c55e",
 };
 
@@ -96,8 +95,7 @@ function candidateDedupeKey(result) {
   if (result.type === "deadline") {
     return [
       "deadline",
-      result.payload?.source || result.activation?.source || result.coverageKey || "",
-      result.itemId || "",
+      result.payload?.id || result.activation?.deadlineId || result.itemId || "",
       result.itemDate || "",
     ].join("|");
   }
@@ -240,43 +238,35 @@ function deadlineDate(task) {
   return task.due_date || task.dueDate || task.date || task.itemDate || null;
 }
 
-function deadlineSource(task, fallback) {
-  const source = task.source || fallback;
-  if (source === "ctm" || source === "canvas") {
-    return { key: "ctm", label: "Canvas", color: SOURCE_COLORS.ctm };
-  }
-  return { key: "todoist", label: "Todoist", color: SOURCE_COLORS.todoist };
-}
-
-export function normalizeDeadlineSearchCandidate(task, { source }) {
+export function normalizeDeadlineSearchCandidate(task) {
   const itemDate = deadlineDate(task);
-  const sourceInfo = deadlineSource(task, source);
   const title = deadlineTitle(task);
   const subtitle = [task.course_name || task.course || task.project_name, task.status]
     .filter(Boolean)
     .join(" · ");
+  const rawDeadlineId = String(task.id);
+  const occurrenceId = `deadline:${rawDeadlineId}:${itemDate || "undated"}`;
   return {
-    id: `deadline:${sourceInfo.key}:${task.id}:${itemDate || ""}`,
+    id: occurrenceId,
     type: "deadline",
-    itemId: task.id,
+    itemId: occurrenceId,
     itemDate,
     title,
     subtitle,
     status: task.status || null,
-    meta: sourceInfo.label,
-    sourceLabel: sourceInfo.label,
-    sourceColor: sourceInfo.color,
+    meta: "Deadline",
+    sourceLabel: "Deadline",
+    sourceColor: SOURCE_COLORS.deadline,
     coverageKey: "deadlines",
     activation: {
       view: "events",
-      detailView: "deadlines",
+      detailKind: "deadline",
       dateKey: itemDate,
-      itemId: task.id,
-      source: sourceInfo.key,
+      itemId: occurrenceId,
+      deadlineId: rawDeadlineId,
     },
     payload: {
-      id: task.id,
-      source: sourceInfo.key,
+      id: rawDeadlineId,
       dueDate: itemDate,
       status: task.status || null,
     },
@@ -284,7 +274,7 @@ export function normalizeDeadlineSearchCandidate(task, { source }) {
       primary: [title],
       secondary: [
         subtitle,
-        sourceInfo.label,
+        "Deadline",
         task.course_name,
         task.course,
         task.project_name,
@@ -295,12 +285,7 @@ export function normalizeDeadlineSearchCandidate(task, { source }) {
 }
 
 export function deadlineSearchCandidates(payload = {}) {
-  const ctm = payload.ctm?.upcoming || [];
-  const todoist = payload.todoist?.upcoming || [];
-  return [
-    ...ctm.map((task) => normalizeDeadlineSearchCandidate(task, { source: "ctm" })),
-    ...todoist.map((task) => normalizeDeadlineSearchCandidate(task, { source: "todoist" })),
-  ];
+  return (payload.upcoming || []).map((task) => normalizeDeadlineSearchCandidate(task));
 }
 
 export function normalizeBillSearchCandidate(bill) {

@@ -31,9 +31,9 @@ function dueDateOf(item) {
   return item?.due_date || item?.dueDate || item?.date || null;
 }
 
-function itemIdentity(item, section) {
+function itemIdentity(item) {
   const id = item?.id ?? item?.todoist_id ?? item?.url ?? item?.title;
-  return `${section}:${id ?? ""}:${dueDateOf(item) ?? ""}`;
+  return `${id ?? ""}:${dueDateOf(item) ?? ""}`;
 }
 
 function recalculateStats(items, existing = {}) {
@@ -73,8 +73,9 @@ function filterSectionForMonth(section, key) {
 function filterDataForMonth(data, key) {
   const next = clone(data);
   if (!next) return next;
-  next.ctm = filterSectionForMonth(next.ctm, key);
-  next.todoist = filterSectionForMonth(next.todoist, key);
+  if (Array.isArray(next.upcoming)) {
+    return filterSectionForMonth(next, key);
+  }
   return next;
 }
 
@@ -83,14 +84,14 @@ function inRange(item, start, end) {
   return !!dueDate && dueDate >= start && dueDate <= end;
 }
 
-function combineSectionForRange(entries, sectionName, start, end) {
-  const base = clone(entries.find((entry) => entry?.data?.[sectionName])?.data?.[sectionName]) || { upcoming: [] };
+function combineDeadlineDataForRange(entries, start, end, emptyData) {
+  const base = clone(entries.find((entry) => Array.isArray(entry?.data?.upcoming))?.data) || clone(emptyData) || { upcoming: [] };
   const seen = new Set();
   const upcoming = [];
   for (const entry of entries) {
-    for (const item of entry?.data?.[sectionName]?.upcoming || []) {
+    for (const item of entry?.data?.upcoming || []) {
       if (!inRange(item, start, end)) continue;
-      const identity = itemIdentity(item, sectionName);
+      const identity = itemIdentity(item);
       if (seen.has(identity)) continue;
       seen.add(identity);
       upcoming.push(clone(item));
@@ -107,18 +108,17 @@ function combineDataForRange(cache, keys, start, end, emptyData) {
   const entries = keys.map((key) => cache.get(key)).filter(Boolean);
   const base = clone(entries.find((entry) => entry?.data)?.data) || clone(emptyData);
   if (!base) return base;
-  base.ctm = combineSectionForRange(entries, "ctm", start, end);
-  base.todoist = combineSectionForRange(entries, "todoist", start, end);
+  if (Array.isArray(base.upcoming)) {
+    return combineDeadlineDataForRange(entries, start, end, emptyData);
+  }
   return base;
 }
 
 function monthKeysFromData(data) {
   const keys = new Set();
-  for (const sectionName of ["ctm", "todoist"]) {
-    for (const item of data?.[sectionName]?.upcoming || []) {
-      const key = monthKeyFromDate(dueDateOf(item));
-      if (key) keys.add(key);
-    }
+  for (const item of data?.upcoming || []) {
+    const key = monthKeyFromDate(dueDateOf(item));
+    if (key) keys.add(key);
   }
   return [...keys];
 }

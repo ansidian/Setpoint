@@ -38,17 +38,14 @@ describe("calendar adjacent date maps", () => {
       viewYear: 2026,
       viewMonth: 4,
       data: {
-        ctm: {
-          upcoming: [
-            {
-              id: "deadline-apr-30",
-              title: "Essay",
-              due_date: "2026-04-30",
-              status: "incomplete",
-            },
-          ],
-        },
-        todoist: { upcoming: [] },
+        upcoming: [
+          {
+            id: "deadline-apr-30",
+            title: "Essay",
+            due_date: "2026-04-30",
+            status: "incomplete",
+          },
+        ],
       },
     });
 

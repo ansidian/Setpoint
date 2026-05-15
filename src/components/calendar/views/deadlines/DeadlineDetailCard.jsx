@@ -14,11 +14,10 @@ import {
   DeadlineStatusValue,
 } from "./DeadlineStatusIndicator.jsx";
 import {
+  DEADLINE_COLOR,
   PRIORITY_META,
-  SOURCE_COLORS,
+  deadlineAccentFor,
   normalizeStatus,
-  sourceLabelFor,
-  sourceOf,
 } from "./deadlinesModel.js";
 import {
   deadlineContextLabel,
@@ -56,10 +55,7 @@ export default function DeadlineDetailCard({
   actions,
 }) {
   const motion = useDetailRailMotion();
-  const source = sourceOf(task);
-  const sourceLabel = sourceLabelFor(task);
-  const sourceColor = SOURCE_COLORS[source] || accent;
-  const isTodoist = source === "todoist";
+  const deadlineColor = deadlineAccentFor(task, DEADLINE_COLOR);
   const normalizedStatus = normalizeStatus(task.status);
   const dueDays = daysUntil(task.due_date);
   const urgency = urgencyForDays(dueDays, accent);
@@ -74,7 +70,7 @@ export default function DeadlineDetailCard({
   const dueBadgeLabel = deadlineDueBadgeLabel(task, dueDays);
   const dueDetailLabel = deadlineDueDetailLabel(task);
   const secondaryMeta = deadlineSecondaryMeta(task);
-  const showPriorityChip = isTodoist && PRIORITY_META[task.priority];
+  const showPriorityChip = PRIORITY_META[task.priority];
   const showPointsChip = task.points_possible != null;
   const density = ultraCompact ? "compressed" : compact ? "compact" : "default";
   const reminderSummary = formatReminderSummary(task);
@@ -102,8 +98,8 @@ export default function DeadlineDetailCard({
                   width: 8,
                   height: 8,
                   borderRadius: 999,
-                  background: sourceColor,
-                  boxShadow: `0 0 0 1px ${sourceColor}22, 0 0 8px ${sourceColor}2b`,
+                  background: deadlineColor,
+                  boxShadow: `0 0 0 1px ${deadlineColor}22, 0 0 8px ${deadlineColor}2b`,
                 }}
               />
               <div
@@ -112,11 +108,11 @@ export default function DeadlineDetailCard({
                   fontWeight: 700,
                   letterSpacing: 2,
                   textTransform: "uppercase",
-                  color: sourceColor,
+                  color: deadlineColor,
                   whiteSpace: "nowrap",
                 }}
               >
-                {sourceLabel}
+                Deadline
               </div>
             </div>
             <div
@@ -235,22 +231,22 @@ export default function DeadlineDetailCard({
               style={{
                 width: 8,
                 height: 8,
-                borderRadius: 999,
-                background: sourceColor,
-                boxShadow: `0 0 0 1px ${sourceColor}22, 0 0 8px ${sourceColor}2b`,
-              }}
-            />
+                  borderRadius: 999,
+                  background: deadlineColor,
+                  boxShadow: `0 0 0 1px ${deadlineColor}22, 0 0 8px ${deadlineColor}2b`,
+                }}
+              />
             <div
               style={{
                 fontSize: 9.5,
                 fontWeight: 700,
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                color: sourceColor,
+                color: deadlineColor,
                 whiteSpace: "nowrap",
               }}
             >
-              {sourceLabel}
+              Deadline
             </div>
           </div>
           <div
@@ -310,7 +306,7 @@ export default function DeadlineDetailCard({
           ) : null}
         </Motion.div>
 
-        {(showPriorityChip || showPointsChip || !isTodoist || reminderSummary) ? (
+        {(showPriorityChip || showPointsChip || reminderSummary) ? (
           <Motion.div layout transition={motion.layout} style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }}>
             {reminderSummary ? (
               <RailReminderIndicator compact={compact}>
@@ -320,7 +316,6 @@ export default function DeadlineDetailCard({
             ) : null}
             {showPriorityChip ? <PriorityBadge level={task.priority} compact={compact} /> : null}
             {showPointsChip ? <RailMetaChip tone="quiet" compact={compact}>{task.points_possible} pts</RailMetaChip> : null}
-            {!isTodoist ? <RailMetaChip tone="quiet" compact={compact}>{sourceLabel}</RailMetaChip> : null}
           </Motion.div>
         ) : null}
 

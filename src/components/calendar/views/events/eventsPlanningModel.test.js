@@ -23,7 +23,6 @@ function deadline(overrides) {
   return {
     id: overrides.id,
     title: overrides.title,
-    source: overrides.source || "todoist",
     due_date: overrides.due_date,
     due_time: overrides.due_time || null,
     status: overrides.status || "incomplete",
@@ -37,7 +36,7 @@ describe("events planning model", () => {
     const completed = deadline({ id: "done", title: "Done", due_date: "2026-05-12", status: "complete" });
 
     const visible = getDeadlineOverlayComputed({
-      deadlineData: { todoist: { upcoming: [active, completed] }, ctm: { upcoming: [] } },
+      deadlineData: { upcoming: [active, completed] },
       viewYear: 2026,
       viewMonth: 4,
       showCompleted: false,
@@ -48,12 +47,12 @@ describe("events planning model", () => {
       id: "active",
       calendarItemKind: "deadline",
       agendaDateKey: "2026-05-12",
-      agendaItemId: "todoist:active",
+      agendaItemId: "deadline:active:2026-05-12",
     });
     expect(visible.completedDeadlines).toBe(0);
 
     const withCompleted = getDeadlineOverlayComputed({
-      deadlineData: { todoist: { upcoming: [active, completed] }, ctm: { upcoming: [] } },
+      deadlineData: { upcoming: [active, completed] },
       viewYear: 2026,
       viewMonth: 4,
       showCompleted: true,
@@ -77,7 +76,7 @@ describe("events planning model", () => {
     const timed = event({ id: "timed", title: "Timed", start: "2026-05-12T18:00:00Z" });
     const active = deadline({ id: "active", title: "Active", due_date: "2026-05-12" });
     const deadlineOverlay = getDeadlineOverlayComputed({
-      deadlineData: { todoist: { upcoming: [active] }, ctm: { upcoming: [] } },
+      deadlineData: { upcoming: [active] },
       viewYear: 2026,
       viewMonth: 4,
       showCompleted: true,
@@ -94,27 +93,27 @@ describe("events planning model", () => {
     });
 
     expect(merged.itemsByDate["2026-05-12"]).toHaveLength(2);
-    expect(merged.itemsByDate["2026-05-12"].map(getPlanningItemId)).toEqual(["timed", "todoist:active"]);
+    expect(merged.itemsByDate["2026-05-12"].map(getPlanningItemId)).toEqual(["timed", "deadline:active:2026-05-12"]);
     expect(isDeadlinePlanningItem(merged.itemsByDate["2026-05-12"][1])).toBe(true);
     expect(merged.totalDeadlines).toBe(1);
   });
 
-  it("keeps CTM and Todoist deadline planning ids source-distinct", () => {
-    const todoist = deadline({ id: "same", title: "Todoist", due_date: "2026-05-12", source: "todoist" });
-    const ctm = deadline({ id: "same", title: "CTM", due_date: "2026-05-12", source: "canvas" });
+  it("keys deadline planning ids by occurrence date", () => {
+    const first = deadline({ id: "same", title: "First occurrence", due_date: "2026-05-12" });
+    const second = deadline({ id: "same", title: "Second occurrence", due_date: "2026-05-13" });
     const overlay = getDeadlineOverlayComputed({
-      deadlineData: {
-        todoist: { upcoming: [todoist] },
-        ctm: { upcoming: [ctm] },
-      },
+      deadlineData: { upcoming: [first, second] },
       viewYear: 2026,
       viewMonth: 4,
       showCompleted: true,
     });
 
-    expect(overlay.itemsByDate["2026-05-12"].map(getPlanningItemId).sort()).toEqual([
-      "canvas:same",
-      "todoist:same",
+    expect([
+      getPlanningItemId(overlay.itemsByDate["2026-05-12"][0]),
+      getPlanningItemId(overlay.itemsByDate["2026-05-13"][0]),
+    ]).toEqual([
+      "deadline:same:2026-05-12",
+      "deadline:same:2026-05-13",
     ]);
   });
 
@@ -123,7 +122,6 @@ describe("events planning model", () => {
       id: "done",
       title: "Done task",
       due_date: "2026-05-12",
-      source: "todoist",
       status: "complete",
     }))).toMatchObject({
       statusIcon: "complete",
@@ -133,10 +131,9 @@ describe("events planning model", () => {
     });
 
     expect(deadlinePlanningDescriptor(deadline({
-      id: "ctm-progress",
+      id: "todo-progress",
       title: "Draft essay",
       due_date: "2026-05-12",
-      source: "canvas",
       status: "in_progress",
     }))).toMatchObject({
       statusIcon: "in_progress",
@@ -151,7 +148,6 @@ describe("events planning model", () => {
       id: "reminder",
       title: "Reminder task",
       due_date: "2026-05-12",
-      source: "todoist",
       hasUpcomingReminder: true,
       upcomingReminderCount: 2,
       nextReminderAt: "2026-05-12T15:30:00.000Z",

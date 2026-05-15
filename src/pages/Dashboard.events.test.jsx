@@ -24,8 +24,10 @@ function makeBriefing(events = []) {
   return {
     weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
     calendar: events,
-    ctm: { upcoming: [{ id: "ctm-1", title: "Essay", due_date: "2026-04-20", source: "canvas", status: "open" }] },
-    todoist: { upcoming: [] },
+    deadlines: {
+      upcoming: [{ id: "deadline-1", title: "Essay", due_date: "2026-04-20", status: "open" }],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
+    },
     emails: { summary: "", accounts: [] },
   };
 }
@@ -50,10 +52,7 @@ function renderDashboardBody({
         liveBills: [],
         liveWeather: briefing.weather,
         liveCalendar: briefing.calendar,
-        liveDeadlines: {
-          ctm: briefing.ctm,
-          todoist: briefing.todoist,
-        },
+        liveDeadlines: briefing.deadlines,
         liveEmails: [],
           billsLoading: false,
           actualConfigured: false,
@@ -183,7 +182,7 @@ describe("Dashboard event loading", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /deadline soon/i }));
-    expect(onOpenDeadlinesCalendar).toHaveBeenCalledWith("2026-04-20", "ctm-1");
+    expect(onOpenDeadlinesCalendar).toHaveBeenCalledWith("2026-04-20", "deadline-1");
   });
 
   it("holds stored briefing deadlines while live calendar deadlines are still loading", () => {
@@ -194,16 +193,15 @@ describe("Dashboard event loading", () => {
     renderDashboardBody({
       briefing: {
         ...makeBriefing([]),
-        ctm: { upcoming: [] },
-        todoist: {
+        deadlines: {
           upcoming: [{
-            id: "todo-rec",
+            id: "deadline-rec",
             title: "Stale recurring review",
             due_date: "2026-04-21",
-            source: "todoist",
             status: "open",
             is_recurring: true,
           }],
+          stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
         },
       },
       ensureRange: vi.fn().mockResolvedValue([]),
@@ -216,7 +214,7 @@ describe("Dashboard event loading", () => {
     expect(screen.queryByRole("button", { name: /deadline soon/i })).toBeNull();
   });
 
-  it("uses live calendar deadlines over stale briefing Todoist deadlines", () => {
+  it("uses live calendar deadlines over stale briefing deadlines", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -225,31 +223,27 @@ describe("Dashboard event loading", () => {
     renderDashboardBody({
       briefing: {
         ...makeBriefing([]),
-        ctm: { upcoming: [] },
-        todoist: {
+        deadlines: {
           upcoming: [{
-            id: "todo-rec",
+            id: "deadline-rec",
             title: "Recurring review",
             due_date: "2026-04-21",
-            source: "todoist",
             status: "open",
             is_recurring: true,
           }],
+          stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
         },
       },
       ensureRange: vi.fn().mockResolvedValue([]),
       calendarDeadlines: {
-        ctm: { upcoming: [] },
-        todoist: {
-          upcoming: [{
-            id: "todo-rec",
-            title: "Recurring review",
-            due_date: "2026-04-23",
-            source: "todoist",
-            status: "open",
-            is_recurring: true,
-          }],
-        },
+        upcoming: [{
+          id: "deadline-rec",
+          title: "Recurring review",
+          due_date: "2026-04-23",
+          status: "open",
+          is_recurring: true,
+        }],
+        stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
       },
       onOpenDeadline,
     });
@@ -257,7 +251,7 @@ describe("Dashboard event loading", () => {
     expect(screen.queryByRole("button", { name: /deadline soon/i })).toBeNull();
     fireEvent.click(screen.getByTestId("hero-callout-deadline"));
     expect(onOpenDeadline).toHaveBeenCalledWith(expect.objectContaining({
-      id: "todo-rec",
+      id: "deadline-rec",
       due_date: "2026-04-23",
     }), expect.any(HTMLElement));
   });

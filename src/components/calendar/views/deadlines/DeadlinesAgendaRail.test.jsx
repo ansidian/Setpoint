@@ -9,43 +9,37 @@ afterEach(() => {
 
 function renderRail(props = {}) {
   const data = {
-    ctm: { upcoming: [] },
-    todoist: {
-      upcoming: [
-        {
-          id: "repeat-1",
-          title: "Recurring review",
-          due_date: "2026-05-05",
-          due_time: "9:00 AM",
-          source: "todoist",
-          project_name: "Ops",
-          status: "open",
-          is_recurring: true,
-          hasUpcomingReminder: true,
-          upcomingReminderCount: 2,
-          nextReminderAt: "2026-05-09T15:30:00.000Z",
-        },
-        {
-          id: "repeat-1",
-          title: "Recurring review",
-          due_date: "2026-05-09",
-          due_time: "9:00 AM",
-          source: "todoist",
-          project_name: "Ops",
-          status: "open",
-          is_recurring: true,
-        },
-        {
-          id: "done-1",
-          title: "Completed review",
-          due_date: "2026-05-09",
-          due_time: "10:00 AM",
-          source: "todoist",
-          project_name: "Ops",
-          status: "complete",
-        },
-      ],
-    },
+    upcoming: [
+      {
+        id: "repeat-1",
+        title: "Recurring review",
+        due_date: "2026-05-05",
+        due_time: "9:00 AM",
+        project_name: "Ops",
+        status: "open",
+        is_recurring: true,
+        hasUpcomingReminder: true,
+        upcomingReminderCount: 2,
+        nextReminderAt: "2026-05-09T15:30:00.000Z",
+      },
+      {
+        id: "repeat-1",
+        title: "Recurring review",
+        due_date: "2026-05-09",
+        due_time: "9:00 AM",
+        project_name: "Ops",
+        status: "open",
+        is_recurring: true,
+      },
+      {
+        id: "done-1",
+        title: "Completed review",
+        due_date: "2026-05-09",
+        due_time: "10:00 AM",
+        project_name: "Ops",
+        status: "complete",
+      },
+    ],
   };
 
   return render(
@@ -63,18 +57,18 @@ function renderRail(props = {}) {
 }
 
 describe("DeadlinesAgendaRail", () => {
-  it("keys recurring Todoist occurrence selection by source id and due date", () => {
+  it("keys deadline occurrence selection by id and due date", () => {
     const onDeadlineAction = vi.fn();
     renderRail({
-      selectedItemId: "todoist:repeat-1-2026-05-09",
+      selectedItemId: "deadline:repeat-1:2026-05-09",
       onDeadlineAction,
     });
 
     const rows = screen.getAllByTestId("calendar-agenda-deadline-row");
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
-      "todoist:repeat-1-2026-05-05",
-      "todoist:repeat-1-2026-05-09",
-      "todoist:done-1",
+      "deadline:repeat-1:2026-05-05",
+      "deadline:repeat-1:2026-05-09",
+      "deadline:done-1:2026-05-09",
     ]);
     expect(rows[0].getAttribute("data-selected")).toBe("false");
     expect(rows[1].getAttribute("data-selected")).toBe("true");
@@ -85,7 +79,7 @@ describe("DeadlinesAgendaRail", () => {
       dateKey: "2026-05-09",
       item: expect.objectContaining({
         id: "repeat-1",
-        agendaItemId: "todoist:repeat-1-2026-05-09",
+        agendaItemId: "deadline:repeat-1:2026-05-09",
       }),
     }));
   });
@@ -118,7 +112,7 @@ describe("DeadlinesAgendaRail", () => {
   it("notifies when hiding completed deadlines removes the selected row", () => {
     const onFilteredSelectedDeadlineHidden = vi.fn();
     renderRail({
-      selectedItemId: "done-1",
+      selectedItemId: "deadline:done-1:2026-05-09",
       onFilteredSelectedDeadlineHidden,
     });
 

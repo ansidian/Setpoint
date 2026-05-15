@@ -43,11 +43,7 @@ function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) 
       location: "Los Angeles, CA",
     },
     calendar: events,
-    ctm: {
-      upcoming: [],
-      stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
-    },
-    todoist: {
+    deadlines: {
       upcoming: [],
       stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
     },
@@ -64,13 +60,9 @@ function buildBriefing({ events = [], emailAccounts = [], briefing = {} } = {}) 
       ...baseBriefing.weather,
       ...(briefing.weather || {}),
     },
-    ctm: {
-      ...baseBriefing.ctm,
-      ...(briefing.ctm || {}),
-    },
-    todoist: {
-      ...baseBriefing.todoist,
-      ...(briefing.todoist || {}),
+    deadlines: {
+      ...baseBriefing.deadlines,
+      ...(briefing.deadlines || {}),
     },
     emails: {
       ...baseBriefing.emails,
@@ -196,10 +188,7 @@ function buildCurrentDashboardFixture({ events = [], emailAccounts = [], briefin
   return {
     weather: latest.weather,
     calendar: latest.calendar,
-    deadlines: {
-      ctm: latest.ctm,
-      todoist: latest.todoist,
-    },
+    deadlines: latest.deadlines,
     bills: live.bills || [],
     allSchedules: live.allSchedules || [],
     payeeMap: live.payeeMap || {},
@@ -413,10 +402,7 @@ async function installBaseDashboardFixtures(page, {
 
   await page.route("**/api/calendar/deadlines", async (route) => {
     const latest = buildBriefing({ events, emailAccounts, briefing });
-    return json(route, {
-      ctm: latest.ctm,
-      todoist: latest.todoist,
-    });
+    return json(route, latest.deadlines);
   });
 
   await page.route("**/api/calendar/range**", async (route) => {
@@ -543,7 +529,7 @@ export async function installDashboardCalendarLayoutFixtures(page) {
       },
     ],
     briefing: {
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "layout-deadline-1",

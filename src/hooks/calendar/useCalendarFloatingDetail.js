@@ -141,14 +141,17 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         allowRailOverlap: sideIntent === "user-flip",
       });
       const nextItemId = nextDetail.itemId != null ? String(nextDetail.itemId) : null;
+      const detailKind = nextDetail.detailKind || null;
       const canReuseSnapshot = current?.open
         && String(current.itemId) === nextItemId
         && current.view === nextView
+        && current.detailKind === detailKind
         && current.dateKey === nextDateKey
         && Array.isArray(current.itemsSnapshot);
       const isSameSession = current?.open
         && current.mode === mode
         && current.view === nextView
+        && current.detailKind === detailKind
         && String(current.itemId || "") === String(nextItemId || "")
         && current.dateKey === nextDateKey;
       const shakeKey = isSameSession ? current?.shakeKey || 0 : 0;
@@ -157,6 +160,7 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         mode,
         placementKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         view: nextView,
+        detailKind,
         itemId: nextItemId,
         dateKey: nextDateKey,
         day: nextDetail.day ?? null,

@@ -93,9 +93,9 @@ describe("calendarModalSelectionModel", () => {
   it("keeps a pending focus date until a view change consumes it", () => {
     const snapshot = buildCalendarModalSyncSnapshot({
       open: true,
-      view: "deadlines",
+      view: "events",
       prevOpen: true,
-      prevView: "events",
+      prevView: "bills",
       prevOpenRequestId: 1,
       openRequestId: 1,
       focusDate: null,
@@ -119,12 +119,12 @@ describe("calendarModalSelectionModel", () => {
     });
   });
 
-  it("clears stale day and item focus for clean deadline create requests", () => {
+  it("keeps the current selected date for plain Events create requests", () => {
     const snapshot = buildCalendarModalSyncSnapshot({
       open: true,
-      view: "deadlines",
+      view: "events",
       prevOpen: true,
-      prevView: "deadlines",
+      prevView: "events",
       prevOpenRequestId: 1,
       openRequestId: 2,
       focusDate: null,
@@ -138,11 +138,11 @@ describe("calendarModalSelectionModel", () => {
     });
 
     expect(snapshot).toMatchObject({
-      nextSelectedDay: null,
-      nextSelectedDateKey: null,
-      nextSelectedItemId: null,
+      nextSelectedDay: 20,
+      nextSelectedDateKey: "2026-04-20",
+      nextSelectedItemId: "new",
       nextPendingFocusDate: null,
-      nextPendingFocusItemId: null,
+      nextPendingFocusItemId: "new",
       openCreate: true,
     });
   });

@@ -97,41 +97,37 @@ describe("events agenda model", () => {
       deadlineOverlay: {
         showCompleted: true,
         data: {
-          ctm: {
-            upcoming: [
-              {
-                id: "ctm-1",
-                title: "Draft essay",
-                due_date: "2026-05-12",
-                source: "canvas",
-                status: "in_progress",
-              },
-            ],
-          },
-          todoist: {
-            upcoming: [
-              {
-                id: "todo-1",
-                title: "Submit report",
-                due_date: "2026-05-12",
-                source: "todoist",
-                status: "complete",
-              },
-            ],
-          },
+          upcoming: [
+            {
+              id: "todo-progress",
+              title: "Draft essay",
+              due_date: "2026-05-12",
+              status: "in_progress",
+            },
+            {
+              id: "todo-1",
+              title: "Submit report",
+              due_date: "2026-05-12",
+              status: "complete",
+            },
+          ],
         },
       },
     });
 
     expect(agenda.visibleGroups.find((group) => group.dateKey === "2026-05-12")?.deadlines).toEqual([
       expect.objectContaining({
-        agendaItemId: "canvas:ctm-1",
+        agendaItemId: "deadline:todo-progress:2026-05-12",
+        agendaSubtitle: "Deadline",
+        agendaTimeRange: "Deadline",
         agendaStatus: "In progress",
         agendaStatusIcon: "in_progress",
         agendaComplete: false,
       }),
       expect.objectContaining({
-        agendaItemId: "todoist:todo-1",
+        agendaItemId: "deadline:todo-1:2026-05-12",
+        agendaSubtitle: "Deadline",
+        agendaTimeRange: "Deadline",
         agendaStatus: "Complete",
         agendaStatusIcon: "complete",
         agendaComplete: true,

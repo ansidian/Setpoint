@@ -30,13 +30,6 @@ export function filterCompletedTodoistTasks(todoistTasks, completedIds) {
   return todoist;
 }
 
-export function separateDeadlines(ctmDeadlines, todoistTasks, completedIds) {
-  return {
-    ctm: ctmDeadlines || [],
-    todoist: filterCompletedTodoistTasks(todoistTasks, completedIds),
-  };
-}
-
 export function carryForwardCompletedTodoist(newList, prevList, boundary) {
   if (!prevList?.length) return newList;
   const keyOf = (task) => `${task.id}:${task.due_date}`;

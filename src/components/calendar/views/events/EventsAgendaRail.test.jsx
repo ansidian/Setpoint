@@ -449,13 +449,10 @@ describe("EventsAgendaRail", () => {
 
   it("derives Mini Calendar deadline markers from the filtered deadline overlay", () => {
     const deadlineData = {
-      todoist: {
-        upcoming: [
-          { id: "active", title: "Active", due_date: "2026-05-12", source: "todoist", status: "incomplete" },
-          { id: "done", title: "Done", due_date: "2026-05-12", source: "todoist", status: "complete" },
-        ],
-      },
-      ctm: { upcoming: [] },
+      upcoming: [
+        { id: "active", title: "Active", due_date: "2026-05-12", source: "todoist", status: "incomplete" },
+        { id: "done", title: "Done", due_date: "2026-05-12", source: "todoist", status: "complete" },
+      ],
     };
     const { rerender } = renderRail({
       selectedDateKey: "2026-05-12",
@@ -516,12 +513,9 @@ describe("EventsAgendaRail", () => {
       deadlineOverlay: {
         showCompleted: true,
         data: {
-          todoist: {
-            upcoming: [
-              { id: "june-deadline", title: "June task", due_date: "2026-06-01", source: "todoist", status: "incomplete" },
-            ],
-          },
-          ctm: { upcoming: [] },
+          upcoming: [
+            { id: "june-deadline", title: "June task", due_date: "2026-06-01", source: "todoist", status: "incomplete" },
+          ],
         },
       },
     });
@@ -548,12 +542,9 @@ describe("EventsAgendaRail", () => {
       deadlineOverlay: {
         showCompleted: true,
         data: {
-          todoist: {
-            upcoming: [
-              { id: "deadline-1", title: "Submit report", due_date: "2026-05-12", source: "todoist", status: "incomplete" },
-            ],
-          },
-          ctm: { upcoming: [] },
+          upcoming: [
+            { id: "deadline-1", title: "Submit report", due_date: "2026-05-12", source: "todoist", status: "incomplete" },
+          ],
         },
       },
     });

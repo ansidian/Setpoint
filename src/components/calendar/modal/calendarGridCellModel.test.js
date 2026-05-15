@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildCalendarGridCellModel } from "./calendarGridCellModel.js";
 
 describe("buildCalendarGridCellModel", () => {
-  it("resolves date-keyed deadline cells with completed filtering and ghost counts", () => {
+  it("resolves date-keyed cells with completed filtering and ghost counts", () => {
     const activeDeadline = { id: "active-1", title: "Active deadline" };
     const completedDeadline = { id: "done-1", title: "Done deadline" };
     const ghost = { kind: "deadline", startDate: "2026-05-01", id: "ghost-1" };
@@ -30,7 +30,7 @@ describe("buildCalendarGridCellModel", () => {
       },
       currentMonth: 4,
       currentYear: 2026,
-      eventDateCells: false,
+      eventDateCells: true,
       ghostPreview: { ghosts: [ghost] },
       itemsByDate: {
         "2026-05-01": [activeDeadline, completedDeadline],
@@ -47,7 +47,7 @@ describe("buildCalendarGridCellModel", () => {
         pinnedGhostCountByDate: {},
       },
       todayDate: 6,
-      view: "deadlines",
+      view: "events",
       viewData: { isLoading: false },
       viewMonth: 4,
       viewYear: 2026,

@@ -76,13 +76,10 @@ const currentPayload = {
   weather: { temp: 72, icon: "Sun" },
   calendar: [{ id: "event-1", title: "Focus" }],
   deadlines: {
-    ctm: { upcoming: [], stats: { total: 0 } },
-    todoist: {
-      upcoming: [
-        { id: "todo-seeded", title: "Seeded task", due_date: "2026-05-05", source: "todoist" },
-      ],
-      stats: { total: 1 },
-    },
+    upcoming: [
+      { id: "todo-seeded", title: "Seeded task", due_date: "2026-05-05", source: "todoist" },
+    ],
+    stats: { total: 1 },
   },
   bills: [{ id: "bill-1", payee: "Power" }],
   allSchedules: [],
@@ -110,9 +107,9 @@ describe("Dashboard current boot", () => {
     mocks.getActiveSnapshot.mockRejectedValue(new Error("snapshot route should not load separately"));
     mocks.syncActiveSnapshot.mockRejectedValue(new Error("snapshot sync route should not load separately"));
     mocks.getSettings.mockResolvedValue({});
-    mocks.getCalendarDeadlines.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.getCalendarDeadlines.mockResolvedValue({ upcoming: [] });
     mocks.calendarRangeEnsureRange.mockResolvedValue([]);
-    mocks.deadlineRangeEnsureRange.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.deadlineRangeEnsureRange.mockResolvedValue({ upcoming: [] });
     mocks.billsRangeEnsureRange.mockResolvedValue([]);
   });
 

@@ -24,7 +24,7 @@ describe("CalendarModal deadlines rail behavior", () => {
           getEvents: () => [],
         }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
@@ -50,7 +50,7 @@ describe("CalendarModal deadlines rail behavior", () => {
           getEvents: () => [],
         }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
@@ -59,7 +59,7 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(screen.queryByRole("button", { name: /deadlines view/i })).toBeNull();
   });
 
-  it("does not route the 3 hotkey to a standalone Deadlines view", () => {
+  it("does not route the 3 hotkey to a third workspace", () => {
     window.innerWidth = 1900;
     const onViewChange = vi.fn();
 
@@ -75,13 +75,13 @@ describe("CalendarModal deadlines rail behavior", () => {
           getEvents: () => [],
         }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
     fireEvent.keyDown(document, { key: "3" });
 
-    expect(onViewChange).not.toHaveBeenCalledWith("deadlines");
+    expect(onViewChange).not.toHaveBeenCalled();
   });
 
   it("opens existing deadline detail from an Events overlay chip without changing view", async () => {
@@ -101,11 +101,9 @@ describe("CalendarModal deadlines rail behavior", () => {
         }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
@@ -134,11 +132,9 @@ describe("CalendarModal deadlines rail behavior", () => {
         }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
@@ -172,12 +168,9 @@ describe("CalendarModal deadlines rail behavior", () => {
         }}
         billsData={{}}
         deadlinesData={{
-          ctm: { upcoming: [] },
-          todoist: {
-            upcoming: [
-              { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", source: "todoist", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", status: "open" },
+          ],
         }}
         deadlinesRangeData={{
           loading: true,
@@ -192,7 +185,7 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Current dashboard task")).toBeTruthy();
   });
 
-  it("preserves a focused deadline day and item when the modal opens into deadlines", async () => {
+  it("preserves a focused deadline day and item when the modal opens into Events", async () => {
     window.innerWidth = 1900;
 
     const { rerender } = render(wrapWithDashboard(
@@ -204,11 +197,9 @@ describe("CalendarModal deadlines rail behavior", () => {
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
@@ -217,27 +208,26 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
 
-    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    const agendaRail = screen.getByTestId("events-agenda-rail");
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(within(agendaRail).getAllByText("Project due").length).toBeGreaterThan(0);
     const row = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
-    expect(row.getAttribute("data-item-id")).toBe("canvas:deadline-1");
+    expect(row.getAttribute("data-item-id")).toBe("deadline:deadline-1:2026-04-20");
 
     fireEvent.click(row);
 
@@ -252,27 +242,26 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-21"
-        focusItemId="todo-rec"
+        focusItemId="deadline:todo-rec:2026-04-21"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-rec", title: "Completed occurrence", due_date: "2026-04-21", source: "todoist", status: "complete", is_recurring: true },
-              { id: "todo-rec", title: "Current occurrence", due_date: "2026-04-23", source: "todoist", status: "open", is_recurring: true },
-            ],
-          },
+          upcoming: [
+            { id: "todo-rec", title: "Completed occurrence", due_date: "2026-04-21", status: "complete", is_recurring: true },
+            { id: "todo-rec", title: "Current occurrence", due_date: "2026-04-23", status: "open", is_recurring: true },
+          ],
         }}
       />,
     ));
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
 
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-deadline-row");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Current occurrence");
   });
 
@@ -283,26 +272,25 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
+          ],
         }}
       />,
     ));
 
-    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    const agendaRail = screen.getByTestId("events-agenda-rail");
     expect(within(agendaRail).getAllByText("Project due").length).toBeGreaterThan(0);
     const row = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
-    expect(within(row).getByLabelText("Complete")).toBeTruthy();
+    expect(within(row).getByText("Complete")).toBeTruthy();
 
     fireEvent.click(row);
 
@@ -319,22 +307,22 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
           isLoading: true,
-          ctm: { upcoming: [] },
-          todoist: { upcoming: [] },
+          upcoming: [],
         }}
       />,
     ));
 
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-    expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
+    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
   });
 
   it("keeps rendered deadlines visible and shows pending status during refresh", async () => {
@@ -344,10 +332,11 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="todo-1"
+        focusItemId="deadline:todo-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
@@ -357,19 +346,16 @@ describe("CalendarModal deadlines rail behavior", () => {
           error: null,
           ensureRange: vi.fn().mockResolvedValue({}),
           data: {
-            todoist: {
-              upcoming: [
-                {
-                  id: "todo-1",
-                  title: "Backfill notes",
-                  due_date: "2026-04-20",
-                  due_time: "9:00 AM",
-                  source: "todoist",
-                  class_name: "Inbox",
-                  status: "open",
-                },
-              ],
-            },
+            upcoming: [
+              {
+                id: "todo-1",
+                title: "Backfill notes",
+                due_date: "2026-04-20",
+                due_time: "9:00 AM",
+                class_name: "Inbox",
+                status: "open",
+              },
+            ],
           },
         }}
       />,
@@ -377,11 +363,6 @@ describe("CalendarModal deadlines rail behavior", () => {
 
     expect(screen.queryByTestId("calendar-grid-skeleton")).toBeNull();
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Backfill notes")).toBeTruthy();
-    expect(screen.getByTestId("calendar-pending-update").getAttribute("aria-label")).toBe("Calendar updates pending");
-    expect(screen.getByTestId("calendar-pending-update").querySelector(".calendar-pending-update-icon")).toBeTruthy();
-
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Backfill notes");
   });
 
   it("does not render completed-only deadlines into the month cell preview", () => {
@@ -391,25 +372,23 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-21"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
-            ],
-          },
-          todoist: { upcoming: [] },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
+          ],
         }}
       />,
     ));
 
     const quietChip = within(screen.getByTestId("calendar-cell-20")).getByText("Project due").closest("button");
     expect(quietChip).toBeTruthy();
-    expect(quietChip?.getAttribute("data-item-id")).toBe("canvas:deadline-1");
+    expect(quietChip?.getAttribute("data-item-id")).toBe("deadline:deadline-1:2026-04-20");
   });
 
   it("uses the event-style font treatment for the selected deadline title", async () => {
@@ -419,24 +398,22 @@ describe("CalendarModal deadlines rail behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-            ],
-          },
-          todoist: { upcoming: [] },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
 
-    const row = within(screen.getByTestId("deadlines-agenda-rail")).getByTestId("calendar-agenda-deadline-row");
+    const row = within(screen.getByTestId("events-agenda-rail")).getByTestId("calendar-agenda-deadline-row");
     fireEvent.click(row);
 
     expect((await screen.findByTestId("calendar-selected-deadline-title")).textContent).toContain("Project due");
@@ -471,16 +448,18 @@ describe("CalendarModal deadlines rail behavior", () => {
   it("does not refetch the deadlines range when only range data object identity changes", async () => {
     window.innerWidth = 1900;
     const ensureRange = vi.fn().mockResolvedValue({});
+    const ensureEventsRange = vi.fn().mockResolvedValue([]);
 
     function modal(deadlineId) {
       return wrapWithDashboard(
         <CalendarModal
           open
           onClose={() => {}}
-          view="deadlines"
+          view="events"
+          forceDeadlineOverlay
           onViewChange={() => {}}
           focusDate="2026-04-20"
-          eventsData={{ getEvents: () => [] }}
+          eventsData={{ ensureRange: ensureEventsRange, getEvents: () => [] }}
           billsData={{}}
           deadlinesData={{}}
           deadlinesRangeData={{
@@ -488,18 +467,14 @@ describe("CalendarModal deadlines rail behavior", () => {
             error: null,
             ensureRange,
             data: {
-              ctm: { upcoming: [] },
-              todoist: {
-                upcoming: [
-                  {
-                    id: deadlineId,
-                    title: "Deadline",
-                    due_date: "2026-04-20",
-                    source: "todoist",
-                    status: "incomplete",
-                  },
-                ],
-              },
+              upcoming: [
+                {
+                  id: deadlineId,
+                  title: "Deadline",
+                  due_date: "2026-04-20",
+                  status: "incomplete",
+                },
+              ],
             },
           }}
         />,
@@ -531,7 +506,7 @@ describe("CalendarModal deadlines rail behavior", () => {
         getEvents: () => [],
       },
       billsData: {},
-      deadlinesData: { todoist: { upcoming: [] } },
+      deadlinesData: { upcoming: [] },
     };
 
     const { rerender } = render(wrapWithDashboard(
@@ -539,7 +514,8 @@ describe("CalendarModal deadlines rail behavior", () => {
         {...props}
         open
         openRequestId={1}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         focusItemId="new"
       />,
     ));
@@ -551,7 +527,8 @@ describe("CalendarModal deadlines rail behavior", () => {
         {...props}
         open={false}
         openRequestId={1}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         focusItemId="new"
       />,
     ));

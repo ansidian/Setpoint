@@ -12,19 +12,18 @@ describe("CalendarModal agenda rail state behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "complete" },
+          ],
         }}
       />,
     ));
@@ -36,7 +35,7 @@ describe("CalendarModal agenda rail state behavior", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
     });
-    expect(within(screen.getByTestId("deadlines-agenda-rail")).queryByText("Project due")).toBeNull();
+    expect(within(screen.getByTestId("events-agenda-rail")).queryByText("Project due")).toBeNull();
     expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Project due")).toBeNull();
   });
 
@@ -140,24 +139,26 @@ describe("CalendarModal agenda rail state behavior", () => {
       expectedText: "Rent",
     },
     {
-      view: "deadlines",
+      view: "events",
+      forceDeadlineOverlay: true,
       eventsData: { getEvents: () => [] },
       billsData: {},
       deadlinesData: {
-        ctm: {
-          upcoming: [
-            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-          ],
-        },
+        upcoming: [
+          { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+        ],
       },
       expectedText: "Project due",
+      expectedRailTestId: "events-agenda-rail",
     },
   ])("renders a locally scrollable agenda rail for $view", async ({
     view,
+    forceDeadlineOverlay = false,
     eventsData,
     billsData,
     deadlinesData,
     expectedText,
+    expectedRailTestId,
   }) => {
     window.innerWidth = 1900;
 
@@ -166,6 +167,7 @@ describe("CalendarModal agenda rail state behavior", () => {
         open
         onClose={() => {}}
         view={view}
+        forceDeadlineOverlay={forceDeadlineOverlay}
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={eventsData}
@@ -174,17 +176,14 @@ describe("CalendarModal agenda rail state behavior", () => {
       />,
     ));
 
-    const testId = {
+    const testId = expectedRailTestId || {
       events: "events-agenda-rail",
       bills: "bills-agenda-rail",
-      deadlines: "deadlines-agenda-rail",
     }[view];
     const agendaRail = await screen.findByTestId(testId);
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(within(agendaRail).getAllByText(expectedText).length).toBeGreaterThan(0);
     expect(agendaRail.getAttribute("data-calendar-local-scroll")).toBe("true");
-    if (view === "events" || view === "bills") {
-      expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
-    }
+    expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
   });
 });

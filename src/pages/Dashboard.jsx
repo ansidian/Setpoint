@@ -170,7 +170,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const seed = liveData.liveDeadlines;
-    if (!seed || (!seed.ctm && !seed.todoist)) return;
+    if (!seed || !Array.isArray(seed.upcoming)) return;
     if (seededCalendarDeadlinesRef.current === seed) return;
     seededCalendarDeadlinesRef.current = seed;
     seedCalendarDeadlineRangeData?.(seed);

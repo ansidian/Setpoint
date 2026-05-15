@@ -87,7 +87,7 @@ export const TRIAGE_SOUND_TRIGGER_ROWS = [
   {
     key: TRIAGE_SOUND_TRIGGER_KEYS.TASK_COMPLETED,
     label: "Task completed",
-    description: "Todoist or CTM items marked complete from the dashboard.",
+    description: "Todoist-backed deadlines marked complete from the dashboard.",
   },
 ];
 

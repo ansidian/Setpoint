@@ -483,24 +483,23 @@ describe("CalendarModal agenda scroll and selection behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         focusItemId="todo-1"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-              { id: "todo-2", title: "Second task", due_date: "2026-04-20", due_time: "11:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
+            { id: "todo-2", title: "Second task", due_date: "2026-04-20", due_time: "11:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
+          ],
         }}
       />,
     ));
 
-    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    const agendaRail = screen.getByTestId("events-agenda-rail");
     expect(within(agendaRail).getAllByText("First task").length).toBeGreaterThan(0);
     fireEvent.click(within(agendaRail).getAllByTestId("calendar-agenda-deadline-row")[1]);
     expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Second task");

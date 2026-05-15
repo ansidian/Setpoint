@@ -42,7 +42,6 @@ export default function CalendarGrid({
   setSelectedDay,
   setSelectedDateKey,
   setSelectedItemId,
-  setDeadlineEditor,
   eventQuickActions,
   deadlineQuickActions,
   ghostPreview,
@@ -64,7 +63,6 @@ export default function CalendarGrid({
   onShakeFloatingEditor,
   onDirectDateAction,
   onDirectItemAction,
-  showCompletedDeadlines = true,
 }) {
   const gridShellRef = useRef(null);
   const gridBodyRef = useRef(null);
@@ -86,7 +84,7 @@ export default function CalendarGrid({
     ? (floatingDetailItemId != null ? String(floatingDetailItemId) : null)
     : selectedItemId;
   const eventDateCells = view === "events";
-  const shouldFilterCompletedDeadlines = view === "deadlines" && !showCompletedDeadlines;
+  const shouldFilterCompletedDeadlines = false;
   const eventsPlanningQuickActions = useMemo(() => {
     if (!eventDateCells) return null;
     return {
@@ -97,7 +95,7 @@ export default function CalendarGrid({
       },
     };
   }, [deadlineQuickActions, eventDateCells, eventQuickActions]);
-  const itemQuickActions = eventDateCells ? eventsPlanningQuickActions : view === "deadlines" ? deadlineQuickActions : null;
+  const itemQuickActions = eventDateCells ? eventsPlanningQuickActions : null;
   const selectedCellKey = gridSelectedDateKey;
   const currentSelectionKey = gridSelectedDateKey && gridSelectedItemId != null
     ? `${gridSelectedDateKey}:${gridSelectedItemId}`
@@ -213,9 +211,6 @@ export default function CalendarGrid({
 
     closeEventEditor();
     if (onCloseFloatingDetail?.() === false) return;
-    if (view === "deadlines") {
-      setDeadlineEditor(null);
-    }
     if (eventDateCells) eventQuickActions?.clearEventSelection?.();
 
     setSelectedDay(day);
@@ -243,9 +238,6 @@ export default function CalendarGrid({
       return;
     }
     closeEventEditor();
-    if (view === "deadlines") {
-      setDeadlineEditor(null);
-    }
     if (eventDateCells && !anchorMeta?.preserveEventSelection) eventQuickActions?.clearEventSelection?.();
     setSelectedDay(day);
     if (dateKey) setSelectedDateKey?.(dateKey);
@@ -272,7 +264,8 @@ export default function CalendarGrid({
     }
     if (!layout.stacked && anchorMeta?.triggerElement) {
       onOpenFloatingDetail?.({
-        view: anchorMeta.detailView || view,
+        view,
+        detailKind: anchorMeta.detailKind || null,
         itemId: itemId != null ? String(itemId) : null,
         dateKey: anchorMeta.dateKey || dateKey || null,
         day,

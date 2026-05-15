@@ -48,10 +48,10 @@ export function preservedReanchorSide(current, nextDetail, nextView, nextDateKey
     || null;
 }
 
-export function floatingDetailTypeLabel(view) {
+export function floatingDetailTypeLabel(view, detailKind = null) {
+  if (detailKind === "deadline") return "Deadline";
   if (view === "events") return "Event";
   if (view === "bills") return "Bill";
-  if (view === "deadlines") return "Deadline";
   return "Item";
 }
 
@@ -71,12 +71,12 @@ function formatFloatingLabelDate(dateKey, viewYear, viewMonth, selectedDay) {
     : "Selected";
 }
 
-export function formatFloatingDetailLabel(view, dateKey, viewYear, viewMonth, selectedDay) {
-  return `${floatingDetailTypeLabel(view)} · ${formatFloatingLabelDate(dateKey, viewYear, viewMonth, selectedDay)}`;
+export function formatFloatingDetailLabel(view, dateKey, viewYear, viewMonth, selectedDay, detailKind = null) {
+  return `${floatingDetailTypeLabel(view, detailKind)} · ${formatFloatingLabelDate(dateKey, viewYear, viewMonth, selectedDay)}`;
 }
 
-export function formatFloatingEditorLabel(mode, view, dateKey, viewYear, viewMonth, selectedDay) {
+export function formatFloatingEditorLabel(mode, view, dateKey, viewYear, viewMonth, selectedDay, detailKind = null) {
   const action = mode === "create" ? "New" : "Edit";
-  const type = floatingDetailTypeLabel(view).toLowerCase();
+  const type = floatingDetailTypeLabel(view, detailKind).toLowerCase();
   return `${action} ${type} · ${formatFloatingLabelDate(dateKey, viewYear, viewMonth, selectedDay)}`;
 }

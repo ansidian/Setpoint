@@ -1,6 +1,6 @@
 # Architecture
 
-Personal executive assistant dashboard that consolidates emails, calendars, weather, Canvas LMS deadlines, Todoist tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and provider-backed email triage. Deployed on Render.
+Personal executive assistant dashboard that consolidates emails, calendars, weather, Todoist-backed deadlines/tasks, and finances into a current operational workspace. Single-user app built with React 19 + Express.js, backed by Turso (LibSQL) and provider-backed email triage. Deployed on Render.
 
 ## System Overview
 
@@ -22,7 +22,6 @@ graph TB
         iCloud[iCloud IMAP<br/>App Passwords]
         GCal[Google Calendar API]
         Weather[Pirate Weather API]
-        CTM[Canvas Task Manager API]
         Todoist[Todoist API]
         Actual[Actual Budget API]
         EmailAI[Email AI<br/>Anthropic or OpenAI]
@@ -30,18 +29,16 @@ graph TB
 
     subgraph Storage
         Turso[(Turso / LibSQL<br/>Main DB)]
-        TursoCTM[(Turso / LibSQL<br/>CTM Read-Only)]
     end
 
     SPA <-->|/api/*| MW
     MW --> Routes
     Routes --> Pipeline
     Scheduler -->|cron triggers| Pipeline
-    Pipeline --> Gmail & iCloud & GCal & Weather & CTM & Todoist & Actual
+    Pipeline --> Gmail & iCloud & GCal & Weather & Todoist & Actual
     Pipeline --> EmailAI
     Routes --> Turso
     Pipeline --> Turso
-    CTM -.->|reads| TursoCTM
 ```
 
 ## Tech Stack
@@ -58,7 +55,7 @@ graph TB
 | Email | Gmail API, ImapFlow (iCloud) | Multi-account email fetching |
 | Calendar | Google Calendar API | Event sync (reuses Gmail OAuth) |
 | Weather | Pirate Weather | Forecast data |
-| Tasks | CTM API, Todoist API | Academic deadlines + personal tasks |
+| Tasks | Todoist API | Deadline items + personal tasks |
 | Finance | @actual-app/api behind provider worker + EA mirrors | Budget tracking, bill management |
 | Auth | bcrypt, WebAuthn passkeys, cookie sessions | Password plus passkey login, session tokens |
 | Encryption | AES-256-GCM | Credentials encrypted at rest |
@@ -72,7 +69,7 @@ ea-dashboard/
 │   ├── index.js                    # Express entry: middleware, routes, migrations, scheduler
 │   ├── briefing/
 │   │   ├── email-service.js        # Email read/unread/trash/snooze/dismiss, FTS search, body fetch
-│   │   ├── tasks-service.js        # Complete task (CTM+Todoist), CTM status, tombstone dismiss, Todoist CRUD
+│   │   ├── tasks-service.js        # Complete Todoist tasks, tombstone dismiss, Todoist CRUD
 │   │   ├── bills-service.js        # Actual Budget wrappers + provider-backed bill extraction
 │   │   ├── dev-service.js          # Dev-only helpers (reindex emails)
 │   │   ├── triage-worker.js        # Durable incoming-email triage worker
@@ -84,7 +81,6 @@ ea-dashboard/
 │   │   ├── icloud.js               # IMAP connection pool, fetch, mark-read, trash
 │   │   ├── calendar.js             # Google Calendar: today/tomorrow/next-week ranges
 │   │   ├── weather.js              # Pirate Weather: forecast + geocoding
-│   │   ├── ctm.js                  # Canvas deadlines: fetch + status update
 │   │   ├── todoist.js              # Todoist tasks: fetch + complete
 │   │   ├── tombstones.js           # Hydrate completed-but-visible recurring Todoist rows
 │   │   ├── snooze-waker.js         # Periodic unsnoozer: resurfaces emails past their until_ts
@@ -109,7 +105,6 @@ ea-dashboard/
 │   │   └── auth.js                 # Cookie-session + scoped Bearer-token validation
 │   └── db/
 │       ├── connection.js           # Turso client (remote prod, local dev file)
-│       ├── ctm-connection.js       # Read-only CTM database client
 │       ├── migrate.js              # Sequential SQL migration runner
 │       └── migrations/             # Numbered SQL files auto-run in order
 ├── src/
@@ -143,8 +138,7 @@ ea-dashboard/
 │   │   ├── email/                  # EmailTabSection, EmailSection, LiveEmail, EmailRow, Body
 │   │   ├── inbox/                  # Inbox-style grouped email views
 │   │   ├── calendar/               # ScheduleSection (today/tomorrow/next-week, NowMarker)
-│   │   ├── deadlines/              # DeadlinesSection (merged CTM + Todoist + tombstones)
-│   │   ├── ctm/                    # CTMCard (status spine), CTMSection
+│   │   ├── deadlines/              # Dashboard deadline rail and detail views
 │   │   ├── todoist/                # AddTaskPanel and Todoist-specific UI
 │   │   ├── bills/                  # BillsPaymentsSection, BillBadge (Actual Budget send)
 │   │   ├── settings/               # Settings page sub-components
@@ -199,10 +193,10 @@ graph TD
     EmailBody --> EmailIframe
     EmailBody --> BillBadge
 
-    DeadlinesSection --> CTMCard
-
     BillsPaymentsSection --> BillBadge
 ```
+
+The calendar modal has two top-level workspaces: Events and Bills. Deadlines are not a standalone workspace; Todoist-backed deadline items render as an Events overlay with Events-owned detail, floating-detail, create, edit, and completion flows.
 
 ### State Management
 
@@ -342,7 +336,7 @@ Gmail OAuth: separate CSRF token flow (UUID, 10-min TTL, one-time use) stored in
 
 ## Current Dashboard Pipeline
 
-Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, CTM, Todoist, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
+Email data flows through the durable email index, triage rows, snapshot windows/items, snooze state, dismissed-email state, and current-data cache. Weather, calendar, Todoist deadlines/tasks, bills, Actual, and notes are fetched through domain services and assembled into the `/api/dashboard/current` envelope.
 
 ```mermaid
 flowchart TD
@@ -382,7 +376,6 @@ Model selection is user-configurable through `/api/ea/models`, defaults to Anthr
 | iCloud | `server/briefing/icloud.js` | IMAP (imap.mail.me.com:993) | App-specific password | Empty array, continue |
 | Calendar | `server/briefing/calendar.js` | Google Calendar API | Reuses Gmail OAuth | Empty array, continue |
 | Weather | `server/briefing/weather.js` | Pirate Weather | API key | Cached data or placeholder |
-| CTM | `server/briefing/ctm.js` | Custom REST API | Bearer token | Empty array, continue |
 | Todoist | `server/briefing/todoist.js` | Todoist REST v1 | Bearer token (encrypted) | Empty array, continue |
 | Actual Budget | `server/briefing/actual.js` + `server/briefing/bills-service.js` mirrors | @actual-app/api SDK in persistent worker | Server URL + password (encrypted) | Mirrored data, degraded sync health |
 | Email triage AI | `server/briefing/triage-worker.js` | Anthropic Messages API or OpenAI Responses API | Provider API key | Durable job remains retryable or falls back by mode |
@@ -691,8 +684,7 @@ Exact paths drift; the source of truth is `server/routes/briefing/*.js` (per-dom
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/briefing/complete-task/:taskId` | Complete task (Todoist + CTM) |
-| PATCH | `/api/briefing/task-status/:taskId` | Update CTM task status |
+| POST | `/api/briefing/complete-task/:taskId` | Complete Todoist-backed deadline/task |
 
 ### Actual Budget
 

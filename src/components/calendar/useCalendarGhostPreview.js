@@ -44,7 +44,7 @@ export default function useCalendarGhostPreview({
       : null
   ), [eventEditor, view, viewData?.events]);
   const deadlineGhostPreview = useMemo(() => {
-    if (!["deadlines", "events"].includes(view) || !deadlineEditor?.mode || !deadlineDraftPreview) return null;
+    if (view !== "events" || !deadlineEditor?.mode || !deadlineDraftPreview) return null;
     return buildDeadlineGhostPreview({
       draft: deadlineDraftPreview,
       dateItems: computed.itemsByDate?.[deadlineDraftPreview.dueDate],

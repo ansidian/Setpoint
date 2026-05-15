@@ -210,7 +210,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
       anchorElement: element,
       sourceCellElement: element,
       anchorKind: "agenda-deadline-row",
-      detailView: "deadlines",
+      detailKind: "deadline",
     });
   }
 

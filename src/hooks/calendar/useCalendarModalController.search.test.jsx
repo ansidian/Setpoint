@@ -59,7 +59,7 @@ function Harness(props) {
 function wrap(node) {
   return (
     <DashboardProvider
-      briefing={{ emails: { accounts: [] }, ctm: { upcoming: [] }, todoist: { upcoming: [] } }}
+      briefing={{ emails: { accounts: [] }, deadlines: { upcoming: [] } }}
       setBriefing={() => {}}
       setCalendarDeadlines={() => {}}
     >
@@ -426,19 +426,91 @@ describe("useCalendarModalController search wiring", () => {
 
     const result = {
       type: "deadline",
-      itemId: "todo-1",
+      itemId: "deadline:todo-1:2026-05-12",
       itemDate: "2026-05-12",
       status: "open",
       activation: {
         view: "events",
-        detailView: "deadlines",
+        detailKind: "deadline",
         dateKey: "2026-05-12",
-        itemId: "todo-1",
+        itemId: "deadline:todo-1:2026-05-12",
       },
-      payload: { id: "todo-1", source: "todoist", status: "open" },
+      payload: { id: "todo-1", status: "open" },
     };
 
     expect(latestShellProps.search.isResultNavigable(result)).toBe(true);
+  });
+
+  it("opens hidden-overlay deadline search results without mutating the overlay preference", async () => {
+    window.localStorage.setItem("calendar:eventsDeadlineOverlay", "false");
+    renderHarness();
+    const row = document.createElement("button");
+    document.body.appendChild(row);
+
+    await waitFor(() => {
+      expect(latestShellProps.viewData.deadlineOverlay.enabled).toBe(false);
+    });
+
+    const result = {
+      type: "deadline",
+      itemId: "deadline:todo-1:2026-05-12",
+      itemDate: "2026-05-12",
+      title: "Hidden deadline",
+      status: "complete",
+      activation: {
+        view: "events",
+        detailKind: "deadline",
+        dateKey: "2026-05-12",
+        itemId: "deadline:todo-1:2026-05-12",
+      },
+      payload: {
+        id: "todo-1",
+        dueDate: "2026-05-12",
+        status: "complete",
+      },
+    };
+
+    const context = latestShellProps.search.getResultActivationContext(result, 0, {
+      anchorElement: row,
+      sourceCellElement: row,
+    });
+
+    expect(context).toMatchObject({ anchorKind: "search-result-row" });
+
+    act(() => {
+      latestShellProps.search.activateResult(result, context);
+    });
+
+    await waitFor(() => {
+      expect(latestShellProps.floatingDetail).toMatchObject({
+        open: true,
+        mode: "detail",
+        view: "events",
+        detailKind: "deadline",
+        itemId: "deadline:todo-1:2026-05-12",
+        dateKey: "2026-05-12",
+        anchorKind: "search-result-row",
+        itemsSnapshot: [expect.objectContaining({
+          id: "todo-1",
+          agendaItemId: "deadline:todo-1:2026-05-12",
+          status: "complete",
+        })],
+      });
+      expect(latestShellProps.viewData.deadlineOverlay.enabled).toBe(false);
+      expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
+    });
+
+    act(() => {
+      latestShellProps.onCloseFloatingDetail();
+    });
+
+    await waitFor(() => {
+      expect(latestShellProps.floatingDetail).toBeNull();
+      expect(latestShellProps.viewData.deadlineOverlay.enabled).toBe(false);
+      expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
+    });
+
+    row.remove();
   });
 
   it("opens floating detail from the search row for mirrored events outside the current grid", async () => {

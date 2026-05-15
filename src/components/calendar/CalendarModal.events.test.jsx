@@ -577,11 +577,11 @@ describe("CalendarModal event grid behavior", () => {
       deadlinesData: {},
     },
     {
-      view: "deadlines",
-      expectedRailTestId: "deadlines-agenda-rail",
-      expectedEmptyText: "No Deadlines",
+      view: "events",
+      expectedRailTestId: "events-agenda-rail",
+      expectedEmptyText: "No Events",
       billsData: {},
-      deadlinesData: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      deadlinesData: { upcoming: [] },
     },
   ])("renders the selected-empty-day agenda treatment for $view", async ({
     view,

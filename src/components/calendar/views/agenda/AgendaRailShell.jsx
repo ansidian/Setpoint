@@ -14,17 +14,23 @@ function findRow(rowRefs, itemId, dateKey) {
   if (!itemIdText || !dateKeyText) return null;
   const simpleKeyPrefix = `${itemIdText}-${dateKeyText}`;
   const deadlineKeyNeedle = `:${itemIdText}-${dateKeyText}`;
+  const keyMatchesDate = (key) => (
+    key === itemIdText
+    || key.endsWith(`-${dateKeyText}`)
+    || key.endsWith(`:${dateKeyText}`)
+    || itemIdText.endsWith(`:${dateKeyText}`)
+  );
   for (const [key, row] of rowRefs.current.entries()) {
     if (!row?.isConnected) continue;
-    if (key.startsWith(simpleKeyPrefix) || key.includes(deadlineKeyNeedle)) return row;
+    if (key === itemIdText || key.startsWith(simpleKeyPrefix) || key.includes(deadlineKeyNeedle)) return row;
     const itemElement = row.querySelector?.("[data-item-id]");
-    if (itemElement && String(itemElement.getAttribute("data-item-id")) === itemIdText && key.endsWith(`-${dateKeyText}`)) {
+    if (itemElement && String(itemElement.getAttribute("data-item-id")) === itemIdText && keyMatchesDate(key)) {
       return row;
     }
     const matchIds = String(itemElement?.getAttribute("data-calendar-match-item-ids") || "")
       .split(/\s+/)
       .filter(Boolean);
-    if (matchIds.includes(itemIdText) && key.endsWith(`-${dateKeyText}`)) {
+    if (matchIds.includes(itemIdText) && keyMatchesDate(key)) {
       return row;
     }
   }

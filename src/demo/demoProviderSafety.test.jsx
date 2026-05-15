@@ -36,7 +36,7 @@ describe("demo mode provider and external navigation safety", () => {
     const open = vi.fn();
     vi.stubGlobal("open", open);
 
-    openInNewTab("https://canvas.example.test");
+    openInNewTab("https://provider.example.test");
     const { container } = render(<div>{linkifyText("Read https://docs.example.test", "#89b4fa")}</div>);
 
     expect(open).not.toHaveBeenCalled();

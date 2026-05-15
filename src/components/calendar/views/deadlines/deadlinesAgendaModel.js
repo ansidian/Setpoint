@@ -1,11 +1,10 @@
 import { buildDisplayedMonthGroups, sparseVisibleGroups } from "../agenda/agendaDateModel.js";
 import {
+  DEADLINE_COLOR,
+  deadlineAccentFor,
   getDayState,
   getDeadlineSelectionId,
   normalizeStatus,
-  SOURCE_COLORS,
-  sourceLabelFor,
-  sourceOf,
   statusLabel,
 } from "./deadlinesModel.js";
 
@@ -14,7 +13,7 @@ function deadlineTitle(task) {
 }
 
 function deadlineSubtitle(task) {
-  return task.project_name || task.class_name || sourceLabelFor(task);
+  return task.project_name || task.class_name || "Deadline";
 }
 
 function deadlineTimeLabel(task) {
@@ -22,23 +21,22 @@ function deadlineTimeLabel(task) {
 }
 
 function toAgendaDeadline(task, dateKey) {
-  const source = sourceOf(task);
   const status = normalizeStatus(task.status);
-  const sourceColor = SOURCE_COLORS[source] || "#89b4fa";
+  const accent = deadlineAccentFor(task, DEADLINE_COLOR);
   const agendaItemId = getDeadlineSelectionId(task, dateKey);
   return {
     ...task,
     agendaDateKey: dateKey,
     agendaItemId,
-    agendaKey: `${source}:${task.id}-${dateKey}`,
+    agendaKey: agendaItemId,
     agendaTitle: deadlineTitle(task),
     agendaSubtitle: deadlineSubtitle(task),
     agendaMeta: deadlineTimeLabel(task),
     agendaStatus: statusLabel(status),
-    agendaDotColor: sourceColor,
-    agendaSelectedColor: sourceColor,
+    agendaDotColor: accent,
+    agendaSelectedColor: accent,
     agendaComplete: status === "complete",
-    agendaSource: source,
+    agendaSource: "deadline",
   };
 }
 

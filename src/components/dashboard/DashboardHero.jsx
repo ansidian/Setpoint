@@ -69,7 +69,7 @@ export default function DashboardHero({
     : compact ? "12px 18px 10px" : "14px 20px 12px";
   const WeatherIcon = (weather?.icon && WEATHER_ICONS[weather.icon]) || WEATHER_ICONS.Sun;
   const quickActions = [
-    { label: "New Task", icon: CheckCircle, action: "task" },
+    { label: "New Deadline", icon: CheckCircle, action: "deadline" },
     { label: "Add Event", icon: CalendarPlus, action: "event" },
   ];
 

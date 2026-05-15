@@ -38,7 +38,7 @@ describe("demo mode read adapter", () => {
 
     expect(current.fetchedAt).toBe("2026-05-12T15:30:00.000Z");
     expect(current.weather).toMatchObject({ temp: expect.any(Number), icon: expect.any(String) });
-    expect(current.deadlines.todoist.upcoming[0].due_date).toBe("2026-05-12");
+    expect(current.deadlines.upcoming[0].due_date).toBe("2026-05-13");
     expect(current.activeSnapshot.lanes.needs_attention[0]).toMatchObject({
       uid: "demo-email-budget",
       subject: expect.stringContaining("Budget"),
@@ -51,7 +51,7 @@ describe("demo mode read adapter", () => {
       title: "Portfolio review prep",
       itemDate: "2026-05-12",
     });
-    expect(deadlines.todoist.upcoming.some((task) => task.title === "Send portfolio demo link")).toBe(true);
+    expect(deadlines.upcoming.some((task) => task.title === "Send portfolio demo link")).toBe(true);
     expect(bills.schedules.some((bill) => bill.payee === "Demo Electric")).toBe(true);
     expect(settings).toMatchObject({ email_triage_mode: "auto", demo: true });
     expect(accounts.accounts).toHaveLength(2);
@@ -78,8 +78,8 @@ describe("demo mode read adapter", () => {
     const apiTomorrow = await importDemoApi("2026-05-13T15:30:00.000Z");
     const tomorrow = await apiTomorrow.getCurrentDashboard();
 
-    expect(today.deadlines.todoist.upcoming[0].due_date).toBe("2026-05-12");
-    expect(tomorrow.deadlines.todoist.upcoming[0].due_date).toBe("2026-05-13");
+    expect(today.deadlines.upcoming.some((task) => task.due_date === "2026-05-12")).toBe(true);
+    expect(tomorrow.deadlines.upcoming.some((task) => task.due_date === "2026-05-13")).toBe(true);
     expect(today.calendar[0].startMs).not.toBe(tomorrow.calendar[0].startMs);
   });
 });

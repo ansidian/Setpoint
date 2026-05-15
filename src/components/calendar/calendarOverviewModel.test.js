@@ -62,42 +62,34 @@ describe("calendarOverviewModel", () => {
     ]);
   });
 
-  it("counts current-week open deadlines from source data", () => {
+  it("defaults stale workspace overview values to Events", () => {
     const model = getOverviewModel({
-      view: "deadlines",
+      view: "legacy",
       viewYear: 2026,
       viewMonth: 4,
       currentYear: 2026,
       currentMonth: 4,
       todayDate: 6,
-      itemsByDay: {
-        6: { totalCount: 2, activeCount: 1, completedCount: 1, activeItems: [{}] },
-        7: { totalCount: 1, activeCount: 1, completedCount: 0, activeItems: [{}] },
+      itemsByDay: {},
+      computed: {
+        totalEvents: 0,
+        allDayEvents: 0,
       },
-      computed: {},
       data: {
-        ctm: {
-          upcoming: [
-            { id: "today", due_date: "2026-05-06" },
-            { id: "done", due_date: "2026-05-06", status: "complete" },
-          ],
-        },
-        todoist: {
-          upcoming: [
-            { id: "week", due_date: "2026-05-09" },
-            { id: "outside", due_date: "2026-05-13" },
-          ],
-        },
+        upcoming: [
+          { id: "today", due_date: "2026-05-06" },
+          { id: "week", due_date: "2026-05-09" },
+        ],
       },
     });
 
     expect(model.spotlight).toMatchObject({
-      label: "Open this month",
-      value: "2",
+      label: "Events this month",
+      value: "0",
     });
     expect(model.stats).toEqual([
-      expect.objectContaining({ label: "Due today", value: "1" }),
-      expect.objectContaining({ label: "Due this week", value: "2" }),
+      expect.objectContaining({ label: "Active days", value: "0" }),
+      expect.objectContaining({ label: "All-day", value: "0" }),
     ]);
   });
 });

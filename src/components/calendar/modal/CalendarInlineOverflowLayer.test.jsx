@@ -17,13 +17,13 @@ describe("CalendarInlineOverflowLayer", () => {
           leadingColumnWidth: 35,
           items: [
             {
-              id: "canvas:ctm-done",
+              id: "deadline:todo-done:2026-05-12",
               leadingLabel: "11:59 PM",
               title: "Teamwork Assessment",
               complete: true,
               statusIcon: "complete",
-              detailView: "deadlines",
-              sourceItem: { id: "ctm-done" },
+              detailKind: "deadline",
+              sourceItem: { id: "todo-done" },
             },
             {
               id: "todoist:todo-done",
@@ -31,7 +31,7 @@ describe("CalendarInlineOverflowLayer", () => {
               title: "Project Deliverables",
               complete: true,
               statusIcon: "complete",
-              detailView: "deadlines",
+              detailKind: "deadline",
               sourceItem: { id: "todo-done" },
             },
           ],
@@ -58,7 +58,7 @@ describe("CalendarInlineOverflowLayer", () => {
 
     fireEvent.click(chips[1]);
     expect(onSelectItem).toHaveBeenCalledWith("todoist:todo-done", expect.objectContaining({
-      detailView: "deadlines",
+      detailKind: "deadline",
       dateKey: "2026-05-12",
     }));
   });

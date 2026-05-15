@@ -296,7 +296,7 @@ describe("triage preflight engine", () => {
     expect(evaluateTriagePreflight(email({
       from_name: "Render",
       from_address: "notify@render.com",
-      subject: "Server failure detected on Canvas-LMS-Task-Manager",
+      subject: "Server failure detected on Course Task Manager",
     }))).toMatchObject({
       action: "finalize",
       lane: "needs_attention",

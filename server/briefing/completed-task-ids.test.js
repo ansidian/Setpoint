@@ -27,37 +27,32 @@ describe("loadCompletedTaskIds", () => {
     testState.db.current = null;
   });
 
-  it("returns only ids from undated completion rows", async () => {
-    await seedCompletedTask(testState.db.current, { todoist_id: "open-1" });
-    await seedCompletedTask(testState.db.current, { todoist_id: "open-2" });
+  it("does not treat dated completed occurrences as active Todoist completion ids", async () => {
     await seedCompletedTask(testState.db.current, {
-      todoist_id: "tombstone-1",
+      todoist_id: "done-1",
       due_date: "2026-04-18",
-      snapshot_json: JSON.stringify({ id: "tombstone-1", title: "Done" }),
+      snapshot_json: JSON.stringify({ id: "done-1", title: "Done" }),
     });
 
     const ids = await loadCompletedTaskIds("user-1", []);
 
-    expect(ids).toEqual(new Set(["open-1", "open-2"]));
+    expect(ids).toEqual(new Set());
   });
 
-  it("reconciles un-completed tasks by removing only undated rows, not tombstones", async () => {
-    await seedCompletedTask(testState.db.current, { todoist_id: "open-a" });
-    await seedCompletedTask(testState.db.current, { todoist_id: "open-b" });
+  it("does not delete dated completed occurrences when the live task id reappears", async () => {
     await seedCompletedTask(testState.db.current, {
-      todoist_id: "tombstone-a",
+      todoist_id: "done-a",
       due_date: "2026-04-18",
-      snapshot_json: JSON.stringify({ id: "tombstone-a", title: "Done" }),
+      snapshot_json: JSON.stringify({ id: "done-a", title: "Done" }),
     });
 
     const ids = await loadCompletedTaskIds("user-1", [
-      { id: "open-a" },
-      { id: "tombstone-a" },
+      { id: "done-a" },
     ]);
     const rows = await listCompletedTasks(testState.db.current);
 
-    expect(ids).toEqual(new Set(["open-b"]));
-    expect(rows.map((row) => row.todoist_id)).toEqual(["open-b", "tombstone-a"]);
-    expect(rows.find((row) => row.todoist_id === "tombstone-a").due_date).toBe("2026-04-18");
+    expect(ids).toEqual(new Set());
+    expect(rows.map((row) => row.todoist_id)).toEqual(["done-a"]);
+    expect(rows[0].due_date).toBe("2026-04-18");
   });
 });

@@ -1,6 +1,6 @@
 # EA Dashboard Agent Map
 
-Personal executive-assistant dashboard for one owner. It triages email, fetches calendar, weather, Canvas/CTM deadlines, Todoist tasks, and Actual Budget finances. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
+Personal executive-assistant dashboard for one owner. It triages email, fetches calendar, weather, Todoist-backed deadlines/tasks, and Actual Budget finances. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
 
 Use this file as a map, not the full manual. Top-level tracked docs are the source of truth for standing product and system guidance. Linear issues are the source of truth for active executable work when an issue exists or the user intends Codex execution. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
 

@@ -1,6 +1,11 @@
 export const DEADLINE_OVERLAY_STORAGE_KEY = "calendar:eventsDeadlineOverlay";
 export const COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY = "calendar:eventsCompletedDeadlines";
 
+export function normalizeCalendarWorkspaceView(view, fallback = "events") {
+  if (view === "events" || view === "bills") return view;
+  return fallback === "bills" ? "bills" : "events";
+}
+
 export function readStoredBoolean(storage, key, fallback) {
   if (!storage) return fallback;
   try {
@@ -30,10 +35,8 @@ export function isDeadlineCreateFocusRequest({
 }) {
   return !!open
     && focusItemId === "new"
-    && (
-      view === "deadlines"
-      || (view === "events" && forceDeadlineOverlay)
-    );
+    && view === "events"
+    && !!forceDeadlineOverlay;
 }
 
 export function initialDeadlineEditorState({
@@ -70,6 +73,7 @@ export function dashboardDetailFocusRequest({
   openRequestId = 0,
   usesFloatingEditor = false,
   view,
+  forceDeadlineOverlay = false,
 }) {
   if (!open || !focusOpenDetail || !focusItemId || focusItemId === "new" || !usesFloatingEditor) {
     return null;
@@ -77,12 +81,14 @@ export function dashboardDetailFocusRequest({
   const dateKey = focusDate || activeSelectedDateKey;
   if (!dateKey) return null;
   const itemId = String(focusItemId);
+  const detailKind = view === "events" && forceDeadlineOverlay ? "deadline" : null;
   return {
     openRequestId,
-    view,
+    view: normalizeCalendarWorkspaceView(view),
+    ...(detailKind ? { detailKind } : {}),
     dateKey,
     itemId,
-    requestKey: `${openRequestId}:${view}:${dateKey}:${itemId}`,
+    requestKey: `${openRequestId}:${normalizeCalendarWorkspaceView(view)}:${detailKind || "item"}:${dateKey}:${itemId}`,
     attempts: 0,
   };
 }

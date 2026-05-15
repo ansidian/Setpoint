@@ -182,7 +182,6 @@ function publishBillsCurrentChange(userId, previousRow, nextPayload, {
 export async function applyDeadlineCurrentStatus(userId, taskId, status, {
   dbClient = db,
   now = new Date(),
-  source = null,
 } = {}) {
   if (!userId || taskId == null || !status) return { updated: false };
   const result = await dbClient.execute({
@@ -196,21 +195,14 @@ export async function applyDeadlineCurrentStatus(userId, taskId, status, {
 
   const payload = parsePayload(row, EMPTY_DEADLINES);
   let updated = false;
-  const sections = source === "todoist" ? ["todoist"] : source === "ctm" ? ["ctm"] : ["ctm", "todoist"];
-  for (const section of sections) {
-    const upcoming = payload?.[section]?.upcoming;
-    if (!Array.isArray(upcoming)) continue;
-    let sectionUpdated = false;
-    for (const task of upcoming) {
-      if (String(task?.id) !== String(taskId)) continue;
-      task.status = status;
-      delete task._completing;
-      sectionUpdated = true;
-      updated = true;
-    }
-    if (sectionUpdated) {
-      payload[section].stats = computeDeadlineStats(upcoming);
-    }
+  for (const task of payload?.upcoming || []) {
+    if (String(task?.id) !== String(taskId)) continue;
+    task.status = status;
+    delete task._completing;
+    updated = true;
+  }
+  if (updated) {
+    payload.stats = computeDeadlineStats(payload.upcoming);
   }
   if (!updated) return { updated: false };
 
@@ -650,28 +642,29 @@ async function hydrateCurrentReminderState(userId, {
 } = {}) {
   const calendarItems = Array.isArray(calendar) ? calendar : [];
   const deadlinePayload = deadlines || EMPTY_DEADLINES;
-  const todoistItems = Array.isArray(deadlinePayload?.todoist?.upcoming)
-    ? deadlinePayload.todoist.upcoming
+  const deadlineItems = Array.isArray(deadlinePayload?.upcoming)
+    ? deadlinePayload.upcoming
     : [];
   try {
-    const [hydratedCalendar, hydratedTodoist] = await Promise.all([
+    const [hydratedCalendar, hydratedDeadlines] = await Promise.all([
       hydrateCalendarEventsWithReminderState(userId, calendarItems, { dbClient, now }),
-      hydrateTodoistTasksWithReminderState(userId, todoistItems, { dbClient, now }),
+      hydrateTodoistTasksWithReminderState(userId, deadlineItems, { dbClient, now }),
     ]);
     return {
       calendar: hydratedCalendar,
       deadlines: {
         ...deadlinePayload,
-        todoist: {
-          ...(deadlinePayload?.todoist || EMPTY_DEADLINES.todoist),
-          upcoming: hydratedTodoist,
-        },
+        upcoming: hydratedDeadlines,
       },
     };
   } catch (err) {
     console.error("[Dashboard] reminder state hydration failed:", err.message);
     return { calendar, deadlines };
   }
+}
+
+function usablePayloadForKey(key, row, fallback) {
+  return hasUsablePayload(key, row) ? parsePayload(row, fallback) : fallback;
 }
 
 async function composeCurrentDashboardResponse(userId, rows, {
@@ -682,7 +675,7 @@ async function composeCurrentDashboardResponse(userId, rows, {
   dbClient = db,
   now = new Date(),
 } = {}) {
-  const billsPayload = parsePayload(rows.bills_current, {
+  const billsPayload = usablePayloadForKey("bills_current", rows.bills_current, {
     bills: [],
     allSchedules: [],
     payeeMap: {},
@@ -694,12 +687,12 @@ async function composeCurrentDashboardResponse(userId, rows, {
   if (activeSnapshotHealth) nextProviderHealth.activeSnapshot = activeSnapshotHealth;
   const fetchedAt = new Date().toISOString();
   const hydratedReminderPayloads = await hydrateCurrentReminderState(userId, {
-    calendar: parsePayload(rows.calendar_current, []),
-    deadlines: parsePayload(rows.deadlines_current, EMPTY_DEADLINES),
+    calendar: usablePayloadForKey("calendar_current", rows.calendar_current, []),
+    deadlines: usablePayloadForKey("deadlines_current", rows.deadlines_current, EMPTY_DEADLINES),
   }, { dbClient, now });
 
   return {
-    weather: parsePayload(rows.weather_current, null),
+    weather: usablePayloadForKey("weather_current", rows.weather_current, null),
     calendar: hydratedReminderPayloads.calendar,
     deadlines: hydratedReminderPayloads.deadlines,
     bills: billsPayload.bills || [],

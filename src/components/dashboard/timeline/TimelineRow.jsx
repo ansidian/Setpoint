@@ -26,7 +26,6 @@ import {
 import { daysUntil } from "../../../lib/bill-utils";
 import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 import {
-  DEADLINE_SOURCE_COLORS,
   PRIORITY_COLOR,
 } from "./timeline-helpers";
 
@@ -105,15 +104,15 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
       : "rgba(205,214,244,0.55)";
     leftLabel = deadline.due_time || "11:59p";
     title = deadline.title;
-    sub = deadline.class_name || deadline.source || "";
-    meta = deadline.source === "todoist" ? "Todoist" : deadline.source === "canvas" ? "Canvas" : "CTM";
-    if (deadline.source === "todoist" && PRIORITY_COLOR[deadline.priority]) {
+    sub = deadline.class_name || deadline.project_name || "";
+    meta = "Deadline";
+    if (PRIORITY_COLOR[deadline.priority]) {
       priorityLevel = deadline.priority;
     }
-    if (deadline.source === "todoist" && deadline.status !== "complete") {
+    if (deadline.status !== "complete") {
       overdueText = overdueLabel(item.dueAtMs, now);
     }
-    railDotColor = DEADLINE_SOURCE_COLORS[deadline.source] || DEADLINE_SOURCE_COLORS.canvas;
+    railDotColor = priorityLevel ? PRIORITY_COLOR[priorityLevel] : accent;
     jumpPayload = { kind: "deadline", id: deadline.id, data: deadline };
   } else {
     return null;

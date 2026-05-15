@@ -7,32 +7,26 @@ function buildAgenda(showCompleted) {
     viewYear: 2026,
     viewMonth: 4,
     data: {
-      ctm: { upcoming: [] },
-      todoist: {
-        upcoming: [
-          {
-            id: "open-1",
-            title: "Open deadline",
-            due_date: "2026-05-05",
-            source: "todoist",
-            status: "open",
-          },
-          {
-            id: "done-1",
-            title: "Completed deadline",
-            due_date: "2026-05-05",
-            source: "todoist",
-            status: "complete",
-          },
-          {
-            id: "done-2",
-            title: "Completed only day",
-            due_date: "2026-05-06",
-            source: "todoist",
-            status: "complete",
-          },
-        ],
-      },
+      upcoming: [
+        {
+          id: "open-1",
+          title: "Open deadline",
+          due_date: "2026-05-05",
+          status: "open",
+        },
+        {
+          id: "done-1",
+          title: "Completed deadline",
+          due_date: "2026-05-05",
+          status: "complete",
+        },
+        {
+          id: "done-2",
+          title: "Completed only day",
+          due_date: "2026-05-06",
+          status: "complete",
+        },
+      ],
     },
   });
 

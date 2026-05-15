@@ -17,8 +17,19 @@ import {
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
 } from "./dashboardShellModel.js";
+import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
 export { DashboardBody };
 const InboxView = lazy(() => import("../inbox/InboxView"));
+
+function deadlineOccurrenceFocusId(taskOrId, dateKey) {
+  const id = typeof taskOrId === "object" ? taskOrId?.id : taskOrId;
+  const dueDate = typeof taskOrId === "object" ? taskOrId?.due_date : dateKey;
+  if (!id) return null;
+  const stringId = String(id);
+  if (stringId.startsWith("deadline:")) return stringId;
+  if (!dueDate) return stringId;
+  return `deadline:${stringId}:${dueDate}`;
+}
 
 export function RedesignShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
@@ -32,8 +43,6 @@ export function RedesignShell({
     handleAddTask,
     handleCompleteTask,
     handleDeleteTask,
-    handleDismissGhost,
-    handleUpdateTaskStatus,
   } = useDashboard();
   const [tab, setTab] = useState(() => {
     try {
@@ -152,7 +161,7 @@ export function RedesignShell({
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
     if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
   };
-  const openTodoistCreate = useCallback(() => {
+  const openDeadlineCreate = useCallback(() => {
     if (isMobile) {
       setAddTaskOpen(true);
       return;
@@ -161,10 +170,10 @@ export function RedesignShell({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile]);
   const changeCalendarView = (v) => {
-    setCalendarView(v);
-    try { localStorage.setItem("calendar:lastView", v); } catch { /* ignore */ }
-    if (v === "deadlines") loadCalendarDeadlines();
-    if (v === "bills") loadCalendarBills({ refreshLive: true });
+    const nextView = normalizeCalendarWorkspaceView(v);
+    setCalendarView(nextView);
+    try { localStorage.setItem("calendar:lastView", nextView); } catch { /* ignore */ }
+    if (nextView === "bills") loadCalendarBills({ refreshLive: true });
   };
 
   useEffect(() => {
@@ -233,9 +242,9 @@ export function RedesignShell({
       if (command.clearChord) {
         clearActionChord();
       }
-      if (command.action === "open-todoist-create") {
+      if (command.action === "open-deadline-create") {
         e.preventDefault();
-        openTodoistCreate();
+        openDeadlineCreate();
         return;
       }
       if (command.action === "open-event-create") {
@@ -261,7 +270,7 @@ export function RedesignShell({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyticsOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openTodoistCreate]);
+  }, [analyticsOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate]);
 
   const { accent } = customize;
   const briefing = bd.briefing;
@@ -324,7 +333,7 @@ export function RedesignShell({
     if (item.kind === "tab") setShellTab(item.payload);
     else if (item.kind === "scroll") jumpToSection(item.payload);
     else if (item.kind === "calendar") openCalendar();
-    else if (item.kind === "todoist") openTodoistCreate();
+    else if (item.kind === "deadline-create") openDeadlineCreate();
     else if (item.kind === "event") openCalendar("events", null, "new");
     else if (item.kind === "analytics") {
       closePalette();
@@ -337,7 +346,7 @@ export function RedesignShell({
     else if (item.kind === "refresh") onQuickRefresh?.();
     else if (item.kind === "settings") window.location.href = "/settings";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closePalette, jumpToSection, onQuickRefresh, openAnalytics, openTodoistCreate, setShellTab]);
+  }, [closePalette, jumpToSection, onQuickRefresh, openAnalytics, openDeadlineCreate, setShellTab]);
 
   const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
 
@@ -385,26 +394,14 @@ export function RedesignShell({
       queueCalendarDeadlineRefresh();
       return result;
     },
-    onUpdateTaskStatus: (...args) => {
-      const result = handleUpdateTaskStatus(...args);
-      queueCalendarDeadlineRefresh();
-      return result;
-    },
     onDeleteTask: (...args) => {
       const result = handleDeleteTask(...args);
-      queueCalendarDeadlineRefresh();
-      return result;
-    },
-    onDismissGhost: (...args) => {
-      const result = handleDismissGhost(...args);
       queueCalendarDeadlineRefresh();
       return result;
     },
   }), [
     handleCompleteTask,
     handleDeleteTask,
-    handleDismissGhost,
-    handleUpdateTaskStatus,
     queueCalendarDeadlineRefresh,
   ]);
 
@@ -468,11 +465,12 @@ export function RedesignShell({
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {
               if (!isMobile) {
-                openCalendar("events", task?.due_date || null, task?.id || null, {
+                const focusItemId = deadlineOccurrenceFocusId(task);
+                openCalendar("events", task?.due_date || null, focusItemId, {
                   source: "dashboard",
-                  openDetail: !!task?.id,
+                  openDetail: !!focusItemId,
                   forceDeadlineOverlay: true,
-                  forceCompletedDeadlineOverlay: !!task?.id,
+                  forceCompletedDeadlineOverlay: !!focusItemId,
                 });
                 return;
               }
@@ -490,13 +488,16 @@ export function RedesignShell({
               openDetail: !!itemId && itemId !== "new",
               forceEventOverlay: !!itemId && itemId !== "new",
             })}
-            onOpenDeadlinesCalendar={(date, itemId) => openCalendar("events", date || null, itemId || null, {
-              source: "dashboard",
-              openDetail: !!itemId,
-              forceDeadlineOverlay: true,
-              forceCompletedDeadlineOverlay: !!itemId,
-            })}
-            onOpenTodoistCreate={openTodoistCreate}
+            onOpenDeadlinesCalendar={(date, itemId) => {
+              const focusItemId = deadlineOccurrenceFocusId(itemId, date);
+              openCalendar("events", date || null, focusItemId, {
+                source: "dashboard",
+                openDetail: !!focusItemId,
+                forceDeadlineOverlay: true,
+                forceCompletedDeadlineOverlay: !!focusItemId,
+              });
+            }}
+            onOpenDeadlineCreate={openDeadlineCreate}
             onJumpSection={jumpToSection}
             setAddTaskOpen={setAddTaskOpen}
           />

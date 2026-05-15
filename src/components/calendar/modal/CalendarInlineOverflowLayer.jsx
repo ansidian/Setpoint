@@ -296,7 +296,7 @@ export default function CalendarInlineOverflowLayer({
                 exclusionElement: layerRef.current,
                 dateKey: overflow.dateKey || null,
                 anchorKind: "overflow-row",
-                detailView: item.detailView || null,
+                detailKind: item.detailKind || null,
                 itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
               });
             }}

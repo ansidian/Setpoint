@@ -22,8 +22,8 @@ describe("current dashboard source definitions", () => {
   it("keeps source payload validation and fallbacks local to each source", () => {
     expect(fallbackPayloadForKey("calendar_current")).toEqual([]);
     expect(fallbackPayloadForKey("deadlines_current")).toEqual({
-      ctm: { upcoming: [], stats: null },
-      todoist: { upcoming: [], stats: null },
+      upcoming: [],
+      stats: null,
     });
     expect(fallbackPayloadForKey("bills_current")).toEqual({
       bills: [],
@@ -37,10 +37,13 @@ describe("current dashboard source definitions", () => {
     expect(hasUsablePayload("calendar_current", { payload_json: JSON.stringify({}) })).toBe(false);
     expect(hasUsablePayload("deadlines_current", {
       payload_json: JSON.stringify({
-        ctm: { upcoming: [] },
-        todoist: { upcoming: [] },
+        upcoming: [],
+        stats: { total: 0 },
       }),
     })).toBe(true);
+    expect(hasUsablePayload("deadlines_current", {
+      payload_json: JSON.stringify({ sections: [] }),
+    })).toBe(false);
     expect(hasUsablePayload("bills_current", {
       payload_json: JSON.stringify({
         bills: [],

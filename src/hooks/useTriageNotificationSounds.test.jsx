@@ -223,8 +223,8 @@ describe("useTriageNotificationSounds", () => {
     await waitFor(() => expect(getSettings).toHaveBeenCalled());
 
     act(() => {
-      result.current.handleTaskCompleted("ctm-1");
-      result.current.handleTaskCompleted("ctm-1");
+      result.current.handleTaskCompleted("todo-1");
+      result.current.handleTaskCompleted("todo-1");
     });
 
     await waitFor(() => {

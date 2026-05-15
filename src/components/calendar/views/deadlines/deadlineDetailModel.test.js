@@ -9,28 +9,28 @@ import {
 } from "./deadlineDetailModel.js";
 
 describe("deadline detail model", () => {
-  it("derives display labels from Todoist and CTM deadline shapes", () => {
+  it("derives display labels from domain deadline shapes", () => {
     const todoistTask = {
       title: "Submit annotated bibliography",
       project_name: "School",
       due_date: "2026-05-02",
       due_time: "3:30 PM",
     };
-    const ctmTask = {
+    const classTask = {
       name: "Quiz window closes",
       class_name: "Data Systems",
     };
 
     expect(deadlineTitle(todoistTask)).toBe("Submit annotated bibliography");
-    expect(deadlineTitle(ctmTask)).toBe("Quiz window closes");
+    expect(deadlineTitle(classTask)).toBe("Quiz window closes");
     expect(deadlineTitle({})).toBe("Untitled task");
     expect(deadlineContextLabel(todoistTask)).toBe("School");
-    expect(deadlineContextLabel(ctmTask)).toBe("Data Systems");
+    expect(deadlineContextLabel(classTask)).toBe("Data Systems");
     expect(deadlineDueBadgeLabel(todoistTask, 0)).toBe("Today");
-    expect(deadlineDueBadgeLabel(ctmTask, null)).toBe("No due date");
+    expect(deadlineDueBadgeLabel(classTask, null)).toBe("No due date");
     expect(deadlineDueDetailLabel(todoistTask)).toBe("3:30 PM");
     expect(deadlineDueDetailLabel({ due_date: "2026-05-02" })).toBe("End of day");
-    expect(deadlineSecondaryMeta(ctmTask)).toBe("Data Systems");
+    expect(deadlineSecondaryMeta(classTask)).toBe("Data Systems");
   });
 
   it("labels completed historical deadlines as complete instead of overdue", () => {

@@ -5,7 +5,7 @@ import useCalendarGhostPreview from "./useCalendarGhostPreview.js";
 function buildProps(overrides = {}) {
   return {
     open: true,
-    view: "deadlines",
+    view: "events",
     viewData: {},
     computed: { itemsByDate: {} },
     eventEditor: { isEditorOpen: false },
