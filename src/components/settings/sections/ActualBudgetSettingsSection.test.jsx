@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
   getActualMetadata: vi.fn(),
+  getActualCacheStatus: vi.fn(),
+  hydrateActualBudgetCache: vi.fn(),
   resolveBillPayMappingSample: vi.fn(),
   testActualBudget: vi.fn(),
   updateSettings: vi.fn(),
@@ -11,6 +13,8 @@ const mockApi = vi.hoisted(() => ({
 
 vi.mock("@/api", () => ({
   getActualMetadata: mockApi.getActualMetadata,
+  getActualCacheStatus: mockApi.getActualCacheStatus,
+  hydrateActualBudgetCache: mockApi.hydrateActualBudgetCache,
   resolveBillPayMappingSample: mockApi.resolveBillPayMappingSample,
   testActualBudget: mockApi.testActualBudget,
   updateSettings: mockApi.updateSettings,
@@ -82,6 +86,19 @@ beforeEach(() => {
   });
   mockApi.testActualBudget.mockResolvedValue({ success: true });
   mockApi.updateSettings.mockResolvedValue({ success: true });
+  mockApi.getActualCacheStatus.mockResolvedValue({
+    success: true,
+    configured: true,
+    hydrated: false,
+    message: "Actual local budget cache not found",
+  });
+  mockApi.hydrateActualBudgetCache.mockResolvedValue({
+    success: true,
+    hydrated: true,
+    budgetId: "My-Finances-d8e502a",
+    dbSizeBytes: 50_000_000,
+    backupCount: 1,
+  });
   mockApi.resolveBillPayMappingSample.mockResolvedValue({
     bill: {
       payee: "Citi",
@@ -114,6 +131,36 @@ describe("ActualBudgetSettingsSection", () => {
       expect(mockApi.testActualBudget).toHaveBeenCalled();
     });
     expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+  });
+
+  it("runs explicit Actual cache hydration from saved settings", async () => {
+    renderSection();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Hydrate Cache" }));
+
+    await waitFor(() => {
+      expect(mockApi.hydrateActualBudgetCache).toHaveBeenCalled();
+    });
+    expect(await screen.findByText("Cache ready")).toBeTruthy();
+    expect(screen.getByText(/My-Finances-d8e502a/)).toBeTruthy();
+    expect(mockApi.getActualMetadata).not.toHaveBeenCalled();
+  });
+
+  it("validates an existing Actual cache when the settings section loads", async () => {
+    mockApi.getActualCacheStatus.mockResolvedValueOnce({
+      success: true,
+      configured: true,
+      hydrated: true,
+      budgetId: "My-Finances-d8e502a",
+      dbSizeBytes: 50_000_000,
+      backupCount: 1,
+    });
+
+    renderSection();
+
+    expect(await screen.findByText("Cache ready")).toBeTruthy();
+    expect(screen.getByText(/My-Finances-d8e502a/)).toBeTruthy();
+    expect(mockApi.hydrateActualBudgetCache).not.toHaveBeenCalled();
   });
 
   it("owns the moved Actual connection controls", async () => {

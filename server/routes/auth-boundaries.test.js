@@ -23,6 +23,8 @@ vi.mock("../briefing/bills-service.js", () => ({
   listPayees: vi.fn(async () => [{ id: "payee-1", name: "Market" }]),
   getMetadata: vi.fn(async () => ({ accounts: [], categories: [], payees: [] })),
   testConnection: vi.fn(async () => ({ success: true })),
+  hydrateActualCache: vi.fn(async () => ({ success: true, hydrated: true })),
+  getActualCacheStatus: vi.fn(async () => ({ success: true, hydrated: true })),
   createQuickTxn: vi.fn(async () => ({ success: true, account: "Checking" })),
   extractBill: vi.fn(async () => ({ payee: "Power", amount: 42 })),
 }));
@@ -942,10 +944,17 @@ describe("auth boundaries", () => {
 
   it("rejects bearer auth on non-quick-txn bills endpoints", async () => {
     await seedBearer(["actual:write"]);
-    const res = await request(makeApp())
-      .get("/api/briefing/actual/metadata")
-      .set("Authorization", "Bearer scoped-token");
+    const cases = [
+      ["get", "/api/briefing/actual/metadata"],
+      ["get", "/api/briefing/actual/cache/status"],
+      ["post", "/api/briefing/actual/cache/hydrate"],
+    ];
 
-    expect(res.status).toBe(401);
+    for (const [method, path] of cases) {
+      const res = await request(makeApp())[method](path)
+        .set("Authorization", "Bearer scoped-token");
+
+      expect(res.status).toBe(401);
+    }
   });
 });

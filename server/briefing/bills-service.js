@@ -18,7 +18,11 @@ import {
   resolveBillPaySample as resolveBillPaySampleCore,
   resolveExtractedBillPay,
 } from "./bill-pay-service.js";
-import { readLocalActualMetadata } from "./actual-local-metadata.js";
+import {
+  describeLocalActualCache,
+  hydrateLocalActualCache,
+  readLocalActualMetadata,
+} from "./actual-local-metadata.js";
 import { buildBillOccurrencesFromSchedules } from "./actual-bill-occurrences.js";
 export { resolveBillPaySeed } from "./bill-pay-service.js";
 
@@ -125,26 +129,35 @@ function hasActualMetadataRows(metadata = {}) {
   );
 }
 
-async function loadActualMetadataForProjection(userId, { refreshLocal = true } = {}) {
-  let liveSyncError = null;
-  if (refreshLocal) {
-    try {
-      return await actualGetMetadata(userId, { forceWorker: true, forceRefresh: true });
-    } catch (err) {
-      liveSyncError = err;
-      console.warn("[EA] Live Actual metadata sync failed; falling back to lightweight projection:", err.message);
-    }
-  }
+async function loadActualMetadataForProjection(userId, {
+  refreshLocal = true,
+  allowWorkerFallback = true,
+} = {}) {
+  let localError = null;
   try {
     return await readLocalActualMetadata(userId, {
-      refresh: liveSyncError ? false : refreshLocal,
-      localOnly: !!liveSyncError,
+      refresh: false,
+      localOnly: true,
     });
   } catch (err) {
-    console.warn("[EA] Lightweight Actual metadata projection failed; falling back to Actual worker:", err.message);
-    if (liveSyncError) throw liveSyncError;
-    return actualGetMetadata(userId, { forceWorker: true, forceRefresh: refreshLocal });
+    localError = err;
+    console.warn("[EA] Cached Actual metadata projection failed:", err.message);
   }
+
+  let projectionError = null;
+  if (refreshLocal) {
+    try {
+      return await readLocalActualMetadata(userId, {
+        refresh: true,
+      });
+    } catch (err) {
+      projectionError = err;
+      console.warn("[EA] Lightweight Actual metadata projection failed:", err.message);
+    }
+  }
+  if (!allowWorkerFallback) throw projectionError || localError;
+  console.warn("[EA] Falling back to Actual worker metadata projection:", projectionError?.message || localError?.message);
+  return actualGetMetadata(userId, { forceWorker: true, forceRefresh: refreshLocal });
 }
 
 function occurrencesFromMetadata(metadata, range) {
@@ -474,6 +487,27 @@ export async function createQuickTxn(userId, payload) {
   return result;
 }
 
+export async function hydrateActualCache(userId, {
+  dbClient = db,
+  now = new Date(),
+} = {}) {
+  const hydrated = await hydrateLocalActualCache(userId, { dbClient });
+  const actualBudgetUrl = await loadActualBudgetUrl(userId, { dbClient });
+  const mirror = await refreshBillsMirror(userId, { actualBudgetUrl, dbClient, now });
+  return {
+    ...hydrated,
+    billsCount: mirror.bills?.length || 0,
+    schedulesCount: mirror.allSchedules?.length || 0,
+    syncHealth: mirror.billsSyncHealth || mirror.syncHealth || null,
+  };
+}
+
+export async function getActualCacheStatus(userId, {
+  dbClient = db,
+} = {}) {
+  return describeLocalActualCache(userId, { dbClient });
+}
+
 export async function resolveBillPaySample(userId, payload = {}) {
   const metadata = await getMetadata(userId);
   return resolveBillPaySampleCore(userId, { ...payload, metadata });
@@ -740,7 +774,9 @@ async function refreshBillsMirrorInner(userId, {
 
   try {
     const refreshRange = billMirrorRefreshRange({ now });
-    const metadata = metadataWithPayeeMap(await loadActualMetadataForProjection(userId));
+    const metadata = metadataWithPayeeMap(await loadActualMetadataForProjection(userId, {
+      allowWorkerFallback: false,
+    }));
     const occurrences = occurrencesFromMetadata(metadata, refreshRange)
       .map(normalizeMirrorOccurrence)
       .filter((occurrence) => occurrence.scheduleId && occurrence.next_date && occurrence.type !== "income");

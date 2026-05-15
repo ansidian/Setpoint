@@ -1,12 +1,18 @@
 import { runActualWorkerOperation } from "./actual-worker.js";
 import { testActualConnectionHttp } from "./actual-connection-test.js";
 import { readLocalActualMetadata } from "./actual-local-metadata.js";
+import { sendBillLightweight } from "./actual-lightweight-writes.js";
 import { buildBillOccurrencesFromSchedules } from "./actual-bill-occurrences.js";
 
 export { isSchedulePaid } from "./actual-bill-occurrences.js";
 
 const METADATA_TTL_MS = 5 * 60 * 1000;
 const FORCE_METADATA_WORKER_TIMEOUT_MS = 30_000;
+const WRITE_OPERATION_TIMEOUT_MS = 45_000;
+const WRITE_OPERATION_WORKER_OPTIONS = {
+  timeoutMs: WRITE_OPERATION_TIMEOUT_MS,
+  shutdownAfterOperation: true,
+};
 let metadataCache = { data: null, ts: 0 };
 
 function mapOpenBillInstances(schedules, payeeMap, range) {
@@ -19,6 +25,10 @@ function mapOpenBillInstances(schedules, payeeMap, range) {
 
 function shouldUseInProcessActual() {
   return process.env.NODE_ENV === "test" || process.env.EA_ACTUAL_WORKER_DISABLED === "1";
+}
+
+function allowSdkWriteFallback() {
+  return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_SDK_WRITE_FALLBACK === "1";
 }
 
 async function callActual(operation, args, options = {}) {
@@ -97,19 +107,31 @@ export function getCalendarBillsRange(userId, range) {
 }
 
 export async function markBillPaid(scheduleId, userId) {
-  const result = await callActual("markBillPaid", [scheduleId, userId]);
+  const result = await callActual("markBillPaid", [scheduleId, userId], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
 }
 
 export async function sendBill(billData, userId) {
-  const result = await callActual("sendBill", [billData, userId]);
+  if (!shouldUseInProcessActual()) {
+    try {
+      const result = await sendBillLightweight(userId, billData);
+      clearMetadataCache();
+      return result;
+    } catch (err) {
+      if (err?.code !== "ACTUAL_LIGHTWEIGHT_UNSUPPORTED" || !allowSdkWriteFallback()) {
+        throw err;
+      }
+      console.warn("[EA] Falling back to Actual SDK bill write:", err.message);
+    }
+  }
+  const result = await callActual("sendBill", [billData, userId], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
 }
 
 export async function createQuickTxn(userId, payload) {
-  const result = await callActual("createQuickTxn", [userId, payload]);
+  const result = await callActual("createQuickTxn", [userId, payload], WRITE_OPERATION_WORKER_OPTIONS);
   clearMetadataCache();
   return result;
 }

@@ -3,6 +3,7 @@ import path from "path";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const PRODUCTION_DEFAULT_MAX_OLD_SPACE_MB = 192;
+const FORCE_KILL_GRACE_MS = 2_000;
 const OUTPUT_LIMIT = 8_000;
 const WORKER_PATH = path.resolve("server/briefing/actual-worker-child.js");
 const INITIAL_HEALTH = {
@@ -21,7 +22,8 @@ let pendingRequests = new Map();
 let operationQueue = Promise.resolve();
 let health = { ...INITIAL_HEALTH };
 let idleShutdownTimer = null;
-let idleShutdownExpected = false;
+const expectedWorkerExits = new Set();
+const workerForceKillTimers = new Map();
 
 function appendBounded(current, chunk) {
   const next = current + chunk;
@@ -56,14 +58,55 @@ function clearIdleShutdownTimer() {
   idleShutdownTimer = null;
 }
 
+function clearForceKillTimer(child) {
+  const timer = workerForceKillTimers.get(child);
+  if (!timer) return;
+  clearTimeout(timer);
+  workerForceKillTimers.delete(child);
+}
+
+function armForceKill(child, delayMs = FORCE_KILL_GRACE_MS) {
+  clearForceKillTimer(child);
+  if (!Number.isFinite(delayMs) || delayMs < 0) return;
+  const timer = setTimeout(() => {
+    workerForceKillTimers.delete(child);
+    child.kill("SIGKILL");
+  }, delayMs);
+  timer.unref?.();
+  workerForceKillTimers.set(child, timer);
+}
+
+function requestWorkerShutdown(child, {
+  expected = false,
+  discard = false,
+  forceKillGraceMs = FORCE_KILL_GRACE_MS,
+} = {}) {
+  if (!child) return;
+  clearIdleShutdownTimer();
+  if (expected) expectedWorkerExits.add(child);
+  if (discard && worker === child) {
+    worker = null;
+    if (expected && !pendingRequests.size) {
+      health = {
+        ...health,
+        state: "idle",
+        pid: null,
+        inFlight: 0,
+        lastError: null,
+      };
+    }
+  }
+  child.kill("SIGTERM");
+  armForceKill(child, forceKillGraceMs);
+}
+
 function scheduleIdleShutdown() {
   clearIdleShutdownTimer();
   const delay = idleShutdownMs();
   if (!worker || pendingRequests.size || delay <= 0) return;
   idleShutdownTimer = setTimeout(() => {
     if (!worker || pendingRequests.size) return;
-    idleShutdownExpected = true;
-    worker.kill("SIGTERM");
+    requestWorkerShutdown(worker, { expected: true, discard: true });
   }, delay);
   idleShutdownTimer.unref?.();
 }
@@ -103,7 +146,6 @@ function rejectPendingRequests(error) {
 function spawnWorker(options = {}) {
   clearIdleShutdownTimer();
   if (worker) return worker;
-  idleShutdownExpected = false;
   const child = fork(options.workerPath || WORKER_PATH, [], {
     env: process.env,
     execArgv: options.execArgv || workerExecArgv(),
@@ -136,9 +178,22 @@ function spawnWorker(options = {}) {
     };
     if (message.ok) request.resolve(message.result);
     else request.reject(deserializeError(message.error));
-    if (!pendingRequests.size) scheduleIdleShutdown();
+    if (!pendingRequests.size) {
+      if (request.shutdownAfterOperation) {
+        requestWorkerShutdown(child, {
+          expected: true,
+          discard: true,
+          forceKillGraceMs: request.forceKillGraceMs,
+        });
+      } else {
+        scheduleIdleShutdown();
+      }
+    }
   });
   child.on("error", (error) => {
+    clearForceKillTimer(child);
+    expectedWorkerExits.delete(child);
+    if (worker !== child) return;
     health = {
       ...health,
       state: "unavailable",
@@ -149,9 +204,13 @@ function spawnWorker(options = {}) {
     worker = null;
   });
   child.on("exit", (code, signal) => {
-    const exitedWorker = worker;
-    worker = null;
-    clearIdleShutdownTimer();
+    const exitedWorker = worker === child;
+    if (exitedWorker) worker = null;
+    if (exitedWorker) clearIdleShutdownTimer();
+    clearForceKillTimer(child);
+    const expectedShutdown = expectedWorkerExits.has(child);
+    expectedWorkerExits.delete(child);
+    if (!exitedWorker) return;
     const lastExitAt = new Date().toISOString();
     const error = workerExitError({
       operation: pendingRequests.size ? "pending operation" : "idle",
@@ -160,18 +219,16 @@ function spawnWorker(options = {}) {
       stderr: workerStderr,
       timedOut: false,
     });
-    const expectedIdleShutdown = idleShutdownExpected && !pendingRequests.size;
-    idleShutdownExpected = false;
     health = {
       ...health,
-      state: expectedIdleShutdown ? "idle" : "unavailable",
+      state: expectedShutdown ? "idle" : "unavailable",
       pid: null,
       inFlight: 0,
       lastExitAt,
       lastExit: { code, signal },
-      lastError: expectedIdleShutdown ? null : error.message,
+      lastError: expectedShutdown ? null : error.message,
     };
-    if (exitedWorker && !expectedIdleShutdown) rejectPendingRequests(error);
+    if (!expectedShutdown) rejectPendingRequests(error);
   });
   return child;
 }
@@ -194,13 +251,24 @@ function sendOperation(operation, args, options = {}) {
       health = {
         ...health,
         state: "unavailable",
+        pid: null,
         inFlight: pendingRequests.size,
         lastError: error.message,
       };
-      child.kill("SIGTERM");
+      requestWorkerShutdown(child, {
+        discard: true,
+        forceKillGraceMs: options.forceKillGraceMs,
+      });
       reject(error);
     }, options.timeoutMs || timeoutMs());
-    pendingRequests.set(requestId, { resolve, reject, timer, operation });
+    pendingRequests.set(requestId, {
+      resolve,
+      reject,
+      timer,
+      operation,
+      shutdownAfterOperation: options.shutdownAfterOperation === true,
+      forceKillGraceMs: options.forceKillGraceMs,
+    });
     health = {
       ...health,
       state: "running",
@@ -224,11 +292,13 @@ export function getActualWorkerHealth() {
 
 export function shutdownActualWorkerForTests() {
   clearIdleShutdownTimer();
-  idleShutdownExpected = false;
   if (worker) {
     worker.kill("SIGTERM");
     worker = null;
   }
+  for (const timer of workerForceKillTimers.values()) clearTimeout(timer);
+  workerForceKillTimers.clear();
+  expectedWorkerExits.clear();
   rejectPendingRequests(Object.assign(new Error("Actual worker shut down"), { status: 503 }));
   pendingRequests = new Map();
   operationQueue = Promise.resolve();

@@ -12,6 +12,8 @@ const mockActual = {
   createQuickTxn: vi.fn(),
 };
 const mockActualLocal = {
+  describeLocalActualCache: vi.fn(),
+  hydrateLocalActualCache: vi.fn(),
   readLocalActualMetadata: vi.fn(),
 };
 const mockDb = { execute: vi.fn(), batch: vi.fn() };
@@ -59,6 +61,23 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
   process.env.OPENAI_API_KEY = "test-openai-key";
   Object.values(mockActual).forEach((fn) => fn.mockReset());
+  mockActualLocal.describeLocalActualCache.mockReset();
+  mockActualLocal.describeLocalActualCache.mockResolvedValue({
+    success: true,
+    configured: true,
+    hydrated: true,
+    budgetId: "Budget-1",
+  });
+  mockActualLocal.hydrateLocalActualCache.mockReset();
+  mockActualLocal.hydrateLocalActualCache.mockResolvedValue({
+    success: true,
+    hydrated: true,
+    budgetId: "Budget-1",
+    dbSizeBytes: 1024,
+    backupCount: 1,
+    backupSizeBytes: 512,
+    backupPrune: { removed: 0, kept: 1 },
+  });
   mockActualLocal.readLocalActualMetadata.mockReset();
   mockActualLocal.readLocalActualMetadata.mockRejectedValue(new Error("lightweight metadata unavailable"));
   mockActual.getPayees.mockResolvedValue([]);
@@ -80,6 +99,7 @@ const {
   listAccounts,
   readBillsMirrorRange,
   refreshBillsMirror,
+  hydrateActualCache,
   scheduleBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
   isBillsMirrorMaintenanceDue,
@@ -429,7 +449,7 @@ describe("Bills mirror", () => {
       ],
       recentTransactions: [],
     };
-    mockActual.getMetadata.mockResolvedValueOnce(actualMetadata);
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
     mockDb.batch.mockResolvedValueOnce([]);
     mockDb.execute.mockResolvedValueOnce(rowResult());
 
@@ -438,8 +458,11 @@ describe("Bills mirror", () => {
       now: new Date("2026-05-06T12:00:00.000Z"),
     });
 
-    expect(mockActual.getMetadata).toHaveBeenCalledWith("u1", { forceWorker: true, forceRefresh: true });
-    expect(mockActualLocal.readLocalActualMetadata).not.toHaveBeenCalled();
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+      refresh: false,
+      localOnly: true,
+    });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
       expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
@@ -461,7 +484,7 @@ describe("Bills mirror", () => {
     ]);
   });
 
-  it("uses the locally synced Actual file if live sync applies messages but exits nonzero", async () => {
+  it("prefers the cached local Actual projection for mirror refreshes", async () => {
     const syncedMetadata = {
       accounts: [],
       payees: [{ id: "payee-water", name: "SGV Water" }],
@@ -481,7 +504,6 @@ describe("Bills mirror", () => {
       ],
       recentTransactions: [],
     };
-    mockActual.getMetadata.mockRejectedValueOnce(new Error("Actual sync exited"));
     mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(syncedMetadata);
     mockDb.batch.mockResolvedValueOnce([]);
 
@@ -494,6 +516,7 @@ describe("Bills mirror", () => {
       refresh: false,
       localOnly: true,
     });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
     expect(out.allSchedules).toEqual([
       expect.objectContaining({
         name: "Water Bill",
@@ -502,8 +525,54 @@ describe("Bills mirror", () => {
     ]);
   });
 
-  it("returns old mirror rows with degraded health when refresh fails", async () => {
-    mockActual.getMetadata.mockRejectedValueOnce(new Error("Actual offline"));
+  it("hydrates the local Actual cache and refreshes the bills mirror from that cache", async () => {
+    const actualMetadata = {
+      accounts: [],
+      payees: [{ id: "payee-power", name: "Power Co" }],
+      payeeMap: { "payee-power": "Power Co" },
+      categories: [],
+      schedules: [
+        {
+          id: "power",
+          name: "Power Bill",
+          next_date: "2026-05-10",
+          type: "bill",
+          conditions: [
+            { field: "payee", value: "payee-power" },
+            { field: "amount", value: -12234 },
+          ],
+        },
+      ],
+      recentTransactions: [],
+    };
+    mockDb.execute.mockResolvedValueOnce(rowResult([{ actual_budget_url: "https://actual.example.test" }]));
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
+    mockDb.batch.mockResolvedValueOnce([]);
+
+    const out = await hydrateActualCache("u1", {
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    expect(mockActualLocal.hydrateLocalActualCache).toHaveBeenCalledWith("u1", { dbClient: mockDb });
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+      refresh: false,
+      localOnly: true,
+    });
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(out).toMatchObject({
+      success: true,
+      hydrated: true,
+      budgetId: "Budget-1",
+      billsCount: 1,
+      schedulesCount: 1,
+      syncHealth: { state: "current", configured: true },
+    });
+  });
+
+  it("returns old mirror rows with degraded health when lightweight refresh fails without spawning the Actual worker", async () => {
+    mockActualLocal.readLocalActualMetadata
+      .mockRejectedValueOnce(new Error("Actual local file unavailable"))
+      .mockRejectedValueOnce(new Error("Actual download timed out"));
     mockDb.execute
       .mockResolvedValueOnce(rowResult())
       .mockResolvedValueOnce(rowResult([
@@ -513,7 +582,7 @@ describe("Bills mirror", () => {
           actual_budget_url: "https://actual.example.test",
           last_success_at: "2026-05-05T12:00:00.000Z",
           last_attempt_at: "2026-05-06T12:00:00.000Z",
-          last_error: "Actual offline",
+          last_error: "Actual download timed out",
           pending_refresh_at: null,
           refresh_started_at: null,
         },
@@ -538,13 +607,19 @@ describe("Bills mirror", () => {
     });
 
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(1, "u1", {
+      refresh: false,
+      localOnly: true,
+    });
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "u1", { refresh: true });
     expect(mockDb.batch).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/ea_bills_mirror_state/i),
     }));
     expect(out.billsSyncHealth).toMatchObject({
       state: "degraded",
-      lastError: "Actual offline",
+      lastError: "Actual download timed out",
     });
     expect(out.allSchedules).toEqual([
       expect.objectContaining({
@@ -575,7 +650,7 @@ describe("Bills mirror", () => {
       recentTransactions: [],
     };
     let finishBatch;
-    mockActual.getMetadata.mockResolvedValueOnce(actualMetadata);
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
     mockDb.batch.mockReturnValueOnce(new Promise((resolve) => {
       finishBatch = () => resolve([]);
     }));
@@ -590,7 +665,8 @@ describe("Bills mirror", () => {
     });
     await Promise.resolve();
 
-    expect(mockActual.getMetadata).toHaveBeenCalledTimes(1);
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1);
+    expect(mockActual.getMetadata).not.toHaveBeenCalled();
     finishBatch();
 
     const [firstOut, secondOut] = await Promise.all([first, second]);
@@ -702,7 +778,7 @@ describe("listAccounts", () => {
     expect(mockActual.getMetadata).not.toHaveBeenCalled();
   });
 
-  it("can explicitly refresh empty metadata projections when a refresh worker requests it", async () => {
+  it("can explicitly refresh empty metadata projections through the worker after lightweight projection fails", async () => {
     mockDb.execute
       .mockResolvedValueOnce(rowResult([
         {
@@ -727,8 +803,12 @@ describe("listAccounts", () => {
     const out = await getMetadata("u1", { allowRefresh: true });
 
     expect(out.accounts).toEqual([{ id: "a1", name: "Checking" }]);
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(1, "u1", {
+      refresh: false,
+      localOnly: true,
+    });
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "u1", { refresh: true });
     expect(mockActual.getMetadata).toHaveBeenCalledWith("u1", { forceWorker: true, forceRefresh: true });
-    expect(mockActualLocal.readLocalActualMetadata).not.toHaveBeenCalled();
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
     }));

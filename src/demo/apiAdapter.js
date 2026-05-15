@@ -518,6 +518,17 @@ export async function handleDemoApiRequest(path, options = {}) {
   if (pathname === "/api/ea/accounts") return clone(seed.accounts);
   if (pathname === "/api/ea/settings") return clone(seed.settings);
   if (pathname === "/api/briefing/actual/metadata") return clone(seed.actualMetadata);
+  if (pathname === "/api/briefing/actual/cache/status") {
+    return {
+      success: true,
+      configured: true,
+      hydrated: true,
+      budgetId: "Demo Budget",
+      dbSizeBytes: 0,
+      backupCount: 0,
+      demo: true,
+    };
+  }
   if (pathname === "/api/notes") return clone(seed.notes);
   if (pathname === "/api/ea/models" || pathname === "/api/ea/bill-extract-models") {
     return [{
