@@ -139,6 +139,13 @@ export default function useCalendarModalSearch({
     setFocusRequestId(0);
   }, []);
 
+  const cancelSearch = useCallback(() => {
+    if (!open) return false;
+    if (query) clearQuery();
+    else closeSearch();
+    return true;
+  }, [clearQuery, closeSearch, open, query]);
+
   const activateResult = useCallback((result, activationContext = null) => {
     if (!result) return;
     if (activationContext) onActivateResult?.(result, activationContext);
@@ -276,6 +283,7 @@ export default function useCalendarModalSearch({
     setQuery,
     clearQuery,
     closeSearch,
+    cancelSearch,
     openSearch,
     focusRequestId,
     focusSelectAll,
