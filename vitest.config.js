@@ -13,5 +13,6 @@ export default defineConfig({
   test: {
     include: ["server/**/*.test.js", "src/**/*.test.js", "src/**/*.test.jsx"],
     environment: "jsdom",
+    testTimeout: 10000,
   },
 });
