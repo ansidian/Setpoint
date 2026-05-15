@@ -116,13 +116,7 @@ describe("inbox AI query planner", () => {
       }],
       receivedOptions: options,
     }));
-    const fetchImpl = vi.fn(async () => openAiPlan({
-      answer: "There was a sign in alert.",
-      confidence: "medium",
-      cited_source_uids: ["source-1"],
-      missing_info: [],
-      low_confidence_reason: "",
-    }));
+    const fetchImpl = vi.fn();
     const planner = vi.fn(async () => {
       throw Object.assign(new Error("bad planner"), { code: "planner_bad_output" });
     });

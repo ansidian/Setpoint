@@ -13,13 +13,7 @@ import {
 function aiResponse(overrides = {}) {
   return {
     answer_status: "ok",
-    answer: {
-      answer: "Amazon says the return deadline is May 12.",
-      confidence: "medium",
-      cited_source_uids: ["source-1"],
-      missing_info: [],
-      low_confidence_reason: "",
-    },
+    answer: null,
     retrieval: {
       mode: "hybrid",
       vector_status: "ok",

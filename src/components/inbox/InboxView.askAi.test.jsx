@@ -38,16 +38,10 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function aiResponse({ uid, subject, answer }) {
+function aiResponse({ uid, subject }) {
   return {
     answer_status: "ok",
-    answer: {
-      answer,
-      confidence: "high",
-      cited_source_uids: [uid],
-      missing_info: [],
-      low_confidence_reason: "",
-    },
+    answer: null,
     retrieval: {
       mode: "hybrid",
       vector_status: "ok",
@@ -195,7 +189,6 @@ describe("desktop inbox Ask AI flow", () => {
     askInboxAiSearch.mockResolvedValueOnce(aiResponse({
       uid: "source-1",
       subject: "Amazon return reminder",
-      answer: "The return deadline is May 12.",
     }));
 
     renderDesktopAskAiInbox();
@@ -212,7 +205,7 @@ describe("desktop inbox Ask AI flow", () => {
     expect(askInboxAiSearch).toHaveBeenCalledWith("amazon return");
 
     await waitFor(() => {
-      expect(screen.getByText("The return deadline is May 12.")).toBeTruthy();
+      expect(screen.getByText("Semantic + indexed mail · 1 candidate")).toBeTruthy();
     });
     expect(screen.getByText("Amazon return reminder")).toBeTruthy();
     await waitFor(() => {
@@ -242,23 +235,20 @@ describe("desktop inbox Ask AI flow", () => {
       second.resolve(aiResponse({
         uid: "source-2",
         subject: "Second source",
-        answer: "Second answer wins.",
       }));
     });
     await waitFor(() => {
-      expect(screen.getByText("Second answer wins.")).toBeTruthy();
+      expect(screen.getByText("Second source")).toBeTruthy();
     });
 
     await act(async () => {
       first.resolve(aiResponse({
         uid: "source-1",
         subject: "First source",
-        answer: "First answer should be stale.",
       }));
     });
 
-    expect(screen.getByText("Second answer wins.")).toBeTruthy();
-    expect(screen.queryByText("First answer should be stale.")).toBeNull();
+    expect(screen.getByText("Second source")).toBeTruthy();
     expect(screen.queryByText("First source")).toBeNull();
   });
 
@@ -266,7 +256,6 @@ describe("desktop inbox Ask AI flow", () => {
     askInboxAiSearch.mockResolvedValueOnce(aiResponse({
       uid: "source-1",
       subject: "Amazon return reminder",
-      answer: "The return deadline is May 12.",
     }));
 
     render(<AskAiSessionHarness />);
@@ -277,7 +266,7 @@ describe("desktop inbox Ask AI flow", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => {
-      expect(screen.getByText("The return deadline is May 12.")).toBeTruthy();
+      expect(screen.getByText("Semantic + indexed mail · 1 candidate")).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
@@ -285,7 +274,7 @@ describe("desktop inbox Ask AI flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
 
-    expect(await screen.findByText("The return deadline is May 12.")).toBeTruthy();
+    expect(await screen.findByText("Semantic + indexed mail · 1 candidate")).toBeTruthy();
     expect(screen.getByText("Amazon return reminder")).toBeTruthy();
     expect(askInboxAiSearch).toHaveBeenCalledTimes(1);
   });
@@ -309,13 +298,12 @@ describe("desktop inbox Ask AI flow", () => {
       request.resolve(aiResponse({
         uid: "source-1",
         subject: "Amazon return reminder",
-        answer: "The return deadline is May 12.",
       }));
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle inbox" }));
 
-    expect(await screen.findByText("The return deadline is May 12.")).toBeTruthy();
+    expect(await screen.findByText("Semantic + indexed mail · 1 candidate")).toBeTruthy();
     expect(screen.getByText("Amazon return reminder")).toBeTruthy();
     expect(askInboxAiSearch).toHaveBeenCalledTimes(1);
   });

@@ -57,17 +57,6 @@ describe("email search cost stats", () => {
     });
     await recordEmailSearchAiUsage("user-1", {
       dbClient: db,
-      eventType: "answer",
-      model: "gpt-5.4-mini",
-      usage: {
-        input_tokens: 900,
-        input_tokens_details: { cached_tokens: 200 },
-        output_tokens: 120,
-      },
-      metadata: { source_count: 2 },
-    });
-    await recordEmailSearchAiUsage("user-1", {
-      dbClient: db,
       eventType: "corpus_embedding",
       model: "text-embedding-3-small",
       usage: { input_tokens: 300 },
@@ -97,19 +86,20 @@ describe("email search cost stats", () => {
       },
     });
     expect(stats.askAi.actualUsage).toMatchObject({
-      calls: 3,
-      inputTokens: 1020,
-      cachedInputTokens: 200,
-      outputTokens: 160,
+      calls: 2,
+      inputTokens: 120,
+      cachedInputTokens: 0,
+      outputTokens: 40,
       estimatedCalls: 1,
       byEvent: {
-        answer: expect.objectContaining({ calls: 1 }),
         planner: expect.objectContaining({ calls: 1 }),
         query_embedding: expect.objectContaining({ calls: 1, estimatedCalls: 1 }),
       },
     });
+    expect(stats.askAi.actualUsage.byEvent.answer).toBeUndefined();
     expect(stats.askAi.actualUsage.byEvent.corpus_embedding).toBeUndefined();
     expect(stats.askAi.perSuccessfulAskEstimate.estimatedCostUsd).toBeGreaterThan(0);
+    expect(stats.askAi.perSuccessfulAskEstimate).not.toHaveProperty("answer");
 
     const columns = await db.execute("PRAGMA table_info('ea_email_search_ai_usage')");
     expect(columns.rows.map((column) => column.name)).not.toContain("query_text");
@@ -125,7 +115,7 @@ describe("email search cost stats", () => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         "user-1",
-        "answer",
+        "planner",
         "gpt-5.4-mini-2026-03-17",
         1000,
         200,
@@ -136,22 +126,14 @@ describe("email search cost stats", () => {
         "2026-05-08T11:00:00.000Z",
       ],
     });
-    await recordEmailSearchAiUsage("user-1", {
-      dbClient: db,
-      eventType: "planner",
-      model: "gpt-5.4-mini-2026-03-17",
-      usage: { input_tokens: 100, output_tokens: 40 },
-      createdAt: new Date("2026-05-08T11:01:00.000Z"),
-    });
-
     const stats = await getEmailSearchCostStats("user-1", {
       dbClient: db,
       now: new Date("2026-05-08T12:00:00.000Z"),
     });
 
-    expect(stats.askAi.actualUsage.calls).toBe(2);
+    expect(stats.askAi.actualUsage.calls).toBe(1);
     expect(stats.askAi.actualUsage.estimatedCostUsd).toBeGreaterThan(0);
-    expect(stats.askAi.actualUsage.byEvent.answer.estimatedCostUsd).toBe(0.001065);
+    expect(stats.askAi.actualUsage.byEvent.planner.estimatedCostUsd).toBe(0.001065);
     expect(stats.askAi.actualUsage.models).toEqual(["gpt-5.4-mini-2026-03-17"]);
   });
 });
