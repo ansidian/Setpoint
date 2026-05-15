@@ -18,6 +18,8 @@ const mockBillsService = vi.hoisted(() => ({
   listPayees: vi.fn(),
   listCategories: vi.fn(),
   testConnection: vi.fn(),
+  hydrateActualCache: vi.fn(),
+  getActualCacheStatus: vi.fn(),
 }));
 
 vi.mock("../../db/connection.js", () => ({ default: mockDb }));
@@ -122,5 +124,55 @@ describe("Bill Pay routes", () => {
       },
       candidate: { payee: "Citi", amount: 10, due_date: "2026-05-15" },
     });
+  });
+
+  it("hydrates the Actual cache through briefing cookie auth", async () => {
+    mockBillsService.hydrateActualCache.mockResolvedValueOnce({
+      success: true,
+      hydrated: true,
+      budgetId: "My-Finances-d8e502a",
+      dbSizeBytes: 50_000_000,
+      backupCount: 1,
+    });
+
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/cache/hydrate")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      hydrated: true,
+      budgetId: "My-Finances-d8e502a",
+      dbSizeBytes: 50_000_000,
+      backupCount: 1,
+    });
+    expect(mockBillsService.hydrateActualCache).toHaveBeenCalledWith("user-1");
+  });
+
+  it("validates the local Actual cache through briefing cookie auth", async () => {
+    mockBillsService.getActualCacheStatus.mockResolvedValueOnce({
+      success: true,
+      configured: true,
+      hydrated: true,
+      budgetId: "My-Finances-d8e502a",
+      dbSizeBytes: 50_000_000,
+      backupCount: 1,
+    });
+
+    const res = await request(makeApp())
+      .get("/api/briefing/actual/cache/status")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      success: true,
+      configured: true,
+      hydrated: true,
+      budgetId: "My-Finances-d8e502a",
+      dbSizeBytes: 50_000_000,
+      backupCount: 1,
+    });
+    expect(mockBillsService.getActualCacheStatus).toHaveBeenCalledWith("user-1");
   });
 });

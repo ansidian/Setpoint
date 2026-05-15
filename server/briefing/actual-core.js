@@ -5,6 +5,11 @@ import {
   filterBillSchedulesForRange,
   isSchedulePaid,
 } from "./actual-bill-occurrences.js";
+import {
+  actualDataDir,
+  findLocalBudgetDir,
+  pruneActualBudgetBackups,
+} from "./actual-local-metadata.js";
 import db from "../db/connection.js";
 
 export { isSchedulePaid } from "./actual-bill-occurrences.js";
@@ -31,6 +36,10 @@ async function getActualConfig(userId) {
 let lock = Promise.resolve();
 let activeBudget = null;
 
+function allowColdActualDownload() {
+  return process.env.NODE_ENV !== "production" || process.env.EA_ACTUAL_ALLOW_COLD_SDK_DOWNLOAD === "1";
+}
+
 function withLock(fn) {
   const result = lock.then(() => fn());
   lock = result.catch(() => {});
@@ -42,6 +51,8 @@ function actualSessionKey(config) {
     serverURL: config.serverURL,
     password: config.password || "",
     syncId: config.syncId,
+    dataDir: config.dataDir || "",
+    localBudgetId: config.localBudgetId || "",
   });
 }
 
@@ -51,15 +62,45 @@ async function closeActualSession() {
 }
 
 async function ensureActualBudget(userId) {
-  const config = await getActualConfig(userId);
+  const baseConfig = await getActualConfig(userId);
+  const dataDir = actualDataDir();
+  const localBudget = await findLocalBudgetDir(baseConfig.syncId, { dataDir }).catch((err) => {
+    console.warn("[EA] Actual local budget lookup failed; falling back to cold download path:", err.message);
+    return null;
+  });
+  const config = {
+    ...baseConfig,
+    dataDir,
+    localBudgetId: localBudget?.metadata?.id || null,
+    localBudgetDir: localBudget?.budgetDir || null,
+  };
   const key = actualSessionKey(config);
   if (activeBudget?.key === key) return config;
   if (activeBudget) {
     await closeActualSession();
   }
   try {
-    await actualApi.init({ serverURL: config.serverURL, password: config.password });
-    await actualApi.downloadBudget(config.syncId);
+    await actualApi.init({ serverURL: config.serverURL, password: config.password, dataDir });
+    if (config.localBudgetId) {
+      const result = await actualApi.loadBudget(config.localBudgetId);
+      if (result?.error) {
+        throw Object.assign(new Error(`Actual local budget load failed: ${result.error}`), {
+          status: 503,
+          code: "ACTUAL_LOCAL_BUDGET_LOAD_FAILED",
+        });
+      }
+    } else {
+      if (!allowColdActualDownload()) {
+        throw Object.assign(new Error("Actual local budget cache is unavailable; refusing cold Actual download in production"), {
+          status: 503,
+          code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
+        });
+      }
+      await actualApi.downloadBudget(
+        config.syncId,
+        config.password ? { password: config.password } : undefined,
+      );
+    }
     activeBudget = { key, ...config, loadedAt: new Date().toISOString() };
     return config;
   } catch (error) {
@@ -71,7 +112,13 @@ async function ensureActualBudget(userId) {
 async function withActualBudget(userId, fn) {
   const config = await ensureActualBudget(userId);
   try {
-    return await fn(config);
+    const result = await fn(config);
+    if (config.localBudgetDir) {
+      await pruneActualBudgetBackups(config.localBudgetDir).catch((err) => {
+        console.warn("[EA] Actual local backup pruning failed:", err.message);
+      });
+    }
+    return result;
   } catch (error) {
     await closeActualSession();
     throw error;

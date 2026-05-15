@@ -29,6 +29,8 @@
     "email-search:date-backfill": "node server/scripts/backfill-email-date-utc.js",
     "ai-search:embedding-status": "node server/scripts/email-search-embedding-status.js",
     "ai-search:backfill": "node server/scripts/email-search-embedding-backfill.js",
+    "actual:hydrate-cache": "node server/scripts/hydrate-actual-cache.js",
+    "actual:prune-cache": "node server/scripts/prune-actual-cache.js",
     "test:e2e": "playwright test",
     "test:e2e:setup": "playwright test --project=setup",
     "test:e2e:headed": "playwright test --headed",

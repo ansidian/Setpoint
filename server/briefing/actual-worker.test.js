@@ -156,6 +156,65 @@ describe("Actual worker runner", () => {
     });
   });
 
+  it("shuts down the worker immediately when an operation opts out of reuse", async () => {
+    const child = createChild();
+    forkMock.mockReturnValueOnce(child);
+
+    const resultPromise = runActualWorkerOperation("sendBill", [{ amount: 10 }, "user-1"], {
+      shutdownAfterOperation: true,
+      timeoutMs: 1000,
+    });
+    await Promise.resolve();
+    const request = child.send.mock.calls[0][0];
+    child.emit("message", {
+      id: request.id,
+      ok: true,
+      result: { success: true },
+    });
+
+    await expect(resultPromise).resolves.toEqual({ success: true });
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+    child.emit("exit", null, "SIGTERM");
+    expect(getActualWorkerHealth()).toMatchObject({
+      state: "idle",
+      pid: null,
+      lastError: null,
+    });
+  });
+
+  it("discards and force-kills a timed-out worker before the next operation", async () => {
+    vi.useFakeTimers();
+    const firstChild = createChild();
+    const secondChild = createChild();
+    forkMock.mockReturnValueOnce(firstChild).mockReturnValueOnce(secondChild);
+
+    const first = runActualWorkerOperation("getMetadata", ["user-1"], { timeoutMs: 25 });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(25);
+
+    await expect(first).rejects.toMatchObject({
+      status: 504,
+      code: "ACTUAL_WORKER_TIMEOUT",
+    });
+    expect(firstChild.kill).toHaveBeenCalledWith("SIGTERM");
+
+    const second = runActualWorkerOperation("getPayees", ["user-1"], { timeoutMs: 5000 });
+    await Promise.resolve();
+    expect(secondChild.send).toHaveBeenCalledTimes(1);
+    expect(forkMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(firstChild.kill).toHaveBeenCalledWith("SIGKILL");
+
+    const secondRequest = secondChild.send.mock.calls[0][0];
+    secondChild.emit("message", {
+      id: secondRequest.id,
+      ok: true,
+      result: [],
+    });
+    await expect(second).resolves.toEqual([]);
+  });
+
   it("caps production worker heap by default", async () => {
     process.env.NODE_ENV = "production";
     const child = createChild();

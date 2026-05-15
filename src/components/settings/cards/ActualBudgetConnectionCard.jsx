@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SiActualbudget } from "@icons-pack/react-simple-icons";
-import { testActualBudget, updateSettings } from "@/api";
+import { getActualCacheStatus, hydrateActualBudgetCache, testActualBudget, updateSettings } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +13,46 @@ import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
 } from "@/components/settings/settings-core";
 
+function formatCacheSize(bytes) {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes)) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = value >= 10 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function cacheSummary(result) {
+  const parts = [];
+  if (result?.budgetId) parts.push(result.budgetId);
+  const dbSize = formatCacheSize(result?.dbSizeBytes);
+  if (dbSize) parts.push(`DB ${dbSize}`);
+  if (Number.isFinite(result?.backupCount)) {
+    parts.push(`${result.backupCount} backup${result.backupCount === 1 ? "" : "s"}`);
+  }
+  return parts.join("; ");
+}
+
+function hydrateStatusTone(status) {
+  if (status === "ok") return "success";
+  if (status === "missing") return "warning";
+  if (status === "fail") return "danger";
+  return "neutral";
+}
+
+function hydrateStatusLabel(status, message) {
+  if (status === "checking") return "Checking cache";
+  if (status === "ok") return "Cache ready";
+  if (status === "missing") return "Cache missing";
+  if (status === "fail") return `Cache failed${message ? `: ${message}` : ""}`;
+  return null;
+}
+
 export default function ActualBudgetConnectionCard({ settings }) {
   const [actualForm, setActualForm] = useState({ serverUrl: "", password: "", syncId: "" });
   const [actualConfigured, setActualConfigured] = useState(false);
@@ -20,6 +60,18 @@ export default function ActualBudgetConnectionCard({ settings }) {
   const [actualSavingSecret, setActualSavingSecret] = useState(false);
   const [testStatus, setTestStatus] = useState(null);
   const [testMsg, setTestMsg] = useState(null);
+  const [hydrateStatus, setHydrateStatus] = useState(null);
+  const [hydrateMsg, setHydrateMsg] = useState(null);
+  const [hydrateResult, setHydrateResult] = useState(null);
+  const cacheStatusRequestRef = useRef(0);
+
+  function markActualDirty() {
+    cacheStatusRequestRef.current += 1;
+    setActualDirty(true);
+    setHydrateStatus(null);
+    setHydrateMsg(null);
+    setHydrateResult(null);
+  }
 
   useEffect(() => {
     if (!(settings?.actual_budget_url || settings?.actual_budget_sync_id || settings?.actual_budget_configured)) {
@@ -32,6 +84,41 @@ export default function ActualBudgetConnectionCard({ settings }) {
     });
     setActualConfigured(!!(settings.actual_budget_url || settings.actual_budget_configured));
   }, [settings?.actual_budget_url, settings?.actual_budget_sync_id, settings?.actual_budget_configured]);
+
+  useEffect(() => {
+    if (!actualConfigured || actualDirty) return undefined;
+
+    const requestId = cacheStatusRequestRef.current + 1;
+    cacheStatusRequestRef.current = requestId;
+    setHydrateStatus("checking");
+    setHydrateMsg(null);
+    setHydrateResult(null);
+
+    getActualCacheStatus()
+      .then((result) => {
+        if (cacheStatusRequestRef.current !== requestId) return;
+        setHydrateResult(result);
+        if (result?.hydrated) {
+          setHydrateStatus("ok");
+          setHydrateMsg(null);
+        } else {
+          setHydrateStatus("missing");
+          setHydrateMsg(result?.message || "Actual local budget cache not found");
+        }
+      })
+      .catch((error) => {
+        if (cacheStatusRequestRef.current !== requestId) return;
+        setHydrateStatus("fail");
+        setHydrateMsg(error.message || "Cache check failed");
+        setHydrateResult(null);
+      });
+
+    return () => {
+      if (cacheStatusRequestRef.current === requestId) {
+        cacheStatusRequestRef.current += 1;
+      }
+    };
+  }, [actualConfigured, actualDirty, settings?.actual_budget_url, settings?.actual_budget_sync_id]);
 
   async function handleSaveActualSecret() {
     setActualSavingSecret(true);
@@ -47,6 +134,8 @@ export default function ActualBudgetConnectionCard({ settings }) {
       setActualConfigured(true);
       setActualDirty(false);
       setActualForm((current) => ({ ...current, password: "" }));
+      setHydrateStatus(null);
+      setHydrateResult(null);
     } finally {
       setActualSavingSecret(false);
     }
@@ -72,6 +161,21 @@ export default function ActualBudgetConnectionCard({ settings }) {
     }
   }
 
+  async function handleHydrateActualCache() {
+    cacheStatusRequestRef.current += 1;
+    setHydrateStatus("hydrating");
+    setHydrateMsg(null);
+    setHydrateResult(null);
+    try {
+      const result = await hydrateActualBudgetCache();
+      setHydrateStatus("ok");
+      setHydrateResult(result);
+    } catch (error) {
+      setHydrateStatus("fail");
+      setHydrateMsg(error.message || "Cache hydration failed");
+    }
+  }
+
   return (
     <SettingsCard
       title="Actual Budget"
@@ -87,7 +191,7 @@ export default function ActualBudgetConnectionCard({ settings }) {
             value={actualForm.serverUrl}
             onChange={(event) => {
               setActualForm((current) => ({ ...current, serverUrl: event.target.value }));
-              setActualDirty(true);
+              markActualDirty();
             }}
           />
         </div>
@@ -103,7 +207,7 @@ export default function ActualBudgetConnectionCard({ settings }) {
             value={actualForm.password}
             onChange={(event) => {
               setActualForm((current) => ({ ...current, password: event.target.value }));
-              setActualDirty(true);
+              markActualDirty();
             }}
           />
         </div>
@@ -115,7 +219,7 @@ export default function ActualBudgetConnectionCard({ settings }) {
             value={actualForm.syncId}
             onChange={(event) => {
               setActualForm((current) => ({ ...current, syncId: event.target.value }));
-              setActualDirty(true);
+              markActualDirty();
             }}
           />
         </div>
@@ -137,6 +241,15 @@ export default function ActualBudgetConnectionCard({ settings }) {
           >
             {testStatus === "testing" ? "Testing…" : "Test Connection"}
           </Button>
+          <Button
+            variant="secondary"
+            className={SETTINGS_SECONDARY_BUTTON_CLASS}
+            size="sm"
+            onClick={handleHydrateActualCache}
+            disabled={!actualConfigured || actualDirty || hydrateStatus === "hydrating"}
+          >
+            {hydrateStatus === "hydrating" ? "Hydrating..." : "Hydrate Cache"}
+          </Button>
           {testStatus && testStatus !== "testing" ? (
             <StatusPill tone={testStatus === "ok" ? "success" : "danger"}>
               {testStatus === "ok" ? "Connected" : `Failed${testMsg ? `: ${testMsg}` : ""}`}
@@ -144,7 +257,21 @@ export default function ActualBudgetConnectionCard({ settings }) {
           ) : actualConfigured && !actualDirty ? (
             <StatusPill tone="success">Configured</StatusPill>
           ) : null}
+          {hydrateStatus && hydrateStatus !== "hydrating" ? (
+            <StatusPill tone={hydrateStatusTone(hydrateStatus)}>
+              {hydrateStatusLabel(hydrateStatus, hydrateMsg)}
+            </StatusPill>
+          ) : null}
         </div>
+        {hydrateStatus === "ok" && cacheSummary(hydrateResult) ? (
+          <p className="text-[11px] leading-4 text-muted-foreground/70">
+            {cacheSummary(hydrateResult)}
+          </p>
+        ) : hydrateStatus === "missing" && hydrateMsg ? (
+          <p className="text-[11px] leading-4 text-muted-foreground/70">
+            {hydrateMsg}
+          </p>
+        ) : null}
       </div>
     </SettingsCard>
   );

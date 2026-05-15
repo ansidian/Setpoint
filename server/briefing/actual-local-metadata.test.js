@@ -1,9 +1,15 @@
-import { mkdtemp, mkdir, rm, writeFile } from "fs/promises";
+import { mkdtemp, mkdir, readdir, rm, utimes, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readLocalActualMetadata } from "./actual-local-metadata.js";
+import {
+  describeLocalActualCache,
+  hydrateLocalActualCache,
+  pruneActualBudgetBackups,
+  pruneLocalActualBackups,
+  readLocalActualMetadata,
+} from "./actual-local-metadata.js";
 
 let tempDir = null;
 
@@ -87,6 +93,43 @@ afterEach(async () => {
 });
 
 describe("readLocalActualMetadata", () => {
+  it("describes an existing local Actual cache without downloading", async () => {
+    await createActualBudgetFixture();
+
+    const result = await describeLocalActualCache("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      configured: true,
+      hydrated: true,
+      budgetId: "Budget-1",
+      syncId: "sync-123",
+      cloudFileId: "file-1",
+      actualDataDir: tempDir,
+    });
+    expect(result.dbSizeBytes).toBeGreaterThan(0);
+  });
+
+  it("reports configured but not hydrated when the local Actual cache is missing", async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+
+    const result = await describeLocalActualCache("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      configured: true,
+      hydrated: false,
+      syncId: "sync-123",
+      actualDataDir: tempDir,
+    });
+  });
+
   it("projects Actual metadata from the local budget sqlite without the SDK", async () => {
     await createActualBudgetFixture();
 
@@ -156,5 +199,94 @@ describe("readLocalActualMetadata", () => {
     })).rejects.toThrow("Actual Budget local metadata is unavailable");
 
     expect(downloadBudget).not.toHaveBeenCalled();
+  });
+
+  it("hydrates the local cache with an explicit hosted download and reports disk usage", async () => {
+    await createActualBudgetFixture();
+    const remoteBudgetDir = path.join(tempDir, "Budget-Remote");
+    const backupDir = path.join(remoteBudgetDir, "backups");
+    await writeBudgetFixture(remoteBudgetDir, {
+      id: "Budget-Remote",
+      cloudFileId: "file-remote",
+      accountName: "Fresh Checking",
+    });
+    await mkdir(backupDir, { recursive: true });
+    await writeFile(path.join(backupDir, "latest.zip"), "backup");
+    const downloadBudget = vi.fn().mockResolvedValue({
+      budgetDir: remoteBudgetDir,
+      metadata: { id: "Budget-Remote", cloudFileId: "file-remote", groupId: "sync-123" },
+      backupPrune: { removed: 2, kept: 1 },
+    });
+
+    const result = await hydrateLocalActualCache("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+      downloadBudget,
+    });
+
+    expect(downloadBudget).toHaveBeenCalledWith(
+      expect.objectContaining({ syncId: "sync-123" }),
+      expect.objectContaining({ refresh: true }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      hydrated: true,
+      budgetId: "Budget-Remote",
+      syncId: "sync-123",
+      cloudFileId: "file-remote",
+      budgetDir: remoteBudgetDir,
+      actualDataDir: tempDir,
+      backupCount: 1,
+      backupSizeBytes: 6,
+      backupPrune: { removed: 2, kept: 1 },
+    });
+    expect(result.dbSizeBytes).toBeGreaterThan(0);
+  });
+
+  it("keeps only the newest local Actual zip backup for a budget", async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    const budgetDir = path.join(tempDir, "My-Finances-d8e502a");
+    const backupDir = path.join(budgetDir, "backups");
+    await mkdir(backupDir, { recursive: true });
+    await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
+      id: "My-Finances-d8e502a",
+      cloudFileId: "file-1",
+      groupId: "sync-123",
+    }));
+    await writeFile(path.join(backupDir, "old.zip"), "old");
+    await writeFile(path.join(backupDir, "new.zip"), "new");
+    await writeFile(path.join(backupDir, "db.latest.sqlite"), "latest");
+    await utimes(path.join(backupDir, "old.zip"), new Date("2026-05-01T00:00:00Z"), new Date("2026-05-01T00:00:00Z"));
+    await utimes(path.join(backupDir, "new.zip"), new Date("2026-05-02T00:00:00Z"), new Date("2026-05-02T00:00:00Z"));
+
+    const result = await pruneActualBudgetBackups(budgetDir, { keep: 1 });
+
+    expect(result).toEqual({ removed: 1, kept: 1 });
+    await expect(readdir(backupDir).then((files) => files.sort())).resolves.toEqual([
+      "db.latest.sqlite",
+      "new.zip",
+    ]);
+  });
+
+  it("prunes backups across local Actual budget folders", async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    const budgetDir = path.join(tempDir, "My-Finances-d8e502a");
+    const backupDir = path.join(budgetDir, "backups");
+    await mkdir(backupDir, { recursive: true });
+    await mkdir(path.join(tempDir, "not-a-budget", "backups"), { recursive: true });
+    await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
+      id: "My-Finances-d8e502a",
+      cloudFileId: "file-1",
+      groupId: "sync-123",
+    }));
+    await writeFile(path.join(backupDir, "old.zip"), "old");
+    await writeFile(path.join(backupDir, "new.zip"), "new");
+    await utimes(path.join(backupDir, "old.zip"), new Date("2026-05-01T00:00:00Z"), new Date("2026-05-01T00:00:00Z"));
+    await utimes(path.join(backupDir, "new.zip"), new Date("2026-05-02T00:00:00Z"), new Date("2026-05-02T00:00:00Z"));
+
+    const result = await pruneLocalActualBackups({ dataDir: tempDir, keep: 1 });
+
+    expect(result).toEqual({ removed: 1, kept: 1, budgets: 1 });
+    await expect(readdir(backupDir).then((files) => files.sort())).resolves.toEqual(["new.zip"]);
   });
 });

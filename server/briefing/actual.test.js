@@ -29,6 +29,13 @@ const actualApiState = vi.hoisted(() => ({
 }));
 actualApiState.reset();
 
+const actualLocalMock = vi.hoisted(() => ({
+  actualDataDir: vi.fn(() => process.cwd()),
+  findLocalBudgetDir: vi.fn().mockResolvedValue(null),
+  pruneActualBudgetBackups: vi.fn().mockResolvedValue({ removed: 0, kept: 0 }),
+  readLocalActualMetadata: vi.fn(),
+}));
+
 // vi.mock is hoisted — these factories run fresh after each vi.resetModules().
 // The fake stores enough Actual state for tests to assert adapter outcomes
 // without depending on Actual's query-builder call shape.
@@ -48,6 +55,7 @@ vi.mock("@actual-app/api", () => {
 
   const actualApi = {
     init: vi.fn().mockResolvedValue(undefined),
+    loadBudget: vi.fn().mockResolvedValue(undefined),
     downloadBudget: vi.fn().mockResolvedValue(undefined),
     shutdown: vi.fn().mockResolvedValue(undefined),
     sync: vi.fn().mockResolvedValue(undefined),
@@ -85,6 +93,8 @@ vi.mock("@actual-app/api", () => {
   return { default: actualApi };
 });
 
+vi.mock("./actual-local-metadata.js", () => actualLocalMock);
+
 vi.mock("../db/connection.js", () => ({
   default: {
     execute: vi.fn().mockResolvedValue({
@@ -102,6 +112,9 @@ describe("actual-core mutex (withLock)", () => {
     vi.resetModules();
     vi.clearAllMocks();
     actualApiState.reset();
+    actualLocalMock.actualDataDir.mockReturnValue(process.cwd());
+    actualLocalMock.findLocalBudgetDir.mockResolvedValue(null);
+    actualLocalMock.pruneActualBudgetBackups.mockResolvedValue({ removed: 0, kept: 0 });
   });
 
   it("two concurrent calls execute sequentially (second starts after first finishes)", async () => {
@@ -241,6 +254,61 @@ describe("actual.js sendBill mutex", () => {
     vi.resetModules();
     vi.clearAllMocks();
     actualApiState.reset();
+    actualLocalMock.actualDataDir.mockReturnValue(process.cwd());
+    actualLocalMock.findLocalBudgetDir.mockResolvedValue(null);
+    actualLocalMock.pruneActualBudgetBackups.mockResolvedValue({ removed: 0, kept: 0 });
+  });
+
+  it("loads a cached local Actual budget for bill pay writes instead of downloading cold", async () => {
+    actualLocalMock.actualDataDir.mockReturnValue("/var/ea-actual");
+    actualLocalMock.findLocalBudgetDir.mockResolvedValueOnce({
+      budgetDir: "/var/ea-actual/Budget-Local",
+      metadata: { id: "Budget-Local", groupId: "sync-123", cloudFileId: "file-1" },
+    });
+    const { sendBill } = await import("./actual-core.js");
+    const actualApi = (await import("@actual-app/api")).default;
+
+    await sendBill({
+      type: "expense",
+      payee: "U.S. Bank",
+      amount: 42.25,
+      due_date: "2026-05-10",
+      account_id: "a1",
+    }, "user1");
+
+    expect(actualApi.init).toHaveBeenCalledWith(expect.objectContaining({
+      serverURL: "http://localhost",
+      dataDir: "/var/ea-actual",
+    }));
+    expect(actualApi.loadBudget).toHaveBeenCalledWith("Budget-Local");
+    expect(actualApi.downloadBudget).not.toHaveBeenCalled();
+    expect(actualApi.addTransactions).toHaveBeenCalled();
+    expect(actualLocalMock.pruneActualBudgetBackups).toHaveBeenCalledWith("/var/ea-actual/Budget-Local");
+  });
+
+  it("refuses a production bill pay write when the local Actual cache is missing", async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      actualLocalMock.findLocalBudgetDir.mockResolvedValueOnce(null);
+      const { sendBill } = await import("./actual-core.js");
+      const actualApi = (await import("@actual-app/api")).default;
+
+      await expect(sendBill({
+        type: "expense",
+        payee: "U.S. Bank",
+        amount: 42.25,
+        due_date: "2026-05-10",
+        account_id: "a1",
+      }, "user1")).rejects.toMatchObject({
+        status: 503,
+        code: "ACTUAL_LOCAL_BUDGET_REQUIRED",
+      });
+
+      expect(actualApi.downloadBudget).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 
   it("sendBill reuses the loaded budget after getMetadata", async () => {

@@ -186,5 +186,23 @@ router.post("/actual/test", async (req, res) => {
   }
 });
 
+router.post("/actual/cache/hydrate", async (_req, res) => {
+  try {
+    res.json(await billsService.hydrateActualCache(EA_USER_ID));
+  } catch (err) {
+    console.error("Actual Budget cache hydration failed:", err.message);
+    res.status(err.status || 500).json({ message: err.message || "Actual Budget cache hydration failed" });
+  }
+});
+
+router.get("/actual/cache/status", async (_req, res) => {
+  try {
+    res.json(await billsService.getActualCacheStatus(EA_USER_ID));
+  } catch (err) {
+    console.error("Actual Budget cache status check failed:", err.message);
+    res.status(err.status || 500).json({ message: err.message || "Actual Budget cache status check failed" });
+  }
+});
+
 export { quickTxnRouter };
 export default router;
