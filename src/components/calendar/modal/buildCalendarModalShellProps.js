@@ -61,6 +61,10 @@ export default function buildCalendarModalShellProps({
     onAgendaPassiveDateChange: agenda.onAgendaPassiveDateChange,
     onAgendaDateAction: agenda.onAgendaDateAction,
     onAgendaEventAction: agenda.onAgendaEventAction,
+    miniCalendarActions: {
+      onDateAction: agenda.onMiniCalendarDateAction,
+      onDateCreate: agenda.onMiniCalendarDateCreate,
+    },
     onAgendaDirtyBlocked: floating.shakeFloatingEditor,
     onGridDateAction: agenda.scrollAgendaToDate,
     onGridEventAction: agenda.scrollAgendaToEvent,

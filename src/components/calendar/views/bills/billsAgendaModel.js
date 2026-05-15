@@ -1,4 +1,5 @@
 import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
+import { addDaysYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import { buildDisplayedMonthGroups, sparseVisibleGroups } from "../agenda/agendaDateModel.js";
 import { getDayState } from "./billsModel.js";
 
@@ -42,6 +43,16 @@ function toAgendaBill(bill, dateKey) {
   };
 }
 
+function miniCalendarBounds(viewYear, viewMonth) {
+  const monthStart = ymdFromParts(viewYear, viewMonth, 1);
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const startDate = addDaysYmd(monthStart, -firstDay);
+  return {
+    startDate,
+    endDate: addDaysYmd(startDate, 41),
+  };
+}
+
 export function buildBillsAgendaGroups({
   computed,
   viewYear,
@@ -81,4 +92,21 @@ export function buildBillsAgendaGroups({
     firstVisibleDateKey,
     monthStartDateKey,
   };
+}
+
+export function buildBillsMiniCalendarActivityItems({
+  computed,
+  viewYear,
+  viewMonth,
+} = {}) {
+  const bounds = miniCalendarBounds(viewYear, viewMonth);
+  return Object.entries(computed?.itemsByDate || {})
+    .filter(([dateKey]) => dateKey >= bounds.startDate && dateKey <= bounds.endDate)
+    .flatMap(([dateKey, rawItems]) => (
+      getDayState(rawItems).items.map((item) => ({
+        ...toAgendaBill(item, dateKey),
+        kind: "bill",
+        dateKey,
+      }))
+    ));
 }

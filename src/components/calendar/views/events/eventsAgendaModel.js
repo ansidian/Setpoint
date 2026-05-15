@@ -2,6 +2,7 @@ import { getEventSelectionId } from "../../../../lib/redesign-helpers";
 import {
   addDaysYmd,
   pacificYMD,
+  ymdFromParts,
 } from "../../calendarDateUtils.js";
 import { visualEventDateRange } from "../../modal/calendarEventSpanLayout.js";
 import {
@@ -83,6 +84,20 @@ function normalizeCurrentWeather(weatherData, todayKey) {
     icon: weatherData.icon,
     summary: weatherData.summary || "",
   };
+}
+
+function miniCalendarBounds(viewYear, viewMonth) {
+  const monthStart = ymdFromParts(viewYear, viewMonth, 1);
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const startDate = addDaysYmd(monthStart, -firstDay);
+  return {
+    startDate,
+    endDate: addDaysYmd(startDate, 41),
+  };
+}
+
+function rangeOverlaps(range, bounds) {
+  return !!range && range.startDate <= bounds.endDate && range.endDate >= bounds.startDate;
 }
 
 export function buildEventsAgendaGroups({
@@ -180,6 +195,36 @@ export function buildEventsAgendaGroups({
     firstVisibleDateKey,
     monthStartDateKey,
   };
+}
+
+export function buildEventsMiniCalendarActivityItems({
+  events = [],
+  deadlineOverlay = null,
+  viewYear,
+  viewMonth,
+} = {}) {
+  const bounds = miniCalendarBounds(viewYear, viewMonth);
+  const eventItems = (events || [])
+    .filter((event) => event?.startMs && rangeOverlaps(visualEventDateRange(event), bounds))
+    .map((event) => ({ ...event, kind: "event" }));
+  const deadlineOverlayComputed = getDeadlineOverlayComputed({
+    deadlineData: deadlineOverlay?.data,
+    viewYear,
+    viewMonth,
+    showCompleted: !!deadlineOverlay?.showCompleted,
+  });
+  const deadlineItems = Object.entries(deadlineOverlayComputed?.itemsByDate || {})
+    .filter(([dateKey]) => dateKey >= bounds.startDate && dateKey <= bounds.endDate)
+    .flatMap(([dateKey, deadlines]) => deadlines.map((task) => ({
+      ...task,
+      kind: "deadline",
+      dateKey,
+      agendaDateKey: dateKey,
+      agendaItemId: getPlanningItemId(task),
+      agendaSourceColor: deadlinePlanningAccent(task),
+    })));
+
+  return [...eventItems, ...deadlineItems];
 }
 
 export { formatAgendaHeaderLabel, monthBounds };

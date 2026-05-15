@@ -72,6 +72,12 @@ describe("CalendarModal shell and search layout", () => {
 
     expect(monthGrid).toBeTruthy();
     expect(skeleton).toBeTruthy();
+    expect(screen.getByTestId("calendar-month-title-month").style.color).toBe("rgb(248, 250, 255)");
+    expect(screen.getByTestId("calendar-month-title-year").style.color).toBe("rgb(255, 69, 58)");
+    expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
+    expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("rgb(248, 250, 255)");
+    expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("rgb(255, 69, 58)");
+    expect(screen.getAllByTestId("calendar-mini-calendar-date")).toHaveLength(42);
     expect(screen.getByTestId("calendar-events-rail-skeleton")).toBeTruthy();
   });
 
@@ -96,6 +102,7 @@ describe("CalendarModal shell and search layout", () => {
       expect(screen.getByTestId("calendar-search-rail")).toBeTruthy();
       expect(screen.getByTestId("calendar-modal-body").getAttribute("data-search-layout")).toBe("three-rail");
       expect(screen.getByTestId("calendar-modal-rail")).toBeTruthy();
+      expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
       expect(screen.getByTestId("calendar-search-input")).toBe(document.activeElement);
     });
   });
@@ -121,6 +128,7 @@ describe("CalendarModal shell and search layout", () => {
       expect(screen.getByTestId("calendar-modal-body").getAttribute("data-search-layout")).toBe("search-replaces-agenda");
       expect(screen.getByTestId("calendar-search-rail")).toBeTruthy();
       expect(screen.queryByTestId("calendar-modal-rail")).toBeNull();
+      expect(screen.queryByTestId("calendar-mini-calendar")).toBeNull();
       expect(screen.getByTestId("calendar-grid-month")).toBeTruthy();
     });
   });

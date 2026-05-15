@@ -46,6 +46,8 @@ export default function EventsAgendaDeadlineRow({
   selected,
   registerRow,
   onSelect,
+  onPreviewStart,
+  onPreviewEnd,
 }) {
   const color = deadline.agendaSourceColor || "#89b4fa";
   const TitleTag = deadline.agendaComplete ? "s" : "span";
@@ -77,10 +79,22 @@ export default function EventsAgendaDeadlineRow({
       onMouseEnter={(eventObject) => {
         eventObject.currentTarget.style.transform = "translateY(-1px)";
         if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+        onPreviewStart?.(deadline);
       }}
       onMouseLeave={(eventObject) => {
         eventObject.currentTarget.style.transform = "translateY(0)";
         if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+        onPreviewEnd?.(deadline);
+      }}
+      onFocus={(eventObject) => {
+        eventObject.currentTarget.style.transform = "translateY(-1px)";
+        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+        onPreviewStart?.(deadline);
+      }}
+      onBlur={(eventObject) => {
+        eventObject.currentTarget.style.transform = "translateY(0)";
+        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+        onPreviewEnd?.(deadline);
       }}
     >
       <span

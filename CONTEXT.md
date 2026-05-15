@@ -116,6 +116,26 @@ _Avoid_: Search drawer, search modal
 The desktop calendar modal layout with search results on the left, month grid in the center, and agenda/detail rail on the right.
 _Avoid_: Replacing agenda on desktop, search overlay
 
+**Mini Calendar**:
+A compact calendar grid in the calendar workspace that orients and navigates the agenda rail by date.
+_Avoid_: Agenda Month Navigator, mini-month, sidebar calendar
+
+**Mini Calendar Activation**:
+The action of choosing a date in the **Mini Calendar** to select that date and land the agenda rail on the same date.
+_Avoid_: Preview-only date selection, partial agenda jump
+
+**Mini Calendar Activity Marker**:
+A compact date-level signal in the **Mini Calendar** showing count or density of active calendar workspace content on that date.
+_Avoid_: Event chip, source legend, decorative dot
+
+**Deadline Overlay**:
+A toggleable layer of deadline items inside the Events workspace.
+_Avoid_: Deadlines view, separate deadlines workspace, Canvas view
+
+**Agenda Row Hover Preview**:
+A temporary **Mini Calendar** date emphasis shown while hovering or focusing an agenda rail item. It wraps the previewed date number and its **Mini Calendar Activity Markers** as one visual target.
+_Avoid_: Hover selection, delayed tooltip, agenda preview mode
+
 ## Relationships
 
 - EA Dashboard has one owner; passkey authentication uses that owner identity and does not introduce usernames or multi-account login.
@@ -190,6 +210,39 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - A **Search Results Rail** dims result rows dated before today in the dashboard timezone, but date headers remain full-strength timeline anchors.
 - A **Search Results Rail** keeps chronological result order but initially centers completed result sets near today, preferring today's date group, then the first future group, then the most recent past group.
 - A **Three-Rail Calendar Workspace** is the desktop target when search is open; smaller or stacked layouts may replace the agenda rail only when there is not enough room.
+- A **Mini Calendar** is distinct from the month grid, agenda rail, and **Search Results Rail**; it is a compact date navigation surface for the current calendar workspace.
+- A **Mini Calendar** accompanies every agenda-backed calendar workspace, not only the Events workspace.
+- A **Mini Calendar** controls the same visible calendar month as the main calendar workspace; it does not maintain an independent preview month.
+- **Mini Calendar Activation** updates calendar selection and moves the agenda rail to the activated date; the agenda rail should finish landed on that target date rather than stopping between dates.
+- **Mini Calendar Activation** prioritizes accurate target landing over animation; long-distance agenda jumps should be instant or distance-aware rather than forced smooth.
+- A **Mini Calendar Activity Marker** is a count or density signal, not a replacement for agenda rows, event chips, bill rows, or deadline rows.
+- A **Mini Calendar Activity Marker** represents content in the active calendar workspace, not all calendar-related feeds at once.
+- **Mini Calendar Activity Markers** reflect the agenda rail's filtered content model rather than a separate month-grid cache.
+- **Mini Calendar Activity Markers** still render on adjacent-month dates inside the stable six-row **Mini Calendar** grid when the active workspace has confirmed content there.
+- A **Mini Calendar Activity Marker** has a hard maximum of four count signals per date; the fourth signal represents four or more items.
+- Deadline items use a checkmark-style **Mini Calendar Activity Marker** instead of a dot; a date shows at most one deadline checkmark, and it appears after dot markers.
+- Multi-day all-day events contribute **Mini Calendar Activity Markers** on every date they touch.
+- An **Agenda Row Hover Preview** previews the hovered agenda item's date in the **Mini Calendar** using the item's source color and encloses the date's **Mini Calendar Activity Markers**.
+- An **Agenda Row Hover Preview** takes visual precedence over the Mini Calendar's selected-date and today treatments while the agenda item is hovered.
+- An **Agenda Row Hover Preview** appears without intentional delay and may fade out subtly after the hover ends.
+- Keyboard focus on an agenda rail item produces the same **Agenda Row Hover Preview** as pointer hover.
+- For a multi-day all-day event, **Agenda Row Hover Preview** spans the event's covered Mini Calendar dates as one continuous pill-like preview with the date numbers and markers centered inside the pill.
+- Owner-driven agenda rail scrolling updates the **Mini Calendar** selection from the topmost active date header.
+- Double-clicking a date in the **Mini Calendar** creates a calendar event seeded to that date, regardless of the active calendar workspace.
+- The first click in a Mini Calendar double-click still performs **Mini Calendar Activation** immediately; the second click additionally opens event creation.
+- Dirty calendar editor protection takes precedence over **Mini Calendar Activation** and Mini Calendar event creation.
+- A **Deadline Overlay** belongs to the Events workspace; it is not a separate top-level calendar workspace.
+- When the **Deadline Overlay** is visible, deadline items participate in Events workspace **Mini Calendar Activity Markers**.
+- **Mini Calendar Activity Markers** follow the active workspace's visible overlay and filter state; hidden deadline items do not contribute markers.
+- In a **Three-Rail Calendar Workspace**, the **Mini Calendar** remains with the visible agenda rail while **Calendar Search** is open; when search replaces the agenda rail on narrower layouts, the **Mini Calendar** is hidden with that rail.
+- A **Mini Calendar** shows adjacent-month dates to keep a stable compact calendar grid; activating an adjacent-month date navigates the shared calendar workspace month and selects that date.
+- A **Mini Calendar** uses a stable six-row grid so its height does not shift the agenda rail between months.
+- A **Mini Calendar** stays fixed above the agenda rail content rather than scrolling away with agenda rows.
+- A **Mini Calendar** ignores wheel input; wheel gestures should not navigate months from the Mini Calendar.
+- A **Mini Calendar** does not provide internal keyboard grid navigation in the initial behavior contract.
+- Mini Calendar dates remain ordinary focusable controls for activation even without internal keyboard grid navigation.
+- The **Mini Calendar** date grid renders immediately for the visible month; activity markers populate from confirmed available data rather than replacing the whole Mini Calendar with a loading skeleton.
+- Owner-driven agenda rail scrolling may update **Mini Calendar** date selection, but it does not navigate the shared calendar workspace month.
 
 ## Example Dialogue
 
@@ -216,3 +269,8 @@ _Avoid_: Replacing agenda on desktop, search overlay
 - "Multi-select chip events" was resolved as a **Calendar Event Selection Set**, not an extension of single-item detail selection or deadline overlay selection.
 - "Cmd-C/Cmd-V for selected event chips" was resolved as a **Calendar Event Clipboard**, not integration with the operating-system clipboard.
 - "Retry failed multi-event paste creates" was rejected for the initial **Calendar Event Clipboard** because duplicate-safe create idempotency is out of scope.
+- "Mini calendar" was resolved as **Mini Calendar**, not **Agenda Month Navigator**, because it is the only compact calendar surface in the project and the owner-facing name is self-explanatory.
+- "Clicking a mini calendar date" was resolved as **Mini Calendar Activation**, not a selection-only preview.
+- "Mini calendar dots" was resolved as **Mini Calendar Activity Markers**, not detailed event chips or a standalone source legend.
+- Binary **Mini Calendar Activity Markers** were rejected as too weak; marker count or density is the useful orientation signal, with a hard cap of four.
+- "Deadlines view" was resolved as **Deadline Overlay** for the current calendar product language; deadlines live inside Events behind a show/hide control.

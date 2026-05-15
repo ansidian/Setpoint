@@ -232,6 +232,16 @@ Floating panels must be portaled to `document.body`, fixed-positioned from the t
 
 Timeline rows, rail cards, and dashboard sections should emphasize time, urgency, source, and action. Use stable row heights and compact metadata so live updates do not disrupt reading.
 
+### Calendar Mini Calendar
+
+The calendar mini calendar is a compact rail navigator. Its title keeps the month text solid white and the year solid red, matching the main calendar shell title treatment. Non-today dates use white text. The selected date uses the same square cell treatment as Agenda Row Hover Preview, with a solid gray fill and slightly larger date text while preserving contrast. Today, when unselected, uses the same blue as the agenda rail's today date header. When today is selected, the square cell fill becomes that same blue and the date text becomes white.
+
+Mini calendar activity markers are count or density signals, not a decorative presence-only dot. Use a hard maximum of four tiny markers per date; the fourth marker represents four or more items. Deadline items use one checkmark-style marker instead of a dot, placed after dot markers. When markers sit on a filled selected or preview cell, keep marker colors true and add only a contrast-aware light or dark halo when needed for legibility. An agenda row hover preview should immediately render an unaltered source-colored cell treatment around that item's mini calendar date and its marker row for pointer hover or keyboard focus with no intentional delay, visually win over selected-date and today treatments while active, and fade out very subtly after hover or focus ends. Do not dim, opacity-reduce, or mix down the source color for the hover preview. For multi-day all-day events, render the hover preview as one continuous unaltered source-colored pill across the covered mini calendar dates and keep the date number plus markers visually centered inside it.
+
+Adjacent-month dates in the mini calendar use a gray, more muted date number instead of white. They may still show activity markers for confirmed active-workspace content in the six-row grid. Do not mute or dim their activity marker colors; the quieter date text is enough.
+
+Keep the mini calendar on a stable six-row grid so month changes do not resize the agenda rail below it.
+
 ## 6. Do's and Don'ts
 
 ### Do:

@@ -59,6 +59,43 @@ describe("CalendarModal agenda rail state behavior", () => {
     expect(screen.getByTestId("events-agenda-rail").getAttribute("data-calendar-local-scroll")).toBe("true");
   });
 
+  it("keeps the Mini Calendar fixed above the Events agenda local scroller", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const miniCalendar = await screen.findByTestId("calendar-mini-calendar");
+    const agendaRail = screen.getByTestId("events-agenda-rail");
+    const contextRail = screen.getByTestId("calendar-modal-rail");
+
+    expect(contextRail.contains(miniCalendar)).toBe(true);
+    expect(agendaRail.contains(miniCalendar)).toBe(false);
+    expect(agendaRail.getAttribute("data-calendar-local-scroll")).toBe("true");
+    expect(miniCalendar.compareDocumentPosition(agendaRail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it.each([
     {
       view: "events",
@@ -146,5 +183,8 @@ describe("CalendarModal agenda rail state behavior", () => {
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(within(agendaRail).getAllByText(expectedText).length).toBeGreaterThan(0);
     expect(agendaRail.getAttribute("data-calendar-local-scroll")).toBe("true");
+    if (view === "events" || view === "bills") {
+      expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
+    }
   });
 });

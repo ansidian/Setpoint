@@ -65,6 +65,7 @@ export default function CalendarModalShell({
   onAgendaPassiveDateChange,
   onAgendaDateAction,
   onAgendaEventAction,
+  miniCalendarActions,
   onAgendaDirtyBlocked,
   onGridDateAction,
   onGridEventAction,
@@ -181,12 +182,14 @@ export default function CalendarModalShell({
       currentYear={currentYear}
       currentMonth={currentMonth}
       todayDate={todayDate}
+      monthNavigation={{ canGoPrev, navigateMonth }}
       eventQuickActions={eventQuickActions}
       deadlineQuickActions={deadlineQuickActions}
       floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
       onDirtyBlocked={onAgendaDirtyBlocked}
       onPassiveDateChange={onAgendaPassiveDateChange}
       onDateAction={onAgendaDateAction}
+      miniCalendarActions={miniCalendarActions}
       onEventAction={onAgendaEventAction}
       onFilteredSelectedDeadlineHidden={() => {
         setSelectedItemId(null);

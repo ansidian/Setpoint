@@ -1172,6 +1172,36 @@ export default function useCalendarModalController({
     requestAgendaScroll({ type: "event", itemId, dateKey });
   }, [requestAgendaScroll]);
 
+  function miniCalendarActionBlocked() {
+    const current = floatingDetailRef.current;
+    const dirtyFloatingEditor = current?.open
+      && (current.mode === "edit" || current.mode === "create")
+      && current.dirty;
+    const dirtyExpandedEditor = eventEditorRef.current?.isEditorOpen
+      && eventEditorRef.current?.isDirty;
+    if (!dirtyFloatingEditor && !dirtyExpandedEditor) return false;
+    shakeFloatingEditor();
+    return true;
+  }
+
+  function activateMiniCalendarDate(dateKey) {
+    const parsed = parseYmd(dateKey);
+    if (!parsed) return false;
+    if (miniCalendarActionBlocked()) return false;
+    if (parsed.year !== viewYear || parsed.month !== viewMonth) {
+      setViewDate({ year: parsed.year, month: parsed.month });
+    }
+    selectAgendaDate(dateKey);
+    scrollAgendaToDate(dateKey);
+    return true;
+  }
+
+  function createMiniCalendarEvent(dateKey) {
+    if (!activateMiniCalendarDate(dateKey)) return false;
+    openFloatingEventCreate(dateKey);
+    return true;
+  }
+
   const resolveSelectedAgendaEditAnchor = useCallback((itemId, dateKey) => {
     const lastAgendaSelection = agendaSelectionAnchorRef.current;
     if (
@@ -1910,6 +1940,8 @@ export default function useCalendarModalController({
       agendaEntryTargetDateKey: effectiveAgendaEntryTargetDateKey,
       onAgendaPassiveDateChange: (dateKey) => selectAgendaDate(dateKey, { passive: true }),
       onAgendaDateAction: (dateKey) => selectAgendaDate(dateKey),
+      onMiniCalendarDateAction: activateMiniCalendarDate,
+      onMiniCalendarDateCreate: createMiniCalendarEvent,
       onAgendaEventAction: selectAgendaEvent,
       scrollAgendaToDate,
       scrollAgendaToEvent,
