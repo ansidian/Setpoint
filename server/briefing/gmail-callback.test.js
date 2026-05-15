@@ -40,6 +40,8 @@ describe("gmail callback canonicalization", () => {
       email: "user@example.com",
       label: "Work",
       sort_order: 2,
+      created_at: "2026-05-10T12:00:00.000Z",
+      updated_at: "2026-05-10T12:00:00.000Z",
     });
     await seedEmailAccount(testState.db.current, {
       id: "gmail-old",
@@ -47,6 +49,8 @@ describe("gmail callback canonicalization", () => {
       email: "USER@example.com",
       label: "Work old",
       sort_order: 7,
+      created_at: "2026-05-09T12:00:00.000Z",
+      updated_at: "2026-05-09T12:00:00.000Z",
     });
     fetch
       .mockResolvedValueOnce({
