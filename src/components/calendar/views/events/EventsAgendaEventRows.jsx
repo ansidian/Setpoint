@@ -26,7 +26,15 @@ function isEventSelectionModifier(event) {
   return !!(event?.metaKey || event?.ctrlKey);
 }
 
-export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlocked }) {
+export function AllDayChip({
+  event,
+  selected,
+  onSelect,
+  quickActions,
+  onDirtyBlocked,
+  onPreviewStart,
+  onPreviewEnd,
+}) {
   const specialDate = isGoogleSpecialDateEvent(event);
   const color = specialDate ? googleSpecialDateAccent(event) : event.agendaSourceColor;
   const safeText = contrastText(color);
@@ -113,9 +121,19 @@ export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlo
       }}
       onMouseEnter={(eventObject) => {
         eventObject.currentTarget.style.transform = "translateY(-1px)";
+        onPreviewStart?.(event);
       }}
       onMouseLeave={(eventObject) => {
         eventObject.currentTarget.style.transform = "translateY(0)";
+        onPreviewEnd?.(event);
+      }}
+      onFocus={(eventObject) => {
+        eventObject.currentTarget.style.transform = "translateY(-1px)";
+        onPreviewStart?.(event);
+      }}
+      onBlur={(eventObject) => {
+        eventObject.currentTarget.style.transform = "translateY(0)";
+        onPreviewEnd?.(event);
       }}
     >
       {specialDate ? (
@@ -152,7 +170,17 @@ export function AllDayChip({ event, selected, onSelect, quickActions, onDirtyBlo
   );
 }
 
-export function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickActions, onDirtyBlocked }) {
+export function TimedRow({
+  event,
+  dateKey,
+  todayKey,
+  selected,
+  onSelect,
+  quickActions,
+  onDirtyBlocked,
+  onPreviewStart,
+  onPreviewEnd,
+}) {
   const color = event.agendaSourceColor;
   const location = event.location ? getLocationDisplayLabel(event.location) : "";
   const hasVideo = !!extractZoomMeetingUrl(event);
@@ -227,10 +255,22 @@ export function TimedRow({ event, dateKey, todayKey, selected, onSelect, quickAc
       onMouseEnter={(eventObject) => {
         eventObject.currentTarget.style.transform = "translateY(-1px)";
         if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+        onPreviewStart?.(event);
       }}
       onMouseLeave={(eventObject) => {
         eventObject.currentTarget.style.transform = "translateY(0)";
         if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+        onPreviewEnd?.(event);
+      }}
+      onFocus={(eventObject) => {
+        eventObject.currentTarget.style.transform = "translateY(-1px)";
+        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+        onPreviewStart?.(event);
+      }}
+      onBlur={(eventObject) => {
+        eventObject.currentTarget.style.transform = "translateY(0)";
+        if (!selected) eventObject.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+        onPreviewEnd?.(event);
       }}
     >
       <span

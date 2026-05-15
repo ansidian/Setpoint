@@ -17,17 +17,25 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
   currentYear,
   currentMonth,
   todayDate,
+  monthNavigation = null,
   eventQuickActions,
   deadlineQuickActions,
   floatingEditorDirty,
   onDirtyBlocked,
   onPassiveDateChange,
   onDateAction,
+  miniCalendarActions = null,
   onEventAction,
   onFilteredSelectedDeadlineHidden,
   showCompletedDeadlines,
   onShowCompletedDeadlinesChange,
 }, ref) {
+  const miniCalendarNavigation = {
+    canGoPrev: monthNavigation?.canGoPrev ?? true,
+    onPreviousMonth: monthNavigation?.navigateMonth ? () => monthNavigation.navigateMonth(-1) : undefined,
+    onNextMonth: monthNavigation?.navigateMonth ? () => monthNavigation.navigateMonth(1) : undefined,
+  };
+
   if (view === "events") {
     return (
       <EventsAgendaRail
@@ -46,11 +54,16 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         currentYear={currentYear}
         currentMonth={currentMonth}
         todayDate={todayDate}
+        canGoPrev={miniCalendarNavigation.canGoPrev}
+        onPreviousMonth={miniCalendarNavigation.onPreviousMonth}
+        onNextMonth={miniCalendarNavigation.onNextMonth}
         eventQuickActions={eventQuickActions}
         floatingEditorDirty={floatingEditorDirty}
         onDirtyBlocked={onDirtyBlocked}
         onPassiveDateChange={onPassiveDateChange}
         onDateAction={onDateAction}
+        onMiniCalendarDateAction={miniCalendarActions?.onDateAction}
+        onMiniCalendarDateCreate={miniCalendarActions?.onDateCreate}
         onEventAction={onEventAction}
       />
     );
@@ -70,8 +83,13 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         currentYear={currentYear}
         currentMonth={currentMonth}
         todayDate={todayDate}
+        canGoPrev={miniCalendarNavigation.canGoPrev}
+        onPreviousMonth={miniCalendarNavigation.onPreviousMonth}
+        onNextMonth={miniCalendarNavigation.onNextMonth}
         onPassiveDateChange={onPassiveDateChange}
         onDateAction={onDateAction}
+        onMiniCalendarDateAction={miniCalendarActions?.onDateAction}
+        onMiniCalendarDateCreate={miniCalendarActions?.onDateCreate}
         onBillAction={onEventAction}
       />
     );

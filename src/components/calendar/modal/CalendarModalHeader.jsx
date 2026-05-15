@@ -1,5 +1,8 @@
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search, X } from "lucide-react";
 
+const TITLE_MONTH_WHITE = "#f8faff";
+const TITLE_YEAR_RED = "#ff453a";
+
 const VIEW_OPTIONS = [
   { key: "events", label: "Events", Icon: CalendarIcon, hint: "1" },
   { key: "bills", label: "Bills", Icon: Receipt, hint: "2" },
@@ -218,14 +221,18 @@ export default function CalendarModalHeader({
               style={{
                 fontSize: titleSize,
                 fontWeight: 500,
-                color: "#fff",
+                color: TITLE_MONTH_WHITE,
                 letterSpacing: -0.7,
                 lineHeight: 0.96,
                 whiteSpace: layout.headerWrap ? "normal" : "nowrap",
               }}
             >
-              {monthName}{" "}
-              <span style={{ color: "rgba(205,214,244,0.4)", fontWeight: 400 }}>{monthYear}</span>
+              <span data-testid="calendar-month-title-month" style={{ color: TITLE_MONTH_WHITE }}>
+                {monthName}
+              </span>{" "}
+              <span data-testid="calendar-month-title-year" style={{ color: TITLE_YEAR_RED, fontWeight: 400 }}>
+                {monthYear}
+              </span>
             </div>
           </div>
         </div>

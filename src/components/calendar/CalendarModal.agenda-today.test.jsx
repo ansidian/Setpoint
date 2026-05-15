@@ -193,6 +193,9 @@ describe("CalendarModal today agenda behavior", () => {
       fireEvent.keyDown(document, { key: "t" });
 
       expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
+      expect(within(screen.getByTestId("calendar-mini-calendar"))
+        .getByRole("button", { name: /Monday, April 20, today, selected/i })
+        .getAttribute("data-date-fill")).toBe("today-selected");
       expect(screen.getByTestId("calendar-cell-date-header-2026-04-20")).toBeTruthy();
     } finally {
       vi.useRealTimers();

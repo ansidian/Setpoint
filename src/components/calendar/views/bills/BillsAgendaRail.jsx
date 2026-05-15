@@ -1,7 +1,11 @@
-import { forwardRef, useMemo } from "react";
+import { forwardRef, useMemo, useState } from "react";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
-import { buildBillsAgendaGroups } from "./billsAgendaModel.js";
+import MiniCalendar, { AgendaRailWithMiniCalendar } from "../agenda/MiniCalendar.jsx";
+import {
+  buildBillsAgendaGroups,
+  buildBillsMiniCalendarActivityItems,
+} from "./billsAgendaModel.js";
 
 function groupDate(group) {
   const parsed = parseYmd(group.dateKey);
@@ -61,7 +65,7 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
   );
 }
 
-function BillRow({ bill, selected, onSelect }) {
+function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
   const color = bill.agendaSelectedColor;
   return (
     <button
@@ -89,10 +93,22 @@ function BillRow({ bill, selected, onSelect }) {
       onMouseEnter={(event) => {
         event.currentTarget.style.transform = "translateY(-1px)";
         if (!selected) event.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+        onPreviewStart?.(bill);
       }}
       onMouseLeave={(event) => {
         event.currentTarget.style.transform = "translateY(0)";
         if (!selected) event.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+        onPreviewEnd?.(bill);
+      }}
+      onFocus={(event) => {
+        event.currentTarget.style.transform = "translateY(-1px)";
+        if (!selected) event.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+        onPreviewStart?.(bill);
+      }}
+      onBlur={(event) => {
+        event.currentTarget.style.transform = "translateY(0)";
+        if (!selected) event.currentTarget.style.borderColor = "rgba(255,255,255,0.055)";
+        onPreviewEnd?.(bill);
       }}
     >
       <span
@@ -161,6 +177,22 @@ function EmptyBillDay({ fallback }) {
   );
 }
 
+function previewSourceKey(item) {
+  return `${item?.agendaItemId || item?.id || ""}:${item?.agendaDateKey || item?.dateKey || ""}`;
+}
+
+function previewItemForBill(item) {
+  const dateKey = item?.agendaDateKey || item?.dateKey || null;
+  return {
+    ...item,
+    kind: "bill",
+    dateKey,
+    agendaDateKey: dateKey,
+    markerColor: item?.agendaDotColor || item?.agendaSelectedColor,
+    previewSourceKey: previewSourceKey(item),
+  };
+}
+
 const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   viewYear,
   viewMonth,
@@ -172,8 +204,13 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   currentYear,
   currentMonth,
   todayDate,
+  canGoPrev = true,
+  onPreviousMonth,
+  onNextMonth,
   onPassiveDateChange,
   onDateAction,
+  onMiniCalendarDateAction,
+  onMiniCalendarDateCreate,
   onBillAction,
 }, ref) {
   const todayKey = ymdFromParts(currentYear, currentMonth, todayDate);
@@ -184,54 +221,91 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
     todayKey,
     forceVisibleDateKey: entryScrollTargetDateKey || selectedDateKey,
   }), [computed, entryScrollTargetDateKey, selectedDateKey, todayKey, viewMonth, viewYear]);
+  const miniCalendarItems = useMemo(() => buildBillsMiniCalendarActivityItems({
+    computed,
+    viewYear,
+    viewMonth,
+  }), [computed, viewMonth, viewYear]);
+  const [hoverPreviewItem, setHoverPreviewItem] = useState(null);
+
+  function startHoverPreview(item) {
+    setHoverPreviewItem(previewItemForBill(item));
+  }
+
+  function endHoverPreview(item) {
+    const sourceKey = previewSourceKey(item);
+    setHoverPreviewItem((current) => (
+      current?.previewSourceKey === sourceKey ? null : current
+    ));
+  }
 
   return (
-    <AgendaRailShell
-      ref={ref}
-      testId="bills-agenda-rail"
-      groups={agenda.visibleGroups}
-      firstVisibleDateKey={agenda.firstVisibleDateKey}
-      todayKey={todayKey}
-      selectedDateKey={selectedDateKey}
-      scrollCommand={scrollCommand}
-      entryScrollTargetDateKey={entryScrollTargetDateKey}
-      onPassiveDateChange={onPassiveDateChange}
-      renderHeader={({ group, registerHeader }) => (
-        <AgendaHeader
-          group={group}
+    <AgendaRailWithMiniCalendar
+      miniCalendar={(
+        <MiniCalendar
+          viewYear={viewYear}
+          viewMonth={viewMonth}
           todayKey={todayKey}
-          registerHeader={registerHeader}
-          onActivate={onDateAction}
+          selectedDateKey={selectedDateKey}
+          activityItems={miniCalendarItems}
+          hoverPreviewItem={hoverPreviewItem}
+          canGoPrev={canGoPrev}
+          onPreviousMonth={onPreviousMonth}
+          onNextMonth={onNextMonth}
+          onDateAction={onMiniCalendarDateAction}
+          onDateCreate={onMiniCalendarDateCreate}
         />
       )}
-      renderGroup={({ group, registerRow, registerContent }) => (
-        <>
-          {group.items.map((bill) => (
-            <span
-              key={bill.agendaKey}
-              ref={(node) => registerRow(bill.agendaKey, node, group.dateKey)}
-            >
-              <BillRow
-                bill={bill}
-                selected={String(selectedItemId || "") === bill.agendaItemId}
-                onSelect={(item, element) => onBillAction?.({
-                  item,
-                  dateKey: item.agendaDateKey,
-                  anchorElement: element,
-                  sourceCellElement: element,
-                  anchorKind: "agenda-row",
-                })}
-              />
-            </span>
-          ))}
-          {!group.hasBills && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
-            <div ref={(node) => registerContent(group.dateKey, node)}>
-              <EmptyBillDay fallback={group.isFallback} />
-            </div>
-          ) : null}
-        </>
-      )}
-    />
+    >
+      <AgendaRailShell
+        ref={ref}
+        testId="bills-agenda-rail"
+        groups={agenda.visibleGroups}
+        firstVisibleDateKey={agenda.firstVisibleDateKey}
+        todayKey={todayKey}
+        selectedDateKey={selectedDateKey}
+        scrollCommand={scrollCommand}
+        entryScrollTargetDateKey={entryScrollTargetDateKey}
+        onPassiveDateChange={onPassiveDateChange}
+        renderHeader={({ group, registerHeader }) => (
+          <AgendaHeader
+            group={group}
+            todayKey={todayKey}
+            registerHeader={registerHeader}
+            onActivate={onDateAction}
+          />
+        )}
+        renderGroup={({ group, registerRow, registerContent }) => (
+          <>
+            {group.items.map((bill) => (
+              <span
+                key={bill.agendaKey}
+                ref={(node) => registerRow(bill.agendaKey, node, group.dateKey)}
+              >
+                <BillRow
+                  bill={bill}
+                  selected={String(selectedItemId || "") === bill.agendaItemId}
+                  onPreviewStart={startHoverPreview}
+                  onPreviewEnd={endHoverPreview}
+                  onSelect={(item, element) => onBillAction?.({
+                    item,
+                    dateKey: item.agendaDateKey,
+                    anchorElement: element,
+                    sourceCellElement: element,
+                    anchorKind: "agenda-row",
+                  })}
+                />
+              </span>
+            ))}
+            {!group.hasBills && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
+              <div ref={(node) => registerContent(group.dateKey, node)}>
+                <EmptyBillDay fallback={group.isFallback} />
+              </div>
+            ) : null}
+          </>
+        )}
+      />
+    </AgendaRailWithMiniCalendar>
   );
 });
 

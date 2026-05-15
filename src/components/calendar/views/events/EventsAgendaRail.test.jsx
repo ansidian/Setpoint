@@ -334,6 +334,195 @@ describe("EventsAgendaRail", () => {
     expect(within(rail).getByText("72°/55°")).toBeTruthy();
   });
 
+  it("updates the Mini Calendar hover preview immediately as agenda rows change", () => {
+    renderRail({
+      selectedDateKey: "2026-05-04",
+      events: [
+        event({
+          id: "event-1",
+          title: "Planning block",
+          color: "#e8776a",
+          start: "2026-05-04T16:00:00.000Z",
+          end: "2026-05-04T17:00:00.000Z",
+        }),
+        event({
+          id: "event-2",
+          title: "Review block",
+          color: "#89b4fa",
+          start: "2026-05-05T16:00:00.000Z",
+          end: "2026-05-05T17:00:00.000Z",
+        }),
+      ],
+    });
+
+    const calendar = screen.getByTestId("calendar-mini-calendar");
+    const [firstRow, secondRow] = screen.getAllByTestId("calendar-agenda-event-row");
+    const mayFour = within(calendar).getByRole("button", { name: /Monday, May 4, selected/i });
+    const mayFive = within(calendar).getByRole("button", { name: /Tuesday, May 5/i });
+
+    fireEvent.mouseEnter(firstRow);
+    expect(mayFour.getAttribute("data-hover-preview")).toBe("active");
+    expect(mayFour.getAttribute("data-date-fill")).toBe("hover-preview");
+    expect(mayFour.getAttribute("data-hover-preview-color")).toBe("#e8776a");
+
+    fireEvent.mouseEnter(secondRow);
+    expect(mayFive.getAttribute("data-hover-preview")).toBe("active");
+    expect(mayFive.getAttribute("data-hover-preview-color")).toBe("#89b4fa");
+
+    fireEvent.mouseLeave(firstRow);
+    expect(mayFive.getAttribute("data-hover-preview")).toBe("active");
+
+    fireEvent.mouseLeave(secondRow);
+    expect(mayFive.getAttribute("data-hover-preview")).toBeNull();
+    expect(mayFour.getAttribute("data-date-fill")).toBe("selected");
+  });
+
+  it("previews focused multi-day all-day chips as a continuous Mini Calendar pill", () => {
+    renderRail({
+      selectedDateKey: "2026-05-01",
+      events: [
+        event({
+          id: "conference",
+          title: "Conference",
+          allDay: true,
+          color: "#a6e3a1",
+          start: "2026-05-01T07:00:00.000Z",
+          end: "2026-05-11T07:00:00.000Z",
+        }),
+      ],
+    });
+
+    fireEvent.focus(screen.getAllByTestId("calendar-agenda-event-chip")[0]);
+
+    const segments = screen.getAllByTestId("calendar-mini-calendar-hover-preview");
+    expect(segments).toHaveLength(3);
+    expect(segments.map((segment) => segment.getAttribute("data-segment-start"))).toEqual([
+      "2026-05-01",
+      "2026-05-03",
+      "2026-05-10",
+    ]);
+    expect(segments.every((segment) => segment.getAttribute("data-preview-color") === "#a6e3a1")).toBe(true);
+  });
+
+  it("derives Mini Calendar deadline markers from the filtered deadline overlay", () => {
+    const deadlineData = {
+      todoist: {
+        upcoming: [
+          { id: "active", title: "Active", due_date: "2026-05-12", source: "todoist", status: "incomplete" },
+          { id: "done", title: "Done", due_date: "2026-05-12", source: "todoist", status: "complete" },
+        ],
+      },
+      ctm: { upcoming: [] },
+    };
+    const { rerender } = renderRail({
+      selectedDateKey: "2026-05-12",
+      deadlineOverlay: { showCompleted: false, data: deadlineData },
+    });
+    const calendar = screen.getByTestId("calendar-mini-calendar");
+    const mayTwelve = within(calendar).getByRole("button", { name: /Tuesday, May 12, selected/i });
+    let deadlineMarker = within(mayTwelve).getByTestId("calendar-mini-calendar-marker");
+
+    expect(deadlineMarker.getAttribute("data-marker-kind")).toBe("deadline");
+    expect(deadlineMarker.getAttribute("data-marker-count")).toBe("1");
+
+    rerender(
+      <EventsAgendaRail
+        viewYear={2026}
+        viewMonth={4}
+        currentYear={2026}
+        currentMonth={4}
+        todayDate={1}
+        selectedDateKey="2026-05-12"
+        events={[
+          event({
+            id: "event-1",
+            title: "Planning block",
+            start: "2026-05-04T16:00:00.000Z",
+            end: "2026-05-04T17:00:00.000Z",
+          }),
+        ]}
+        deadlineOverlay={{ showCompleted: true, data: deadlineData }}
+      />,
+    );
+
+    deadlineMarker = within(within(screen.getByTestId("calendar-mini-calendar"))
+      .getByRole("button", { name: /Tuesday, May 12, selected/i }))
+      .getByTestId("calendar-mini-calendar-marker");
+    expect(deadlineMarker.getAttribute("data-marker-kind")).toBe("deadline");
+    expect(deadlineMarker.getAttribute("data-marker-count")).toBe("2");
+  });
+
+  it("shows markers for trailing Mini Calendar dates while viewing the current month", () => {
+    renderRail({
+      selectedDateKey: "2026-05-04",
+      events: [
+        event({
+          id: "event-1",
+          title: "Planning block",
+          start: "2026-05-04T16:00:00.000Z",
+          end: "2026-05-04T17:00:00.000Z",
+        }),
+        event({
+          id: "june-event",
+          title: "June kickoff",
+          color: "#a6e3a1",
+          start: "2026-06-01T16:00:00.000Z",
+          end: "2026-06-01T17:00:00.000Z",
+        }),
+      ],
+      deadlineOverlay: {
+        showCompleted: true,
+        data: {
+          todoist: {
+            upcoming: [
+              { id: "june-deadline", title: "June task", due_date: "2026-06-01", source: "todoist", status: "incomplete" },
+            ],
+          },
+          ctm: { upcoming: [] },
+        },
+      },
+    });
+
+    const juneOne = within(screen.getByTestId("calendar-mini-calendar"))
+      .getByRole("button", { name: /Monday, June 1/i });
+    expect(juneOne.getAttribute("data-adjacent-position")).toBe("trailing");
+
+    const markers = within(juneOne).getAllByTestId("calendar-mini-calendar-marker");
+    expect(markers.map((marker) => marker.getAttribute("data-marker-kind"))).toEqual([
+      "dot",
+      "deadline",
+    ]);
+    expect(markers.map((marker) => marker.getAttribute("data-marker-color"))).toEqual([
+      "#a6e3a1",
+      "#e8776a",
+    ]);
+  });
+
+  it("previews focused deadline rows with their source color", () => {
+    renderRail({
+      selectedDateKey: "2026-05-12",
+      events: [],
+      deadlineOverlay: {
+        showCompleted: true,
+        data: {
+          todoist: {
+            upcoming: [
+              { id: "deadline-1", title: "Submit report", due_date: "2026-05-12", source: "todoist", status: "incomplete" },
+            ],
+          },
+          ctm: { upcoming: [] },
+        },
+      },
+    });
+
+    fireEvent.focus(screen.getByTestId("calendar-agenda-deadline-row"));
+
+    const mayTwelve = within(screen.getByTestId("calendar-mini-calendar"))
+      .getByRole("button", { name: /Tuesday, May 12, selected/i });
+    expect(mayTwelve.getAttribute("data-hover-preview")).toBe("active");
+    expect(mayTwelve.getAttribute("data-hover-preview-color")).toBe("#e8776a");
+  });
+
   it("scopes visual selection to the selected agenda date for multi-day events", () => {
     renderRail({
       selectedDateKey: "2026-05-05",
