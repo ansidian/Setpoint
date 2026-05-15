@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../api", () => ({
-  getCalendarDeadlines: vi.fn().mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } }),
+  getCalendarDeadlines: vi.fn().mockResolvedValue({ upcoming: [] }),
   getCalendarDeadlinesRange: vi.fn(),
   getCalendarBillsRange: vi.fn(),
   getSettings: vi.fn().mockResolvedValue({}),
@@ -56,8 +56,7 @@ vi.mock("../hooks/useCurrentDashboard", () => ({
       error: null,
       briefing: {
         emails: { summary: "", accounts: [] },
-        ctm: { upcoming: [], stats: null },
-        todoist: { upcoming: [], stats: null },
+        deadlines: { upcoming: [], stats: null },
         calendar: [],
       },
       setBriefing: vi.fn(),

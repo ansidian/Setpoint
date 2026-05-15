@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createCompletedTasksTestDb,
   listCompletedTasks,
+  seedCompletedTask,
 } from "../test-utils/completed-tasks-db.js";
 
 const testState = vi.hoisted(() => ({
@@ -23,23 +24,23 @@ vi.mock("./todoist.js", () => ({
   createTodoistTask: vi.fn(),
   updateTodoistTask: vi.fn(),
 }));
-vi.mock("./ctm.js", () => ({
-  updateCTMEventStatus: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock("./reminder-service.js", () => ({
   deleteSourceReminders: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
 }));
 
 const todoist = await import("./todoist.js");
-const ctm = await import("./ctm.js");
 const reminderService = await import("./reminder-service.js");
-const { completeTask, deleteTask, updateCTMStatus, updateTask } = await import("./tasks-service.js");
+const {
+  completeDeadlineOccurrence,
+  createDeadline,
+  deleteDeadline,
+  updateDeadline,
+} = await import("./tasks-service.js");
 
 beforeEach(async () => {
   testState.db.current = await createCompletedTasksTestDb();
   Object.values(todoist).forEach((fn) => fn.mockReset?.());
-  ctm.updateCTMEventStatus.mockClear();
   Object.values(reminderService).forEach((fn) => fn.mockReset?.());
   todoist.fetchTodoistTasksAll.mockResolvedValue([]);
 });
@@ -49,109 +50,145 @@ afterEach(async () => {
   testState.db.current = null;
 });
 
-describe("completeTask", () => {
-  it("does not complete CTM-only tasks through the Todoist completion endpoint", async () => {
-    await completeTask("u1", "42");
+describe("deadline-domain mutations", () => {
+  it("creates Todoist-backed deadlines from domain fields", async () => {
+    todoist.createTodoistTask.mockResolvedValueOnce({ id: "td-new", title: "Pay invoice" });
 
-    expect(ctm.updateCTMEventStatus).not.toHaveBeenCalled();
-    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
-    expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
-  });
-
-  it("Todoist-only non-recurring: closes in Todoist and writes a completed-task snapshot", async () => {
-    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([
-      { id: "td-1", title: "One off", is_recurring: false, due_date: "2026-04-18", source: "todoist" },
-    ]);
-    await completeTask("u1", "td-1");
-
-    const rows = await listCompletedTasks(testState.db.current, "u1");
-
-    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-1");
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      user_id: "u1",
-      todoist_id: "td-1",
-      due_date: "2026-04-18",
+    const result = await createDeadline("u1", {
+      title: "Pay invoice",
+      description: "Attach receipt",
+      dueDate: "2026-05-20",
+      dueTime: "3:00 PM",
+      projectId: "project-1",
+      labelIds: ["finance"],
+      priority: 2,
     });
-    expect(JSON.parse(rows[0].snapshot_json)).toMatchObject({ id: "td-1", title: "One off", is_recurring: false });
-  });
 
-  it("Todoist-only recurring: writes completed-task snapshot row", async () => {
-    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
-      id: "td-1",
-      title: "Empty dishwasher",
-      is_recurring: true,
-      due_date: "2026-04-18",
-      due_time: "8:00 AM",
-      _completing: true,
-    }]);
-    await completeTask("u1", "td-1");
-
-    const rows = await listCompletedTasks(testState.db.current, "u1");
-    const snapshot = JSON.parse(rows[0].snapshot_json);
-
-    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-1");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].todoist_id).toBe("td-1");
-    expect(rows[0].due_date).toBe("2026-04-18");
-    expect(snapshot).toMatchObject({
-      id: "td-1",
-      title: "Empty dishwasher",
-      due_date: "2026-04-18",
-      due_time: "8:00 AM",
-      source: "todoist",
-      is_recurring: true,
+    expect(result).toMatchObject({ id: "td-new" });
+    expect(todoist.createTodoistTask).toHaveBeenCalledWith("u1", {
+      content: "Pay invoice",
+      description: "Attach receipt",
+      due_string: "2026-05-20 3:00 PM",
+      labels: ["finance"],
+      priority: 2,
+      project_id: "project-1",
     });
-    expect(snapshot._completing).toBeUndefined();
   });
 
-  it("deletes unsent reminders after completing a Todoist task", async () => {
-    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([
-      { id: "td-1", title: "One off", due_date: "2026-04-18", source: "todoist" },
-    ]);
+  it("rejects legacy Todoist payload fields on deadline creation", async () => {
+    await expect(createDeadline("u1", { content: "Old shape" })).rejects.toMatchObject({
+      message: "Use deadline-domain fields instead of content",
+      status: 400,
+    });
 
-    await completeTask("u1", "td-1");
+    expect(todoist.createTodoistTask).not.toHaveBeenCalled();
+  });
 
+  it("updates Todoist-backed deadlines through domain fields only", async () => {
+    todoist.updateTodoistTask.mockResolvedValueOnce({ id: "td-1", title: "Renamed", due_date: null });
+
+    await updateDeadline("u1", "td-1", {
+      title: "Renamed",
+      dueString: "tomorrow at 9am",
+      labelIds: [],
+    });
+
+    expect(todoist.updateTodoistTask).toHaveBeenCalledWith("u1", "td-1", {
+      content: "Renamed",
+      due_string: "tomorrow at 9am",
+      labels: [],
+    });
+  });
+
+  it("deletes Todoist-backed deadlines and local reminders", async () => {
+    await deleteDeadline("u1", "td-1");
+
+    expect(todoist.deleteTodoistTask).toHaveBeenCalledWith("u1", "td-1");
     expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
       userId: "u1",
       sourceType: "todoist_task",
       sourceItemId: "td-1",
+    });
+  });
+
+  it("requires an explicit ISO occurrence date before reading Todoist state", async () => {
+    await expect(completeDeadlineOccurrence("u1", "td-1", "05/12/2026")).rejects.toMatchObject({
+      message: "Deadline occurrence date must be YYYY-MM-DD",
+      status: 400,
+    });
+
+    expect(todoist.fetchTodoistTasksAll).not.toHaveBeenCalled();
+    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
+  });
+
+  it("treats an existing completed occurrence as idempotent", async () => {
+    await seedCompletedTask(testState.db.current, {
+      user_id: "u1",
+      todoist_id: "td-rec",
+      due_date: "2026-05-12",
+    });
+
+    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12");
+
+    expect(result).toEqual({
+      completed: true,
+      alreadyCompleted: true,
+      deadlineId: "td-rec",
+      occurrenceDate: "2026-05-12",
+    });
+    expect(todoist.fetchTodoistTasksAll).not.toHaveBeenCalled();
+    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
+  });
+
+  it("rejects completing a date that is not the active Todoist occurrence", async () => {
+    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-rec",
+      title: "Daily review",
+      due_date: "2026-05-13",
+      status: "incomplete",
+    }]);
+
+    await expect(completeDeadlineOccurrence("u1", "td-rec", "2026-05-12")).rejects.toMatchObject({
+      message: "Deadline occurrence is not active for that date",
+      status: 409,
+    });
+
+    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
+    expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
+  });
+
+  it("completes and stores the matching active occurrence", async () => {
+    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-rec",
+      title: "Daily review",
+      due_date: "2026-05-12",
+      due_time: "9:00 AM",
+      status: "incomplete",
+      is_recurring: true,
+    }]);
+
+    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12");
+
+    expect(result).toEqual({
+      completed: true,
+      alreadyCompleted: false,
+      deadlineId: "td-rec",
+      occurrenceDate: "2026-05-12",
+    });
+    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec");
+    expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
+      { todoist_id: "td-rec", due_date: "2026-05-12" },
+    ]);
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-rec",
       unsentOnly: true,
     });
   });
-
-  it("updates CTM status without closing or tombstoning a Todoist task", async () => {
-    await updateCTMStatus("u1", "42", "complete");
-
-    expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith("42", "complete");
-    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
-    expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
-  });
-
-  it("preserves string CTM event ids when updating status", async () => {
-    await updateCTMStatus("u1", "canvas-assignment-42", "complete");
-
-    expect(ctm.updateCTMEventStatus).toHaveBeenCalledWith("canvas-assignment-42", "complete");
-  });
-
-  it("rejects invalid CTM statuses", async () => {
-    await expect(updateCTMStatus("u1", "42", "blocked")).rejects.toMatchObject({
-      message: "Invalid status",
-      status: 400,
-    });
-    expect(ctm.updateCTMEventStatus).not.toHaveBeenCalled();
-  });
-
-  it("skips tombstone row when matching a Todoist-only completion", async () => {
-    await completeTask("u1", "td-1");
-
-    // No live row → no Todoist close call
-    expect(todoist.completeTodoistTask).not.toHaveBeenCalled();
-    expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
-  });
 });
 
-describe("updateTask", () => {
+describe("updateDeadline", () => {
   it("recomputes unsent Todoist reminders when the due date changes through EA", async () => {
     todoist.updateTodoistTask.mockResolvedValueOnce({
       id: "td-1",
@@ -161,7 +198,7 @@ describe("updateTask", () => {
       class_name: "Inbox",
     });
 
-    const task = await updateTask("u1", "td-1", { due_string: "2026-05-12 at 10:00 AM" });
+    const task = await updateDeadline("u1", "td-1", { dueString: "2026-05-12 at 10:00 AM" });
 
     expect(task.id).toBe("td-1");
     expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
@@ -181,7 +218,7 @@ describe("updateTask", () => {
       due_time: null,
     });
 
-    await updateTask("u1", "td-1", { due_string: "" });
+    await updateDeadline("u1", "td-1", { dueString: "" });
 
     expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
       userId: "u1",
@@ -199,7 +236,7 @@ describe("updateTask", () => {
       due_time: null,
     });
 
-    await updateTask("u1", "td-1", { due_string: "2026-05-12" });
+    await updateDeadline("u1", "td-1", { dueString: "2026-05-12" });
 
     expect(reminderService.recomputeUnsentRemindersForSource).toHaveBeenCalledWith({
       userId: "u1",
@@ -211,9 +248,9 @@ describe("updateTask", () => {
   });
 });
 
-describe("deleteTask", () => {
+describe("deleteDeadline", () => {
   it("deletes local reminders when deleting a Todoist task through EA", async () => {
-    await deleteTask("u1", "td-1");
+    await deleteDeadline("u1", "td-1");
 
     expect(todoist.deleteTodoistTask).toHaveBeenCalledWith("u1", "td-1");
     expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({

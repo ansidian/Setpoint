@@ -78,12 +78,12 @@ describe("calendarFloatingDetailModel", () => {
     expect(preservedReanchorSide(current, nextDetail, "events", "2026-05-02")).toBe("right");
     expect(preservedReanchorSide({ ...current, sideIntent: "user-flip", forcedSide: "left" }, nextDetail, "events", "2026-05-02")).toBeNull();
     expect(preservedReanchorSide({ ...current, dirty: true }, nextDetail, "events", "2026-05-02")).toBeNull();
-    expect(preservedReanchorSide(current, nextDetail, "deadlines", "2026-05-02")).toBeNull();
+    expect(preservedReanchorSide(current, nextDetail, "bills", "2026-05-02")).toBeNull();
   });
 
   it("formats floating detail and editor labels from selected dates", () => {
     expect(formatFloatingDetailLabel("events", "2026-05-02", 2026, 4, null)).toBe("Event · Sat, May 2");
-    expect(formatFloatingEditorLabel("create", "deadlines", null, 2026, 4, 3)).toBe("New deadline · Sun, May 3");
+    expect(formatFloatingEditorLabel("create", "events", null, 2026, 4, 3, "deadline")).toBe("New deadline · Sun, May 3");
     expect(formatFloatingEditorLabel("edit", "bills", null, 2026, 4, null)).toBe("Edit bill · Selected");
   });
 

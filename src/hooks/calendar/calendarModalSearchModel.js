@@ -202,9 +202,10 @@ export function activationTargetFromCalendarSearchResult(result) {
   const dateKey = activation.dateKey || result?.itemDate || null;
   const itemId = activation.itemId || result?.itemId || null;
   if (!dateKey || !itemId) return null;
+  const detailKind = activation.detailKind || (result?.type === "deadline" ? "deadline" : null);
   return {
     view: activation.view || (result?.type === "bill" ? "bills" : "events"),
-    detailView: activation.detailView || (result?.type === "deadline" ? "deadlines" : result?.type || null),
+    ...(detailKind ? { detailKind } : {}),
     dateKey,
     itemId: String(itemId),
   };

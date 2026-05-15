@@ -41,13 +41,23 @@ describe("dashboard shell model", () => {
       view: "events",
       shouldLoadBills: false,
     });
+
+    expect(resolveCalendarOpenState({
+      isMobile: false,
+      viewKey: null,
+      currentView: "deadlines",
+      showBills: true,
+    })).toMatchObject({
+      view: "events",
+      shouldLoadBills: false,
+    });
   });
 
   it("resolves shell hotkeys and g-chords as commands", () => {
     expect(resolveDashboardShellHotkey({ key: "k", metaKey: true })).toEqual({ action: "open-palette" });
     expect(resolveDashboardShellHotkey({ key: "g" })).toEqual({ action: "start-g-chord" });
     expect(resolveDashboardShellHotkey({ key: "t", actionChord: "g" })).toEqual({
-      action: "open-todoist-create",
+      action: "open-deadline-create",
       clearChord: true,
     });
     expect(resolveDashboardShellHotkey({ key: "c", actionChord: "g" })).toEqual({

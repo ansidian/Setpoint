@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Check, CircleDashed, Circle, ExternalLink, Pencil, X, AlertCircle,
-  CalendarClock, Flag,
+  Check, ExternalLink, Pencil, X, AlertCircle, Flag,
 } from "lucide-react";
 import { useDashboard } from "../../context/DashboardContext";
 import { daysUntil } from "../../lib/bill-utils";
@@ -11,6 +10,8 @@ import AddTaskPanel from "../todoist/AddTaskPanel";
 
 function ActionButton({ icon: Icon, label, onClick, accent, variant = "default", disabled, loading = false }) {
   const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const active = hover || focus;
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
   const isAccent = variant === "accent";
@@ -23,14 +24,14 @@ function ActionButton({ icon: Icon, label, onClick, accent, variant = "default",
     ? "#f38ba8"
     : "rgba(205,214,244,0.8)";
   const bg = isPrimary
-    ? (hover ? "rgba(166,227,161,0.14)" : "rgba(255,255,255,0.02)")
+    ? (active ? "rgba(166,227,161,0.14)" : "rgba(255,255,255,0.02)")
     : isAccent
-    ? (hover ? `${accent}18` : `${accent}0c`)
-    : hover
+    ? (active ? `${accent}18` : `${accent}0c`)
+    : active
     ? "rgba(255,255,255,0.05)"
     : "rgba(255,255,255,0.02)";
   const border = isPrimary
-    ? `1px solid ${hover ? "rgba(166,227,161,0.4)" : "rgba(166,227,161,0.22)"}`
+    ? `1px solid ${active ? "rgba(166,227,161,0.4)" : "rgba(166,227,161,0.22)"}`
     : isAccent
     ? `1px solid ${accent}38`
     : isDanger
@@ -44,6 +45,8 @@ function ActionButton({ icon: Icon, label, onClick, accent, variant = "default",
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onFocus={() => setFocus(true)}
+      onBlur={() => setFocus(false)}
       style={{
         display: "inline-flex", alignItems: "center", gap: 6,
         padding: "7px 11px", borderRadius: 8,
@@ -51,6 +54,8 @@ function ActionButton({ icon: Icon, label, onClick, accent, variant = "default",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.4 : 1,
         background: bg, border, color,
+        outline: focus ? `2px solid ${accent}66` : "none",
+        outlineOffset: 2,
         transition: "all 120ms", whiteSpace: "nowrap",
       }}
     >
@@ -87,8 +92,8 @@ function InfoRow({ label, value, color }) {
   );
 }
 
-// Todoist priority: 1 = urgent, 2 = high, 3 = medium, 4 = low. We only render
-// a badge for 1–3 since 4 is the default "no flag" baseline in Todoist's UX.
+// Provider priorities use 1 = urgent, 2 = high, 3 = medium, 4 = low. We only
+// render a badge for 1-3 since 4 is the default "no flag" baseline.
 const PRIORITY_META = {
   1: { color: "#f38ba8", label: "P1 · Urgent" },
   2: { color: "#f9e2af", label: "P2 · High" },
@@ -147,8 +152,9 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
   const [pos, setPos] = useState(() => computePos(anchor));
   const [editing, setEditing] = useState(false);
   const [completingState, setCompletingState] = useState({ taskId: null, pending: false });
+  const [closeActive, setCloseActive] = useState(false);
   const editAnchorRef = useRef(null);
-  const { handleCompleteTask, handleUpdateTaskStatus, handleUpdateTask } = useDashboard();
+  const { handleCompleteTask, handleUpdateTask } = useDashboard();
 
   // Reposition on scroll/resize (init already happened in lazy useState)
   useEffect(() => {
@@ -184,19 +190,16 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
 
   if (!task || !pos) return null;
 
-  const isTodoist = task.source === "todoist";
-  const isCanvas = task.source === "canvas";
   const completing = completingState.pending && completingState.taskId === task.id;
   const isComplete = task.status === "complete" || completing;
   const isInProgress = task.status === "in_progress";
-  const ctmUrl = `https://ctm.andysu.tech/#/event/${task.id}`;
 
   const days = daysUntil(task.due_date);
   const urgency = urgencyForDays(days, accent);
   const dueColor = urgency.key === "high" ? "#f38ba8" : urgency.key === "medium" ? "#f9e2af" : accent;
 
-  const sourceLabel = isTodoist ? "Todoist" : isCanvas ? "Canvas" : "CTM";
-  const sourceColor = isTodoist ? "#cba6da" : isCanvas ? "#fab387" : "#b4befe";
+  const deadlineLabel = "Deadline";
+  const deadlineColor = accent;
 
   return createPortal(
     <>
@@ -223,35 +226,47 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
           style={{
             padding: "12px 14px 10px",
             borderBottom: "1px solid rgba(255,255,255,0.05)",
-            background: `linear-gradient(135deg, ${sourceColor}0e, transparent 65%)`,
+            background: `linear-gradient(135deg, ${deadlineColor}0e, transparent 65%)`,
             display: "flex", alignItems: "center", gap: 8,
           }}
         >
           <div
             style={{
               width: 22, height: 22, borderRadius: 6,
-              background: `${sourceColor}18`,
+              background: `${deadlineColor}18`,
               display: "grid", placeItems: "center",
             }}
           >
-            <AlertCircle size={11} color={sourceColor} />
+            <AlertCircle size={11} color={deadlineColor} />
           </div>
           <div
             style={{
               fontSize: 9.5, fontWeight: 700, letterSpacing: 2,
-              textTransform: "uppercase", color: sourceColor,
+              textTransform: "uppercase", color: deadlineColor,
             }}
           >
-            {sourceLabel}
+            {deadlineLabel}
           </div>
           <span style={{ flex: 1 }} />
           <button
             type="button"
             onClick={onClose}
+            onMouseEnter={() => setCloseActive(true)}
+            onMouseLeave={() => setCloseActive(false)}
+            onFocus={() => setCloseActive(true)}
+            onBlur={() => setCloseActive(false)}
             style={{
-              background: "transparent", border: "none", cursor: "pointer",
-              color: "rgba(205,214,244,0.5)", padding: 4, borderRadius: 4,
-              display: "inline-flex", fontFamily: "inherit",
+              background: closeActive ? "rgba(255,255,255,0.07)" : "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: closeActive ? "rgba(205,214,244,0.85)" : "rgba(205,214,244,0.5)",
+              padding: 4,
+              borderRadius: 4,
+              display: "inline-flex",
+              fontFamily: "inherit",
+              outline: closeActive ? `2px solid ${accent}55` : "none",
+              outlineOffset: 2,
+              transition: "background 120ms ease, color 120ms ease, outline-color 120ms ease",
             }}
             aria-label="Close"
           >
@@ -295,7 +310,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
             label="Status"
             value={isComplete ? "Complete" : isInProgress ? "In progress" : "Incomplete"}
           />
-          {isTodoist && PRIORITY_META[task.priority] && (
+          {PRIORITY_META[task.priority] && (
             <InfoRow
               label="Priority"
               value={<PriorityBadge level={task.priority} />}
@@ -314,94 +329,46 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
             display: "flex", flexWrap: "wrap", gap: 6,
           }}
         >
-          {isTodoist ? (
-            <>
-              {!isComplete && (
-                <ActionButton
-                  icon={Check}
-                  label={completing ? "Completing..." : "Mark complete"}
-                  variant="primary"
-                  accent={accent}
-                  disabled={completing}
-                  loading={completing}
-                  onClick={() => {
-                    setCompletingState({ taskId: task.id, pending: true });
-                    Promise.resolve(handleCompleteTask(task.id, task)).catch(() => {
-                      setCompletingState({ taskId: task.id, pending: false });
-                    });
-                    window.setTimeout(() => onClose(), 720);
-                  }}
-                />
-              )}
-              <div ref={editAnchorRef} style={{ display: "inline-flex" }}>
-                <ActionButton
-                  icon={Pencil}
-                  label="Edit"
-                  accent={accent}
-                  disabled={completing}
-                  onClick={() => setEditing(true)}
-                />
-              </div>
-              {task.url && (
-                <ActionButton
-                  icon={ExternalLink}
-                  label="Open in Todoist"
-                  variant="accent"
-                  accent={accent}
-                  disabled={completing}
-                  onClick={() => { openInNewTab(task.url); onClose(); }}
-                />
-              )}
-            </>
-          ) : (
-            <>
-              {task.status !== "complete" && (
-                <ActionButton
-                  icon={Check}
-                  label="Mark complete"
-                  variant="primary"
-                  accent={accent}
-                  onClick={() => { handleUpdateTaskStatus(task.id, "complete"); onClose(); }}
-                />
-              )}
-              {task.status !== "in_progress" && (
-                <ActionButton
-                  icon={CircleDashed}
-                  label="In progress"
-                  accent={accent}
-                  onClick={() => { handleUpdateTaskStatus(task.id, "in_progress"); onClose(); }}
-                />
-              )}
-              {task.status !== "incomplete" && (
-                <ActionButton
-                  icon={Circle}
-                  label="Reopen"
-                  accent={accent}
-                  onClick={() => { handleUpdateTaskStatus(task.id, "incomplete"); onClose(); }}
-                />
-              )}
-              {task.url && /instructure\.com|canvas/i.test(task.url) && (
-                <ActionButton
-                  icon={ExternalLink}
-                  label="Open in Canvas"
-                  variant="accent"
-                  accent={accent}
-                  onClick={() => { openInNewTab(task.url); onClose(); }}
-                />
-              )}
-              <ActionButton
-                icon={CalendarClock}
-                label="Open in CTM"
-                variant="accent"
-                accent={accent}
-                onClick={() => { openInNewTab(ctmUrl); onClose(); }}
-              />
-            </>
+          {!isComplete && (
+            <ActionButton
+              icon={Check}
+              label={completing ? "Completing..." : "Mark complete"}
+              variant="primary"
+              accent={accent}
+              disabled={completing}
+              loading={completing}
+              onClick={() => {
+                setCompletingState({ taskId: task.id, pending: true });
+                Promise.resolve(handleCompleteTask(task.id, task)).catch(() => {
+                  setCompletingState({ taskId: task.id, pending: false });
+                });
+                window.setTimeout(() => onClose(), 720);
+              }}
+            />
+          )}
+          <div ref={editAnchorRef} style={{ display: "inline-flex" }}>
+            <ActionButton
+              icon={Pencil}
+              label="Edit"
+              accent={accent}
+              disabled={completing}
+              onClick={() => setEditing(true)}
+            />
+          </div>
+          {task.url && (
+            <ActionButton
+              icon={ExternalLink}
+              label="Open in Todoist"
+              variant="accent"
+              accent={accent}
+              disabled={completing}
+              onClick={() => { openInNewTab(task.url); onClose(); }}
+            />
           )}
         </div>
       </div>
 
-      {editing && isTodoist && (
+      {editing && (
         <AddTaskPanel
           anchorRef={editAnchorRef}
           editingTask={task}

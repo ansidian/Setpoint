@@ -48,26 +48,25 @@ describe("CalendarModal dashboard focus behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     expect(panel.getAttribute("data-floating-mode")).toBe("detail");
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-deadline-row");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
   });
 
@@ -79,24 +78,23 @@ describe("CalendarModal dashboard focus behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));
 
-    const agendaRail = screen.getByTestId("deadlines-agenda-rail");
+    const agendaRail = screen.getByTestId("events-agenda-rail");
     const agendaHeader = agendaRail.querySelector("[data-agenda-date-header='true']");
     const agendaRow = within(agendaRail).getByTestId("calendar-agenda-deadline-row");
     agendaRail.scrollTo = scrollTo;
@@ -110,7 +108,7 @@ describe("CalendarModal dashboard focus behavior", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
 
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-row");
+    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-deadline-row");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
     expect(clickSpy).toHaveBeenCalled();
     expect(scrollTo.mock.calls.some(([command]) => command?.top > 0)).toBe(false);
@@ -125,23 +123,22 @@ describe("CalendarModal dashboard focus behavior", () => {
       onClose: () => {},
       onViewChange: () => {},
       focusDate: "2026-04-20",
-      focusItemId: "deadline-1",
+      focusItemId: "deadline:deadline-1:2026-04-20",
       focusOpenDetail: true,
       eventsData: { getEvents: () => [] },
       billsData: {},
       deadlinesData: {
-        ctm: {
-          upcoming: [
-            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-          ],
-        },
+        upcoming: [
+          { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+        ],
       },
     };
 
     const { rerender } = render(wrapWithDashboard(
       <CalendarModal
         {...deadlineProps}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
       />,
     ));
 
@@ -158,12 +155,14 @@ describe("CalendarModal dashboard focus behavior", () => {
       <CalendarModal
         {...deadlineProps}
         view="events"
+        forceDeadlineOverlay
       />,
     ));
     rerender(wrapWithDashboard(
       <CalendarModal
         {...deadlineProps}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
       />,
     ));
 
@@ -184,19 +183,18 @@ describe("CalendarModal dashboard focus behavior", () => {
         openRequestId={8}
         onClose={() => {}}
         onViewChange={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-              { id: "deadline-2", title: "Lab due", due_date: "2026-04-21", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+            { id: "deadline-2", title: "Lab due", due_date: "2026-04-21", status: "open" },
+          ],
         }}
       />,
     ));
@@ -229,17 +227,17 @@ describe("CalendarModal dashboard focus behavior", () => {
         open
         openRequestId={1}
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
           isLoading: true,
-          ctm: { upcoming: [] },
-          todoist: { upcoming: [] },
+          upcoming: [],
         }}
       />,
     ));
@@ -251,20 +249,18 @@ describe("CalendarModal dashboard focus behavior", () => {
         open
         openRequestId={1}
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="deadline-1"
+        focusItemId="deadline:deadline-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: {
-            upcoming: [
-              { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
-            ],
-          },
-          todoist: { upcoming: [] },
+          upcoming: [
+            { id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
         }}
       />,
     ));

@@ -1,13 +1,12 @@
 import {
+  DEADLINE_COLOR,
+  deadlineAccentFor,
   getDayState,
   getDeadlineSelectionId,
   normalizeStatus,
-  SOURCE_COLORS,
-  sourceLabelFor,
-  sourceOf,
   statusLabel,
+  compute as computeDeadlines,
 } from "../deadlines/deadlinesModel.js";
-import deadlinesView from "../deadlinesView.jsx";
 import { dueDateToMs, getEventSelectionId } from "../../../../lib/redesign-helpers";
 
 export function isDeadlinePlanningItem(item) {
@@ -20,7 +19,7 @@ export function getPlanningItemId(item) {
 }
 
 export function deadlinePlanningAccent(task) {
-  return SOURCE_COLORS[sourceOf(task)] || "#89b4fa";
+  return deadlineAccentFor(task, DEADLINE_COLOR);
 }
 
 export function deadlinePlanningTitle(task) {
@@ -28,11 +27,11 @@ export function deadlinePlanningTitle(task) {
 }
 
 export function deadlinePlanningSubtitle(task) {
-  return task?.project_name || task?.class_name || sourceLabelFor(task);
+  return task?.project_name || task?.class_name || "Deadline";
 }
 
 export function deadlinePlanningTimeLabel(task) {
-  return task?.due_time || sourceLabelFor(task);
+  return task?.due_time || "Deadline";
 }
 
 export function deadlinePlanningStatusIcon(status) {
@@ -59,7 +58,7 @@ function filteredDeadlineItems(rawItems, showCompleted) {
 
 export function getDeadlineOverlayComputed({ deadlineData, viewYear, viewMonth, showCompleted = true } = {}) {
   if (!deadlineData) return null;
-  const computed = deadlinesView.compute({ data: deadlineData, viewYear, viewMonth });
+  const computed = computeDeadlines({ data: deadlineData, viewYear, viewMonth });
   const itemsByDay = {};
   const itemsByDate = {};
   let totalDeadlines = 0;
@@ -149,11 +148,11 @@ export function deadlinePlanningDescriptor(task) {
     id: getDeadlineSelectionId(task, task.agendaDateKey || task.due_date),
     sourceItem: task,
     itemKind: "deadline",
-    detailView: "deadlines",
+    detailKind: "deadline",
     title: deadlinePlanningTitle(task),
     detail: [deadlinePlanningSubtitle(task), statusLabel(status)].filter(Boolean).join(" · "),
     leadingLabel: deadlinePlanningTimeLabel(task),
-    recurring: sourceOf(task) === "todoist" && !!task.is_recurring,
+    recurring: !!task.is_recurring,
     accent,
     leadingColor: accent,
     complete: status === "complete",

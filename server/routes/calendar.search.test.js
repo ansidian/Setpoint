@@ -42,7 +42,14 @@ vi.mock("../briefing/bills-service.js", () => ({
   scheduleBillsMirrorRefresh: vi.fn(),
 }));
 vi.mock("../dashboard/current-service.js", () => ({
+  applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
+}));
+vi.mock("../briefing/tasks-service.js", () => ({
+  completeDeadlineOccurrence: vi.fn(),
+  createDeadline: vi.fn(),
+  deleteDeadline: vi.fn(),
+  updateDeadline: vi.fn(),
 }));
 vi.mock("../briefing/google-places.js", () => ({
   suggestGooglePlaces: vi.fn(),
@@ -121,18 +128,15 @@ describe("GET /api/calendar/search", () => {
     calendarSearchMirror.requestCalendarSearchMirrorSync.mockReturnValue({ queued: true });
     readCalendarDeadlineRange.mockResolvedValue({
       payload: {
-        ctm: {
-          upcoming: [
-            {
-              id: "ctm-1",
-              title: "Final project upload",
-              due_date: "2026-05-19",
-              source: "ctm",
-              course_name: "CS 4220",
-            },
-          ],
-        },
-        todoist: { upcoming: [] },
+        upcoming: [
+          {
+            id: "deadline-1",
+            title: "Final project upload",
+            due_date: "2026-05-19",
+            course_name: "CS 4220",
+          },
+        ],
+        stats: { total: 1 },
       },
       errors: [],
     });
@@ -173,12 +177,24 @@ describe("GET /api/calendar/search", () => {
     expect(res.body.results).toEqual([
       expect.objectContaining({
         type: "deadline",
-        itemId: "ctm-1",
+        id: "deadline:deadline-1:2026-05-19",
+        itemId: "deadline:deadline-1:2026-05-19",
         itemDate: "2026-05-19",
         title: "Final project upload",
-        sourceLabel: "Canvas",
+        sourceLabel: "Deadline",
+        sourceColor: "#e44332",
         matchReason: "word_start",
         rankBucket: 1,
+        activation: expect.objectContaining({
+          view: "events",
+          detailKind: "deadline",
+          dateKey: "2026-05-19",
+          itemId: "deadline:deadline-1:2026-05-19",
+        }),
+        payload: expect.objectContaining({
+          id: "deadline-1",
+          dueDate: "2026-05-19",
+        }),
       }),
       expect.objectContaining({
         type: "event",
@@ -216,6 +232,57 @@ describe("GET /api/calendar/search", () => {
     expect(calendarSearchMirror.requestCalendarSearchMirrorSync).not.toHaveBeenCalled();
   });
 
+  it("returns completed deadline-history occurrences with domain identity and labels", async () => {
+    readCalendarDeadlineRange.mockResolvedValueOnce({
+      payload: {
+        upcoming: [
+          {
+            id: "td-rec",
+            title: "Final recurring upload",
+            due_date: "2026-05-10",
+            status: "complete",
+            project_name: "School",
+            _tombstone: true,
+          },
+        ],
+        stats: { total: 1 },
+      },
+      errors: [],
+    });
+
+    const res = await request(makeApp()).get("/api/calendar/search?scope=events&q=final");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results).toEqual([
+      expect.objectContaining({
+        type: "deadline",
+        id: "deadline:td-rec:2026-05-10",
+        itemId: "deadline:td-rec:2026-05-10",
+        itemDate: "2026-05-10",
+        title: "Final recurring upload",
+        subtitle: "School · complete",
+        meta: "Deadline",
+        sourceLabel: "Deadline",
+        activation: expect.objectContaining({
+          view: "events",
+          detailKind: "deadline",
+          dateKey: "2026-05-10",
+          itemId: "deadline:td-rec:2026-05-10",
+        }),
+        payload: expect.objectContaining({
+          id: "td-rec",
+          dueDate: "2026-05-10",
+          status: "complete",
+        }),
+      }),
+      expect.objectContaining({
+        type: "event",
+        itemId: "event-1",
+      }),
+    ]);
+    expect(res.body.results[0].sourceLabel).toBe("Deadline");
+  });
+
   it("returns deadline results and requests non-blocking repair when the event mirror is initializing", async () => {
     calendarSearchMirror.listCalendarSearchMirrorOccurrences.mockResolvedValueOnce([]);
     calendarSearchMirror.getCalendarSearchMirrorHealth.mockResolvedValueOnce({
@@ -232,7 +299,7 @@ describe("GET /api/calendar/search", () => {
     expect(res.body.results).toEqual([
       expect.objectContaining({
         type: "deadline",
-        itemId: "ctm-1",
+        itemId: "deadline:deadline-1:2026-05-19",
       }),
     ]);
     expect(res.body.coverage.sources[0]).toMatchObject({
@@ -411,7 +478,7 @@ describe("GET /api/calendar/search", () => {
       }),
     ]);
     readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
 
@@ -446,7 +513,7 @@ describe("GET /api/calendar/search", () => {
       async (_userId, { limit }) => ascendingMirrorRows.slice(0, limit),
     );
     readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
 
@@ -493,7 +560,7 @@ describe("GET /api/calendar/search", () => {
       }),
     ]);
     readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
 
@@ -531,7 +598,7 @@ describe("GET /api/calendar/search", () => {
       }),
     ]);
     readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
 
@@ -564,7 +631,7 @@ describe("GET /api/calendar/search", () => {
       }),
     ]);
     readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
 
@@ -585,7 +652,7 @@ describe("GET /api/calendar/search", () => {
       }),
     ]);
     readCalendarDeadlineRange.mockResolvedValue({
-      payload: { ctm: { upcoming: [] }, todoist: { upcoming: [] } },
+      payload: { upcoming: [], stats: { total: 0 } },
       errors: [],
     });
 

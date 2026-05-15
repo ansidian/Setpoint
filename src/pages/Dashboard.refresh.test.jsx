@@ -134,7 +134,7 @@ describe("Dashboard refresh wiring", () => {
     mocks.activeSnapshotRefresh.mockReset();
     mocks.activeSnapshotSync.mockReset();
     mocks.getCalendarDeadlines.mockReset();
-    mocks.getCalendarDeadlines.mockResolvedValue({ ctm: { upcoming: [] }, todoist: { upcoming: [] } });
+    mocks.getCalendarDeadlines.mockResolvedValue({ upcoming: [] });
     mocks.dashboardEventHandler = null;
     mocks.handleDashboardEvent.mockReset();
     mocks.handleCalendarSnapshot.mockReset();
@@ -254,7 +254,7 @@ describe("Dashboard refresh wiring", () => {
   });
 
   it("clears the Bills pending snapshot once current-data refresh settles", () => {
-    mocks.briefing = { weather: null, calendar: [], ctm: {}, todoist: {}, emails: { accounts: [] } };
+    mocks.briefing = { weather: null, calendar: [], deadlines: { upcoming: [] }, emails: { accounts: [] } };
     mocks.liveData = {
       allSchedules: [{ id: "bill-1", payee: "Power" }],
       recentTransactions: [],

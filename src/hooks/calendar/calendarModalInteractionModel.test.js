@@ -4,12 +4,21 @@ import {
   dashboardDetailFocusRequest,
   floatingWorkspaceNavigationEffect,
   initialDeadlineEditorState,
+  normalizeCalendarWorkspaceView,
   readStoredBoolean,
   shouldForceDeadlineOverlay,
   writeStoredBoolean,
 } from "./calendarModalInteractionModel.js";
 
 describe("calendar modal interaction model", () => {
+  it("limits top-level calendar workspaces to Events and Bills", () => {
+    expect(normalizeCalendarWorkspaceView("events")).toBe("events");
+    expect(normalizeCalendarWorkspaceView("bills")).toBe("bills");
+    expect(normalizeCalendarWorkspaceView("legacy")).toBe("events");
+    expect(normalizeCalendarWorkspaceView("todoist")).toBe("events");
+    expect(normalizeCalendarWorkspaceView(null)).toBe("events");
+  });
+
   it("normalizes persisted overlay visibility without needing the modal DOM", () => {
     const storage = new Map();
     const adapter = {
@@ -61,12 +70,14 @@ describe("calendar modal interaction model", () => {
       openRequestId: 3,
       usesFloatingEditor: true,
       view: "events",
+      forceDeadlineOverlay: true,
     })).toEqual({
       openRequestId: 3,
       view: "events",
+      detailKind: "deadline",
       dateKey: "2026-05-08",
       itemId: "todo-1",
-      requestKey: "3:events:2026-05-08:todo-1",
+      requestKey: "3:events:deadline:2026-05-08:todo-1",
       attempts: 0,
     });
 

@@ -143,8 +143,7 @@ function makeBriefing() {
       ],
     },
     weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
-    ctm: { upcoming: [] },
-    todoist: { upcoming: [] },
+    deadlines: { upcoming: [], stats: null },
   };
 }
 
@@ -268,9 +267,9 @@ describe("RedesignShell mobile behavior", () => {
     expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
   });
 
-  it("ignores a stale persisted Deadlines calendar view", async () => {
+  it("ignores a stale persisted calendar view", async () => {
     mockIsMobile = false;
-    window.localStorage.setItem("calendar:lastView", "deadlines");
+    window.localStorage.setItem("calendar:lastView", "legacy");
     renderShell();
 
     fireEvent.keyDown(window, { key: "c" });
@@ -408,20 +407,19 @@ describe("RedesignShell mobile behavior", () => {
   it("routes desktop deadline clicks into the calendar modal with focused item state", async () => {
     mockIsMobile = false;
     const props = makeProps();
-    props.bd.briefing.todoist.upcoming = [
+    props.bd.briefing.deadlines.upcoming = [
       {
         id: "todo-42",
         title: "Ship report",
         due_date: "2026-04-20",
         due_time: "9:00 AM",
-        source: "todoist",
         class_name: "Inbox",
         status: "open",
       },
     ];
     props.calendarDeadlines = {
-      ctm: { upcoming: [] },
-      todoist: { upcoming: props.bd.briefing.todoist.upcoming },
+      upcoming: props.bd.briefing.deadlines.upcoming,
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
     };
 
     render(
@@ -439,7 +437,7 @@ describe("RedesignShell mobile behavior", () => {
 	      expect(modal.textContent).toBe("open");
 	      expect(modal.getAttribute("data-view")).toBe("events");
 	      expect(modal.getAttribute("data-focus-date")).toBe("2026-04-20");
-	      expect(modal.getAttribute("data-focus-item-id")).toBe("todo-42");
+	      expect(modal.getAttribute("data-focus-item-id")).toBe("deadline:todo-42:2026-04-20");
 	      expect(modal.getAttribute("data-focus-open-detail")).toBe("true");
 	      expect(modal.getAttribute("data-force-deadline-overlay")).toBe("true");
 	    });

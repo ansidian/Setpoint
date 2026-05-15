@@ -59,33 +59,20 @@ function countActiveDays(itemsByDay) {
   return Object.keys(itemsByDay || {}).length;
 }
 
-function countOpenDeadlinesInRange(items = [], start, end) {
-  return items.reduce((count, item) => {
-    if (!item?.due_date || item.status === "complete") return count;
-    const due = new Date(`${item.due_date}T00:00:00`);
-    if (Number.isNaN(due.getTime())) return count;
-    if (due < start || due > end) return count;
-    return count + 1;
-  }, 0);
-}
-
 export function getOverviewModel({
   view,
   viewYear,
   viewMonth,
-  currentYear,
-  currentMonth,
-  todayDate,
   itemsByDay,
   computed,
-  data,
 }) {
-  const meta = getCalendarViewMeta(view);
+  const normalizedView = view === "bills" ? "bills" : "events";
+  const meta = getCalendarViewMeta(normalizedView);
   const monthLabel = formatMonthLabel(viewYear, viewMonth);
   const activeDays = countActiveDays(itemsByDay);
   const month = summarizeMonth(itemsByDay);
 
-  if (view === "events") {
+  if (normalizedView === "events") {
     const totalEvents = computed?.totalEvents || 0;
     const allDayEvents = computed?.allDayEvents || 0;
 
@@ -119,7 +106,7 @@ export function getOverviewModel({
     };
   }
 
-  if (view === "bills") {
+  if (normalizedView === "bills") {
     const monthTotal = computed?.monthTotal || 0;
 
     return {
@@ -152,63 +139,7 @@ export function getOverviewModel({
     };
   }
 
-  const isCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
-  const openItems = month.active;
-  const allDeadlineItems = [
-    ...(data?.ctm?.upcoming || []),
-    ...(data?.todoist?.upcoming || []),
-  ];
-  const today = new Date(currentYear, currentMonth, todayDate);
-  today.setHours(0, 0, 0, 0);
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay());
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  const dueToday = isCurrentMonth
-    ? countOpenDeadlinesInRange(allDeadlineItems, today, today)
-    : null;
-  const dueThisWeek = isCurrentMonth
-    ? countOpenDeadlinesInRange(allDeadlineItems, weekStart, weekEnd)
-    : null;
-
-  return {
-    ...meta,
-    eyebrow: "Month overview",
-    title: monthLabel,
-    description: month.total
-      ? `${openItems} open and ${month.completed} complete deadlines are distributed across ${activeDays} day${activeDays === 1 ? "" : "s"}. Select a day to review or edit tasks.`
-      : `Nothing is due in ${monthLabel} yet. Select a day to keep the month overview visible while you plan.`,
-    spotlight: {
-      label: "Open this month",
-      value: `${openItems}`,
-      detail: month.total
-        ? `${month.total} total deadline${month.total === 1 ? "" : "s"} tracked`
-        : "The month is currently clear",
-    },
-    stats: [
-      {
-        label: isCurrentMonth ? "Due today" : "Active days",
-        value: `${isCurrentMonth ? dueToday : activeDays}`,
-        detail: isCurrentMonth
-          ? dueToday ? "Open items due today" : "Nothing due today"
-          : activeDays ? "Days with deadline activity" : "No active days yet",
-      },
-      {
-        label: isCurrentMonth ? "Due this week" : "Complete",
-        value: `${isCurrentMonth ? dueThisWeek : month.completed}`,
-        detail: isCurrentMonth
-          ? dueThisWeek ? "Open items inside this week" : "Week is clear"
-          : month.completed ? "Already cleared this month" : "Nothing complete yet",
-      },
-    ],
-    footerLabel: "Coursework detail",
-  };
-}
-
-function selectedDateYmd(viewYear, viewMonth, selectedDay, selectedDateKey) {
-  if (selectedDateKey) return selectedDateKey;
-  if (!selectedDay) return null;
-  return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+  return null;
 }
 
 function parseDateKey(dateKey) {
@@ -228,21 +159,11 @@ function formatShortDate(viewYear, viewMonth, selectedDay, selectedDateKey) {
 
 export function emptyDayPrimaryAction(props) {
   const dateLabel = formatShortDate(props.viewYear, props.viewMonth, props.selectedDay, props.selectedDateKey);
-  const seedDate = selectedDateYmd(props.viewYear, props.viewMonth, props.selectedDay, props.selectedDateKey);
-
   if (props.view === "events" && props.eventEditor?.editable && props.onCreateEvent) {
     return {
       label: dateLabel ? `Create on ${dateLabel}` : "Create event",
       detail: "Create directly on the selected date.",
       onClick: props.onCreateEvent,
-    };
-  }
-
-  if (props.view === "deadlines" && props.onCreateTask) {
-    return {
-      label: dateLabel ? `Create task due ${dateLabel}` : "Create task",
-      detail: "Seed Todoist with this due date.",
-      onClick: () => props.onCreateTask(seedDate),
     };
   }
 

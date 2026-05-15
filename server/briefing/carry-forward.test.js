@@ -6,7 +6,6 @@ vi.mock("./gmail.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("./icloud.js", () => ({ fetchEmails: async () => [] }));
 vi.mock("./calendar.js", () => ({ fetchCalendar: async () => [] }));
 vi.mock("./weather.js", () => ({ fetchWeather: async () => ({}) }));
-vi.mock("./ctm.js", () => ({ fetchCTMDeadlines: async () => [] }));
 vi.mock("./actual.js", () => ({ getCategories: async () => [] }));
 
 const { carryForwardCompletedTodoist } = await import("./deadline-helpers.js");

@@ -8,13 +8,21 @@ import {
   createTodoistTask,
   updateTodoistTask,
 } from "./todoist.js";
-import { updateCTMEventStatus } from "./ctm.js";
 import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,
 } from "./reminder-service.js";
 import { todoistReminderAnchorFromTask } from "./todoist-reminder-source.js";
 import { buildSnapshot } from "./tombstones.js";
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const LEGACY_DEADLINE_FIELDS = ["content", "project_id", "label_ids"];
+
+function serviceError(message, status = 400) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
 
 function findTodoistTask(tasks, taskId) {
   return (tasks || []).find((task) =>
@@ -30,20 +38,29 @@ async function loadCompletionSources(userId) {
   return { todoistTasks };
 }
 
-async function persistCompletedTodoistTask(userId, todoistId, task) {
-  if (task?.due_date) {
-    await db.execute({
-      sql: `INSERT OR REPLACE INTO ea_completed_tasks
-            (user_id, todoist_id, completed_at, due_date, snapshot_json)
-            VALUES (?, ?, datetime('now'), ?, ?)`,
-      args: [userId, todoistId, task.due_date, JSON.stringify(buildSnapshot(task))],
-    });
-    return;
-  }
+async function completedDeadlineOccurrenceExists(userId, todoistId, occurrenceDate) {
+  const result = await db.execute({
+    sql: `SELECT 1
+          FROM ea_completed_tasks
+          WHERE user_id = ? AND todoist_id = ? AND due_date = ?
+          LIMIT 1`,
+    args: [userId, todoistId, occurrenceDate],
+  });
+  return result.rows.length > 0;
+}
 
+async function persistCompletedDeadlineOccurrence(userId, todoistId, task, occurrenceDate) {
+  if (!occurrenceDate) return;
   await db.execute({
-    sql: "INSERT OR IGNORE INTO ea_completed_tasks (user_id, todoist_id) VALUES (?, ?)",
-    args: [userId, todoistId],
+    sql: `INSERT OR REPLACE INTO ea_completed_tasks
+          (user_id, todoist_id, completed_at, due_date, snapshot_json)
+          VALUES (?, ?, datetime('now'), ?, ?)`,
+    args: [
+      userId,
+      todoistId,
+      occurrenceDate,
+      JSON.stringify(buildSnapshot({ ...task, due_date: occurrenceDate })),
+    ],
   });
 }
 
@@ -69,45 +86,90 @@ async function syncTodoistReminderAnchor(userId, task) {
   });
 }
 
-export async function completeTask(userId, taskId) {
-  const { todoistTasks } = await loadCompletionSources(userId);
-  const todoistTask = findTodoistTask(todoistTasks, taskId);
+function assertIsoDate(value, message = "Deadline occurrence date must be YYYY-MM-DD") {
+  if (!ISO_DATE_RE.test(String(value || ""))) {
+    throw serviceError(message, 400);
+  }
+}
 
-  if (!todoistTask) {
-    return;
+function assertDeadlineDomainPayload(body = {}) {
+  const legacyField = LEGACY_DEADLINE_FIELDS.find((field) => Object.prototype.hasOwnProperty.call(body, field));
+  if (legacyField) {
+    throw serviceError(`Use deadline-domain fields instead of ${legacyField}`, 400);
+  }
+}
+
+function dueStringFromDeadlineBody(body = {}) {
+  if (body.dueString !== undefined) return body.dueString || undefined;
+  const date = body.dueDate || "";
+  const time = body.dueTime || "";
+  return [date, time].filter(Boolean).join(" ") || undefined;
+}
+
+function todoistPayloadFromDeadlineBody(body = {}, { partial = false } = {}) {
+  assertDeadlineDomainPayload(body);
+  const payload = {};
+  if (body.title !== undefined) payload.content = String(body.title || "").trim();
+  if (!partial && !payload.content) throw serviceError("Deadline title is required", 400);
+  if (body.description !== undefined) payload.description = body.description || "";
+  if (body.projectId !== undefined) payload.project_id = body.projectId || null;
+  if (body.labelIds !== undefined) payload.labels = Array.isArray(body.labelIds) ? body.labelIds : [];
+  if (body.priority !== undefined) payload.priority = body.priority;
+  const dueString = dueStringFromDeadlineBody(body);
+  if (dueString !== undefined) payload.due_string = dueString;
+  return payload;
+}
+
+export async function createDeadline(userId, body) {
+  return createTodoistTask(userId, todoistPayloadFromDeadlineBody(body));
+}
+
+export async function updateDeadline(userId, deadlineId, body) {
+  if (!deadlineId) throw serviceError("Deadline id is required", 400);
+  const task = await updateTodoistTask(userId, deadlineId, todoistPayloadFromDeadlineBody(body, { partial: true }));
+  await syncTodoistReminderAnchor(userId, task);
+  return task;
+}
+
+export async function deleteDeadline(userId, deadlineId) {
+  if (!deadlineId) throw serviceError("Deadline id is required", 400);
+  await deleteTask(userId, deadlineId);
+}
+
+export async function completeDeadlineOccurrence(userId, deadlineId, occurrenceDate) {
+  if (!deadlineId) throw serviceError("Deadline id is required", 400);
+  assertIsoDate(occurrenceDate);
+  if (await completedDeadlineOccurrenceExists(userId, deadlineId, occurrenceDate)) {
+    return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
+  }
+
+  const { todoistTasks } = await loadCompletionSources(userId);
+  const todoistTask = findTodoistTask(todoistTasks, deadlineId);
+  if (!todoistTask) throw serviceError("Deadline not found", 404);
+
+  if (todoistTask.due_date && todoistTask.due_date !== occurrenceDate) {
+    throw serviceError("Deadline occurrence is not active for that date", 409);
+  }
+  if (todoistTask.status === "complete") {
+    await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate);
+    return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
   }
 
   try {
-    await completeTodoistTask(userId, taskId);
+    await completeTodoistTask(userId, deadlineId);
   } catch (err) {
     const wrapped = new Error(`Todoist close failed: ${err.message}`);
     wrapped.status = 502;
     throw wrapped;
   }
-  await persistCompletedTodoistTask(userId, taskId, todoistTask);
+  await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate);
   await deleteSourceReminders({
     userId,
     sourceType: "todoist_task",
-    sourceItemId: String(taskId),
+    sourceItemId: String(deadlineId),
     unsentOnly: true,
   });
-}
-
-export async function updateCTMStatus(_userId, taskId, status) {
-  if (!["incomplete", "in_progress", "complete"].includes(status)) {
-    const err = new Error("Invalid status");
-    err.status = 400;
-    throw err;
-  }
-
-  await updateCTMEventStatus(taskId, status);
-}
-
-export async function dismissTombstone(userId, todoistId) {
-  await db.execute({
-    sql: "DELETE FROM ea_completed_tasks WHERE user_id = ? AND todoist_id = ? AND due_date IS NOT NULL",
-    args: [userId, todoistId],
-  });
+  return { completed: true, alreadyCompleted: false, deadlineId: String(deadlineId), occurrenceDate };
 }
 
 export async function listProjects(userId) {
@@ -118,18 +180,7 @@ export async function listLabels(userId) {
   return fetchTodoistLabels(userId);
 }
 
-export async function createTask(userId, body) {
-  const task = await createTodoistTask(userId, body);
-  return task;
-}
-
-export async function updateTask(userId, id, body) {
-  const task = await updateTodoistTask(userId, id, body);
-  await syncTodoistReminderAnchor(userId, task);
-  return task;
-}
-
-export async function deleteTask(userId, id) {
+async function deleteTask(userId, id) {
   await deleteTodoistTask(userId, id);
   await deleteSourceReminders({
     userId,

@@ -19,7 +19,7 @@ const HARD_RISK_PATTERNS = [
   /\btax document\b/i,
   /\btuition\b/i,
   /\bregistration deadline\b/i,
-  /\bcanvas assignment\b/i,
+  /\bassignment (?:deadline|due)\b/i,
   /\bunrecognized sign-?in\b/i,
   /\bsuspicious sign-?in\b/i,
   /\bpassword changed\b/i,

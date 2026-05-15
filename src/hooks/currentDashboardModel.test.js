@@ -7,30 +7,32 @@ import {
 } from "./currentDashboardModel.js";
 
 describe("current dashboard model", () => {
-  it("projects the current dashboard envelope into legacy briefing data", () => {
+  it("projects the current dashboard envelope into domain-shaped briefing data", () => {
     expect(currentToBriefing({
       weather: { temp: 72 },
       calendar: [{ id: "event-1" }],
       deadlines: {
-        ctm: { upcoming: [{ id: "ctm-1" }], stats: { total: 1 } },
-        todoist: { upcoming: [{ id: "todoist-1" }], stats: { total: 1 } },
+        upcoming: [{ id: "deadline-1" }],
+        stats: { total: 1 },
       },
     })).toEqual({
       weather: { temp: 72 },
       calendar: [{ id: "event-1" }],
-      ctm: { upcoming: [{ id: "ctm-1" }], stats: { total: 1 } },
-      todoist: { upcoming: [{ id: "todoist-1" }], stats: { total: 1 } },
+      deadlines: {
+        upcoming: [{ id: "deadline-1" }],
+        stats: { total: 1 },
+      },
       emails: { summary: "", accounts: [] },
     });
   });
 
-  it("projects the current dashboard envelope into legacy live data", () => {
+  it("projects the current dashboard envelope into domain-shaped live data", () => {
     const refreshNow = vi.fn();
     expect(currentToLiveData({
       calendar: [{ id: "event-1" }],
       deadlines: {
-        ctm: { upcoming: [] },
-        todoist: { upcoming: [] },
+        upcoming: [{ id: "deadline-1" }],
+        stats: { total: 1 },
       },
       weather: { temp: 72 },
       bills: [{ id: "bill-1" }],
@@ -45,6 +47,10 @@ describe("current dashboard model", () => {
     }, { refreshNow, isPolling: false })).toMatchObject({
       liveEmails: [],
       liveCalendar: [{ id: "event-1" }],
+      liveDeadlines: {
+        upcoming: [{ id: "deadline-1" }],
+        stats: { total: 1 },
+      },
       liveWeather: { temp: 72 },
       liveBills: [{ id: "bill-1" }],
       allSchedules: [{ id: "schedule-1" }],

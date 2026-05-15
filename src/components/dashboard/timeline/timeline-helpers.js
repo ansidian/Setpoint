@@ -6,12 +6,6 @@ export const PRIORITY_COLOR = {
   3: "#89b4fa",
 };
 
-export const DEADLINE_SOURCE_COLORS = {
-  canvas: "#5A8FBF",
-  manual: "#5A8FBF",
-  todoist: "#E9776A",
-};
-
 export const timelineSettleTransition = {
   type: "spring",
   stiffness: 290,

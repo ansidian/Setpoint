@@ -36,10 +36,7 @@ describe("CalendarModal deadline overlay behavior", () => {
         deadlinesRangeData={{
           loading: true,
           error: null,
-          data: {
-            ctm: { upcoming: [] },
-            todoist: { upcoming: [] },
-          },
+          data: { upcoming: [] },
           dataRange: null,
           ensureRange: ensureDeadlines,
         }}
@@ -66,11 +63,9 @@ describe("CalendarModal deadline overlay behavior", () => {
         }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+          ],
         }}
       />,
     ));
@@ -111,7 +106,7 @@ describe("CalendarModal deadline overlay behavior", () => {
           getEvents: () => [],
         }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
@@ -145,11 +140,9 @@ describe("CalendarModal deadline overlay behavior", () => {
         }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "complete" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "complete" },
+          ],
         }}
       />,
     ));
@@ -183,12 +176,9 @@ describe("CalendarModal deadline overlay behavior", () => {
           loading: true,
           error: null,
           data: {
-            ctm: { upcoming: [] },
-            todoist: {
-              upcoming: [
-                { id: "todo-seeded", title: "Seeded task", due_date: "2026-04-20", source: "todoist", status: "open" },
-              ],
-            },
+            upcoming: [
+              { id: "todo-seeded", title: "Seeded task", due_date: "2026-04-20", source: "todoist", status: "open" },
+            ],
           },
           ensureRange: ensureDeadlines,
         }}
@@ -207,20 +197,14 @@ describe("CalendarModal deadline overlay behavior", () => {
       getEvents: () => [],
     };
     const seededDeadlines = {
-      ctm: { upcoming: [] },
-      todoist: {
-        upcoming: [
-          { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", source: "todoist", status: "open" },
-        ],
-      },
+      upcoming: [
+        { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", source: "todoist", status: "open" },
+      ],
     };
     const rangeDeadlines = {
-      ctm: { upcoming: [] },
-      todoist: {
-        upcoming: [
-          { id: "todo-range", title: "Range task", due_date: "2026-04-20", source: "todoist", status: "open" },
-        ],
-      },
+      upcoming: [
+        { id: "todo-range", title: "Range task", due_date: "2026-04-20", source: "todoist", status: "open" },
+      ],
     };
 
     const { rerender } = render(wrapWithDashboard(
@@ -298,12 +282,10 @@ describe("CalendarModal deadline overlay behavior", () => {
         }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "Open task", due_date: "2026-04-20", source: "todoist", status: "open" },
-              { id: "todo-2", title: "Done task", due_date: "2026-04-20", source: "todoist", status: "complete" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "Open task", due_date: "2026-04-20", source: "todoist", status: "open" },
+            { id: "todo-2", title: "Done task", due_date: "2026-04-20", source: "todoist", status: "complete" },
+          ],
         }}
       />,
     ));
@@ -390,7 +372,7 @@ describe("CalendarModal deadline overlay behavior", () => {
             getEvents: () => [],
           }}
           billsData={{}}
-          deadlinesData={{ todoist: { upcoming: [] } }}
+          deadlinesData={{ upcoming: [] }}
           deadlinesRangeData={{
             loading: true,
             error: null,
@@ -417,11 +399,9 @@ describe("CalendarModal deadline overlay behavior", () => {
 
       await act(async () => {
         resolveDeadlines({
-          todoist: {
-            upcoming: [
-              { id: "late", title: "Late deadline", due_date: "2026-04-20", source: "todoist", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "late", title: "Late deadline", due_date: "2026-04-20", source: "todoist", status: "open" },
+          ],
         });
         await Promise.resolve();
       });

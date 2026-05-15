@@ -467,19 +467,19 @@ describe("CalendarModal bills behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          ctm: { upcoming: [{ id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" }] },
-          todoist: { upcoming: [] },
+          upcoming: [{ id: "deadline-1", title: "Project due", due_date: "2026-04-20", status: "open" }],
         }}
       />,
     ));
 
     expect(await screen.findByTestId("timeline-detail-rail")).toBeTruthy();
-    expect(screen.queryByTestId("deadlines-agenda-rail")).toBeNull();
+    expect(screen.queryByTestId("events-agenda-rail")).toBeNull();
   });
 });

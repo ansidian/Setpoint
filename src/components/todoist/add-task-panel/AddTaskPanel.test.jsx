@@ -3,21 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
 
-const mockCreateTodoistTask = vi.fn();
-const mockUpdateTodoistTask = vi.fn();
+const mockCreateDeadline = vi.fn();
+const mockUpdateDeadline = vi.fn();
 const mockGetTodoistProjects = vi.fn();
 const mockGetTodoistLabels = vi.fn();
-const mockDeleteTodoistTask = vi.fn();
+const mockDeleteDeadline = vi.fn();
 const mockListReminders = vi.fn();
 const mockCreateReminder = vi.fn();
 const mockDeleteReminder = vi.fn();
 
 vi.mock("../../../api", () => ({
-  createTodoistTask: (...args) => mockCreateTodoistTask(...args),
-  updateTodoistTask: (...args) => mockUpdateTodoistTask(...args),
+  createDeadline: (...args) => mockCreateDeadline(...args),
+  updateDeadline: (...args) => mockUpdateDeadline(...args),
   getTodoistProjects: (...args) => mockGetTodoistProjects(...args),
   getTodoistLabels: (...args) => mockGetTodoistLabels(...args),
-  deleteTodoistTask: (...args) => mockDeleteTodoistTask(...args),
+  deleteDeadline: (...args) => mockDeleteDeadline(...args),
   listReminders: (...args) => mockListReminders(...args),
   createReminder: (...args) => mockCreateReminder(...args),
   deleteReminder: (...args) => mockDeleteReminder(...args),
@@ -57,11 +57,11 @@ describe("AddTaskPanel due picker", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-19T17:00:10.000Z"));
-    mockCreateTodoistTask.mockResolvedValue({ id: "todo-new" });
-    mockUpdateTodoistTask.mockResolvedValue({ id: "todo-1" });
+    mockCreateDeadline.mockResolvedValue({ id: "todo-new" });
+    mockUpdateDeadline.mockResolvedValue({ id: "todo-1" });
     mockGetTodoistProjects.mockResolvedValue([]);
     mockGetTodoistLabels.mockResolvedValue([]);
-    mockDeleteTodoistTask.mockResolvedValue({});
+    mockDeleteDeadline.mockResolvedValue({});
     mockListReminders.mockResolvedValue({ reminders: [] });
     mockCreateReminder.mockResolvedValue({ reminder: { id: "rem-created" } });
     mockDeleteReminder.mockResolvedValue({ success: true });
@@ -76,7 +76,7 @@ describe("AddTaskPanel due picker", () => {
 
   it("flushes pending Todoist reminders only after provider task creation succeeds", async () => {
     const onTaskAdded = vi.fn();
-    mockCreateTodoistTask.mockResolvedValueOnce({
+    mockCreateDeadline.mockResolvedValueOnce({
       id: "todo-new",
       title: "Call dentist",
       due_date: "2026-04-20",
@@ -97,9 +97,9 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(expect.objectContaining({
-      content: "Call dentist",
-      due_string: "2026-04-20 at 10 AM",
+    expect(mockCreateDeadline).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Call dentist",
+      dueString: "2026-04-20 at 10 AM",
     }));
     expect(mockCreateReminder).toHaveBeenCalledWith(expect.objectContaining({
       sourceType: "todoist_task",
@@ -122,7 +122,7 @@ describe("AddTaskPanel due picker", () => {
   });
 
   it("does not create pending reminders when provider task creation fails", async () => {
-    mockCreateTodoistTask.mockRejectedValueOnce(new Error("Todoist unavailable"));
+    mockCreateDeadline.mockRejectedValueOnce(new Error("Todoist unavailable"));
 
     render(<PanelHarness />);
     vi.runOnlyPendingTimers();
@@ -134,7 +134,7 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalled();
+    expect(mockCreateDeadline).toHaveBeenCalled();
     expect(mockCreateReminder).not.toHaveBeenCalled();
     expect(screen.getByText("Todoist unavailable")).toBeTruthy();
   });
@@ -189,10 +189,10 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+    expect(mockCreateDeadline).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "Send invoice",
-        due_string: "2026-04-19 at 10:01 AM",
+        title: "Send invoice",
+        dueString: "2026-04-19 at 10:01 AM",
       }),
     );
   });
@@ -217,10 +217,10 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+    expect(mockCreateDeadline).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "Backfill notes",
-        due_string: "2026-04-18 at 10:01 AM",
+        title: "Backfill notes",
+        dueString: "2026-04-18 at 10:01 AM",
       }),
     );
   });
@@ -239,10 +239,10 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+    expect(mockCreateDeadline).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "Backfill notes",
-        due_string: "2026-04-20 at 9 AM",
+        title: "Backfill notes",
+        dueString: "2026-04-20 at 9 AM",
       }),
     );
   });
@@ -260,11 +260,11 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+    expect(mockCreateDeadline).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "Water plants",
+        title: "Water plants",
         priority: 2,
-        due_string: "every weekday at 9am",
+        dueString: "every weekday at 9am",
       }),
     );
   });
@@ -308,11 +308,11 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await vi.runAllTimersAsync();
 
-    expect(mockUpdateTodoistTask).toHaveBeenCalledWith(
+    expect(mockUpdateDeadline).toHaveBeenCalledWith(
       "todo-1",
       expect.objectContaining({
-        content: "Follow up",
-        due_string: "2026-04-21 at 2:30 PM",
+        title: "Follow up",
+        dueString: "2026-04-21 at 2:30 PM",
       }),
     );
   });
@@ -324,7 +324,7 @@ describe("AddTaskPanel due picker", () => {
         { id: "at-start", offset_minutes: 0, remind_at: "2026-04-21T21:30:00.000Z", status: "pending" },
       ],
     });
-    mockUpdateTodoistTask.mockResolvedValueOnce({
+    mockUpdateDeadline.mockResolvedValueOnce({
       id: "todo-1",
       title: "Follow up",
       due_date: "2026-04-21",
@@ -391,10 +391,10 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+    expect(mockCreateDeadline).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "Plan sprint",
-        due_string: "2026-04-22 at 9:00 AM",
+        title: "Plan sprint",
+        dueString: "2026-04-22 at 9:00 AM",
       }),
     );
   });
@@ -465,12 +465,12 @@ describe("AddTaskPanel due picker", () => {
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
 
-    expect(mockCreateTodoistTask).toHaveBeenCalledWith(
+    expect(mockCreateDeadline).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: "Submit lab notes",
-        project_id: "school",
+        title: "Submit lab notes",
+        projectId: "school",
         priority: 2,
-        labels: ["lab"],
+        labelIds: ["lab"],
       }),
     );
   });
@@ -720,14 +720,14 @@ describe("AddTaskPanel due picker", () => {
     vi.runOnlyPendingTimers();
 
     fireEvent.click(screen.getByTestId("todoist-delete"));
-    expect(mockDeleteTodoistTask).not.toHaveBeenCalled();
+    expect(mockDeleteDeadline).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.getByTestId("todoist-delete-confirm")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("todoist-delete-confirm"));
     await vi.runAllTimersAsync();
 
-    expect(mockDeleteTodoistTask).toHaveBeenCalledWith("todo-delete");
+    expect(mockDeleteDeadline).toHaveBeenCalledWith("todo-delete");
     expect(onTaskDeleted).toHaveBeenCalledWith("todo-delete");
   });
 });

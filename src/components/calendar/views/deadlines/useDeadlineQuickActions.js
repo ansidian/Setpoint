@@ -1,10 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { deleteTodoistTask } from "@/api";
+import { deleteDeadline } from "@/api";
 import {
   normalizeStatus,
   openInNewTab,
-  sourceLabelFor,
-  sourceOf,
 } from "./deadlinesModel.js";
 
 function compactItems(items) {
@@ -20,14 +18,10 @@ function compactItems(items) {
   return compacted;
 }
 
-function ctmUrlFor(task) {
-  return `https://ctm.andysu.tech/#/event/${task.id}`;
-}
-
-function todoistActionItems(task, { onEdit, onComplete, onRequestDelete }) {
+function deadlineActionItems(task, { onEdit, onComplete, onRequestDelete }) {
   const isComplete = normalizeStatus(task.status) === "complete";
   return compactItems([
-    { id: "edit", label: "Edit task", onSelect: onEdit, testId: "calendar-deadline-context-edit" },
+    { id: "edit", label: "Edit deadline", onSelect: onEdit, testId: "calendar-deadline-context-edit" },
     !isComplete && {
       id: "complete",
       label: "Mark complete",
@@ -35,7 +29,7 @@ function todoistActionItems(task, { onEdit, onComplete, onRequestDelete }) {
       testId: "calendar-deadline-context-complete",
     },
     { type: "separator" },
-    task.url && {
+    task.url && /todoist/i.test(task.url) && {
       id: "open-todoist",
       label: "Open in Todoist",
       onSelect: () => openInNewTab(task.url),
@@ -46,56 +40,6 @@ function todoistActionItems(task, { onEdit, onComplete, onRequestDelete }) {
       tone: "danger",
       onSelect: onRequestDelete,
       testId: "calendar-deadline-context-delete",
-    },
-  ]);
-}
-
-function ctmActionItems(task, { onStatusChange }) {
-  const status = normalizeStatus(task.status);
-  const isCanvas = sourceOf(task) === "canvas";
-  return compactItems([
-    status !== "incomplete" && {
-      id: "incomplete",
-      label: "Mark incomplete",
-      onSelect: () => onStatusChange("incomplete"),
-    },
-    status !== "in_progress" && {
-      id: "in-progress",
-      label: "Mark in progress",
-      onSelect: () => onStatusChange("in_progress"),
-    },
-    status !== "complete" && {
-      id: "complete",
-      label: "Mark complete",
-      onSelect: () => onStatusChange("complete"),
-      testId: "calendar-deadline-context-complete",
-    },
-    { type: "separator" },
-    isCanvas && task.url && {
-      id: "open-canvas",
-      label: "Open in Canvas",
-      onSelect: () => openInNewTab(task.url),
-    },
-    {
-      id: "open-ctm",
-      label: "Open in CTM",
-      onSelect: () => openInNewTab(ctmUrlFor(task)),
-    },
-  ]);
-}
-
-function tombstoneActionItems(task, { onDismissGhost }) {
-  return compactItems([
-    task.url && {
-      id: "open-todoist",
-      label: "Open in Todoist",
-      onSelect: () => openInNewTab(task.url),
-    },
-    { type: "separator" },
-    {
-      id: "dismiss",
-      label: "Dismiss",
-      onSelect: () => onDismissGhost?.(task.id),
     },
   ]);
 }
@@ -138,13 +82,13 @@ export default function useDeadlineQuickActions({
 
   const confirmContextDelete = useCallback(async () => {
     const task = contextMenu?.task;
-    if (!task || sourceOf(task) !== "todoist") return;
+    if (!task?.id) return;
 
     setContextMenu((current) => (current ? { ...current, busy: true, error: null } : current));
     setStatus({ tone: "pending", message: "Deleting deadline..." });
 
     try {
-      await deleteTodoistTask(task.id);
+      await deleteDeadline(task.id);
       actions.onDeleteTask?.(task.id);
       onDeleted?.(task.id, task);
       setContextMenu(null);
@@ -165,31 +109,17 @@ export default function useDeadlineQuickActions({
     const task = contextMenu?.task;
     if (!task) return [];
 
-    if (task._tombstone) {
-      return tombstoneActionItems(task, {
-        onDismissGhost: actions.onDismissGhost,
-      });
-    }
-
-    if (sourceOf(task) === "todoist") {
-      return todoistActionItems(task, {
-        onEdit: () => onEditTask?.(task, contextMenu),
-        onComplete: () => actions.onCompleteTask?.(task.id, task),
-        onRequestDelete: requestDelete,
-      });
-    }
-
-    return ctmActionItems(task, {
-      onStatusChange: (nextStatus) => actions.onUpdateTaskStatus?.(task.id, nextStatus),
+    return deadlineActionItems(task, {
+      onEdit: () => onEditTask?.(task, contextMenu),
+      onComplete: () => actions.onCompleteTask?.(task.id, task),
+      onRequestDelete: requestDelete,
     });
   }, [actions, contextMenu, onEditTask, requestDelete]);
 
   return useMemo(() => ({
     kind: "deadline",
     contextMenu,
-    contextMenuTitle: contextMenu?.task
-      ? `${sourceLabelFor(contextMenu.task)} deadline`
-      : "Deadline",
+    contextMenuTitle: "Deadline",
     menuItems,
     status,
     clearStatus,

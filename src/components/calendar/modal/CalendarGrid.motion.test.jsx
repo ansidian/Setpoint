@@ -400,10 +400,9 @@ describe("CalendarGrid overflow motion coverage", () => {
     const deadline = {
       id: "todo-hidden",
       calendarItemKind: "deadline",
-      title: "Hidden Todoist task",
+      title: "Hidden deadline",
       due_date: "2026-04-20",
       due_time: "5:00 PM",
-      source: "todoist",
       status: "incomplete",
     };
 
@@ -416,11 +415,12 @@ describe("CalendarGrid overflow motion coverage", () => {
 
     fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
     const popover = await screen.findByTestId("calendar-cell-overflow-popover");
-    fireEvent.click(within(popover).getByText("Hidden Todoist task"));
+    fireEvent.click(within(popover).getByText("Hidden deadline"));
 
     expect(onOpenFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
-      itemId: "todoist:todo-hidden",
-      view: "deadlines",
+      itemId: "deadline:todo-hidden:2026-04-20",
+      view: "events",
+      detailKind: "deadline",
       itemsSnapshot: [expect.objectContaining({ id: "todo-hidden" })],
     }));
   });

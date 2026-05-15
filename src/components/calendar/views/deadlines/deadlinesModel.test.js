@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canNavigateBack, compute } from "./deadlinesModel.js";
+import {
+  canNavigateBack,
+  compute,
+  getDeadlineSelectionId,
+} from "./deadlinesModel.js";
 
 describe("deadlinesModel range navigation", () => {
   it("allows previous navigation by rolling window even without overdue data", () => {
@@ -31,22 +35,32 @@ describe("deadlinesModel range navigation", () => {
     })).toBe(false);
   });
 
-  it("groups completed Todoist history with active deadlines", () => {
+  it("groups completed deadline history with active deadlines from the domain payload", () => {
     const result = compute({
       viewYear: 2026,
       viewMonth: 4,
       data: {
-        ctm: { upcoming: [] },
-        todoist: {
-          upcoming: [
-            { id: "active", title: "Active", due_date: "2026-05-10", status: "incomplete", source: "todoist" },
-            { id: "done", title: "Done", due_date: "2026-05-10", status: "complete", source: "todoist" },
-          ],
-        },
+        upcoming: [
+          { id: "active", title: "Active", due_date: "2026-05-10", status: "incomplete" },
+          { id: "done", title: "Done", due_date: "2026-05-10", status: "complete" },
+        ],
       },
     });
 
     expect(result.itemsByDate["2026-05-10"].activeItems.map((item) => item.id)).toEqual(["active"]);
     expect(result.itemsByDate["2026-05-10"].completedItems.map((item) => item.id)).toEqual(["done"]);
+  });
+
+  it("uses deadline occurrence identity for every deadline row", () => {
+    expect(getDeadlineSelectionId({
+      id: "repeat-1",
+      due_date: "2026-05-10",
+      is_recurring: true,
+    })).toBe("deadline:repeat-1:2026-05-10");
+
+    expect(getDeadlineSelectionId({
+      id: "one-off",
+      due_date: "2026-05-11",
+    })).toBe("deadline:one-off:2026-05-11");
   });
 });

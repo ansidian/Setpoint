@@ -90,7 +90,7 @@ export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile
             data-testid="deadlines-rail-refresh-status"
             style={{ fontSize: 10, color: "rgba(205,214,244,0.46)" }}
           >
-            Checking Todoist...
+            Checking deadlines...
           </div>
         ) : <CountBadge n={openCount} />}
       />
@@ -153,8 +153,7 @@ function DeadlineGroup({ label, items, accent, onJump, isMobile, tone, completed
 }
 
 function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed }) {
-  const isTodoist = d.source === "todoist";
-  const showPriority = isTodoist && PRIORITY_COLOR[d.priority];
+  const showPriority = PRIORITY_COLOR[d.priority];
   const reminderSummary = formatReminderSummary(d);
 
   return (
@@ -222,7 +221,7 @@ function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed })
             whiteSpace: isMobile ? "normal" : "nowrap",
           }}
         >
-          {d.class_name || d.source}
+          {d.class_name || d.project_name || "Deadline"}
         </div>
         {reminderSummary ? (
           <div

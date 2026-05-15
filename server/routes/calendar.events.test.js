@@ -9,7 +9,6 @@ vi.mock("../briefing/config-service.js", () => ({
   loadUserConfig: vi.fn(),
 }));
 vi.mock("../briefing/deadline-helpers.js", () => ({
-  separateDeadlines: vi.fn(),
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
@@ -33,14 +32,36 @@ vi.mock("../briefing/calendar-search-mirror.js", () => ({
   requestCalendarSearchMirrorSync: vi.fn(),
   upsertCalendarSearchMirrorOccurrence: vi.fn().mockResolvedValue({ upserted: true }),
 }));
+vi.mock("../briefing/calendar-search.js", () => ({
+  deadlineSearchCandidates: vi.fn(() => []),
+  normalizeBillSearchCandidate: vi.fn((bill) => bill),
+  normalizeEventSearchCandidate: vi.fn((event) => event),
+  normalizeLimit: vi.fn(() => 20),
+  rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
+}));
+vi.mock("../briefing/deadlines-read.js", () => ({
+  readCalendarDeadlines: vi.fn(),
+  readCalendarDeadlineRange: vi.fn(),
+}));
+vi.mock("../briefing/tasks-service.js", () => ({
+  completeDeadlineOccurrence: vi.fn(),
+  createDeadline: vi.fn(),
+  deleteDeadline: vi.fn(),
+  updateDeadline: vi.fn(),
+}));
+vi.mock("../briefing/bills-service.js", () => ({
+  billMirrorRefreshRange: vi.fn(() => ({ start: "2026-05-01", end: "2026-05-31" })),
+  isBillsMirrorMaintenanceDue: vi.fn(),
+  readBillsMirrorRange: vi.fn(),
+  scheduleBillsMirrorRefresh: vi.fn(),
+}));
+vi.mock("../dashboard/current-service.js", () => ({
+  applyDeadlineCurrentStatus: vi.fn(),
+  requestBillsCurrentMaintenanceRefresh: vi.fn(),
+}));
 vi.mock("../briefing/google-places.js", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
-}));
-vi.mock("../briefing/ctm.js", () => ({
-  fetchCTMDeadlines: vi.fn(),
-  fetchCTMDeadlinesAll: vi.fn(),
-  fetchCTMDeadlinesRange: vi.fn(),
 }));
 vi.mock("../briefing/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: vi.fn(),

@@ -51,6 +51,32 @@ describe("TimelineRow", () => {
     expect(screen.getByText("Already pinged").closest("[role='button']")?.textContent).not.toContain("Reminder");
   });
 
+  it("renders deadline timeline rows with domain metadata rather than provider labels", () => {
+    const now = new Date("2026-05-05T20:25:00.000Z").getTime();
+    const deadline = {
+      kind: "deadline",
+      dueAtMs: new Date("2026-05-06T06:59:00.000Z").getTime(),
+      data: {
+        id: "deadline-1",
+        title: "Submit packet",
+        due_date: "2026-05-05",
+        class_name: "School",
+        source: "canvas",
+        status: "open",
+        priority: 2,
+      },
+    };
+
+    render(<TimelineRow accent="#cba6da" item={deadline} now={now} />);
+
+    const row = screen.getByTestId("timeline-row-desktop");
+    expect(row.textContent).toContain("Deadline");
+    expect(row.textContent).toContain("School");
+    expect(row.textContent).not.toContain("Canvas");
+    expect(row.textContent).not.toContain("CTM");
+    expect(row.textContent).not.toContain("Todoist");
+  });
+
   it("renders all-day events as all-day rather than timed live blocks", () => {
     const now = new Date("2026-05-05T20:25:00.000Z").getTime();
     const allDayEvent = {

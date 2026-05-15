@@ -1,3 +1,5 @@
+import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
+
 export function resolveCalendarOpenState({
   isMobile = false,
   viewKey = null,
@@ -8,10 +10,11 @@ export function resolveCalendarOpenState({
   options = {},
 } = {}) {
   if (isMobile) return null;
-  const requested = viewKey === "deadlines" ? "events" : viewKey;
+  const requested = viewKey ? normalizeCalendarWorkspaceView(viewKey) : null;
+  const fallbackView = normalizeCalendarWorkspaceView(currentView);
   const view = requested === "bills" && !showBills
     ? "events"
-    : requested || currentView;
+    : requested || fallbackView;
   const nextFocusItemId = focusItemId ? String(focusItemId) : null;
   const forceDeadlineOverlay = !!options.forceDeadlineOverlay;
   const forceEventOverlay = !!options.forceEventOverlay;
@@ -46,7 +49,7 @@ export function resolveDashboardShellHotkey({
   if (repeat || metaKey || ctrlKey || altKey) return { action: "ignore" };
 
   if (actionChord === "g") {
-    if (normalized === "t") return { action: "open-todoist-create", clearChord: true };
+    if (normalized === "t") return { action: "open-deadline-create", clearChord: true };
     if (normalized === "e" || normalized === "c") {
       return { action: "open-event-create", clearChord: true };
     }

@@ -1,6 +1,6 @@
 export const EMPTY_DEADLINES = {
-  ctm: { upcoming: [], stats: null },
-  todoist: { upcoming: [], stats: null },
+  upcoming: [],
+  stats: null,
 };
 
 export function hasActiveRefreshWork(current) {
@@ -16,8 +16,7 @@ export function currentToBriefing(current) {
   return {
     weather: current?.weather || null,
     calendar: current?.calendar || [],
-    ctm: deadlines.ctm || EMPTY_DEADLINES.ctm,
-    todoist: deadlines.todoist || EMPTY_DEADLINES.todoist,
+    deadlines,
     emails: { summary: "", accounts: [] },
   };
 }

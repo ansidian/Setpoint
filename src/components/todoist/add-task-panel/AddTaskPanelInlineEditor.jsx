@@ -403,10 +403,10 @@ export default function AddTaskPanelInlineEditor({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <div id="todoist-editor-title" style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
-              {isEdit ? "Edit Todoist task" : "New Todoist task"}
+              {isEdit ? "Edit deadline" : "New deadline"}
             </div>
             <div style={{ marginTop: 3, fontSize: 11, color: "rgba(205,214,244,0.42)", lineHeight: 1.45 }}>
-              Task text can carry Todoist dates, priority, projects, and labels.
+              Deadline text can carry dates, priority, projects, and labels.
             </div>
           </div>
         </div>

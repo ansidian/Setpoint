@@ -1,4 +1,4 @@
-export function buildTodoistTaskPayload({
+export function buildDeadlineMutationPayload({
   parsed,
   input = "",
   description = "",
@@ -9,16 +9,16 @@ export function buildTodoistTaskPayload({
   isEdit = false,
 }) {
   const payload = {
-    content: parsed?.stripped ?? input.trim(),
+    title: parsed?.stripped ?? input.trim(),
   };
 
   if (description.trim()) payload.description = description.trim();
-  if (resolvedProject) payload.project_id = resolvedProject.id;
+  if (resolvedProject) payload.projectId = resolvedProject.id;
   if (resolvedPriority) payload.priority = resolvedPriority;
   if (isEdit || resolvedLabels.length) {
-    payload.labels = resolvedLabels.map((label) => label.name);
+    payload.labelIds = resolvedLabels.map((label) => label.name);
   }
-  if (resolvedDue) payload.due_string = resolvedDue;
+  if (resolvedDue) payload.dueString = resolvedDue;
 
   return payload;
 }

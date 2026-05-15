@@ -1,4 +1,4 @@
-const EMPTY_TODOIST_STATS = {
+const EMPTY_DEADLINE_STATS = {
   incomplete: 0,
   dueToday: 0,
   dueThisWeek: 0,
@@ -6,8 +6,8 @@ const EMPTY_TODOIST_STATS = {
 };
 
 export const EMPTY_DEADLINES = {
-  ctm: { upcoming: [], stats: null },
-  todoist: { upcoming: [], stats: null },
+  upcoming: [],
+  stats: null,
 };
 
 function clone(value) {
@@ -28,34 +28,31 @@ function dateWindow(now = new Date()) {
   };
 }
 
-export function taskMatches(task, taskId, section = null) {
-  if (task?._tombstone || String(task?.id) !== String(taskId)) return false;
-  if (section === "todoist") return task.source === "todoist";
-  if (section === "ctm") return task.source !== "todoist";
+export function deadlineMatches(deadline, deadlineId) {
+  if (deadline?._tombstone || String(deadline?.id) !== String(deadlineId)) return false;
   return true;
 }
 
-function ensureTodoistSection(root) {
-  if (!root.todoist) {
-    root.todoist = { upcoming: [], stats: { ...EMPTY_TODOIST_STATS } };
-  }
-  if (!Array.isArray(root.todoist.upcoming)) root.todoist.upcoming = [];
-  return root.todoist;
+function ensureDeadlineRoot(root) {
+  if (!root) return { upcoming: [], stats: { ...EMPTY_DEADLINE_STATS } };
+  if (!Array.isArray(root.upcoming)) root.upcoming = [];
+  if (!root.stats) root.stats = { ...EMPTY_DEADLINE_STATS };
+  return root;
 }
 
-function recalculateTodoistStats(root, { now = new Date(), skipCompleteForDueCounts = true } = {}) {
-  if (!root?.todoist?.upcoming) return root;
+function recalculateDeadlineStats(root, { now = new Date(), skipCompleteForDueCounts = true } = {}) {
+  if (!root?.upcoming) return root;
   const { today, weekFromNow } = dateWindow(now);
   let dueToday = 0;
   let dueThisWeek = 0;
-  for (const task of root.todoist.upcoming) {
-    if (task._tombstone) continue;
-    if (skipCompleteForDueCounts && task.status === "complete") continue;
-    if (task.due_date === today) dueToday += 1;
-    if (task.due_date >= today && task.due_date <= weekFromNow) dueThisWeek += 1;
+  for (const deadline of root.upcoming) {
+    if (deadline._tombstone) continue;
+    if (skipCompleteForDueCounts && deadline.status === "complete") continue;
+    if (deadline.due_date === today) dueToday += 1;
+    if (deadline.due_date >= today && deadline.due_date <= weekFromNow) dueThisWeek += 1;
   }
-  root.todoist.stats = {
-    incomplete: root.todoist.upcoming.filter((task) => !task._tombstone && task.status !== "complete").length,
+  root.stats = {
+    incomplete: root.upcoming.filter((deadline) => !deadline._tombstone && deadline.status !== "complete").length,
     dueToday,
     dueThisWeek,
     totalPoints: 0,
@@ -63,97 +60,53 @@ function recalculateTodoistStats(root, { now = new Date(), skipCompleteForDueCou
   return root;
 }
 
-function recalculateSectionStats(root, section, { now = new Date() } = {}) {
-  if (!root?.[section]?.upcoming) return root;
-  const { today, weekFromNow } = dateWindow(now);
-  let totalPoints = 0;
-  let dueToday = 0;
-  let dueThisWeek = 0;
-  let incomplete = 0;
-  for (const task of root[section].upcoming) {
-    if (task.status !== "complete") incomplete += 1;
-    if (task.due_date === today) dueToday += 1;
-    if (task.due_date >= today && task.due_date <= weekFromNow) dueThisWeek += 1;
-    if (task.points_possible) totalPoints += task.points_possible;
-  }
-  root[section].stats = { incomplete, dueToday, dueThisWeek, totalPoints };
-  return root;
-}
-
-export function applyTodoistTaskUpsert(root, task, { merge = false, now = new Date() } = {}) {
-  if (!root || !task?.id) return root;
-  const updated = clone(root);
-  const todoist = ensureTodoistSection(updated);
-  const index = todoist.upcoming.findIndex(
-    (entry) => !entry._tombstone && String(entry.id) === String(task.id),
+export function applyDeadlineUpsert(root, deadline, { merge = false, now = new Date() } = {}) {
+  if (!deadline?.id) return root;
+  const updated = clone(root || EMPTY_DEADLINES);
+  const deadlines = ensureDeadlineRoot(updated);
+  const index = deadlines.upcoming.findIndex(
+    (entry) => !entry._tombstone && String(entry.id) === String(deadline.id),
   );
   if (index >= 0) {
-    todoist.upcoming[index] = merge ? { ...todoist.upcoming[index], ...task } : task;
+    deadlines.upcoming[index] = merge ? { ...deadlines.upcoming[index], ...deadline } : deadline;
   } else {
-    todoist.upcoming.push(task);
+    deadlines.upcoming.push(deadline);
   }
-  return recalculateTodoistStats(updated, { now });
+  return recalculateDeadlineStats(updated, { now, skipCompleteForDueCounts: false });
 }
 
-export function applyTodoistTaskDelete(root, taskId, { now = new Date() } = {}) {
-  if (!root?.todoist?.upcoming) return root;
+export function applyDeadlineDelete(root, deadlineId, { now = new Date() } = {}) {
+  if (!root?.upcoming) return root;
   const updated = clone(root);
-  updated.todoist.upcoming = updated.todoist.upcoming.filter(
-    (task) => task._tombstone || String(task.id) !== String(taskId),
+  updated.upcoming = updated.upcoming.filter(
+    (deadline) => deadline._tombstone || String(deadline.id) !== String(deadlineId),
   );
-  return recalculateTodoistStats(updated, { now });
+  return recalculateDeadlineStats(updated, { now, skipCompleteForDueCounts: false });
 }
 
-export function applyTaskCompleting(root, taskId, sectionName) {
+export function applyDeadlineCompleting(root, deadlineId) {
   if (!root) return root;
   const updated = clone(root);
-  for (const section of sectionName ? [sectionName] : ["ctm", "todoist"]) {
-    const task = updated[section]?.upcoming?.find((entry) => taskMatches(entry, taskId, section));
-    if (task) task._completing = true;
-  }
+  const deadline = updated.upcoming?.find((entry) => deadlineMatches(entry, deadlineId));
+  if (deadline) deadline._completing = true;
   return updated;
 }
 
-export function clearTaskCompleting(root, taskId, sectionName) {
+export function clearDeadlineCompleting(root, deadlineId) {
   if (!root) return root;
   const updated = clone(root);
-  for (const section of sectionName ? [sectionName] : ["ctm", "todoist"]) {
-    const task = updated[section]?.upcoming?.find((entry) => taskMatches(entry, taskId, section));
-    if (task) delete task._completing;
-  }
+  const deadline = updated.upcoming?.find((entry) => deadlineMatches(entry, deadlineId));
+  if (deadline) delete deadline._completing;
   return updated;
 }
 
-export function applyTaskComplete(root, taskId, sectionName = null, { now = new Date() } = {}) {
+export function applyDeadlineComplete(root, deadlineId, { now = new Date() } = {}) {
   if (!root) return root;
   const updated = clone(root);
-  for (const section of sectionName ? [sectionName] : ["ctm", "todoist"]) {
-    if (!updated[section]?.upcoming) continue;
-    const task = updated[section].upcoming.find((entry) => taskMatches(entry, taskId, section));
-    if (task) {
-      task.status = "complete";
-      delete task._completing;
-    }
-    recalculateSectionStats(updated, section, { now });
+  const deadline = updated.upcoming?.find((entry) => deadlineMatches(entry, deadlineId));
+  if (deadline) {
+    deadline.status = "complete";
+    delete deadline._completing;
   }
-  return updated;
-}
-
-export function applyTaskStatus(root, taskId, status, sectionName = "ctm") {
-  if (!root) return root;
-  const updated = clone(root);
-  for (const section of [sectionName]) {
-    const task = updated[section]?.upcoming?.find((entry) => taskMatches(entry, taskId, section));
-    if (task) task.status = status;
-  }
-  return updated;
-}
-
-export function dismissTodoistTombstone(root, todoistId, { now = new Date() } = {}) {
-  if (!root?.todoist?.upcoming) return root;
-  const updated = clone(root);
-  updated.todoist.upcoming = updated.todoist.upcoming.filter(
-    (task) => !(task._tombstone && task.id === todoistId),
-  );
-  return recalculateTodoistStats(updated, { now, skipCompleteForDueCounts: false });
+  return recalculateDeadlineStats(updated, { now, skipCompleteForDueCounts: false });
 }

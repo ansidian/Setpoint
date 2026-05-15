@@ -247,15 +247,7 @@ export function buildEventGhostPreview({ editor, events }) {
   };
 }
 
-const DEADLINE_SOURCE_COLORS = {
-  canvas: "#5A8FBF",
-  manual: "#5A8FBF",
-  todoist: "#e8776a",
-};
-
-function deadlineSourceColor(source) {
-  return DEADLINE_SOURCE_COLORS[source] || "#89b4fa";
-}
+const DEADLINE_GHOST_COLOR = "#e8776a";
 
 export function deadlinePreviewFromEpoch(epochMs) {
   if (!Number.isFinite(epochMs)) return null;
@@ -271,7 +263,6 @@ export function buildDeadlineGhostPreview({ draft, dateItems }) {
   if (!draft?.dueDate || !isValidYmd(draft.dueDate)) return null;
   if (draft.isEditing && !draft.placementChanged) return null;
   const activeCount = dateItems?.activeCount ?? dateItems?.items?.length ?? 0;
-  const source = draft.source || "todoist";
   const ghost = {
     id: "deadline-ghost",
     kind: "deadline",
@@ -280,8 +271,7 @@ export function buildDeadlineGhostPreview({ draft, dateItems }) {
     endDate: draft.dueDate,
     dueTime: draft.dueTime || null,
     dueMinutes: minutesFromDisplayTime(draft.dueTime),
-    source,
-    color: deadlineSourceColor(source),
+    color: draft.color || DEADLINE_GHOST_COLOR,
     lane: 0,
     conflictCount: 0,
     crowdedCount: activeCount,

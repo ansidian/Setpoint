@@ -1,19 +1,26 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import eventsView from "./eventsView.jsx";
-import deadlinesView from "./deadlinesView.jsx";
 import billsView from "./billsView.jsx";
 import { DashboardProvider } from "../../../context/DashboardContext.jsx";
+import { renderDeadlinesCellContents } from "./deadlines/DeadlinesCellContent.jsx";
+import { renderDeadlinesDetail, renderDeadlinesFloatingDetail } from "./deadlines/DeadlinesDetailRail.jsx";
+import { getDayState as getDeadlineDayState } from "./deadlines/deadlinesModel.js";
 
-const mockCompleteTask = vi.hoisted(() => vi.fn());
-const mockUpdateTaskStatus = vi.hoisted(() => vi.fn());
+const mockCompleteDeadlineOccurrence = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../api", () => ({
   dismissEmail: vi.fn(),
-  completeTask: (...args) => mockCompleteTask(...args),
-  updateTaskStatus: (...args) => mockUpdateTaskStatus(...args),
+  completeDeadlineOccurrence: (...args) => mockCompleteDeadlineOccurrence(...args),
   dismissTombstone: vi.fn(),
 }));
+
+const deadlinesDetail = {
+  getDayState: getDeadlineDayState,
+  renderCellContents: renderDeadlinesCellContents,
+  renderDetail: renderDeadlinesDetail,
+  renderFloatingDetail: renderDeadlinesFloatingDetail,
+};
 
 afterEach(() => {
   cleanup();
@@ -283,10 +290,10 @@ describe("calendar detail timeline", () => {
         viewMonth: 3,
         items: [
           {
-            id: "ctm-1",
+            id: "todo-0",
             title: "Draft essay",
             due_date: "2026-04-19",
-            source: "canvas",
+            source: "todoist",
             class_name: "English",
             status: "in_progress",
             calendarItemKind: "deadline",
@@ -304,7 +311,7 @@ describe("calendar detail timeline", () => {
       }),
     );
 
-    expect(screen.getByTestId("deadline-status-indicator-ctm-1").textContent).toContain("In progress");
+    expect(screen.getByTestId("deadline-status-indicator-todo-0").textContent).toContain("In progress");
     expect(screen.getByTestId("deadline-status-indicator-todo-1").textContent).toContain("Complete");
     expect(screen.getByText("Submit report").closest("[data-testid='timeline-detail-row']")?.getAttribute("data-complete")).toBe("true");
   });
@@ -663,24 +670,23 @@ describe("calendar detail timeline", () => {
     const onSelect = vi.fn();
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
-          { id: "todo-1", title: "Open early", due_date: "2026-04-19", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-          { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
-          { id: "todo-3", title: "No time task", due_date: "2026-04-19", due_time: null, source: "todoist", class_name: "Inbox", status: "open" },
+          { id: "todo-1", title: "Open early", due_date: "2026-04-19", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+          { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "9:00 AM", class_name: "Inbox", status: "complete" },
+          { id: "todo-3", title: "No time task", due_date: "2026-04-19", due_time: null, class_name: "Inbox", status: "open" },
         ],
       },
     };
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 19,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.todoist.upcoming,
-          selectedItemId: "todo-1",
+          items: briefing.deadlines.upcoming,
+          selectedItemId: "deadline:todo-1:2026-04-19",
           onSelectItem: onSelect,
         })}
       </DashboardProvider>,
@@ -705,14 +711,13 @@ describe("calendar detail timeline", () => {
     expect(completedRows[2].getAttribute("data-complete")).toBe("true");
 
     fireEvent.click(rows[1]);
-    expect(onSelect).toHaveBeenCalledWith("todoist:todo-3");
+    expect(onSelect).toHaveBeenCalledWith("deadline:todo-3:2026-04-19");
   });
 
   it("keeps selected deadline details in the rail", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
@@ -739,11 +744,11 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.todoist.upcoming,
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
           onSelectItem: () => {},
         })}
@@ -757,8 +762,7 @@ describe("calendar detail timeline", () => {
   it("shows selected deadline reminder timing in the detail card", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
@@ -778,11 +782,11 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.todoist.upcoming,
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
           onSelectItem: () => {},
         })}
@@ -797,8 +801,7 @@ describe("calendar detail timeline", () => {
   it("shows selected deadline reminder timing in the floating detail card", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
@@ -818,8 +821,8 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderFloatingDetail({
-          items: briefing.todoist.upcoming,
+        {deadlinesDetail.renderFloatingDetail({
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
         })}
       </DashboardProvider>,
@@ -830,18 +833,16 @@ describe("calendar detail timeline", () => {
     expect(indicator.textContent).not.toContain("2 reminders");
   });
 
-  it("uses the selected deadline source color for floating detail gradients", () => {
+  it("uses domain deadline identity in floating detail gradients", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
             title: "Ship report",
             due_date: "2026-04-22",
             due_time: "5:00 PM",
-            source: "todoist",
             class_name: "Inbox",
             status: "open",
           },
@@ -851,22 +852,21 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderFloatingDetail({
-          items: briefing.todoist.upcoming,
-          selectedItemId: "todo-1",
+        {deadlinesDetail.renderFloatingDetail({
+          items: briefing.deadlines.upcoming,
+          selectedItemId: "deadline:todo-1:2026-04-22",
         })}
       </DashboardProvider>,
     );
 
     const hero = screen.getByTestId("calendar-selected-deadline-card").firstElementChild;
-    expect(hero?.getAttribute("data-accent")).toBe("#e8776a");
+    expect(hero?.textContent).toContain("Deadline");
   });
 
   it("keeps complete text stable and swaps the icon to loading while a deadline is completing", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
@@ -884,8 +884,8 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderFloatingDetail({
-          items: briefing.todoist.upcoming,
+        {deadlinesDetail.renderFloatingDetail({
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
         })}
       </DashboardProvider>,
@@ -899,7 +899,7 @@ describe("calendar detail timeline", () => {
 
   it("closes floating deadline detail shortly after complete starts", async () => {
     vi.useFakeTimers();
-    mockCompleteTask.mockResolvedValueOnce({});
+    mockCompleteDeadlineOccurrence.mockResolvedValueOnce({});
     const onCloseFloatingDetail = vi.fn();
     const task = {
       id: "todo-1",
@@ -912,14 +912,16 @@ describe("calendar detail timeline", () => {
     };
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: { upcoming: [task] },
+      deadlines: {
+        upcoming: [task],
+        stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
+      },
     };
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderFloatingDetail({
-          items: briefing.todoist.upcoming,
+        {deadlinesDetail.renderFloatingDetail({
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
           onCloseFloatingDetail,
         })}
@@ -928,7 +930,7 @@ describe("calendar detail timeline", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^mark complete$/i }));
 
-    expect(mockCompleteTask).toHaveBeenCalledWith("todo-1");
+    expect(mockCompleteDeadlineOccurrence).toHaveBeenCalledWith("todo-1", "2026-04-22");
     expect(onCloseFloatingDetail).not.toHaveBeenCalled();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120);
@@ -939,8 +941,7 @@ describe("calendar detail timeline", () => {
   it("shows completed deadlines immediately when a day only has completed items", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
         ],
@@ -949,11 +950,11 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 19,
           viewYear: 2026,
           viewMonth: 3,
-          items: deadlinesView.getDayState(briefing.todoist.upcoming),
+          items: deadlinesDetail.getDayState(briefing.deadlines.upcoming),
           selectedItemId: "todo-2",
           onSelectItem: () => {},
         })}
@@ -966,8 +967,7 @@ describe("calendar detail timeline", () => {
   it("compresses the selected deadline card on two-deadline days", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
@@ -995,11 +995,11 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.todoist.upcoming,
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
           onSelectItem: () => {},
         })}
@@ -1012,26 +1012,25 @@ describe("calendar detail timeline", () => {
     expect(screen.getByRole("button", { name: /open todoist/i })).toBeTruthy();
   });
 
-  it("keeps deadline secondary CTAs in the same selected-card footer group", () => {
+  it("keeps deadline secondary CTAs in the same selected-card footer group without provider-status actions", () => {
     const task = {
-      id: "ctm-1",
+      id: "deadline-1",
       title: "Presentation Slides",
       due_date: "2026-04-29",
       due_time: "11:59 PM",
-      source: "manual",
       class_name: "Senior Design (CS 4962-01/02)",
       status: "open",
-      url: "https://calstatela.instructure.com/courses/1/assignments/2",
+      url: "https://todoist.com/showTask?id=deadline-1",
     };
 
     render(
-      <DashboardProvider briefing={{ emails: { accounts: [] }, ctm: { upcoming: [] }, todoist: { upcoming: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+      <DashboardProvider briefing={{ emails: { accounts: [] }, deadlines: { upcoming: [] } }} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesDetail.renderDetail({
           selectedDay: 29,
           viewYear: 2026,
           viewMonth: 3,
           items: [task],
-          selectedItemId: "ctm-1",
+          selectedItemId: "deadline:deadline-1:2026-04-29",
           onSelectItem: () => {},
         })}
       </DashboardProvider>,
@@ -1040,21 +1039,19 @@ describe("calendar detail timeline", () => {
     const card = screen.getByTestId("calendar-selected-deadline-card");
     const dock = screen.getByTestId("timeline-detail-action-dock");
     const complete = screen.getByRole("button", { name: /^complete$/i });
-    const inProgress = screen.getByRole("button", { name: /^in progress$/i });
-    const openCanvas = screen.getByRole("button", { name: /^open canvas$/i });
-    const openCtm = screen.getByRole("button", { name: /^open ctm$/i });
+    const edit = screen.getByRole("button", { name: /^edit$/i });
+    const openTodoist = screen.getByRole("button", { name: /^open todoist$/i });
 
     expect(card.contains(dock)).toBe(true);
-    expect(complete.parentElement).toBe(inProgress.parentElement);
-    expect(complete.parentElement).toBe(openCanvas.parentElement);
-    expect(complete.parentElement).toBe(openCtm.parentElement);
+    expect(complete.parentElement).toBe(edit.parentElement);
+    expect(complete.parentElement).toBe(openTodoist.parentElement);
+    expect(screen.queryByRole("button", { name: /^in progress$/i })).toBeNull();
   });
 
   it("keeps selected deadline density consistent when switching between same-day tasks", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-1",
@@ -1081,11 +1078,11 @@ describe("calendar detail timeline", () => {
     };
     const renderDetail = (selectedItemId) => (
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.todoist.upcoming,
+          items: briefing.deadlines.upcoming,
           selectedItemId,
           onSelectItem: () => {},
         })}
@@ -1106,8 +1103,7 @@ describe("calendar detail timeline", () => {
   it("compresses the selected deadline card for long single deadlines", () => {
     const briefing = {
       emails: { accounts: [] },
-      ctm: { upcoming: [] },
-      todoist: {
+      deadlines: {
         upcoming: [
           {
             id: "todo-long",
@@ -1125,11 +1121,11 @@ describe("calendar detail timeline", () => {
 
     render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        {deadlinesView.renderDetail({
+        {deadlinesDetail.renderDetail({
           selectedDay: 23,
           viewYear: 2026,
           viewMonth: 3,
-          items: briefing.todoist.upcoming,
+          items: briefing.deadlines.upcoming,
           selectedItemId: "todo-long",
           onSelectItem: () => {},
         })}
@@ -1144,8 +1140,8 @@ describe("calendar detail timeline", () => {
   it("does not render completed deadlines into month cells when active items exist", () => {
     render(
       <div>
-        {deadlinesView.renderCellContents({
-          items: deadlinesView.getDayState([
+        {deadlinesDetail.renderCellContents({
+          items: deadlinesDetail.getDayState([
             { id: "todo-1", title: "Open early", due_date: "2026-04-19", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
             { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "11:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
           ]),
@@ -1161,8 +1157,8 @@ describe("calendar detail timeline", () => {
   it("keeps completed-only deadline month cells visually quiet", () => {
     render(
       <div>
-        {deadlinesView.renderCellContents({
-          items: deadlinesView.getDayState([
+        {deadlinesDetail.renderCellContents({
+          items: deadlinesDetail.getDayState([
             { id: "todo-2", title: "Complete early", due_date: "2026-04-19", due_time: "11:00 AM", source: "todoist", class_name: "Inbox", status: "complete" },
           ]),
         })}

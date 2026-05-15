@@ -56,19 +56,19 @@ describe("CalendarSearchRail", () => {
       query: "final",
       results: [
         {
-          id: "deadline:1",
+          id: "deadline:todo-1:2026-05-20",
           type: "deadline",
-          itemId: "todo-1",
+          itemId: "deadline:todo-1:2026-05-20",
           itemDate: "2026-05-20",
           title: "Final project",
           subtitle: "CS 4220",
-          sourceLabel: "Todoist",
+          sourceLabel: "Deadline",
           sourceColor: "#e44332",
         },
       ],
       highlightedIndex: 0,
       selectedDateKey: "2026-05-20",
-      selectedItemId: "todo-1",
+      selectedItemId: "deadline:todo-1:2026-05-20",
     });
 
     render(<CalendarSearchRail search={search} layoutMode="three-rail" />);
@@ -110,30 +110,30 @@ describe("CalendarSearchRail", () => {
     expect(row.getAttribute("data-source-color")).toBe("#ff887c");
   });
 
-  it("matches deadline rows against source-qualified selection ids from floating detail", () => {
+  it("matches deadline rows against stable occurrence selection ids from floating detail", () => {
     const baseSearch = makeSearch({
       query: "final",
       results: [
         {
-          id: "deadline:todoist:todo-1:2026-05-20",
+          id: "deadline:todo-1:2026-05-20",
           type: "deadline",
-          itemId: "todo-1",
+          itemId: "deadline:todo-1:2026-05-20",
           itemDate: "2026-05-20",
           title: "Final project",
           subtitle: "CS 4220",
-          sourceLabel: "Todoist",
+          sourceLabel: "Deadline",
           sourceColor: "#e44332",
-          payload: { id: "todo-1", source: "todoist" },
+          payload: { id: "todo-1" },
           activation: {
             view: "events",
-            detailView: "deadlines",
+            detailKind: "deadline",
             dateKey: "2026-05-20",
-            itemId: "todo-1",
+            itemId: "deadline:todo-1:2026-05-20",
           },
         },
       ],
       selectedDateKey: "2026-05-20",
-      selectedItemId: "todoist:todo-1",
+      selectedItemId: "deadline:todo-1:2026-05-20",
     });
     const { rerender } = render(<CalendarSearchRail search={baseSearch} layoutMode="three-rail" />);
 
@@ -143,13 +143,13 @@ describe("CalendarSearchRail", () => {
       <CalendarSearchRail
         search={{
           ...baseSearch,
-          selectedItemId: "todoist:todo-1-2026-05-20",
+          selectedItemId: "deadline:todo-1:2026-05-21",
         }}
         layoutMode="three-rail"
       />,
     );
 
-    expect(screen.getByTestId("calendar-search-result-row").getAttribute("data-selected")).toBe("true");
+    expect(screen.getByTestId("calendar-search-result-row").getAttribute("data-selected")).toBe("false");
   });
 
   it("does not use the keyboard highlight as the selected color state", () => {
@@ -157,9 +157,9 @@ describe("CalendarSearchRail", () => {
       query: "final",
       results: [
         {
-          id: "deadline:1",
+          id: "deadline:todo-1:2026-05-20",
           type: "deadline",
-          itemId: "todo-1",
+          itemId: "deadline:todo-1:2026-05-20",
           itemDate: "2026-05-20",
           title: "Final project",
           sourceColor: "#e44332",
@@ -182,13 +182,13 @@ describe("CalendarSearchRail", () => {
       query: "final",
       results: [
         {
-          id: "deadline:1",
+          id: "deadline:todo-1:2026-05-20",
           type: "deadline",
-          itemId: "todo-1",
+          itemId: "deadline:todo-1:2026-05-20",
           itemDate: "2026-05-20",
           title: "Final project",
           subtitle: "CS 4220",
-          sourceLabel: "Todoist",
+          sourceLabel: "Deadline",
           sourceColor: "#e44332",
         },
       ],
@@ -778,11 +778,11 @@ describe("CalendarSearchRail", () => {
         {
           id: "deadline:future",
           type: "deadline",
-          itemId: "deadline-future",
+          itemId: "deadline:deadline-future:2026-05-14",
           itemDate: "2026-05-14",
           title: "Project review",
           subtitle: "CS 4220",
-          sourceLabel: "Todoist",
+          sourceLabel: "Deadline",
           sourceColor: "#e44332",
         },
       ],

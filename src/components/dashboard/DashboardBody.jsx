@@ -15,7 +15,7 @@ import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel";
 export function DashboardBody({
   briefing, liveData, activeSnapshot, calendarRange, customize, accent,
   isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false, calendarDeadlinesError = false,
-  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenTodoistCreate, onJumpSection, setAddTaskOpen,
+  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenDeadlineCreate, onJumpSection, setAddTaskOpen,
 }) {
   const { dashboardLayout, density, showInboxPeek, showNotes } = customize;
   const layoutPlan = resolveDashboardBodyLayout({
@@ -60,21 +60,13 @@ export function DashboardBody({
   const calendarDeadlinesReady = calendarDeadlines != null;
   const allowCurrentDeadlineFallback = calendarDeadlines === undefined || calendarDeadlinesError;
   const currentDeadlines = liveData.liveDeadlines || {};
-  const ctm = useMemo(
+  const deadlines = useMemo(
     () => {
-      if (calendarDeadlinesReady) return calendarDeadlines?.ctm?.upcoming || [];
-      return allowCurrentDeadlineFallback ? currentDeadlines.ctm?.upcoming || [] : [];
+      if (calendarDeadlinesReady) return calendarDeadlines?.upcoming || [];
+      return allowCurrentDeadlineFallback ? currentDeadlines.upcoming || [] : [];
     },
-    [allowCurrentDeadlineFallback, calendarDeadlines?.ctm?.upcoming, calendarDeadlinesReady, currentDeadlines.ctm?.upcoming],
+    [allowCurrentDeadlineFallback, calendarDeadlines?.upcoming, calendarDeadlinesReady, currentDeadlines.upcoming],
   );
-  const todoist = useMemo(
-    () => {
-      if (calendarDeadlinesReady) return calendarDeadlines?.todoist?.upcoming || [];
-      return allowCurrentDeadlineFallback ? currentDeadlines.todoist?.upcoming || [] : [];
-    },
-    [allowCurrentDeadlineFallback, calendarDeadlines?.todoist?.upcoming, calendarDeadlinesReady, currentDeadlines.todoist?.upcoming],
-  );
-  const deadlines = useMemo(() => [...ctm, ...todoist], [ctm, todoist]);
   const bills = liveData.liveBills || [];
   const activeSnapshotEmailAccounts = useMemo(() => {
     if (!activeSnapshot?.snapshot) return null;
@@ -178,8 +170,8 @@ export function DashboardBody({
       onOpenPressure={() => onOpenDeadlinesCalendar?.(pressureFocusTarget?.date || null, pressureFocusTarget?.id || null)}
       eventLoadingState={eventLoadingState}
       onQuickAction={(action) => {
-        if (action === "task") {
-          if (onOpenTodoistCreate) onOpenTodoistCreate();
+        if (action === "deadline") {
+          if (onOpenDeadlineCreate) onOpenDeadlineCreate();
           else setAddTaskOpen?.(true);
         } else if (action === "event") {
           onOpenEventsCalendar(today, "new");

@@ -71,9 +71,9 @@ CREATE TABLE IF NOT EXISTS ea_completed_tasks (
   user_id TEXT NOT NULL,
   todoist_id TEXT NOT NULL,
   completed_at TEXT DEFAULT (datetime('now')),
-  due_date TEXT,
+  due_date TEXT NOT NULL,
   snapshot_json TEXT,
-  PRIMARY KEY (user_id, todoist_id)
+  PRIMARY KEY (user_id, todoist_id, due_date)
 );
 
 CREATE TABLE IF NOT EXISTS ea_email_index (

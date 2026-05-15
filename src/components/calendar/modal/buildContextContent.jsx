@@ -1,5 +1,6 @@
 import { CalendarOverviewRail, CalendarSelectedDayEmptyRail } from "../CalendarRailStates.jsx";
 import CalendarEventEditorRail from "../events/CalendarEventEditorRail.jsx";
+import { renderDeadlinesDetail } from "../views/deadlines/DeadlinesDetailRail.jsx";
 
 export default function buildContextContent({
   layout,
@@ -41,6 +42,45 @@ export default function buildContextContent({
         transientCloseToken={transientCloseToken}
       />
     );
+  }
+
+  if (view === "events" && deadlineEditor?.mode) {
+    return renderDeadlinesDetail({
+      selectedDay,
+      selectedDateKey,
+      viewYear,
+      viewMonth,
+      items: selectedItems,
+      data: viewData,
+      computed,
+      selectedItemId: effectiveSelectedItemId,
+      onSelectItem: (itemId) => {
+        setSelectedItemId(String(itemId));
+      },
+      editorState: deadlineEditor,
+      onStartEdit: (task) => {
+        const itemId = activeView.getItemId?.(task) ?? task.id;
+        setSelectedItemId(itemId != null ? String(itemId) : null);
+        setDeadlineEditor({ mode: "edit", taskId: String(task.id) });
+        onDeadlineDraftPreviewChange?.(null);
+      },
+      onCloseEditor: () => {
+        setDeadlineEditor(null);
+        onDeadlineDraftPreviewChange?.(null);
+      },
+      onTaskSaved: focusDeadlineTask,
+      onTaskDeleted: (taskId) => {
+        setDeadlineEditor(null);
+        onDeadlineDraftPreviewChange?.(null);
+        const selectedId = String(effectiveSelectedItemId || "");
+        if (selectedId === String(taskId) || selectedId.includes(`:${taskId}-`)) {
+          setSelectedItemId(null);
+        }
+      },
+      onDraftPreviewChange: onDeadlineDraftPreviewChange,
+      ghostPreview,
+      transientCloseToken,
+    });
   }
 
   if (activeView.renderSidebar) {

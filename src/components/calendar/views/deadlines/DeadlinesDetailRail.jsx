@@ -4,14 +4,13 @@ import { useDashboard } from "../../../../context/DashboardContext.jsx";
 import AddTaskPanel from "../../../todoist/AddTaskPanel";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
+  DEADLINE_COLOR,
+  deadlineAccentFor,
   formatFullDate,
   deadlineMatchesItemId,
   getDayState,
   getDeadlineSelectionId,
   normalizeStatus,
-  SOURCE_COLORS,
-  sourceLabelFor,
-  sourceOf,
 } from "./deadlinesModel.js";
 import DeadlineDetailCard from "./DeadlineDetailCard.jsx";
 import DeadlineSelectedActions from "./DeadlineDetailActions.jsx";
@@ -41,7 +40,6 @@ function DeadlinesDetail({
 }) {
   const {
     handleCompleteTask,
-    handleUpdateTaskStatus,
     handleUpdateTask,
     handleAddTask,
     handleDeleteTask,
@@ -115,7 +113,6 @@ function DeadlinesDetail({
                 accent={accent}
                 onEdit={onStartEdit}
                 onComplete={handleCompleteTask}
-                onStatusChange={handleUpdateTaskStatus}
                 compact={effectiveCompactDetail}
               />
             }
@@ -143,19 +140,18 @@ function DeadlinesDetail({
           id: "active-deadlines",
           label: "Active",
           items: state.activeItems.map((task) => {
-            const sourceLabel = sourceLabelFor(task);
-            const subtitle = task.class_name || task.project_name || sourceLabel;
+            const subtitle = task.class_name || task.project_name || "Deadline";
             const metaParts = [];
-            if (subtitle !== sourceLabel) metaParts.push(sourceLabel);
             if (normalizeStatus(task.status) === "in_progress") metaParts.push("In progress");
+            const itemId = getDeadlineSelectionId(task, task.agendaDateKey || task.due_date || selectedDateKey);
 
             return {
-              id: getDeadlineSelectionId(task),
+              id: itemId,
               timeLabel: task.due_time || "End of day",
               title: task.title || task.name || "Untitled",
               subtitle,
               meta: metaParts.join(" · "),
-              dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
+              dotColor: deadlineAccentFor(task, DEADLINE_COLOR),
               complete: normalizeStatus(task.status) === "complete",
               trailing: (
                 <DeadlineStatusIcon
@@ -165,7 +161,7 @@ function DeadlinesDetail({
                 />
               ),
               selected: deadlineMatchesItemId(task, selectedItemId, selectedDateKey),
-              onClick: () => onSelectItem?.(getDeadlineSelectionId(task)),
+              onClick: () => onSelectItem?.(itemId),
             };
           }),
         },
@@ -177,19 +173,18 @@ function DeadlinesDetail({
           onToggle: () => setShowCompleted((prev) => !prev),
           itemCount: state.completedCount,
           items: state.completedItems.map((task) => {
-            const sourceLabel = sourceLabelFor(task);
-            const subtitle = task.class_name || task.project_name || sourceLabel;
+            const subtitle = task.class_name || task.project_name || "Deadline";
             const metaParts = [];
-            if (subtitle !== sourceLabel) metaParts.push(sourceLabel);
             metaParts.push("Complete");
+            const itemId = getDeadlineSelectionId(task, task.agendaDateKey || task.due_date || selectedDateKey);
 
             return {
-              id: getDeadlineSelectionId(task),
+              id: itemId,
               timeLabel: task.due_time || "End of day",
               title: task.title || task.name || "Untitled",
               subtitle,
               meta: metaParts.join(" · "),
-              dotColor: SOURCE_COLORS[sourceOf(task)] || "rgba(255,255,255,0.3)",
+              dotColor: deadlineAccentFor(task, DEADLINE_COLOR),
               complete: true,
               trailing: (
                 <DeadlineStatusIcon
@@ -199,7 +194,7 @@ function DeadlinesDetail({
                 />
               ),
               selected: deadlineMatchesItemId(task, selectedItemId, selectedDateKey),
-              onClick: () => onSelectItem?.(getDeadlineSelectionId(task)),
+              onClick: () => onSelectItem?.(itemId),
             };
           }),
         },
@@ -218,7 +213,6 @@ function DeadlinesFloatingDetail({
 }) {
   const {
     handleCompleteTask,
-    handleUpdateTaskStatus,
   } = useDashboard();
 
   const state = getDayState(items);
@@ -229,7 +223,7 @@ function DeadlinesFloatingDetail({
   const effectiveCompactDetail = compactDetail || compressedSelectedCard;
 
   if (!selectedTask) return null;
-  const sourceAccent = SOURCE_COLORS[sourceOf(selectedTask)] || accent;
+  const sourceAccent = deadlineAccentFor(selectedTask, accent);
   const closeAfterFeedback = () => {
     if (!onCloseFloatingDetail) return;
     window.setTimeout(() => onCloseFloatingDetail(), 120);
@@ -239,12 +233,6 @@ function DeadlinesFloatingDetail({
     closeAfterFeedback();
     return result;
   };
-  const handleFloatingStatusChange = (taskId, status) => {
-    const result = handleUpdateTaskStatus(taskId, status);
-    closeAfterFeedback();
-    return result;
-  };
-
   return (
     <DeadlineDetailCard
       task={selectedTask}
@@ -257,7 +245,6 @@ function DeadlinesFloatingDetail({
           accent={sourceAccent}
           onEdit={onStartEdit}
           onComplete={handleFloatingComplete}
-          onStatusChange={handleFloatingStatusChange}
           compact={effectiveCompactDetail}
         />
       }

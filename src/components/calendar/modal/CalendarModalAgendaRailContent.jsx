@@ -1,6 +1,5 @@
 import { forwardRef } from "react";
 import BillsAgendaRail from "../views/bills/BillsAgendaRail.jsx";
-import DeadlinesAgendaRail from "../views/deadlines/DeadlinesAgendaRail.jsx";
 import EventsAgendaRail from "../views/events/EventsAgendaRail.jsx";
 
 const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRailContent({
@@ -19,16 +18,12 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
   todayDate,
   monthNavigation = null,
   eventQuickActions,
-  deadlineQuickActions,
   floatingEditorDirty,
   onDirtyBlocked,
   onPassiveDateChange,
   onDateAction,
   miniCalendarActions = null,
   onEventAction,
-  onFilteredSelectedDeadlineHidden,
-  showCompletedDeadlines,
-  onShowCompletedDeadlinesChange,
 }, ref) {
   const miniCalendarNavigation = {
     canGoPrev: monthNavigation?.canGoPrev ?? true,
@@ -95,30 +90,7 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
     );
   }
 
-  return (
-    <DeadlinesAgendaRail
-      ref={ref}
-      viewYear={viewYear}
-      viewMonth={viewMonth}
-      computed={computed}
-      selectedDateKey={selectedDateKey}
-      selectedItemId={selectedItemId}
-      scrollCommand={scrollCommand}
-      entryScrollTargetDateKey={entryScrollTargetDateKey}
-      currentYear={currentYear}
-      currentMonth={currentMonth}
-      todayDate={todayDate}
-      floatingEditorDirty={floatingEditorDirty}
-      onDirtyBlocked={onDirtyBlocked}
-      onPassiveDateChange={onPassiveDateChange}
-      onDateAction={onDateAction}
-      onDeadlineAction={onEventAction}
-      onFilteredSelectedDeadlineHidden={onFilteredSelectedDeadlineHidden}
-      showCompleted={showCompletedDeadlines}
-      onShowCompletedChange={onShowCompletedDeadlinesChange}
-      deadlineQuickActions={deadlineQuickActions}
-    />
-  );
+  return null;
 });
 
 export default CalendarModalAgendaRailContent;

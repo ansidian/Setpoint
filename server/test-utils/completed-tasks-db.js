@@ -6,7 +6,7 @@ export async function createCompletedTasksTestDb() {
       user_id TEXT NOT NULL,
       todoist_id TEXT NOT NULL,
       completed_at TEXT DEFAULT (datetime('now')),
-      due_date TEXT,
+      due_date TEXT NOT NULL,
       snapshot_json TEXT,
       PRIMARY KEY (user_id, todoist_id, due_date)
     );
@@ -18,7 +18,7 @@ export async function seedCompletedTask(db, task = {}) {
   const row = {
     user_id: "user-1",
     todoist_id: "td-1",
-    due_date: null,
+    due_date: "2026-05-12",
     snapshot_json: null,
     ...task,
   };
@@ -37,7 +37,7 @@ export async function listCompletedTasks(db, userId = "user-1") {
     sql: `SELECT user_id, todoist_id, due_date, snapshot_json
           FROM ea_completed_tasks
           WHERE user_id = ?
-          ORDER BY todoist_id`,
+          ORDER BY todoist_id, due_date`,
     args: [userId],
   });
   return result.rows;

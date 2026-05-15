@@ -41,7 +41,7 @@ function CommandPaletteInner({ accent, backdropSnapshot = null, onClose, onActio
     { id: "timeline",     icon: Clock,      label: "Today timeline",  kind: "scroll", payload: "timeline" },
     { id: "deadlines",    icon: AlertCircle, label: "Deadlines",      kind: "scroll", payload: "deadlines" },
     { id: "bills",        icon: CreditCard, label: "Bills",           kind: "scroll", payload: "bills" },
-    { id: "new-todoist",  icon: ListPlus,   label: "New Todoist task", hint: "G T", kind: "todoist" },
+    { id: "new-deadline", icon: ListPlus,   label: "New deadline",     hint: "G T", kind: "deadline-create" },
     { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
     { id: "calendar",     icon: Calendar,   label: "Open calendar",   hint: "C", kind: "calendar" },
     { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },

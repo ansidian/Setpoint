@@ -15,14 +15,9 @@ function makeBriefing(overrides = {}) {
   return {
     weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
     calendar: [],
-    ctm: {
+    deadlines: {
       upcoming: [
-        { id: "ctm-1", title: "Finalize deck", due_date: "2026-04-20", source: "canvas", class_name: "Ops" },
-      ],
-    },
-    todoist: {
-      upcoming: [
-        { id: "todo-1", title: "Reply to recruiter", due_date: "2026-04-19", source: "todoist", priority: 1, status: "open" },
+        { id: "deadline-1", title: "Reply to recruiter", due_date: "2026-04-19", priority: 1, status: "open" },
       ],
     },
     emails: {
@@ -47,7 +42,7 @@ function makeBriefing(overrides = {}) {
 }
 
 const currentDeadlineFixture = [
-  { id: "ctm-1", title: "Finalize deck", due_date: "2026-04-20", source: "canvas", class_name: "Ops", status: "open" },
+  { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
 ];
 
 function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", showInsights = true } = {}) {
@@ -56,10 +51,7 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
     liveBills: [{ id: "bill-1", name: "Rent", amount: 1800, next_date: "2026-04-21", payee: "Landlord", paid: false }],
     liveWeather: briefing.weather,
     liveCalendar: briefing.calendar,
-    liveDeadlines: {
-      ctm: briefing.ctm,
-      todoist: briefing.todoist,
-    },
+    liveDeadlines: briefing.deadlines,
     liveEmails: [],
   };
 
@@ -214,7 +206,7 @@ describe("DashboardHero mobile layout", () => {
     );
 
     const primaryColumn = screen.getByTestId("dashboard-hero-primary");
-    const newTask = within(primaryColumn).getByRole("button", { name: /new task/i });
+    const newTask = within(primaryColumn).getByRole("button", { name: /new deadline/i });
     const addEvent = within(primaryColumn).getByRole("button", { name: /add event/i });
 
     expect(primaryColumn.contains(newTask)).toBe(true);
@@ -233,12 +225,11 @@ describe("DashboardHero mobile layout", () => {
         density="comfortable"
         briefing={makeBriefing({
           calendar: [],
-          ctm: {
+          deadlines: {
             upcoming: [
-              { id: "ctm-1", title: "Finalize deck", due_date: "2026-04-20", source: "canvas", class_name: "Ops", status: "open" },
+              { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
             ],
           },
-          todoist: { upcoming: [] },
         })}
         liveBills={[]}
         liveCalendar={[]}
@@ -272,8 +263,7 @@ describe("DashboardHero mobile layout", () => {
         briefing={{
           weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
           calendar: [],
-          ctm: { upcoming: [] },
-          todoist: { upcoming: [] },
+          deadlines: { upcoming: [] },
           emails: { summary: "", accounts: [] },
         }}
         liveBills={[]}
@@ -300,12 +290,11 @@ describe("DashboardHero mobile layout", () => {
         density="comfortable"
         briefing={makeBriefing({
           calendar: [],
-          ctm: {
+          deadlines: {
             upcoming: [
-              { id: "ctm-1", title: "Finalize deck", due_date: "2026-04-20", source: "canvas", class_name: "Ops", status: "open" },
+              { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
             ],
           },
-          todoist: { upcoming: [] },
         })}
         liveBills={[]}
         liveCalendar={[]}

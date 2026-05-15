@@ -95,10 +95,8 @@ function moveSnapshotRow(snapshot, itemId, lane) {
 }
 
 function mutateTask(seed, taskId, updater) {
-  for (const section of [seed.deadlines.ctm, seed.deadlines.todoist]) {
-    for (const task of section.upcoming || []) {
-      if (String(task.id || task.todoist_id) === String(taskId)) updater(task);
-    }
+  for (const task of seed.deadlines.upcoming || []) {
+    if (String(task.id || task.todoist_id) === String(taskId)) updater(task);
   }
 }
 
@@ -131,14 +129,7 @@ function makeCalendarEvent(data, id = `demo-event-${Date.now()}`) {
 function filterDeadlines(deadlines, start, end) {
   return {
     ...clone(deadlines),
-    ctm: {
-      ...clone(deadlines.ctm),
-      upcoming: demoDateRange(deadlines.ctm.upcoming, start, end, (item) => item.due_date),
-    },
-    todoist: {
-      ...clone(deadlines.todoist),
-      upcoming: demoDateRange(deadlines.todoist.upcoming, start, end, (item) => item.due_date),
-    },
+    upcoming: demoDateRange(deadlines.upcoming, start, end, (item) => item.due_date),
   };
 }
 
@@ -196,20 +187,24 @@ function searchCalendar({ scope, q, limit }) {
       payload: clone(event),
     }));
 
-  const deadlineResults = [
-    ...seed.deadlines.ctm.upcoming,
-    ...seed.deadlines.todoist.upcoming,
-  ]
+  const deadlineResults = (seed.deadlines.upcoming || [])
     .filter((item) => !query || item.title.toLowerCase().includes(query))
     .map((item) => ({
-      id: `deadline:${item.id}`,
+      id: `deadline:${item.id}:${item.due_date || "undated"}`,
       type: "deadline",
-      itemId: item.id,
+      itemId: `deadline:${item.id}:${item.due_date || "undated"}`,
       itemDate: item.due_date,
       title: item.title,
-      sourceLabel: item.source === "ctm" ? "Canvas" : "Todoist",
+      sourceLabel: "Deadline",
       matchReason: "title",
       rankBucket: 2,
+      activation: {
+        view: "events",
+        detailKind: "deadline",
+        dateKey: item.due_date,
+        itemId: `deadline:${item.id}:${item.due_date || "undated"}`,
+        deadlineId: item.id,
+      },
       payload: clone(item),
     }));
 
@@ -295,11 +290,6 @@ export async function handleDemoApiRequest(path, options = {}) {
     return { ok: true };
   }
 
-  if (pathname.startsWith("/api/briefing/task-status/") && method === "PATCH") {
-    mutateTask(seed, decodeURIComponent(pathname.split("/").at(-1)), (task) => { task.status = body.status || task.status; });
-    return { ok: true };
-  }
-
   if (pathname === "/api/briefing/todoist/tasks" && method === "POST") {
     const id = `demo-task-${Date.now()}`;
     const dueDate = body.due_date || body.dueDate || seed.dateKey;
@@ -311,7 +301,7 @@ export async function handleDemoApiRequest(path, options = {}) {
       status: "open",
       source: "todoist",
     };
-    seed.deadlines.todoist.upcoming.unshift(task);
+    seed.deadlines.upcoming.unshift(task);
     return clone(task);
   }
 
@@ -320,12 +310,12 @@ export async function handleDemoApiRequest(path, options = {}) {
     mutateTask(seed, taskId, (task) => {
       Object.assign(task, body, { id: task.id, todoist_id: task.todoist_id });
     });
-    return clone(seed.deadlines.todoist.upcoming.find((task) => String(task.id) === String(taskId)) || { ok: true });
+    return clone(seed.deadlines.upcoming.find((task) => String(task.id) === String(taskId)) || { ok: true });
   }
 
   if (pathname.match(/^\/api\/briefing\/todoist\/tasks\/[^/]+$/) && method === "DELETE") {
     const taskId = decodeURIComponent(pathname.split("/").at(-1));
-    seed.deadlines.todoist.upcoming = seed.deadlines.todoist.upcoming.filter((task) => String(task.id) !== String(taskId));
+    seed.deadlines.upcoming = seed.deadlines.upcoming.filter((task) => String(task.id) !== String(taskId));
     return { ok: true };
   }
 
@@ -471,7 +461,43 @@ export async function handleDemoApiRequest(path, options = {}) {
   }
 
   if (pathname === "/api/calendar/deadlines") {
+    if (method === "POST") {
+      const id = `demo-deadline-${Date.now()}`;
+      const deadline = {
+        id,
+        todoist_id: id,
+        title: body.title || body.content || "Demo deadline",
+        due_date: body.due_date || body.dueDate || seed.dateKey,
+        due_time: body.due_time || body.dueTime || null,
+        status: body.status || "open",
+        source: "todoist",
+        class_name: body.class_name || body.project_name || "Inbox",
+      };
+      seed.deadlines.upcoming.unshift(deadline);
+      return clone(deadline);
+    }
     return clone(seed.deadlines);
+  }
+
+  if (pathname.match(/^\/api\/calendar\/deadlines\/[^/]+$/) && method === "PATCH") {
+    const taskId = decodeURIComponent(pathname.split("/").at(-1));
+    mutateTask(seed, taskId, (task) => {
+      Object.assign(task, body, { id: task.id, todoist_id: task.todoist_id || task.id });
+    });
+    return clone(seed.deadlines.upcoming.find((task) => String(task.id) === String(taskId)) || { ok: true });
+  }
+
+  if (pathname.match(/^\/api\/calendar\/deadlines\/[^/]+$/) && method === "DELETE") {
+    const taskId = decodeURIComponent(pathname.split("/").at(-1));
+    seed.deadlines.upcoming = seed.deadlines.upcoming.filter((task) => String(task.id) !== String(taskId));
+    return { ok: true };
+  }
+
+  if (pathname.match(/^\/api\/calendar\/deadlines\/[^/]+\/completed-occurrences\/[^/]+$/) && method === "POST") {
+    const parts = pathname.split("/");
+    const taskId = decodeURIComponent(parts.at(-3));
+    mutateTask(seed, taskId, (task) => { task.status = "complete"; });
+    return { ok: true };
   }
 
   if (pathname === "/api/calendar/deadlines/range") {

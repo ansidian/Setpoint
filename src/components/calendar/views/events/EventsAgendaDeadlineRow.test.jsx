@@ -67,11 +67,11 @@ describe("EventsAgendaDeadlineRow", () => {
       <>
         <EventsAgendaDeadlineRow
           deadline={{
-            id: "ctm-1",
-            agendaItemId: "canvas:ctm-1",
+            id: "todo-0",
+            agendaItemId: "deadline:todo-0:2026-05-12",
             agendaTitle: "Draft essay",
-            agendaSubtitle: "Canvas",
-            agendaTimeRange: "Canvas",
+            agendaSubtitle: "School",
+            agendaTimeRange: "School",
             agendaSourceColor: "#5A8FBF",
             agendaStatus: "In progress",
             agendaStatusIcon: "in_progress",
@@ -102,7 +102,7 @@ describe("EventsAgendaDeadlineRow", () => {
       </>,
     );
 
-    const progressStatus = screen.getByTestId("events-agenda-deadline-status-canvas:ctm-1");
+    const progressStatus = screen.getByTestId("events-agenda-deadline-status-deadline:todo-0:2026-05-12");
     const completeStatus = screen.getByTestId("events-agenda-deadline-status-todoist:todo-1");
     expect(progressStatus.textContent).toContain("In progress");
     expect(progressStatus.querySelector("[data-events-agenda-deadline-status-icon='in_progress']")?.getAttribute("aria-hidden")).toBe("true");
@@ -111,6 +111,6 @@ describe("EventsAgendaDeadlineRow", () => {
     expect(screen.getByText("Submit report").closest("s")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Draft essay"));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "ctm-1" }), expect.any(HTMLButtonElement));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "todo-0" }), expect.any(HTMLButtonElement));
   });
 });

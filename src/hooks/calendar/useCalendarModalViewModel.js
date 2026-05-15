@@ -87,11 +87,9 @@ export default function useCalendarModalViewModel({
     if (activeSelectedItemId == null) return null;
     if (!activeView.getItemId) return activeSelectedItemId;
 
-    const pool = view === "deadlines"
-      ? [...selectedDayState.activeItems, ...selectedDayState.completedItems]
-      : Array.isArray(selectedItems)
-        ? selectedItems
-        : selectedDayState.items || [];
+    const pool = Array.isArray(selectedItems)
+      ? selectedItems
+      : selectedDayState.items || [];
     const resolveItemId = activeView.getItemId;
     const hasSelectedItem = pool.some((item) => (
       activeView.matchesItemId?.(item, activeSelectedItemId)
@@ -100,22 +98,11 @@ export default function useCalendarModalViewModel({
     return hasSelectedItem ? String(activeSelectedItemId) : null;
   })();
   const hasSelectedDay = activeSelectedDay != null;
-  const showDeadlineEditor = view === "deadlines" && !!deadlineEditor;
+  const showDeadlineEditor = view === "events" && !!deadlineEditor;
   const showEventsLoading = view === "events" && viewData?.isLoading && (computed?.totalEvents || 0) === 0;
-  const hasRenderableDeadlineData = view === "deadlines"
-    && Object.values(itemsByDay).some((state) => {
-      const dayState = activeView.getDayState?.(state) ?? buildFallbackDayState(state);
-      return (dayState.totalCount || 0) > 0;
-    });
-  const showDeadlinesPendingUpdate = view === "deadlines" && !!viewData?.isLoading && hasRenderableDeadlineData;
-  const showDeadlinesLoadingState = view === "deadlines" && !!viewData?.isLoading && !hasRenderableDeadlineData;
-  const showGridSkeleton = showEventsLoading || showDeadlinesLoadingState;
-  const showDetail = view === "deadlines"
-    ? showDeadlineEditor || (!showDeadlinesLoadingState && hasSelectedDay && selectedDayState.totalCount > 0)
-    : hasSelectedDay && selectedDayState.totalCount > 0;
-  const showEmptySelection = view === "deadlines"
-    ? hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor && !showDeadlinesLoadingState
-    : hasSelectedDay && selectedDayState.totalCount === 0;
+  const showGridSkeleton = showEventsLoading;
+  const showDetail = showDeadlineEditor || (hasSelectedDay && selectedDayState.totalCount > 0);
+  const showEmptySelection = hasSelectedDay && selectedDayState.totalCount === 0 && !showDeadlineEditor;
   const floatingDetailLabel = floatingDetail?.open
     ? (floatingDetail.mode === "edit" || floatingDetail.mode === "create"
         ? formatFloatingEditorLabel(
@@ -125,6 +112,7 @@ export default function useCalendarModalViewModel({
             viewYear,
             viewMonth,
             floatingDetail.day || activeSelectedDay,
+            floatingDetail.detailKind || null,
           )
         : formatFloatingDetailLabel(
             floatingDetail.view || view,
@@ -132,6 +120,7 @@ export default function useCalendarModalViewModel({
             viewYear,
             viewMonth,
             floatingDetail.day || activeSelectedDay,
+            floatingDetail.detailKind || null,
           ))
     : "";
   const layout = activeLayout;
@@ -152,7 +141,7 @@ export default function useCalendarModalViewModel({
     monthName,
     monthYear: String(viewYear),
     panelWidth,
-    pendingUpdate: showDeadlinesPendingUpdate,
+    pendingUpdate: false,
     selectedDayState,
     selectedItems,
     showDetail,

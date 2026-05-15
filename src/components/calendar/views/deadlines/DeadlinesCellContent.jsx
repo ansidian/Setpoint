@@ -2,7 +2,13 @@ import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { minutesFromDisplayTime } from "../../ghostPreview.js";
 import { dueDateToMs } from "../../../../lib/redesign-helpers";
-import { getDayState, getDeadlineSelectionId, SOURCE_COLORS, sourceLabelFor, sourceOf, statusLabel } from "./deadlinesModel.js";
+import {
+  DEADLINE_COLOR,
+  deadlineAccentFor,
+  getDayState,
+  getDeadlineSelectionId,
+  statusLabel,
+} from "./deadlinesModel.js";
 
 const LG_DEADLINE_CHIP_METRICS = {
   itemHeight: 36,
@@ -28,17 +34,18 @@ function resolveDeadlineChipMetrics(layout) {
 }
 
 function toDeadlineDescriptor(task) {
-  const source = sourceOf(task);
-  const accent = SOURCE_COLORS[source] || "rgba(255,255,255,0.3)";
-  const timeLabel = task.due_time || sourceLabelFor(task);
+  const accent = deadlineAccentFor(task, DEADLINE_COLOR);
+  const timeLabel = task.due_time || "Deadline";
 
   return {
     id: getDeadlineSelectionId(task),
     sourceItem: task,
+    itemKind: "deadline",
+    detailKind: "deadline",
     title: task.title || task.name || "Untitled",
     detail: [task.class_name || task.project_name, statusLabel(task.status)].filter(Boolean).join(" · "),
     leadingLabel: timeLabel,
-    recurring: source === "todoist" && !!task.is_recurring,
+    recurring: !!task.is_recurring,
     accent,
     leadingColor: accent,
     complete: task.status === "complete",
@@ -53,19 +60,18 @@ function toDeadlineDescriptor(task) {
 }
 
 export function toDeadlineGhostDescriptor(ghost) {
-  const source = ghost.source || "todoist";
-  const accent = SOURCE_COLORS[source] || ghost.color || "#89b4fa";
+  const accent = ghost.color || DEADLINE_COLOR;
   return {
     id: ghost.id,
     isGhost: true,
     itemKind: "deadline",
-    detailView: "deadlines",
+    detailKind: "deadline",
     ghostKind: "deadline",
     ghostStart: ghost.startDate,
     ghostEnd: ghost.endDate,
     title: ghost.title || "Untitled",
-    leadingLabel: ghost.dueTime || sourceLabelFor({ source }),
-    recurring: source === "todoist" && !!(ghost.recurring || ghost.is_recurring),
+    leadingLabel: ghost.dueTime || "Deadline",
+    recurring: !!(ghost.recurring || ghost.is_recurring),
     accent,
     leadingColor: accent,
     complete: false,

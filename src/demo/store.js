@@ -60,16 +60,16 @@ function event({
   };
 }
 
-function task({ id, title, day, source = "todoist", status = "open", points = null }) {
+function task({ id, title, day, status = "open", points = null, className = "Inbox" }) {
   return {
     id,
-    todoist_id: source === "todoist" ? id : null,
+    todoist_id: id,
     title,
     due_date: dateKey(day),
     status,
-    source,
+    source: "todoist",
     points_possible: points,
-    course_name: source === "ctm" ? "Portfolio Systems" : null,
+    class_name: className,
   };
 }
 
@@ -155,20 +155,13 @@ function makeDemoSeed(now = new Date()) {
   ];
 
   const deadlines = {
-    ctm: {
-      upcoming: [
-        task({ id: "demo-ctm-brief", title: "Finalize dashboard walkthrough notes", day: tomorrow, source: "ctm", points: 20 }),
-        task({ id: "demo-ctm-recording", title: "Record two-minute product tour", day: later, source: "ctm", points: 10 }),
-      ],
-      stats: { incomplete: 2, dueToday: 0, dueThisWeek: 1, totalPoints: 30 },
-    },
-    todoist: {
-      upcoming: [
-        task({ id: "demo-task-link", title: "Send portfolio demo link", day: today }),
-        task({ id: "demo-task-budget", title: "Review mock bill-pay copy", day: soon }),
-      ],
-      stats: { incomplete: 2, dueToday: 1, dueThisWeek: 2, totalPoints: 0 },
-    },
+    upcoming: [
+      task({ id: "demo-deadline-notes", title: "Finalize dashboard walkthrough notes", day: tomorrow, points: 20, className: "Portfolio Systems" }),
+      task({ id: "demo-deadline-recording", title: "Record two-minute product tour", day: later, points: 10, className: "Portfolio Systems" }),
+      task({ id: "demo-task-link", title: "Send portfolio demo link", day: today }),
+      task({ id: "demo-task-budget", title: "Review mock bill-pay copy", day: soon }),
+    ],
+    stats: { incomplete: 4, dueToday: 1, dueThisWeek: 3, totalPoints: 30 },
   };
 
   const bills = [

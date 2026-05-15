@@ -1,9 +1,4 @@
 import {
-  fetchCTMDeadlines,
-  fetchCTMDeadlinesAll,
-  fetchCTMDeadlinesRange,
-} from "./ctm.js";
-import {
   fetchTodoistDueTaskIdSet,
   fetchTodoistTasks,
   fetchTodoistTasksAll,
@@ -12,8 +7,8 @@ import {
 } from "./todoist.js";
 import {
   computeDeadlineStats,
+  filterCompletedTodoistTasks,
   loadCompletedTaskIds,
-  separateDeadlines,
 } from "./deadline-helpers.js";
 import { hydrateTodoistTasksWithReminderState } from "./reminder-hydration.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";
@@ -33,18 +28,19 @@ function quietSourceError(source, err) {
   return { source, message: err?.message || `${source} unavailable` };
 }
 
-function deadlinePayload({ ctmDeadlines, todoistTasks, todoistSyncHealth = null }) {
+function publicDeadlineItem(task) {
+  if (!task || typeof task !== "object") return task;
+  const { source: _source, ...item } = task;
+  return item;
+}
+
+function deadlinePayload({ todoistTasks, todoistSyncHealth = null }) {
+  const upcoming = (todoistTasks || []).map(publicDeadlineItem);
   const payload = {
-    ctm: {
-      upcoming: ctmDeadlines,
-      stats: computeDeadlineStats(ctmDeadlines),
-    },
-    todoist: {
-      upcoming: todoistTasks,
-      stats: computeDeadlineStats(todoistTasks),
-    },
+    upcoming,
+    stats: computeDeadlineStats(upcoming),
   };
-  if (todoistSyncHealth) payload.todoist.syncHealth = todoistSyncHealth;
+  if (todoistSyncHealth) payload.syncHealth = todoistSyncHealth;
   return payload;
 }
 
@@ -67,11 +63,7 @@ function mergeTodoistRowsWithTombstones(todoistTasks, tombstones) {
 export async function readCurrentDeadlines(userId, {
   force = false,
 } = {}) {
-  const [ctmDeadlines, todoistTasks, todoistDueTaskIds] = await Promise.all([
-    fetchCTMDeadlines().catch((err) => {
-      console.error("[Dashboard] CTM current refresh failed:", err.message);
-      return [];
-    }),
+  const [todoistTasks, todoistDueTaskIds] = await Promise.all([
     fetchTodoistTasks(userId, { refresh: !!force }).catch((err) => {
       console.error("[Dashboard] Todoist current refresh failed:", err.message);
       return [];
@@ -83,24 +75,19 @@ export async function readCurrentDeadlines(userId, {
   ]);
 
   const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
-  const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
+  const activeTodoistTasks = filterCompletedTodoistTasks(todoistTasks, completedIds);
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
     viewBoundary: "today",
   });
-  const todoistWithCompleted = mergeTodoistRowsWithTombstones(separated.todoist, tombstones);
+  const todoistWithCompleted = mergeTodoistRowsWithTombstones(activeTodoistTasks, tombstones);
 
   return deadlinePayload({
-    ctmDeadlines: separated.ctm,
     todoistTasks: todoistWithCompleted,
   });
 }
 
 export async function readCalendarDeadlines(userId) {
-  const [ctmDeadlines, todoistTasks, todoistDueTaskIds, todoistSyncHealth] = await Promise.all([
-    fetchCTMDeadlinesAll().catch((err) => {
-      console.error("[Calendar] CTM fetch failed:", err.message);
-      return [];
-    }),
+  const [todoistTasks, todoistDueTaskIds, todoistSyncHealth] = await Promise.all([
     fetchTodoistTasksAll(userId).catch((err) => {
       console.error("[Calendar] Todoist fetch failed:", err.message);
       return [];
@@ -113,16 +100,15 @@ export async function readCalendarDeadlines(userId) {
   ]);
 
   const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
-  const separated = separateDeadlines(ctmDeadlines, todoistTasks, completedIds);
+  const activeTodoistTasks = filterCompletedTodoistTasks(todoistTasks, completedIds);
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
     viewBoundary: "today",
   });
   const todoistWithCompleted = await hydrateTodoistTasksWithReminderState(userId, [
-    ...mergeTodoistRowsWithTombstones(separated.todoist, tombstones),
+    ...mergeTodoistRowsWithTombstones(activeTodoistTasks, tombstones),
   ]);
 
   return deadlinePayload({
-    ctmDeadlines: separated.ctm,
     todoistTasks: todoistWithCompleted,
     todoistSyncHealth,
   });
@@ -130,13 +116,11 @@ export async function readCalendarDeadlines(userId) {
 
 export async function readCalendarDeadlineRange(userId, range) {
   const errors = [];
-  const [ctmResult, todoistResult, todoistDueTaskIdsResult, todoistHealthResult] = await Promise.allSettled([
-    fetchCTMDeadlinesRange({ start: range.start, end: range.end }),
+  const [todoistResult, todoistDueTaskIdsResult, todoistHealthResult] = await Promise.allSettled([
     fetchTodoistTasksRange(userId, { start: range.start, end: range.end }),
     fetchTodoistDueTaskIdSet(userId),
     getTodoistSyncHealth(userId),
   ]);
-  const ctmDeadlines = ctmResult.status === "fulfilled" ? ctmResult.value : [];
   const todoistTasks = todoistResult.status === "fulfilled" ? todoistResult.value : [];
   const todoistSyncHealth = todoistHealthResult.status === "fulfilled"
     ? todoistHealthResult.value
@@ -144,12 +128,12 @@ export async function readCalendarDeadlineRange(userId, range) {
   const todoistDueTaskIds = todoistDueTaskIdsResult.status === "fulfilled"
     ? todoistDueTaskIdsResult.value
     : null;
-  if (ctmResult.status === "rejected") errors.push(quietSourceError("ctm", ctmResult.reason));
   if (todoistResult.status === "rejected") errors.push(quietSourceError("todoist", todoistResult.reason));
   if (todoistDueTaskIdsResult.status === "rejected") errors.push(quietSourceError("todoist", todoistDueTaskIdsResult.reason));
 
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
-    viewBoundary: "yesterday",
+    start: range.start,
+    end: range.end,
   }).catch((err) => {
     errors.push(quietSourceError("todoist", err));
     return [];
@@ -157,16 +141,13 @@ export async function readCalendarDeadlineRange(userId, range) {
   const rangeTombstones = tombstones.filter((task) =>
     task.due_date && task.due_date >= range.start && task.due_date <= range.end,
   );
-  const separated = separateDeadlines(
-    ctmDeadlines,
+  const hydratedTodoist = await hydrateTodoistTasksWithReminderState(
+    userId,
     mergeTodoistRowsWithTombstones(todoistTasks, rangeTombstones),
-    new Set(),
   );
-  const hydratedTodoist = await hydrateTodoistTasksWithReminderState(userId, separated.todoist);
 
   return {
     payload: deadlinePayload({
-      ctmDeadlines: separated.ctm,
       todoistTasks: hydratedTodoist,
       todoistSyncHealth,
     }),

@@ -143,8 +143,6 @@ function deadlineSelectionIdCandidates(result, dateKey) {
     || "",
   ).toLowerCase();
   const sources = new Set([source].filter(Boolean));
-  if (source === "ctm") sources.add("canvas");
-  if (source === "canvas") sources.add("ctm");
   const id = String(rawId);
   return [...sources].flatMap((sourceKey) => [
     `${sourceKey}:${id}`,

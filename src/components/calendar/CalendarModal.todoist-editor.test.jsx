@@ -5,34 +5,33 @@ import CalendarModal from "./CalendarModal.jsx";
 import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
 
 describe("CalendarModal Todoist editor behavior", () => {
-  it("opens a blank floating Todoist editor from the deadlines header", async () => {
+  it("opens a blank floating Todoist editor from the Events deadline shortcut", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+          ],
         }}
       />,
     ));
 
-    fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
+    fireEvent.keyDown(document, { key: "C", shiftKey: true });
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
-    expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
+    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
   });
 
   it("keeps a Todoist create workspace open and closes transient panels while wheel-browsing the month grid", async () => {
@@ -42,13 +41,14 @@ describe("CalendarModal Todoist editor behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         focusItemId="new"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
@@ -90,30 +90,28 @@ describe("CalendarModal Todoist editor behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              {
-                id: "todo-1",
-                title: "First task",
-                due_date: "2026-04-20",
-                due_time: "9:00 AM",
-                source: "todoist",
-                class_name: "Inbox",
-                status: "open",
-              },
-            ],
-          },
+          upcoming: [
+            {
+              id: "todo-1",
+              title: "First task",
+              due_date: "2026-04-20",
+              due_time: "9:00 AM",
+              class_name: "Inbox",
+              status: "open",
+            },
+          ],
         }}
       />,
     ));
 
-    fireEvent.click(within(screen.getByTestId("deadlines-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
+    fireEvent.click(within(screen.getByTestId("events-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     fireEvent.click(within(panel).getByRole("button", { name: /^edit$/i }));
     const editor = await screen.findByTestId("todoist-inline-editor");
@@ -155,12 +153,13 @@ describe("CalendarModal Todoist editor behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusItemId="new"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
@@ -177,13 +176,14 @@ describe("CalendarModal Todoist editor behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-30"
         focusItemId="new"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
-        deadlinesData={{ todoist: { upcoming: [] } }}
+        deadlinesData={{ upcoming: [] }}
       />,
     ));
 
@@ -208,29 +208,28 @@ describe("CalendarModal Todoist editor behavior", () => {
     expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 2, 2027 · 9 AM");
   });
 
-  it("opens a blank inline Todoist editor from c in deadlines view", async () => {
+  it("opens a blank inline Todoist editor from Shift+C in Events", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+          ],
         }}
       />,
     ));
 
-    fireEvent.keyDown(document, { key: "c" });
+    fireEvent.keyDown(document, { key: "C", shiftKey: true });
 
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
     expect(screen.getAllByText(/Apr 20/i).length).toBeGreaterThan(0);
@@ -243,23 +242,22 @@ describe("CalendarModal Todoist editor behavior", () => {
       <CalendarModal
         open
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="todo-1"
+        focusItemId="deadline:todo-1:2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+          ],
         }}
       />,
     ));
 
-    fireEvent.click(within(screen.getByTestId("deadlines-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
+    fireEvent.click(within(screen.getByTestId("events-agenda-rail")).getByTestId("calendar-agenda-deadline-row"));
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
     fireEvent.click(within(panel).getByRole("button", { name: /^edit$/i }));
     expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
@@ -276,29 +274,28 @@ describe("CalendarModal Todoist editor behavior", () => {
       <CalendarModal
         open
         onClose={onClose}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+          ],
         }}
       />,
     ));
 
-    fireEvent.click(screen.getByRole("button", { name: /new todoist/i }));
+    fireEvent.keyDown(document, { key: "C", shiftKey: true });
     const inlineEditor = await screen.findByTestId("todoist-inline-editor");
     fireEvent.click(within(inlineEditor).getByRole("button", { name: /^cancel$/i }));
 
     await waitFor(() => {
       expect(screen.queryByTestId("todoist-inline-editor")).toBeNull();
     });
-    expect(screen.getByTestId("deadlines-agenda-rail")).toBeTruthy();
+    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
     expect(getLatestRailContent().getAttribute("data-rail-content-kind")).toBe("agenda");
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -308,16 +305,15 @@ describe("CalendarModal Todoist editor behavior", () => {
     const baseProps = {
       open: true,
       onClose: () => {},
-      view: "deadlines",
+      view: "events",
+      forceDeadlineOverlay: true,
       onViewChange: () => {},
       eventsData: { getEvents: () => [] },
       billsData: {},
       deadlinesData: {
-        todoist: {
-          upcoming: [
-            { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-          ],
-        },
+        upcoming: [
+          { id: "todo-1", title: "First task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+        ],
       },
     };
 
@@ -326,7 +322,7 @@ describe("CalendarModal Todoist editor behavior", () => {
         {...baseProps}
         openRequestId={1}
         focusDate="2026-04-20"
-        focusItemId="todo-1"
+        focusItemId="deadline:todo-1:2026-04-20"
         focusOpenDetail
       />,
     ));
@@ -344,7 +340,7 @@ describe("CalendarModal Todoist editor behavior", () => {
     ));
 
     const inlineEditor = await screen.findByTestId("todoist-inline-editor");
-    expect(screen.queryByTestId("todoist-draft-preview-summary")).toBeNull();
+    expect(within(inlineEditor).queryByDisplayValue("First task")).toBeNull();
     fireEvent.click(within(inlineEditor).getByRole("button", { name: /^cancel$/i }));
 
     await waitFor(() => {
@@ -362,19 +358,18 @@ describe("CalendarModal Todoist editor behavior", () => {
         open
         openRequestId={1}
         onClose={() => {}}
-        view="deadlines"
+        view="events"
+        forceDeadlineOverlay
         onViewChange={() => {}}
         focusDate="2026-04-20"
-        focusItemId="todo-1"
+        focusItemId="deadline:todo-1:2026-04-20"
         focusOpenDetail
         eventsData={{ getEvents: () => [] }}
         billsData={{}}
         deadlinesData={{
-          todoist: {
-            upcoming: [
-              { id: "todo-1", title: "Hero task", due_date: "2026-04-20", due_time: "9:00 AM", source: "todoist", class_name: "Inbox", status: "open" },
-            ],
-          },
+          upcoming: [
+            { id: "todo-1", title: "Hero task", due_date: "2026-04-20", due_time: "9:00 AM", class_name: "Inbox", status: "open" },
+          ],
         }}
       />,
     ));
@@ -387,7 +382,7 @@ describe("CalendarModal Todoist editor behavior", () => {
       expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /new todoist task due apr 22/i }));
+    fireEvent.keyDown(document, { key: "C", shiftKey: true });
     const inlineEditor = await screen.findByTestId("todoist-inline-editor");
     expect(within(inlineEditor).getByTestId("todoist-draft-preview-summary").textContent).toContain("April 22, 2026");
 

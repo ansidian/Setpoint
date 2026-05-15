@@ -4,8 +4,8 @@ import { Plus } from "lucide-react";
 export default function DeadlinesHeaderExtras({ onCreateTask, selectedDate, selectedDateLabel }) {
   const [hovered, setHovered] = useState(false);
   const label = selectedDateLabel
-    ? `New Todoist task due ${selectedDateLabel}`
-    : "New Todoist task";
+    ? `New deadline due ${selectedDateLabel}`
+    : "New deadline";
 
   return (
     <button
@@ -34,7 +34,7 @@ export default function DeadlinesHeaderExtras({ onCreateTask, selectedDate, sele
       }}
     >
       <Plus size={12} />
-      <span>New task</span>
+      <span>New deadline</span>
     </button>
   );
 }

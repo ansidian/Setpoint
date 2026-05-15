@@ -426,7 +426,7 @@ export default function CalendarCellOverflowPopover({
                       exclusionElement: popoverRef.current,
                       dateKey: popover.dateKey || null,
                       anchorKind: "overflow-row",
-                      detailView: item.detailView || null,
+                      detailKind: item.detailKind || null,
                       itemsSnapshot: item.sourceItem || item.sourceEvent ? [item.sourceItem || item.sourceEvent] : null,
                     });
                   }}

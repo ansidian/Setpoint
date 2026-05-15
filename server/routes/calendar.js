@@ -6,11 +6,15 @@ import {
   readBillsMirrorRange,
   scheduleBillsMirrorRefresh,
 } from "../briefing/bills-service.js";
-import { requestBillsCurrentMaintenanceRefresh } from "../dashboard/current-service.js";
+import {
+  applyDeadlineCurrentStatus,
+  requestBillsCurrentMaintenanceRefresh,
+} from "../dashboard/current-service.js";
 import {
   readCalendarDeadlines,
   readCalendarDeadlineRange,
 } from "../briefing/deadlines-read.js";
+import * as tasksService from "../briefing/tasks-service.js";
 import { loadUserConfig } from "../briefing/config-service.js";
 import {
   fetchCalendar,
@@ -84,6 +88,63 @@ router.get("/deadlines", async (_req, res) => {
     console.error("[Calendar] deadlines fetch failed:", err);
     res.status(500).json({ message: "Failed to fetch calendar deadlines" });
   }
+});
+
+function handleDeadlineMutationError(res, err, fallbackMessage) {
+  const status = err?.status || 500;
+  if (status >= 500) console.error(fallbackMessage, err);
+  return res.status(status).json({ message: err?.message || fallbackMessage });
+}
+
+router.post("/deadlines", async (req, res) => {
+  try {
+    const userId = process.env.EA_USER_ID;
+    const deadline = await tasksService.createDeadline(userId, req.body || {});
+    res.status(201).json({ deadline });
+  } catch (err) {
+    handleDeadlineMutationError(res, err, "Failed to create deadline");
+  }
+});
+
+router.patch("/deadlines/:deadlineId", async (req, res) => {
+  try {
+    const userId = process.env.EA_USER_ID;
+    const deadline = await tasksService.updateDeadline(userId, req.params.deadlineId, req.body || {});
+    res.json({ deadline });
+  } catch (err) {
+    handleDeadlineMutationError(res, err, "Failed to update deadline");
+  }
+});
+
+router.delete("/deadlines/:deadlineId", async (req, res) => {
+  try {
+    const userId = process.env.EA_USER_ID;
+    await tasksService.deleteDeadline(userId, req.params.deadlineId);
+    res.json({ ok: true });
+  } catch (err) {
+    handleDeadlineMutationError(res, err, "Failed to delete deadline");
+  }
+});
+
+router.post("/deadlines/:deadlineId/completed-occurrences/:date", async (req, res) => {
+  if (!ISO_DATE_RE.test(req.params.date)) {
+    return res.status(400).json({ message: "Deadline occurrence date must be YYYY-MM-DD" });
+  }
+  try {
+    const userId = process.env.EA_USER_ID;
+    const result = await tasksService.completeDeadlineOccurrence(
+      userId,
+      req.params.deadlineId,
+      req.params.date,
+    );
+    applyDeadlineCurrentStatus(userId, req.params.deadlineId, "complete").catch((err) => {
+      console.error("[Calendar] Failed to update current Todoist deadline cache:", err.message);
+    });
+    res.json(result);
+  } catch (err) {
+    handleDeadlineMutationError(res, err, "Failed to complete deadline occurrence");
+  }
+  return undefined;
 });
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

@@ -5,7 +5,7 @@ import { DashboardProvider } from "../../context/DashboardContext.jsx";
 export function wrapWithDashboard(node) {
   return (
     <DashboardProvider
-      briefing={{ emails: { accounts: [] }, ctm: { upcoming: [] }, todoist: { upcoming: [] } }}
+      briefing={{ emails: { accounts: [] }, deadlines: { upcoming: [] } }}
       setBriefing={() => {}}
       setCalendarDeadlines={() => {}}
     >

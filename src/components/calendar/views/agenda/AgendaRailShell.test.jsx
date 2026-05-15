@@ -825,6 +825,48 @@ describe("AgendaRailShell", () => {
     expect(rail.scrollTo).not.toHaveBeenCalled();
   });
 
+  it("activates rows registered with stable deadline occurrence ids", async () => {
+    const railRef = createRef();
+    const onRowClick = vi.fn();
+    render(
+      <AgendaRailShell
+        ref={railRef}
+        testId="agenda-shell"
+        groups={GROUPS}
+        firstVisibleDateKey="2026-05-01"
+        todayKey="2026-05-01"
+        selectedDateKey="2026-05-01"
+        renderHeader={({ group, registerHeader }) => (
+          <button
+            type="button"
+            ref={(node) => registerHeader(group.dateKey, node)}
+            data-testid={`header-${group.dateKey}`}
+          >
+            {group.dateKey}
+          </button>
+        )}
+        renderGroup={({ group, registerRow }) => (
+          group.dateKey === "2026-05-01" ? (
+            <span ref={(node) => registerRow("deadline:row-1:2026-05-01", node, group.dateKey)}>
+              <button
+                type="button"
+                data-testid="calendar-agenda-deadline-row"
+                data-item-id="deadline:row-1:2026-05-01"
+                onClick={onRowClick}
+              >
+                Row one
+              </button>
+            </span>
+          ) : null
+        )}
+      />,
+    );
+    await flushRailEffects();
+
+    expect(railRef.current.activateItem("deadline:row-1:2026-05-01", "2026-05-01")).toBe(true);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+  });
+
   it("does not replay entry scroll after an agenda row selection changes the selected date", async () => {
     const railRef = createRef();
     const onRowClick = vi.fn();

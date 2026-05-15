@@ -377,9 +377,9 @@ describe("CalendarCellItemStack ghost visibility", () => {
       <CalendarCellItemStack
         day={20}
         items={[
-          { id: "canvas-done", leadingLabel: "Canvas", title: "Turn in lab", complete: true, statusIcon: "complete" },
+          { id: "deadline-done", leadingLabel: "School", title: "Turn in lab", complete: true, statusIcon: "complete" },
           { id: "todo-done", leadingLabel: "Todoist", title: "Submit report", complete: true, statusIcon: "complete" },
-          { id: "progress", leadingLabel: "Canvas", title: "Draft essay", statusIcon: "in_progress" },
+          { id: "progress", leadingLabel: "School", title: "Draft essay", statusIcon: "in_progress" },
         ]}
         metrics={{ ...metrics, itemHeight: 36, fullVisibleCount: 3 }}
       />,
@@ -488,7 +488,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
         items={[
           { id: "real-1", leadingLabel: "9:00 AM", title: "First hold" },
           { id: "real-2", leadingLabel: "10:00 AM", title: "Second hold" },
-          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold", detailView: "deadlines" },
+          { id: "real-3", leadingLabel: "11:00 AM", title: "Third hold", detailKind: "deadline" },
         ]}
         metrics={metrics}
         onSelectItem={onSelectItem}
@@ -502,7 +502,7 @@ describe("CalendarCellItemStack ghost visibility", () => {
 
     expect(onSelectItem).toHaveBeenCalledWith("real-3", expect.objectContaining({
       anchorKind: "overflow-row",
-      detailView: "deadlines",
+      detailKind: "deadline",
       triggerElement: expect.any(HTMLElement),
     }));
     expect(onCloseInlineOverflow).not.toHaveBeenCalled();

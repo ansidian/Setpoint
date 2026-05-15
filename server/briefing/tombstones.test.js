@@ -105,7 +105,7 @@ describe("hydrateRecurringTombstones", () => {
     testState.db.current = null;
   });
 
-  it("returns live tombstones as complete _tombstone rows and deletes expired ones", async () => {
+  it("returns visible completed occurrences and leaves older history stored", async () => {
     await seedCompletedTask(testState.db.current, {
       todoist_id: "live-1",
       due_date: "2099-01-01",
@@ -130,7 +130,7 @@ describe("hydrateRecurringTombstones", () => {
     expect(out[0].id).toBe("live-1");
     expect(out[0].status).toBe("complete");
     expect(out[0]._tombstone).toBe(true);
-    expect(rows.map((row) => row.todoist_id)).toEqual(["live-1"]);
+    expect(rows.map((row) => row.todoist_id)).toEqual(["expired-1", "live-1"]);
   });
 
   it("gracefully skips rows with malformed snapshot_json", async () => {
@@ -200,21 +200,45 @@ describe("hydrateRecurringTombstones", () => {
       snapshot_json: JSON.stringify({ id: "two-days-ago", title: "Old", source: "todoist" }),
     });
 
-    // Deadlines view: today gate. Yesterday filtered out IN MEMORY but
-    // retained in DB for calendar's benefit. Two-days-ago deleted from DB.
+    // Deadlines view: today gate. Older history is filtered in memory, not deleted.
     const deadlinesOut = await hydrateRecurringTombstones("user-1", null, { viewBoundary: "today" });
     const afterDeadlinesRows = await listCompletedTasks(testState.db.current);
 
     expect(deadlinesOut.map((t) => t.id)).toEqual(["today-task"]);
-    // Crucially: yesterday's tombstone survives the deadlines pass.
     expect(afterDeadlinesRows.map((row) => row.todoist_id)).toEqual([
       "today-task",
+      "two-days-ago",
       "yesterday-task",
     ]);
 
     // Calendar view: yesterday gate. Sees both today AND yesterday.
     const calendarOut = await hydrateRecurringTombstones("user-1", null, { viewBoundary: "yesterday" });
     expect(calendarOut.map((t) => t.id).sort()).toEqual(["today-task", "yesterday-task"]);
+  });
+
+  it("returns historical completed occurrences inside an explicit calendar range", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-18T16:00:00Z"));
+
+    await seedCompletedTask(testState.db.current, {
+      todoist_id: "two-days-ago",
+      due_date: "2026-04-16",
+      snapshot_json: JSON.stringify({ id: "two-days-ago", title: "Old", source: "todoist" }),
+    });
+    await seedCompletedTask(testState.db.current, {
+      todoist_id: "yesterday-task",
+      due_date: "2026-04-17",
+      snapshot_json: JSON.stringify({ id: "yesterday-task", title: "Y", source: "todoist" }),
+    });
+
+    const out = await hydrateRecurringTombstones("user-1", null, {
+      start: "2026-04-16",
+      end: "2026-04-16",
+    });
+    const rows = await listCompletedTasks(testState.db.current);
+
+    expect(out.map((task) => task.id)).toEqual(["two-days-ago"]);
+    expect(rows.map((row) => row.todoist_id)).toEqual(["two-days-ago", "yesterday-task"]);
   });
 
   it("skips orphan pruning when liveTodoistIds is null (can't verify)", async () => {

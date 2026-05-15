@@ -6,7 +6,7 @@ vi.mock("../calendar/CalendarModal", () => ({
     return (
       <div
         data-testid="calendar-modal"
-        data-deadline-title={deadlinesData?.todoist?.upcoming?.[0]?.title || ""}
+        data-deadline-title={deadlinesData?.upcoming?.[0]?.title || ""}
         data-bill-id={billsData?.schedules?.[0]?.id || ""}
         data-bill-schedule-id={billsData?.schedules?.[0]?.scheduleId || ""}
         data-bill-paid={String(!!billsData?.schedules?.[0]?.paid)}
@@ -40,12 +40,10 @@ describe("DashboardCalendarModalMount", () => {
         handleCalendarEventsRangeChange={() => {}}
         liveData={{
           liveDeadlines: {
-            ctm: { upcoming: [] },
-            todoist: {
-              upcoming: [
-                { id: "todo-current", title: "Current dashboard task", due_date: "2026-04-20", source: "todoist" },
-              ],
-            },
+            upcoming: [
+              { id: "deadline-current", title: "Current dashboard task", due_date: "2026-04-20" },
+            ],
+            stats: { incomplete: 1 },
           },
         }}
         briefing={{}}
@@ -59,7 +57,8 @@ describe("DashboardCalendarModalMount", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("calendar-modal").getAttribute("data-deadline-title")).toBe("Current dashboard task");
+      const modal = screen.getByTestId("calendar-modal");
+      expect(modal.getAttribute("data-deadline-title")).toBe("Current dashboard task");
     });
   });
 

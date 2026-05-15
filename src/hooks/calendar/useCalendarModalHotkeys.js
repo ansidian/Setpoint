@@ -29,9 +29,9 @@ function closeVisibleOverflowPopover() {
   document.dispatchEvent(new CustomEvent("calendar-overflow-close"));
 }
 
-function isTodoistDeadlineItem(item) {
+function isDeadlineItem(item) {
   const isDeadline = item?.calendarItemKind === "deadline" || (!!item?.due_date && !item?.startMs);
-  return isDeadline && item?.source === "todoist";
+  return isDeadline && !!item?.id;
 }
 
 export default function useCalendarModalHotkeys({
@@ -151,7 +151,7 @@ export default function useCalendarModalHotkeys({
         return;
       }
 
-      if (event.key === "Escape" && view === "deadlines" && deadlineEditor?.mode) {
+      if (event.key === "Escape" && view === "events" && deadlineEditor?.mode) {
         setDeadlineEditor(null);
         setDeadlineDraftPreview(null);
         consumeCalendarKey();
@@ -272,7 +272,7 @@ export default function useCalendarModalHotkeys({
               const dayItems = itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay] || [];
               const resolveId = activeView.getItemId;
               const selectedItem = dayItems.find((item) => String(resolveId(item)) === String(selectedItemId));
-              if (isTodoistDeadlineItem(selectedItem)) {
+              if (isDeadlineItem(selectedItem)) {
                 if (usesFloatingEditor) {
                   openFloatingDeadlineEdit(selectedItem, {
                     dateKey: selectedDateKey,
@@ -292,22 +292,6 @@ export default function useCalendarModalHotkeys({
                 } else {
                   setFloatingDetail(null);
                   eventEditor.openEdit(selectedItem);
-                }
-              }
-            } else if (view === "deadlines") {
-              const dayState = itemsByDate?.[selectedDateKey] || itemsByDay[selectedDay];
-              const pool = dayState?.items || dayState || [];
-              const task = (Array.isArray(pool) ? pool : []).find((t) => String(t?.id) === String(selectedItemId));
-              if (task?.source === "todoist") {
-                if (usesFloatingEditor) {
-                  openFloatingDeadlineEdit(task, {
-                    dateKey: selectedDateKey,
-                    ...resolveSelectedAgendaEditAnchor?.(selectedItemId, selectedDateKey),
-                  });
-                } else {
-                  setFloatingDetail(null);
-                  setDeadlineEditor({ mode: "edit", taskId: String(selectedItemId) });
-                  setDeadlineDraftPreview(null);
                 }
               }
             }
@@ -334,17 +318,6 @@ export default function useCalendarModalHotkeys({
             } else {
               setFloatingDetail(null);
               eventEditor.openCreate();
-            }
-          } else if (view === "deadlines") {
-            if (usesFloatingEditor) {
-              openFloatingDeadlineCreate(selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }));
-            } else {
-              setFloatingDetail(null);
-              setDeadlineEditor({
-                mode: "create",
-                seedDate: selectedDateKey || ymdFromView({ viewYear, viewMonth, selectedDay }),
-              });
-              setDeadlineDraftPreview(null);
             }
           }
           consumeCalendarKey();

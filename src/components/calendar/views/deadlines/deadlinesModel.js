@@ -5,11 +5,7 @@ import { parseYmd } from "../../calendarDateUtils.js";
 
 export const MAX_PILLS = 2;
 
-export const SOURCE_COLORS = {
-  canvas: "#5A8FBF",
-  manual: "#5A8FBF",
-  todoist: "#e8776a",
-};
+export const DEADLINE_COLOR = "#e8776a";
 
 export const PRIORITY_META = {
   1: { color: "#f38ba8", label: "P1 · Urgent" },
@@ -18,7 +14,11 @@ export const PRIORITY_META = {
 };
 
 export function sourceOf(task) {
-  return task?.source || "canvas";
+  return task?.source || "deadline";
+}
+
+export function deadlineAccentFor(task, fallback = DEADLINE_COLOR) {
+  return task?.color || fallback || DEADLINE_COLOR;
 }
 
 export function normalizeStatus(status) {
@@ -50,26 +50,35 @@ export function formatFullDate(year, month, day, selectedDateKey) {
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
 
-export function sourceLabelFor(task) {
-  const source = sourceOf(task);
-  return source === "todoist" ? "Todoist" : source === "canvas" ? "Canvas" : "CTM";
+export function deadlineItemsFromData(data) {
+  if (Array.isArray(data?.upcoming)) return data.upcoming;
+  return [];
+}
+
+export function getDeadlineOccurrenceDate(task, dateKey = null) {
+  return dateKey || task?.agendaDateKey || task?.due_date || task?.dueDate || task?.date || "undated";
 }
 
 export function getDeadlineSelectionId(task, dateKey = null) {
   if (!task || task.id == null) return null;
-  if (task.agendaItemId) return String(task.agendaItemId);
-  const occurrenceDateKey = dateKey || task.agendaDateKey || task.due_date;
-  const source = sourceOf(task);
-  const isRecurringTodoist = source === "todoist" && !!task.is_recurring;
-  return isRecurringTodoist && occurrenceDateKey
-    ? `${source}:${task.id}-${occurrenceDateKey}`
-    : `${source}:${task.id}`;
+  if (String(task.agendaItemId || "").startsWith("deadline:")) return String(task.agendaItemId);
+  const occurrenceDateKey = getDeadlineOccurrenceDate(task, dateKey);
+  return `deadline:${task.id}:${occurrenceDateKey}`;
 }
 
 export function deadlineMatchesItemId(task, itemId, dateKey = null) {
   if (!task || itemId == null) return false;
   const target = String(itemId);
-  return String(getDeadlineSelectionId(task, dateKey)) === target || String(task.id) === target;
+  const occurrenceDateKey = getDeadlineOccurrenceDate(task, dateKey);
+  const legacySource = sourceOf(task);
+  const legacyIds = [
+    `${legacySource}:${task.id}-${occurrenceDateKey}`,
+    `${legacySource}:${task.id}`,
+  ];
+  return String(getDeadlineSelectionId(task, dateKey)) === target
+    || String(task.agendaItemId || "") === target
+    || String(task.id) === target
+    || legacyIds.includes(target);
 }
 
 function orderDeadlines(items = []) {
@@ -111,9 +120,7 @@ export function getDefaultSelectedItemId(items = []) {
 }
 
 export function compute({ data, viewYear, viewMonth }) {
-  const ctmItems = data?.ctm?.upcoming || [];
-  const todoistItems = data?.todoist?.upcoming || [];
-  const all = [...ctmItems, ...todoistItems];
+  const all = deadlineItemsFromData(data);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

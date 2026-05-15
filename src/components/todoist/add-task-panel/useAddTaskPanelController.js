@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  createDeadline,
   createReminder,
-  createTodoistTask,
+  deleteDeadline,
   deleteReminder,
-  deleteTodoistTask,
   getTodoistLabels,
   getTodoistProjects,
   listReminders,
-  updateTodoistTask,
+  updateDeadline,
 } from "../../../api";
 import useIsMobile from "../../../hooks/useIsMobile";
 import { epochFromLa } from "../../inbox/helpers";
@@ -18,7 +18,7 @@ import {
   applyUpcomingReminderState,
   projectUpcomingReminderState,
 } from "../../calendar/reminderDisplay.js";
-import { buildTodoistTaskPayload } from "./submitPayload";
+import { buildDeadlineMutationPayload } from "./submitPayload";
 import {
   buildTodoistReminderCreatePayload,
   createTodoistReminderDraftFromCustom,
@@ -172,7 +172,7 @@ export default function useAddTaskPanelController({
     setError(null);
     setDeleting(true);
     try {
-      await deleteTodoistTask(editingTask.id);
+      await deleteDeadline(editingTask.id);
       onTaskDeleted?.(editingTask.id);
       requestClose();
     } catch (err) {
@@ -620,7 +620,7 @@ export default function useAddTaskPanelController({
     setSubmitting(true);
     setError(null);
     try {
-      const payload = buildTodoistTaskPayload({
+      const payload = buildDeadlineMutationPayload({
         parsed,
         input,
         description,
@@ -633,9 +633,9 @@ export default function useAddTaskPanelController({
 
       let task;
       if (isEdit) {
-        task = await updateTodoistTask(editingTask.id, payload);
+        task = await updateDeadline(editingTask.id, payload);
       } else {
-        task = await createTodoistTask(payload);
+        task = await createDeadline(payload);
       }
       const savedTask = isEdit ? { ...editingTask, ...task, id: editingTask.id } : task;
       for (const reminderId of removedReminderIds) {

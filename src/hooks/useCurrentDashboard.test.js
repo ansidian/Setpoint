@@ -52,8 +52,8 @@ const currentPayload = {
   weather: { temp: 72, icon: "Sun" },
   calendar: [{ id: "event-1", title: "Focus" }],
   deadlines: {
-    ctm: { upcoming: [{ id: "ctm-1" }], stats: { total: 1 } },
-    todoist: { upcoming: [{ id: "todoist-1" }], stats: { total: 1 } },
+    upcoming: [{ id: "deadline-1" }],
+    stats: { total: 1 },
   },
   bills: [{ id: "bill-1", payee: "Power" }],
   allSchedules: [{ id: "schedule-1" }],
@@ -128,8 +128,7 @@ describe("useCurrentDashboard", () => {
     expect(result.current.briefingData.briefing).toMatchObject({
       weather: { temp: 72, icon: "Sun" },
       calendar: [{ id: "event-1", title: "Focus" }],
-      ctm: { upcoming: [{ id: "ctm-1" }], stats: { total: 1 } },
-      todoist: { upcoming: [{ id: "todoist-1" }], stats: { total: 1 } },
+      deadlines: { upcoming: [{ id: "deadline-1" }], stats: { total: 1 } },
       emails: { summary: "", accounts: [] },
     });
     expect(result.current.liveData).toMatchObject({
@@ -331,8 +330,8 @@ describe("useCurrentDashboard", () => {
       .mockResolvedValueOnce({
         ...currentPayload,
         deadlines: {
-          ...currentPayload.deadlines,
-          todoist: { upcoming: [{ id: "todoist-live" }], stats: { total: 1 } },
+          upcoming: [{ id: "deadline-live" }],
+          stats: { total: 1 },
         },
         fetchedAt: "2026-05-05T00:20:00.000Z",
       });
@@ -353,7 +352,7 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
-    expect(result.current.briefingData.briefing.todoist.upcoming).toEqual([{ id: "todoist-live" }]);
+    expect(result.current.briefingData.briefing.deadlines.upcoming).toEqual([{ id: "deadline-live" }]);
     expect(result.current.refreshing).toBe(false);
 
     unmount();
@@ -563,8 +562,8 @@ describe("useCurrentDashboard", () => {
       .mockResolvedValueOnce({
         ...currentPayload,
         deadlines: {
-          ...currentPayload.deadlines,
-          todoist: { upcoming: [{ id: "todoist-live" }], stats: { total: 1 } },
+          upcoming: [{ id: "deadline-live" }],
+          stats: { total: 1 },
         },
         providerHealth: {
           ...currentPayload.providerHealth,
@@ -589,7 +588,7 @@ describe("useCurrentDashboard", () => {
       await Promise.resolve();
     });
     expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
-    expect(result.current.briefingData.briefing.todoist.upcoming).toEqual([{ id: "todoist-1" }]);
+    expect(result.current.briefingData.briefing.deadlines.upcoming).toEqual([{ id: "deadline-1" }]);
     expect(result.current.refreshing).toBe(false);
 
     await act(async () => {
@@ -597,7 +596,7 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
-    expect(result.current.briefingData.briefing.todoist.upcoming).toEqual([{ id: "todoist-live" }]);
+    expect(result.current.briefingData.briefing.deadlines.upcoming).toEqual([{ id: "deadline-live" }]);
     expect(result.current.refreshing).toBe(false);
     unmount();
   });

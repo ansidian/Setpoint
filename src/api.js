@@ -156,7 +156,6 @@ export const snoozeEmail = (uid, untilTs, snapshot = null) =>
 export const unsnoozeEmail = (uid) =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/snooze`, { method: "DELETE" });
 export const completeTask = (taskId) => apiFetch(`/api/briefing/complete-task/${encodeURIComponent(taskId)}`, { method: "POST" });
-export const updateTaskStatus = (taskId, status) => apiFetch(`/api/briefing/task-status/${encodeURIComponent(taskId)}`, { method: "PATCH", body: JSON.stringify({ status }) });
 export const dismissTombstone = (todoistId) =>
   apiFetch(`/api/briefing/tombstone/${todoistId}`, { method: "DELETE" });
 export const markEmailAsRead = (uid) => apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/mark-read`, { method: "POST" });
@@ -204,6 +203,17 @@ export const settleArrivalGraceOnExit = () => {
 export const getCalendarDeadlines = () => apiFetch("/api/calendar/deadlines");
 export const getCalendarDeadlinesRange = (start, end) =>
   apiFetch(`/api/calendar/deadlines/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+export const createDeadline = (data) =>
+  apiFetch("/api/calendar/deadlines", { method: "POST", body: JSON.stringify(data) });
+export const updateDeadline = (id, data) =>
+  apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
+export const deleteDeadline = (id) =>
+  apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "DELETE" });
+export const completeDeadlineOccurrence = (id, occurrenceDate) =>
+  apiFetch(
+    `/api/calendar/deadlines/${encodeURIComponent(id)}/completed-occurrences/${encodeURIComponent(occurrenceDate)}`,
+    { method: "POST" },
+  );
 export const getCalendarBillsRange = (start, end) =>
   apiFetch(`/api/calendar/bills/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const getCalendarSearch = ({ scope, q, limit } = {}) => {

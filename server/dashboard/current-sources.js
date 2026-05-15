@@ -1,6 +1,6 @@
 export const EMPTY_DEADLINES = {
-  ctm: { upcoming: [], stats: null },
-  todoist: { upcoming: [], stats: null },
+  upcoming: [],
+  stats: null,
 };
 
 const REFRESH_TIMEOUT_MS = 2 * 60 * 1000;
@@ -54,7 +54,7 @@ const CURRENT_SOURCE_DEFINITIONS = {
   deadlines_current: {
     ttlMs: 15 * 60 * 1000,
     fallback: () => clone(EMPTY_DEADLINES),
-    hasUsablePayload: (payload) => Boolean(payload?.ctm && payload?.todoist),
+    hasUsablePayload: (payload) => Array.isArray(payload?.upcoming),
   },
   bills_current: {
     ttlMs: 60 * 60 * 1000,
