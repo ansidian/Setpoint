@@ -1,5 +1,6 @@
 import { epochFromLa, laComponents } from "../inbox/helpers.js";
 import { addDaysYmd, daysBetweenYmd, parseYmd } from "./calendarDateUtils.js";
+import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors.js";
 
 const TIME_12_RE = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
 
@@ -247,7 +248,7 @@ export function buildEventGhostPreview({ editor, events }) {
   };
 }
 
-const DEADLINE_GHOST_COLOR = "#e8776a";
+const DEADLINE_GHOST_COLOR = TODOIST_DEADLINE_COLOR;
 
 export function deadlinePreviewFromEpoch(epochMs) {
   if (!Number.isFinite(epochMs)) return null;

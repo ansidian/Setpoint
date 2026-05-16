@@ -531,7 +531,7 @@ describe("EventsAgendaRail", () => {
     ]);
     expect(markers.map((marker) => marker.getAttribute("data-marker-color"))).toEqual([
       "#a6e3a1",
-      "#e8776a",
+      "#e44332",
     ]);
   });
 
@@ -554,7 +554,7 @@ describe("EventsAgendaRail", () => {
     const mayTwelve = within(screen.getByTestId("calendar-mini-calendar"))
       .getByRole("button", { name: /Tuesday, May 12, selected/i });
     expect(mayTwelve.getAttribute("data-hover-preview")).toBe("active");
-    expect(mayTwelve.getAttribute("data-hover-preview-color")).toBe("#e8776a");
+    expect(mayTwelve.getAttribute("data-hover-preview-color")).toBe("#e44332");
   });
 
   it("scopes visual selection to the selected agenda date for multi-day events", () => {

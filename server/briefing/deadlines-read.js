@@ -6,6 +6,11 @@ import {
   getTodoistSyncHealth,
 } from "./todoist.js";
 import {
+  TODOIST_DEADLINE_COLOR,
+  TODOIST_DEADLINE_SOURCE,
+  TODOIST_DEADLINE_SOURCE_LABEL,
+} from "../../shared/deadline-source-colors.js";
+import {
   computeDeadlineStats,
   filterCompletedTodoistTasks,
   loadCompletedTaskIds,
@@ -30,8 +35,20 @@ function quietSourceError(source, err) {
 
 function publicDeadlineItem(task) {
   if (!task || typeof task !== "object") return task;
-  const { source: _source, ...item } = task;
-  return item;
+  const {
+    source: _source,
+    sourceLabel: _sourceLabel,
+    color: _color,
+    sourceColor: _sourceColor,
+    ...item
+  } = task;
+  return {
+    ...item,
+    source: TODOIST_DEADLINE_SOURCE,
+    sourceLabel: TODOIST_DEADLINE_SOURCE_LABEL,
+    color: TODOIST_DEADLINE_COLOR,
+    sourceColor: TODOIST_DEADLINE_COLOR,
+  };
 }
 
 function deadlinePayload({ todoistTasks, todoistSyncHealth = null }) {

@@ -249,7 +249,12 @@ describe("GET /api/calendar/deadlines", () => {
     );
     expect(db.execute).not.toHaveBeenCalled();
     expect(res.body.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
-    expect(res.body.upcoming[0]).not.toHaveProperty("source");
+    expect(res.body.upcoming[0]).toMatchObject({
+      source: "todoist",
+      sourceLabel: "Todoist",
+      color: "#e44332",
+      sourceColor: "#e44332",
+    });
     expect(res.body.stats).toEqual({ total: 2 });
   });
 });
@@ -299,8 +304,11 @@ describe("GET /api/calendar/deadlines/range", () => {
       hasUpcomingReminder: true,
       upcomingReminderCount: 2,
       nextReminderAt: "2026-05-05T15:30:00.000Z",
+      source: "todoist",
+      sourceLabel: "Todoist",
+      color: "#e44332",
+      sourceColor: "#e44332",
     });
-    expect(res.body.upcoming.find((item) => item.id === "todo-1")).not.toHaveProperty("source");
     expect(res.body.stats).toEqual({ total: 3 });
     expect(res.body.syncHealth).toEqual({ state: "current", configured: true, ageMs: 30_000 });
     expect(res.body.minDate).toBe("2025-05-03");

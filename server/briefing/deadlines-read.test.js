@@ -72,8 +72,22 @@ describe("deadline read module", () => {
     );
     expect(payload).toEqual({
       upcoming: [
-        { id: "todo-1" },
-        { id: "done-1", status: "complete", due_date: "2026-05-04" },
+        {
+          id: "todo-1",
+          source: "todoist",
+          sourceLabel: "Todoist",
+          color: "#e44332",
+          sourceColor: "#e44332",
+        },
+        {
+          id: "done-1",
+          status: "complete",
+          due_date: "2026-05-04",
+          source: "todoist",
+          sourceLabel: "Todoist",
+          color: "#e44332",
+          sourceColor: "#e44332",
+        },
       ],
       stats: { total: 2 },
     });
@@ -109,6 +123,10 @@ describe("deadline read module", () => {
         title: "Completed task",
         due_date: "2026-05-11",
         status: "complete",
+        source: "todoist",
+        sourceLabel: "Todoist",
+        color: "#e44332",
+        sourceColor: "#e44332",
       },
     ]);
     expect(payload.stats).toEqual({ total: 1 });
@@ -155,7 +173,12 @@ describe("deadline read module", () => {
       upcomingReminderCount: 1,
       nextReminderAt: "2026-05-05T15:30:00.000Z",
     });
-    expect(payload.upcoming.find((item) => item.id === "todo-all")).not.toHaveProperty("source");
+    expect(payload.upcoming.find((item) => item.id === "todo-all")).toMatchObject({
+      source: "todoist",
+      sourceLabel: "Todoist",
+      color: "#e44332",
+      sourceColor: "#e44332",
+    });
   });
 
   it("builds the range-calendar deadline payload from Todoist rows and tombstones", async () => {
@@ -188,6 +211,11 @@ describe("deadline read module", () => {
     expect(result.payload.upcoming.map((item) => item.id)).toEqual(["todo-range", "done-in"]);
     expect(result.payload.stats).toEqual({ total: 2 });
     expect(result.payload.syncHealth).toEqual({ state: "current", configured: true });
-    expect(result.payload.upcoming.find((item) => item.id === "todo-range")).not.toHaveProperty("source");
+    expect(result.payload.upcoming.find((item) => item.id === "todo-range")).toMatchObject({
+      source: "todoist",
+      sourceLabel: "Todoist",
+      color: "#e44332",
+      sourceColor: "#e44332",
+    });
   });
 });

@@ -76,7 +76,7 @@ describe("calendar ghost previews", () => {
       kind: "deadline",
       startDate: "2026-04-21",
       endDate: "2026-04-21",
-      color: "#e8776a",
+      color: "#e44332",
       dueMinutes: 540,
       crowdedCount: 3,
     });

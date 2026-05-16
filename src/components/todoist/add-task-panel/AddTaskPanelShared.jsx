@@ -4,6 +4,7 @@ import { RemoveLabelButton, TokenAutocomplete } from "./controls";
 import { formatFriendlyDraftPreview } from "./formatDraftPreview.js";
 import { ActionButton, FieldLabel } from "../../calendar/events/CalendarEditorControls";
 import { textFieldStyle } from "../../calendar/events/calendarEditorUtils";
+import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors.js";
 
 export function TodoistErrorNotice({ error, compact = false }) {
   if (!error) return null;
@@ -32,14 +33,14 @@ export function TodoistDraftPreview({ draftPreview, compact = false }) {
       style={{
         padding: compact ? "9px 10px" : "10px 12px",
         borderRadius: 10,
-        border: "1px solid rgba(232,119,106,0.2)",
-        background: "rgba(232,119,106,0.07)",
+        border: `1px solid ${TODOIST_DEADLINE_COLOR}33`,
+        background: `${TODOIST_DEADLINE_COLOR}12`,
         display: "flex",
         flexDirection: "column",
         gap: 5,
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.6, textTransform: "uppercase", color: "#e8776a" }}>
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.6, textTransform: "uppercase", color: TODOIST_DEADLINE_COLOR }}>
         Draft preview
       </div>
       <div style={{ fontSize: 11.5, lineHeight: 1.45, color: "rgba(205,214,244,0.78)" }}>

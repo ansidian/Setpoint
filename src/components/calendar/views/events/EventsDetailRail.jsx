@@ -20,7 +20,7 @@ import {
   isDeadlinePlanningItem,
   orderPlanningItems,
 } from "./eventsPlanningModel.js";
-import { normalizeStatus, statusLabel } from "../deadlines/deadlinesModel.js";
+import { deadlineAccentFor, normalizeStatus, statusLabel } from "../deadlines/deadlinesModel.js";
 import {
   googleSpecialDateAccent,
   googleSpecialDateLabel,
@@ -404,7 +404,7 @@ function toRailItem(ev, onSelectItem, selectedItemId) {
       subtitle: ev.project_name || ev.class_name || "Deadline",
       meta: "",
       selected: isSelected,
-      dotColor: ev.color || "#e8776a",
+      dotColor: deadlineAccentFor(ev),
       complete: status === "complete",
       trailing: <DeadlineTimelineStatus task={ev} />,
       onClick: !isSelected && onSelectItem ? () => onSelectItem(selectionId) : undefined,

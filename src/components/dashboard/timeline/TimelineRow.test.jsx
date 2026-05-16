@@ -77,6 +77,27 @@ describe("TimelineRow", () => {
     expect(row.textContent).not.toContain("Todoist");
   });
 
+  it("uses the deadline source color for timeline rows without priority", () => {
+    const now = new Date("2026-05-05T20:25:00.000Z").getTime();
+    const deadline = {
+      kind: "deadline",
+      dueAtMs: new Date("2026-05-06T06:59:00.000Z").getTime(),
+      data: {
+        id: "todo-1",
+        title: "Mop and Clean",
+        due_date: "2026-05-05",
+        class_name: "Inbox",
+        source: "todoist",
+        color: "#e44332",
+        status: "open",
+      },
+    };
+
+    render(<TimelineRow accent="#cba6da" item={deadline} now={now} />);
+
+    expect(screen.getByTestId("timeline-row-dot").firstElementChild?.style.background).toBe("rgb(228, 67, 50)");
+  });
+
   it("renders all-day events as all-day rather than timed live blocks", () => {
     const now = new Date("2026-05-05T20:25:00.000Z").getTime();
     const allDayEvent = {

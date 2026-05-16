@@ -28,6 +28,7 @@ import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 import {
   PRIORITY_COLOR,
 } from "./timeline-helpers";
+import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors.js";
 
 function PriorityFlag({ level, size = 11 }) {
   const color = PRIORITY_COLOR[level];
@@ -112,7 +113,9 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     if (deadline.status !== "complete") {
       overdueText = overdueLabel(item.dueAtMs, now);
     }
-    railDotColor = priorityLevel ? PRIORITY_COLOR[priorityLevel] : accent;
+    railDotColor = priorityLevel
+      ? PRIORITY_COLOR[priorityLevel]
+      : deadline.color || deadline.sourceColor || TODOIST_DEADLINE_COLOR || accent;
     jumpPayload = { kind: "deadline", id: deadline.id, data: deadline };
   } else {
     return null;

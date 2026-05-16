@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canNavigateBack,
   compute,
+  deadlineAccentFor,
   getDeadlineSelectionId,
 } from "./deadlinesModel.js";
 
@@ -62,5 +63,10 @@ describe("deadlinesModel range navigation", () => {
       id: "one-off",
       due_date: "2026-05-11",
     })).toBe("deadline:one-off:2026-05-11");
+  });
+
+  it("uses Todoist red as the deadline source accent fallback", () => {
+    expect(deadlineAccentFor({ id: "todo-1", title: "Mop and Clean" })).toBe("#e44332");
+    expect(deadlineAccentFor({ id: "custom", color: "#89b4fa" })).toBe("#89b4fa");
   });
 });
