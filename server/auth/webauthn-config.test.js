@@ -5,7 +5,7 @@ describe("WebAuthn config", () => {
   it("uses localhost defaults outside production", () => {
     expect(resolveWebAuthnConfig({ NODE_ENV: "development" })).toEqual({
       mode: "development",
-      rpName: "EA Dashboard",
+      rpName: "Setpoint",
       rpId: "localhost",
       origin: "http://localhost:5173",
     });
@@ -17,7 +17,7 @@ describe("WebAuthn config", () => {
       { requestOrigin: "http://127.0.0.1:5173" },
     )).toEqual({
       mode: "development",
-      rpName: "EA Dashboard",
+      rpName: "Setpoint",
       rpId: "127.0.0.1",
       origin: "http://127.0.0.1:5173",
     });
@@ -27,7 +27,7 @@ describe("WebAuthn config", () => {
       { requestOrigin: "http://localhost:3000" },
     )).toEqual({
       mode: "development",
-      rpName: "EA Dashboard",
+      rpName: "Setpoint",
       rpId: "localhost",
       origin: "http://localhost:3000",
     });
@@ -41,14 +41,14 @@ describe("WebAuthn config", () => {
   it("rejects unsafe production origin and RP ID values", () => {
     expect(() => resolveWebAuthnConfig({
       NODE_ENV: "production",
-      EA_WEBAUTHN_RP_NAME: "EA Dashboard",
+      EA_WEBAUTHN_RP_NAME: "Setpoint",
       EA_WEBAUTHN_RP_ID: "https://dashboard.example.com",
       EA_WEBAUTHN_ORIGIN: "https://dashboard.example.com",
     })).toThrow(/RP ID must be a hostname/);
 
     expect(() => resolveWebAuthnConfig({
       NODE_ENV: "production",
-      EA_WEBAUTHN_RP_NAME: "EA Dashboard",
+      EA_WEBAUTHN_RP_NAME: "Setpoint",
       EA_WEBAUTHN_RP_ID: "dashboard.example.com",
       EA_WEBAUTHN_ORIGIN: "http://dashboard.example.com",
     })).toThrow(/must use HTTPS/);
@@ -57,12 +57,12 @@ describe("WebAuthn config", () => {
   it("accepts explicit production WebAuthn config", () => {
     expect(resolveWebAuthnConfig({
       NODE_ENV: "production",
-      EA_WEBAUTHN_RP_NAME: "EA Dashboard",
+      EA_WEBAUTHN_RP_NAME: "Setpoint",
       EA_WEBAUTHN_RP_ID: "dashboard.example.com",
       EA_WEBAUTHN_ORIGIN: "https://dashboard.example.com",
     })).toEqual({
       mode: "production",
-      rpName: "EA Dashboard",
+      rpName: "Setpoint",
       rpId: "dashboard.example.com",
       origin: "https://dashboard.example.com",
     });

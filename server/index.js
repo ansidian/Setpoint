@@ -69,7 +69,7 @@ app.use("/api", (req, res, next) => {
   if (req.path === "/gmail/push") return next();
   if (req.path === "/auth/login") return next();
   if (req.headers.authorization?.startsWith("Bearer ")) return next();
-  if (req.headers["x-requested-with"] !== "EADashboard") {
+  if (req.headers["x-requested-with"] !== "Setpoint") {
     return res.status(403).json({ message: "Forbidden" });
   }
   next();
@@ -112,7 +112,7 @@ timeAsync("migrations", () => migrate())
   .then(() => timeAsync("encryption-rewrite", () => migrateCbcEncryption()))
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`EA Dashboard running on http://localhost:${PORT}`);
+      console.log(`Setpoint running on http://localhost:${PORT}`);
       logTiming({
         event: "boot",
         phase: "listen",

@@ -1,5 +1,5 @@
 ---
-name: "EA Dashboard"
+name: "Setpoint"
 description: "A private executive-assistant workspace for current snapshots, inbox triage, schedule awareness, deadlines, and finances."
 colors:
   page: "#1e1e2e"
@@ -109,13 +109,13 @@ components:
     padding: "8px 12px"
 ---
 
-# Design System: EA Dashboard
+# Design System: Setpoint
 
 ## 1. Overview
 
 **Creative North Star: "The Private Ops Desk"**
 
-EA Dashboard is a private product surface, not a brand page. The physical scene is a single user checking the day from a laptop in a quiet room before moving into meetings, schoolwork, errands, or finance admin. The interface chooses a restrained dark theme because it is used repeatedly, often around calendar transitions or early in the day, when low glare and stable hierarchy matter more than spectacle.
+Setpoint is a private product surface, not a brand page. The physical scene is a single user checking the day from a laptop in a quiet room before moving into meetings, schoolwork, errands, or finance admin. The interface chooses a restrained dark theme because it is used repeatedly, often around calendar transitions or early in the day, when low glare and stable hierarchy matter more than spectacle.
 
 The visual system is compact, border-led, and data-first. Purple is the default primary accent, but it should appear as a control signal, not a wash over the product. The shell can support a scoped V3 light mode, but new work must respect the token system in this file and `DESIGN.json`, which remain the implementation source of truth.
 

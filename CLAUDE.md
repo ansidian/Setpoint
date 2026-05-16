@@ -1,4 +1,4 @@
-# EA Dashboard
+# Setpoint
 
 Claude-specific entry point. Keep this file deliberately thin so it does not drift from the shared agent instructions.
 

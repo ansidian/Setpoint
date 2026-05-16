@@ -1,4 +1,4 @@
-const DEFAULT_DEV_RP_NAME = "EA Dashboard";
+const DEFAULT_DEV_RP_NAME = "Setpoint";
 const DEFAULT_DEV_RP_ID = "localhost";
 const DEFAULT_DEV_ORIGIN = "http://localhost:5173";
 const LOOPBACK_DEV_HOSTS = new Set(["localhost", "127.0.0.1"]);

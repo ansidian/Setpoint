@@ -92,7 +92,7 @@ describe("App auth redirects", () => {
 
   it("derives a router basename from Vite's deployment base", () => {
     expect(resolveRouterBasename("/")).toBeUndefined();
-    expect(resolveRouterBasename("/ea-dashboard/")).toBe("/ea-dashboard");
+    expect(resolveRouterBasename("/Setpoint/")).toBe("/Setpoint");
     expect(resolveRouterBasename("/portfolio/demo")).toBe("/portfolio/demo");
   });
 });

@@ -98,7 +98,7 @@ vi.mock("../briefing/encryption.js", () => ({
   decrypt: vi.fn((value) => value),
 }));
 vi.mock("../briefing/discord-reminders.js", () => ({
-  formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "EA Dashboard reminder test" }] })),
+  formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "Setpoint reminder test" }] })),
   sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
 }));
 vi.mock("../briefing/bill-extractors/catalog.js", () => ({
@@ -745,7 +745,7 @@ describe("auth boundaries", () => {
     });
     expect(discordReminders.sendDiscordWebhook).toHaveBeenCalledWith(
       "enc:https://discord.example/webhook",
-      { embeds: [{ title: "EA Dashboard reminder test" }] },
+      { embeds: [{ title: "Setpoint reminder test" }] },
     );
   });
 

@@ -51,7 +51,7 @@ describe("demo mode API network guard", () => {
 
     expect(fetch).toHaveBeenCalledWith("/api/auth/check", expect.objectContaining({
       headers: expect.objectContaining({
-        "X-Requested-With": "EADashboard",
+        "X-Requested-With": "Setpoint",
       }),
     }));
   });
@@ -72,7 +72,7 @@ describe("demo mode API network guard", () => {
 
     expect(fetch).toHaveBeenNthCalledWith(1, "/api/auth/passkey/authentication/options", expect.objectContaining({
       method: "POST",
-      headers: expect.objectContaining({ "X-Requested-With": "EADashboard" }),
+      headers: expect.objectContaining({ "X-Requested-With": "Setpoint" }),
     }));
     expect(fetch).toHaveBeenNthCalledWith(2, "/api/auth/passkey/authentication/verify", expect.objectContaining({
       method: "POST",
@@ -99,7 +99,7 @@ describe("demo mode API network guard", () => {
     await api.deletePasskeyCredential("credential-1");
 
     expect(fetch).toHaveBeenNthCalledWith(1, "/api/auth/passkeys", expect.objectContaining({
-      headers: expect.objectContaining({ "X-Requested-With": "EADashboard" }),
+      headers: expect.objectContaining({ "X-Requested-With": "Setpoint" }),
     }));
     expect(fetch).toHaveBeenNthCalledWith(2, "/api/auth/passkeys/registration/options", expect.objectContaining({
       method: "POST",

@@ -22,7 +22,7 @@ describe("required env validation", () => {
       NODE_ENV: "production",
       TURSO_DATABASE_URL: "libsql://example.turso.io",
       TURSO_AUTH_TOKEN: "token",
-      EA_WEBAUTHN_RP_NAME: "EA Dashboard",
+      EA_WEBAUTHN_RP_NAME: "Setpoint",
       EA_WEBAUTHN_RP_ID: "dashboard.example.com",
       EA_WEBAUTHN_ORIGIN: "https://dashboard.example.com",
     })).toEqual([]);

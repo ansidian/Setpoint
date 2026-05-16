@@ -49,7 +49,7 @@ describe("ChunkLoadBoundary", () => {
 
     await waitFor(() => expect(reloadPage).toHaveBeenCalledTimes(1));
     expect(storage.getItem(CHUNK_RELOAD_STORAGE_KEY)).toBe("1000");
-    expect(screen.getByRole("alert").textContent).toContain("Reload EA Dashboard");
+    expect(screen.getByRole("alert").textContent).toContain("Reload Setpoint");
   });
 
   it("shows a manual reload action when automatic reload was already attempted recently", () => {

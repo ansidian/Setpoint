@@ -6,7 +6,7 @@ function clone(value) {
 }
 
 function route(path) {
-  return new URL(path, "http://ea-dashboard-demo.local");
+  return new URL(path, "http://setpoint-demo.local");
 }
 
 function unsupported(path) {

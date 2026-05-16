@@ -11,7 +11,7 @@ async function apiFetch(path, options = {}) {
     ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "EADashboard",
+      "X-Requested-With": "Setpoint",
       ...fetchOptions.headers,
     },
   });
@@ -40,7 +40,7 @@ export async function login(password) {
 
   const res = await fetch("/api/auth/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Requested-With": "EADashboard" },
+    headers: { "Content-Type": "application/json", "X-Requested-With": "Setpoint" },
     body: JSON.stringify({ password }),
   });
   if (!res.ok) {
@@ -174,7 +174,7 @@ export const trashEmailOnExit = (uid) => {
     keepalive: true,
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "EADashboard",
+      "X-Requested-With": "Setpoint",
     },
     body: "{}",
   }).catch(() => {});
@@ -194,7 +194,7 @@ export const settleArrivalGraceOnExit = () => {
     keepalive: true,
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "EADashboard",
+      "X-Requested-With": "Setpoint",
     },
     body: "{}",
   }).catch(() => {});
