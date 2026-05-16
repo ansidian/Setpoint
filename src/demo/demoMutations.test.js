@@ -67,7 +67,12 @@ describe("demo mode in-memory mutations", () => {
     expect((await api.getNotes()).some((note) => note.id === created.id)).toBe(false);
 
     const reloadedApi = await importDemoApi();
-    expect((await reloadedApi.getNotes()).map((note) => note.id)).toEqual(["demo-note-1", "demo-note-2"]);
+    expect((await reloadedApi.getNotes()).map((note) => note.id)).toEqual([
+      "demo-note-1",
+      "demo-note-2",
+      "demo-note-3",
+      "demo-note-4",
+    ]);
   });
 
   it("mutates important senders in memory without fetch", async () => {

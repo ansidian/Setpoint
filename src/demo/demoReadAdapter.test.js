@@ -57,9 +57,10 @@ describe("demo mode read adapter", () => {
     expect(accounts.accounts).toHaveLength(2);
     expect(actual.accounts[0]).toMatchObject({ name: "Demo Checking" });
     expect(notes[0].content).toContain("Demo walkthrough");
-    expect(importantSenders).toEqual([
+    expect(importantSenders).toEqual(expect.arrayContaining([
       { address: "morgan@northstar.example", name: "Morgan Lee", source: "auto" },
-    ]);
+    ]));
+    expect(importantSenders.length).toBeGreaterThanOrEqual(4);
     expect(models[0]).toMatchObject({
       provider: "demo",
       defaultModel: "demo-triage-model",
@@ -69,6 +70,44 @@ describe("demo mode read adapter", () => {
       defaultModel: "demo-bill-extract-model",
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the portfolio demo populated like a busy SWE month", async () => {
+    const api = await importDemoApi();
+
+    const current = await api.getCurrentDashboard();
+    const snapshot = await api.getActiveSnapshot();
+    const calendarRange = await api.getCalendarRange("2026-05-01", "2026-05-31");
+    const deadlines = await api.getCalendarDeadlinesRange("2026-05-01", "2026-05-31");
+    const bills = await api.getCalendarBillsRange("2026-05-01", "2026-05-31");
+
+    const rows = [
+      ...(snapshot.carryover || []),
+      ...Object.values(snapshot.lanes || {}).flat(),
+    ];
+    const calendarDays = new Set(calendarRange.events.map((event) => event.start.slice(0, 10)));
+    const deadlineProjects = new Set(deadlines.upcoming.map((task) => task.class_name));
+
+    expect(current.calendar.length).toBeGreaterThanOrEqual(20);
+    expect(calendarRange.events.length).toBeGreaterThanOrEqual(30);
+    expect(calendarDays.size).toBeGreaterThanOrEqual(18);
+    expect(calendarRange.events.some((event) => event.title === "Backend platform standup")).toBe(true);
+    expect(calendarRange.events.some((event) => event.title === "Incident review: webhook retries")).toBe(true);
+    expect(deadlines.upcoming.length).toBeGreaterThanOrEqual(12);
+    expect([...deadlineProjects]).toEqual(expect.arrayContaining(["Engineering", "Product", "Career"]));
+    expect(bills.schedules.length).toBeGreaterThanOrEqual(6);
+    expect(rows.length).toBeGreaterThanOrEqual(18);
+    expect(snapshot.laneCounts).toMatchObject({
+      queued: expect.any(Number),
+      needs_attention: expect.any(Number),
+      catch_up: expect.any(Number),
+      fyi: expect.any(Number),
+      noise: expect.any(Number),
+      carryover: expect.any(Number),
+    });
+    expect(snapshot.laneCounts.needs_attention).toBeGreaterThanOrEqual(5);
+    expect(snapshot.laneCounts.fyi).toBeGreaterThanOrEqual(4);
+    expect(snapshot.laneCounts.noise).toBeGreaterThanOrEqual(3);
   });
 
   it("regenerates the seed from the viewer local date", async () => {
