@@ -1,4 +1,4 @@
-# EA Dashboard Agent Map
+# Setpoint Agent Map
 
 Personal executive-assistant dashboard for one owner. It triages email, fetches calendar, weather, Todoist-backed deadlines/tasks, and Actual Budget finances. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
 

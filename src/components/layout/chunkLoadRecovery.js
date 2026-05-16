@@ -1,4 +1,4 @@
-export const CHUNK_RELOAD_STORAGE_KEY = "ea-dashboard:chunk-reload-attempted-at";
+export const CHUNK_RELOAD_STORAGE_KEY = "setpoint:chunk-reload-attempted-at";
 export const CHUNK_RELOAD_COOLDOWN_MS = 5 * 60 * 1000;
 
 function getErrorText(error) {

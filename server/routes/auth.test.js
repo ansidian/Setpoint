@@ -379,7 +379,7 @@ describe("auth routes", () => {
 
     expect(res.status).toBe(200);
     expect(webAuthnMocks.generateRegistrationOptions).toHaveBeenCalledWith(expect.objectContaining({
-      rpName: "EA Dashboard",
+      rpName: "Setpoint",
       rpID: "localhost",
       userName: "user-1",
       attestationType: "none",

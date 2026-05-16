@@ -112,8 +112,8 @@ export default function Login({ onLogin }) {
           <Card className="bg-card/85 backdrop-blur-[2px]">
             <CardHeader className="items-center gap-3 border-b border-white/[0.04] pb-5 text-center">
               <img
-                src={publicAssetUrl("ea-dashboard-header-logo-v3.svg")}
-                alt="EA Dashboard"
+                src={publicAssetUrl("setpoint.svg")}
+                alt="Setpoint"
                 style={{ height: 32, filter: "drop-shadow(0 2px 8px rgba(203,166,218,0.18))" }}
               />
               <div className="text-[11px] font-semibold tracking-[2.5px] uppercase text-muted-foreground">

@@ -5,7 +5,7 @@ import {
 } from "./webauthn-service.js";
 
 const DEV_CONFIG = {
-  rpName: "EA Dashboard",
+  rpName: "Setpoint",
   rpId: "localhost",
   origin: "http://localhost:5173",
 };

@@ -1,6 +1,6 @@
-# EA Dashboard
+# Setpoint
 
-EA Dashboard is a single-owner personal assistant surface that aggregates sensitive personal data. Authentication language should distinguish full dashboard access from partial setup or verification states.
+Setpoint is a single-owner personal assistant surface that aggregates sensitive personal data. Authentication language should distinguish full dashboard access from partial setup or verification states.
 
 ## Language
 
@@ -13,7 +13,7 @@ A WebAuthn credential controlled by a trusted device, platform authenticator, or
 _Avoid_: MFA code, recovery key
 
 **Registered Passkey**:
-The server-side record of a passkey credential that EA Dashboard can verify.
+The server-side record of a passkey credential that Setpoint can verify.
 _Avoid_: Stored passkey, private key
 
 **Pending Password Authentication**:
@@ -49,7 +49,7 @@ The browser or authenticator ceremony used to prove control of a registered pass
 _Avoid_: Manual second login page, passkey-only login
 
 **Passkey Storage Separation**:
-The owner preference that the passkey should live outside EA Dashboard and outside the password manager that stores the dashboard password.
+The owner preference that the passkey should live outside Setpoint and outside the password manager that stores the dashboard password.
 _Avoid_: Bitwarden enforcement, dashboard-stored passkey
 
 **Calendar Search**:
@@ -157,15 +157,15 @@ The focused item-detail treatment for one deadline inside the Events workspace.
 _Avoid_: Deadlines view, deadlines workspace, deadline view
 
 **Deadline Creation**:
-The action of creating a new **Deadline Item** from EA Dashboard.
+The action of creating a new **Deadline Item** from Setpoint.
 _Avoid_: Todoist task creation, CTM task creation
 
 **Deadline Edit**:
-The action of changing one whole **Deadline Item** from EA Dashboard.
+The action of changing one whole **Deadline Item** from Setpoint.
 _Avoid_: Todoist task update, CTM status edit, single-occurrence deadline edit
 
 **Deadline Deletion**:
-The action of removing one whole **Deadline Item** from EA Dashboard.
+The action of removing one whole **Deadline Item** from Setpoint.
 _Avoid_: Todoist task deletion, CTM removal, single-occurrence deadline delete
 
 **Deadline Mutation Payload**:
@@ -181,11 +181,11 @@ A completed **Deadline Occurrence** shown after completion.
 _Avoid_: Tombstone, ghost, completed Todoist row
 
 **Completed Deadline History**:
-The local EA Dashboard record of completed **Deadline Occurrences**, especially recurring provider-backed deadlines whose provider task advances to the next occurrence.
+The local Setpoint record of completed **Deadline Occurrences**, especially recurring provider-backed deadlines whose provider task advances to the next occurrence.
 _Avoid_: One-row task completion flag, undated completion row, Todoist activity log, short-lived tombstone only, dashboard-visible backlog
 
 **Completed Deadline Snapshot Cleanup**:
-The optional EA Dashboard-local cleanup of one persisted **Completed Deadline Occurrence** when a cleanup path is retained.
+The optional Setpoint-local cleanup of one persisted **Completed Deadline Occurrence** when a cleanup path is retained.
 _Avoid_: Product Dismiss button, tombstone UI, ghost UI, delete completed task, Todoist uncomplete/reopen/delete
 
 **Agenda Row Hover Preview**:
@@ -194,7 +194,7 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 
 ## Relationships
 
-- EA Dashboard has one owner; passkey authentication uses that owner identity and does not introduce usernames or multi-account login.
+- Setpoint has one owner; passkey authentication uses that owner identity and does not introduce usernames or multi-account login.
 - A **Dashboard Password** can create **Pending Password Authentication** when a **Registered Passkey** exists.
 - A **Passkey** verifies against exactly one **Registered Passkey** record.
 - An **Authenticated Session** is created only after **Pending Password Authentication** is followed by successful **Passkey** verification.
@@ -220,7 +220,7 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - A **Calendar Search Endpoint** is the preferred implementation path for search because the owner values broader lookup more than a bounded cache-only compromise.
 - A **Calendar Search Mirror** may answer Events search, but it does not replace live Google Calendar reads for the normal Events calendar range or dashboard surfaces.
 - A **Calendar Search Mirror** owns the same rolling Events search window as **Calendar Search Coverage**: 12 months back and 18 months forward from today.
-- A **Calendar Search Mirror** stores **Calendar Search Occurrences** expanded by Google Calendar over the rolling window, not raw recurring series that EA Dashboard expands itself.
+- A **Calendar Search Mirror** stores **Calendar Search Occurrences** expanded by Google Calendar over the rolling window, not raw recurring series that Setpoint expands itself.
 - A **Calendar Search Occurrence** is searchable by event title, location, description, and calendar source label, while preserving activation fields needed to reopen the existing calendar detail behavior.
 - Calendar writes continue to use Google Calendar as the provider of record; a **Calendar Search Mirror** is refreshed or marked stale after writes.
 - Simple non-recurring calendar writes may update matching **Calendar Search Occurrences** immediately, but recurring writes mark the affected Google calendar dirty and rely on **Calendar Search Mirror Sync** for repair.
@@ -256,7 +256,7 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - Dirty calendar editor protection takes precedence over changing a **Calendar Event Selection Set**.
 - Ordinary single-item calendar selection replaces a **Calendar Event Selection Set**, but modifier-held day clicks do not; month navigation alone does not.
 - While building a **Calendar Event Selection Set**, overflow panels are selection helpers: opening overflow does not clear the set, and outside clicks do not dismiss overflow.
-- Copying a **Calendar Event Selection Set** creates a **Calendar Event Clipboard** inside EA Dashboard rather than writing event data to the operating-system clipboard.
+- Copying a **Calendar Event Selection Set** creates a **Calendar Event Clipboard** inside Setpoint rather than writing event data to the operating-system clipboard.
 - A non-empty **Calendar Event Selection Set** takes precedence over single selected event detail when copying.
 - Pasting a **Calendar Event Clipboard** preserves the selected events' relative date offsets from the earliest copied event date.
 - A **Calendar Event Clipboard** pastes onto the calendar's active selected date.
@@ -305,13 +305,13 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - **Completed Deadline History** is keyed by **Deadline Item Identifier** and **Deadline Occurrence Date**; multiple completed occurrences for one recurring **Deadline Item** must be able to coexist.
 - **Completed Deadline History** remains stored in `ea_completed_tasks`, keyed by `user_id`, `todoist_id`, and `due_date`, while product/API language treats those rows as completed deadline occurrences.
 - **Completed Deadline History** requires a **Deadline Occurrence Date**; undated legacy completion rows are not valid completed deadline occurrences.
-- **Completed Deadline History** is written by EA Dashboard completion in this cleanup; Todoist Provider completed-task backfill is out of scope unless missed completions become a recurring problem.
+- **Completed Deadline History** is written by Setpoint completion in this cleanup; Todoist Provider completed-task backfill is out of scope unless missed completions become a recurring problem.
 - **Completed Deadline History** is durable storage, not a promise that every surface renders all history. Dashboard deadline surfaces render completed occurrences due today or in the future, not past history, while Calendar range reads may render historical completed occurrences for the requested range.
 - **Calendar Search** in Events includes matching **Completed Deadline History** within its honest search coverage/window by using the same range-aware deadline history model as Calendar range reads.
 - **Calendar Search** in Events may include **Deadline Occurrences** even when the **Deadline Overlay** is hidden; overlay visibility controls ordinary Events rendering and activity markers, not search eligibility.
 - Activating a hidden-overlay deadline search result is a targeted **Deadline Detail** feature: closing the detail returns to the normal hidden-overlay Events state.
 - **Completed Deadline Snapshot Cleanup** is not a primary product action; prefer deleting hidden legacy cleanup UI/API when no current surface needs it.
-- If **Completed Deadline Snapshot Cleanup** is retained, it applies to exactly one **Completed Deadline Occurrence**, is idempotent, is local to EA Dashboard, and does not mutate the **Todoist Provider**.
+- If **Completed Deadline Snapshot Cleanup** is retained, it applies to exactly one **Completed Deadline Occurrence**, is idempotent, is local to Setpoint, and does not mutate the **Todoist Provider**.
 - **Todoist Provider** may be named for external-provider actions such as opening, configuring, or syncing Todoist, but not as the product category for **Deadline Items**.
 - When the **Deadline Overlay** is visible, deadline items participate in Events workspace **Mini Calendar Activity Markers**.
 - **Mini Calendar Activity Markers** follow the active workspace's visible overlay and filter state; hidden deadline items do not contribute markers.
@@ -332,7 +332,7 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 
 ## Flagged Ambiguities
 
-- "Outside Bitwarden" was resolved as **Passkey Storage Separation**: EA Dashboard should recommend and support device or hardware-key passkeys, but should not claim it can reliably detect or block Bitwarden-hosted passkeys through browser WebAuthn.
+- "Outside Bitwarden" was resolved as **Passkey Storage Separation**: Setpoint should recommend and support device or hardware-key passkeys, but should not claim it can reliably detect or block Bitwarden-hosted passkeys through browser WebAuthn.
 - "Pending auth token" was resolved as cookie-held **Pending Password Authentication**, not a JSON token the frontend stores or passes manually.
 - "Delete passkey" includes deleting the final **Registered Passkey**; this is a deliberate recovery path, not an invalid state.
 - "Search in the calendar modal" was resolved as **Calendar Search**, not a visible-month filter: the happy path is broader calendar lookup, with an acceptable bounded multi-month search window when needed for performance.
@@ -361,7 +361,7 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - "Todoist deadline" was resolved as provider-backed **Deadline Item** in product UI, while **Todoist Provider** remains valid for external-provider actions and settings.
 - "Deadline id" was resolved as **Deadline Item Identifier**: read rows may keep `id`, while route/helper parameters use `deadlineId`.
 - "Deadline selection id" was resolved as **Deadline Occurrence** identity, not a provider task id alone.
-- "Occurrence date" was resolved as **Deadline Occurrence Date**, the dashboard/Pacific `YYYY-MM-DD` date shown in EA Dashboard.
+- "Occurrence date" was resolved as **Deadline Occurrence Date**, the dashboard/Pacific `YYYY-MM-DD` date shown in Setpoint.
 - "Todoist task create/edit/delete" was resolved as **Deadline Creation**, **Deadline Edit**, and **Deadline Deletion** for product/API surfaces.
 - "Todoist-shaped create/edit payload" was resolved as **Deadline Mutation Payload** for product/API surfaces, with Todoist provider field names kept behind the provider boundary.
 - "Single-occurrence recurring deadline edit/delete" was rejected for this cleanup; **Deadline Edit** and **Deadline Deletion** are item-level operations.

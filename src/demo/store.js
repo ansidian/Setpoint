@@ -220,7 +220,7 @@ function makeMonthEvent(today, dayNumber, config) {
 
 function makeCalendarEvents(today, tomorrow) {
   return [
-    event({ id: "demo-event-review", title: "Portfolio review prep", day: today, startHour: 10, endHour: 11, location: "Focus room", description: "Walk through recruiter-facing EA Dashboard demo path and tighten screenshots." }),
+    event({ id: "demo-event-review", title: "Portfolio review prep", day: today, startHour: 10, endHour: 11, location: "Focus room", description: "Walk through recruiter-facing Setpoint demo path and tighten screenshots." }),
     event({ id: "demo-event-sync", title: "Product sync with Morgan", day: today, startHour: 13, endHour: 14, location: "Product Zoom", description: "Review inbox automation tradeoffs, demo scope, and product risk." }),
     event({ id: "demo-event-bills", title: "Budget review block", day: tomorrow, startHour: 16, endHour: 17, sourceColor: BILLS_COLOR, location: "Desk", description: "Reconcile recurring bills and verify bill-pay copy." }),
     ...makeWorkdayStandups(today),

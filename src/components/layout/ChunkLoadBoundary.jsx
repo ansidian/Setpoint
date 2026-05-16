@@ -19,7 +19,7 @@ function ChunkLoadFallback({ onAutoReload, onReload }) {
     >
       <div className="w-full max-w-[420px] rounded-lg border border-border bg-card/80 px-6 py-7 text-center">
         <p className="mb-2 text-[11px] font-semibold text-warning">Build changed</p>
-        <h1 className="mb-3 text-[20px] font-semibold text-foreground">Reload EA Dashboard</h1>
+        <h1 className="mb-3 text-[20px] font-semibold text-foreground">Reload Setpoint</h1>
         <p className="mb-5 text-[13px] leading-relaxed text-muted-foreground">
           This tab is holding an old app bundle. Reload to fetch the current dashboard.
         </p>

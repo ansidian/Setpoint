@@ -19,7 +19,7 @@ setup("authenticate local e2e session", async ({ request }) => {
       baseURL,
       storageState: authFile,
       extraHTTPHeaders: {
-        "X-Requested-With": "EADashboard",
+        "X-Requested-With": "Setpoint",
       },
     });
     const check = await existing.get("/api/auth/check");
@@ -36,7 +36,7 @@ setup("authenticate local e2e session", async ({ request }) => {
     data: { password },
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "EADashboard",
+      "X-Requested-With": "Setpoint",
     },
   });
 

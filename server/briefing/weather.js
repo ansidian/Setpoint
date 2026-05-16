@@ -131,7 +131,7 @@ export async function fetchWeather(lat, lng) {
 export async function geocodeLocation(query) {
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
   const res = await fetch(url, {
-    headers: { "User-Agent": "EA-Dashboard/1.0" },
+    headers: { "User-Agent": "Setpoint/1.0" },
   });
   if (!res.ok) throw new Error(`Geocoding error: ${res.status}`);
   const data = await res.json();

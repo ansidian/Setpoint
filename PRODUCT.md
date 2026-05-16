@@ -6,13 +6,13 @@ product
 
 ## Users
 
-EA Dashboard is built for a single owner who uses it as a private daily command center. The user is managing personal email across accounts, calendar events, Todoist-backed deadlines/tasks, weather, bills, and Actual Budget activity. They use it at the start of the day and between commitments, often while deciding what deserves attention next.
+Setpoint is built for a single owner who uses it as a private daily command center. The user is managing personal email across accounts, calendar events, Todoist-backed deadlines/tasks, weather, bills, and Actual Budget activity. They use it at the start of the day and between commitments, often while deciding what deserves attention next.
 
 The user is not browsing a public product, comparing plans, or exploring a marketing story. They are trying to reduce context switching, recover missed obligations, and turn noisy feeds into a concise operational picture.
 
 ## Product Purpose
 
-EA Dashboard consolidates scattered personal systems into current snapshots and focused work surfaces. It fetches mail, calendars, Todoist-backed deadlines/tasks, weather, and finances, then turns them into actionable sections: what is urgent, what changed, what is due, what can wait, and what should be logged or dismissed.
+Setpoint consolidates scattered personal systems into current snapshots and focused work surfaces. It fetches mail, calendars, Todoist-backed deadlines/tasks, weather, and finances, then turns them into actionable sections: what is urgent, what changed, what is due, what can wait, and what should be logged or dismissed.
 
 Success means the user can trust the dashboard as the first place to look. Important emails surface without scanning every inbox, deadlines appear before they become problems, bills and transactions are ready to act on, and the current snapshot stays useful as live data changes throughout the day.
 

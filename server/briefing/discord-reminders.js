@@ -44,7 +44,7 @@ function formatDateTime(value) {
 
 export function formatDiscordReminderPayload({ reminder, discordUserId = null }) {
   const snapshot = parseSnapshot(reminder);
-  const title = snapshot.title || snapshot.name || "EA Dashboard reminder";
+  const title = snapshot.title || snapshot.name || "Setpoint reminder";
   const context = snapshot.context || snapshot.sourceLabel || sourceLabel(reminder.source_type);
   const fields = [
     { name: "Source", value: context, inline: true },
@@ -61,7 +61,7 @@ export function formatDiscordReminderPayload({ reminder, discordUserId = null })
       description: snapshot.description || undefined,
       color: colorToInteger(snapshot.color),
       fields,
-      footer: { text: "EA Dashboard" },
+      footer: { text: "Setpoint" },
       timestamp: reminder.remind_at,
     }],
   };
@@ -126,7 +126,7 @@ export function formatGenericDiscordTestPayload({ discordUserId = null } = {}) {
   return {
     content: discordUserId ? `<@${discordUserId}>` : undefined,
     embeds: [{
-      title: "EA Dashboard reminder test",
+      title: "Setpoint reminder test",
       description: "Discord reminders are configured.",
       color: FALLBACK_COLOR,
       timestamp: new Date().toISOString(),

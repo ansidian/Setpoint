@@ -6,7 +6,7 @@ on:
       base_path:
         description: "Vite base path for GitHub Pages project hosting"
         required: true
-        default: "/ea-dashboard/"
+        default: "/Setpoint/"
 
 permissions:
   contents: read

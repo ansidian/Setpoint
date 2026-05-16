@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Setpoint app icon</title>
+  <desc id="desc">Rounded gradient Setpoint mark with a priority star and compact list lines.</desc>
 
   <defs>
     <linearGradient id="brandGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">

@@ -1,15 +1,15 @@
-# EA Dashboard
+# Setpoint
 
-![EA Dashboard](public/repo-hero.png)
+![Setpoint](public/repo-hero.png)
 
 A personal executive-assistant dashboard that consolidates email, calendar, tasks, reminders, weather, bills, and notes into one current operational view. It is built to solve the daily problem of managing multiple inboxes, calendars, tasks, and financial signals without losing important work in the noise.
 
-EA Dashboard is a private BYOK system. Bring your own OpenAI or Anthropic API key: email triage and bill extraction can run on either provider, while semantic inbox search uses OpenAI embeddings and answer generation.
+Setpoint is a private BYOK system. Bring your own OpenAI or Anthropic API key: email triage and bill extraction can run on either provider, while semantic inbox search uses OpenAI embeddings and answer generation.
 
 ## Live Demo
 
 <p align="center">
-  <a href="https://ansidian.github.io/ea-dashboard/">
+  <a href="https://ansidian.github.io/Setpoint/">
     <img alt="Open live demo" src="https://img.shields.io/badge/Live%20Demo-Open%20Portfolio%20Build-7c3aed?style=for-the-badge">
   </a>
   <img alt="Static fictional data" src="https://img.shields.io/badge/Data-Fictional%20Static%20Seed-475569?style=for-the-badge">
@@ -67,8 +67,8 @@ EA_PASSWORD_HASH=$2b$12$...
 EA_USER_ID=your-user-id
 
 # WebAuthn passkeys. Production requires all three and must use your HTTPS app origin.
-# Local dev defaults to EA Dashboard / localhost / http://localhost:5173 when unset.
-EA_WEBAUTHN_RP_NAME=EA Dashboard
+# Local dev defaults to Setpoint / localhost / http://localhost:5173 when unset.
+EA_WEBAUTHN_RP_NAME=Setpoint
 EA_WEBAUTHN_RP_ID=your-app-domain.com
 EA_WEBAUTHN_ORIGIN=https://your-app-domain.com
 
@@ -198,7 +198,7 @@ tracks expiry, and refreshes before Todoist REST/Sync calls:
 ```bash
 curl -X PUT "https://ea.andysu.tech/api/ea/settings" \
   -H "Content-Type: application/json" \
-  -H "X-Requested-With: EADashboard" \
+  -H "X-Requested-With: Setpoint" \
   -H "Cookie: ea_session=<your-session-cookie>" \
   --data-binary @- <<'JSON'
 {

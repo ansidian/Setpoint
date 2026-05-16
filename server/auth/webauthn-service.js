@@ -46,7 +46,7 @@ export async function buildRegistrationOptions({
     rpID: config.rpId,
     userName: userId,
     userID: Buffer.from(userId),
-    userDisplayName: "EA Dashboard",
+    userDisplayName: "Setpoint",
     challenge: challengeFromBase64Url(challenge),
     attestationType: "none",
     authenticatorSelection: {
