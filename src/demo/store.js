@@ -1,4 +1,8 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WORK_COLOR = "#89b4fa";
+const PERSONAL_COLOR = "#cba6f7";
+const CAREER_COLOR = "#f5c2e7";
+const BILLS_COLOR = "#a6e3a1";
 
 let cachedSeed = null;
 let cachedDateKey = null;
@@ -21,6 +25,23 @@ function addDays(date, days) {
   return next;
 }
 
+function daysInMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function monthDay(anchor, dayNumber) {
+  return new Date(anchor.getFullYear(), anchor.getMonth(), Math.min(dayNumber, daysInMonth(anchor)));
+}
+
+function monthDates(anchor) {
+  return Array.from({ length: daysInMonth(anchor) }, (_, index) => monthDay(anchor, index + 1));
+}
+
+function isWeekday(date) {
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
+}
+
 function atLocalIso(baseDate, hour, minute = 0) {
   const value = new Date(baseDate);
   value.setHours(hour, minute, 0, 0);
@@ -33,12 +54,16 @@ function event({
   day,
   startHour,
   endHour,
+  startMinute = 0,
+  endMinute = 0,
   calendarId = "demo-work",
   calendarName = "Demo Work",
-  sourceColor = "#89b4fa",
+  sourceColor = WORK_COLOR,
+  location = "",
+  description = "Fictional demo calendar event.",
 }) {
-  const start = atLocalIso(day, startHour);
-  const end = atLocalIso(day, endHour);
+  const start = atLocalIso(day, startHour, startMinute);
+  const end = atLocalIso(day, endHour, endMinute);
   return {
     id,
     title,
@@ -55,21 +80,35 @@ function event({
     startMs: new Date(start).getTime(),
     endMs: new Date(end).getTime(),
     allDay: false,
-    location: "",
-    description: "Fictional demo calendar event.",
+    location,
+    description,
   };
 }
 
-function task({ id, title, day, status = "open", points = null, className = "Inbox" }) {
+function task({
+  id,
+  title,
+  day,
+  status = "open",
+  points = null,
+  className = "Inbox",
+  dueTime = null,
+  description = "",
+  priority = 1,
+}) {
   return {
     id,
     todoist_id: id,
     title,
     due_date: dateKey(day),
+    due_time: dueTime,
     status,
     source: "todoist",
     points_possible: points,
     class_name: className,
+    project_name: className,
+    description,
+    priority,
   };
 }
 
@@ -100,7 +139,17 @@ function snapshotEmail({
   day,
   read = false,
   category = "work",
+  source = null,
+  sourceAt = null,
+  laneAtSnapshot = null,
+  handledAt = null,
+  escalationBadge = null,
+  receivedHour = null,
+  receivedMinute = null,
 }) {
+  const numericItemId = Number(itemId) || 0;
+  const hour = receivedHour ?? (8 + (numericItemId % 10));
+  const minute = receivedMinute ?? ((numericItemId * 7) % 60);
   return {
     id: itemId,
     snapshot_item_id: itemId,
@@ -113,10 +162,15 @@ function snapshotEmail({
     from_name: fromName,
     from_address: fromAddress,
     summary,
-    action: lane === "needs_attention" ? "Review" : "Read later",
-    date: atLocalIso(day, 9 + itemId, 15),
+    action: lane === "needs_attention" ? "Review" : lane === "queued" ? "Classify" : "Read later",
+    date: atLocalIso(day, hour, minute),
     read,
     urgency: lane === "needs_attention" ? "high" : "normal",
+    source,
+    source_at: sourceAt,
+    lane_at_snapshot: laneAtSnapshot,
+    handled_at: handledAt,
+    escalation_badge: escalationBadge,
     _activeSnapshot: true,
   };
 }
@@ -125,6 +179,7 @@ function makeLaneCounts(lanes, carryover) {
   return {
     queued: lanes.queued.length,
     needs_attention: lanes.needs_attention.length,
+    catch_up: lanes.catch_up.length,
     fyi: lanes.fyi.length,
     handled: lanes.handled.length,
     untriaged_read: lanes.untriaged_read.length,
@@ -140,6 +195,113 @@ function filterDateRange(items, start, end, getDate) {
   });
 }
 
+function makeWorkdayStandups(today) {
+  return monthDates(today)
+    .filter(isWeekday)
+    .map((day) => event({
+      id: `demo-event-standup-${dateKey(day)}`,
+      title: "Backend platform standup",
+      day,
+      startHour: 9,
+      startMinute: 30,
+      endHour: 9,
+      endMinute: 45,
+      location: "Engineering Zoom",
+      description: "Daily platform standup for API reliability, inbox triage, calendar sync, and release blockers.",
+    }));
+}
+
+function makeMonthEvent(today, dayNumber, config) {
+  return event({
+    day: monthDay(today, dayNumber),
+    ...config,
+  });
+}
+
+function makeCalendarEvents(today, tomorrow) {
+  return [
+    event({ id: "demo-event-review", title: "Portfolio review prep", day: today, startHour: 10, endHour: 11, location: "Focus room", description: "Walk through recruiter-facing EA Dashboard demo path and tighten screenshots." }),
+    event({ id: "demo-event-sync", title: "Product sync with Morgan", day: today, startHour: 13, endHour: 14, location: "Product Zoom", description: "Review inbox automation tradeoffs, demo scope, and product risk." }),
+    event({ id: "demo-event-bills", title: "Budget review block", day: tomorrow, startHour: 16, endHour: 17, sourceColor: BILLS_COLOR, location: "Desk", description: "Reconcile recurring bills and verify bill-pay copy." }),
+    ...makeWorkdayStandups(today),
+    makeMonthEvent(today, 4, { id: "demo-event-sprint-planning", title: "Sprint planning: inbox automation", startHour: 10, endHour: 11, calendarName: "Demo Work", sourceColor: WORK_COLOR, location: "Team room", description: "Shape triage worker scope, UI guardrails, and release risks." }),
+    makeMonthEvent(today, 5, { id: "demo-event-oncall-handoff", title: "On-call handoff", startHour: 15, endHour: 16, location: "Incident channel", description: "Review webhook retries, Gmail watch renewals, and alert ownership." }),
+    makeMonthEvent(today, 7, { id: "demo-event-architecture-review", title: "Architecture review: snapshot lifecycle", startHour: 11, endHour: 12, location: "Architecture Zoom", description: "Finalize cache boundaries and idempotent active snapshot refresh behavior." }),
+    makeMonthEvent(today, 8, { id: "demo-event-code-review", title: "Code review queue", startHour: 14, endHour: 15, location: "GitHub reviews", description: "Clear PR comments on calendar, inbox, and bill extraction changes." }),
+    makeMonthEvent(today, 11, { id: "demo-event-design-handoff", title: "Design handoff: dense dashboard states", startHour: 11, endHour: 12, location: "Figma review", description: "Check focus, hover, and compact dashboard layout states before release." }),
+    makeMonthEvent(today, 13, { id: "demo-event-incident-review", title: "Incident review: webhook retries", startHour: 15, endHour: 16, location: "Reliability Zoom", description: "Postmortem retry-loop alert, replay safety, and provider backoff behavior." }),
+    makeMonthEvent(today, 14, { id: "demo-event-one-on-one", title: "1:1 with engineering manager", startHour: 10, startMinute: 30, endHour: 11, location: "Manager Zoom", description: "Discuss scope control, project narrative, and next SWE role targets." }),
+    makeMonthEvent(today, 15, { id: "demo-event-release-check", title: "Release train check", startHour: 16, endHour: 16, endMinute: 30, location: "Release channel", description: "Confirm demo build, lint, tests, and static deploy readiness." }),
+    makeMonthEvent(today, 18, { id: "demo-event-api-observability", title: "API observability deep dive", startHour: 11, endHour: 12, location: "Ops review", description: "Review dashboard-current events, provider health, and stale-cache telemetry." }),
+    makeMonthEvent(today, 20, { id: "demo-event-product-qa", title: "Product QA: calendar editor", startHour: 13, endHour: 14, location: "QA workspace", description: "Run through source moves, overflow chips, and selected agenda detail flows." }),
+    makeMonthEvent(today, 22, { id: "demo-event-demo-dry-run", title: "Portfolio demo dry run", startHour: 15, endHour: 16, calendarId: "demo-career", calendarName: "Demo Career", sourceColor: CAREER_COLOR, location: "Desk", description: "Practice a concise SWE walkthrough with product context and implementation depth." }),
+    makeMonthEvent(today, 25, { id: "demo-event-retro", title: "Sprint retro: reliability polish", startHour: 10, endHour: 11, location: "Retro board", description: "Capture what improved in email triage, calendar sync, and demo safety." }),
+    makeMonthEvent(today, 27, { id: "demo-event-interview-prep", title: "System design interview prep", startHour: 18, endHour: 19, calendarId: "demo-career", calendarName: "Demo Career", sourceColor: CAREER_COLOR, location: "Home desk", description: "Review single-user dashboard architecture, data freshness, and failure modes." }),
+    makeMonthEvent(today, 29, { id: "demo-event-month-close", title: "Month-end finance and roadmap review", startHour: 14, endHour: 15, calendarId: "demo-personal", calendarName: "Demo Personal", sourceColor: PERSONAL_COLOR, location: "Desk", description: "Close budget review and plan next portfolio feature pass." }),
+  ];
+}
+
+function makeDeadlineStats(items, today) {
+  const todayKey = dateKey(today);
+  const weekFromNow = dateKey(addDays(today, 7));
+  let incomplete = 0;
+  let dueToday = 0;
+  let dueThisWeek = 0;
+  let totalPoints = 0;
+
+  for (const item of items) {
+    if (item.status !== "complete") incomplete += 1;
+    if (item.due_date === todayKey) dueToday += 1;
+    if (item.due_date >= todayKey && item.due_date <= weekFromNow) dueThisWeek += 1;
+    if (item.points_possible) totalPoints += item.points_possible;
+  }
+
+  return { incomplete, dueToday, dueThisWeek, totalPoints };
+}
+
+function flattenSnapshotRows(lanes, carryover) {
+  return [
+    ...(carryover || []),
+    ...Object.values(lanes || {}).flat(),
+  ];
+}
+
+const DEMO_ACCOUNTS = {
+  "demo-gmail": { account_id: "demo-gmail", label: "Demo Gmail", email: "alex@demo.example", color: WORK_COLOR, icon: "Mail" },
+  "demo-icloud": { account_id: "demo-icloud", label: "Demo iCloud", email: "alex.personal@example", color: PERSONAL_COLOR, icon: "Mail" },
+};
+
+function makeSnapshotFilters(lanes, carryover) {
+  const rows = flattenSnapshotRows(lanes, carryover);
+  const accountCounts = new Map();
+  const categoryCounts = new Map();
+
+  for (const row of rows) {
+    accountCounts.set(row.account_id, (accountCounts.get(row.account_id) || 0) + 1);
+    categoryCounts.set(row.category, (categoryCounts.get(row.category) || 0) + 1);
+  }
+
+  return {
+    accounts: Object.values(DEMO_ACCOUNTS).map((account) => ({
+      ...account,
+      count: accountCounts.get(account.account_id) || 0,
+    })),
+    categories: [...categoryCounts.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([category, count]) => ({ category, count })),
+  };
+}
+
+function makeEmailBodies(lanes, carryover) {
+  return Object.fromEntries(flattenSnapshotRows(lanes, carryover).map((row) => [
+    row.uid,
+    {
+      uid: row.uid,
+      body: `This is a fictional demo email body for "${row.subject}". ${row.summary} The content is representative sample data only.`,
+    },
+  ]));
+}
+
 function makeDemoSeed(now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = addDays(today, -1);
@@ -148,30 +310,76 @@ function makeDemoSeed(now = new Date()) {
   const later = addDays(today, 8);
   const fetchedAt = now.toISOString();
 
-  const calendarEvents = [
-    event({ id: "demo-event-review", title: "Portfolio review prep", day: today, startHour: 10, endHour: 11 }),
-    event({ id: "demo-event-sync", title: "Product sync with Morgan", day: today, startHour: 13, endHour: 14 }),
-    event({ id: "demo-event-bills", title: "Budget review block", day: tomorrow, startHour: 16, endHour: 17, sourceColor: "#a6e3a1" }),
+  const calendarEvents = makeCalendarEvents(today, tomorrow);
+
+  const upcomingDeadlines = [
+    task({ id: "demo-deadline-notes", title: "Finalize dashboard walkthrough notes", day: tomorrow, points: 20, className: "Portfolio Systems", dueTime: "5pm", priority: 3 }),
+    task({ id: "demo-deadline-recording", title: "Record two-minute product tour", day: later, points: 10, className: "Portfolio Systems", dueTime: "7pm", priority: 2 }),
+    task({ id: "demo-task-link", title: "Send portfolio demo link", day: today, className: "Career", dueTime: "4pm", priority: 3 }),
+    task({ id: "demo-task-budget", title: "Review mock bill-pay copy", day: soon, className: "Product", dueTime: "3pm", priority: 2 }),
+    task({ id: "demo-task-pr-review", title: "Respond to PR review on calendar source moves", day: tomorrow, className: "Engineering", dueTime: "1pm", priority: 4, description: "Reply to comments, rerun focused tests, and keep source edit behavior idempotent." }),
+    task({ id: "demo-task-worker-runbook", title: "Update triage-worker retry runbook", day: addDays(today, 2), className: "Engineering", dueTime: "11am", priority: 2 }),
+    task({ id: "demo-task-incident-postmortem", title: "Publish webhook retry postmortem", day: addDays(today, 4), className: "Engineering", dueTime: "5pm", points: 8, priority: 3 }),
+    task({ id: "demo-task-product-metrics", title: "QA product metrics dashboard cards", day: addDays(today, 5), className: "Product", dueTime: "2pm", points: 5, priority: 2 }),
+    task({ id: "demo-task-architecture-rfc", title: "Draft snapshot cache lifecycle RFC", day: addDays(today, 6), className: "Engineering", dueTime: "6pm", points: 13, priority: 3 }),
+    task({ id: "demo-task-recruiter-packet", title: "Send recruiter follow-up packet", day: addDays(today, 9), className: "Career", dueTime: "10am", priority: 2 }),
+    task({ id: "demo-task-release-checklist", title: "Close static demo release checklist", day: monthDay(today, 20), className: "Engineering", dueTime: "4pm", points: 5, priority: 3 }),
+    task({ id: "demo-task-design-audit", title: "Audit hover and focus states before demo deploy", day: monthDay(today, 22), className: "Product", dueTime: "12pm", points: 3, priority: 2 }),
+    task({ id: "demo-task-interview-stories", title: "Polish SWE interview project stories", day: monthDay(today, 24), className: "Career", dueTime: "8pm", priority: 2 }),
+    task({ id: "demo-task-dependency-review", title: "Clear dependency security review", day: monthDay(today, 26), status: "complete", className: "Engineering", dueTime: "5pm", priority: 1 }),
+    task({ id: "demo-task-monthly-retro", title: "Write monthly engineering retro notes", day: monthDay(today, 30), className: "Engineering", dueTime: "6pm", points: 5, priority: 1 }),
   ];
 
   const deadlines = {
-    upcoming: [
-      task({ id: "demo-deadline-notes", title: "Finalize dashboard walkthrough notes", day: tomorrow, points: 20, className: "Portfolio Systems" }),
-      task({ id: "demo-deadline-recording", title: "Record two-minute product tour", day: later, points: 10, className: "Portfolio Systems" }),
-      task({ id: "demo-task-link", title: "Send portfolio demo link", day: today }),
-      task({ id: "demo-task-budget", title: "Review mock bill-pay copy", day: soon }),
-    ],
-    stats: { incomplete: 4, dueToday: 1, dueThisWeek: 3, totalPoints: 30 },
+    upcoming: upcomingDeadlines,
+    stats: makeDeadlineStats(upcomingDeadlines, today),
   };
 
   const bills = [
     bill({ id: "demo-electric", payee: "Demo Electric", day: soon, amount: 146.32 }),
     bill({ id: "demo-water", payee: "Northstar Water", day: later, amount: 58.11 }),
     bill({ id: "demo-internet", payee: "Fiber Co-op", day: yesterday, amount: 79.99, paid: true }),
+    bill({ id: "demo-rent", payee: "Northstar Lofts", day: monthDay(today, 1), amount: 2450.00, paid: dateKey(monthDay(today, 1)) < dateKey(today) }),
+    bill({ id: "demo-phone", payee: "Signal Mobile", day: monthDay(today, 12), amount: 64.20, paid: dateKey(monthDay(today, 12)) < dateKey(today) }),
+    bill({ id: "demo-cloud", payee: "Cloud Sandbox", day: monthDay(today, 18), amount: 38.47 }),
+    bill({ id: "demo-card", payee: "Everyday Card", day: monthDay(today, 22), amount: 512.84 }),
+    bill({ id: "demo-student-loan", payee: "Student Loan Servicer", day: monthDay(today, 28), amount: 220.00 }),
   ];
+  const payeeMap = Object.fromEntries(bills.map((entry) => [entry.scheduleId, entry.payee]));
 
   const lanes = {
-    queued: [],
+    queued: [
+      snapshotEmail({
+        itemId: 5,
+        uid: "demo-email-queued-build",
+        accountId: "demo-gmail",
+        lane: "queued",
+        subject: "CI build queued for demo-mode fixture branch",
+        fromName: "GitHub Actions",
+        fromAddress: "actions@github.example",
+        summary: "A new workflow run is waiting for the demo fixture branch.",
+        day: today,
+        category: "engineering",
+        source: "arrival_grace",
+        receivedHour: 14,
+        receivedMinute: 8,
+      }),
+      snapshotEmail({
+        itemId: 6,
+        uid: "demo-email-queued-security",
+        accountId: "demo-gmail",
+        lane: "queued",
+        subject: "Security review queued: OAuth redirect copy",
+        fromName: "Security Bot",
+        fromAddress: "security@northstar.example",
+        summary: "Security automation is classifying an OAuth redirect wording review.",
+        day: today,
+        category: "security",
+        source: "arrival_grace",
+        receivedHour: 14,
+        receivedMinute: 22,
+      }),
+    ],
     needs_attention: [
       snapshotEmail({
         itemId: 1,
@@ -185,8 +393,96 @@ function makeDemoSeed(now = new Date()) {
         day: today,
         category: "finance",
       }),
+      snapshotEmail({
+        itemId: 7,
+        uid: "demo-email-prod-alert",
+        accountId: "demo-gmail",
+        lane: "needs_attention",
+        subject: "Prod alert: Gmail watch renewal missed",
+        fromName: "PagerDuty",
+        fromAddress: "alerts@pagerduty.example",
+        summary: "A Gmail watch renewal warning needs acknowledgement before the provider window closes.",
+        day: today,
+        category: "engineering",
+        escalationBadge: "Prod",
+        receivedHour: 8,
+        receivedMinute: 42,
+      }),
+      snapshotEmail({
+        itemId: 8,
+        uid: "demo-email-pr-blocker",
+        accountId: "demo-gmail",
+        lane: "needs_attention",
+        subject: "PR blocker: calendar source retry copy",
+        fromName: "Riley Park",
+        fromAddress: "riley@northstar.example",
+        summary: "Riley left a blocking review on the stale calendar-source retry copy.",
+        day: today,
+        category: "engineering",
+        receivedHour: 10,
+        receivedMinute: 12,
+      }),
+      snapshotEmail({
+        itemId: 9,
+        uid: "demo-email-product-decision",
+        accountId: "demo-gmail",
+        lane: "needs_attention",
+        subject: "Decision needed: hide provider edit on personal date markers",
+        fromName: "Morgan Lee",
+        fromAddress: "morgan@northstar.example",
+        summary: "Morgan needs a final call on read-only personal date marker behavior.",
+        day: today,
+        category: "product",
+        receivedHour: 11,
+        receivedMinute: 4,
+      }),
+      snapshotEmail({
+        itemId: 10,
+        uid: "demo-email-recruiter",
+        accountId: "demo-icloud",
+        lane: "needs_attention",
+        subject: "Follow-up: senior frontend/SWE screen",
+        fromName: "Jamie Rivera",
+        fromAddress: "jamie@talent.example",
+        summary: "Jamie asked for availability and a concise dashboard architecture summary.",
+        day: today,
+        category: "career",
+        receivedHour: 12,
+        receivedMinute: 18,
+      }),
     ],
-    catch_up: [],
+    catch_up: [
+      snapshotEmail({
+        itemId: 11,
+        uid: "demo-email-catchup-rfc",
+        accountId: "demo-gmail",
+        lane: "catch_up",
+        subject: "Thread: snapshot lifecycle RFC notes",
+        fromName: "Architecture Guild",
+        fromAddress: "arch@northstar.example",
+        summary: "The RFC thread has useful context but no immediate decision request.",
+        day: yesterday,
+        read: true,
+        category: "engineering",
+        source: "catch_up",
+        laneAtSnapshot: "fyi",
+      }),
+      snapshotEmail({
+        itemId: 12,
+        uid: "demo-email-catchup-design",
+        accountId: "demo-icloud",
+        lane: "catch_up",
+        subject: "Design archive: dense dashboard examples",
+        fromName: "Avery Chen",
+        fromAddress: "avery@studio.example",
+        summary: "Avery shared reference screenshots for compact operational dashboards.",
+        day: yesterday,
+        read: true,
+        category: "product",
+        source: "catch_up",
+        laneAtSnapshot: "fyi",
+      }),
+    ],
     fyi: [
       snapshotEmail({
         itemId: 2,
@@ -201,9 +497,104 @@ function makeDemoSeed(now = new Date()) {
         read: true,
         category: "product",
       }),
+      snapshotEmail({
+        itemId: 13,
+        uid: "demo-email-release-notes",
+        accountId: "demo-gmail",
+        lane: "fyi",
+        subject: "Release notes: dashboard-current refresh patch",
+        fromName: "Deploy Bot",
+        fromAddress: "deploy@northstar.example",
+        summary: "The release candidate includes the dashboard-current refresh patch and focused Vitest coverage.",
+        day: today,
+        read: true,
+        category: "engineering",
+      }),
+      snapshotEmail({
+        itemId: 14,
+        uid: "demo-email-docs",
+        accountId: "demo-gmail",
+        lane: "fyi",
+        subject: "Docs update: inbox workflow glossary",
+        fromName: "Docs Bot",
+        fromAddress: "docs@northstar.example",
+        summary: "The inbox workflow glossary now reflects queued, catch-up, handled, and noise lanes.",
+        day: yesterday,
+        read: true,
+        category: "documentation",
+      }),
+      snapshotEmail({
+        itemId: 15,
+        uid: "demo-email-calendar-coverage",
+        accountId: "demo-gmail",
+        lane: "fyi",
+        subject: "Calendar sync coverage report",
+        fromName: "Sync Monitor",
+        fromAddress: "sync@northstar.example",
+        summary: "Calendar range coverage is current across events, deadlines, and bill overlays.",
+        day: today,
+        category: "engineering",
+      }),
+      snapshotEmail({
+        itemId: 16,
+        uid: "demo-email-school-alumni",
+        accountId: "demo-icloud",
+        lane: "fyi",
+        subject: "Alumni panel invite: SWE portfolio demos",
+        fromName: "CS Alumni Office",
+        fromAddress: "alumni@example.edu",
+        summary: "A panel invite about turning personal systems into credible SWE portfolio stories.",
+        day: yesterday,
+        read: true,
+        category: "career",
+      }),
     ],
-    handled: [],
-    untriaged_read: [],
+    handled: [
+      snapshotEmail({
+        itemId: 17,
+        uid: "demo-email-handled-standup",
+        accountId: "demo-gmail",
+        lane: "handled",
+        subject: "Handled: standup notes posted",
+        fromName: "Casey Nguyen",
+        fromAddress: "casey@northstar.example",
+        summary: "Standup notes were posted and no longer need a response.",
+        day: today,
+        read: true,
+        category: "engineering",
+        handledAt: atLocalIso(today, 9, 58),
+      }),
+      snapshotEmail({
+        itemId: 18,
+        uid: "demo-email-handled-demo-link",
+        accountId: "demo-icloud",
+        lane: "handled",
+        subject: "Handled: demo link received",
+        fromName: "Portfolio Reviewer",
+        fromAddress: "reviewer@portfolio.example",
+        summary: "The reviewer confirmed the demo link works from a clean browser.",
+        day: yesterday,
+        read: true,
+        category: "career",
+        handledAt: atLocalIso(today, 10, 16),
+      }),
+    ],
+    untriaged_read: [
+      snapshotEmail({
+        itemId: 19,
+        uid: "demo-email-read-security",
+        accountId: "demo-gmail",
+        lane: "untriaged_read",
+        subject: "Read during grace: dependency advisory",
+        fromName: "Dependency Watch",
+        fromAddress: "advisory@security.example",
+        summary: "A dependency advisory was read before the snapshot finalized classification.",
+        day: today,
+        read: true,
+        category: "security",
+        source: "arrival_grace_read",
+      }),
+    ],
     noise: [
       snapshotEmail({
         itemId: 3,
@@ -217,6 +608,45 @@ function makeDemoSeed(now = new Date()) {
         day: yesterday,
         read: true,
         category: "newsletter",
+      }),
+      snapshotEmail({
+        itemId: 20,
+        uid: "demo-email-vendor-webinar",
+        accountId: "demo-gmail",
+        lane: "noise",
+        subject: "Webinar: ten dashboards your team needs",
+        fromName: "Vendor Marketing",
+        fromAddress: "events@vendor.example",
+        summary: "A vendor webinar routed away from the active inbox.",
+        day: yesterday,
+        read: true,
+        category: "marketing",
+      }),
+      snapshotEmail({
+        itemId: 21,
+        uid: "demo-email-promo",
+        accountId: "demo-icloud",
+        lane: "noise",
+        subject: "Limited-time workspace template sale",
+        fromName: "Template Store",
+        fromAddress: "promo@templates.example",
+        summary: "A promotional email classified as noise.",
+        day: yesterday,
+        read: true,
+        category: "marketing",
+      }),
+      snapshotEmail({
+        itemId: 22,
+        uid: "demo-email-status-green",
+        accountId: "demo-gmail",
+        lane: "noise",
+        subject: "Status page: all systems operational",
+        fromName: "Status Bot",
+        fromAddress: "status@northstar.example",
+        summary: "Routine green status update with no required action.",
+        day: today,
+        read: true,
+        category: "operations",
       }),
     ],
   };
@@ -233,6 +663,18 @@ function makeDemoSeed(now = new Date()) {
       day: yesterday,
       category: "legal",
     }),
+    snapshotEmail({
+      itemId: 23,
+      uid: "demo-email-carryover-runbook",
+      accountId: "demo-gmail",
+      lane: "needs_attention",
+      subject: "Carryover: approve retry runbook diff",
+      fromName: "Nina Torres",
+      fromAddress: "nina@northstar.example",
+      summary: "Nina is waiting on a final approval for the retry runbook update.",
+      day: yesterday,
+      category: "engineering",
+    }),
   ];
 
   const activeSnapshot = {
@@ -241,18 +683,7 @@ function makeDemoSeed(now = new Date()) {
       date: dateKey(today),
       generated_at: fetchedAt,
     },
-    filters: {
-      accounts: [
-        { account_id: "demo-gmail", label: "Demo Gmail", email: "alex@demo.example", color: "#89b4fa", icon: "Mail", count: 3 },
-        { account_id: "demo-icloud", label: "Demo iCloud", email: "alex.personal@example", color: "#cba6f7", icon: "Mail", count: 1 },
-      ],
-      categories: [
-        { category: "finance", count: 1 },
-        { category: "legal", count: 1 },
-        { category: "newsletter", count: 1 },
-        { category: "product", count: 1 },
-      ],
-    },
+    filters: makeSnapshotFilters(lanes, carryover),
     lanes,
     carryover,
     laneCounts: makeLaneCounts(lanes, carryover),
@@ -296,11 +727,7 @@ function makeDemoSeed(now = new Date()) {
       deadlines,
       bills,
       allSchedules: bills,
-      payeeMap: {
-        "demo-electric": "Demo Electric",
-        "demo-water": "Northstar Water",
-        "demo-internet": "Fiber Co-op",
-      },
+      payeeMap,
       actualConfigured: true,
       actualBudgetUrl: "https://actual.example.invalid/demo",
       billsSyncHealth: { state: "current", message: "Demo bills are generated locally." },
@@ -319,40 +746,36 @@ function makeDemoSeed(now = new Date()) {
     settings,
     accounts: {
       accounts: [
-        { id: "demo-gmail", type: "gmail", email: "alex@demo.example", label: "Demo Gmail", color: "#89b4fa", icon: "Mail" },
-        { id: "demo-icloud", type: "icloud", email: "alex.personal@example", label: "Demo iCloud", color: "#cba6f7", icon: "Mail" },
+        { id: "demo-gmail", type: "gmail", email: "alex@demo.example", label: "Demo Gmail", color: WORK_COLOR, icon: "Mail" },
+        { id: "demo-icloud", type: "icloud", email: "alex.personal@example", label: "Demo iCloud", color: PERSONAL_COLOR, icon: "Mail" },
       ],
     },
     actualMetadata: {
-      accounts: [{ id: "demo-checking", name: "Demo Checking", offbudget: false, closed: false }],
-      payees: [{ id: "demo-electric", name: "Demo Electric" }],
-      categories: [{ group_name: "Demo Bills", categories: [{ id: "demo-utilities", name: "Utilities" }] }],
+      accounts: [
+        { id: "demo-checking", name: "Demo Checking", offbudget: false, closed: false },
+        { id: "demo-savings", name: "Emergency Fund", offbudget: false, closed: false },
+        { id: "demo-credit", name: "Everyday Card", offbudget: false, closed: false },
+      ],
+      payees: bills.map((entry) => ({ id: entry.scheduleId, name: entry.payee })),
+      categories: [
+        { group_name: "Demo Housing", categories: [{ id: "demo-rent-category", name: "Rent" }] },
+        { group_name: "Demo Bills", categories: [{ id: "demo-utilities", name: "Utilities" }, { id: "demo-cloud-services", name: "Cloud Services" }] },
+        { group_name: "Demo Debt", categories: [{ id: "demo-loans", name: "Loan Payments" }, { id: "demo-credit-card", name: "Credit Card" }] },
+      ],
     },
     notes: [
       { id: "demo-note-1", content: "Demo walkthrough: dashboard, inbox, calendar, bills, then settings.", sort_order: 1, created_at: fetchedAt, updated_at: fetchedAt },
       { id: "demo-note-2", content: "All names, accounts, and providers are fictional.", sort_order: 2, created_at: fetchedAt, updated_at: fetchedAt },
+      { id: "demo-note-3", content: "Talk track: single-user system, rolling data boundary, inbox triage, calendar overlays, Actual Budget mapping.", sort_order: 3, created_at: fetchedAt, updated_at: fetchedAt },
+      { id: "demo-note-4", content: "Capture screenshots on a weekday: inbox pressure, month calendar density, selected deadline rail, bills ledger.", sort_order: 4, created_at: fetchedAt, updated_at: fetchedAt },
     ],
     importantSenders: [
       { address: "morgan@northstar.example", name: "Morgan Lee", source: "auto" },
+      { address: "alerts@pagerduty.example", name: "PagerDuty", source: "auto" },
+      { address: "riley@northstar.example", name: "Riley Park", source: "auto" },
+      { address: "jamie@talent.example", name: "Jamie Rivera", source: "manual" },
     ],
-    emailBodies: {
-      "demo-email-budget": {
-        uid: "demo-email-budget",
-        body: "This is a fictional demo email body for the static portfolio demo. Please approve the mock budget so the walkthrough can continue.",
-      },
-      "demo-email-design": {
-        uid: "demo-email-design",
-        body: "Fictional demo design notes: tighten the hero card, review hover states, and keep the dashboard data believable.",
-      },
-      "demo-email-newsletter": {
-        uid: "demo-email-newsletter",
-        body: "Fictional demo newsletter content.",
-      },
-      "demo-email-carryover": {
-        uid: "demo-email-carryover",
-        body: "Fictional carryover message for contract review.",
-      },
-    },
+    emailBodies: makeEmailBodies(lanes, carryover),
   };
 }
 

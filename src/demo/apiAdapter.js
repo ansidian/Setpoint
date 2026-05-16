@@ -43,6 +43,7 @@ function refreshLaneCounts(snapshot) {
   snapshot.laneCounts = {
     queued: snapshot.lanes.queued?.length || 0,
     needs_attention: snapshot.lanes.needs_attention?.length || 0,
+    catch_up: snapshot.lanes.catch_up?.length || 0,
     fyi: snapshot.lanes.fyi?.length || 0,
     handled: snapshot.lanes.handled?.length || 0,
     untriaged_read: snapshot.lanes.untriaged_read?.length || 0,
@@ -455,6 +456,7 @@ export async function handleDemoApiRequest(path, options = {}) {
         calendars: [
           { id: "demo-work", summary: "Demo Work", backgroundColor: "#89b4fa", primary: true },
           { id: "demo-personal", summary: "Demo Personal", backgroundColor: "#cba6f7" },
+          { id: "demo-career", summary: "Demo Career", backgroundColor: "#f5c2e7" },
         ],
       }],
     };
