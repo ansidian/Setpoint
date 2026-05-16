@@ -200,13 +200,19 @@ export const settleArrivalGraceOnExit = () => {
   }).catch(() => {});
 };
 // Calendar
+function unwrapDeadlineMutationResult(result) {
+  return result?.deadline ?? result;
+}
+
 export const getCalendarDeadlines = () => apiFetch("/api/calendar/deadlines");
 export const getCalendarDeadlinesRange = (start, end) =>
   apiFetch(`/api/calendar/deadlines/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const createDeadline = (data) =>
-  apiFetch("/api/calendar/deadlines", { method: "POST", body: JSON.stringify(data) });
+  apiFetch("/api/calendar/deadlines", { method: "POST", body: JSON.stringify(data) })
+    .then(unwrapDeadlineMutationResult);
 export const updateDeadline = (id, data) =>
-  apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) });
+  apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) })
+    .then(unwrapDeadlineMutationResult);
 export const deleteDeadline = (id) =>
   apiFetch(`/api/calendar/deadlines/${encodeURIComponent(id)}`, { method: "DELETE" });
 export const completeDeadlineOccurrence = (id, occurrenceDate) =>
