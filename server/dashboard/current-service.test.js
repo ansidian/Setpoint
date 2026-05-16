@@ -983,7 +983,12 @@ describe("GET /api/dashboard/current", () => {
       { viewBoundary: "today" },
     );
     expect(res.body.deadlines.upcoming.map((item) => item.id)).toEqual(["todo-open", "todo-done"]);
-    expect(res.body.deadlines.upcoming[0]).not.toHaveProperty("source");
+    expect(res.body.deadlines.upcoming[0]).toMatchObject({
+      source: "todoist",
+      sourceLabel: "Todoist",
+      color: "#e44332",
+      sourceColor: "#e44332",
+    });
     expect(res.body.deadlines.stats).toEqual({ total: 2 });
   });
 

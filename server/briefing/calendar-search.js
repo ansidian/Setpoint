@@ -1,8 +1,10 @@
+import { TODOIST_DEADLINE_COLOR } from "../../shared/deadline-source-colors.js";
+
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 
 const SOURCE_COLORS = {
   google_calendar: "#4285f4",
-  deadline: "#e44332",
+  deadline: TODOIST_DEADLINE_COLOR,
   bills: "#22c55e",
 };
 

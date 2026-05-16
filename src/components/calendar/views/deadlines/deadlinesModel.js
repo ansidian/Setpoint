@@ -2,10 +2,11 @@ import { parseDueDate } from "../../../../lib/dashboard-helpers";
 import { dueDateToMs } from "../../../../lib/redesign-helpers";
 import { isDemoMode } from "../../../../demo/config.js";
 import { parseYmd } from "../../calendarDateUtils.js";
+import { TODOIST_DEADLINE_COLOR } from "../../../../../shared/deadline-source-colors.js";
 
 export const MAX_PILLS = 2;
 
-export const DEADLINE_COLOR = "#e8776a";
+export const DEADLINE_COLOR = TODOIST_DEADLINE_COLOR;
 
 export const PRIORITY_META = {
   1: { color: "#f38ba8", label: "P1 · Urgent" },
@@ -18,7 +19,7 @@ export function sourceOf(task) {
 }
 
 export function deadlineAccentFor(task, fallback = DEADLINE_COLOR) {
-  return task?.color || fallback || DEADLINE_COLOR;
+  return task?.color || task?.sourceColor || fallback || DEADLINE_COLOR;
 }
 
 export function normalizeStatus(status) {

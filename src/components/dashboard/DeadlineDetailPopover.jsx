@@ -7,6 +7,7 @@ import { useDashboard } from "../../context/DashboardContext";
 import { daysUntil } from "../../lib/bill-utils";
 import { daysLabel, urgencyForDays } from "../../lib/redesign-helpers";
 import AddTaskPanel from "../todoist/AddTaskPanel";
+import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors.js";
 
 function ActionButton({ icon: Icon, label, onClick, accent, variant = "default", disabled, loading = false }) {
   const [hover, setHover] = useState(false);
@@ -196,10 +197,10 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
 
   const days = daysUntil(task.due_date);
   const urgency = urgencyForDays(days, accent);
-  const dueColor = urgency.key === "high" ? "#f38ba8" : urgency.key === "medium" ? "#f9e2af" : accent;
 
   const deadlineLabel = "Deadline";
-  const deadlineColor = accent;
+  const deadlineColor = task.color || task.sourceColor || TODOIST_DEADLINE_COLOR || accent;
+  const dueColor = urgency.key === "high" ? "#f38ba8" : urgency.key === "medium" ? "#f9e2af" : deadlineColor;
 
   return createPortal(
     <>
