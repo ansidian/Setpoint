@@ -15,6 +15,7 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
                   : email.urgency === "medium" ? "#fab387"
                   : "#a6adc8";
   const dimmed = email.read;
+  const summaryColor = dimmed ? "rgba(205,214,244,0.76)" : "rgba(205,214,244,0.82)";
   const barColor = untriaged ? "#89b4fa" : (L ? L.color : "#6c7086");
   const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
   const hPad = 14;
@@ -35,7 +36,7 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
         background: selected ? `${accent}14` : hover ? "rgba(255,255,255,0.025)" : "transparent",
         boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
         transition: "background 120ms, box-shadow 120ms",
-        opacity: dimmed && !hover ? 0.55 : 1,
+        opacity: dimmed && !hover ? 0.82 : 1,
       }}
     >
       <div
@@ -190,7 +191,7 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
         {showPreview && density !== "compact" && email.preview && (
           <div
             style={{
-              marginTop: 4, fontSize: 11, color: "rgba(205,214,244,0.45)",
+              marginTop: 4, fontSize: 11, color: summaryColor,
               lineHeight: 1.5,
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
             }}
