@@ -70,23 +70,27 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     }
   }, []);
 
-  const runEventRefetch = useCallback(async () => {
+  const runEventRefetch = useCallback(async ({ allowHidden = false } = {}) => {
     if (disabled) return null;
-    if (document.hidden) {
+    if (document.hidden && !allowHidden) {
       hiddenEventRefetchRef.current = true;
       return null;
     }
     if (currentRequestInFlightRef.current) {
       queuedEventRefetchRef.current = true;
+      if (document.hidden) hiddenEventRefetchRef.current = true;
       return null;
     }
     currentRequestInFlightRef.current = true;
     try {
       let data = await getCurrentDashboard();
       applyCurrent(data);
-      data = await pollWhileRefreshActive(data);
+      if (!document.hidden) {
+        data = await pollWhileRefreshActive(data);
+      }
       return data;
     } catch {
+      if (document.hidden) hiddenEventRefetchRef.current = true;
       return null;
     } finally {
       if (mountedRef.current) {
@@ -171,7 +175,7 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
           onDashboardEventRef.current(null);
         }
       }
-      runEventRefetch();
+      runEventRefetch({ allowHidden: true });
     };
     source.addEventListener("dashboard-current-changed", handleChanged);
     return () => {

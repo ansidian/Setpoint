@@ -462,10 +462,11 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
-  it("defers SSE-triggered refetch while hidden and catches up when visible", async () => {
+  it("catches up when visible if an SSE-triggered hidden refetch fails", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     getCurrentDashboard
       .mockResolvedValueOnce(currentPayload)
+      .mockRejectedValueOnce(new Error("Network unavailable"))
       .mockResolvedValueOnce({
         ...currentPayload,
         fetchedAt: "2026-05-05T00:25:00.000Z",
@@ -483,7 +484,44 @@ describe("useCurrentDashboard", () => {
       });
       await Promise.resolve();
     });
-    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(result.current.current.fetchedAt).toBe("2026-05-04T12:00:00.000Z");
+
+    setDocumentHidden(false);
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await Promise.resolve();
+    });
+
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
+    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:25:00.000Z");
+    unmount();
+  });
+
+  it("applies SSE-triggered refetches while hidden so background tabs stay current", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload)
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        fetchedAt: "2026-05-05T00:25:00.000Z",
+      });
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    setDocumentHidden(true);
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", {
+        source: "email_triage",
+        reason: "email_triage_queued",
+        state: "current",
+      });
+      await Promise.resolve();
+    });
+
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:25:00.000Z");
 
     setDocumentHidden(false);
     await act(async () => {
@@ -492,7 +530,6 @@ describe("useCurrentDashboard", () => {
     });
 
     expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
-    expect(result.current.current.fetchedAt).toBe("2026-05-05T00:25:00.000Z");
     unmount();
   });
 
