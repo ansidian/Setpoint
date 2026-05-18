@@ -438,6 +438,62 @@ describe("email indexing", () => {
     ]);
   });
 
+  it("replaces stale FTS content when a uid appears after the preflight read", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-reassigned",
+      subject: "Previous subject",
+      body_snippet: "Previous preview",
+      body_text: "Previous body",
+    });
+    const dbClient = {
+      execute: vi.fn((query) => {
+        if (query?.sql?.includes("SELECT rowid, uid")) {
+          return Promise.resolve({ rows: [] });
+        }
+        return testState.db.current.execute(query);
+      }),
+      batch: (...args) => testState.db.current.batch(...args),
+    };
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-reassigned",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Updated subject",
+        body_preview: "Updated preview",
+        body_text: "Updated body",
+        date: "2026-05-01T12:00:00Z",
+        read: false,
+      },
+    ], { dbClient });
+
+    const rows = await testState.db.current.execute({
+      sql: `SELECT i.user_id,
+                   i.subject AS index_subject,
+                   COUNT(f.rowid) AS fts_count,
+                   MAX(f.subject) AS fts_subject
+            FROM ea_email_index i
+            LEFT JOIN ea_email_fts f ON f.uid = i.uid AND f.rowid = i.rowid
+            WHERE i.uid = ?
+            GROUP BY i.uid`,
+      args: ["gmail-work-msg-reassigned"],
+    });
+
+    expect(rows.rows).toEqual([
+      {
+        user_id: "user-1",
+        index_subject: "Updated subject",
+        fts_count: 1,
+        fts_subject: "Updated subject",
+      },
+    ]);
+  });
+
   it("replaces changed FTS content by rowid instead of scanning by uid", async () => {
     await seedIndexedEmail(testState.db.current, {
       uid: "gmail-work-msg-rowid-delete",
@@ -470,8 +526,7 @@ describe("email indexing", () => {
 
     const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
     const ftsDelete = statements.find((statement) => statement.sql.includes("DELETE FROM ea_email_fts"));
-    expect(ftsDelete?.sql).toContain("WHERE rowid = ?");
-    expect(ftsDelete?.sql).not.toContain("WHERE uid = ?");
+    expect(ftsDelete?.sql).toContain("WHERE rowid = (SELECT rowid FROM ea_email_index WHERE uid = ?)");
   });
 
   it("logs indexing with a scoped current-system prefix", async () => {
