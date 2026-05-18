@@ -304,17 +304,18 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
                 read = excluded.read`,
         args,
       },
-      existing ? {
-        sql: `DELETE FROM ea_email_fts WHERE rowid = ?`,
-        args: [existing.rowid],
-      } : null,
+      {
+        sql: `DELETE FROM ea_email_fts
+              WHERE rowid = (SELECT rowid FROM ea_email_index WHERE uid = ?)`,
+        args: [uid],
+      },
       {
         sql: `INSERT INTO ea_email_fts
               (rowid, uid, from_name, from_address, subject, body_snippet, body_text)
               VALUES ((SELECT rowid FROM ea_email_index WHERE uid = ?), ?, ?, ?, ?, ?, ?)`,
         args: [uid, uid, fromName, fromAddress, subject, bodySnippet, bodyText],
       },
-    ].filter(Boolean);
+    ];
   });
 
   if (stmts.length) await dbClient.batch(stmts);
