@@ -310,8 +310,44 @@ describe("readLocalActualMetadata", () => {
     expect(request.getSince()).toBe(baseTimestamp);
   });
 
-  it("downloads a fresh budget zip when a refresh is explicitly requested", async () => {
+  it("syncs the existing local budget when a refresh is explicitly requested", async () => {
     await createActualBudgetFixture();
+    const syncedBudgetDir = path.join(tempDir, "synced-output", "Budget-Synced");
+    await writeBudgetFixture(syncedBudgetDir, {
+      id: "Budget-Synced",
+      cloudFileId: "file-synced",
+      accountName: "Fresh Checking",
+    });
+    const downloadBudget = vi.fn();
+    const syncBudget = vi.fn().mockResolvedValue({
+      budgetDir: syncedBudgetDir,
+      metadata: { id: "Budget-Synced", cloudFileId: "file-synced", groupId: "sync-123" },
+    });
+
+    const metadata = await readLocalActualMetadata("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+      refresh: true,
+      downloadBudget,
+      syncBudget,
+    });
+
+    expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Fresh Checking", type: "checking" }]);
+    expect(syncBudget).toHaveBeenCalledWith(
+      expect.objectContaining({ syncId: "sync-123" }),
+      expect.objectContaining({
+        refresh: true,
+        local: expect.objectContaining({
+          budgetDir: path.join(tempDir, "Budget-1"),
+          metadata: expect.objectContaining({ id: "Budget-1" }),
+        }),
+      }),
+    );
+    expect(downloadBudget).not.toHaveBeenCalled();
+  });
+
+  it("downloads a budget zip on refresh when no local cache exists", async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
     const remoteBudgetDir = path.join(tempDir, "Budget-Remote");
     await writeBudgetFixture(remoteBudgetDir, {
       id: "Budget-Remote",
@@ -322,12 +358,14 @@ describe("readLocalActualMetadata", () => {
       budgetDir: remoteBudgetDir,
       metadata: { id: "Budget-Remote", cloudFileId: "file-remote", groupId: "sync-123" },
     });
+    const syncBudget = vi.fn();
 
     const metadata = await readLocalActualMetadata("u1", {
       dbClient: settingsDbClient(),
-      dataDir: tempDir,
+      dataDir: path.join(tempDir, "empty-cache"),
       refresh: true,
       downloadBudget,
+      syncBudget,
     });
 
     expect(metadata.accounts).toEqual([{ id: "acct-1", name: "Fresh Checking", type: "checking" }]);
@@ -335,6 +373,7 @@ describe("readLocalActualMetadata", () => {
       expect.objectContaining({ syncId: "sync-123" }),
       expect.objectContaining({ refresh: true }),
     );
+    expect(syncBudget).not.toHaveBeenCalled();
   });
 
   it("does not download from Actual when local-only metadata is requested", async () => {
@@ -372,6 +411,7 @@ describe("readLocalActualMetadata", () => {
       dbClient: settingsDbClient(),
       dataDir: tempDir,
       downloadBudget,
+      forceDownload: true,
     });
 
     expect(downloadBudget).toHaveBeenCalledWith(
