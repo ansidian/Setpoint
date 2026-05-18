@@ -1,5 +1,16 @@
 import AdmZip from "adm-zip";
 import { createClient } from "@libsql/client";
+import {
+  SyncProtoBuf,
+  Timestamp,
+  deserializeClock,
+  makeClientId,
+  makeClock,
+  merkle,
+  serializeClock,
+  setClock,
+  getClock,
+} from "@actual-app/crdt";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.js";
@@ -316,6 +327,235 @@ async function fetchActualBuffer(url, { token, fileId }) {
   }
 }
 
+function quoteIdent(identifier) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+    throw new Error(`Invalid Actual DB identifier: ${identifier}`);
+  }
+  return `"${identifier}"`;
+}
+
+async function tableColumns(client, table) {
+  const result = await client.execute(`PRAGMA table_info(${quoteIdent(table)})`);
+  return new Set((result.rows || []).map((row) => row.name));
+}
+
+function deserializeSyncValue(value) {
+  const text = String(value ?? "");
+  switch (text[0]) {
+    case "0":
+      return null;
+    case "N":
+      return Number.parseFloat(text.slice(2));
+    case "S":
+      return text.slice(2);
+    default:
+      throw new Error(`Invalid Actual sync value: ${text.slice(0, 20)}`);
+  }
+}
+
+function encodeSyncRequest({ groupId, cloudFileId, since }) {
+  const requestPb = new SyncProtoBuf.SyncRequest();
+  requestPb.setGroupid(groupId);
+  requestPb.setFileid(cloudFileId);
+  requestPb.setSince(String(since));
+  return requestPb.serializeBinary();
+}
+
+function decodeSyncResponse(buffer) {
+  const responsePb = SyncProtoBuf.SyncResponse.deserializeBinary(new Uint8Array(buffer));
+  const messages = responsePb.getMessagesList().map((envelopePb) => {
+    if (envelopePb.getIsencrypted()) {
+      throw Object.assign(new Error("Encrypted Actual sync messages are not supported by lightweight metadata refresh"), {
+        status: 400,
+      });
+    }
+    const messagePb = SyncProtoBuf.Message.deserializeBinary(envelopePb.getContent());
+    return {
+      timestamp: Timestamp.parse(envelopePb.getTimestamp()),
+      dataset: messagePb.getDataset(),
+      row: messagePb.getRow(),
+      column: messagePb.getColumn(),
+      value: messagePb.getValue(),
+      rawValue: deserializeSyncValue(messagePb.getValue()),
+    };
+  });
+  const merkleText = responsePb.getMerkle();
+  return {
+    messages,
+    merkle: merkleText ? JSON.parse(merkleText) : null,
+  };
+}
+
+async function postActualSync(config, token, { metadata, since }) {
+  const buffer = encodeSyncRequest({
+    groupId: metadata.groupId,
+    cloudFileId: metadata.cloudFileId,
+    since,
+  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs());
+  try {
+    const response = await fetch(`${config.serverURL}/sync/sync`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Length": String(buffer.length),
+        "Content-Type": "application/actual-sync",
+        "X-ACTUAL-TOKEN": token,
+      },
+      body: buffer,
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw Object.assign(new Error(`Actual Budget lightweight sync failed: ${text.slice(0, 120) || response.status}`), {
+        status: response.status >= 500 ? 502 : 400,
+      });
+    }
+    return decodeSyncResponse(await response.arrayBuffer());
+  } catch (err) {
+    if (err?.status) throw err;
+    throw Object.assign(new Error(err?.name === "AbortError"
+      ? "Actual Budget lightweight sync timed out"
+      : "Actual Budget lightweight sync failed"), { status: 502 });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadClock(client) {
+  try {
+    const result = await client.execute("SELECT clock FROM messages_clock WHERE id = 1");
+    const clockText = result.rows?.[0]?.clock;
+    setClock(clockText
+      ? deserializeClock(clockText)
+      : makeClock(new Timestamp(0, 0, makeClientId())));
+  } catch {
+    setClock(makeClock(new Timestamp(0, 0, makeClientId())));
+  }
+}
+
+function clockUpdateQuery(messages) {
+  let currentMerkle = getClock().merkle;
+  for (const message of messages) {
+    currentMerkle = merkle.insert(currentMerkle, message.timestamp);
+  }
+  currentMerkle = merkle.prune(currentMerkle);
+  const nextClock = { ...getClock(), merkle: currentMerkle };
+  setClock(nextClock);
+  return {
+    sql: "INSERT OR REPLACE INTO messages_clock (id, clock) VALUES (1, ?)",
+    args: [serializeClock(nextClock)],
+  };
+}
+
+async function latestLocalMessageTimestamp(client) {
+  try {
+    const result = await client.execute("SELECT MAX(timestamp) AS timestamp FROM messages_crdt");
+    return result.rows?.[0]?.timestamp || null;
+  } catch {
+    return null;
+  }
+}
+
+async function shouldApplySyncMessage(client, message) {
+  const result = await client.execute({
+    sql: `SELECT timestamp
+          FROM messages_crdt
+          WHERE dataset = ?
+            AND row = ?
+            AND column = ?
+            AND timestamp >= ?
+          ORDER BY timestamp ASC
+          LIMIT 1`,
+    args: [message.dataset, message.row, message.column, String(message.timestamp)],
+  });
+  return !result.rows?.length;
+}
+
+async function hasSyncMessageTimestamp(client, message) {
+  const result = await client.execute({
+    sql: "SELECT timestamp FROM messages_crdt WHERE timestamp = ? LIMIT 1",
+    args: [String(message.timestamp)],
+  });
+  return Boolean(result.rows?.length);
+}
+
+function messageInsertQuery(message) {
+  return {
+    sql: `INSERT OR IGNORE INTO messages_crdt (timestamp, dataset, row, column, value)
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [String(message.timestamp), message.dataset, message.row, message.column, message.value],
+  };
+}
+
+async function applySyncMessages(client, messages) {
+  const sorted = [...messages].sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+  const applied = [];
+  const clockMessages = [];
+  for (const message of sorted) {
+    if (message.dataset === "prefs") continue;
+    const columns = await tableColumns(client, message.dataset);
+    if (!columns.has("id") || !columns.has(message.column)) continue;
+
+    const applyMessage = await shouldApplySyncMessage(client, message);
+    if (applyMessage) {
+      const existing = await client.execute({
+        sql: `SELECT id FROM ${quoteIdent(message.dataset)} WHERE id = ? LIMIT 1`,
+        args: [message.row],
+      });
+      if (existing.rows?.length) {
+        await client.execute({
+          sql: `UPDATE ${quoteIdent(message.dataset)} SET ${quoteIdent(message.column)} = ? WHERE id = ?`,
+          args: [message.rawValue, message.row],
+        });
+      } else {
+        await client.execute({
+          sql: `INSERT INTO ${quoteIdent(message.dataset)} (id, ${quoteIdent(message.column)}) VALUES (?, ?)`,
+          args: [message.row, message.rawValue],
+        });
+      }
+      applied.push(message);
+    }
+
+    if (!(await hasSyncMessageTimestamp(client, message))) {
+      await client.execute(messageInsertQuery(message));
+      clockMessages.push(message);
+    }
+  }
+  if (clockMessages.length) await client.execute(clockUpdateQuery(clockMessages));
+  return { applied: applied.length, recorded: clockMessages.length };
+}
+
+async function syncDownloadedBudget(config, token, { budgetDir, metadata }) {
+  const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
+  try {
+    await loadClock(client);
+    const since = metadata.lastSyncedTimestamp
+      || await latestLocalMessageTimestamp(client)
+      || new Timestamp(Date.now() - 5 * 60 * 1000, 0, "0").toString();
+    const syncResult = await postActualSync(config, token, { metadata, since });
+    const applyResult = await applySyncMessages(client, syncResult.messages);
+    const latestRemoteTimestamp = syncResult.messages
+      .map((message) => String(message.timestamp))
+      .sort()
+      .at(-1);
+    const nextMetadata = latestRemoteTimestamp
+      ? { ...metadata, lastSyncedTimestamp: latestRemoteTimestamp }
+      : metadata;
+    if (latestRemoteTimestamp) {
+      await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify(nextMetadata));
+    }
+    return {
+      ...syncResult,
+      ...applyResult,
+      metadata: nextMetadata,
+      since,
+    };
+  } finally {
+    await client.close();
+  }
+}
+
 async function downloadBudgetZip(config, { dataDir = actualDataDir() } = {}) {
   if (!config.password) {
     throw Object.assign(new Error("Actual Budget password is required for lightweight metadata download"), { status: 400 });
@@ -363,12 +603,13 @@ async function downloadBudgetZip(config, { dataDir = actualDataDir() } = {}) {
   await mkdir(budgetDir, { recursive: true });
   await writeFile(path.join(budgetDir, "db.sqlite"), zip.readFile(dbEntry));
   await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify(metadata));
+  const syncDeltas = await syncDownloadedBudget(config, token, { budgetDir, metadata });
   let backupPrune = { removed: 0, kept: 0 };
   backupPrune = await pruneActualBudgetBackups(budgetDir).catch((err) => {
     console.warn("[EA] Actual local backup pruning failed:", err.message);
     return backupPrune;
   });
-  return { budgetDir, metadata, backupPrune };
+  return { budgetDir, metadata: syncDeltas.metadata, backupPrune, syncDeltas };
 }
 
 async function ensureLocalBudget(config, options = {}) {
@@ -480,4 +721,5 @@ export const __testing__ = {
   ymdFromActualDate,
   normalizeRuleConditions,
   findLocalBudgetDir,
+  syncDownloadedBudget,
 };

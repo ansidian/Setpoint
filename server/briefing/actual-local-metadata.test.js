@@ -1,9 +1,17 @@
-import { mkdtemp, mkdir, readdir, rm, utimes, writeFile } from "fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, utimes, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";
+import {
+  SyncProtoBuf,
+  Timestamp,
+  makeClientId,
+  makeClock,
+  serializeClock,
+} from "@actual-app/crdt";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  __testing__,
   describeLocalActualCache,
   hydrateLocalActualCache,
   pruneActualBudgetBackups,
@@ -12,6 +20,7 @@ import {
 } from "./actual-local-metadata.js";
 
 let tempDir = null;
+const originalFetch = global.fetch;
 
 function settingsDbClient({ encryptedPassword = null } = {}) {
   return {
@@ -87,7 +96,93 @@ async function createActualBudgetFixture() {
   await writeBudgetFixture(path.join(tempDir, "Budget-1"));
 }
 
+function syncResponseBuffer(messages) {
+  const response = new SyncProtoBuf.SyncResponse();
+  response.setMerkle(JSON.stringify({}));
+  for (const message of messages) {
+    const messagePb = new SyncProtoBuf.Message();
+    messagePb.setDataset(message.dataset);
+    messagePb.setRow(message.row);
+    messagePb.setColumn(message.column);
+    messagePb.setValue(message.value);
+
+    const envelopePb = new SyncProtoBuf.MessageEnvelope();
+    envelopePb.setTimestamp(String(message.timestamp));
+    envelopePb.setIsencrypted(false);
+    envelopePb.setContent(messagePb.serializeBinary());
+    response.addMessages(envelopePb);
+  }
+  return response.serializeBinary();
+}
+
+async function writeSyncPullFixture(budgetDir, { lastSyncedTimestamp } = {}) {
+  await mkdir(budgetDir, { recursive: true });
+  await writeFile(path.join(budgetDir, "metadata.json"), JSON.stringify({
+    id: "Budget-Sync",
+    cloudFileId: "file-1",
+    groupId: "sync-123",
+    lastSyncedTimestamp,
+  }));
+  const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
+  await client.executeMultiple(`
+    CREATE TABLE accounts (id TEXT, name TEXT, type TEXT, closed INTEGER, tombstone INTEGER);
+    CREATE TABLE payees (id TEXT, name TEXT, transfer_acct TEXT, tombstone INTEGER);
+    CREATE TABLE payee_mapping (id TEXT PRIMARY KEY, targetId TEXT);
+    CREATE TABLE category_groups (id TEXT, name TEXT, sort_order REAL, tombstone INTEGER);
+    CREATE TABLE categories (id TEXT, name TEXT, cat_group TEXT, sort_order REAL, tombstone INTEGER);
+    CREATE TABLE v_schedules (
+      id TEXT,
+      name TEXT,
+      rule TEXT,
+      next_date INTEGER,
+      completed INTEGER,
+      tombstone INTEGER,
+      _conditions TEXT
+    );
+    CREATE TABLE transactions (
+      id TEXT PRIMARY KEY,
+      acct TEXT,
+      amount INTEGER,
+      description TEXT,
+      date INTEGER,
+      schedule TEXT,
+      tombstone INTEGER,
+      isChild INTEGER,
+      parent_id TEXT,
+      sort_order REAL
+    );
+    CREATE VIEW v_transactions AS
+      SELECT t.id, t.date, t.amount, pm.targetId AS payee, t.schedule, t.tombstone
+      FROM transactions t
+      LEFT JOIN payee_mapping pm ON pm.id = t.description
+      WHERE t.date IS NOT NULL
+        AND t.acct IS NOT NULL
+        AND (COALESCE(t.isChild, 0) = 0 OR t.parent_id IS NOT NULL);
+    CREATE TABLE messages_crdt (
+      id INTEGER PRIMARY KEY,
+      timestamp TEXT NOT NULL UNIQUE,
+      dataset TEXT NOT NULL,
+      row TEXT NOT NULL,
+      column TEXT NOT NULL,
+      value BLOB NOT NULL
+    );
+    CREATE TABLE messages_clock (id INTEGER PRIMARY KEY, clock TEXT);
+    INSERT INTO accounts VALUES ('acct-1', 'Checking', 'checking', 0, 0);
+    INSERT INTO payees VALUES ('payee-1', 'Power Co', NULL, 0);
+    INSERT INTO payee_mapping VALUES ('payee-1', 'payee-1');
+    INSERT INTO category_groups VALUES ('group-1', 'Bills', 1, 0);
+    INSERT INTO categories VALUES ('cat-1', 'Utilities', 'group-1', 1, 0);
+  `);
+  const clock = makeClock(new Timestamp(0, 0, makeClientId()));
+  await client.execute({
+    sql: "INSERT INTO messages_clock (id, clock) VALUES (1, ?)",
+    args: [serializeClock(clock)],
+  });
+  await client.close();
+}
+
 afterEach(async () => {
+  global.fetch = originalFetch;
   if (tempDir) await rm(tempDir, { recursive: true, force: true });
   tempDir = null;
 });
@@ -158,6 +253,61 @@ describe("readLocalActualMetadata", () => {
     expect(metadata.recentTransactions).toEqual([
       { payee: "Power Co", payeeId: "payee-1", amount: 122.34, date: "2026-05-11", scheduleId: "sched-1" },
     ]);
+  });
+
+  it("applies remote sync deltas to a freshly downloaded Actual snapshot before reading transactions", async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    const budgetDir = path.join(tempDir, "Budget-Sync");
+    const baseTimestamp = new Timestamp(1000, 0, makeClientId()).toString();
+    await writeSyncPullFixture(budgetDir, { lastSyncedTimestamp: baseTimestamp });
+    const remoteMessages = [
+      { timestamp: new Timestamp(2000, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "acct", value: "S:acct-1" },
+      { timestamp: new Timestamp(2001, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "amount", value: "N:-1888" },
+      { timestamp: new Timestamp(2002, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "description", value: "S:payee-1" },
+      { timestamp: new Timestamp(2003, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "date", value: "N:20260518" },
+      { timestamp: new Timestamp(2004, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "schedule", value: "S:sched-1" },
+      { timestamp: new Timestamp(2005, 0, makeClientId()), dataset: "transactions", row: "txn-remote", column: "tombstone", value: "N:0" },
+    ];
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => syncResponseBuffer(remoteMessages),
+    });
+
+    const syncResult = await __testing__.syncDownloadedBudget({
+      serverURL: "https://actual.example.test",
+    }, "token-1", {
+      budgetDir,
+      metadata: {
+        id: "Budget-Sync",
+        cloudFileId: "file-1",
+        groupId: "sync-123",
+        lastSyncedTimestamp: baseTimestamp,
+      },
+    });
+    const metadata = await readLocalActualMetadata("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+      localOnly: true,
+    });
+    const savedMetadata = JSON.parse(await readFile(path.join(budgetDir, "metadata.json"), "utf8"));
+
+    expect(syncResult).toMatchObject({ applied: 6, recorded: 6, since: baseTimestamp });
+    expect(metadata.recentTransactions).toEqual([
+      { payee: "Power Co", payeeId: "payee-1", amount: 18.88, date: "2026-05-18", scheduleId: "sched-1" },
+    ]);
+    expect(savedMetadata.lastSyncedTimestamp).toBe(String(remoteMessages.at(-1).timestamp));
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://actual.example.test/sync/sync",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/actual-sync",
+          "X-ACTUAL-TOKEN": "token-1",
+        }),
+      }),
+    );
+    const request = SyncProtoBuf.SyncRequest.deserializeBinary(global.fetch.mock.calls[0][1].body);
+    expect(request.getSince()).toBe(baseTimestamp);
   });
 
   it("downloads a fresh budget zip when a refresh is explicitly requested", async () => {
