@@ -91,7 +91,9 @@ export function resolveFloatingDetailPlacement({
   const maxHeight = isEditor
     ? clamp(Math.min(MAX_EDITOR_HEIGHT, bounds.height), Math.min(420, bounds.height), MAX_EDITOR_HEIGHT)
     : clamp(Math.min(MAX_PANEL_HEIGHT, bounds.height), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT);
-  const height = clamp(panelHeight || (isEditor ? 560 : DEFAULT_PANEL_HEIGHT), MIN_PANEL_HEIGHT, maxHeight);
+  const height = isEditor
+    ? maxHeight
+    : clamp(panelHeight || DEFAULT_PANEL_HEIGHT, MIN_PANEL_HEIGHT, maxHeight);
 
   if (parked) {
     const parkingRect = railRect || calendarRect || bounds;
