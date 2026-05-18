@@ -372,7 +372,11 @@ async function refreshBillsCurrent(userId, config, options) {
       });
   if (options.force || dueRefresh) {
     await clearPendingBillsMirrorRefresh(userId, options);
-    payload = await refreshBillsMirror(userId, { ...options, actualBudgetUrl });
+    payload = await refreshBillsMirror(userId, {
+      ...options,
+      actualBudgetUrl,
+      refreshLocalActual: true,
+    });
   } else {
     payload = await readBillsMirrorCurrent(userId, options);
     if (payload.billsSyncHealth?.state === "needs_sync") {
