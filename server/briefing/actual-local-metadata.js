@@ -327,6 +327,18 @@ async function fetchActualBuffer(url, { token, fileId }) {
   }
 }
 
+async function loginActual(config) {
+  if (!config.password) {
+    throw Object.assign(new Error("Actual Budget password is required for lightweight metadata download"), { status: 400 });
+  }
+  const login = await fetchActualJson(`${config.serverURL}/account/login`, {
+    body: { password: config.password, loginMethod: "password" },
+  });
+  const token = login?.data?.token;
+  if (!token) throw Object.assign(new Error("Actual Budget login did not return a session token"), { status: 502 });
+  return token;
+}
+
 function quoteIdent(identifier) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`Invalid Actual DB identifier: ${identifier}`);
@@ -557,14 +569,7 @@ async function syncDownloadedBudget(config, token, { budgetDir, metadata }) {
 }
 
 async function downloadBudgetZip(config, { dataDir = actualDataDir() } = {}) {
-  if (!config.password) {
-    throw Object.assign(new Error("Actual Budget password is required for lightweight metadata download"), { status: 400 });
-  }
-  const login = await fetchActualJson(`${config.serverURL}/account/login`, {
-    body: { password: config.password, loginMethod: "password" },
-  });
-  const token = login?.data?.token;
-  if (!token) throw Object.assign(new Error("Actual Budget login did not return a session token"), { status: 502 });
+  const token = await loginActual(config);
 
   const files = await fetchActualJson(`${config.serverURL}/sync/list-user-files`, { token });
   const file = (Array.isArray(files?.data) ? files.data : []).find((candidate) => candidate?.groupId === config.syncId);
@@ -612,10 +617,36 @@ async function downloadBudgetZip(config, { dataDir = actualDataDir() } = {}) {
   return { budgetDir, metadata: syncDeltas.metadata, backupPrune, syncDeltas };
 }
 
+async function syncLocalBudget(config, { local } = {}) {
+  if (!local?.budgetDir || !local?.metadata) {
+    throw Object.assign(new Error("Actual Budget local metadata is unavailable"), { status: 503 });
+  }
+  const token = await loginActual(config);
+  const syncDeltas = await syncDownloadedBudget(config, token, {
+    budgetDir: local.budgetDir,
+    metadata: local.metadata,
+  });
+  let backupPrune = { removed: 0, kept: 0 };
+  backupPrune = await pruneActualBudgetBackups(local.budgetDir).catch((err) => {
+    console.warn("[EA] Actual local backup pruning failed:", err.message);
+    return backupPrune;
+  });
+  return {
+    budgetDir: local.budgetDir,
+    metadata: syncDeltas.metadata,
+    backupPrune,
+    syncDeltas,
+  };
+}
+
 async function ensureLocalBudget(config, options = {}) {
   const downloadBudget = options.downloadBudget || downloadBudgetZip;
-  if (options.refresh) return downloadBudget(config, options);
+  const syncBudget = options.syncBudget || syncLocalBudget;
   const local = await findLocalBudgetDir(config.syncId, options);
+  if (options.refresh) {
+    if (local && !options.forceDownload) return syncBudget(config, { ...options, local });
+    return downloadBudget(config, options);
+  }
   if (local) return local;
   if (options.localOnly) {
     throw Object.assign(new Error("Actual Budget local metadata is unavailable"), { status: 503 });
