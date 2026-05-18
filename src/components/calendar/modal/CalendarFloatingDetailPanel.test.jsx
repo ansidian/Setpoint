@@ -736,4 +736,80 @@ describe("CalendarFloatingDetailPanel", () => {
 
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-transition-y-type")).toBe("spring");
   });
+
+  it("keeps editor placement stable when content height changes while typing", async () => {
+    const calendarPanel = appendRectElement({
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 900,
+      width: 900,
+      height: 900,
+    });
+    const anchorElement = appendRectElement({
+      top: 400,
+      left: 600,
+      right: 700,
+      bottom: 424,
+      width: 100,
+      height: 24,
+    });
+    const detail = {
+      open: true,
+      mode: "create",
+      placementKey: "event-editor-placement",
+      view: "events",
+      itemId: "new-event",
+      dateKey: "2026-05-17",
+      anchorElement,
+      sourceCellElement: anchorElement,
+      exclusionElement: null,
+      anchorKind: "day-cell",
+      preferredSide: null,
+      forcedSide: null,
+      sideIntent: "auto",
+      parked: false,
+      userDragged: false,
+      initialPlacement: resolveFloatingDetailPlacement({
+        anchorRect: anchorElement.getBoundingClientRect(),
+        sourceRect: anchorElement.getBoundingClientRect(),
+        exclusionRect: null,
+        calendarRect: calendarPanel.getBoundingClientRect(),
+        railRect: null,
+        panelHeight: 560,
+        mode: "create",
+      }),
+    };
+
+    render(
+      <CalendarFloatingDetailPanel
+        detail={detail}
+        label="New event"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onPark={() => {}}
+        onClose={() => {}}
+      >
+        <label>
+          Title
+          <input data-testid="calendar-event-title" defaultValue="" />
+        </label>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 561, width: 420 } }]);
+    });
+    const initialY = Number(
+      screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-y"),
+    );
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 562, width: 420 } }]);
+    });
+
+    expect(Number(
+      screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-y"),
+    )).toBe(initialY);
+  });
 });
