@@ -525,6 +525,60 @@ describe("Bills mirror", () => {
     ]);
   });
 
+  it("can force a fresh local Actual projection before rebuilding the bills mirror", async () => {
+    const staleMetadata = {
+      accounts: [],
+      payees: [{ id: "payee-power", name: "SCE" }],
+      payeeMap: { "payee-power": "SCE" },
+      categories: [],
+      schedules: [
+        {
+          id: "power",
+          name: "SCE",
+          next_date: "2026-05-18",
+          type: "bill",
+          conditions: [
+            { field: "payee", value: "payee-power" },
+            { field: "amount", value: -15075 },
+          ],
+        },
+      ],
+      recentTransactions: [],
+    };
+    const freshMetadata = {
+      ...staleMetadata,
+      recentTransactions: [
+        {
+          payeeId: "payee-power",
+          amount: 150.75,
+          date: "2026-05-18",
+        },
+      ],
+    };
+    mockActualLocal.readLocalActualMetadata.mockImplementation((_userId, options = {}) => (
+      Promise.resolve(options.refresh ? freshMetadata : staleMetadata)
+    ));
+    mockDb.batch.mockResolvedValueOnce([]);
+
+    const out = await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      refreshLocalActual: true,
+      now: new Date("2026-05-18T20:00:00.000Z"),
+    });
+
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledTimes(1);
+    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenCalledWith("u1", {
+      refresh: true,
+    });
+    expect(out.allSchedules).toEqual([
+      expect.objectContaining({
+        name: "SCE",
+        paid: true,
+        openActionDisabled: true,
+      }),
+    ]);
+  });
+
   it("hydrates the local Actual cache and refreshes the bills mirror from that cache", async () => {
     const actualMetadata = {
       accounts: [],

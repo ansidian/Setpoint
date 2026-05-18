@@ -132,16 +132,19 @@ function hasActualMetadataRows(metadata = {}) {
 async function loadActualMetadataForProjection(userId, {
   refreshLocal = true,
   allowWorkerFallback = true,
+  preferFreshLocal = false,
 } = {}) {
   let localError = null;
-  try {
-    return await readLocalActualMetadata(userId, {
-      refresh: false,
-      localOnly: true,
-    });
-  } catch (err) {
-    localError = err;
-    console.warn("[EA] Cached Actual metadata projection failed:", err.message);
+  if (!preferFreshLocal) {
+    try {
+      return await readLocalActualMetadata(userId, {
+        refresh: false,
+        localOnly: true,
+      });
+    } catch (err) {
+      localError = err;
+      console.warn("[EA] Cached Actual metadata projection failed:", err.message);
+    }
   }
 
   let projectionError = null;
@@ -645,7 +648,12 @@ export async function runDueBillsMirrorRefresh(userId, {
   const due = await consumeDueBillsMirrorRefresh(userId, { dbClient, now });
   if (!due) return { refreshed: false };
   const actualBudgetUrl = await loadActualBudgetUrl(userId, { dbClient });
-  const payload = await refreshBillsMirror(userId, { actualBudgetUrl, dbClient, now });
+  const payload = await refreshBillsMirror(userId, {
+    actualBudgetUrl,
+    dbClient,
+    now,
+    refreshLocalActual: true,
+  });
   return { refreshed: true, payload };
 }
 
@@ -705,11 +713,17 @@ export async function refreshBillsMirror(userId, {
   actualBudgetUrl = null,
   dbClient = db,
   now = new Date(),
+  refreshLocalActual = false,
 } = {}) {
   const inFlightKey = `${userId}:${actualBudgetUrl || "unconfigured"}`;
   const existingRefresh = BILLS_MIRROR_REFRESH_IN_FLIGHT.get(inFlightKey);
   if (existingRefresh) return existingRefresh;
-  const refreshPromise = refreshBillsMirrorInner(userId, { actualBudgetUrl, dbClient, now })
+  const refreshPromise = refreshBillsMirrorInner(userId, {
+    actualBudgetUrl,
+    dbClient,
+    now,
+    refreshLocalActual,
+  })
     .finally(() => {
       if (BILLS_MIRROR_REFRESH_IN_FLIGHT.get(inFlightKey) === refreshPromise) {
         BILLS_MIRROR_REFRESH_IN_FLIGHT.delete(inFlightKey);
@@ -723,6 +737,7 @@ async function refreshBillsMirrorInner(userId, {
   actualBudgetUrl = null,
   dbClient = db,
   now = new Date(),
+  refreshLocalActual = false,
 } = {}) {
   const timestamp = isoNow(now);
   if (!actualBudgetUrl) {
@@ -776,6 +791,7 @@ async function refreshBillsMirrorInner(userId, {
     const refreshRange = billMirrorRefreshRange({ now });
     const metadata = metadataWithPayeeMap(await loadActualMetadataForProjection(userId, {
       allowWorkerFallback: false,
+      preferFreshLocal: refreshLocalActual,
     }));
     const occurrences = occurrencesFromMetadata(metadata, refreshRange)
       .map(normalizeMirrorOccurrence)

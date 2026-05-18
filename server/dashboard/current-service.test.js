@@ -633,6 +633,7 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
       actualBudgetUrl: "https://actual.example.test",
       force: true,
+      refreshLocalActual: true,
     }));
   });
 
@@ -716,6 +717,7 @@ describe("GET /api/dashboard/current", () => {
     expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
       actualBudgetUrl: "https://actual.example.test",
       force: true,
+      refreshLocalActual: true,
     }));
     expect(testState.clearPendingBillsMirrorRefresh).toHaveBeenCalledWith("u1", expect.objectContaining({
       force: true,
@@ -1226,6 +1228,7 @@ describe("POST /api/dashboard/current/sync", () => {
     expect(testState.refreshBillsMirror).toHaveBeenCalledWith("u1", expect.objectContaining({
       actualBudgetUrl: "https://actual.example.test",
       force: true,
+      refreshLocalActual: true,
     }));
     expect(testState.syncActiveSnapshot).toHaveBeenCalledWith("u1");
   });
