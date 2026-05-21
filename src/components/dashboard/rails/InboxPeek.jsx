@@ -8,6 +8,9 @@ import {
 } from "./railPrimitives.jsx";
 import { timeAgo } from "./railModel.js";
 
+const MAX_VISIBLE_EMAILS = 4;
+const INBOX_ROW_MIN_HEIGHT = 46;
+
 export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox, isMobile = false }) {
   const flat = useMemo(() => {
     const all = [];
@@ -18,7 +21,7 @@ export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJu
     }
     return all
       .sort((a, b) => (a.read === b.read ? new Date(b.date) - new Date(a.date) : (a.read ? 1 : 0) - (b.read ? 1 : 0)))
-      .slice(0, 5);
+      .slice(0, MAX_VISIBLE_EMAILS);
   }, [emailAccounts]);
 
   const needsYou = flat.filter((e) => e._lane === "action" && !e.read).length;
@@ -44,7 +47,15 @@ export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJu
           </div>
         }
       />
-      <div style={{ marginTop: 10, display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          marginTop: 10,
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: isMobile ? undefined : INBOX_ROW_MIN_HEIGHT * MAX_VISIBLE_EMAILS,
+          overflow: "hidden",
+        }}
+      >
         {flat.map((e) => (
           <div
             key={e.id}
@@ -54,6 +65,7 @@ export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJu
             onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") onJump?.({ kind: "email", id: e.id, email: e }); }}
             style={{
               display: "grid", gridTemplateColumns: isMobile ? "18px minmax(0, 1fr)" : "18px 1fr auto", gap: 10, alignItems: isMobile ? "start" : "center",
+              minHeight: isMobile ? undefined : INBOX_ROW_MIN_HEIGHT,
               padding: isMobile ? "10px 2px" : "9px 2px", borderBottom: "1px solid rgba(255,255,255,0.04)",
               cursor: "pointer",
             }}

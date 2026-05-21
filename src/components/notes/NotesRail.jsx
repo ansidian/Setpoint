@@ -16,7 +16,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { getNotes, createNote, updateNote, deleteNote, reorderNotes } from "../../api.js";
 import NoteItem from "./NoteItem.jsx";
 
-export default function NotesRail({ accent }) {
+const MAX_VISIBLE_NOTES = 3;
+
+export default function NotesRail({ accent, isMobile = false }) {
   const [notes, setNotes] = useState([]);
   const [input, setInput] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -24,10 +26,11 @@ export default function NotesRail({ accent }) {
 
   const resizeInput = useCallback((element = inputRef.current) => {
     if (!element) return;
+    const maxHeight = isMobile ? 160 : 72;
     element.style.height = "auto";
-    element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
-    element.style.overflowY = element.scrollHeight > 160 ? "auto" : "hidden";
-  }, []);
+    element.style.height = `${Math.min(element.scrollHeight, maxHeight)}px`;
+    element.style.overflowY = element.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [isMobile]);
 
   useEffect(() => {
     getNotes()
@@ -104,8 +107,11 @@ export default function NotesRail({ accent }) {
     [notes],
   );
 
+  const visibleNotes = notes.slice(0, MAX_VISIBLE_NOTES);
+  const hiddenNoteCount = Math.max(0, notes.length - visibleNotes.length);
+
   return (
-    <div>
+    <div style={{ minHeight: 0, overflow: "hidden" }}>
       {/* Section header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ color: "#cdd6f4", fontSize: 13, fontWeight: 600 }}>Notes</span>
@@ -149,7 +155,7 @@ export default function NotesRail({ accent }) {
           marginBottom: 14,
           boxSizing: "border-box",
           minHeight: 36,
-          maxHeight: 160,
+          maxHeight: isMobile ? 160 : 72,
           resize: "none",
           overflowY: "hidden",
         }}
@@ -160,10 +166,19 @@ export default function NotesRail({ accent }) {
       {/* Note list */}
       {loaded && notes.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={notes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <SortableContext items={visibleNotes.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+            <div
+              data-testid="notes-rail-list"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                maxHeight: isMobile ? undefined : 222,
+                overflow: "hidden",
+              }}
+            >
               <AnimatePresence initial={false}>
-                {notes.map((note) => (
+                {visibleNotes.map((note) => (
                   <motion.div
                     key={note.id}
                     initial={{ opacity: 0, y: 10, scale: 0.985 }}
@@ -176,6 +191,7 @@ export default function NotesRail({ accent }) {
                       accent={accent}
                       onUpdate={handleUpdate}
                       onDelete={handleDelete}
+                      compactPreview={!isMobile}
                     />
                   </motion.div>
                 ))}
@@ -183,6 +199,18 @@ export default function NotesRail({ accent }) {
             </div>
           </SortableContext>
         </DndContext>
+      )}
+      {loaded && hiddenNoteCount > 0 && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 10,
+            color: "rgba(205,214,244,0.42)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          +{hiddenNoteCount} more
+        </div>
       )}
     </div>
   );

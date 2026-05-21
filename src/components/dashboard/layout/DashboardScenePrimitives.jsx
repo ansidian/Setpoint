@@ -103,6 +103,9 @@ export function DashboardRailStack({ sections, compact = false, style }) {
       style={{
         paddingLeft: compact ? 18 : 24,
         minWidth: 0,
+        minHeight: 0,
+        maxHeight: "100%",
+        overflow: "hidden",
         borderLeft: "1px solid rgba(255,255,255,0.06)",
         background: "transparent",
         ...style,
@@ -116,6 +119,8 @@ export function DashboardRailStack({ sections, compact = false, style }) {
             borderTop: index === 0 ? "none" : dashboardSurfaceBorder,
             contentVisibility: "auto",
             containIntrinsicSize: "160px",
+            minHeight: 0,
+            overflow: "hidden",
           }}
         >
           {section}
@@ -195,12 +200,14 @@ export function DashboardBodyLayout({
             gap: 18,
             flex: 1,
             minHeight: 0,
-            overflowY: "auto",
-            overscrollBehavior: "contain",
+            overflow: "hidden",
           }}
         >
           {timelinePanel}
-          <DashboardRailStack sections={primaryRailSections} style={{ marginTop: 2 }} />
+          <DashboardRailStack
+            sections={primaryRailSections}
+            style={{ marginTop: 2, flex: "0 0 auto", maxHeight: 248 }}
+          />
         </DashboardSceneRegion>
       </DashboardLayoutFrame>
     );
@@ -231,12 +238,8 @@ export function DashboardBodyLayout({
             paddingTop: 18,
             flex: 1,
             minHeight: 0,
-            overflowY: "auto",
-            overflowX: "hidden",
-            overscrollBehavior: "contain",
-            scrollbarGutter: "stable",
-            alignItems: "start",
-            paddingRight: 2,
+            overflow: "hidden",
+            alignItems: "stretch",
           }}
         >
           <DashboardSceneRegion
@@ -251,7 +254,8 @@ export function DashboardBodyLayout({
             initial={{ opacity: 0, y: 12, scale: 0.996 }}
             style={{
               minHeight: 0,
-              paddingRight: 2,
+              height: "100%",
+              overflow: "hidden",
               borderLeft: "1px solid rgba(255,255,255,0.06)",
             }}
           >
@@ -264,6 +268,9 @@ export function DashboardBodyLayout({
                 alignItems: "start",
                 paddingLeft: 18,
                 minHeight: 0,
+                height: "100%",
+                maxHeight: "100%",
+                overflow: "hidden",
               }}
             >
               <DashboardRailStack sections={commandPrimaryRailSections} compact style={{ paddingLeft: 0, borderLeft: "none" }} />
@@ -313,7 +320,7 @@ export function DashboardBodyLayout({
         <DashboardSceneRegion
           delay={dashboardStageDelays.secondary}
           initial={{ opacity: 0, x: 14, y: 10, scale: 0.996 }}
-          style={{ display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", scrollbarGutter: "stable" }}
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
         >
           <DashboardRailStack sections={primaryRailSections} />
         </DashboardSceneRegion>

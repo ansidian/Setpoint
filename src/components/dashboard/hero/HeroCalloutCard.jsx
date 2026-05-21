@@ -39,7 +39,7 @@ export default function HeroCalloutCard({
       style={{
         width: "100%",
         minWidth: 0,
-        padding: isMobile ? "12px 0" : "2px 0",
+        padding: isMobile ? "12px 0" : "3px 0",
         borderRadius: 8,
         background: active ? "rgba(255,255,255,0.03)" : "transparent",
         border: 0,
@@ -60,8 +60,8 @@ export default function HeroCalloutCard({
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
         <div
           style={{
-            width: isMobile ? 22 : 24,
-            height: isMobile ? 22 : 24,
+            width: isMobile ? 22 : 22,
+            height: isMobile ? 22 : 22,
             borderRadius: 6,
             background: `${tone}12`,
             border: `1px solid ${tone}26`,
@@ -70,7 +70,7 @@ export default function HeroCalloutCard({
             flexShrink: 0,
           }}
         >
-          <Icon size={isMobile ? 10 : 11} color={tone} />
+          <Icon size={isMobile ? 10 : 10} color={tone} />
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -88,7 +88,7 @@ export default function HeroCalloutCard({
             <div style={{ height: 3, width: 3, borderRadius: 99, background: tone, opacity: 0.75, flexShrink: 0 }} />
             <div
               style={{
-                fontSize: isMobile ? 10 : 10.5,
+                fontSize: isMobile ? 10 : 10,
                 fontWeight: 600,
                 letterSpacing: 0.2,
                 color: tone,
@@ -132,7 +132,7 @@ export default function HeroCalloutCard({
 
           <div
             style={{
-              fontSize: isMobile ? 13 : 14,
+              fontSize: isMobile ? 13 : 12.5,
               fontWeight: 500,
               color: "#cdd6f4",
               lineHeight: 1.35,
@@ -147,7 +147,7 @@ export default function HeroCalloutCard({
           {sub && (
             <div
               style={{
-                fontSize: isMobile ? 11 : 11.5,
+                fontSize: isMobile ? 11 : 10.5,
                 color: "rgba(205,214,244,0.55)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",

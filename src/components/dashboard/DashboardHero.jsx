@@ -11,6 +11,45 @@ import {
 } from "./hero/dashboard-hero-helpers";
 import HeroMessageBlock from "./hero/HeroMessageBlock";
 
+function HeroQuickActionButton({ accent, isMobile, item, onQuickAction }) {
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const active = hovered || focused;
+  const Icon = item.icon;
+
+  return (
+    <button
+      type="button"
+      key={item.action}
+      onClick={() => onQuickAction?.(item.action)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: isMobile ? "7px 12px" : "7px 14px",
+        borderRadius: 999,
+        background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.045)",
+        border: `1px solid ${active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.1)"}`,
+        color: "#cdd6f4",
+        fontSize: isMobile ? 12 : 13,
+        fontWeight: 500,
+        cursor: "pointer",
+        outline: focused ? `2px solid ${accent}55` : "none",
+        outlineOffset: 2,
+        transform: active ? "translateY(-1px)" : "translateY(0)",
+        transition: "background 150ms ease, border-color 150ms ease, transform 150ms cubic-bezier(0.22,1,0.36,1)",
+      }}
+    >
+      <Icon size={isMobile ? 14 : 16} color={accent} />
+      {item.label}
+    </button>
+  );
+}
+
 /**
  * DashboardHero — the single most-important block on the Dashboard.
  * Large serif greeting + AI state-of-day + weather/focus band + 3-up callouts.
@@ -66,12 +105,16 @@ export default function DashboardHero({
   const stacked = stack || isMobile;
   const outerPadding = isMobile
     ? "12px 14px 10px"
-    : compact ? "12px 18px 10px" : "14px 20px 12px";
+    : compact ? "9px 16px 8px" : "10px 18px 9px";
   const WeatherIcon = (weather?.icon && WEATHER_ICONS[weather.icon]) || WEATHER_ICONS.Sun;
   const quickActions = [
     { label: "New Deadline", icon: CheckCircle, action: "deadline" },
     { label: "Add Event", icon: CalendarPlus, action: "event" },
   ];
+  const hasCallouts = theCallouts.length > 0;
+  const desktopColumns = hasCallouts
+    ? "minmax(210px, 0.72fr) minmax(250px, 0.82fr) minmax(320px, 1fr)"
+    : "minmax(0, 1fr) minmax(260px, 0.72fr)";
 
   return (
     <div
@@ -80,8 +123,8 @@ export default function DashboardHero({
         padding: outerPadding,
         position: "relative",
         overflow: "hidden",
-        margin: isMobile ? "0" : "8px 0 0",
-        borderRadius: isMobile ? 0 : 16,
+        margin: isMobile ? "0" : "6px 0 0",
+        borderRadius: isMobile ? 0 : 14,
         border: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
         background: isMobile
           ? "transparent"
@@ -91,9 +134,9 @@ export default function DashboardHero({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: stacked ? "1fr" : "minmax(0, 1fr) 276px",
-          gap: stacked ? (isMobile ? 10 : 12) : 18,
-          alignItems: "start",
+          gridTemplateColumns: stacked ? "1fr" : desktopColumns,
+          gap: stacked ? (isMobile ? 10 : 12) : 16,
+          alignItems: "stretch",
           position: "relative",
         }}
       >
@@ -104,6 +147,7 @@ export default function DashboardHero({
             display: "flex",
             flexDirection: "column",
             alignItems: "flex-start",
+            justifyContent: "flex-start",
             gap: isMobile ? 10 : 12,
           }}
         >
@@ -126,37 +170,13 @@ export default function DashboardHero({
             }}
           >
             {quickActions.map((item) => (
-              <button
+              <HeroQuickActionButton
                 key={item.action}
-                onClick={() => onQuickAction?.(item.action)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: isMobile ? "7px 12px" : "7px 14px",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#cdd6f4",
-                  fontSize: isMobile ? 12 : 13,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.08)";
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
-              >
-                <item.icon size={isMobile ? 14 : 16} color={accent} />
-                {item.label}
-              </button>
+                accent={accent}
+                isMobile={isMobile}
+                item={item}
+                onQuickAction={onQuickAction}
+              />
             ))}
           </div>
         </div>
@@ -171,43 +191,51 @@ export default function DashboardHero({
           stacked={stacked}
           weather={weather}
           weatherIcon={WeatherIcon}
+          compact={!stacked}
         />
-      </div>
 
-      {theCallouts.length > 0 && (
-        <div
-          data-testid="dashboard-hero-callouts"
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : `repeat(${theCallouts.length}, 1fr)`,
-            gap: 0,
-            marginTop: isMobile ? 8 : compact ? 8 : 10,
-            position: "relative",
-            paddingTop: isMobile ? 2 : 6,
-            borderTop: "1px solid rgba(255,255,255,0.05)",
-            alignItems: "stretch",
-          }}
-        >
-          {theCallouts.map((c, i) => (
-            <div
-              key={i}
-              style={{
-                minWidth: 0,
-                padding: isMobile ? "0" : i === 0 ? "0 16px 0 0" : "0 16px",
-                borderLeft: !isMobile && i > 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
-                borderTop: isMobile && i > 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
-              }}
-            >
-              <HeroCalloutCard
-                {...c}
-                accent={accent}
-                isMobile={isMobile}
-                onJump={(anchor) => onJump?.(c, anchor)}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+        {hasCallouts && (
+          <div
+            data-testid="dashboard-hero-callouts"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              gap: 0,
+              marginTop: stacked ? (isMobile ? 8 : compact ? 8 : 10) : 0,
+              position: "relative",
+              paddingTop: stacked ? (isMobile ? 2 : 6) : 0,
+              paddingLeft: !stacked && !isMobile ? 16 : 0,
+              borderTop: stacked ? "1px solid rgba(255,255,255,0.05)" : "none",
+              borderLeft: !stacked && !isMobile ? "1px solid rgba(255,255,255,0.06)" : "none",
+              minWidth: 0,
+            }}
+          >
+            {theCallouts.map((c, i) => (
+              <div
+                key={i}
+                style={{
+                  minWidth: 0,
+                  padding: isMobile
+                    ? "0"
+                    : stacked
+                      ? i === 0 ? "0 16px 0 0" : "0 16px"
+                      : i === 0 ? "0 0 6px" : "7px 0 6px",
+                  borderLeft: !isMobile && stacked && i > 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                  borderTop: (isMobile && i > 0) || (!stacked && !isMobile && i > 0) ? "1px solid rgba(255,255,255,0.05)" : "none",
+                }}
+              >
+                <HeroCalloutCard
+                  {...c}
+                  accent={accent}
+                  isMobile={isMobile}
+                  onJump={(anchor) => onJump?.(c, anchor)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

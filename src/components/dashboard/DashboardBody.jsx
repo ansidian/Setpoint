@@ -208,7 +208,7 @@ export function DashboardBody({
       deadlines={deadlines}
       onJump={handleRailJump}
       eventLoadingState={eventLoadingState}
-      scrollContained={effectiveLayout === "focus"}
+      scrollContained={!isMobile}
     />
   );
 
@@ -217,7 +217,8 @@ export function DashboardBody({
       isMobile={isMobile}
       style={{
         minHeight: isMobile ? 520 : 0,
-        height: !isMobile && effectiveLayout === "focus" ? "100%" : undefined,
+        height: !isMobile && effectiveLayout !== "paper" ? "100%" : undefined,
+        flex: !isMobile && effectiveLayout === "paper" ? "1 1 0" : undefined,
         display: "flex",
         flexDirection: "column",
       }}
@@ -248,7 +249,7 @@ export function DashboardBody({
     />
   ) : null;
 
-  const notesSection = showNotes ? <NotesRail accent={accent} /> : null;
+  const notesSection = showNotes ? <NotesRail accent={accent} isMobile={isMobile} /> : null;
   const sectionByKey = {
     deadlines: deadlinesSection,
     bills: billsSection,

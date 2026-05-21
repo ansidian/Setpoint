@@ -42,13 +42,13 @@ export default function HeroMessageBlock({
         className="ea-display"
         style={{
           margin: 0,
-          fontSize: isMobile ? 22 : compact ? 30 : 34,
+          fontSize: isMobile ? 22 : compact ? 26 : 28,
           fontWeight: 300,
           letterSpacing: 0,
-          lineHeight: isMobile ? 1.08 : 1.02,
+          lineHeight: isMobile ? 1.08 : 1.04,
           color: "#cdd6f4",
           textWrap: "balance",
-          maxWidth: isMobile ? "100%" : 480,
+          maxWidth: isMobile ? "100%" : 360,
         }}
       >
         <span style={{ display: "block" }}>{greetingText}</span>

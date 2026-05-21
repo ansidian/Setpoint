@@ -71,8 +71,11 @@ export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile
         return a.days - b.days;
       });
 
-    const open = visible.filter(({ d }) => d.status !== "complete").slice(0, 4);
-    const completed = visible.filter(({ d }) => d.status === "complete").slice(0, 2);
+    const openAll = visible.filter(({ d }) => d.status !== "complete");
+    const completedAll = visible.filter(({ d }) => d.status === "complete");
+    const open = openAll.slice(0, MAX_VISIBLE_DEADLINES);
+    const remainingSlots = Math.max(0, MAX_VISIBLE_DEADLINES - open.length);
+    const completed = completedAll.slice(0, remainingSlots);
     return { open, completed };
   }, [deadlines]);
 
@@ -95,6 +98,7 @@ export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile
         ) : <CountBadge n={openCount} />}
       />
       <div
+        data-testid="deadlines-rail-list"
         style={{
           marginTop: 10,
           display: "flex",
