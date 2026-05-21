@@ -135,6 +135,17 @@ describe("mobile dashboard layout", () => {
     expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
   });
 
+  it("lets the desktop timeline own scroll in the command layout", () => {
+    renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
+
+    const timeline = screen.getByTestId("today-timeline");
+    const rails = screen.getByTestId("dashboard-command-rails");
+
+    expect(timeline.style.height).toBe("100%");
+    expect(timeline.style.overflow).toBe("hidden");
+    expect(rails.style.overflow).toBe("hidden");
+  });
+
   it("gives the inbox peek open button an interactive hover state", () => {
     renderDashboardBody({ isMobile: false, dashboardLayout: "focus" });
 

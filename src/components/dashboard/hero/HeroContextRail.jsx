@@ -10,6 +10,7 @@ export default function HeroContextRail({
   stacked = false,
   weather,
   weatherIcon,
+  compact = false,
 }) {
   const IconComponent = weatherIcon;
 
@@ -18,16 +19,16 @@ export default function HeroContextRail({
       style={{
         display: "flex",
         flexDirection: stacked && !isMobile ? "row" : "column",
-        gap: isMobile ? 8 : 7,
+        gap: isMobile ? 8 : compact ? 5 : 7,
         minWidth: 0,
-        paddingLeft: isMobile ? 0 : 16,
+        paddingLeft: isMobile ? 0 : compact ? 14 : 16,
         borderLeft: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)",
       }}
     >
       <div
         style={{
           flex: stacked && !isMobile ? 1 : "unset",
-          padding: isMobile ? "10px 12px" : "0 0 5px",
+          padding: isMobile ? "10px 12px" : compact ? "0 0 3px" : "0 0 5px",
           borderRadius: 0,
           background: "transparent",
           border: "none",
@@ -39,20 +40,20 @@ export default function HeroContextRail({
       >
         <div
           style={{
-            width: isMobile ? 36 : 34,
-            height: isMobile ? 36 : 34,
-            borderRadius: 10,
+            width: isMobile ? 36 : compact ? 30 : 34,
+            height: isMobile ? 36 : compact ? 30 : 34,
+            borderRadius: compact && !isMobile ? 8 : 10,
             background: isMobile ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.025)",
             display: "grid",
             placeItems: "center",
           }}
         >
-          <IconComponent size={isMobile ? 20 : 18} color="#cdd6f4" />
+            <IconComponent size={isMobile ? 20 : compact ? 16 : 18} color="#cdd6f4" />
         </div>
         <div>
           <div
             style={{
-              fontSize: isMobile ? 15 : 17,
+              fontSize: isMobile ? 15 : compact ? 15 : 17,
               fontWeight: 500,
               color: "#cdd6f4",
               lineHeight: 1,
@@ -78,6 +79,7 @@ export default function HeroContextRail({
         focusWindows={focusWindows}
         openDaySummary={openDaySummary}
         accent={accent}
+        compact={compact}
         isMobile={isMobile}
         onOpenPressure={onOpenPressure}
         eventLoadingState={eventLoadingState}

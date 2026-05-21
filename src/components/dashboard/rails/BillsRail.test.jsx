@@ -23,10 +23,24 @@ describe("BillsRail", () => {
     expect(screen.queryByTestId("bills-rail-loading-placeholder")).toBeNull();
   });
 
-  it("keeps the five-row reservation for the loading placeholder", () => {
+  it("limits the desktop bill preview to four rows", () => {
+    const bills = Array.from({ length: 5 }, (_, index) => ({
+      ...futureBill,
+      id: `bill-${index + 1}`,
+      name: `Bill ${index + 1}`,
+      next_date: `2099-04-${21 + index}`,
+    }));
+
+    render(<BillsRail accent="#cba6da" bills={bills} />);
+
+    expect(screen.getByText("Bill 4")).toBeTruthy();
+    expect(screen.queryByText("Bill 5")).toBeNull();
+  });
+
+  it("keeps the four-row reservation for the loading placeholder", () => {
     render(<BillsRail accent="#cba6da" bills={[]} loadingState="empty_loading" />);
 
-    expect(screen.getByTestId("bills-rail-list").style.minHeight).toBe("255px");
+    expect(screen.getByTestId("bills-rail-list").style.minHeight).toBe("204px");
     expect(screen.getByTestId("bills-rail-loading-placeholder")).toBeTruthy();
   });
 });

@@ -49,7 +49,7 @@ const OPEN_DAY_URGENCY_COLOR = {
   low: null,
 };
 
-function OpenDayBlock({ summary, accent, isMobile = false }) {
+function OpenDayBlock({ summary, accent, compact = false, isMobile = false }) {
   const isLight = summary.tone === "light";
   const primary = summary.primary;
   const Icon = primary ? OPEN_DAY_ICONS[primary.kind] : null;
@@ -60,7 +60,7 @@ function OpenDayBlock({ summary, accent, isMobile = false }) {
     <div
       data-testid="focus-window-open-day"
       style={{
-        padding: isMobile ? "10px 12px" : "8px 10px",
+        padding: isMobile ? "10px 12px" : compact ? "7px 9px" : "8px 10px",
         borderRadius: 10,
         background: `${accent}0d`,
         border: `1px solid ${accent}22`,
@@ -194,6 +194,7 @@ function OpenDayBlock({ summary, accent, isMobile = false }) {
 
 export default function HeroFocusCard({
   accent,
+  compact = false,
   eventLoadingState = "ready",
   focusWindows,
   isMobile = false,
@@ -220,7 +221,7 @@ export default function HeroFocusCard({
       data-testid="focus-window-card"
       style={{
         flex: "unset",
-        padding: isMobile ? "10px 12px" : "7px 0 0",
+        padding: isMobile ? "10px 12px" : compact ? "5px 0 0" : "7px 0 0",
         borderRadius: 0,
         background: "transparent",
         borderTop: isMobile ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(255,255,255,0.06)",
@@ -232,7 +233,7 @@ export default function HeroFocusCard({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 10,
-          marginBottom: isMobile ? 6 : 5,
+          marginBottom: isMobile ? 6 : compact ? 4 : 5,
         }}
       >
         <div
@@ -289,12 +290,12 @@ export default function HeroFocusCard({
           <Skeleton className="h-[12px] w-[72%] bg-white/8" />
         </div>
       ) : primary && isOpenDay ? (
-        <OpenDayBlock summary={openDaySummary} accent={accent} isMobile={isMobile} />
+        <OpenDayBlock summary={openDaySummary} accent={accent} compact={compact} isMobile={isMobile} />
       ) : primary ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div
             style={{
-              padding: "8px 10px",
+              padding: compact && !isMobile ? "7px 9px" : "8px 10px",
               borderRadius: 10,
               background: `${accent}0d`,
               border: `1px solid ${accent}22`,

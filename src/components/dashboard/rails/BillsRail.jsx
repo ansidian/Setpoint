@@ -10,7 +10,7 @@ import {
   UrgencyPill,
 } from "./railPrimitives.jsx";
 
-const MAX_VISIBLE_BILLS = 5;
+const MAX_VISIBLE_BILLS = 4;
 const BILL_ROW_MIN_HEIGHT = 51;
 const BILL_ROW_MIN_HEIGHT_MOBILE = 72;
 
@@ -78,7 +78,7 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
         const bp = b.b.paid ? 1 : 0;
         return ap - bp;
       })
-      .slice(0, 5);
+      .slice(0, MAX_VISIBLE_BILLS);
   }, [bills]);
 
   const nextWeekTotal = upcoming
@@ -115,6 +115,8 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
           display: "flex",
           flexDirection: "column",
           minHeight: showLoadingPlaceholder ? loadingListMinHeight : undefined,
+          maxHeight: isMobile ? undefined : loadingListMinHeight,
+          overflow: "hidden",
         }}
       >
         {showLoadingPlaceholder ? <BillsRailLoadingPlaceholder isMobile={isMobile} /> : null}
@@ -176,6 +178,9 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
                     fontSize: 10.5,
                     color: "rgba(205,214,244,0.45)",
                     marginTop: 2,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: isMobile ? "normal" : "nowrap",
                   }}
                 >
                   {b.payee || ""}

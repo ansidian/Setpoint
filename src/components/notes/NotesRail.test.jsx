@@ -76,13 +76,13 @@ describe("NotesRail input", () => {
     setScrollHeight(input, 96);
     fireEvent.change(input, { target: { value: "A longer note that wraps across a few lines" } });
 
-    expect(input.style.height).toBe("96px");
-    expect(input.style.overflowY).toBe("hidden");
+    expect(input.style.height).toBe("72px");
+    expect(input.style.overflowY).toBe("auto");
 
     setScrollHeight(input, 220);
     fireEvent.change(input, { target: { value: "A much longer note\nwith several lines\nand more content" } });
 
-    expect(input.style.height).toBe("160px");
+    expect(input.style.height).toBe("72px");
     expect(input.style.overflowY).toBe("auto");
   });
 
@@ -101,5 +101,21 @@ describe("NotesRail input", () => {
       expect(mockCreateNote).toHaveBeenCalledWith("Line one");
     });
     expect(input.value).toBe("");
+  });
+
+  it("renders a bounded dashboard preview when many notes exist", async () => {
+    mockGetNotes.mockResolvedValue([
+      { id: "note-1", content: "First note", sort_order: 0 },
+      { id: "note-2", content: "Second note", sort_order: 1 },
+      { id: "note-3", content: "Third note", sort_order: 2 },
+      { id: "note-4", content: "Fourth note", sort_order: 3 },
+    ]);
+
+    render(<NotesRail accent="#cba6da" />);
+
+    expect(await screen.findByText("First note")).toBeTruthy();
+    expect(screen.getByText("Third note")).toBeTruthy();
+    expect(screen.queryByText("Fourth note")).toBeNull();
+    expect(screen.getByText("+1 more")).toBeTruthy();
   });
 });
