@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.js";
 import CalendarModal from "./CalendarModal.jsx";
 import { wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
@@ -65,41 +65,155 @@ describe("CalendarModal bills behavior", () => {
     expect(screen.queryByTestId("calendar-pending-update")).toBeNull();
   });
 
-  it("matches utility statement status against mirrored bill payees", () => {
-    window.innerWidth = 1900;
+  describe("utility statement status", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date("2026-05-20T12:00:00.000-07:00"));
+    });
 
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="bills"
-        onViewChange={() => {}}
-        focusDate="2026-05-26"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{
-          schedules: [
-            {
-              id: "water:2026-05-26",
-              scheduleId: "water",
-              name: "Water Bill",
-              payee: "SGV Water",
-              next_date: "2026-05-26",
-              amount: 50.67,
-              paid: false,
-              type: "bill",
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("matches utility statement status against mirrored bill payees", () => {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="bills"
+          onViewChange={() => {}}
+          focusDate="2026-05-26"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{
+            schedules: [
+              {
+                id: "water:2026-05-26",
+                scheduleId: "water",
+                name: "Water Bill",
+                payee: "SGV Water",
+                next_date: "2026-05-26",
+                amount: 50.67,
+                paid: false,
+                type: "bill",
+              },
+            ],
+            payeeMap: {},
+          }}
+          deadlinesData={{}}
+        />,
+      ));
+
+      fireEvent.click(screen.getByLabelText("Utility statement status"));
+
+      const waterRow = screen.getByText("Water").parentElement?.parentElement;
+      expect(waterRow).toBeTruthy();
+      expect(within(waterRow).getByText("next May 26")).toBeTruthy();
+    });
+
+    it("treats a paid past-due utility as honored, not stale", () => {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="bills"
+          onViewChange={() => {}}
+          focusDate="2026-05-20"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{
+            schedules: [
+              {
+                id: "water:2026-05-10",
+                scheduleId: "water",
+                name: "Water Bill",
+                payee: "SGV Water",
+                next_date: "2026-05-10",
+                amount: 50.67,
+                paid: true,
+                type: "bill",
+              },
+            ],
+            payeeMap: {},
+          }}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const trigger = screen.getByLabelText("Utility statement status");
+      fireEvent.click(trigger);
+
+      const waterRow = screen.getByText("Water").parentElement?.parentElement;
+      expect(within(waterRow).getByText("paid May 10")).toBeTruthy();
+      const dateSpan = within(waterRow).getByText("paid May 10");
+      const computed = dateSpan.getAttribute("style") || "";
+      expect(computed).not.toContain("rgb(249, 115, 22)");
+    });
+
+    it("looks past the visible range when locating tracked utility schedules", () => {
+      window.innerWidth = 1900;
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="bills"
+          onViewChange={() => {}}
+          focusDate="2026-05-20"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{
+            schedules: [
+              {
+                id: "spectrum:2026-05-25",
+                scheduleId: "spectrum",
+                name: "Spectrum",
+                payee: "Spectrum",
+                next_date: "2026-05-25",
+                amount: 50,
+                paid: false,
+                type: "bill",
+              },
+              {
+                id: "water:2026-06-26",
+                scheduleId: "water",
+                name: "Water Bill",
+                payee: "SGV Water",
+                next_date: "2026-06-26",
+                amount: 50.67,
+                paid: false,
+                type: "bill",
+              },
+            ],
+            payeeMap: {},
+          }}
+          billsRangeData={{
+            data: {
+              schedules: [
+                {
+                  id: "spectrum:2026-05-25",
+                  scheduleId: "spectrum",
+                  name: "Spectrum",
+                  payee: "Spectrum",
+                  next_date: "2026-05-25",
+                  amount: 50,
+                  paid: false,
+                  type: "bill",
+                },
+              ],
+              payeeMap: {},
             },
-          ],
-          payeeMap: {},
-        }}
-        deadlinesData={{}}
-      />,
-    ));
+          }}
+          deadlinesData={{}}
+        />,
+      ));
 
-    fireEvent.click(screen.getByLabelText("Utility statement status"));
+      fireEvent.click(screen.getByLabelText("Utility statement status"));
 
-    const waterRow = screen.getByText("Water").parentElement?.parentElement;
-    expect(waterRow).toBeTruthy();
-    expect(within(waterRow).getByText("next May 26")).toBeTruthy();
+      const waterRow = screen.getByText("Water").parentElement?.parentElement;
+      expect(within(waterRow).getByText("next Jun 26")).toBeTruthy();
+    });
   });
 
   it("refetches the visible Bills range when range data is marked stale", async () => {

@@ -32,6 +32,8 @@ const PROVIDERS = {
 };
 const BILL_MIRROR_LOOKBACK_DAYS = 30;
 const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
+const BILLS_CURRENT_LOOKBACK_DAYS = 30;
+const BILLS_CURRENT_LOOKAHEAD_DAYS = 90;
 export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 6 * 60 * 60 * 1000;
 const BILLS_MIRROR_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map();
@@ -319,15 +321,19 @@ function currentPayloadFromOccurrences(occurrences, {
   syncHealth,
   now = new Date(),
 } = {}) {
-  const today = now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-    .toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const today = todayYmd(now);
+  const weekFromNow = addDaysYmd(today, 7);
+  const lookbackStart = addDaysYmd(today, -BILLS_CURRENT_LOOKBACK_DAYS);
+  const lookaheadEnd = addDaysYmd(today, BILLS_CURRENT_LOOKAHEAD_DAYS);
   const bills = occurrences.filter((occurrence) =>
     occurrence.next_date >= today && occurrence.next_date <= weekFromNow,
   );
+  const allSchedules = occurrences.filter((occurrence) =>
+    occurrence.next_date >= lookbackStart && occurrence.next_date <= lookaheadEnd,
+  );
   return {
     bills,
-    allSchedules: occurrences,
+    allSchedules,
     payeeMap: {},
     actualConfigured,
     actualBudgetUrl,
@@ -560,12 +566,16 @@ export async function readBillsMirrorCurrent(userId, {
   dbClient = db,
   now = new Date(),
 } = {}) {
-  const today = now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-    .toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const data = await readBillsMirrorRange(userId, { start: today, end: weekFromNow }, { dbClient });
+  const today = todayYmd(now);
+  const weekFromNow = addDaysYmd(today, 7);
+  const lookbackStart = addDaysYmd(today, -BILLS_CURRENT_LOOKBACK_DAYS);
+  const lookaheadEnd = addDaysYmd(today, BILLS_CURRENT_LOOKAHEAD_DAYS);
+  const data = await readBillsMirrorRange(userId, { start: lookbackStart, end: lookaheadEnd }, { dbClient });
+  const bills = data.schedules.filter((schedule) =>
+    schedule.next_date >= today && schedule.next_date <= weekFromNow,
+  );
   return {
-    bills: data.schedules,
+    bills,
     allSchedules: data.schedules,
     payeeMap: data.payeeMap,
     actualConfigured: data.syncHealth.configured === true,

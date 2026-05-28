@@ -98,6 +98,7 @@ const {
   sendBill,
   listAccounts,
   readBillsMirrorRange,
+  readBillsMirrorCurrent,
   refreshBillsMirror,
   hydrateActualCache,
   scheduleBillsMirrorRefresh,
@@ -427,6 +428,69 @@ describe("Bills mirror", () => {
     expect(out.syncHealth).toMatchObject({ state: "needs_sync", configured: null });
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockActual.getMetadata).not.toHaveBeenCalled();
+  });
+
+  it("readBillsMirrorCurrent returns 7-day bills but a broader allSchedules window", async () => {
+    const now = new Date("2026-05-06T12:00:00.000Z");
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult([
+        {
+          status: "current",
+          actual_configured: 1,
+          actual_budget_url: "https://actual.example.test",
+          last_success_at: "2026-05-06T12:00:00.000Z",
+          last_attempt_at: "2026-05-06T12:00:00.000Z",
+          last_error: null,
+          pending_refresh_at: null,
+          refresh_started_at: null,
+        },
+      ]))
+      .mockResolvedValueOnce(rowResult([
+        {
+          occurrence_id: "spectrum:2026-05-11",
+          schedule_id: "spectrum",
+          occurrence_date: "2026-05-11",
+          name: "Spectrum",
+          payee: "Spectrum",
+          amount: 50,
+          type: "bill",
+          paid: 0,
+          open_action_disabled: 0,
+        },
+        {
+          occurrence_id: "water:2026-06-26",
+          schedule_id: "water",
+          occurrence_date: "2026-06-26",
+          name: "Water Bill",
+          payee: "SGV Water",
+          amount: 50.67,
+          type: "bill",
+          paid: 0,
+          open_action_disabled: 0,
+        },
+        {
+          occurrence_id: "sce:2026-07-15",
+          schedule_id: "sce",
+          occurrence_date: "2026-07-15",
+          name: "SCE",
+          payee: "SCE",
+          amount: 120,
+          type: "bill",
+          paid: 0,
+          open_action_disabled: 0,
+        },
+      ]));
+
+    const out = await readBillsMirrorCurrent("u1", { now });
+
+    expect(out.bills.map((bill) => bill.scheduleId)).toEqual(["spectrum"]);
+    expect(out.allSchedules.map((bill) => bill.scheduleId)).toEqual(["spectrum", "water", "sce"]);
+    const occurrenceQuery = mockDb.execute.mock.calls[1][0];
+    expect(occurrenceQuery.args).toEqual(expect.arrayContaining([
+      "u1",
+      expect.stringMatching(/^2026-04-/),
+      expect.stringMatching(/^2026-08-/),
+    ]));
   });
 
   it("full-replaces schedule and occurrence mirror rows on successful refresh", async () => {

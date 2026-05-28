@@ -13,6 +13,32 @@ const ICONS = {
   trash: Trash2,
 };
 
+function pickBestUtilityMatch(matches, today) {
+  if (!matches?.length) return null;
+  let bestUpcoming = null;
+  let bestRecentPaid = null;
+  let fallback = null;
+  for (const entry of matches) {
+    const nextDate = entry.next_date || null;
+    if (nextDate && nextDate >= today) {
+      if (!bestUpcoming || nextDate.localeCompare(bestUpcoming.next_date) < 0) {
+        bestUpcoming = entry;
+      }
+      continue;
+    }
+    if (entry.paid && nextDate) {
+      if (!bestRecentPaid || nextDate.localeCompare(bestRecentPaid.next_date) > 0) {
+        bestRecentPaid = entry;
+      }
+      continue;
+    }
+    if (!fallback || (nextDate && (!fallback.next_date || nextDate.localeCompare(fallback.next_date) > 0))) {
+      fallback = entry;
+    }
+  }
+  return bestUpcoming || bestRecentPaid || fallback || null;
+}
+
 export default function UtilityStatusButton({ data, suppressOutsideClick }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 0 });
@@ -20,25 +46,30 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
   const popoverRef = useRef(null);
 
   const utilityStatus = useMemo(() => {
-    const schedules = data?.schedules || [];
+    const schedules = data?.allSchedules || data?.schedules || [];
     const payeeMap = data?.payeeMap || {};
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     const rows = TRACKED_UTILITIES.map((utility) => {
-      const schedule = schedules.find((entry) => {
+      const matches = schedules.filter((entry) => {
         const payeeCond = entry.conditions?.find((condition) => condition.field === "payee");
         const payeeName = payeeCond ? payeeMap[payeeCond.value] : null;
         const haystack = `${payeeName || ""} ${entry.payee || ""} ${entry.name || ""}`.toLowerCase();
         return haystack.includes(utility.match);
       });
+      const schedule = pickBestUtilityMatch(matches, today);
       const nextDate = schedule?.next_date || null;
       const amtCond = schedule?.conditions?.find((condition) => condition.field === "amount");
       const amount = amtCond?.value ? Math.abs(amtCond.value) / 100 : schedule?.amount ?? null;
+      const paid = !!schedule?.paid;
+      const isPast = !!nextDate && nextDate < today;
       return {
         ...utility,
         found: !!schedule,
         next_date: nextDate,
         amount,
-        isStale: !schedule || !nextDate || nextDate < today,
+        paid,
+        isStale: !!schedule && isPast && !paid,
+        isHonored: !!schedule && paid,
       };
     });
 
@@ -51,7 +82,8 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
   }, [data]);
 
   const anyStale = utilityStatus.some((utility) => utility.isStale && utility.found);
-  const allFresh = utilityStatus.length > 0 && utilityStatus.every((utility) => utility.found && !utility.isStale);
+  const allFresh = utilityStatus.length > 0
+    && utilityStatus.every((utility) => utility.found && !utility.isStale);
 
   const updatePos = useCallback(() => {
     if (!btnRef.current) return;
@@ -197,16 +229,32 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
                   : "#a6e3a1";
               const days = utility.next_date ? daysUntil(utility.next_date) : null;
               const relative = relativeDateLabel(days);
+              const isPastDate = !!utility.next_date && days != null && days < 0;
               const dateText = !utility.found
                 ? "not found"
+                : utility.isHonored && isPastDate
+                  ? `paid ${formatShortDate(utility.next_date)}`
+                  : utility.isStale
+                    ? `last ${formatShortDate(utility.next_date)}`
+                    : `next ${formatShortDate(utility.next_date)}`;
+              const dateColor = !utility.found
+                ? "rgba(255,255,255,0.4)"
                 : utility.isStale
-                  ? `last ${formatShortDate(utility.next_date)}`
-                  : `next ${formatShortDate(utility.next_date)}`;
+                  ? "#f97316"
+                  : utility.isHonored && isPastDate
+                    ? "#a6e3a1"
+                    : "rgba(255,255,255,0.4)";
               const tooltipText =
                 utility.found && relative ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, lineHeight: 1.3 }}>
                     {utility.amount != null && <span style={{ fontWeight: 600 }}>{formatAmount(utility.amount)}</span>}
-                    <span>{utility.isStale ? `${relative} - statement pending` : relative}</span>
+                    <span>{
+                      utility.isStale
+                        ? `${relative} - statement pending`
+                        : utility.isHonored && isPastDate
+                          ? `${relative} - statement paid`
+                          : relative
+                    }</span>
                   </div>
                 ) : null;
 
@@ -230,7 +278,7 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
                     <span
                       style={{
                         fontSize: 12,
-                        color: utility.isStale && utility.found ? "#f97316" : "rgba(255,255,255,0.4)",
+                        color: dateColor,
                         whiteSpace: "nowrap",
                         cursor: tooltipText ? "help" : "default",
                       }}
