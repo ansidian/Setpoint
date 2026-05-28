@@ -19,6 +19,11 @@ function miniDate(name) {
 describe("CalendarModal Mini Calendar activation", () => {
   it("selects a Mini Calendar date and lands the agenda rail on that date", async () => {
     window.innerWidth = 1900;
+    // Pin "today" off the target dates so the Mini Calendar selection renders as
+    // "selected" rather than "today-selected"; fake only Date so the rail's real
+    // requestAnimationFrame/setTimeout scheduling keeps working.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-15T16:00:00.000Z"));
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     const originalScrollTo = HTMLElement.prototype.scrollTo;
     const scrollTo = vi.fn();
@@ -73,6 +78,11 @@ describe("CalendarModal Mini Calendar activation", () => {
 
   it("syncs Mini Calendar selection from agenda scrolling before later date activation", async () => {
     window.innerWidth = 1900;
+    // Pin "today" off the target dates so the Mini Calendar selection renders as
+    // "selected" rather than "today-selected"; fake only Date so the rail's real
+    // requestAnimationFrame/setTimeout scheduling keeps working.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-15T16:00:00.000Z"));
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     const originalScrollTo = HTMLElement.prototype.scrollTo;
     const scrollTo = vi.fn(function scrollToMock(options) {
