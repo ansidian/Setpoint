@@ -502,4 +502,45 @@ describe("transaction tools", () => {
     expect(result.buckets).toHaveLength(2);
     expect(deps.summarizeSpending).toHaveBeenCalledWith("user-1", expect.objectContaining({ group_by: "category" }));
   });
+
+  it("summarize_spending emits a summary event with buckets", async () => {
+    const buckets = [{ label: "Groceries", amount: 82, count: 2 }, { label: "Gas", amount: 60, count: 1 }];
+    const period = { start: "2026-04-01", end: "2026-05-31" };
+    const deps = {
+      summarizeSpending: vi.fn(async () => ({
+        total: 142, period, group_by: "category", buckets,
+      })),
+    };
+    const ctx = ctxWith(deps);
+    await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctx);
+    expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({
+      type: "summary",
+      total: 142,
+      period,
+      group_by: "category",
+      buckets,
+    }));
+  });
+
+  it("summarize_spending does NOT emit on error", async () => {
+    const deps = {
+      summarizeSpending: vi.fn(async () => ({ error: "ynab unavailable" })),
+    };
+    const ctx = ctxWith(deps);
+    await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctx);
+    const summaryCalls = ctx.emit.mock.calls.filter(([e]) => e?.type === "summary");
+    expect(summaryCalls).toHaveLength(0);
+  });
+
+  it("summarize_spending does NOT emit when buckets are empty", async () => {
+    const deps = {
+      summarizeSpending: vi.fn(async () => ({
+        total: 0, period: { start: "2026-04-01", end: "2026-05-31" }, group_by: "category", buckets: [],
+      })),
+    };
+    const ctx = ctxWith(deps);
+    await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctx);
+    const summaryCalls = ctx.emit.mock.calls.filter(([e]) => e?.type === "summary");
+    expect(summaryCalls).toHaveLength(0);
+  });
 });

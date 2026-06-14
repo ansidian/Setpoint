@@ -91,6 +91,16 @@ export function applyAlfredEvent(messages, event) {
         id: nextId(), type: "rows", kind: event.kind, items: event.items || [],
       }];
     }
+    case "summary": {
+      return [...closeOpenSay(messages), {
+        id: nextId(),
+        type: "summary",
+        total: event.total,
+        period: event.period || {},
+        group_by: event.group_by || "category",
+        buckets: event.buckets || [],
+      }];
+    }
     case "run_end":
       return closeOpenSay(messages);
     case "run_error":
@@ -170,6 +180,23 @@ export function isNearBottom(scrollTop, clientHeight, scrollHeight, threshold = 
   const view = Number(clientHeight) || 0;
   const full = Number(scrollHeight) || 0;
   return full - (top + view) <= threshold;
+}
+
+export function spendingBreakdownRows(buckets = []) {
+  const max = buckets.reduce((m, b) => Math.max(m, Math.abs(Number(b.amount) || 0)), 0);
+  return buckets.map((b) => {
+    const amount = Number(b.amount) || 0;
+    const pct = max > 0 ? (Math.abs(amount) / max) * 100 : 0;
+    // "Other" is the rollup label hardcoded in server/transactions/transactions-service.js;
+    // matching it greys that bar. Keep in sync if the service's rollup label ever changes.
+    return {
+      label: b.label,
+      amount,
+      count: b.count,
+      pct: Math.round(pct * 10) / 10,
+      isOther: b.label === "Other",
+    };
+  });
 }
 
 // Render key for the auto-scroll effect (P3-4): bumps when a new message is

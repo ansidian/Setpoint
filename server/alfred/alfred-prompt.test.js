@@ -40,4 +40,9 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toMatch(/transactions|spending/i);
     expect(prompt).not.toMatch(/cannot read budget transactions/i);
   });
+
+  it("mentions the breakdown card behavior for spending summaries", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
+    expect(prompt).toMatch(/breakdown card/i);
+  });
 });
