@@ -151,6 +151,30 @@ describe("search_email", () => {
     expect(ctx.conversation.items.get("email:em-1").subject).toBe("Car insurance renewal");
   });
 
+  it("renders the sender as a readable string, not [object Object]", async () => {
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "hybrid",
+      total: 1,
+      candidates: [{
+        uid: "em-1",
+        subject: "Car insurance renewal",
+        body_snippet: "renews soon",
+        email_date: "2026-06-10T12:00:00.000Z",
+        read: false,
+        from: { name: "Geico", address: "no-reply@geico.com" },
+        metadata: {},
+        scores: {},
+      }],
+    });
+    const result = await executeAlfredTool("search_email", { query: "geico" }, ctxWith({ retrieve }));
+    const from = result.results[0].from;
+    // still fenced as untrusted content...
+    expect(from).toContain("<email_content uid=\"em-1\">");
+    // ...but with the real sender the model can reason about, not a stringified object
+    expect(from).toContain("Geico");
+    expect(from).not.toContain("[object Object]");
+  });
+
   it("requires a query", async () => {
     const ctx = ctxWith({ retrieve: vi.fn() });
     const result = await executeAlfredTool("search_email", {}, ctx);

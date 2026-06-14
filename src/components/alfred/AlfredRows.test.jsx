@@ -11,9 +11,11 @@ describe("RowsBlock", () => {
       { id: "b2", name: "Spotify", payee: "Spotify", amount: 12.99, next_date: "2026-06-14", paid: true },
     ]} />);
     expect(screen.getByText("Rent")).toBeTruthy();
-    expect(screen.getByText("$1,850.00")).toBeTruthy();
+    // $1,850.00 appears on the row and again in the Total due footer (only unpaid bill).
+    expect(screen.getAllByText("$1,850.00").length).toBeGreaterThan(0);
     expect(screen.getByText("Jun 14")).toBeTruthy();
-    expect(screen.getByText("Paid")).toBeTruthy();
+    // the paid chip now keeps the date visible: "Paid · Jun 14"
+    expect(screen.getByText(/^Paid ·/)).toBeTruthy();
   });
 
   it("renders event rows with time column and calendar name", () => {
@@ -87,5 +89,63 @@ describe("RowsBlock", () => {
       { subject: "No uid", from: { name: "X" }, email_date: "2026-06-12T17:30:00.000Z" },
     ]} />);
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("shows an absolute-date tooltip on email rows", () => {
+    render(<RowsBlock accent="#cba6da" kind="email" items={[
+      { uid: "m1", subject: "Verify enrollment", from: { name: "Aid" }, email_date: "2026-06-12T17:30:00.000Z" },
+    ]} />);
+    expect(screen.getByTitle(/Received .*2026/)).toBeTruthy();
+  });
+
+  it("groups email rows into time sections when they span buckets", () => {
+    const now = new Date("2026-06-13T18:00:00.000Z");
+    render(<RowsBlock accent="#cba6da" kind="email" now={now} items={[
+      { uid: "fresh", subject: "Fresh one", from: { name: "A" }, email_date: "2026-06-13T10:00:00.000Z" },
+      { uid: "stale", subject: "Stale one", from: { name: "B" }, email_date: "2026-05-01T10:00:00.000Z" },
+    ]} />);
+    expect(screen.getByText("Today")).toBeTruthy();
+    expect(screen.getByText("Earlier")).toBeTruthy();
+  });
+
+  it("omits section headers when all email rows fall in one bucket", () => {
+    const now = new Date("2026-06-13T18:00:00.000Z");
+    render(<RowsBlock accent="#cba6da" kind="email" now={now} items={[
+      { uid: "a", subject: "One", from: { name: "A" }, email_date: "2026-05-01T10:00:00.000Z" },
+      { uid: "b", subject: "Two", from: { name: "B" }, email_date: "2026-05-02T10:00:00.000Z" },
+    ]} />);
+    expect(screen.queryByText("Earlier")).toBeNull();
+    expect(screen.queryByText("Today")).toBeNull();
+  });
+
+  it("groups events by day and surfaces the location", () => {
+    const now = new Date("2026-06-14T18:00:00.000Z");
+    render(<RowsBlock accent="#cba6da" kind="event" now={now} items={[
+      { id: "e1", title: "Dentist", time: "10:00 AM", allDay: false, calendarName: "Personal", startMs: Date.parse("2026-06-14T17:00:00.000Z"), location: "Downtown Dental" },
+      { id: "e2", title: "Standup", time: "9:00 AM", allDay: false, calendarName: "Work", startMs: Date.parse("2026-06-15T16:00:00.000Z") },
+    ]} />);
+    expect(screen.getByText("Today")).toBeTruthy();
+    expect(screen.getByText("Tomorrow")).toBeTruthy();
+    expect(screen.getByText("Downtown Dental")).toBeTruthy();
+  });
+
+  it("routes a completed deadline into a Done section", () => {
+    const now = new Date("2026-06-14T18:00:00.000Z");
+    render(<RowsBlock accent="#cba6da" kind="deadline" now={now} items={[
+      { id: "d1", title: "Submit timesheet", due_date: "2026-06-14", status: "incomplete" },
+      { id: "d2", title: "File expense report", due_date: "2026-06-09", status: "complete" },
+    ]} />);
+    expect(screen.getByText("Today")).toBeTruthy();
+    expect(screen.getByText("Done")).toBeTruthy();
+  });
+
+  it("shows a Total due footer summing only unpaid bills", () => {
+    render(<RowsBlock accent="#cba6da" kind="bill" items={[
+      { id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-18", paid: false },
+      { id: "b2", name: "Internet", payee: "Sonic", amount: 70, next_date: "2026-06-14", paid: false },
+      { id: "b3", name: "Spotify", payee: "Spotify", amount: 12.99, next_date: "2026-06-05", paid: true },
+    ]} />);
+    expect(screen.getByText("Total due")).toBeTruthy();
+    expect(screen.getByText("$1,920.00")).toBeTruthy();
   });
 });
