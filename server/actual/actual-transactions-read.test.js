@@ -33,7 +33,7 @@ async function writeFixture(budgetDir) {
     CREATE TABLE payees (id TEXT, name TEXT, transfer_acct TEXT, tombstone INTEGER);
     CREATE TABLE categories (id TEXT, name TEXT, cat_group TEXT, sort_order REAL, tombstone INTEGER);
     CREATE TABLE v_transactions (
-      id TEXT, date INTEGER, amount INTEGER, payee TEXT, category TEXT, account TEXT, tombstone INTEGER
+      id TEXT, date INTEGER, amount INTEGER, payee TEXT, category TEXT, account TEXT, notes TEXT, tombstone INTEGER
     );
     INSERT INTO accounts VALUES ('acct-1','Checking','checking',0,0),('acct-2','Amex','credit',0,0);
     INSERT INTO payees VALUES
@@ -43,12 +43,14 @@ async function writeFixture(budgetDir) {
       ('p-xfer','Transfer to Amex','acct-2',0);
     INSERT INTO categories VALUES ('c-grocery','Groceries','g1',1,0),('c-rent','Rent','g1',2,0);
     INSERT INTO v_transactions VALUES
-      ('t-grocery1', 20260505, -4210, 'p-store', 'c-grocery', 'acct-1', 0),
-      ('t-grocery2', 20260518, -3990, 'p-store', 'c-grocery', 'acct-1', 0),
-      ('t-rent',     20260501, -250000, 'p-rent', 'c-rent', 'acct-1', 0),
-      ('t-income',   20260515, 500000, 'p-job', NULL, 'acct-1', 0),
-      ('t-transfer', 20260510, -120000, 'p-xfer', NULL, 'acct-1', 0),
-      ('t-old',      20260105, -9999, 'p-store', 'c-grocery', 'acct-1', 0)
+      ('t-grocery1', 20260505, -4210, 'p-store', 'c-grocery', 'acct-1', 'Weekly run', 0),
+      ('t-grocery2', 20260518, -3990, 'p-store', 'c-grocery', 'acct-1', 'Snacks for party', 0),
+      ('t-rent',     20260501, -250000, 'p-rent', 'c-rent', 'acct-1', '', 0),
+      ('t-income',   20260515, 500000, 'p-job', NULL, 'acct-1', '', 0),
+      ('t-transfer', 20260510, -120000, 'p-xfer', NULL, 'acct-1', '', 0),
+      ('t-old',      20260105, -9999, 'p-store', 'c-grocery', 'acct-1', '', 0),
+      ('t-pct',      20260315, -1000, 'p-store', 'c-grocery', 'acct-1', 'Save 5% cashback', 0),
+      ('t-plain',    20260316, -1000, 'p-store', 'c-grocery', 'acct-1', 'Save 5 dollars', 0)
     ;
   `);
   await client.close();
@@ -113,5 +115,36 @@ describe("readTransactionsRange", () => {
     }, opts());
     expect(result.transactions).toHaveLength(1);
     expect(result.truncated).toBe(true);
+  });
+
+  it("filters by notes substring (case-insensitive) and returns notes in results", async () => {
+    await fixture();
+
+    // (a) lowercase match — only t-grocery1 has 'Weekly run'
+    const lower = await readTransactionsRange("u1", {
+      start: "2026-05-01", end: "2026-05-31", notes: "weekly",
+    }, opts());
+    expect(lower.transactions.map((t) => t.id)).toEqual(["t-grocery1"]);
+
+    // (b) case-insensitive — uppercase term produces same result
+    const upper = await readTransactionsRange("u1", {
+      start: "2026-05-01", end: "2026-05-31", notes: "WEEKLY",
+    }, opts());
+    expect(upper.transactions.map((t) => t.id)).toEqual(["t-grocery1"]);
+
+    // (c) returned transaction objects include the notes field with the right value
+    const txn = lower.transactions[0];
+    expect(txn.notes).toBe("Weekly run");
+  });
+
+  it("treats LIKE wildcards in a notes search as literal characters", async () => {
+    await fixture();
+    // 't-pct' note contains a literal '%'; 't-plain' does not (both contain '5').
+    // A correctly escaped search for '5%' must match ONLY the literal occurrence —
+    // an unescaped '%' would act as a wildcard and over-match 't-plain' too.
+    const result = await readTransactionsRange("u1", {
+      start: "2026-03-01", end: "2026-03-31", notes: "5%",
+    }, opts());
+    expect(result.transactions.map((t) => t.id)).toEqual(["t-pct"]);
   });
 });
