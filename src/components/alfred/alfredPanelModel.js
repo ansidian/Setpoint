@@ -101,6 +101,17 @@ export function applyAlfredEvent(messages, event) {
         buckets: event.buckets || [],
       }];
     }
+    case "breakdown": {
+      return [...closeOpenSay(messages), {
+        id: nextId(),
+        type: "breakdown",
+        kind: event.kind,
+        title: event.title || "",
+        caption: event.caption || "",
+        total: event.total || 0,
+        buckets: event.buckets || [],
+      }];
+    }
     case "run_end":
       return closeOpenSay(messages);
     case "run_error":
