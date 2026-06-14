@@ -55,4 +55,5 @@ The landing surface: hero (greeting/callouts/weather), today timeline, and rails
 ## Related
 
 - `src/components/calendar/` — modal mounted via `DashboardCalendarModalMount.jsx`
+- `src/components/alfred/` — Alfred Panel mounted by `DashboardShell.jsx` (⌘\ toggle, ⌘⇧\ new chat)
 - `server/routes/dashboard.js` — state fetch + SSE stream backing this view
