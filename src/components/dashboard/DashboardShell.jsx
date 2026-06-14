@@ -23,6 +23,7 @@ import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarMod
 import { resetInboxSession, setInboxSession } from "../inbox/useInboxSessionState";
 export { DashboardBody };
 const InboxView = lazy(() => import("../inbox/InboxView"));
+const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
 export function DashboardShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
@@ -89,6 +90,28 @@ export function DashboardShell({
   const calendarEventsRangeRef = useRef(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [alfredOpen, setAlfredOpen] = useState(false);
+  const [alfredMounted, setAlfredMounted] = useState(false);
+  const [alfredNewChatTick, setAlfredNewChatTick] = useState(0);
+  const [alfredHandoff, setAlfredHandoff] = useState(null);
+  const alfredHandoffSeq = useRef(0);
+  const toggleAlfred = useCallback(() => {
+    setAlfredMounted(true);
+    setAlfredOpen((v) => !v);
+  }, []);
+  const alfredNewChat = useCallback(() => {
+    setAlfredMounted(true);
+    setAlfredOpen(true);
+    setAlfredNewChatTick((t) => t + 1);
+  }, []);
+  const askAlfred = useCallback((query) => {
+    const q = String(query || "").trim();
+    if (!q) return;
+    setAlfredMounted(true);
+    setAlfredOpen(true);
+    alfredHandoffSeq.current += 1;
+    setAlfredHandoff({ id: alfredHandoffSeq.current, query: q });
+  }, []);
   const analyticsBackdropSourceRef = useRef(null);
   const {
     backdropSnapshot: shellBackdropSnapshot,
@@ -192,6 +215,8 @@ export function DashboardShell({
     openDeadlineCreate,
     openCalendar,
     setHistoryOpen,
+    toggleAlfred,
+    alfredNewChat,
   });
 
   const { accent } = customize;
@@ -427,6 +452,7 @@ export function DashboardShell({
               onRefresh={onQuickRefresh}
               commitPendingUndoSignal={calendarOpenRequestId}
               isMobile={isMobile}
+              onAskAlfred={askAlfred}
             />
           </Suspense>
         )}
@@ -481,6 +507,18 @@ export function DashboardShell({
           calendarDeadlineActions,
         }}
       />
+
+      {alfredMounted && (
+        <Suspense fallback={null}>
+          <AlfredPanel
+            open={alfredOpen}
+            onClose={() => setAlfredOpen(false)}
+            accent={accent}
+            handoff={alfredHandoff}
+            newChatTick={alfredNewChatTick}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

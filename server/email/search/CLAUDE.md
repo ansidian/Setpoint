@@ -1,16 +1,14 @@
 # Server Email Search Map
 
-AI search pipeline over the email index: query planning, hybrid retrieval (FTS + embeddings), ranking, and answer compilation. Entry point for routes is `email-search-answer.js`; `email-search-embedding-worker.js` exposes the background re-embedding hook consumed by `server/scheduler.js`. Depends one-way on `server/email/` (reads the index; never fetches providers directly).
+AI search pipeline over the email index: hybrid retrieval (FTS + embeddings) and ranking. Primary consumer is Alfred's `search_email` tool (`server/alfred/alfred-tools.js`) via `retrieveInboxAiSearch`; the indexed-search route also reads it. `email-search-embedding-worker.js` exposes the background re-embedding hook consumed by `server/scheduler.js`. Depends one-way on `server/email/` (reads the index; never fetches providers directly). The standalone LLM query planner and answer compiler were retired with the inbox ask-ai surface — the Alfred model calling `search_email` is the planner now.
 
 ## Files
 
 - `email-search-query.js` — parses search strings: intent, date range, sender
-- `email-search-planner.js` — LLM query planner decomposing semantic intent
 - `email-search-date-window.js` — decides the search lookback window from email age/relevance
 - `email-search-retrieval.js` — retrieval chain: FTS → embeddings → ranking → dedupe/limit
 - `email-search-ranking.js` — re-ranks by BM25, recency, sender match
-- `email-search-evidence.js` — chains evidence: semantics → BM25 → planner
-- `email-search-answer.js` — compiles the AI answer with sources and usage logging
+- `email-search-evidence.js` — evidence gate: vector floor, lexical floor, field matches
 - `email-search-embeddings.js` — embedding model config: dimension, version, pricing
 - `email-search-embedding-client.js` — embedding API client
 - `email-search-embedding-store.js` — vector store: corpus load/refresh, similarity, staleness

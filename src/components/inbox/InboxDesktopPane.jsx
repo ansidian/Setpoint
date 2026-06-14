@@ -32,12 +32,7 @@ export default function InboxDesktopPane({
   indexedSearchActive,
   indexedSearchLoading,
   indexedSearchError,
-  inboxAiSearchAccountsById,
-  inboxAiSearch,
-  inboxAiSearchActive,
-  onInboxAiIntent,
-  onInboxAiConfirm,
-  onInboxAiCancel,
+  onAskAlfred,
   visibleEmails,
   laneCounts,
   liveCount,
@@ -63,8 +58,8 @@ export default function InboxDesktopPane({
   undo,
   onUndo,
 }) {
-  const rowAccountsById = indexedSearchActive || inboxAiSearchActive
-    ? { ...accountsById, ...indexedSearchAccountsById, ...inboxAiSearchAccountsById }
+  const rowAccountsById = indexedSearchActive
+    ? { ...accountsById, ...indexedSearchAccountsById }
     : accountsById;
 
   return (
@@ -142,7 +137,7 @@ export default function InboxDesktopPane({
               selectedId={selectedEmail?.id || selectedEmail?.uid || null}
               onOpen={(email) => setSelectedId(email.id || email.uid)}
               density={density}
-              layout={indexedSearchActive || inboxAiSearchActive ? "flat" : grouping}
+              layout={indexedSearchActive ? "flat" : grouping}
               showPreview={showPreview}
               searchQuery={search}
               onSearchChange={setSearch}
@@ -155,11 +150,7 @@ export default function InboxDesktopPane({
               indexedSearchActive={indexedSearchActive}
               indexedSearchLoading={indexedSearchLoading}
               indexedSearchError={indexedSearchError}
-              inboxAiSearch={inboxAiSearch}
-              inboxAiSearchActive={inboxAiSearchActive}
-              onInboxAiIntent={onInboxAiIntent}
-              onInboxAiConfirm={onInboxAiConfirm}
-              onInboxAiCancel={onInboxAiCancel}
+              onAskAlfred={onAskAlfred}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
               noiseUnreadCount={noiseUnreadCount}

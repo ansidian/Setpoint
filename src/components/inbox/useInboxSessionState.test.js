@@ -7,7 +7,6 @@ import useInboxSessionState, {
   setInboxSession,
   useInboxSessionStore,
 } from "./useInboxSessionState.js";
-import { EMPTY_INBOX_AI_SEARCH } from "./inboxAiSearchModel.js";
 
 afterEach(() => {
   resetInboxSession();
@@ -72,7 +71,6 @@ describe("useInboxSessionState field accessors", () => {
     expect(result.current.lane).toBe("__all");
     expect(result.current.search).toBe("");
     expect(result.current.selectedId).toBeNull();
-    expect(result.current.inboxAiSearch).toBe(EMPTY_INBOX_AI_SEARCH);
   });
 
   it("writes individual fields through the session setter", () => {
@@ -91,21 +89,7 @@ describe("useInboxSessionState field accessors", () => {
     });
   });
 
-  it("clears a non-idle AI search when the plain search changes", () => {
-    const { hook, readSession, rerender } = renderAccessors({
-      inboxAiSearch: { ...EMPTY_INBOX_AI_SEARCH, status: "result", query: "rent" },
-    });
-
-    act(() => {
-      hook.result.current.setSearch("lease");
-    });
-    rerender();
-
-    expect(readSession().search).toBe("lease");
-    expect(readSession().inboxAiSearch.status).toBe("idle");
-  });
-
-  it("leaves an idle AI search untouched when searching", () => {
+  it("writes the plain search through the session setter", () => {
     const { hook, readSession } = renderAccessors();
 
     act(() => {
@@ -113,6 +97,5 @@ describe("useInboxSessionState field accessors", () => {
     });
 
     expect(readSession().search).toBe("lease");
-    expect(readSession().inboxAiSearch).toBe(EMPTY_INBOX_AI_SEARCH);
   });
 });

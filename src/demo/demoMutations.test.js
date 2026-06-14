@@ -112,7 +112,6 @@ describe("demo mode in-memory mutations", () => {
 
     await expect(api.getGmailAuthUrl()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.getCalendarPlaceSuggestions("coffee")).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
-    await expect(api.askInboxAiSearch("what matters?")).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testActualBudget()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testDiscordReminderWebhook()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
   });

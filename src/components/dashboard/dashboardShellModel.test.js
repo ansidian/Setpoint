@@ -140,4 +140,26 @@ describe("dashboard shell model", () => {
   it("forwards the cache stamp so modal memos invalidate when event content changes", () => {
     expect(buildDashboardEventsData({ cacheStamp: 7 }).cacheStamp).toBe(7);
   });
+
+  describe("alfred hotkeys", () => {
+    it("toggles alfred on cmd+backslash even from an editable target", () => {
+      expect(resolveDashboardShellHotkey({
+        key: "\\", code: "Backslash", metaKey: true, editableTarget: true,
+      })).toEqual({ action: "toggle-alfred" });
+      expect(resolveDashboardShellHotkey({
+        key: "\\", code: "Backslash", ctrlKey: true,
+      })).toEqual({ action: "toggle-alfred" });
+    });
+
+    it("starts a new chat on cmd+shift+backslash (key reports as | on US layouts)", () => {
+      expect(resolveDashboardShellHotkey({
+        key: "|", code: "Backslash", metaKey: true, shiftKey: true, editableTarget: true,
+      })).toEqual({ action: "alfred-new-chat" });
+    });
+
+    it("plain backslash still does nothing", () => {
+      expect(resolveDashboardShellHotkey({ key: "\\", code: "Backslash" }))
+        .toEqual({ action: "ignore" });
+    });
+  });
 });
