@@ -77,11 +77,14 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
   // inbox handoff: run the query immediately (CONTEXT.md: no confirmation step)
   const handoffSeen = useRef(handoff?.id ?? null);
   useEffect(() => {
-    if (handoff && handoff.id !== handoffSeen.current) {
+    // Don't consume the handoff while a run is in flight — submit would no-op on
+    // busyRef and the query would be silently lost. Depending on `busy` re-runs
+    // this when the current run finishes, so the dropped handoff fires then.
+    if (handoff && handoff.id !== handoffSeen.current && !busy) {
       handoffSeen.current = handoff.id;
       submit(handoff.query);
     }
-  }, [handoff, submit]);
+  }, [handoff, submit, busy]);
 
   // The panel owns Esc ordering for its overlay stack: preview first, panel
   // second. Document capture + consume, so the calendar's own capture-phase

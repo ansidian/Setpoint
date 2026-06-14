@@ -58,10 +58,6 @@ export async function wakeDueSnoozes({
       // clear it manually if it got stuck.
     }
     try {
-      await dbClient.execute({
-        sql: "UPDATE ea_snoozed_emails SET status = 'resurfaced', resurfaced_at = ? WHERE user_id = ? AND email_id = ?",
-        args: [resurfacedAt, userId, uid],
-      });
       if (snap) {
         const accountId = snap.account_id || snap.accountId || snap._accountKey;
         let pendingTriage = false;
@@ -113,6 +109,13 @@ export async function wakeDueSnoozes({
           }
         }
       }
+      // Flip to 'resurfaced' only AFTER a successful reattach. If the reattach
+      // throws, the row stays 'snoozed' so the next tick retries it — otherwise
+      // the email would be silently dropped from the briefing.
+      await dbClient.execute({
+        sql: "UPDATE ea_snoozed_emails SET status = 'resurfaced', resurfaced_at = ? WHERE user_id = ? AND email_id = ?",
+        args: [resurfacedAt, userId, uid],
+      });
     } catch (err) {
       console.error(`[EA Snooze] Status update failed for uid=${uid}:`, err.message);
     }

@@ -79,4 +79,24 @@ describe("ImportantSendersCard", () => {
 
     expect(mockApi.updateImportantSenders).not.toHaveBeenCalled();
   });
+
+  it("rolls back the optimistic add and surfaces an error when the save fails", async () => {
+    mockApi.updateImportantSenders.mockRejectedValueOnce(new Error("Network down"));
+    render(<ImportantSendersCard />);
+
+    await screen.findByText("Boss");
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. boss@company.com"), {
+      target: { value: "new@company.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    // The optimistic row must be rolled back once the persist rejects...
+    await waitFor(() => {
+      expect(screen.queryByText("new@company.com")).toBeNull();
+    });
+    // ...and the failure surfaced rather than silently swallowed.
+    expect(screen.getByText("Network down")).toBeTruthy();
+    expect(screen.getByText("Boss")).toBeTruthy(); // original list intact
+  });
 });

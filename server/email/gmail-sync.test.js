@@ -378,6 +378,93 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     ]);
   });
 
+  it("recovers via lookback re-fetch when the history page cap is hit, instead of failing the job (P2-26)", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "100"],
+    });
+    // Every page returns a nextPageToken, so the loop hits MAX_HISTORY_PAGES with a token still pending.
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "200",
+      history: [{ messagesAdded: [{ message: { id: "msg-capped", labelIds: ["INBOX"] } }] }],
+      nextPageToken: "more",
+    }));
+    const fetchEmailsFn = vi.fn(async () => [{
+      uid: "gmail-gmail-work-recovered",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      from: "Recovered <r@example.com>",
+      subject: "Recovered message",
+      body_preview: "p",
+      body_text: "b",
+      date: "2026-05-03T12:05:00.000Z",
+      read: false,
+    }]);
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work", user_id: "user-1", email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsFn,
+      fetchEmailsByIdsFn: vi.fn(async () => []),
+      targetHistoryId: "900",
+      now: new Date("2026-05-03T15:30:00.000Z"),
+    });
+
+    expect(fetchEmailsFn).toHaveBeenCalled(); // lookback recovery ran instead of throwing the job away
+    expect(result).toMatchObject({ history_recovered: true, indexed: 1 });
+  });
+
+  it("retries dropped messages once so a transient per-message failure isn't skipped permanently (P2-25)", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "100"],
+    });
+    const fetchHistoryPage = vi.fn(async () => ({
+      historyId: "105",
+      history: [{ messagesAdded: [
+        { message: { id: "msg-1", labelIds: ["INBOX"] } },
+        { message: { id: "msg-2", labelIds: ["INBOX"] } },
+      ] }],
+      nextPageToken: null,
+    }));
+    const emailFor = (id, subject) => ({
+      uid: `gmail-gmail-work-${id}`,
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      from: "Sender <s@example.com>",
+      subject,
+      body_preview: "p",
+      body_text: "b",
+      date: "2026-05-03T12:01:00.000Z",
+      read: false,
+    });
+    // First fetch drops msg-2 (returns only msg-1); the bounded retry returns both.
+    const fetchEmailsByIdsFn = vi.fn()
+      .mockResolvedValueOnce([emailFor("msg-1", "One")])
+      .mockResolvedValueOnce([emailFor("msg-1", "One"), emailFor("msg-2", "Two")]);
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work", user_id: "user-1", email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsByIdsFn,
+      targetHistoryId: "105",
+      now: new Date("2026-05-03T12:15:00.000Z"),
+    });
+
+    expect(fetchEmailsByIdsFn).toHaveBeenCalledTimes(2); // dropped msg-2 retried, not skipped
+    expect(result.indexed).toBe(2);
+  });
+
   it("syncs Gmail history into indexed mail and idempotent message triage jobs", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state

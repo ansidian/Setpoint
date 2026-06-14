@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { buildEventsAgendaGroups, buildMultiMonthAgendaGroups, formatAgendaHeaderLabel, reuseMultiMonthAgendaGroups } from "./eventsAgendaModel.js";
+import { agendaHasSelectedHiddenAllDay, buildEventsAgendaGroups, buildMultiMonthAgendaGroups, formatAgendaHeaderLabel, reuseMultiMonthAgendaGroups } from "./eventsAgendaModel.js";
+
+describe("agendaHasSelectedHiddenAllDay", () => {
+  const group = {
+    dateKey: "2026-05-04",
+    allDay: [
+      { agendaItemId: "a1" },
+      { agendaItemId: "a2" },
+      { agendaItemId: "a3" },
+      { agendaItemId: "a4" },
+    ],
+  };
+
+  it("is true when the selected item is a hidden (beyond-cap) all-day chip", () => {
+    expect(agendaHasSelectedHiddenAllDay(group, 2, "a3", "2026-05-04")).toBe(true);
+  });
+
+  it("is false when the selected item is among the visible all-day chips", () => {
+    expect(agendaHasSelectedHiddenAllDay(group, 2, "a1", "2026-05-04")).toBe(false);
+  });
+
+  it("is false when the selection is on a different day", () => {
+    expect(agendaHasSelectedHiddenAllDay(group, 2, "a3", "2026-05-05")).toBe(false);
+  });
+
+  it("is false when nothing is selected", () => {
+    expect(agendaHasSelectedHiddenAllDay(group, 2, null, "2026-05-04")).toBe(false);
+  });
+});
 
 function event(overrides) {
   return {

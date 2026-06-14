@@ -139,6 +139,40 @@ describe("AddTaskPanel due picker", () => {
     expect(screen.getByText("Todoist unavailable")).toBeTruthy();
   });
 
+  it("does not re-create the task on retry after a reminder failure (no duplicate)", async () => {
+    mockCreateDeadline.mockResolvedValueOnce({
+      id: "todo-new",
+      title: "Call dentist",
+      due_date: "2026-04-20",
+      due_time: "10:00 AM",
+      class_name: "Inbox",
+    });
+    // The reminder create throws on the first attempt, after the task is created.
+    mockCreateReminder.mockRejectedValueOnce(new Error("Reminder service down"));
+
+    render(<PanelHarness />);
+    vi.runOnlyPendingTimers();
+
+    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
+      target: { value: "Call dentist tomorrow at 10am" },
+    });
+    fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
+
+    // First submit: task is created, reminder create fails → error shown, panel stays open.
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+    expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Reminder service down")).toBeTruthy();
+
+    // Retry: must UPDATE the already-committed task, never create a second one.
+    fireEvent.click(screen.getByText("Add task"));
+    await vi.runAllTimersAsync();
+    expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
+    expect(mockUpdateDeadline).toHaveBeenCalledWith("todo-new", expect.objectContaining({
+      title: "Call dentist",
+    }));
+  });
+
   it("loads existing reminders when editing a Todoist task", async () => {
     mockListReminders.mockResolvedValueOnce({
       reminders: [

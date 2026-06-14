@@ -138,6 +138,9 @@ export default function useAddTaskPanelController({
   const inputRef = useRef(null);
   const dueTriggerRef = useRef(null);
   const duePickerRef = useRef(null);
+  // Once a create succeeds, remember the new task so a retry (e.g. after a
+  // reminder-create failure) updates it instead of creating a duplicate.
+  const committedTaskRef = useRef(null);
 
   const requestClose = useCallback(() => {
     if (isInline) {
@@ -625,8 +628,13 @@ export default function useAddTaskPanelController({
       let task;
       if (isEdit) {
         task = await updateDeadline(editingTask.id, payload);
+      } else if (committedTaskRef.current) {
+        // Retry after a partial failure: the task already exists, so update it
+        // rather than creating a second copy on Todoist.
+        task = await updateDeadline(committedTaskRef.current.id, payload);
       } else {
         task = await createDeadline(payload);
+        committedTaskRef.current = task;
       }
       const savedTask = isEdit ? { ...editingTask, ...task, id: editingTask.id } : task;
       for (const reminderId of removedReminderIds) {

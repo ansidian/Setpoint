@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { loadTriageAnalyticsModal } from "../shell/triageAnalyticsModalLoader.js";
 import { useDashboard } from "../../context/DashboardContext";
@@ -271,6 +272,7 @@ export function DashboardShell({
   // Deadline detail popover (anchored to the clicked row)
   const [deadlinePopover, setDeadlinePopover] = useState(null);
 
+  const navigate = useNavigate();
   const handlePaletteAction = useCallback((item) => {
     if (item.kind === "tab") setShellTab(item.payload);
     else if (item.kind === "scroll") jumpToSection(item.payload);
@@ -286,9 +288,11 @@ export function DashboardShell({
     else if (item.kind === "history") setHistoryOpen(true);
     else if (item.kind === "customize") setCustomizeOpen(true);
     else if (item.kind === "refresh") onQuickRefresh?.();
-    else if (item.kind === "settings") window.location.href = "/settings";
+    // SPA navigation (honors the router basename, keeps SSE/caches alive) — the
+    // old window.location.href forced a full reload and ignored a sub-path base.
+    else if (item.kind === "settings") navigate("/settings");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closePalette, jumpToSection, onQuickRefresh, openAnalytics, openDeadlineCreate, setShellTab]);
+  }, [closePalette, jumpToSection, navigate, onQuickRefresh, openAnalytics, openDeadlineCreate, setShellTab]);
 
   const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
 

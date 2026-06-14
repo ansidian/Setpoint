@@ -60,6 +60,17 @@ describe("findAccountByUid", () => {
     expect(out).toEqual({ type: "icloud", account: { id: "icloud-1", email: "x@icloud.com" } });
   });
 
+  it("refuses to guess when multiple iCloud accounts exist and the uid is unindexed (P2-24)", async () => {
+    mockDb.execute
+      .mockResolvedValueOnce({ rows: [] }) // index lookup: not found
+      .mockResolvedValueOnce({ rows: [
+        { id: "icloud-a", email: "a@icloud.com", type: "icloud" },
+        { id: "icloud-b", email: "b@icloud.com", type: "icloud" },
+      ] });
+    // Routing to rows[0] here would mutate the wrong mailbox, so it must refuse.
+    await expect(__testing__.findAccountByUid("u1", "icloud-abc")).rejects.toMatchObject({ status: 404 });
+  });
+
   it("prefers the indexed iCloud account when the uid is ambiguous", async () => {
     mockDb.execute.mockResolvedValueOnce({
       rows: [{ id: "icloud-work", email: "work@icloud.com", type: "icloud" }],

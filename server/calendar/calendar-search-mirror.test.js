@@ -65,6 +65,45 @@ describe("Calendar Search Mirror service", () => {
     vi.useRealTimers();
   });
 
+  it("preserves a dirty_since that lands during the sync fetch (P2-20 lost-update guard)", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-05-12T19:00:00.000Z");
+    vi.setSystemTime(now);
+    db = createClient({ url: "file::memory:" });
+    await applyMirrorMigration(db);
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+
+    const laterDirty = "2026-05-12T19:00:05.000Z"; // a write landing 5s into the fetch
+    const listCalendars = vi.fn(async () => [primaryCalendar]);
+    // Simulate a recurring-event edit marking the row dirty (newer than the sync
+    // start) WHILE the Google round-trip is still in flight.
+    const syncClient = vi.fn(async ({ calendar, window }) => {
+      await db.execute({
+        sql: `UPDATE ea_calendar_search_mirror_state
+              SET dirty_since = ?, dirty_reason = 'recurring-edit'
+              WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
+        args: [laterDirty, "test-user", account.id, calendar.id],
+      });
+      return { events: [occurrence], nextSyncToken: `sync-${calendar.id}`, window };
+    });
+
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now,
+    });
+
+    const state = await db.execute({
+      sql: `SELECT dirty_since FROM ea_calendar_search_mirror_state
+            WHERE user_id = ? AND account_id = ? AND calendar_id = ?`,
+      args: ["test-user", account.id, "primary"],
+    });
+    // The write landed after sync start, so the success update must not clear it,
+    // otherwise the mirror would serve stale occurrences with no follow-up sync.
+    expect(state.rows[0].dirty_since).toBe(laterDirty);
+  });
+
   it("full-syncs enabled Google calendars into searchable occurrence rows and current health", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));

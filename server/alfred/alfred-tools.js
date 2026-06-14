@@ -89,7 +89,10 @@ export const ALFRED_TOOL_DEFINITIONS = [
 ];
 
 function wrapEmailContent(uid, text) {
-  return `<email_content uid="${uid}">${String(text || "")}</email_content>`;
+  // Neutralize any attacker-supplied delimiter in the untrusted text so it can't
+  // close the trust fence early and smuggle "trusted" instructions after it.
+  const safe = String(text || "").replace(/<(\/?)email_content/gi, "&lt;$1email_content");
+  return `<email_content uid="${uid}">${safe}</email_content>`;
 }
 
 function parseDateRange(input = {}) {
@@ -152,8 +155,10 @@ async function runSearchEmail(input, { userId, conversation, deps }) {
     mode: result?.mode || "lexical",
     results: candidates.map((candidate) => ({
       uid: candidate.uid,
-      from: candidate.from,
-      subject: candidate.subject,
+      // subject/from are attacker-controlled too — wrap them in the untrusted
+      // delimiter so the system prompt's distrust rule covers them, not just the body.
+      from: wrapEmailContent(candidate.uid, candidate.from),
+      subject: wrapEmailContent(candidate.uid, candidate.subject),
       date: candidate.email_date,
       read: candidate.read,
       snippet: wrapEmailContent(candidate.uid, candidate.body_snippet),
@@ -172,8 +177,8 @@ async function runGetEmailBody(input, { userId, deps }) {
   const text = deps.htmlToPlainText(body.html_body || "").slice(0, BODY_CHAR_LIMIT);
   return {
     uid,
-    subject: body.subject || "",
-    from: body.from || "",
+    subject: wrapEmailContent(uid, body.subject || ""),
+    from: wrapEmailContent(uid, body.from || ""),
     date: body.date || "",
     body: wrapEmailContent(uid, text),
   };

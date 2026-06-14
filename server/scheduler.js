@@ -38,7 +38,7 @@ const EMAIL_SEARCH_EMBEDDING_CRON = "*/5 * * * *";
 const REMINDER_SCHEDULER_INTERVAL_MS = 10_000;
 const EMAIL_SEARCH_EMBEDDINGS_DISABLED = process.env.EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED === "1";
 
-export async function initScheduler() {
+async function runInitScheduler() {
   // Clear any existing jobs (in case of re-init)
   for (const job of activeJobs) job.stop();
   activeJobs.length = 0;
@@ -113,6 +113,27 @@ export async function initScheduler() {
     // ea_settings table may not exist yet on first run before migration
     console.log("[EA Scheduler] Skipping — ea_settings not yet available");
   }
+}
+
+let initSchedulerInFlight = null;
+let initSchedulerRerun = false;
+
+// Serialize concurrent init calls (startup + un-awaited settings-PUT re-inits).
+// Coalescing into one in-flight run prevents the clear-then-await-then-push window
+// from double-registering every cron job; the rerun flag guarantees a caller that
+// arrived mid-run still gets a fresh re-init afterward (so no schedule change is missed).
+export async function initScheduler() {
+  if (initSchedulerInFlight) {
+    initSchedulerRerun = true;
+    return initSchedulerInFlight;
+  }
+  initSchedulerInFlight = (async () => {
+    do {
+      initSchedulerRerun = false;
+      await runInitScheduler();
+    } while (initSchedulerRerun);
+  })().finally(() => { initSchedulerInFlight = null; });
+  return initSchedulerInFlight;
 }
 
 // Passive email indexer: sweeps every account's inbox every 10 minutes and

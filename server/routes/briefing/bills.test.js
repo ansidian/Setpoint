@@ -51,6 +51,17 @@ beforeEach(() => {
 });
 
 describe("Bill Pay routes", () => {
+  it("rejects a malformed due_date before writing to Actual (P2-39)", async () => {
+    const res = await request(makeApp())
+      .post("/api/briefing/actual/send")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ type: "bill", payee: "Power", amount: 42, due_date: "2026-13-40" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/due_date/);
+    expect(mockBillsService.sendBill).not.toHaveBeenCalled();
+  });
+
   it("resolves a Bill Pay seed through briefing cookie auth", async () => {
     mockBillsService.resolveBillPaySeed.mockResolvedValueOnce({
       bill: { payee: "Power", amount: 42 },

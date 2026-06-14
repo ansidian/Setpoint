@@ -16,16 +16,27 @@ import { cn } from "@/lib/utils";
 export default function ImportantSendersCard() {
   const [importantSenders, setImportantSenders] = useState([]);
   const [senderSaving, setSenderSaving] = useState(false);
+  const [senderError, setSenderError] = useState(null);
 
   useEffect(() => {
     getImportantSenders().then((senders) => setImportantSenders(senders || [])).catch(() => {});
   }, []);
 
   async function persistSenders(nextSenders) {
+    const prevSenders = importantSenders;
     setImportantSenders(nextSenders);
     setSenderSaving(true);
-    await updateImportantSenders(nextSenders).catch(() => {});
-    setSenderSaving(false);
+    setSenderError(null);
+    try {
+      await updateImportantSenders(nextSenders);
+    } catch (err) {
+      // Roll back the optimistic update and surface the failure instead of
+      // diverging silently from the server (this list drives notifications).
+      setImportantSenders(prevSenders);
+      setSenderError(err?.message || "Could not save important senders.");
+    } finally {
+      setSenderSaving(false);
+    }
   }
 
   return (
@@ -107,6 +118,12 @@ export default function ImportantSendersCard() {
             {senderSaving ? "Saving…" : "Add"}
           </Button>
         </form>
+
+        {senderError ? (
+          <p className="text-[11px] text-danger" role="alert">
+            {senderError}
+          </p>
+        ) : null}
       </div>
     </SettingsCard>
   );

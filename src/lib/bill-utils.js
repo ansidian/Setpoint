@@ -1,3 +1,5 @@
+import { todayPacific, toPacificDate } from "./dashboard-helpers";
+
 export function formatAmount(amount) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
 }
@@ -10,10 +12,13 @@ export function formatDate(dateStr) {
 
 export function daysUntil(dateStr) {
   if (!dateStr) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr + "T00:00:00");
-  return Math.round((target - today) / 86400000);
+  // Anchor "today" and the target to the Pacific day boundary (not the host's
+  // local zone), mirroring formatRelativeDate. Noon-anchored so the diff is
+  // DST-safe and the local-parse offset cancels in the subtraction.
+  const todayMs = new Date(todayPacific() + "T12:00:00").getTime();
+  const dueMs = new Date(toPacificDate(dateStr) + "T12:00:00").getTime();
+  if (Number.isNaN(dueMs)) return null;
+  return Math.round((dueMs - todayMs) / 86400000);
 }
 
 export function daysLabel(days) {

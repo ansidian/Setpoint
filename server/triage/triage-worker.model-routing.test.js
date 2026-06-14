@@ -536,4 +536,81 @@ describe("email triage worker model routing", () => {
     ]);
     unsubscribe();
     });
+
+  it("defers a retryable model error (429) instead of marking the email failed (P2-32)", async () => {
+    __resetCurrentDashboardEventsForTests();
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient, {
+      subject: "Payment due for tuition",
+      body_snippet: "Your payment due date is May 8.",
+      body_text: "Tuition balance $450.00 is due May 8.",
+      from_name: "University Billing",
+      from_address: "billing@school.example",
+    });
+    const modelClient = {
+      classify: vi.fn().mockRejectedValue(
+        Object.assign(new Error("OpenAI triage API error (429)"), { status: 429, retryable: true }),
+      ),
+    };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:20:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ deferred: true });
+    const jobRow = await dbClient.execute("SELECT status, scheduled_for FROM ea_triage_jobs LIMIT 1");
+    expect(jobRow.rows[0].status).toBe("queued"); // re-queued with backoff, not terminal-failed
+    expect(jobRow.rows[0].scheduled_for).not.toBeNull();
+    const triageRow = await dbClient.execute("SELECT triage_status FROM ea_email_triage LIMIT 1");
+    expect(triageRow.rows[0]?.triage_status).not.toBe("failed");
+  });
+
+  it("re-queues a job when snapshot attach fails during finalize, not leaving it stuck running (P2-31)", async () => {
+    __resetCurrentDashboardEventsForTests();
+    const realDb = await createMigratedDb();
+    await queueEmail(realDb, {
+      subject: "Payment due for tuition",
+      body_snippet: "Your payment due date is May 8.",
+      body_text: "Tuition balance $450.00 is due May 8.",
+      from_name: "University Billing",
+      from_address: "billing@school.example",
+    });
+    // Wrap the db so the snapshot-item INSERT (the attach step) throws.
+    const dbClient = {
+      execute: vi.fn(async (q) => {
+        const sql = typeof q === "string" ? q : q.sql;
+        if (sql.includes("INSERT INTO ea_briefing_snapshot_items")) {
+          throw new Error("snapshot item insert failed");
+        }
+        return realDb.execute(q);
+      }),
+      batch: (...args) => realDb.batch(...args),
+    };
+    const modelClient = {
+      classify: vi.fn(async ({ tier }) => ({
+        decision: {
+          lane: "needs_attention",
+          category: "finance",
+          urgency: "high",
+          summary: "Tuition payment is due soon.",
+          action: "Review payment",
+          confidence: 0.9,
+        },
+        usage: { input_tokens: 100, output_tokens: 30 },
+        tier,
+      })),
+    };
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      modelClient,
+      now: new Date("2026-05-03T12:20:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ deferred: true });
+    const jobRow = await realDb.execute("SELECT status FROM ea_triage_jobs LIMIT 1");
+    expect(jobRow.rows[0].status).toBe("queued"); // not stuck in 'running'
+  });
 });

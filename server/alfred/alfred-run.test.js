@@ -58,6 +58,27 @@ describe("runAlfred", () => {
     recordUsage = vi.fn().mockResolvedValue(undefined);
   });
 
+  it("reverts a dangling user turn when a run throws, keeping the conversation reusable (P2-19)", async () => {
+    const overloaded = vi.fn(async () => ({ ok: false, status: 529, text: async () => "overloaded" }));
+    await expect(runAlfred({
+      userId: "user-1", conversation, message: "first question", model: "claude-sonnet-4-6",
+      emit, fetchImpl: overloaded, apiKey: "key", deps: {}, recordUsage,
+    })).rejects.toThrow();
+    // The just-pushed user turn must be removed so reuse doesn't send two
+    // consecutive user messages (which the Anthropic Messages API 400s).
+    expect(conversation.messages).toHaveLength(0);
+
+    // A retry on the same conversation then produces a valid alternating transcript.
+    const ok = fetchScript([textTurn("Recovered.")]);
+    await runAlfred({
+      userId: "user-1", conversation, message: "second question", model: "claude-sonnet-4-6",
+      emit, fetchImpl: ok, apiKey: "key", deps: {}, recordUsage,
+    });
+    const roles = conversation.messages.map((m) => m.role);
+    expect(roles.some((role, i) => i > 0 && role === "user" && roles[i - 1] === "user")).toBe(false);
+    expect(conversation.messages.at(-1).role).toBe("assistant");
+  });
+
   it("streams a plain text answer and ends the run", async () => {
     const fetchImpl = fetchScript([textTurn("All clear today.")]);
 

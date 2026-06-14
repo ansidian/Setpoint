@@ -10,6 +10,18 @@ function isBlank(value) {
   return value == null || String(value).trim() === "";
 }
 
+function isValidYmd(value) {
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  // Reconstruct to reject non-calendar dates like 2026-02-31 (which would roll over).
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 function validateSendBillPayload(billData) {
   if (!billData || typeof billData !== "object") return "bill data is required";
   if (isBlank(billData.type)) return "type is required";
@@ -19,6 +31,7 @@ function validateSendBillPayload(billData) {
   if (!Number.isFinite(amount)) return "amount must be a number";
   if (amount <= 0) return "amount must be greater than 0";
   if (isBlank(billData.due_date)) return "due_date is required";
+  if (!isValidYmd(billData.due_date)) return "due_date must be a valid YYYY-MM-DD calendar date";
 
   if (billData.type === "transfer") {
     if (isBlank(billData.from_account_id) || isBlank(billData.to_account_id) || isBlank(billData.schedule_name)) {

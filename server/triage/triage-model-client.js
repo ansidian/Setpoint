@@ -283,9 +283,9 @@ export function createTriageModelClient({
               };
             }
             const retryText = await res.text?.();
-            throw new Error(`OpenAI triage API error (${res.status})${retryText ? `: ${retryText}` : ""}`);
+            throw Object.assign(new Error(`OpenAI triage API error (${res.status})${retryText ? `: ${retryText}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
           }
-          throw new Error(`OpenAI triage API error (${res.status})${text ? `: ${text}` : ""}`);
+          throw Object.assign(new Error(`OpenAI triage API error (${res.status})${text ? `: ${text}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
         }
         const data = await res.json();
         logOpenAITriageCacheUsage({
@@ -332,7 +332,7 @@ export function createTriageModelClient({
       });
       if (!res.ok) {
         const text = await res.text?.();
-        throw new Error(`Anthropic triage API error (${res.status})${text ? `: ${text}` : ""}`);
+        throw Object.assign(new Error(`Anthropic triage API error (${res.status})${text ? `: ${text}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
       }
       const data = await res.json();
       return {

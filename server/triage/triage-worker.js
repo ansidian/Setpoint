@@ -37,6 +37,17 @@ function nowIso(now) {
   return now.toISOString();
 }
 
+const TRIAGE_BACKOFF_BASE_MS = 30_000;
+const TRIAGE_BACKOFF_CAP_MS = 10 * 60_000;
+const MAX_TRIAGE_RETRY_ATTEMPTS = 5;
+
+// Capped exponential backoff for re-queuing a triage job after a transient
+// failure (provider 429/5xx or a mid-finalize error), so it isn't terminal.
+function triageRetryBackoffIso(now, attempts) {
+  const ms = Math.min(2 ** Number(attempts || 0) * TRIAGE_BACKOFF_BASE_MS, TRIAGE_BACKOFF_CAP_MS);
+  return new Date(now.getTime() + ms).toISOString();
+}
+
 export async function recoverStaleRunningTriageJobs({
   dbClient = db,
   now = new Date(),
@@ -696,18 +707,36 @@ export async function processNextEmailTriageJob({
       modelCalls = routed.modelCalls;
     }
   } catch (err) {
+    if (err?.retryable && Number(job.attempts || 0) < MAX_TRIAGE_RETRY_ATTEMPTS) {
+      // Transient provider error (429/5xx): re-queue with backoff instead of
+      // permanently misclassifying the email as a failure_fallback.
+      const scheduledFor = triageRetryBackoffIso(now, job.attempts);
+      await deferJob(job, dbClient, scheduledFor, `Retryable triage error: ${err.message}`);
+      return { processed: true, job_id: Number(job.id), deferred: true, scheduled_for: scheduledFor };
+    }
     decision = fallbackDecision(email, err);
     status = "failed";
   }
 
-  await updateTriageRow(email, decision, {
-    dbClient,
-    now,
-    status,
-    inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
-  });
-  await attachToActiveSnapshot(email, decision, { dbClient, now });
-  await completeJob(job, dbClient, now, status === "failed" ? decision.error : "");
+  try {
+    // Attach BEFORE marking the triage row complete: that ordering makes a
+    // 'complete' status imply the snapshot item already exists, so the recovery
+    // early-exit can safely complete the job without re-attaching. The snapshot
+    // upsert is idempotent, so a retry after a partial finalize is harmless.
+    await attachToActiveSnapshot(email, decision, { dbClient, now });
+    await updateTriageRow(email, decision, {
+      dbClient,
+      now,
+      status,
+      inferBillCandidate: mode.effective_email_triage_mode !== "no_model",
+    });
+    await completeJob(job, dbClient, now, status === "failed" ? decision.error : "");
+  } catch (finalizeErr) {
+    // A finalize step failed; re-queue so the job isn't left stuck in 'running'.
+    const scheduledFor = triageRetryBackoffIso(now, job.attempts);
+    await deferJob(job, dbClient, scheduledFor, `Finalize failed: ${finalizeErr.message}`);
+    return { processed: true, job_id: Number(job.id), deferred: true, scheduled_for: scheduledFor };
+  }
   publishCurrentDashboardEvent(email.user_id, {
     source: "email_triage",
     reason: status === "failed" ? "email_triage_failed" : "email_triage_finalized",

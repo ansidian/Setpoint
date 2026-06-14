@@ -14,11 +14,15 @@ export async function fetchAllEmails(accounts, hoursBack) {
       }),
     ),
     ...icloudAccounts.map(async (account) => {
-      const password = decrypt(account.credentials_encrypted);
-      return fetchIcloudEmails(account, password, hoursBack).catch((err) => {
+      // decrypt() must be inside the try too — a corrupt/rotated key throwing here
+      // would otherwise reject the whole Promise.all and sink healthy Gmail results.
+      try {
+        const password = decrypt(account.credentials_encrypted);
+        return await fetchIcloudEmails(account, password, hoursBack);
+      } catch (err) {
         console.error(`iCloud fetch failed for ${account.email}:`, err.message);
         return [];
-      });
+      }
     }),
   ];
 

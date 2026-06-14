@@ -263,4 +263,43 @@ describe("snooze waker", () => {
       },
     ]);
   });
+
+  it("leaves a snooze 'snoozed' when reattach throws, so the next tick retries it (P2-29)", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-04T17:30:00.000Z");
+    const resurfacedAt = now.getTime();
+
+    await dbClient.execute({
+      sql: `INSERT INTO ea_snoozed_emails
+              (user_id, email_id, until_ts, email_snapshot, status)
+            VALUES (?, ?, ?, ?, 'snoozed')`,
+      args: ["user-1", "gmail-work-msg-1", resurfacedAt - 1_000, JSON.stringify({
+        uid: "gmail-work-msg-1",
+        id: "gmail-work-msg-1",
+        account_id: "gmail-work",
+        account_email: "work@example.test",
+        subject: "Wake this thread",
+        lane: "needs_attention",
+        read: false,
+      })],
+    });
+
+    await wakeDueSnoozes({
+      userId: "user-1",
+      dbClient,
+      now,
+      loadUserConfigFn: vi.fn(async () => ({
+        accounts: [{ id: "gmail-work", email: "work@example.test", type: "gmail" }],
+      })),
+      wakeAtGmailFn: vi.fn().mockResolvedValue(undefined),
+      attachResurfacedSnoozeToActiveSnapshotFn: vi.fn().mockRejectedValue(new Error("attach failed")),
+    });
+
+    const row = await dbClient.execute(
+      "SELECT status FROM ea_snoozed_emails WHERE user_id = 'user-1' AND email_id = 'gmail-work-msg-1'",
+    );
+    // Reattach threw, so the row must stay 'snoozed' for the next tick to retry,
+    // not flip to 'resurfaced' (which would drop the email from the briefing).
+    expect(row.rows[0].status).toBe("snoozed");
+  });
 });

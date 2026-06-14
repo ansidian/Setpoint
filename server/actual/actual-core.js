@@ -359,7 +359,18 @@ async function findExistingSchedule(payeeId, accountId, amount, name) {
   if (name) {
     const allSchedules = await getSchedulesWithConditions({ includeCompleted: true });
     const byName = allSchedules.find(s => s.name === name);
-    if (byName) return byName.id;
+    if (byName) {
+      // Cross-type guard (bill <-> transfer): refuse a bare-name match whose amount
+      // sign differs from this write, so a transfer can't clobber a same-named bill.
+      const amountCond = (byName.conditions || []).find(
+        (c) => c.field === "amount" && ["is", "isapprox", "isbetween"].includes(c.op),
+      );
+      const existingAmount = amountCond?.value;
+      if (typeof existingAmount === "number" && existingAmount !== 0 && Math.sign(existingAmount) !== Math.sign(amount)) {
+        return null;
+      }
+      return byName.id;
+    }
   }
   return null;
 }

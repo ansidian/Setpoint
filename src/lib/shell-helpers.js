@@ -1,7 +1,7 @@
 // Helpers shared across the dashboard shell, hero, timeline, rails, and inbox.
 // Kept small and pure so they can be unit-tested without a React tree.
 
-import { greetingPools } from "./dashboard-helpers";
+import { greetingPools, epochFromLa } from "./dashboard-helpers";
 
 export const URGENCY_COLORS = {
   high: "#f38ba8",
@@ -167,21 +167,24 @@ export function dayBucketLabel(offset, now = Date.now()) {
 // a YYYY-MM-DD date to produce an absolute epoch ms. Falls back to 11:59pm PT.
 export function dueDateToMs(dateStr, dueTime) {
   if (!dateStr) return null;
-  const base = new Date(`${dateStr}T07:00:00Z`); // midnight PT ≈ 07:00Z (ignoring DST precision)
-  if (Number.isNaN(base.getTime())) return null;
+  // Anchor the wall-clock instant in Pacific time via the DST-aware epochFromLa,
+  // instead of a fixed +7h UTC offset (which was an hour early all winter/PST).
+  const dm = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!dm) return null;
+  const year = Number(dm[1]);
+  const month = Number(dm[2]) - 1;
+  const day = Number(dm[3]);
 
   const t = String(dueTime || "").toLowerCase().trim();
   const match = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
   if (!match) {
-    base.setUTCHours(7 + 23, 59, 0, 0); // 11:59p PT fallback
-    return base.getTime();
+    return epochFromLa(year, month, day, 23, 59); // 11:59p PT fallback
   }
   let h = parseInt(match[1], 10);
   const m = match[2] ? parseInt(match[2], 10) : 0;
   if (match[3] === "pm" && h < 12) h += 12;
   if (match[3] === "am" && h === 12) h = 0;
-  base.setUTCHours(7 + h, m, 0, 0);
-  return base.getTime();
+  return epochFromLa(year, month, day, h, m);
 }
 
 // Build a unified chronological stream: events + deadlines + bills.
@@ -198,7 +201,10 @@ export function buildTimeline({ events = [], deadlines = [], bills = [] }) {
   }
   for (const b of bills) {
     if (!b.next_date) continue;
-    const ms = new Date(`${b.next_date}T22:00:00Z`).getTime(); // ~3pm PT
+    const bm = String(b.next_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!bm) continue;
+    // ~3pm Pacific, DST-aware (the old fixed 22:00Z was 2pm PST half the year).
+    const ms = epochFromLa(Number(bm[1]), Number(bm[2]) - 1, Number(bm[3]), 15, 0);
     items.push({ kind: "bill", dueAtMs: ms, data: b, sortKey: ms });
   }
   items.sort((a, b) => a.sortKey - b.sortKey);
@@ -226,6 +232,8 @@ export function deriveLane(email) {
   if (email._lane) return email._lane;
   if (email.urgency === "high" || email.urgentFlag) return "needs_attention";
   if (email.noise) return "noise";
+  // Snapshot emails (DashboardBody) only carry a coarse `triage` lane.
+  if (email.triage === "action") return "needs_attention";
   return "fyi";
 }
 

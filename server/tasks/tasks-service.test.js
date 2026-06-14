@@ -100,6 +100,15 @@ describe("deadline-domain mutations", () => {
     });
   });
 
+  it("rejects an explicit empty title on update instead of blanking the Todoist title", async () => {
+    await expect(updateDeadline("u1", "td-1", { title: "   " })).rejects.toMatchObject({
+      message: "Deadline title is required",
+      status: 400,
+    });
+
+    expect(todoist.updateTodoistTask).not.toHaveBeenCalled();
+  });
+
   it("deletes Todoist-backed deadlines and local reminders", async () => {
     await deleteDeadline("u1", "td-1");
 
@@ -185,6 +194,30 @@ describe("deadline-domain mutations", () => {
       sourceItemId: "td-rec",
       unsentOnly: true,
     });
+  });
+
+  it("does not double-close a recurring occurrence under concurrent completion (P2-30)", async () => {
+    todoist.fetchTodoistTasksAll.mockResolvedValue([{
+      id: "td-rec",
+      title: "Daily review",
+      due_date: "2026-05-12",
+      due_time: "9:00 AM",
+      status: "incomplete",
+      is_recurring: true,
+    }]);
+
+    const [a, b] = await Promise.all([
+      completeDeadlineOccurrence("u1", "td-rec", "2026-05-12"),
+      completeDeadlineOccurrence("u1", "td-rec", "2026-05-12"),
+    ]);
+
+    // Exactly one request closes the Todoist task (which advances the recurrence);
+    // the other loses the atomic claim and short-circuits as alreadyCompleted.
+    expect(todoist.completeTodoistTask).toHaveBeenCalledTimes(1);
+    expect([a.alreadyCompleted, b.alreadyCompleted].sort()).toEqual([false, true]);
+    expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
+      { todoist_id: "td-rec", due_date: "2026-05-12" },
+    ]);
   });
 });
 

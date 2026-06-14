@@ -18,29 +18,35 @@ async function loadDiscordSettings(userId, { dbClient = db } = {}) {
   return result.rows[0] || null;
 }
 
-function retryAfterFromResult(result, now) {
-  if (!result.rateLimited || !result.retryAfterMs) return null;
-  return new Date(new Date(now).getTime() + result.retryAfterMs).toISOString();
+const REMINDER_BACKOFF_BASE_MS = 60_000; // 1 minute
+const REMINDER_BACKOFF_CAP_MS = 60 * 60_000; // 1 hour
+const MAX_REMINDER_DELIVERY_RETRIES = 6;
+
+function retryAfterFromResult(result, now, retryCount = 0) {
+  const base = new Date(now).getTime();
+  // Honor a rate-limit Retry-After when present; otherwise back off exponentially
+  // so a permanently-failing webhook isn't re-fired (and Discord re-hit) every 10s.
+  const delayMs = result.rateLimited && result.retryAfterMs
+    ? result.retryAfterMs
+    : Math.min(2 ** retryCount * REMINDER_BACKOFF_BASE_MS, REMINDER_BACKOFF_CAP_MS);
+  return new Date(base + delayMs).toISOString();
 }
 
-const RETRY_BACKOFF_BASE_MS = 60_000; // 1 minute
-const RETRY_BACKOFF_MAX_MS = 30 * 60_000; // 30 minutes
-
 // Backoff for an unexpected THROW during delivery (corrupt-webhook decrypt,
-// network reject, etc.). retryAfterFromResult only handles structured Discord
-// 429s, so a thrown error needs its own non-null FUTURE retry_after — otherwise
+// network reject, etc.), where there is no structured Discord result to read.
+// A thrown error still needs a non-null FUTURE retry_after — otherwise
 // listDueReminders re-selects the same reminder every 10s and head-of-line-
-// blocks the entire batch until it ages out of the 6h grace (P1-10).
+// blocks the entire batch until it ages out of the grace window (P1-10).
 //
-// MERGE-NOTE (P1-10 ↔ P2-27): P2-27 is "non-rate-limited Discord failures set no
-// retry_after, so a permanently-failing reminder re-fires every 10s" — that is
-// the structured delivery.ok===false path in the loop below, where
-// retryAfterFromResult returns null for non-429 results. When fixing P2-27,
-// REUSE this helper for that path rather than adding a second backoff.
+// MERGE-NOTE (P1-10 ⇄ P2-27): RESOLVED. P1-10 (per-item throw isolation) and
+// P2-27 (non-rate-limited failures must back off, not re-fire every 10s) both
+// land in this loop. Per P1's original note, there is exactly ONE backoff curve
+// — retryAfterFromResult. This adapter supplies a synthetic non-rate-limited
+// result for the thrown-error path so the catch and the structured-failure path
+// share the same exponential backoff (and the same 1h cap), instead of carrying
+// a second, divergent backoff implementation.
 function computeReminderRetryAfter(reminder, now) {
-  const attempts = Number(reminder.retry_count) || 0;
-  const delayMs = Math.min(RETRY_BACKOFF_BASE_MS * 2 ** attempts, RETRY_BACKOFF_MAX_MS);
-  return new Date(new Date(now).getTime() + delayMs).toISOString();
+  return retryAfterFromResult({ rateLimited: false }, now, Number(reminder.retry_count) || 0);
 }
 
 function publishReminderChange(reminder, reason, state = "current") {
@@ -106,9 +112,20 @@ export async function processDueReminderBatch({
         continue;
       }
 
+      const retryCount = Number(reminder.retry_count) || 0;
+      if (retryCount >= MAX_REMINDER_DELIVERY_RETRIES) {
+        // Cap retries: stop re-firing (and re-hitting Discord for) a
+        // permanently-failing reminder and mark it missed instead (P2-27).
+        await markReminderMissed(reminder.id, { missedAt: nowIso }, { dbClient });
+        publishReminderChange(reminder, "reminder_missed", "degraded");
+        result.missed += 1;
+        continue;
+      }
       await markReminderDeliveryFailed(reminder.id, {
         error: delivery.error || `Discord ${delivery.status || "error"}`,
-        retryAfter: retryAfterFromResult(delivery, nowIso),
+        // P2-27: back off non-rate-limited failures too, instead of leaving
+        // retry_after NULL and re-firing every 10s.
+        retryAfter: retryAfterFromResult(delivery, nowIso, retryCount),
       }, { dbClient });
       publishReminderChange(reminder, "reminder_delivery_failed", "degraded");
       result.failed += 1;

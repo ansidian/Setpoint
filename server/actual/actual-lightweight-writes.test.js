@@ -154,6 +154,45 @@ afterEach(async () => {
   tempDir = null;
 });
 
+describe("actualDateInt (P2-39 date validation)", () => {
+  it("returns the YYYYMMDD integer for a valid date", () => {
+    expect(__testing__.actualDateInt("2026-05-15")).toBe(20260515);
+  });
+  it("throws instead of serializing NaN/garbage for a non-date", () => {
+    expect(() => __testing__.actualDateInt("not-a-date")).toThrow();
+    expect(() => __testing__.actualDateInt("")).toThrow();
+    expect(() => __testing__.actualDateInt(null)).toThrow();
+  });
+});
+
+describe("findExistingSchedule (P2-16 cross-type guard)", () => {
+  const billSchedule = {
+    id: "sched-bill",
+    name: "Acme",
+    conditions: [{ op: "is", field: "amount", value: -5000 }], // negative => a bill/payment
+  };
+
+  it("reuses a same-type bare-name match", () => {
+    // A bill write (negative amount) named "Acme" reuses the bill schedule.
+    expect(__testing__.findExistingSchedule([billSchedule], null, null, -5000, "Acme")).toBe(billSchedule);
+  });
+
+  it("does not reuse a bare-name schedule of the opposite type", () => {
+    // A transfer write (positive amount) named "Acme" must NOT clobber the bill schedule.
+    expect(__testing__.findExistingSchedule([billSchedule], null, null, 5000, "Acme")).toBeNull();
+  });
+});
+
+describe("computeSyncSince (P2-15 since-window)", () => {
+  it("prefers lastSyncedTimestamp, then lastPushedTimestamp", () => {
+    expect(__testing__.computeSyncSince({ lastSyncedTimestamp: "T-synced", lastPushedTimestamp: "T-pushed" })).toBe("T-synced");
+    expect(__testing__.computeSyncSince({ lastPushedTimestamp: "T-pushed" })).toBe("T-pushed");
+  });
+  it("falls back to epoch zero, never a 5-minute wall-clock window that drops old messages", () => {
+    expect(__testing__.computeSyncSince({})).toBe(new Timestamp(0, 0, "0").toString());
+  });
+});
+
 describe("sendBillLightweight", () => {
   it("writes an expense transaction into the local Actual DB and syncs CRDT messages", async () => {
     const budgetDir = await createBudgetDb();
@@ -215,6 +254,26 @@ describe("sendBillLightweight", () => {
     expect(request.groupId).toBe("sync-123");
     expect(request.fileId).toBe("cloud-file-1");
     expect(request.messages.length).toBeGreaterThan(0);
+  });
+
+  it("records lastPushedTimestamp after a successful sync so the next since-window can't drop unsynced messages (P2-15)", async () => {
+    const budgetDir = await createBudgetDb();
+
+    await sendBillLightweight("u1", {
+      type: "expense",
+      payee: "Power Co",
+      amount: 12.34,
+      due_date: "2026-05-20",
+      account_id: "acct-1",
+      category_id: "cat-1",
+    }, {
+      dbClient: settingsDbClient(),
+      now: new Date("2026-05-15T12:00:00.000Z"),
+    });
+
+    const metadata = JSON.parse(await (await import("fs/promises")).readFile(path.join(budgetDir, "metadata.json"), "utf8"));
+    expect(typeof metadata.lastPushedTimestamp).toBe("string");
+    expect(metadata.lastPushedTimestamp.length).toBeGreaterThan(0);
   });
 
   it("writes a future bill schedule into the local Actual DB and syncs schedule CRDT messages", async () => {

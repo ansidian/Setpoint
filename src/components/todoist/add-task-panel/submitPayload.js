@@ -9,7 +9,9 @@ export function buildDeadlineMutationPayload({
   isEdit = false,
 }) {
   const payload = {
-    title: parsed?.stripped ?? input.trim(),
+    // `||` (not `??`): a tokens-only input strips to "", which must fall back to
+    // the raw input rather than being persisted as a blank title.
+    title: parsed?.stripped || input.trim(),
   };
 
   if (description.trim()) payload.description = description.trim();

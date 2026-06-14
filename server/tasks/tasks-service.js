@@ -50,9 +50,11 @@ async function completedDeadlineOccurrenceExists(userId, todoistId, occurrenceDa
 }
 
 async function persistCompletedDeadlineOccurrence(userId, todoistId, task, occurrenceDate) {
-  if (!occurrenceDate) return;
-  await db.execute({
-    sql: `INSERT OR REPLACE INTO ea_completed_tasks
+  if (!occurrenceDate) return false;
+  const result = await db.execute({
+    // INSERT OR IGNORE makes this an atomic claim on (user, todoist, due_date):
+    // only the first writer gets rowsAffected > 0, so it can gate the Todoist close.
+    sql: `INSERT OR IGNORE INTO ea_completed_tasks
           (user_id, todoist_id, completed_at, due_date, snapshot_json)
           VALUES (?, ?, datetime('now'), ?, ?)`,
     args: [
@@ -62,6 +64,7 @@ async function persistCompletedDeadlineOccurrence(userId, todoistId, task, occur
       JSON.stringify(buildSnapshot({ ...task, due_date: occurrenceDate })),
     ],
   });
+  return result.rowsAffected > 0;
 }
 
 async function syncTodoistReminderAnchor(userId, task) {
@@ -109,8 +112,14 @@ function dueStringFromDeadlineBody(body = {}) {
 function todoistPayloadFromDeadlineBody(body = {}, { partial = false } = {}) {
   assertDeadlineDomainPayload(body);
   const payload = {};
-  if (body.title !== undefined) payload.content = String(body.title || "").trim();
-  if (!partial && !payload.content) throw serviceError("Deadline title is required", 400);
+  if (body.title !== undefined) {
+    payload.content = String(body.title || "").trim();
+    // An explicitly-provided blank title is always invalid — even on a partial
+    // update — so it can never silently blank the Todoist task content.
+    if (!payload.content) throw serviceError("Deadline title is required", 400);
+  } else if (!partial) {
+    throw serviceError("Deadline title is required", 400);
+  }
   if (body.description !== undefined) payload.description = body.description || "";
   if (body.projectId !== undefined) payload.project_id = body.projectId || null;
   if (body.labelIds !== undefined) payload.labels = Array.isArray(body.labelIds) ? body.labelIds : [];
@@ -155,14 +164,26 @@ export async function completeDeadlineOccurrence(userId, deadlineId, occurrenceD
     return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
   }
 
+  // Atomically claim the occurrence BEFORE closing the Todoist task: only the
+  // request that wins the (user, todoist, due_date) INSERT OR IGNORE proceeds, so
+  // concurrent completions can't double-close (and double-advance) a recurring task.
+  const claimed = await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate);
+  if (!claimed) {
+    return { completed: true, alreadyCompleted: true, deadlineId: String(deadlineId), occurrenceDate };
+  }
+
   try {
     await completeTodoistTask(userId, deadlineId);
   } catch (err) {
+    // Roll back the claim so a retry can re-attempt the close.
+    await db.execute({
+      sql: "DELETE FROM ea_completed_tasks WHERE user_id = ? AND todoist_id = ? AND due_date = ?",
+      args: [userId, deadlineId, occurrenceDate],
+    }).catch(() => {});
     const wrapped = new Error(`Todoist close failed: ${err.message}`);
     wrapped.status = 502;
     throw wrapped;
   }
-  await persistCompletedDeadlineOccurrence(userId, deadlineId, todoistTask, occurrenceDate);
   await deleteSourceReminders({
     userId,
     sourceType: "todoist_task",

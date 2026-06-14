@@ -32,6 +32,12 @@ export async function findAccountByUid(userId, uid) {
       args: [userId],
     });
     if (!result.rows.length) return null;
+    // Only resolve the bare-UID fallback when it is unambiguous (a single iCloud
+    // account). With multiple accounts the UID carries no account identity, so
+    // guessing rows[0] would route mark-read/trash to the WRONG mailbox.
+    if (result.rows.length > 1) {
+      throw Object.assign(new Error(`Cannot resolve iCloud account for uid ${uid}`), { status: 404 });
+    }
     return { type: "icloud", account: result.rows[0] };
   }
   if (uid.startsWith("gmail-")) {
