@@ -325,18 +325,17 @@ export async function processEmailSearchEmbeddingBatch(userId, {
       const chunk = candidates.slice(index, index + embedBatchSize);
       const texts = chunk.map((row) => row.document.text);
       const vectors = await embeddingClient.embed(texts);
-      for (let vectorIndex = 0; vectorIndex < chunk.length; vectorIndex += 1) {
-        const row = chunk[vectorIndex];
-        await store.upsertEmbedding({
-          uid: row.uid,
-          user_id: row.user_id,
-          account_id: row.account_id,
-          document: row.document,
-          source_hash: row.source_hash,
-          embedding: vectors[vectorIndex],
-        });
-        embedded++;
-      }
+      // Upsert the whole chunk atomically in one batched round-trip (P3-3),
+      // replacing the per-row autocommits.
+      await store.upsertEmbeddings(chunk.map((row, vectorIndex) => ({
+        uid: row.uid,
+        user_id: row.user_id,
+        account_id: row.account_id,
+        document: row.document,
+        source_hash: row.source_hash,
+        embedding: vectors[vectorIndex],
+      })));
+      embedded += chunk.length;
       await safeRecordCorpusEmbeddingUsage(recordUsage, userId, {
         dbClient,
         vectors,

@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { laComponents } from "../../inbox/helpers";
+import { ensureChrono } from "../../calendar/events/parseCalendarTitle";
 import { parseTokens } from "./parsing";
 
 // Pacific (DASHBOARD_TZ) Y-M-D string for an epoch, computed independently of the
@@ -10,6 +11,13 @@ function pacificYmd(epochMs) {
 }
 
 describe("Todoist task parsing", () => {
+  // parseCalendarTitle lazily imports chrono-node now; warm it once (with real
+  // timers, before the per-test fake-timer setup) so the synchronous parse paths
+  // produce the natural-language time/date results the assertions expect.
+  beforeAll(async () => {
+    await ensureChrono();
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));

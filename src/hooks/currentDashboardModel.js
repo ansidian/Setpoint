@@ -3,6 +3,29 @@ export const EMPTY_DEADLINES = {
   stats: null,
 };
 
+// Content signature for a calendar event list. getCurrentDashboard() returns a
+// freshly JSON-parsed `calendar` array on every poll/refetch, so its identity
+// churns even when nothing changed. This signature lets a caller reuse the prior
+// array reference when the contents are equivalent, killing the per-refetch
+// effect/setEvents churn downstream (the event shape carries id/startMs/endMs).
+export function calendarContentSignature(calendar) {
+  if (!Array.isArray(calendar)) return calendar == null ? "null" : "invalid";
+  let sig = `${calendar.length}`;
+  for (const ev of calendar) {
+    const id = ev?.id ?? ev?.iCalUID ?? ev?.htmlLink ?? ev?.openUrl ?? "";
+    sig += `|${id}:${ev?.startMs ?? ""}:${ev?.endMs ?? ""}`;
+  }
+  return sig;
+}
+
+// Returns `prev` when its contents match `next` so the reference stays stable
+// across refetches that did not actually change the calendar; otherwise `next`.
+export function stabilizeCalendar(prev, next) {
+  if (prev === next) return next;
+  if (calendarContentSignature(prev) === calendarContentSignature(next)) return prev;
+  return next;
+}
+
 export function hasActiveRefreshWork(current) {
   const currentSources = current?.providerHealth?.currentData?.sources || [];
   return currentSources.some((source) => source.state === "refreshing")
@@ -21,7 +44,11 @@ export function currentToBriefing(current) {
   };
 }
 
-export function currentToLiveData(current, { refreshNow, isPolling }) {
+// Bulk live-data projection that depends only on `current` (the parsed payload)
+// and the stable `refreshNow` callback. Deliberately excludes the volatile
+// poll/loading flags so a caller can memoize this slice on `current` alone and
+// keep a stable object reference across loading/refreshing toggles.
+export function currentToLiveDataBulk(current, { refreshNow }) {
   return {
     liveEmails: [],
     liveCalendar: current?.calendar || null,
@@ -34,10 +61,7 @@ export function currentToLiveData(current, { refreshNow, isPolling }) {
     allSchedules: current?.allSchedules || [],
     payeeMap: current?.payeeMap || {},
     importantSenders: [],
-    briefingReadStatus: {},
     lastFetched: current?.fetchedAt || null,
-    isPolling,
-    billsLoading: !!current?.actualConfigured && isPolling && !(current?.bills || []).length,
     actualConfigured: !!current?.actualConfigured,
     actualBudgetUrl: current?.actualBudgetUrl || null,
     billsSyncHealth: current?.billsSyncHealth || null,
@@ -46,5 +70,14 @@ export function currentToLiveData(current, { refreshNow, isPolling }) {
     providerHealth: current?.providerHealth || null,
     systemStatus: current?.systemStatus || null,
     refreshNow,
+  };
+}
+
+export function currentToLiveData(current, { refreshNow, isPolling }) {
+  const bulk = currentToLiveDataBulk(current, { refreshNow });
+  return {
+    ...bulk,
+    isPolling,
+    billsLoading: bulk.actualConfigured && isPolling && !bulk.liveBills.length,
   };
 }

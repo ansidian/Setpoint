@@ -393,6 +393,43 @@ describe("email indexing", () => {
     expect(indexed.rows[0].read).toBe(1);
   });
 
+  it("routes a snippet-only drift through the cheap metadata update, not an FTS rewrite (P3-2)", async () => {
+    const base = {
+      uid: "gmail-work-msg-snippet",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      account_color: "#123456",
+      account_icon: "Mail",
+      from: "Sender <sender@example.com>",
+      subject: "Stable subject",
+      body_text: "Stable body",
+      date: "2026-05-01T12:00:00.000Z",
+      read: true,
+    };
+    // Baseline index establishes every column, including the normalized date.
+    await emailIndex.indexEmails("user-1", [{ ...base, body_preview: "Old preview" }]);
+
+    const dbClient = {
+      execute: (...args) => testState.db.current.execute(...args),
+      batch: vi.fn((...args) => testState.db.current.batch(...args)),
+    };
+    // A re-fetch sees only a drifted Gmail snippet — everything else identical.
+    await emailIndex.indexEmails("user-1", [{ ...base, body_preview: "New preview" }], { dbClient });
+
+    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].sql).toContain("UPDATE ea_email_index");
+    expect(statements[0].sql).not.toContain("ea_email_fts");
+    expect(statements.some((s) => s.sql.includes("ea_email_search_embeddings"))).toBe(false);
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT body_snippet FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-snippet"],
+    });
+    expect(indexed.rows[0].body_snippet).toBe("New preview");
+  });
+
   it("normalizes provider email dates for temporal search without rewriting unchanged FTS content", async () => {
     await seedIndexedEmail(testState.db.current, {
       uid: "gmail-work-msg-date",

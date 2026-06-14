@@ -32,7 +32,9 @@ function toUiPriority(apiLevel) {
 
 // --- Caches: 10-minute TTL ---
 const CACHE_TTL_MS = 10 * 60 * 1000;
-let projectCache = { data: null, ts: 0 };
+// P3-13: keyed by userId (mirrors the per-user backgroundSyncs map) so a future
+// multi-user deployment never serves one user's project names/colors to another.
+const projectCache = new Map(); // userId -> { data, ts }
 const MIRROR_BOOTSTRAP_TIMEOUT_MS = 10_000;
 const MIRROR_REFRESH_TIMEOUT_MS = 2_000;
 const backgroundSyncs = new Map();
@@ -58,9 +60,10 @@ async function todoistFetch(token, path, options = {}) {
   return res.json();
 }
 
-async function fetchProjects(token) {
-  if (projectCache.data && Date.now() - projectCache.ts < CACHE_TTL_MS) {
-    return projectCache.data;
+async function fetchProjects(token, userId) {
+  const cached = projectCache.get(userId);
+  if (cached?.data && Date.now() - cached.ts < CACHE_TTL_MS) {
+    return cached.data;
   }
   const map = new Map();
   let cursor = null;
@@ -74,8 +77,7 @@ async function fetchProjects(token) {
     }
     cursor = data.next_cursor || null;
   } while (cursor);
-  projectCache.data = map;
-  projectCache.ts = Date.now();
+  projectCache.set(userId, { data: map, ts: Date.now() });
   return map;
 }
 
@@ -163,12 +165,17 @@ async function fetchMirrorMappedTasks(userId, {
   start = null,
   end = null,
   refresh = false,
+  // P2-6/P2-25: a caller fetching both active and completed tasks can resolve
+  // mirror health and the project map ONCE and pass them in, so each inner read
+  // skips its own redundant prepare + project-map round-trips.
+  health: providedHealth = null,
+  projects: providedProjects = null,
 } = {}) {
-  const health = await prepareTodoistMirrorRead(userId, { refresh });
+  const health = providedHealth || await prepareTodoistMirrorRead(userId, { refresh });
   if (!health.configured) return { tasks: [], idSet: null, health };
 
   const [projects, tasks] = await Promise.all([
-    fetchMirrorProjectMap(userId),
+    providedProjects || fetchMirrorProjectMap(userId),
     listTodoistMirrorActiveTasks(userId, { start, end }),
   ]);
   const mappedTasks = tasks.map((task) => mapTodoistTask(task, projects));
@@ -182,12 +189,14 @@ async function fetchMirrorMappedTasks(userId, {
 async function fetchMirrorMappedCompletedTasks(userId, {
   start = null,
   end = null,
+  health: providedHealth = null,
+  projects: providedProjects = null,
 } = {}) {
-  const health = await prepareTodoistMirrorRead(userId);
+  const health = providedHealth || await prepareTodoistMirrorRead(userId);
   if (!health.configured) return { tasks: [], health };
 
   const [projects, tasks] = await Promise.all([
-    fetchMirrorProjectMap(userId),
+    providedProjects || fetchMirrorProjectMap(userId),
     listTodoistMirrorCompletedTasks(userId, { start, end }),
   ]);
   return {
@@ -324,9 +333,14 @@ export async function fetchTodoistTasks(userId, options = {}) {
 }
 
 async function fetchMirrorMappedTasksWithVisibleCompleted(userId, options = {}) {
+  // P2-6/P2-25: resolve mirror health (with the active read's refresh semantics)
+  // and the project map ONCE, then thread them into both reads so they no longer
+  // each run prepareTodoistMirrorRead + fetchMirrorProjectMap.
+  const health = await prepareTodoistMirrorRead(userId, { refresh: options.refresh || false });
+  const projects = health.configured ? await fetchMirrorProjectMap(userId) : null;
   const [{ tasks: active }, { tasks: completed }] = await Promise.all([
-    fetchMirrorMappedTasks(userId, options),
-    fetchMirrorMappedCompletedTasks(userId, { start: todayPacific() }),
+    fetchMirrorMappedTasks(userId, { ...options, health, projects }),
+    fetchMirrorMappedCompletedTasks(userId, { start: todayPacific(), health, projects }),
   ]);
   return dedupeTodoistRangeTasks([...active, ...completed]);
 }
@@ -338,9 +352,12 @@ export async function fetchTodoistTasksAll(userId, options = {}) {
 }
 
 export async function fetchTodoistTasksRange(userId, { start, end, refresh = false }) {
+  // P2-6/P2-25: same single-resolution pattern as fetchMirrorMappedTasksWithVisibleCompleted.
+  const health = await prepareTodoistMirrorRead(userId, { refresh });
+  const projects = health.configured ? await fetchMirrorProjectMap(userId) : null;
   const [{ tasks: active }, { tasks: completed }] = await Promise.all([
-    fetchMirrorMappedTasks(userId, { start, end, refresh }),
-    fetchMirrorMappedCompletedTasks(userId, { start, end }),
+    fetchMirrorMappedTasks(userId, { start, end, refresh, health, projects }),
+    fetchMirrorMappedCompletedTasks(userId, { start, end, health, projects }),
   ]);
   return dedupeTodoistRangeTasks([...active, ...completed]);
 }
@@ -426,7 +443,7 @@ export async function createTodoistTask(userId, { content, description, project_
   requestTodoistWriteReconciliation(userId);
 
   // Return in the same format as fetchTodoistTasks
-  const projects = await fetchProjects(token);
+  const projects = await fetchProjects(token, userId);
   const proj = projects.get(task.project_id);
   return {
     id: task.id,
@@ -466,7 +483,7 @@ export async function updateTodoistTask(userId, taskId, { content, description, 
   await upsertTodoistMirrorItem(userId, task);
   requestTodoistWriteReconciliation(userId);
 
-  const projects = await fetchProjects(token);
+  const projects = await fetchProjects(token, userId);
   const proj = projects.get(task.project_id);
   // Intentionally omit `status` — the client merges this over the existing
   // row, and the UI's completion state (including tombstone/_completing flags)

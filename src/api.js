@@ -126,7 +126,24 @@ export const getTriageCacheStats = (options = {}) => (
 // server-side once delivered; the cache eliminates the loading flicker on
 // re-selection and dedupes concurrent fetches for the same uid.
 const EMAIL_BODY_TTL_MS = 5 * 60 * 1000;
+// Bound the cache so a long-lived tab can't accumulate full HTML bodies for
+// every distinct email ever opened. The TTL was previously only consulted
+// lazily on read, so entries for uids that were never re-opened lived forever.
+const EMAIL_BODY_CACHE_MAX = 50;
 const emailBodyCache = new Map(); // uid -> { promise, expiresAt, value }
+// Sweep expired entries, then evict least-recently-inserted entries until the
+// cache is under cap. Map iteration order is insertion order, so the first key
+// is the oldest. Called on every insert — O(n) sweep is trivial at this scale.
+function pruneEmailBodyCache(now) {
+  for (const [key, entry] of emailBodyCache) {
+    if (entry.expiresAt <= now) emailBodyCache.delete(key);
+  }
+  while (emailBodyCache.size > EMAIL_BODY_CACHE_MAX) {
+    const oldest = emailBodyCache.keys().next().value;
+    if (oldest === undefined) break;
+    emailBodyCache.delete(oldest);
+  }
+}
 export const getEmailBody = (uid) => {
   const now = Date.now();
   const hit = emailBodyCache.get(uid);
@@ -134,6 +151,7 @@ export const getEmailBody = (uid) => {
   const promise = apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}`)
     .then((value) => {
       emailBodyCache.set(uid, { promise, value, expiresAt: Date.now() + EMAIL_BODY_TTL_MS });
+      pruneEmailBodyCache(Date.now());
       return value;
     })
     .catch((err) => {
@@ -142,6 +160,7 @@ export const getEmailBody = (uid) => {
       throw err;
     });
   emailBodyCache.set(uid, { promise, value: null, expiresAt: now + EMAIL_BODY_TTL_MS });
+  pruneEmailBodyCache(now);
   return promise;
 };
 export const peekEmailBody = (uid) => {

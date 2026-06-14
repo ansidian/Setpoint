@@ -4,6 +4,20 @@ import db from "../db/connection.js";
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SESSION_TOKEN_PREFIX = "sha256:";
 
+// P2-27: every authenticated /api request validates the session token, which in
+// production is a remote Turso round-trip. For a single user the token is static
+// between ~monthly logins, so memoize a positive validation for a short TTL keyed
+// by the hashed token. Only positive, unexpired results are cached; negatives and
+// expirations always fall through to the DB. Invalidated on logout (deleteSession)
+// and on full revocation (session-rotation); the TTL bounds any missed
+// invalidation to a few tens of seconds.
+const SESSION_CACHE_TTL_MS = 30_000;
+const sessionValidationCache = new Map(); // hashedToken -> { expiresAt, cachedAt }
+
+export function __clearSessionValidationCache() {
+  sessionValidationCache.clear();
+}
+
 export function hashToken(raw) {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
@@ -38,11 +52,20 @@ export async function deleteSession(token) {
     sql: "DELETE FROM ea_sessions WHERE token IN (?, ?)",
     args: [token, hashSessionToken(token)],
   });
+  sessionValidationCache.delete(hashSessionToken(token));
 }
 
 export async function createSession() {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = Date.now() + SESSION_MAX_AGE_MS;
+  // P3-18: expired sessions are otherwise never reclaimed (the lazy delete only
+  // fires if the exact expired token is re-presented, which never happens once
+  // the cookie stops being sent). Opportunistically sweep them on each login
+  // using idx_ea_sessions_expires so the table self-prunes.
+  await db.execute({
+    sql: "DELETE FROM ea_sessions WHERE expires_at < ?",
+    args: [Date.now()],
+  });
   await db.execute({
     sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
     args: [hashSessionToken(token), expiresAt],
@@ -53,6 +76,18 @@ export async function createSession() {
 export async function validateSession(token) {
   if (!token) return false;
   const hashedToken = hashSessionToken(token);
+
+  // P2-27: serve a recent positive validation from the in-process cache, skipping
+  // the remote Turso SELECT. A cached entry is honored only within the TTL and
+  // only while still unexpired; otherwise drop it and fall through to the DB
+  // (which also runs the legacy-token migration and lazy expiry cleanup).
+  const nowMs = Date.now();
+  const cached = sessionValidationCache.get(hashedToken);
+  if (cached && nowMs - cached.cachedAt < SESSION_CACHE_TTL_MS) {
+    if (nowMs <= cached.expiresAt) return true;
+    sessionValidationCache.delete(hashedToken);
+  }
+
   let result = await db.execute({
     sql: "SELECT expires_at FROM ea_sessions WHERE token = ?",
     args: [hashedToken],
@@ -73,6 +108,7 @@ export async function validateSession(token) {
       sql: "DELETE FROM ea_sessions WHERE token = ?",
       args: [storedToken],
     });
+    sessionValidationCache.delete(hashedToken);
     return false;
   }
   if (storedToken === token) {
@@ -81,6 +117,10 @@ export async function validateSession(token) {
       args: [hashedToken, token],
     }).catch((err) => console.error("[EA] session hash migration failed:", err.message));
   }
+  sessionValidationCache.set(hashedToken, {
+    expiresAt: result.rows[0].expires_at,
+    cachedAt: Date.now(),
+  });
   return true;
 }
 

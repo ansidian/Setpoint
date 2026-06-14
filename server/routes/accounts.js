@@ -140,6 +140,13 @@ router.get("/accounts/gmail/auth", async (req, res) => {
   // Generate CSRF token and store with label
   const csrfToken = crypto.randomUUID();
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+  // P3-19: abandoned OAuth flows otherwise leak CSRF rows forever (deleted only on
+  // a matching callback). Opportunistically sweep expired rows on each new flow
+  // using idx_ea_csrf_tokens_expires (migration 017).
+  await db.execute({
+    sql: "DELETE FROM ea_csrf_tokens WHERE expires_at < ?",
+    args: [Date.now()],
+  });
   await db.execute({
     sql: "INSERT INTO ea_csrf_tokens (token, account_label, expires_at, browser_bind_hash, oauth_user_id, oauth_label) VALUES (?, ?, ?, ?, ?, ?)",
     args: [csrfToken, `${userId}:${label}`, expiresAt, hashToken(oauthBind), userId, label],

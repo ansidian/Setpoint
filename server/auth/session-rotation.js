@@ -1,9 +1,12 @@
 import db from "../db/connection.js";
-import { createSession } from "../middleware/auth.js";
+import { createSession, __clearSessionValidationCache } from "../middleware/auth.js";
 
 export function createSessionRotation(database = db, createSessionToken = createSession) {
   async function revokeAllSessions() {
     await database.execute("DELETE FROM ea_sessions");
+    // P2-27: this wipes every session row, so drop the whole validation cache to
+    // avoid a stale positive surviving a passkey-driven revocation.
+    __clearSessionValidationCache();
   }
 
   async function rotateSessionsForCurrentBrowser() {

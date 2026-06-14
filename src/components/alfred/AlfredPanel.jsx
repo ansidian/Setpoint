@@ -2,9 +2,9 @@
 // with Cmd/Ctrl+\. Overlays the dashboard without reflowing it. Stays mounted
 // while closed so the Alfred Conversation survives close/reopen; cleared only
 // by new chat (Cmd/Ctrl+Shift+\ → newChatTick).
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUp, RotateCcw, X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import useAlfredChat from "./useAlfredChat.js";
 import { alfredModelByKey, alfredScrollKey, isNearBottom } from "./alfredPanelModel.js";
 import {
@@ -16,28 +16,23 @@ import {
   UserLine,
 } from "./AlfredMessages.jsx";
 import { RowsBlock } from "./AlfredRows.jsx";
+import AlfredComposer from "./AlfredComposer.jsx";
 import AlfredEmailPreview from "./AlfredEmailPreview.jsx";
 
 const dim = "rgba(205,214,244,0.55)";
 const text = "#cdd6f4";
-const mono = "var(--font-mono, 'Fira Code', ui-monospace, monospace)";
 
-function Kbd({ children }) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      minWidth: 14, padding: "1px 4px", borderRadius: 4,
-      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
-      fontFamily: mono, fontSize: 8.5, color: dim,
-    }}>{children}</span>
-  );
-}
-
-export default function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalendarItem }) {
-  const { messages, busy, modelKey, setModelKey, draft, setDraft, submit, newChat } = useAlfredChat();
+function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalendarItem }) {
+  const { messages, busy, modelKey, setModelKey, submit, newChat } = useAlfredChat();
   const [previewItem, setPreviewItem] = useState(null);
   const scrollerRef = useRef(null);
-  const inputRef = useRef(null);
+  // Header-button new-chats bump this; combined with the external newChatTick it
+  // forms the composer's clear signal (perf audit fe-alfred::composer-keystroke-
+  // rerenders-thread). The draft no longer lives in this component, so the hook's
+  // own newChat()→setDraft("") reset can't reach the live input on its own; the
+  // composer clears its LOCAL draft whenever this combined signal changes.
+  const [headerClearTick, setHeaderClearTick] = useState(0);
+  const composerClearSignal = `${newChatTick}:${headerClearTick}`;
   // P3-4: only follow the tail when the user is parked near the bottom. Starts
   // true so the first answer scrolls into view; flipped by onScroll as the user
   // scrolls up to read earlier messages while composing. A ref (not state) so
@@ -79,15 +74,18 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
     stickToBottomRef.current = isNearBottom(scrollTop, clientHeight, scrollHeight);
   }
 
-  // focus composer after the open transition
-  useEffect(() => {
-    if (!open) return undefined;
-    const t = setTimeout(() => inputRef.current?.focus(), 260);
-    return () => clearTimeout(t);
-  }, [open]);
+  // Header-button new chat (event handler, not render/effect): run the hook's full
+  // reset and bump headerClearTick so the composer drops its local draft. The
+  // ⌘⇧\ path clears the composer via newChatTick flowing into composerClearSignal.
+  const handleHeaderNewChat = useCallback(() => {
+    newChat();
+    setHeaderClearTick((t) => t + 1);
+  }, [newChat]);
 
   // ⌘⇧\ new chat. newChat() owns the full reset (messages, draft, abort,
-  // server delete) — external work that must stay in an effect, not render.
+  // server delete) — external work that must stay in an effect, not render. The
+  // composer's draft clear rides on newChatTick via composerClearSignal, so this
+  // effect stays a single external-system call with no setState.
   const newChatSeen = useRef(newChatTick);
   useEffect(() => {
     if (newChatSeen.current !== newChatTick) {
@@ -124,22 +122,18 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
     return () => document.removeEventListener("keydown", onKey, true);
   }, [open, previewItem, onClose]);
 
-  function onComposerKey(e) {
-    if (e.key === "Enter" && draft.trim()) {
-      e.preventDefault();
-      submit(draft.trim());
-      setDraft("");
-    }
-  }
-
-  function onActivateChip(action) {
+  // useCallback so RowsBlock (React.memo'd) can bail during token streaming
+  // (perf audit fe-alfred::rows-chip-action-rebuilt-every-render). setPreviewItem
+  // is stable; onOpenCalendarItem comes from DashboardShell and is stabilized on
+  // that island (fe-alfred::unstable-callbacks-from-dashboardshell).
+  const onActivateChip = useCallback((action) => {
     if (action.type === "email") {
       setPreviewItem(action.item);
     } else if (action.type === "calendar") {
       setPreviewItem(null);
       onOpenCalendarItem?.(action.request);
     }
-  }
+  }, [onOpenCalendarItem]);
 
   const empty = messages.length === 0;
 
@@ -180,7 +174,7 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
         </span>
         <span style={{ flex: 1 }} />
         <ModelToggle modelKey={modelKey} onChange={setModelKey} accent={accent} />
-        <button type="button" title="New chat (⌘⇧\)" onClick={newChat}
+        <button type="button" title="New chat (⌘⇧\)" onClick={handleHeaderNewChat}
           style={{ display: "inline-flex", padding: "4px 7px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
           <RotateCcw size={11} />
         </button>
@@ -221,50 +215,15 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
         )}
       </div>
 
-      {/* composer */}
-      <div style={{ padding: "10px 14px 12px", borderTop: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            ref={inputRef}
-            value={draft}
-            disabled={busy}
-            placeholder={busy ? "Working…" : "Ask about your day…"}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onComposerKey}
-            style={{
-              flex: 1, fontSize: 12, color: text, fontFamily: "inherit",
-              padding: "8px 10px", borderRadius: 8, outline: "none",
-              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          />
-          <button
-            type="button"
-            disabled={busy || !draft.trim()}
-            onClick={() => { if (draft.trim()) { submit(draft.trim()); setDraft(""); } }}
-            title="Send"
-            style={{
-              display: "inline-flex", padding: "8px 10px", borderRadius: 8, border: "none",
-              cursor: busy || !draft.trim() ? "default" : "pointer",
-              background: busy || !draft.trim() ? "rgba(255,255,255,0.05)" : accent,
-              color: busy || !draft.trim() ? dim : "#16161e",
-            }}
-          >
-            <ArrowUp size={12} strokeWidth={2.4} />
-          </button>
-        </div>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6, marginTop: 8,
-          fontSize: 9, color: "rgba(205,214,244,0.35)", fontFamily: mono,
-        }}>
-          <Kbd>⌘</Kbd><Kbd>\</Kbd>
-          <span style={{ whiteSpace: "nowrap" }}>toggle</span>
-          <span>·</span>
-          <Kbd>⌘</Kbd><Kbd>⇧</Kbd><Kbd>\</Kbd>
-          <span style={{ whiteSpace: "nowrap" }}>new chat</span>
-          <span style={{ flex: 1 }} />
-          <span style={{ whiteSpace: "nowrap" }}>{alfredModelByKey(modelKey).hint}</span>
-        </div>
-      </div>
+      {/* composer (extracted: local draft state so keystrokes don't re-render the thread) */}
+      <AlfredComposer
+        open={open}
+        busy={busy}
+        accent={accent}
+        modelHint={alfredModelByKey(modelKey).hint}
+        clearSignal={composerClearSignal}
+        onSubmit={submit}
+      />
 
       {previewItem ? (
         <AlfredEmailPreview item={previewItem} onClose={() => setPreviewItem(null)} />
@@ -273,3 +232,10 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
     document.body,
   );
 }
+
+// React.memo so the panel bails out when DashboardShell passes stable callbacks
+// (perf audit fe-alfred::every-token-rerenders-whole-thread /
+// fe-alfred::unstable-callbacks-from-dashboardshell). The DashboardShell side
+// (stabilizing onClose/onOpenCalendarItem) is owned by the dashboard island; this
+// memo is the alfred-side half that lets those stable identities take effect.
+export default memo(AlfredPanel);

@@ -6,13 +6,17 @@ const MIN_PROTECTED_MS = 25 * 60 * 1000;
 const MIN_SHORT_MS = 10 * 60 * 1000;
 const TZ = "America/Los_Angeles";
 
+// Module singleton — focus-window derivations run on every hero tick, so avoid
+// re-allocating the Pacific date formatter per call.
+const PACIFIC_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 function pacificDateKey(ms) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(ms));
+  return PACIFIC_DATE_KEY_FORMATTER.format(new Date(ms));
 }
 
 export function endOfPacificDayMs(now) {
@@ -329,12 +333,7 @@ export function focusPressureTarget(deadlines = [], now = Date.now()) {
   if (!relevant.length) return null;
 
   const entry = relevant[0];
-  const date = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(entry.dueAtMs));
+  const date = PACIFIC_DATE_KEY_FORMATTER.format(new Date(entry.dueAtMs));
 
   return {
     date,

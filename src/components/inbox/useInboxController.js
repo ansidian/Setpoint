@@ -14,6 +14,7 @@ import {
   composeReadOverrides,
 } from "./inboxWorkItems.js";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
+import { computeNextTickDelay } from "./inboxNowTick.js";
 import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
 import { SNAPSHOT_LANE_ORDER } from "./activeSnapshotWorkflowModel.js";
 import useInboxActionDispatch from "./useInboxActionDispatch";
@@ -93,10 +94,9 @@ export default function useInboxController({
 
   const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId });
 
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  // nowTick scheduling lives below, after `flatEmails`, so it can also fire at
+  // pending-security-grace label transitions (the grace rows live in flatEmails).
+  // See the computeNextTickDelay effect after flatEmails.
 
   useEffect(() => {
     setSnoozedMap(new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])));
@@ -187,7 +187,31 @@ export default function useInboxController({
     resurfacedMap,
   ]);
 
+  // Bump nowTick at the soonest moment a derived value actually changes: a snooze
+  // boundary passing (the snooze sweep) OR a pending-security-grace row crossing a
+  // label bucket (EmailRow derives that countdown from _pendingSecurityGraceAt +
+  // nowTick). Idle when neither is pending, so an inbox with no near-term snooze
+  // or grace transition never re-filters/re-renders. flatEmails is the dep that
+  // carries the grace rows; rescheduling on nowTick advances through the buckets.
+  useEffect(() => {
+    const delay = computeNextTickDelay(snoozedMap, flatEmails, Date.now());
+    if (delay == null) return undefined;
+    const id = setTimeout(() => setNowTick(Date.now()), delay + 1);
+    return () => clearTimeout(id);
+  }, [snoozedMap, flatEmails, nowTick]);
+
   const indexedSearchActive = search.trim().length >= 2;
+
+  // Stable account lookup for the rows: only re-allocates the merged object when
+  // search state or the underlying maps actually change. Previously each pane
+  // re-spread `{ ...accountsById, ...indexedSearchAccountsById }` in its render
+  // body, handing EmailRow a fresh `account` reference every render and
+  // defeating its memo while indexed search was active.
+  const rowAccountsById = useMemo(() => (
+    indexedSearchActive
+      ? { ...accountsById, ...indexedSearch.accountsById }
+      : accountsById
+  ), [indexedSearchActive, accountsById, indexedSearch.accountsById]);
 
   const visibleEmails = useMemo(() => {
     if (indexedSearchActive) return indexedSearch.emails;
@@ -399,6 +423,13 @@ export default function useInboxController({
     }
   }, [readOnly, visibleEmails, onLiveReadOverrideChange]);
 
+  // Stable open handler so EmailRow's React.memo holds across list re-renders.
+  // Previously each pane passed an inline `(email) => setSelectedId(...)` arrow,
+  // a fresh reference per render that defeated the row memo.
+  const onOpen = useCallback((email) => {
+    setSelectedId(email.id || email.uid);
+  }, [setSelectedId]);
+
   const moveBy = useCallback((direction) => {
     const index = visibleEmails.findIndex((email) => email.id === selectedId || email.uid === selectedId);
     const nextIndex = Math.max(0, Math.min(visibleEmails.length - 1, index + direction));
@@ -468,6 +499,7 @@ export default function useInboxController({
     : emailAccounts.find((account) => (account.id || account.name) === accountId);
 
   return {
+    nowTick,
     accountId,
     setAccountId,
     lane,
@@ -479,6 +511,7 @@ export default function useInboxController({
     mobileFilterPanelRef,
     selectedId,
     setSelectedId,
+    onOpen,
     closeSelectedEmail,
     selectedEmail,
     selectedAccount,
@@ -487,6 +520,7 @@ export default function useInboxController({
     billOpen,
     setBillOpen,
     accountsById,
+    rowAccountsById,
     indexedSearchAccountsById: indexedSearch.accountsById,
     indexedSearchActive,
     indexedSearchLoading: indexedSearch.loading,

@@ -18,7 +18,13 @@ export default function AnchoredFloatingPanel({
 }) {
   const internalPanelRef = useRef(null);
   const resolvedPanelRef = panelRef || internalPanelRef;
+  const positionRafRef = useRef(0);
   const [pos, setPos] = useState(null);
+  // Stable "panel is mounted" gate: flips false->true once when the panel first
+  // renders and stays true across repositions. Used so the ResizeObserver and
+  // wheel listener bind once when the panel appears without rebinding on every
+  // committed `pos` change (pos is a fresh object each reposition).
+  const panelMounted = pos != null;
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization -- ref.current access is intentionally excluded from deps
   const updatePos = useCallback(() => {
@@ -52,6 +58,16 @@ export default function AnchoredFloatingPanel({
     });
   }, [anchorRef, height, matchAnchorWidth, maxWidth, minWidth, resolvedPanelRef, width]);
 
+  // Coalesce scroll/resize-driven re-measures to one rAF so a burst of scroll
+  // events runs the two getBoundingClientRect reads at most once per frame.
+  const scheduleUpdate = useCallback(() => {
+    if (positionRafRef.current) return;
+    positionRafRef.current = window.requestAnimationFrame(() => {
+      positionRafRef.current = 0;
+      updatePos();
+    });
+  }, [updatePos]);
+
   useLayoutEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- DOM measurement for initial positioning
     updatePos();
@@ -66,29 +82,41 @@ export default function AnchoredFloatingPanel({
       frame = window.requestAnimationFrame(retryMissingAnchor);
     };
     frame = window.requestAnimationFrame(retryMissingAnchor);
-    window.addEventListener("scroll", updatePos, true);
-    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", scheduleUpdate, true);
+    window.addEventListener("resize", scheduleUpdate);
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", updatePos, true);
-      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", scheduleUpdate, true);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (positionRafRef.current) {
+        window.cancelAnimationFrame(positionRafRef.current);
+        positionRafRef.current = 0;
+      }
     };
-  }, [anchorRef, updatePos]);
+  }, [anchorRef, updatePos, scheduleUpdate]);
 
   useLayoutEffect(() => {
     if (!pos) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-measure DOM after content change
+    // Re-measure once the panel first renders (pos transitions null -> set) so
+    // placement uses the real panel height. Content-size changes after that are
+    // caught by the ResizeObserver below, so `children` is intentionally not a
+    // dependency (it is a fresh element every parent render and would re-measure
+    // on every keystroke into a panel-hosted input).
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-measure DOM after first render
     updatePos();
-  }, [children, pos, updatePos]);
+  }, [pos, updatePos]);
 
   useEffect(() => {
     const element = resolvedPanelRef.current;
     if (!element || typeof window.ResizeObserver !== "function") return undefined;
 
+    // Bind once when the panel mounts rather than rebinding on every reposition;
+    // the `panelMounted` gate (not the `pos` object) is the dependency so the
+    // observer is not torn down and recreated on each committed position change.
     const observer = new window.ResizeObserver(() => updatePos());
     observer.observe(element);
     return () => observer.disconnect();
-  }, [pos, resolvedPanelRef, updatePos]);
+  }, [panelMounted, resolvedPanelRef, updatePos]);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -114,7 +142,7 @@ export default function AnchoredFloatingPanel({
 
     element.addEventListener("wheel", handleWheel, { passive: false });
     return () => element.removeEventListener("wheel", handleWheel);
-  }, [resolvedPanelRef, pos]);
+  }, [panelMounted, resolvedPanelRef]);
 
   if (!pos) return null;
 

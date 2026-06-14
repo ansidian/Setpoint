@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { parseCalendarTitle } from "./parseCalendarTitle";
+import { beforeAll, describe, expect, it } from "vitest";
+import { ensureChrono, parseCalendarTitle } from "./parseCalendarTitle";
 
 describe("parseCalendarTitle", () => {
+  // chrono-node is now lazily imported; production callers warm it before they
+  // depend on the natural-language parse, so the unit suite does the same.
+  beforeAll(async () => {
+    await ensureChrono();
+  });
   it("keeps ordinary title typing on the default draft schedule without invoking assist parsing", () => {
     const parsed = parseCalendarTitle("Planning block", {
       now: new Date("2026-04-20T19:00:00.000Z").getTime(),

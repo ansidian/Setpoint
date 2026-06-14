@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   BellOff,
   CalendarX,
@@ -15,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { isCatchUpEmail, timeClock, timeSince } from "../helpers";
+import { isCatchUpEmail, pendingSecurityGraceLabel, timeClock, timeSince } from "../helpers";
 import { Avatar, QuickAction } from "../primitives";
 import SnoozePicker from "../SnoozePicker";
 import BillBadge from "../../bills/BillBadge";
@@ -25,7 +26,20 @@ import DraftReply from "./DraftReply";
 import { resolveBillExtractionBody } from "./billExtractionBody";
 
 function LiveEmailNotice({ email }) {
-  const status = email?._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live · not yet triaged";
+  const pendingGrace = !!email?._pendingSecurityGrace;
+  // Compute the countdown label live so it advances while the reader is open,
+  // rather than freezing at the value baked when the snapshot row was built.
+  // A 30s local tick (only mounted for pending-grace emails) mirrors the
+  // controller's now-tick cadence without threading nowTick through the reader.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!pendingGrace) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [pendingGrace]);
+  const status = pendingGrace
+    ? pendingSecurityGraceLabel(email._pendingSecurityGraceAt, now)
+    : "Live · not yet triaged";
   const detail = email?._pendingSecurityGrace
     ? "Security triage is delayed briefly before classification."
     : "Arrived after the current snapshot. Not yet triaged.";

@@ -168,7 +168,7 @@ describe("Bills mirror", () => {
     ]));
   });
 
-  it("full-replaces schedule and occurrence mirror rows on successful refresh", async () => {
+  it("upserts schedule and occurrence mirror rows and prunes stale ones on successful refresh", async () => {
     const actualMetadata = {
       accounts: [{ id: "acct-1", name: "Checking" }],
       payees: [{ id: "payee-1", name: "Mortgage Co" }],
@@ -205,11 +205,11 @@ describe("Bills mirror", () => {
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
     expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
       expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
-      expect.stringMatching(/DELETE FROM ea_bill_occurrence_mirror/i),
-      expect.stringMatching(/DELETE FROM ea_bill_schedule_mirror/i),
       expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
-      expect.stringMatching(/INSERT INTO ea_bill_schedule_mirror/i),
-      expect.stringMatching(/INSERT INTO ea_bill_occurrence_mirror/i),
+      expect.stringMatching(/INSERT INTO ea_bill_schedule_mirror[\s\S]*ON CONFLICT/i),
+      expect.stringMatching(/INSERT INTO ea_bill_occurrence_mirror[\s\S]*ON CONFLICT/i),
+      expect.stringMatching(/DELETE FROM ea_bill_schedule_mirror WHERE user_id = \? AND schedule_id NOT IN/i),
+      expect.stringMatching(/DELETE FROM ea_bill_occurrence_mirror WHERE user_id = \? AND occurrence_id NOT IN/i),
       expect.stringMatching(/UPDATE ea_bills_mirror_state/i),
     ]);
     expect(out.syncHealth).toMatchObject({ state: "current", configured: true });

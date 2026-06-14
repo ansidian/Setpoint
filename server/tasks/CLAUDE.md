@@ -6,7 +6,7 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 
 - `tasks-service.js` — Todoist task complete/delete/projects/labels service wrappers
 - `deadlines-read.js` — reads current/range deadlines: Todoist merge, tombstones, reminders
-- `deadline-helpers.js` — task reconciliation: completed IDs, active filters, stats (covered by `carry-forward.test.js` and `completed-task-ids.test.js`)
+- `deadline-helpers.js` — task reconciliation: active filters, stats (covered by `carry-forward.test.js`)
 - `todoist.js` — Todoist facade: fetch tasks, sync health
 - `todoist-api.js` — Todoist REST client
 - `todoist-mirror.js` — syncs tasks into the local Todoist mirror tables

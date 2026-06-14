@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Clock } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
-import { timeAgo } from "./helpers";
+import { pendingSecurityGraceLabel, timeAgo } from "./helpers";
 import { Avatar } from "./primitives";
 
-export default function EmailRow({ email, account, selected, onOpen, density, showPreview, accent }) {
+function EmailRow({ email, account, selected, onOpen, density, showPreview, accent, nowTick }) {
   const [hover, setHover] = useState(false);
   const untriaged = email._untriaged;
   const arrivalGraceQueued = email._arrivalGraceQueued;
@@ -19,6 +19,15 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
   const barColor = untriaged ? "#89b4fa" : (L ? L.color : "#6c7086");
   const vPad = density === "compact" ? 8 : density === "comfortable" ? 14 : 11;
   const hPad = 14;
+  // Compute the pending-security-grace countdown label live from the grace
+  // timestamp + the controller's nowTick, so the 30s tick actually advances it
+  // (it was previously baked at row-build time and frozen between snapshots).
+  // Pass nowTick straight through; when it is undefined (e.g. a row rendered
+  // outside the controller in isolation) the helper falls back to Date.now()
+  // in its own module scope, keeping the render body pure.
+  const pendingGraceLabel = email._pendingSecurityGrace
+    ? pendingSecurityGraceLabel(email._pendingSecurityGraceAt, nowTick)
+    : null;
 
   return (
     <div
@@ -130,7 +139,7 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
                   boxShadow: "0 0 5px #89b4fa",
                 }}
               />
-              {email._pendingSecurityGrace ? email._pendingSecurityGraceLabel : "Live"}
+              {email._pendingSecurityGrace ? pendingGraceLabel : "Live"}
             </span>
           )}
           {arrivalGraceQueued && (
@@ -203,3 +212,50 @@ export default function EmailRow({ email, account, selected, onOpen, density, sh
     </div>
   );
 }
+
+// Email row objects are rebuilt fresh on every controller recompute
+// (buildInboxRow allocates a new object), so a default React.memo shallow
+// compare on `email` never bails. Compare the row identity plus exactly the
+// fields the render reads, so search keystrokes, lane toggles, selection
+// moves, and the now-tick only re-render the rows whose visible state changed.
+function rowKeyFields(email) {
+  return [
+    email.id, email.uid,
+    email.read, email._lane, email._untriaged, email._resurfaced,
+    email._arrivalGraceQueued, email._untriagedRead,
+    email._pendingSecurityGrace, email._pendingSecurityGraceAt,
+    email.urgency, email.category, email.from, email.fromEmail,
+    email.subject, email.preview, email.date,
+    email.urgentFlag?.label, email.urgentFlag,
+  ];
+}
+
+function areEqual(prev, next) {
+  if (
+    prev.selected !== next.selected
+    || prev.density !== next.density
+    || prev.showPreview !== next.showPreview
+    || prev.accent !== next.accent
+    || prev.onOpen !== next.onOpen
+    || prev.account !== next.account
+  ) {
+    return false;
+  }
+  // nowTick only changes the rendered output for pending-security-grace rows
+  // (the live countdown label). Ignore it for every other row so a tick does
+  // not re-render the whole list — that is the whole point of the memo.
+  if (
+    (prev.email._pendingSecurityGrace || next.email._pendingSecurityGrace)
+    && prev.nowTick !== next.nowTick
+  ) {
+    return false;
+  }
+  const a = rowKeyFields(prev.email);
+  const b = rowKeyFields(next.email);
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+export default memo(EmailRow, areEqual);

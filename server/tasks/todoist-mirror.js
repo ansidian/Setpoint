@@ -94,38 +94,46 @@ async function loadExistingReminderRows(userId, items, dbClient) {
   return new Map(result.rows.map((row) => [String(row.item_id), row]));
 }
 
-async function reconcileTodoistReminderRows(userId, items, previousRows, dbClient) {
+// P2-21: collect the reminder-reconcile mutations as statements (the reads still
+// run here against dbClient) so applySyncResponse can fold them into the same
+// batched transaction as the item upserts, restoring atomicity and replacing the
+// per-item serial round-trips.
+async function collectTodoistReminderReconcileStatements(userId, items, previousRows, dbClient) {
+  const statements = [];
   for (const item of items || []) {
     const sourceItemId = normalizeId(item.id);
     if (!sourceItemId) continue;
 
     if (item.is_deleted) {
-      await deleteSourceReminders({
+      const stmt = await deleteSourceReminders({
         userId,
         sourceType: "todoist_task",
         sourceItemId,
-      }, { dbClient });
+      }, { dbClient, collect: true });
+      if (stmt) statements.push(stmt);
       continue;
     }
 
     if (item.checked) {
-      await deleteSourceReminders({
+      const stmt = await deleteSourceReminders({
         userId,
         sourceType: "todoist_task",
         sourceItemId,
         unsentOnly: true,
-      }, { dbClient });
+      }, { dbClient, collect: true });
+      if (stmt) statements.push(stmt);
       continue;
     }
 
     const nextAnchor = todoistReminderAnchorFromTask(item);
     if (!nextAnchor?.anchorAt) {
-      await deleteSourceReminders({
+      const stmt = await deleteSourceReminders({
         userId,
         sourceType: "todoist_task",
         sourceItemId,
         unsentOnly: true,
-      }, { dbClient });
+      }, { dbClient, collect: true });
+      if (stmt) statements.push(stmt);
       continue;
     }
 
@@ -134,14 +142,16 @@ async function reconcileTodoistReminderRows(userId, items, previousRows, dbClien
     const previousAnchor = todoistReminderAnchorFromTask(previousRow);
     if (anchorsEqual(previousAnchor, nextAnchor)) continue;
 
-    await recomputeUnsentRemindersForSource({
+    const recomputeStatements = await recomputeUnsentRemindersForSource({
       userId,
       sourceType: "todoist_task",
       sourceItemId,
       anchorKind: nextAnchor.anchorKind,
       anchorAt: nextAnchor.anchorAt,
-    }, { dbClient });
+    }, { dbClient, collect: true });
+    if (Array.isArray(recomputeStatements)) statements.push(...recomputeStatements);
   }
+  return statements;
 }
 
 export async function recordTodoistSyncRequest(userId, {
@@ -595,8 +605,17 @@ async function applySyncResponse(userId, response, {
   statements.push(...(response.projects || []).map((project) => projectStatement(userId, project, timestamp)));
   statements.push(...(response.labels || []).map((label) => labelStatement(userId, label, timestamp)));
   statements.push(stateSuccessStatement(userId, response, timestamp, isFullSync, syncStartedAt));
+  // P2-21: fold reminder reconciliation into the SAME batch as the item upserts so
+  // the mirror write and reminder reconciliation commit atomically, instead of a
+  // batch followed by serial per-item reminder round-trips.
+  const reminderStatements = await collectTodoistReminderReconcileStatements(
+    userId,
+    response.items || [],
+    previousRows,
+    dbClient,
+  );
+  statements.push(...reminderStatements);
   await dbClient.batch(statements);
-  await reconcileTodoistReminderRows(userId, response.items || [], previousRows, dbClient);
 }
 
 // P3-63: three independent trigger paths (background read sync, refresh-blocking
@@ -691,7 +710,14 @@ export async function getTodoistMirrorHealth(userId, {
   dbClient = db,
   now = new Date(),
 } = {}) {
-  const token = await loadTodoistToken(userId, dbClient);
+  // P2-5: loadSyncState does not depend on the token value, so resolve both
+  // reads concurrently instead of serially on the warm /current path. The token
+  // still solely gates the early-return shapes below; state is discarded when the
+  // account is unconfigured.
+  const [token, state] = await Promise.all([
+    loadTodoistToken(userId, dbClient),
+    loadSyncState(userId, dbClient),
+  ]);
   if (!token) {
     return {
       state: "unconfigured",
@@ -708,7 +734,6 @@ export async function getTodoistMirrorHealth(userId, {
     };
   }
 
-  const state = await loadSyncState(userId, dbClient);
   if (!state) {
     return {
       state: "unavailable",

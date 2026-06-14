@@ -12,7 +12,13 @@ vi.mock("../db/connection.js", () => ({
   },
 }));
 
-const { createSession, validateSession, deleteSession, validateBearer } = await import("./auth.js");
+const {
+  createSession,
+  validateSession,
+  deleteSession,
+  validateBearer,
+  __clearSessionValidationCache,
+} = await import("./auth.js");
 
 async function seedApiToken(db, raw, { scopes = ["actual:write"], expiresAt } = {}) {
   await db.execute({
@@ -24,6 +30,7 @@ async function seedApiToken(db, raw, { scopes = ["actual:write"], expiresAt } = 
 describe("auth middleware session storage", () => {
   beforeEach(async () => {
     testState.db.current = await createAuthTestDb();
+    __clearSessionValidationCache();
   });
 
   afterEach(async () => {
@@ -126,5 +133,42 @@ describe("auth middleware session storage", () => {
       args: [],
     });
     expect(result.rows).toHaveLength(0);
+  });
+
+  it("sweeps expired sessions when a new session is created (P3-18)", async () => {
+    await testState.db.current.execute({
+      sql: "INSERT INTO ea_sessions (token, expires_at) VALUES (?, ?)",
+      args: [hashSessionToken("stale-session"), Date.now() - 60_000],
+    });
+
+    await createSession();
+
+    const rows = await testState.db.current.execute({
+      sql: "SELECT token FROM ea_sessions WHERE token = ?",
+      args: [hashSessionToken("stale-session")],
+    });
+    expect(rows.rows).toHaveLength(0);
+  });
+
+  it("serves a repeat validation from cache without re-querying the database (P2-27)", async () => {
+    await seedSession(testState.db.current, "cached-session");
+    const spy = vi.spyOn(testState.db.current, "execute");
+
+    expect(await validateSession("cached-session")).toBe(true);
+    const callsAfterFirst = spy.mock.calls.length;
+    expect(callsAfterFirst).toBeGreaterThan(0);
+
+    expect(await validateSession("cached-session")).toBe(true);
+    // Second validation is a cache hit: no additional DB round-trips.
+    expect(spy.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it("invalidates the session cache on logout so a revoked token stops validating (P2-27)", async () => {
+    await seedSession(testState.db.current, "logout-cache-session");
+
+    expect(await validateSession("logout-cache-session")).toBe(true); // populates cache
+    await deleteSession("logout-cache-session"); // deletes row AND clears cache entry
+
+    expect(await validateSession("logout-cache-session")).toBe(false);
   });
 });

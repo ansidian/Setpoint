@@ -1,19 +1,28 @@
-import { useEffect } from "react";
+import { memo, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import DeadlineQuickActionLayer from "../views/deadlines/DeadlineQuickActionLayer.jsx";
 import CalendarModalContextRail from "./CalendarModalContextRail.jsx";
-import CalendarFloatingDetailContent from "./CalendarFloatingDetailContent.jsx";
+import CalendarFloatingDetailContentBase from "./CalendarFloatingDetailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";
 import CalendarScrollContainer from "./CalendarScrollContainer.jsx";
 import buildContextContent from "./buildContextContent.jsx";
-import CalendarModalAgendaRailContent from "./CalendarModalAgendaRailContent.jsx";
+import CalendarModalAgendaRailContentBase from "./CalendarModalAgendaRailContent.jsx";
 import CalendarModalBackdrop from "./CalendarModalBackdrop.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 import CalendarModalTexture from "./CalendarModalTexture.jsx";
 import CalendarSearchRail from "./CalendarSearchRail.jsx";
 import { getCalendarSearchLayoutMode } from "../calendarLayout.js";
+
+// Memo boundaries for the heavier rail children (fe-global::shell-props-inline-
+// callbacks-churn). The shell re-renders on every calendar interaction; with the
+// inline callbacks below hoisted to useCallback and the data props stabilized
+// upstream, these wrappers let the agenda/floating rails skip re-rendering when
+// their inputs are unchanged. Wrapping at the import site avoids reshaping the
+// underlying component modules.
+const CalendarModalAgendaRailContent = memo(CalendarModalAgendaRailContentBase);
+const CalendarFloatingDetailContent = memo(CalendarFloatingDetailContentBase);
 
 export default function CalendarModalShell({
   refs,
@@ -152,20 +161,18 @@ export default function CalendarModalShell({
           : `summary-${view}-${viewYear}-${viewMonth}`;
 
   const contextWidth = workspaceMode === "editor" ? layout.editorWidth : layout.contextWidth;
-  const headerEventEditor = view === "events"
-    ? {
-        ...eventEditor,
-        openCreate: () => {
-          if (!layout.stacked) {
-            onOpenFloatingEventCreate?.(selectedDateKey);
-          } else {
-            onCloseFloatingDetail?.();
-            eventEditor.openCreate?.();
-          }
-        },
-      }
-    : eventEditor;
-  const onCreateTask = (seedDate) => {
+  // Hoist the rail-facing callbacks to useCallback so the memoized agenda /
+  // floating rails (and any memoized header descendants) are not re-rendered by
+  // a fresh inline-arrow identity on every shell render.
+  const handleOpenEventCreate = useCallback(() => {
+    if (!layout.stacked) {
+      onOpenFloatingEventCreate?.(selectedDateKey);
+    } else {
+      onCloseFloatingDetail?.();
+      eventEditor.openCreate?.();
+    }
+  }, [eventEditor, layout.stacked, onCloseFloatingDetail, onOpenFloatingEventCreate, selectedDateKey]);
+  const handleCreateTask = useCallback((seedDate) => {
     if (!layout.stacked) {
       onOpenFloatingDeadlineCreate?.(seedDate || selectedDateKey || null);
     } else {
@@ -176,7 +183,18 @@ export default function CalendarModalShell({
       });
       onDeadlineDraftPreviewChange?.(null);
     }
-  };
+  }, [layout.stacked, onCloseFloatingDetail, onDeadlineDraftPreviewChange, onOpenFloatingDeadlineCreate, selectedDateKey, setDeadlineEditor]);
+  const handleFilteredSelectedDeadlineHidden = useCallback(() => {
+    setSelectedItemId(null);
+    onCloseFloatingDetail?.();
+  }, [onCloseFloatingDetail, setSelectedItemId]);
+  const headerEventEditor = view === "events"
+    ? {
+        ...eventEditor,
+        openCreate: handleOpenEventCreate,
+      }
+    : eventEditor;
+  const onCreateTask = handleCreateTask;
 
   const contextContent = useAgendaRail ? (
     <CalendarModalAgendaRailContent
@@ -207,10 +225,7 @@ export default function CalendarModalShell({
       eventsRange={eventsRange}
       deadlinesRange={deadlinesRange}
       dataRevision={dataRevision}
-      onFilteredSelectedDeadlineHidden={() => {
-        setSelectedItemId(null);
-        onCloseFloatingDetail?.();
-      }}
+      onFilteredSelectedDeadlineHidden={handleFilteredSelectedDeadlineHidden}
     />
   ) : buildContextContent({
     layout,
@@ -236,14 +251,7 @@ export default function CalendarModalShell({
     setSelectedItemId,
     setDeadlineEditor,
     focusDeadlineTask,
-    onCreateEvent: () => {
-      if (!layout.stacked) {
-        onOpenFloatingEventCreate?.(selectedDateKey);
-      } else {
-        onCloseFloatingDetail?.();
-        eventEditor.openCreate?.();
-      }
-    },
+    onCreateEvent: handleOpenEventCreate,
     onCreateTask,
     ghostPreview,
     onDeadlineDraftPreviewChange,

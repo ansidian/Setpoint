@@ -321,7 +321,7 @@ describe("syncTodoistMirror", () => {
       sourceItemId: "item-1",
       anchorKind: "todoist_due_datetime",
       anchorAt: "2026-05-06T16:30:00.000Z",
-    }, { dbClient: testState.db.current });
+    }, { dbClient: testState.db.current, collect: true });
   });
 
   it("deletes unsent reminders when sync observes provider-side completion", async () => {
@@ -355,7 +355,7 @@ describe("syncTodoistMirror", () => {
       sourceType: "todoist_task",
       sourceItemId: "item-2",
       unsentOnly: true,
-    }, { dbClient: testState.db.current });
+    }, { dbClient: testState.db.current, collect: true });
   });
 
   it("applies incremental updates without deleting absent resources", async () => {

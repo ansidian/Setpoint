@@ -15,6 +15,7 @@ const gmailSyncApi = vi.hoisted(() => ({
 const triageWorkerApi = vi.hoisted(() => ({
   processNextEmailTriageJob: vi.fn(),
   recoverStaleRunningTriageJobs: vi.fn(),
+  createTriageBatchContext: vi.fn(() => ({})),
 }));
 const embeddingWorkerApi = vi.hoisted(() => ({
   processEmailSearchEmbeddingBatchesForAllUsers: vi.fn(),
@@ -312,5 +313,30 @@ describe("email triage scheduler worker", () => {
     expect(triageWorkerApi.processNextEmailTriageJob).toHaveBeenCalledTimes(1);
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  it("self-reschedules to keep draining after a full batch (P2-4)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    let calls = 0;
+    triageWorkerApi.processNextEmailTriageJob.mockImplementation(async () => {
+      calls += 1;
+      // First 10 calls fill the batch; afterwards the queue is empty.
+      return { processed: calls <= 10 };
+    });
+
+    await runEmailTriageWorker();
+    expect(calls).toBe(10); // full batch → an immediate re-arm is scheduled
+
+    // Let the setImmediate-scheduled drain run to completion.
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    expect(calls).toBe(11); // re-armed run processed one more, saw empty queue, stopped
+    // Recovery runs once on the cron tick, NOT on the immediate self-reschedule.
+    expect(triageWorkerApi.recoverStaleRunningTriageJobs).toHaveBeenCalledTimes(1);
+    expect(errorSpy).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });

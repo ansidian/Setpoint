@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getGmailUrl } from "../../lib/email-links";
 import { defaultSnoozeTs } from "./helpers";
 import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
@@ -25,8 +25,18 @@ export default function useInboxKeyboardCommands({
   readOnly,
   onAction,
 }) {
+  // Keep the per-selection-volatile handlers/values in refs so the window
+  // keydown listener can subscribe ONCE on mount instead of detaching and
+  // re-attaching on every j/k nav or row click (selectedEmail, onAction and
+  // moveBy all change identity per selection). Mirrors the undoSlotRef pattern.
+  const handlersRef = useRef({ onUndo, moveBy, selectedEmail, readOnly, onAction });
+  useEffect(() => {
+    handlersRef.current = { onUndo, moveBy, selectedEmail, readOnly, onAction };
+  }, [onUndo, moveBy, selectedEmail, readOnly, onAction]);
+
   useEffect(() => {
     function onKey(event) {
+      const { onUndo: onUndoNow, moveBy: moveByNow, selectedEmail: selectedEmailNow, readOnly: readOnlyNow, onAction: onActionNow } = handlersRef.current;
       if (shouldHandleInboxUndoHotkey({
         key: event.key,
         metaKey: event.metaKey,
@@ -36,7 +46,7 @@ export default function useInboxKeyboardCommands({
       })) {
         event.preventDefault();
         event.stopPropagation();
-        onUndo();
+        onUndoNow();
         return;
       }
 
@@ -58,30 +68,33 @@ export default function useInboxKeyboardCommands({
       const key = event.key.toLowerCase();
       if (key === "j" || event.key === "ArrowDown") {
         event.preventDefault();
-        moveBy(1);
+        moveByNow(1);
       } else if (key === "k" || event.key === "ArrowUp") {
         event.preventDefault();
-        moveBy(-1);
+        moveByNow(-1);
       } else if (key === "o") {
         event.preventDefault();
-        if (!selectedEmail) return;
-        const url = getGmailUrl(selectedEmail);
+        if (!selectedEmailNow) return;
+        const url = getGmailUrl(selectedEmailNow);
         if (url) window.open(url, "_blank", "noopener,noreferrer");
       } else {
-        const action = resolveInboxHotkeyAction(key, selectedEmail, readOnly);
+        const action = resolveInboxHotkeyAction(key, selectedEmailNow, readOnlyNow);
         if (!action) return;
         event.preventDefault();
         if (action.kind === "snooze-default") {
-          onAction("snooze", defaultSnoozeTs());
+          onActionNow("snooze", defaultSnoozeTs());
         } else if (action.kind === "snapshot-move-lane") {
-          onAction(action.kind, action.lane);
+          onActionNow(action.kind, action.lane);
         } else {
-          onAction(action.kind);
+          onActionNow(action.kind);
         }
       }
     }
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [moveBy, onAction, onUndo, readOnly, searchRef, selectedEmail, undoSlotRef]);
+    // searchRef and undoSlotRef are stable ref objects; the per-selection
+    // values are read from handlersRef.current at event time, so the listener
+    // is bound exactly once for the hook's lifetime.
+  }, [searchRef, undoSlotRef]);
 }

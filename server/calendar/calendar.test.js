@@ -1,11 +1,157 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+const clientMocks = vi.hoisted(() => ({
+  getAuthorizedAccount: vi.fn(),
+  listCalendarsForAccount: vi.fn(),
+  googleCalendarFetch: vi.fn(),
+}));
+
+vi.mock("./calendar-google-client.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  getAuthorizedAccount: clientMocks.getAuthorizedAccount,
+  listCalendarsForAccount: clientMocks.listCalendarsForAccount,
+  googleCalendarFetch: clientMocks.googleCalendarFetch,
+}));
+
 import {
   buildGoogleRecurrenceRules,
   extractStructuredRecurrence,
+  fetchCalendar,
   getNextWeekRange,
+  markCalendarConflicts,
   normalizeGoogleCalendarLink,
   normalizeGoogleEvent,
 } from "./calendar.js";
+
+describe("markCalendarConflicts", () => {
+  const ev = (id, startMs, endMs, allDay = false) => ({ id, startMs, endMs, allDay });
+  const flagged = (events) => events.filter((e) => e.flag === "Conflict").map((e) => e.id).sort();
+
+  it("flags both events when two timed events strictly overlap", () => {
+    const events = [ev("a", 0, 100), ev("b", 50, 150)];
+    markCalendarConflicts(events);
+    expect(flagged(events)).toEqual(["a", "b"]);
+  });
+
+  it("does not flag events that merely touch at a boundary", () => {
+    const events = [ev("a", 0, 100), ev("b", 100, 200)];
+    markCalendarConflicts(events);
+    expect(flagged(events)).toEqual([]);
+  });
+
+  it("flags a nested event and its container", () => {
+    const events = [ev("outer", 0, 1000), ev("inner", 200, 300)];
+    markCalendarConflicts(events);
+    expect(flagged(events)).toEqual(["inner", "outer"]);
+  });
+
+  it("never flags all-day events even when they span timed events", () => {
+    const events = [ev("allday", 0, 100000, true), ev("a", 10, 20), ev("b", 30, 40)];
+    markCalendarConflicts(events);
+    expect(flagged(events)).toEqual([]);
+  });
+
+  it("matches the brute-force all-pairs algorithm on randomized inputs", () => {
+    // Deterministic LCG so the property check is reproducible.
+    let seed = 1234567;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const bruteForce = (events) => {
+      const flags = events.map(() => false);
+      for (let i = 0; i < events.length; i += 1) {
+        if (events[i].allDay) continue;
+        for (let j = i + 1; j < events.length; j += 1) {
+          if (events[j].allDay) continue;
+          if (events[i].startMs < events[j].endMs && events[j].startMs < events[i].endMs) {
+            flags[i] = true;
+            flags[j] = true;
+          }
+        }
+      }
+      return flags;
+    };
+
+    for (let trial = 0; trial < 40; trial += 1) {
+      const events = Array.from({ length: 60 }, (_, i) => {
+        const start = Math.floor(rand() * 500);
+        const duration = 1 + Math.floor(rand() * 50); // strictly positive
+        return ev(`e${i}`, start, start + duration, rand() < 0.15);
+      });
+      const expected = bruteForce(events);
+      markCalendarConflicts(events);
+      const actual = events.map((e) => e.flag === "Conflict");
+      expect(actual).toEqual(expected);
+    }
+  });
+});
+
+describe("fetchCalendar fan-out", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const range = {
+    startDate: new Date("2026-04-20T07:00:00.000Z"),
+    endDate: new Date("2026-04-21T06:59:59.999Z"),
+  };
+
+  function eventsResponse(items) {
+    return { json: async () => ({ items }) };
+  }
+
+  function timedItem(id) {
+    return {
+      id,
+      summary: id,
+      start: { dateTime: "2026-04-20T09:00:00-07:00" },
+      end: { dateTime: "2026-04-20T09:30:00-07:00" },
+    };
+  }
+
+  it("fetches every calendar across every account and merges the results", async () => {
+    clientMocks.getAuthorizedAccount.mockResolvedValue({ accessToken: "t" });
+    clientMocks.listCalendarsForAccount.mockResolvedValue([
+      { id: "primary", summary: "Primary" },
+      { id: "work", summary: "Work" },
+    ]);
+    clientMocks.googleCalendarFetch.mockImplementation(async (_auth, path) =>
+      eventsResponse([timedItem(path)]));
+
+    const events = await fetchCalendar(
+      [{ id: "a", email: "a@example.com" }, { id: "b", email: "b@example.com" }],
+      range,
+    );
+
+    // 2 accounts × 2 calendars = 4 independent event fetches.
+    expect(clientMocks.googleCalendarFetch).toHaveBeenCalledTimes(4);
+    expect(events).toHaveLength(4);
+  });
+
+  it("degrades gracefully when one calendar fetch fails", async () => {
+    clientMocks.getAuthorizedAccount.mockResolvedValue({ accessToken: "t" });
+    clientMocks.listCalendarsForAccount.mockResolvedValue([
+      { id: "primary", summary: "Primary" },
+      { id: "broken", summary: "Broken" },
+    ]);
+    clientMocks.googleCalendarFetch.mockImplementation(async (_auth, path) => {
+      if (path.includes("broken")) {
+        const err = new Error("nope");
+        err.code = "calendar_google_error";
+        throw err;
+      }
+      return eventsResponse([timedItem(path)]);
+    });
+
+    const events = await fetchCalendar([{ id: "a", email: "a@example.com" }], range);
+
+    // The failing calendar is swallowed by its per-calendar .catch; the healthy
+    // calendar still populates the response.
+    expect(events).toHaveLength(1);
+    expect(events[0].id).toContain("primary");
+  });
+});
 
 describe("getNextWeekRange", () => {
   afterEach(() => {

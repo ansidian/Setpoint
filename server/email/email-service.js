@@ -93,19 +93,24 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
   const { textQuery, readFilter } = parseEmailSearchQuery(q);
   const hasTextQuery = textQuery.trim().length > 0;
   const readPredicate = readFilter == null ? "" : " AND idx.read = ?";
-  const snapshotJoin = `
+  // Both branches first bound the driving row set to fetchLimit via a CTE, then
+  // attach triage + the latest-active-snapshot row. This keeps the (byte-for-
+  // byte unchanged) per-row correlated snapshot subquery, but runs it against at
+  // most fetchLimit rows instead of every FTS match / every indexed row
+  // (P2-14 + P2-24). `alias` is the bounded CTE so the subquery keys are stable.
+  const buildSnapshotJoins = (alias) => `
               LEFT JOIN ea_email_triage triage
-                ON triage.user_id = idx.user_id
-               AND triage.account_id = idx.account_id
-               AND triage.email_id = idx.uid
+                ON triage.user_id = ${alias}.user_id
+               AND triage.account_id = ${alias}.account_id
+               AND triage.email_id = ${alias}.uid
               LEFT JOIN ea_briefing_snapshot_items snap
                 ON snap.id = (
                   SELECT si.id
                   FROM ea_briefing_snapshot_items si
                   JOIN ea_briefing_snapshots s ON s.id = si.snapshot_id
-                  WHERE si.user_id = idx.user_id
-                    AND si.account_id = idx.account_id
-                    AND si.email_id = idx.uid
+                  WHERE si.user_id = ${alias}.user_id
+                    AND si.account_id = ${alias}.account_id
+                    AND si.email_id = ${alias}.uid
                     AND s.status = 'active'
                   ORDER BY si.updated_at DESC, si.id DESC
                   LIMIT 1
@@ -133,40 +138,59 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 snap.updated_at AS snapshot_updated_at`;
   const result = hasTextQuery
     ? await db.execute({
-        sql: `SELECT
-                idx.uid, idx.account_id, idx.account_label, idx.account_email,
-                idx.account_color, idx.account_icon,
-                idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-                idx.email_date, idx.email_date_utc, idx.read,
-                snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
-                snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
-                rank
+        sql: `WITH bounded AS (
+                SELECT
+                  idx.uid, idx.account_id, idx.account_label, idx.account_email,
+                  idx.account_color, idx.account_icon,
+                  idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
+                  idx.email_date, idx.email_date_utc, idx.read, idx.user_id,
+                  snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
+                  snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
+                  rank
+                FROM ea_email_fts
+                JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
+                WHERE ea_email_fts MATCH ? AND idx.user_id = ?${readPredicate}
+                ORDER BY rank
+                LIMIT ?
+              )
+              SELECT
+                bounded.uid, bounded.account_id, bounded.account_label, bounded.account_email,
+                bounded.account_color, bounded.account_icon,
+                bounded.from_name, bounded.from_address, bounded.subject, bounded.body_snippet,
+                bounded.email_date, bounded.email_date_utc, bounded.read,
+                bounded.subject_highlight, bounded.body_highlight, bounded.rank
                 ${rankingColumns}
-              FROM ea_email_fts
-              JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
-              ${snapshotJoin}
-              WHERE ea_email_fts MATCH ? AND idx.user_id = ?${readPredicate}
-              ORDER BY rank
-              LIMIT ?`,
+              FROM bounded
+              ${buildSnapshotJoins("bounded")}
+              ORDER BY bounded.rank`,
         args: readFilter == null
           ? [sanitizeFtsQuery(textQuery), userId, fetchLimit]
           : [sanitizeFtsQuery(textQuery), userId, readFilter, fetchLimit],
       })
     : await db.execute({
-        sql: `SELECT
-                idx.uid, idx.account_id, idx.account_label, idx.account_email,
-                idx.account_color, idx.account_icon,
-                idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-                idx.email_date, idx.email_date_utc, idx.read,
+        sql: `WITH bounded AS (
+                SELECT
+                  idx.uid, idx.account_id, idx.account_label, idx.account_email,
+                  idx.account_color, idx.account_icon,
+                  idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
+                  idx.email_date, idx.email_date_utc, idx.read, idx.user_id
+                FROM ea_email_index idx
+                WHERE idx.user_id = ?${readPredicate}
+                ORDER BY idx.email_date_utc DESC
+                LIMIT ?
+              )
+              SELECT
+                bounded.uid, bounded.account_id, bounded.account_label, bounded.account_email,
+                bounded.account_color, bounded.account_icon,
+                bounded.from_name, bounded.from_address, bounded.subject, bounded.body_snippet,
+                bounded.email_date, bounded.email_date_utc, bounded.read,
                 NULL AS subject_highlight,
                 NULL AS body_highlight,
                 0 AS rank
                 ${rankingColumns}
-              FROM ea_email_index idx
-              ${snapshotJoin}
-              WHERE idx.user_id = ?${readPredicate}
-              ORDER BY idx.email_date_utc DESC, idx.email_date DESC
-              LIMIT ?`,
+              FROM bounded
+              ${buildSnapshotJoins("bounded")}
+              ORDER BY bounded.email_date_utc DESC`,
         args: readFilter == null
           ? [userId, fetchLimit]
           : [userId, readFilter, fetchLimit],

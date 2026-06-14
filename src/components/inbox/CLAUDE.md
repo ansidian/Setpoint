@@ -21,6 +21,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `inboxRow.js` — canonical row normalization: field fallbacks, read-override merge
 - `inboxWorkItems.js` — work item pipelines: active-snapshot, live, resurfaced-snooze
 - `inboxCountsModel.js` — scoped unread counts under account/category filters
+- `inboxNowTick.js` — schedules the `nowTick` timeout to the soonest snooze boundary or grace-label transition
 - `inboxProcessingModel.js` — triage activity counts from processing state
 - `snapshotSummary.js` — lane breakdown text for the digest header
 - `activeSnapshotWorkflowModel.js` — lane routing, mutable/dismissible rules, reopen logic

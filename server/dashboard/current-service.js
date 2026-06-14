@@ -629,6 +629,12 @@ async function composeCurrentDashboardResponse(userId, rows, {
   activeSnapshot,
   activeSnapshotHealth = null,
   providerHealth,
+  // P0-1/P3-9: the hot getCurrentDashboard path hydrates reminder state inside
+  // its parallel batch and passes the result in here, so hydration no longer
+  // extends the serial response-composition chain on the every-2s poll. Other
+  // callers (force sync / manual refresh) omit it and hydrate inline below.
+  // Either way the produced calendar/deadlines payloads are identical.
+  hydratedReminderPayloads = null,
   refresh = { mode: "passive", scheduled: [], skipped: [] },
   dbClient = db,
   now = new Date(),
@@ -638,15 +644,15 @@ async function composeCurrentDashboardResponse(userId, rows, {
   const nextProviderHealth = { ...providerHealth };
   if (activeSnapshotHealth) nextProviderHealth.activeSnapshot = activeSnapshotHealth;
   const fetchedAt = new Date().toISOString();
-  const hydratedReminderPayloads = await hydrateCurrentReminderState(userId, {
+  const reminderPayloads = hydratedReminderPayloads || await hydrateCurrentReminderState(userId, {
     calendar: usablePayloadForKey("calendar_current", rows.calendar_current, []),
     deadlines: usablePayloadForKey("deadlines_current", rows.deadlines_current, EMPTY_DEADLINES),
   }, { dbClient, now });
 
   return {
     weather: usablePayloadForKey("weather_current", rows.weather_current, null),
-    calendar: hydratedReminderPayloads.calendar,
-    deadlines: hydratedReminderPayloads.deadlines,
+    calendar: reminderPayloads.calendar,
+    deadlines: reminderPayloads.deadlines,
     bills: billsPayload.bills || [],
     allSchedules: billsPayload.allSchedules || [],
     payeeMap: billsPayload.payeeMap || {},
@@ -696,13 +702,22 @@ export async function getCurrentDashboard(userId, {
   // them concurrently instead of as serial awaits in the object literal.
   // loadProviderHealth MUST keep receiving context.todoistHealth so it reuses
   // the already-loaded health and does not re-issue its own getTodoistSyncHealth.
-  const [activeSnapshot, providerHealth] = await Promise.all([
+  // P0-1/P3-9: hydrateCurrentReminderState reads ea_reminders only (disjoint from
+  // the snapshot + provider-health tables), so fold it into the SAME parallel
+  // batch instead of letting composeCurrentDashboardResponse await it serially
+  // afterward. This removes the last serial DB hop from the every-2s poll path.
+  const [activeSnapshot, providerHealth, hydratedReminderPayloads] = await Promise.all([
     getActiveSnapshotView(userId),
     loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+    hydrateCurrentReminderState(userId, {
+      calendar: usablePayloadForKey("calendar_current", rows.calendar_current, []),
+      deadlines: usablePayloadForKey("deadlines_current", rows.deadlines_current, EMPTY_DEADLINES),
+    }, { dbClient, now }),
   ]);
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot,
     providerHealth,
+    hydratedReminderPayloads,
     refresh: { mode: "passive", ...refreshPlan },
     dbClient,
     now,
@@ -775,6 +790,14 @@ export async function requestCurrentDashboardRefresh(userId, {
       : refreshPlan.scheduled,
     skipped: refreshPlan.skipped,
   };
+  // MERGE-NOTE[srv-snapshot-dash::snapshot-sync-snapshotview-double-load] (P2-19):
+  // This inline getActiveSnapshotView is the full ~8-trip rebuild and runs a
+  // SECOND time inside the fire-and-forget syncActiveSnapshot above (its trailing
+  // getActiveSnapshotView at snapshot-service.js runActiveSnapshotSync). The audit
+  // fix — return a *lightweight* activeSnapshot inline — would change the
+  // /current/refresh response shape (activeSnapshot is consumed by the frontend
+  // worktree's currentDashboardModel/poll dedup), so it is a cross-layer contract
+  // change. Per the work order, skipped here and flagged for coordinated follow-up.
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
     providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),

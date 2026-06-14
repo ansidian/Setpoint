@@ -185,8 +185,11 @@ export function ifMatchHeaders(etag) {
   return etag ? { "If-Match": etag } : {};
 }
 
-export async function getRawEvent(account, calendarId, eventId) {
-  const auth = await getAuthorizedAccount(account);
+export async function getRawEvent(account, calendarId, eventId, { auth: providedAuth = null } = {}) {
+  // Callers that already resolved an authorized account (e.g. a recurring-event
+  // mutation that just fetched the selected instance) can pass it to skip a
+  // redundant credential decrypt + possible token refresh.
+  const auth = providedAuth || await getAuthorizedAccount(account);
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
   const event = await res.json();
   return { auth, event };
@@ -221,7 +224,38 @@ function normalizeCalendarEntry(account, raw, hasWriteScope) {
   };
 }
 
+// Short-TTL per-account memo for the Google calendarList. The list is read on
+// every /range open, every /calendars call, the dashboard provider refresh, the
+// mirror-sync tick, and every event mutation; it almost never changes within a
+// session. Keyed by account.id and discriminated by the stored credentials blob,
+// because the per-calendar `writable` flag is derived from the credential's
+// scopes — a re-auth that adds calendar write scope changes credentials_encrypted
+// and must NOT serve a stale writable=false list. credentials_encrypted is stable
+// between (hourly) token refreshes, so the hot-path benefit holds. Invalidated on
+// event mutations (see invalidateCalendarListCache callers in
+// calendar-mutations.js). Single-user (EA_USER_ID) app, so a process-global Map
+// is sufficient.
+const CALENDAR_LIST_CACHE_TTL_MS = 120_000;
+const calendarListCache = new Map();
+
+export function invalidateCalendarListCache(accountId) {
+  if (accountId == null) {
+    calendarListCache.clear();
+    return;
+  }
+  calendarListCache.delete(accountId);
+}
+
 export async function listCalendarsForAccount(account) {
+  const cacheKey = account?.id ?? null;
+  const credentialsKey = account?.credentials_encrypted ?? "";
+  if (cacheKey != null) {
+    const cached = calendarListCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now() && cached.credentialsKey === credentialsKey) {
+      return cached.value;
+    }
+  }
+
   const auth = await getAuthorizedAccount(account);
   let rawCalendars = [];
   let pageToken = null;
@@ -242,11 +276,13 @@ export async function listCalendarsForAccount(account) {
     pageToken = data.nextPageToken || null;
   } while (pageToken);
 
+  // Don't cache the synthetic fallback: it is the symptom of a transient
+  // forbidden/error response, and caching it would mask recovery for 120s.
   if (rawCalendars.length === 0) {
     return [buildSyntheticPrimaryCalendar(account, auth.hasWriteScope)];
   }
 
-  return rawCalendars
+  const calendars = rawCalendars
     .filter(calendarListEntrySelected)
     .map((entry) => normalizeCalendarEntry(account, entry, auth.hasWriteScope))
     .sort((a, b) => {
@@ -254,4 +290,14 @@ export async function listCalendarsForAccount(account) {
       if (a.writable !== b.writable) return a.writable ? -1 : 1;
       return a.summary.localeCompare(b.summary);
     });
+
+  if (cacheKey != null) {
+    calendarListCache.set(cacheKey, {
+      value: calendars,
+      expiresAt: Date.now() + CALENDAR_LIST_CACHE_TTL_MS,
+      credentialsKey,
+    });
+  }
+
+  return calendars;
 }

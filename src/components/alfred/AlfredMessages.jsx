@@ -1,6 +1,12 @@
 // Alfred Panel message primitives. Inline styles + accent prop, matching the
 // design handoff's values and the inbox's literal-rgba convention.
-import { useState } from "react";
+//
+// The message leaves are React.memo-wrapped (perf audit fe-alfred::
+// every-token-rerenders-whole-thread): applyAlfredEvent keeps untouched message
+// objects referentially stable, so memoized leaves skip re-render on every
+// streamed token / keystroke and only the active say block re-renders. Props are
+// primitive/stable (text, tools, accent, done).
+import { memo, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -25,7 +31,7 @@ const dimmer = "rgba(205,214,244,0.4)";
 const text = "#cdd6f4";
 const mono = "var(--font-mono, 'Fira Code', ui-monospace, monospace)";
 
-export function UserLine({ text: body, accent }) {
+export const UserLine = memo(function UserLine({ text: body, accent }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-end" }}>
       <div style={{
@@ -35,9 +41,9 @@ export function UserLine({ text: body, accent }) {
       }}>{body}</div>
     </div>
   );
-}
+});
 
-export function ToolRows({ tools, accent }) {
+export const ToolRows = memo(function ToolRows({ tools, accent }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, padding: "1px 2px" }}>
       {tools.map((t) => {
@@ -64,10 +70,15 @@ export function ToolRows({ tools, accent }) {
       })}
     </div>
   );
-}
+});
 
-export function SayBlock({ text: body }) {
-  const { lead, body: rest } = splitSayText(body);
+export const SayBlock = memo(function SayBlock({ text: body }) {
+  // useMemo the lead/body split (perf audit fe-alfred::
+  // splitsaytext-rerun-per-delta-quadratic): with the memo wrap above, DONE say
+  // blocks never recompute; for the active streaming block this skips the split
+  // on render causes unrelated to body. The split itself stays O(n) per delta —
+  // inherent to splitting a growing string — but no longer reruns on keystrokes.
+  const { lead, body: rest } = useMemo(() => splitSayText(body), [body]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="ea-display" style={{
@@ -79,9 +90,9 @@ export function SayBlock({ text: body }) {
       ) : null}
     </div>
   );
-}
+});
 
-export function ErrorLine({ text: body }) {
+export const ErrorLine = memo(function ErrorLine({ text: body }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 7,
@@ -91,7 +102,7 @@ export function ErrorLine({ text: body }) {
       <span>{body}</span>
     </div>
   );
-}
+});
 
 const SUGGESTION_ICONS = {
   sun: Sun, bills: CreditCard, inbox: Inbox, deadlines: Flag, calendar: Calendar, search: Search,

@@ -273,7 +273,18 @@ async function loadUsageSummary(userId, { dbClient, cutoff, eventTypes = [] }) {
   return finalizeUsageSummary(summary);
 }
 
+// P3-6: the corpus estimate sums LENGTH(document_text) across the whole
+// embedding corpus. It is only reached via the opt-in cache-stats diagnostics
+// (?semantic=1), but a short-TTL memo keeps repeated refreshes from re-running
+// the full aggregate. Keyed by dbClient so the production singleton memoizes
+// while each test's distinct connection stays isolated.
+const CORPUS_ESTIMATE_TTL_MS = 60_000;
+const corpusEstimateCache = new WeakMap();
+
 async function loadCorpusEmbeddingEstimate(userId, { dbClient }) {
+  const byUser = corpusEstimateCache.get(dbClient);
+  const cached = byUser?.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
   try {
     const result = await dbClient.execute({
       sql: `SELECT COUNT(*) AS embedded_documents,
@@ -293,7 +304,7 @@ async function loadCorpusEmbeddingEstimate(userId, { dbClient }) {
     const row = result.rows[0] || {};
     const documentChars = Number(row.document_chars || 0);
     const estimatedInputTokens = estimateTokensFromChars(documentChars);
-    return {
+    const value = {
       model: EMAIL_SEARCH_EMBEDDING_MODEL,
       embeddedDocuments: Number(row.embedded_documents || 0),
       documentChars,
@@ -304,6 +315,10 @@ async function loadCorpusEmbeddingEstimate(userId, { dbClient }) {
       }),
       note: "Current-corpus replacement estimate from stored embedding documents; historical re-embeds are not reconstructed.",
     };
+    const entries = byUser || new Map();
+    entries.set(userId, { value, expiresAt: Date.now() + CORPUS_ESTIMATE_TTL_MS });
+    if (!byUser) corpusEstimateCache.set(dbClient, entries);
+    return value;
   } catch (err) {
     if (!/no such table/i.test(String(err?.message || ""))) throw err;
     return {

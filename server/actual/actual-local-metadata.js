@@ -485,14 +485,6 @@ async function shouldApplySyncMessage(client, message) {
   return !result.rows?.length;
 }
 
-async function hasSyncMessageTimestamp(client, message) {
-  const result = await client.execute({
-    sql: "SELECT timestamp FROM messages_crdt WHERE timestamp = ? LIMIT 1",
-    args: [String(message.timestamp)],
-  });
-  return Boolean(result.rows?.length);
-}
-
 function messageInsertQuery(message) {
   return {
     sql: `INSERT OR IGNORE INTO messages_crdt (timestamp, dataset, row, column, value)
@@ -503,12 +495,18 @@ function messageInsertQuery(message) {
 
 async function applySyncMessages(client, messages) {
   const sorted = [...messages].sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+  // Hoist PRAGMA table_info to one probe per distinct dataset (P2-17) instead of
+  // re-running it for every message.
+  const datasets = [...new Set(sorted.map((m) => m.dataset).filter((d) => d !== "prefs"))];
+  const columnsByDataset = new Map(
+    await Promise.all(datasets.map(async (dataset) => [dataset, await tableColumns(client, dataset)])),
+  );
   const applied = [];
   const clockMessages = [];
   for (const message of sorted) {
     if (message.dataset === "prefs") continue;
-    const columns = await tableColumns(client, message.dataset);
-    if (!columns.has("id") || !columns.has(message.column)) continue;
+    const columns = columnsByDataset.get(message.dataset);
+    if (!columns || !columns.has("id") || !columns.has(message.column)) continue;
 
     const applyMessage = await shouldApplySyncMessage(client, message);
     if (applyMessage) {
@@ -530,10 +528,11 @@ async function applySyncMessages(client, messages) {
       applied.push(message);
     }
 
-    if (!(await hasSyncMessageTimestamp(client, message))) {
-      await client.execute(messageInsertQuery(message));
-      clockMessages.push(message);
-    }
+    // INSERT OR IGNORE no-ops on the UNIQUE messages_crdt.timestamp; rowsAffected
+    // tells us whether the message was newly recorded, replacing the redundant
+    // hasSyncMessageTimestamp SELECT probe (P2-17). Identical clock semantics.
+    const inserted = await client.execute(messageInsertQuery(message));
+    if (inserted.rowsAffected > 0) clockMessages.push(message);
   }
   if (clockMessages.length) await client.execute(clockUpdateQuery(clockMessages));
   return { applied: applied.length, recorded: clockMessages.length };
@@ -703,13 +702,17 @@ export async function readLocalActualMetadata(userId, options = {}) {
                       WHERE COALESCE(tombstone, 0) = 0
                       ORDER BY next_date, name COLLATE NOCASE`),
       client.execute({
+        // LIMIT bounds the view-backed 30-day scan (P3-7). The only consumer,
+        // isSchedulePaid, matches transactions within ~3-14 days of a schedule's
+        // next_date, so the most recent 1000 rows comfortably cover it.
         sql: `SELECT id, date, amount, payee, schedule
               FROM v_transactions
               WHERE COALESCE(tombstone, 0) = 0
                 AND payee IS NOT NULL
                 AND amount != 0
                 AND date >= ?
-              ORDER BY date DESC`,
+              ORDER BY date DESC
+              LIMIT 1000`,
         args: [actualDateInt(new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }))],
       }),
     ]);

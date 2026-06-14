@@ -143,6 +143,7 @@ function normalizeMessage(account, msg) {
   const fromName = from?.name || from?.address || "Unknown";
   const fromAddress = from?.address || "";
 
+  const { bodyText, bodyPreview } = extractBodyTextAndPreview(msg.source);
   return {
     uid: `icloud-${msg.uid}`,
     account_id: account.id,
@@ -153,8 +154,8 @@ function normalizeMessage(account, msg) {
     from: fromName,
     from_email: fromAddress,
     subject: msg.envelope?.subject || "(no subject)",
-    body_preview: extractPreview(msg.source),
-    body_text: extractBodyText(msg.source),
+    body_preview: bodyPreview,
+    body_text: bodyText,
     date: msgDate ? new Date(msgDate).toISOString() : "",
     read: msg.flags?.has("\\Seen") || false,
   };
@@ -167,24 +168,17 @@ function extractAmounts(text) {
   return ` [amounts: ${unique.join(", ")}]`;
 }
 
-function extractPreview(source) {
-  if (!source) return "";
+// P2-1: decode the raw source and run the HTML→text strip ONCE, then derive both
+// the full body_text (for FTS) and the 600-char body_preview (+amounts) from the
+// same clean text. Previously normalizeMessage called two helpers that each
+// decoded up to 256KB and re-ran the full strip chain.
+function extractBodyTextAndPreview(source) {
+  if (!source) return { bodyText: "", bodyPreview: "" };
   const text = source.toString("utf8");
   const bodyStart = text.indexOf("\r\n\r\n");
-  if (bodyStart === -1) return "";
+  if (bodyStart === -1) return { bodyText: "", bodyPreview: "" };
   const clean = htmlToPlainText(text.slice(bodyStart + 4));
-  const amounts = extractAmounts(clean);
-  return clean.slice(0, 600) + amounts;
-}
-
-// Full plain-text body for FTS indexing. Same stripping as extractPreview but
-// without the 600-char truncation.
-function extractBodyText(source) {
-  if (!source) return "";
-  const text = source.toString("utf8");
-  const bodyStart = text.indexOf("\r\n\r\n");
-  if (bodyStart === -1) return "";
-  return htmlToPlainText(text.slice(bodyStart + 4));
+  return { bodyText: clean, bodyPreview: clean.slice(0, 600) + extractAmounts(clean) };
 }
 
 export async function fetchEmailBody(email, password, uid) {

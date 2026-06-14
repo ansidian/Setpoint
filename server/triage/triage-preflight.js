@@ -161,13 +161,30 @@ function senderScopedInterestMatch(email, interests = [], parts = textParts(emai
   return null;
 }
 
+// Compile each distinct rule pattern once and reuse it. evaluateTriagePreflight
+// runs on every model-routed email and previously recompiled the same default
+// subject/body regexes per call. These patterns are case-insensitive only (no
+// `g`/`y` flag), so `.test()` keeps no lastIndex state and the cached RegExp is
+// safe to share across calls. Invalid patterns cache as null (treated as
+// non-matching, preserving the prior try/catch behavior).
+const compiledRegexCache = new Map();
+
+function compileRegex(pattern) {
+  if (compiledRegexCache.has(pattern)) return compiledRegexCache.get(pattern);
+  let compiled;
+  try {
+    compiled = new RegExp(pattern, "i");
+  } catch {
+    compiled = null;
+  }
+  compiledRegexCache.set(pattern, compiled);
+  return compiled;
+}
+
 function regexMatches(text, pattern) {
   if (!pattern) return false;
-  try {
-    return new RegExp(pattern, "i").test(text);
-  } catch {
-    return false;
-  }
+  const compiled = compileRegex(pattern);
+  return compiled ? compiled.test(text) : false;
 }
 
 function hasHardRisk(email, parts = textParts(email), exclusions = []) {

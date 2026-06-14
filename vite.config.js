@@ -6,6 +6,31 @@ import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Conservative vendor splitting: route a few heavy, stable libraries into their
+// own chunks for better deploy cache granularity. Everything else (including the
+// app entry) returns undefined and falls back to Rollup's default chunking.
+// Matching is on node_modules path segments to avoid substring false positives
+// (e.g. "react" must not catch "@base-ui/react" or "react-router-dom").
+function manualChunks(id) {
+  const normalized = id.split(path.sep).join("/");
+  if (!normalized.includes("/node_modules/")) return undefined;
+  if (normalized.includes("/node_modules/motion/")
+    || normalized.includes("/node_modules/framer-motion/")) {
+    return "motion";
+  }
+  if (normalized.includes("/node_modules/@base-ui/")) {
+    return "base-ui";
+  }
+  if (normalized.includes("/node_modules/react/")
+    || normalized.includes("/node_modules/react-dom/")
+    || normalized.includes("/node_modules/react-router/")
+    || normalized.includes("/node_modules/react-router-dom/")
+    || normalized.includes("/node_modules/scheduler/")) {
+    return "react-vendor";
+  }
+  return undefined;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const demoBase = env.VITE_EA_DEMO_BASE || env.VITE_EA_BASE_PATH;
@@ -13,6 +38,13 @@ export default defineConfig(({ mode }) => {
   return {
     base: demoBase || "/",
     plugins: [tailwindcss(), react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks,
+        },
+      },
+    },
     optimizeDeps: {
       include: [
         "@base-ui/react/button",

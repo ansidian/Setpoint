@@ -472,16 +472,22 @@ export async function syncCalendarSearchMirror(userId, accounts, {
   for (const account of enabledCalendarAccounts(accounts)) {
     const calendars = await listCalendars(account);
     await tombstoneUnlistedCalendars(userId, account, calendars, dbClient, timestamp);
-    for (const calendar of calendars || []) {
-      calendarCount += 1;
+    const accountCalendars = calendars || [];
+    calendarCount += accountCalendars.length;
+    // Sync this account's calendars concurrently: each one's dominant cost is an
+    // independent paginated Google round-trip, and every write is keyed on a
+    // distinct (user_id, account_id, calendar_id) row so they never conflict.
+    const results = await Promise.all(accountCalendars.map(async (calendar) => {
       await dbClient.execute(upsertStateStatement(userId, account, calendar, window, timestamp));
-      const result = await syncCalendar(userId, account, calendar, {
+      return syncCalendar(userId, account, calendar, {
         dbClient,
         syncClient,
         timestamp,
         window,
         forceFull,
       });
+    }));
+    for (const result of results) {
       didFullSync = didFullSync || result.fullSync;
       occurrenceCount += result.occurrences;
     }
@@ -793,7 +799,14 @@ export async function listCalendarSearchMirrorOccurrences(userId, {
     ? "ABS(start_ms - ?) ASC, start_ms ASC, title COLLATE NOCASE ASC"
     : "start_ms ASC, title COLLATE NOCASE ASC";
   const result = await dbClient.execute({
-    sql: `SELECT *
+    // Explicit projection of exactly the columns rowToOccurrence reads. Avoids
+    // pulling the raw_json (≈KB/row) and searchable_text blobs for up to `limit`
+    // (up to 1000) rows on every search; neither is read downstream.
+    sql: `SELECT event_id, title, location, description, start_ms, end_ms,
+                 time_label, duration_label, source_label, source_color,
+                 event_color, color_id, account_id, account_label, account_email,
+                 calendar_id, all_day, original_start_key, recurring_event_id,
+                 recurring_kind, is_recurring, html_link, open_url
           FROM ea_calendar_search_occurrences
           WHERE user_id = ?
             AND status != 'cancelled'

@@ -82,9 +82,7 @@ describe("inbox helpers", () => {
       carryover: [],
     });
 
-    const rows = collectActiveSnapshotEmails(activeSnapshot, {}, {
-      nowMs: Date.parse("2026-05-03T16:04:30.000Z"),
-    });
+    const rows = collectActiveSnapshotEmails(activeSnapshot, {});
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -94,9 +92,11 @@ describe("inbox helpers", () => {
       _activeSnapshot: true,
       _lane: null,
       _pendingSecurityGrace: true,
+      // The countdown label is no longer baked here; it is derived live in the
+      // row/reader from _pendingSecurityGraceAt + nowTick.
       _pendingSecurityGraceAt: Date.parse("2026-05-03T16:05:00.000Z"),
-      _pendingSecurityGraceLabel: "Classifying in <1m",
     });
+    expect(rows[0]._pendingSecurityGraceLabel).toBeUndefined();
   });
 
   it("collects handled snapshot rows as handled lane review rows", () => {

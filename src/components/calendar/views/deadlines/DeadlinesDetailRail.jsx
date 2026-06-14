@@ -1,7 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useDashboard } from "../../../../context/DashboardContext.jsx";
-import AddTaskPanel from "../../../todoist/AddTaskPanel";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
   DEADLINE_COLOR,
@@ -18,6 +17,11 @@ import {
   DeadlineStatusIcon,
 } from "./DeadlineStatusIndicator.jsx";
 import { shouldCompressDeadlineCard } from "./deadlineDetailModel.js";
+
+// Lazy-load AddTaskPanel so the calendar-open chunk stops statically pulling it
+// (and the natural-language parser it carries). It only mounts when the deadline
+// create/edit editor is actually opened.
+const AddTaskPanel = lazy(() => import("../../../todoist/AddTaskPanel"));
 
 function DeadlinesDetail({
   selectedDay,
@@ -69,26 +73,28 @@ function DeadlinesDetail({
     const seedDate = editingTask ? null : editorState.seedDate || null;
 
     return (
-      <AddTaskPanel
-        host="inline"
-        editingTask={editingTask || undefined}
-        initialDueDate={seedDate}
-        onDraftPreviewChange={onDraftPreviewChange}
-        onDirtyChange={onEditorDirtyChange}
-        onClose={onCloseEditor}
-        onTaskAdded={(task) => {
-          handleAddTask(task);
-          onTaskSaved?.(task);
-        }}
-        onTaskUpdated={(task) => {
-          handleUpdateTask(task);
-          onTaskSaved?.(task);
-        }}
-        onTaskDeleted={(taskId) => {
-          handleDeleteTask(taskId);
-          onTaskDeleted?.(taskId);
-        }}
-      />
+      <Suspense fallback={null}>
+        <AddTaskPanel
+          host="inline"
+          editingTask={editingTask || undefined}
+          initialDueDate={seedDate}
+          onDraftPreviewChange={onDraftPreviewChange}
+          onDirtyChange={onEditorDirtyChange}
+          onClose={onCloseEditor}
+          onTaskAdded={(task) => {
+            handleAddTask(task);
+            onTaskSaved?.(task);
+          }}
+          onTaskUpdated={(task) => {
+            handleUpdateTask(task);
+            onTaskSaved?.(task);
+          }}
+          onTaskDeleted={(taskId) => {
+            handleDeleteTask(taskId);
+            onTaskDeleted?.(taskId);
+          }}
+        />
+      </Suspense>
     );
   }
 

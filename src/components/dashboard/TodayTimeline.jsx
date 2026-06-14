@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion as Motion } from "motion/react";
 import { buildTimeline } from "../../lib/shell-helpers";
 import TimelineDayGroup from "./timeline/TimelineDayGroup";
@@ -9,13 +9,21 @@ import {
 } from "./timeline/timeline-helpers";
 import TimelineSkeleton from "./timeline/TimelineSkeleton";
 
+// Module singleton — used only to derive the day-granular memo key for groups.
+const PACIFIC_DAY_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
 /**
  * TodayTimeline — merges events + deadlines onto one chronological rail.
  * The now marker slides proportionally inside a live event's row, otherwise
  * snaps to the boundary between past and future items; CSS transitions the
  * `top` value so the marker animates smoothly between positions.
+ *
+ * Wrapped in React.memo so dashboard poll/refresh re-renders that leave the
+ * (reference-stable) events/deadlines props untouched do not re-render it.
  */
-export default function TodayTimeline({
+function TodayTimeline({
   accent = "#cba6da",
   density = "comfortable",
   isMobile = false,
@@ -38,15 +46,29 @@ export default function TodayTimeline({
     [events, deadlines],
   );
 
-  const filtered = items.filter((it) => {
-    if (it.kind === "event") return filters.events;
-    if (it.kind === "deadline") return filters.deadlines;
-    return false;
-  });
+  // Memoize so `filtered` keeps a stable identity across the 30s now-tick (its
+  // content only depends on items + filters), which in turn lets the groups memo
+  // below avoid rebuilding on every tick.
+  const filtered = useMemo(
+    () => items.filter((it) => {
+      if (it.kind === "event") return filters.events;
+      if (it.kind === "deadline") return filters.deadlines;
+      return false;
+    }),
+    [items, filters],
+  );
 
+  // Day buckets only change at the Pacific day roll-over, so key the groups memo
+  // on the Pacific-YMD of `now` rather than raw ms — the 30s tick no longer
+  // rebuilds groups (with their per-item dayBucket work) unless the day rolls.
+  const nowDayKey = useMemo(() => PACIFIC_DAY_KEY_FORMATTER.format(new Date(now)), [now]);
+  // `now` is intentionally keyed via nowDayKey (day-granular): raw ms would rebuild
+  // every tick for an identical bucketing result. The now-marker math reads precise
+  // `now` elsewhere (TimelineDayGroup), so live marker movement is unaffected.
   const groups = useMemo(
     () => buildTimelineGroups(filtered, now, filters, { minDay: 0 }),
-    [filtered, now, filters],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, nowDayKey, filters],
   );
 
   const todayLabel = formatFullDateForOffset(0, now);
@@ -137,3 +159,5 @@ export default function TodayTimeline({
     </div>
   );
 }
+
+export default memo(TodayTimeline);
