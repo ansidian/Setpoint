@@ -3,6 +3,7 @@ import { cacheAlfredItems, readAlfredItems } from "./alfred-conversations.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 92;
+const MAX_QUERY_RANGE_DAYS = 366;
 const MAX_SEARCH_LIMIT = 20;
 const DEFAULT_SEARCH_LIMIT = 12;
 const BODY_CHAR_LIMIT = 6000;
@@ -38,32 +39,33 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
   {
     name: "get_calendar_events",
-    description: "List the owner's Google Calendar events between two dates (inclusive, Pacific time).",
+    description: "List the owner's Google Calendar events between two dates (inclusive, Pacific time). Maximum range is 92 days per call, or 366 days when query is set. To find a specific event sometime this year (a birthday, anniversary, trip), pass query with a year-long range in one call instead of chunking.",
     input_schema: {
       type: "object",
       properties: {
         start: { type: "string", description: "Range start (YYYY-MM-DD)" },
         end: { type: "string", description: "Range end (YYYY-MM-DD)" },
-        query: { type: "string", description: "Optional text filter applied by the calendar provider" },
+        query: { type: "string", description: "Optional text filter applied by the calendar provider; required for ranges over 92 days" },
       },
       required: ["start", "end"],
     },
   },
   {
     name: "get_deadlines",
-    description: "List the owner's deadlines (tasks with due dates) between two dates (inclusive).",
+    description: "List the owner's deadlines (tasks with due dates) between two dates (inclusive). Each row has completed; rows with completed true are already done — exclude them when answering what is due or outstanding. Maximum range is 92 days per call, or 366 days when query is set. To find a specific task sometime this year, pass query with a year-long range in one call instead of chunking.",
     input_schema: {
       type: "object",
       properties: {
         start: { type: "string", description: "Range start (YYYY-MM-DD)" },
         end: { type: "string", description: "Range end (YYYY-MM-DD)" },
+        query: { type: "string", description: "Optional case-insensitive title filter; required for ranges over 92 days" },
       },
       required: ["start", "end"],
     },
   },
   {
     name: "get_upcoming_bills",
-    description: "List the owner's bill and card-payment occurrences between two dates (inclusive), with amounts and paid status.",
+    description: "List the owner's bill and card-payment occurrences between two dates (inclusive), with amounts and paid status. Maximum range is 92 days per call; use multiple calls for longer spans.",
     input_schema: {
       type: "object",
       properties: {
@@ -75,7 +77,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
   {
     name: "show_items",
-    description: "Display retrieved items to the owner as native data rows. Pass ids of items returned by earlier tool calls in this conversation. Always use this instead of restating item details in prose.",
+    description: "Display retrieved items to the owner as native data rows. Call this before your final reply whenever that reply names items returned by earlier tool calls in this conversation, even a single item. Pass their ids, then keep prose brief instead of restating row details.",
     input_schema: {
       type: "object",
       properties: {
@@ -102,8 +104,17 @@ function parseDateRange(input = {}) {
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
     return { error: "invalid date range: end must be on or after start" };
   }
-  if ((end.getTime() - start.getTime()) / 86_400_000 > MAX_RANGE_DAYS) {
-    return { error: `range too large: maximum ${MAX_RANGE_DAYS} days per call` };
+  // Unfiltered lists stay short-range to keep tool results (and the model's
+  // context) small; a query filter bounds the result size, so it unlocks a
+  // year-long window for "find X sometime this year" lookups in one call.
+  const hasQuery = Boolean(String(input.query || "").trim());
+  const maxDays = hasQuery ? MAX_QUERY_RANGE_DAYS : MAX_RANGE_DAYS;
+  if ((end.getTime() - start.getTime()) / 86_400_000 > maxDays) {
+    return {
+      error: hasQuery
+        ? `range too large: maximum ${MAX_QUERY_RANGE_DAYS} days per call`
+        : `range too large: maximum ${MAX_RANGE_DAYS} days without a query filter (pass query to search up to ${MAX_QUERY_RANGE_DAYS} days)`,
+    };
   }
   return { start, end, startIso, endIso };
 }
@@ -206,18 +217,23 @@ async function runGetDeadlines(input, { userId, conversation, deps }) {
     start: range.startIso,
     end: range.endIso,
   });
-  const upcoming = payload?.upcoming || [];
+  const query = String(input.query || "").trim().toLowerCase();
+  const upcoming = (payload?.upcoming || []).filter((task) =>
+    !query || String(task.content ?? task.title ?? "").toLowerCase().includes(query),
+  );
   cacheAlfredItems(conversation, "deadline", upcoming, "id");
+  const deadlines = upcoming.map((task) => ({
+    id: task.id,
+    title: task.content ?? task.title ?? "",
+    due_date: task.due_date ?? null,
+    priority: task.priority ?? null,
+    completed: task.status === "complete",
+  }));
   return {
-    total: upcoming.length,
+    total: deadlines.length,
+    open: deadlines.filter((task) => !task.completed).length,
     ...(errors?.length ? { errors: errors.map((entry) => entry.message) } : {}),
-    deadlines: upcoming.map((task) => ({
-      id: task.id,
-      title: task.content ?? task.title ?? "",
-      due_date: task.due_date ?? null,
-      priority: task.priority ?? null,
-      completed: task.completed ?? false,
-    })),
+    deadlines,
   };
 }
 
@@ -291,7 +307,7 @@ export function alfredToolSummary(name, result = {}) {
     case "search_email": return `Mail · ${result.total ?? 0} matches`;
     case "get_email_body": return "Mail · opened message";
     case "get_calendar_events": return `Calendar · ${result.total ?? 0} events`;
-    case "get_deadlines": return `Deadlines · ${result.total ?? 0} open`;
+    case "get_deadlines": return `Deadlines · ${result.open ?? result.total ?? 0} open`;
     case "get_upcoming_bills": return `Bills · ${result.total ?? 0} upcoming`;
     case "show_items": return `Showing ${result.shown ?? 0} items`;
     default: return name;

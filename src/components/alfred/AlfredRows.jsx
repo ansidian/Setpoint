@@ -1,6 +1,7 @@
 // Embedded data rows for Alfred answers. Items are VERBATIM domain rows from
 // the server's `rows` event (ADR 0006: cite-by-reference — never reshape or
 // recompute amounts/dates beyond display formatting).
+import { useState } from "react";
 import { Check, CheckCircle2, Circle, CreditCard } from "lucide-react";
 import {
   alfredPriorityLabel,
@@ -8,18 +9,37 @@ import {
   formatAlfredDate,
   formatAlfredMoney,
 } from "./alfredPanelModel.js";
+import { resolveAlfredChipAction } from "./alfredChipActionModel.js";
 
 const dim = "rgba(205,214,244,0.55)";
 const dimmer = "rgba(205,214,244,0.4)";
 const text = "#cdd6f4";
 
-function RowShell({ children }) {
+function RowShell({ onActivate, children }) {
+  const [hover, setHover] = useState(false);
+  const interactive = typeof onActivate === "function";
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 9, minHeight: 36,
-      padding: "5px 10px", borderRadius: 9,
-      background: "rgba(36,36,58,0.4)", border: "1px solid rgba(255,255,255,0.04)",
-    }}>{children}</div>
+    <div
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? onActivate : undefined}
+      onKeyDown={interactive ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate();
+        }
+      } : undefined}
+      onMouseEnter={interactive ? () => setHover(true) : undefined}
+      onMouseLeave={interactive ? () => setHover(false) : undefined}
+      style={{
+        display: "flex", alignItems: "center", gap: 9, minHeight: 36,
+        padding: "5px 10px", borderRadius: 9,
+        background: hover ? "rgba(46,46,72,0.55)" : "rgba(36,36,58,0.4)",
+        border: `1px solid ${hover ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)"}`,
+        cursor: interactive ? "pointer" : undefined,
+        transition: "background 150ms ease-out, border-color 150ms ease-out",
+      }}
+    >{children}</div>
   );
 }
 
@@ -32,9 +52,9 @@ function TitleCell({ title, sub }) {
   );
 }
 
-function BillRow({ item }) {
+function BillRow({ item, onActivate }) {
   return (
-    <RowShell>
+    <RowShell onActivate={onActivate}>
       <CreditCard size={13} color={dimmer} />
       <TitleCell title={item.name} sub={item.payee} />
       <span style={{ fontSize: 12, fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>
@@ -55,9 +75,9 @@ function BillRow({ item }) {
   );
 }
 
-function EventRow({ item, accent }) {
+function EventRow({ item, accent, onActivate }) {
   return (
-    <RowShell>
+    <RowShell onActivate={onActivate}>
       <span style={{ width: 6, height: 6, borderRadius: 999, background: accent, flexShrink: 0 }} />
       <span style={{
         fontSize: 10.5, color: dim, fontVariantNumeric: "tabular-nums",
@@ -70,12 +90,12 @@ function EventRow({ item, accent }) {
   );
 }
 
-function DeadlineRow({ item }) {
+function DeadlineRow({ item, onActivate }) {
   const done = !!item.completed;
   const StatusIcon = done ? CheckCircle2 : Circle;
   const priority = alfredPriorityLabel(item.priority);
   return (
-    <RowShell>
+    <RowShell onActivate={onActivate}>
       <StatusIcon size={13} color={done ? "#a6e3a1" : dimmer} />
       <TitleCell title={item.content ?? item.title ?? ""} sub={null} />
       {priority ? (
@@ -90,11 +110,11 @@ function DeadlineRow({ item }) {
   );
 }
 
-function EmailRow({ item }) {
+function EmailRow({ item, onActivate }) {
   const needsAction = item.metadata?.lane === "needs_attention";
   const fromName = item.from?.name || item.from?.address || "";
   return (
-    <RowShell>
+    <RowShell onActivate={onActivate}>
       <span style={{
         width: 5, height: 5, borderRadius: 999, flexShrink: 0,
         background: needsAction ? "#f38ba8" : "#94e2d5",
@@ -108,14 +128,22 @@ function EmailRow({ item }) {
   );
 }
 
-export function RowsBlock({ kind, items, accent }) {
+export function RowsBlock({ kind, items, accent, onActivateItem }) {
   const Row = { bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow }[kind];
   if (!Row) return null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-      {(items || []).map((item, i) => (
-        <Row key={item.id ?? item.uid ?? i} item={item} accent={accent} />
-      ))}
+      {(items || []).map((item, i) => {
+        const action = onActivateItem ? resolveAlfredChipAction(kind, item) : null;
+        return (
+          <Row
+            key={item.id ?? item.uid ?? i}
+            item={item}
+            accent={accent}
+            onActivate={action ? () => onActivateItem(action) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }

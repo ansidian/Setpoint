@@ -104,22 +104,143 @@ describe("runAlfred", () => {
       recordUsage,
     });
 
+    // The prose-only answer about a retrieved bill triggers the show_items
+    // nudge once; the scripted model answers in prose again and the run ends.
     expect(events.map((event) => event.type)).toEqual([
-      "tool_start", "tool_result", "text_delta", "run_end",
+      "tool_start", "tool_result", "text_delta", "text_delta", "run_end",
     ]);
     expect(events[1]).toEqual(expect.objectContaining({
       ok: true,
       summary: "Bills · 1 upcoming",
     }));
-    // Transcript: user, assistant(tool_use), user(tool_result), assistant(text)
-    expect(conversation.messages).toHaveLength(4);
+    // Transcript: user, assistant(tool_use), user(tool_result),
+    // assistant(text), user(nudge), assistant(text)
+    expect(conversation.messages).toHaveLength(6);
     expect(conversation.messages[2].role).toBe("user");
     expect(conversation.messages[2].content[0]).toEqual(expect.objectContaining({
       type: "tool_result",
       tool_use_id: "tu_1",
     }));
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(recordUsage).toHaveBeenCalledTimes(3);
+  });
+
+  it("marks the last block of the last outgoing message as a cache breakpoint", async () => {
+    const fetchImpl = fetchScript([textTurn("All clear today.")]);
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "What's left today?",
+      model: "claude-sonnet-4-6",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: {},
+      recordUsage,
+    });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    const lastMessage = body.messages.at(-1);
+    expect(lastMessage.content).toEqual([
+      { type: "text", text: "What's left today?", cache_control: { type: "ephemeral" } },
+    ]);
+    // Exactly one breakpoint per request — prefix = tools + system + transcript.
+    expect(JSON.stringify(body).match(/cache_control/g)).toHaveLength(1);
+    // The stored transcript keeps its plain-string shape, unmarked.
+    expect(conversation.messages[0]).toEqual({ role: "user", content: "What's left today?" });
+  });
+
+  it("moves the cache breakpoint onto the tool_result block on follow-up turns", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("One bill is due."),
+    ]);
+    const readBillsMirrorRange = vi.fn().mockResolvedValue({ schedules: [], syncHealth: { state: "current" } });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "Any bills coming up?",
+      model: "claude-sonnet-4-6",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readBillsMirrorRange },
+      recordUsage,
+    });
+
+    const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    const lastMessage = secondBody.messages.at(-1);
+    expect(lastMessage.content.at(-1)).toEqual(expect.objectContaining({
+      type: "tool_result",
+      cache_control: { type: "ephemeral" },
+    }));
+    expect(JSON.stringify(secondBody).match(/cache_control/g)).toHaveLength(1);
+    // No marker leaks into the stored transcript.
+    expect(JSON.stringify(conversation.messages)).not.toContain("cache_control");
+  });
+
+  it("nudges the model once when it answers about retrieved items without show_items", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("Your car insurance is due June 21."),
+      toolUseTurn("show_items", { kind: "bill", ids: ["b-1"] }, "tu_2"),
+      textTurn("Due in nine days."),
+    ]);
+    const readBillsMirrorRange = vi.fn().mockResolvedValue({
+      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
+      syncHealth: { state: "current" },
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "When is my car insurance due?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readBillsMirrorRange },
+      recordUsage,
+    });
+
+    // The prose answer streams, then the nudge produces real rows.
+    expect(events.map((event) => event.type)).toEqual([
+      "tool_start", "tool_result", "text_delta",
+      "tool_start", "rows", "tool_result", "text_delta", "run_end",
+    ]);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    const nudge = conversation.messages.find(
+      (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("show_items"),
+    );
+    expect(nudge.content).toContain("<system-reminder>");
+  });
+
+  it("does not nudge when the result set is too large to plausibly be named", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-09-12" }),
+      textTurn("You have 37 open deadlines this quarter."),
+    ]);
+    const upcoming = Array.from({ length: 37 }, (_, i) => ({
+      id: `td-${i}`, content: `Task ${i}`, due_date: "2026-07-01", status: "incomplete",
+    }));
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({ payload: { upcoming }, errors: [] });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "how many deadlines do I have?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readCalendarDeadlineRange },
+      recordUsage,
+    });
+
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(recordUsage).toHaveBeenCalledTimes(2);
+    expect(events.at(-1).type).toBe("run_end");
   });
 
   it("stops with run_error at the iteration cap", async () => {

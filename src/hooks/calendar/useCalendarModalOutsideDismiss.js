@@ -53,6 +53,12 @@ export default function useCalendarModalOutsideDismiss({
     function handleClick(event) {
       const suppressors = [...suppressOutsideClickRef.current.values()];
       if (suppressors.some((test) => test?.(event.target))) return;
+      // Overlays stacked ABOVE the calendar (the Alfred panel + its email
+      // preview) portal to document.body, so they're not inside panelRef and
+      // would read as an "outside" click. They mark themselves fully detached
+      // with data-suspend-calendar-hotkeys="all" (same marker the hotkey layer
+      // honors); a pointerdown inside one must not dismiss the calendar.
+      if (event.target.closest?.("[data-suspend-calendar-hotkeys='all']")) return;
       if (event.target.closest?.("[data-calendar-month-navigation='true']")) return;
       if (isFloatingDetailPanelTarget(event.target)) return;
       const roleLayer = event.target.closest?.('[role="menu"], [role="dialog"], [role="listbox"]');

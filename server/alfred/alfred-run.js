@@ -8,6 +8,25 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const MAX_TOOL_ITERATIONS = 12;
 const MAX_TOKENS = 2000;
 
+// Cite-by-reference backstop (ADR 0006): smaller models sometimes retype item
+// details instead of calling show_items. When a run retrieved a small, almost
+// certainly named result set and is about to end without rows, remind once.
+// Above this size the answer is likely a summary/count, where rows would spam.
+const MAX_NUDGE_ITEMS = 8;
+const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, or bills, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
+
+// Multi-turn prompt caching: mark the last block of the last message so the
+// cached prefix covers tools + system + the whole transcript. Only the outgoing
+// request copy is marked — the stored transcript keeps its plain shapes.
+function withCacheBreakpoint(messages) {
+  const last = messages.at(-1);
+  const blocks = typeof last.content === "string"
+    ? [{ type: "text", text: last.content }]
+    : last.content.map((block) => ({ ...block }));
+  blocks[blocks.length - 1] = { ...blocks.at(-1), cache_control: { type: "ephemeral" } };
+  return [...messages.slice(0, -1), { ...last, content: blocks }];
+}
+
 export async function runAlfred({
   userId,
   conversation,
@@ -24,6 +43,10 @@ export async function runAlfred({
   conversation.messages.push({ role: "user", content: String(message) });
   const system = buildAlfredSystemPrompt({ now: now() });
 
+  let retrievedCount = 0;
+  let showItemsCalled = false;
+  let nudged = false;
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const res = await fetchImpl(ANTHROPIC_URL, {
       method: "POST",
@@ -38,7 +61,7 @@ export async function runAlfred({
         stream: true,
         system,
         tools: ALFRED_TOOL_DEFINITIONS,
-        messages: conversation.messages,
+        messages: withCacheBreakpoint(conversation.messages),
       }),
       ...(signal ? { signal } : {}),
     });
@@ -66,6 +89,11 @@ export async function runAlfred({
 
     const toolUses = turn.content.filter((block) => block.type === "tool_use");
     if (turn.stopReason !== "tool_use" || !toolUses.length) {
+      if (!nudged && !showItemsCalled && retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS) {
+        nudged = true;
+        conversation.messages.push({ role: "user", content: SHOW_ITEMS_NUDGE });
+        continue;
+      }
       emit({ type: "run_end", stop_reason: turn.stopReason || "end_turn" });
       return;
     }
@@ -83,6 +111,11 @@ export async function runAlfred({
         });
       } catch (err) {
         result = { error: err?.message || "tool failed" };
+      }
+      if (toolUse.name === "show_items") {
+        showItemsCalled = true;
+      } else if (!result?.error && typeof result?.total === "number") {
+        retrievedCount += result.total;
       }
       emit({
         type: "tool_result",

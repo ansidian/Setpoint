@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   runAlfredStream: vi.fn(),
   deleteAlfredConversation: vi.fn().mockResolvedValue({ ok: true }),
+  getEmailBody: vi.fn().mockResolvedValue({ body: "Body" }),
+  peekEmailBody: vi.fn(() => null),
 }));
 vi.mock("../../api", () => api);
 
@@ -77,10 +79,12 @@ describe("AlfredPanel", () => {
     fireEvent.change(input, { target: { value: "hi" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("Hello.")).toBeTruthy());
+    fireEvent.change(input, { target: { value: "half-typed follow-up" } });
 
     rerender(<AlfredPanel {...baseProps} newChatTick={1} />);
     await waitFor(() => expect(screen.queryByText("Hello.")).toBeNull());
     expect(screen.getByText("What do you need?")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Ask about your day…").value).toBe("");
   });
 
   it("shows the model hint for the selected model", () => {
@@ -88,5 +92,81 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("claude sonnet 4.6")).toBeTruthy();
     fireEvent.click(screen.getByText("haiku"));
     expect(screen.getByText("claude haiku 4.5")).toBeTruthy();
+  });
+
+  it("dispatches a calendar request when a bill chip is clicked", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "rows", kind: "bill", items: [{ id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false }] },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const onOpenCalendarItem = vi.fn();
+    render(<AlfredPanel {...baseProps} onOpenCalendarItem={onOpenCalendarItem} />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "Any bills?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("Rent")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: /Rent/ }));
+    expect(onOpenCalendarItem).toHaveBeenCalledTimes(1);
+    expect(onOpenCalendarItem.mock.calls[0][0].viewKey).toBe("bills");
+    expect(onOpenCalendarItem.mock.calls[0][0].focusItemId).toBe("b1");
+  });
+
+  it("opens the read-only preview when an email chip is clicked", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    render(<AlfredPanel {...baseProps} />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "find it" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: /Verify enrollment/ }));
+    expect(screen.getByRole("dialog", { name: "Email preview" })).toBeTruthy();
+  });
+
+  it("clears the preview when the panel closes", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const { rerender } = render(<AlfredPanel {...baseProps} />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "find it" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /Verify enrollment/ }));
+    expect(screen.getByRole("dialog", { name: "Email preview" })).toBeTruthy();
+
+    rerender(<AlfredPanel {...baseProps} open={false} />);
+    expect(screen.queryByRole("dialog", { name: "Email preview" })).toBeNull();
+  });
+
+  it("Escape closes the preview first, then the panel", async () => {
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "rows", kind: "email", items: [{ uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" }] },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const onClose = vi.fn();
+    render(<AlfredPanel {...baseProps} onClose={onClose} />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "find it" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText("Verify enrollment")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /Verify enrollment/ }));
+    expect(screen.getByRole("dialog", { name: "Email preview" })).toBeTruthy();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Email preview" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

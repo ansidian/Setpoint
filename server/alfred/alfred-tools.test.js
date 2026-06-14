@@ -38,6 +38,16 @@ describe("tool definitions", () => {
       expect(tool.description).toBeTruthy();
     }
   });
+
+  it("tells the model that a query filter unlocks year-long ranges", () => {
+    const byName = new Map(ALFRED_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]));
+    const deadlines = byName.get("get_deadlines");
+    expect(deadlines.input_schema.properties.query).toBeTruthy();
+    for (const name of ["get_deadlines", "get_calendar_events"]) {
+      expect(byName.get(name).description).toContain("query");
+      expect(byName.get(name).description).toContain("366");
+    }
+  });
 });
 
 describe("search_email", () => {
@@ -160,6 +170,26 @@ describe("get_calendar_events", () => {
     const result = await executeAlfredTool("get_calendar_events", { start: "junk", end: "2026-06-14" }, ctx);
     expect(result.error).toContain("YYYY-MM-DD");
   });
+
+  it("allows a year-long range when a query filter is present", async () => {
+    const loadUserConfig = vi.fn().mockResolvedValue({ accounts: [] });
+    const pacificDayBoundaries = vi.fn((date) => ({ dayStart: date, dayEnd: date }));
+    const fetchCalendar = vi.fn().mockResolvedValue([]);
+    const ctx = ctxWith({ loadUserConfig, pacificDayBoundaries, fetchCalendar });
+
+    const filtered = await executeAlfredTool("get_calendar_events", {
+      start: "2026-06-12",
+      end: "2027-06-11",
+      query: "birthday",
+    }, ctx);
+    expect(filtered.error).toBeUndefined();
+
+    const unfiltered = await executeAlfredTool("get_calendar_events", {
+      start: "2026-06-12",
+      end: "2027-06-11",
+    }, ctx);
+    expect(unfiltered.error).toContain("query");
+  });
 });
 
 describe("get_deadlines", () => {
@@ -180,6 +210,69 @@ describe("get_deadlines", () => {
       due_date: "2026-06-15",
     }));
     expect(ctx.conversation.items.get("deadline:td-1")).toBeTruthy();
+  });
+
+  it("marks completed deadlines so the model can filter 'what is due' answers", async () => {
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({
+      payload: {
+        upcoming: [
+          { id: "td-1", content: "File taxes", due_date: "2026-06-15", status: "complete" },
+          { id: "td-2", content: "Renew registration", due_date: "2026-06-16", status: "incomplete" },
+        ],
+      },
+      errors: [],
+    });
+    const ctx = ctxWith({ readCalendarDeadlineRange });
+    const result = await executeAlfredTool("get_deadlines", { start: "2026-06-12", end: "2026-06-30" }, ctx);
+
+    expect(result.deadlines).toEqual([
+      expect.objectContaining({ id: "td-1", completed: true }),
+      expect.objectContaining({ id: "td-2", completed: false }),
+    ]);
+    expect(result.total).toBe(2);
+    expect(result.open).toBe(1);
+  });
+
+  it("filters by query text so name lookups stay cheap", async () => {
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({
+      payload: {
+        upcoming: [
+          { id: "td-1", content: "Conway Lee's birthday", due_date: "2026-07-26", status: "incomplete" },
+          { id: "td-2", content: "Renew registration", due_date: "2026-06-16", status: "incomplete" },
+        ],
+      },
+      errors: [],
+    });
+    const ctx = ctxWith({ readCalendarDeadlineRange });
+    const result = await executeAlfredTool("get_deadlines", {
+      start: "2026-06-12",
+      end: "2026-09-12",
+      query: "conway",
+    }, ctx);
+
+    expect(result.deadlines).toEqual([
+      expect.objectContaining({ id: "td-1", title: "Conway Lee's birthday" }),
+    ]);
+    expect(result.total).toBe(1);
+  });
+
+  it("allows up to a year in one call when a query filter is present", async () => {
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({ payload: { upcoming: [] }, errors: [] });
+    const ctx = ctxWith({ readCalendarDeadlineRange });
+
+    const filtered = await executeAlfredTool("get_deadlines", {
+      start: "2026-06-12",
+      end: "2027-06-11",
+      query: "birthday",
+    }, ctx);
+    expect(filtered.error).toBeUndefined();
+    expect(readCalendarDeadlineRange).toHaveBeenCalledWith("user-1", { start: "2026-06-12", end: "2027-06-11" });
+
+    const unfiltered = await executeAlfredTool("get_deadlines", {
+      start: "2026-06-12",
+      end: "2027-06-11",
+    }, ctx);
+    expect(unfiltered.error).toContain("query");
   });
 });
 
@@ -232,7 +325,7 @@ describe("alfredToolSummary", () => {
   it("produces quiet one-line labels", () => {
     expect(alfredToolSummary("search_email", { total: 4 })).toBe("Mail · 4 matches");
     expect(alfredToolSummary("get_calendar_events", { total: 2 })).toBe("Calendar · 2 events");
-    expect(alfredToolSummary("get_deadlines", { total: 0 })).toBe("Deadlines · 0 open");
+    expect(alfredToolSummary("get_deadlines", { total: 5, open: 3 })).toBe("Deadlines · 3 open");
     expect(alfredToolSummary("get_upcoming_bills", { total: 3 })).toBe("Bills · 3 upcoming");
     expect(alfredToolSummary("get_email_body", { subject: "Hi" })).toBe("Mail · opened message");
     expect(alfredToolSummary("show_items", { shown: 2 })).toBe("Showing 2 items");
