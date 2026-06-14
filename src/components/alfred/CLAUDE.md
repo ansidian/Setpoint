@@ -13,6 +13,7 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 - `AlfredEmailPreview.jsx` — read-only email preview overlay opened from an email chip (Esc/outside-click close it, never the panel)
 - `alfredChipActionModel.js` — pure chip-click → navigation action resolver (email preview vs calendar request via the dashboard's request builders)
 - `alfredRowOrdering.js` — pure sort/section logic for surfaced rows: ordering rules and kind-based sectioning for the Alfred panel result list
+- `AlfredSpendingBreakdown.jsx` — auto-rendered spending breakdown card for the summarize_spending tool result: accent-driven proportional bars, period/group-by header, "Other" greyed, reduced-motion-safe bar-grow animation
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

@@ -372,7 +372,7 @@ async function runSearchTransactions(input, { userId, conversation, deps }) {
   };
 }
 
-async function runSummarizeSpending(input, { userId, deps }) {
+async function runSummarizeSpending(input, { userId, deps, emit }) {
   const range = parseTransactionDateRange(input);
   if (range.error) return { error: range.error };
   const groupBy = ["category", "payee", "month"].includes(input.group_by) ? input.group_by : "category";
@@ -384,12 +384,22 @@ async function runSummarizeSpending(input, { userId, deps }) {
   });
   if (data?.error) return { error: data.error };
   if (data?.unknown_filter) return { total: 0, unknown_filter: data.unknown_filter };
+  const buckets = data?.buckets || [];
+  if (buckets.length && emit) {
+    emit({
+      type: "summary",
+      total: data?.total ?? 0,
+      period: data?.period || { start: range.startIso, end: range.endIso },
+      group_by: groupBy,
+      buckets,
+    });
+  }
   return {
     total: data?.total ?? 0,
     period: data?.period || { start: range.startIso, end: range.endIso },
     group_by: groupBy,
     ...(data?.sync_state ? { sync_state: data.sync_state } : {}),
-    buckets: data?.buckets || [],
+    buckets,
   };
 }
 

@@ -10,6 +10,7 @@ import {
   formatAlfredAgo,
   formatAlfredDate,
   isNearBottom,
+  spendingBreakdownRows,
   splitSayText,
 } from "./alfredPanelModel.js";
 
@@ -183,5 +184,56 @@ describe("formatAlfredAbsolute", () => {
   it("returns an empty string for a missing or invalid timestamp", () => {
     expect(formatAlfredAbsolute("")).toBe("");
     expect(formatAlfredAbsolute("not-a-date")).toBe("");
+  });
+});
+
+describe("spendingBreakdownRows", () => {
+  it("returns [] for empty input", () => {
+    expect(spendingBreakdownRows([])).toEqual([]);
+    expect(spendingBreakdownRows()).toEqual([]);
+  });
+
+  it("largest bucket gets pct === 100", () => {
+    const rows = spendingBreakdownRows([{ label: "Groceries", amount: 100, count: 3 }]);
+    expect(rows[0].pct).toBe(100);
+  });
+
+  it("a half-size bucket gets pct === 50", () => {
+    const rows = spendingBreakdownRows([
+      { label: "Groceries", amount: 100, count: 3 },
+      { label: "Dining", amount: 50, count: 2 },
+    ]);
+    expect(rows[0].pct).toBe(100);
+    expect(rows[1].pct).toBe(50);
+  });
+
+  it("marks Other rows with isOther: true", () => {
+    const rows = spendingBreakdownRows([
+      { label: "Groceries", amount: 80, count: 2 },
+      { label: "Other", amount: 20, count: 5 },
+    ]);
+    expect(rows[0].isOther).toBe(false);
+    expect(rows[1].isOther).toBe(true);
+  });
+});
+
+describe("applyAlfredEvent summary case", () => {
+  it("appends a summary message and closes the open say", () => {
+    const ms = [
+      { id: "am1", type: "say", text: "Here:", done: false },
+    ].reduce((acc, m) => [...acc, m], []);
+    const result = applyAlfredEvent(ms, {
+      type: "summary",
+      total: 200,
+      period: { start: "2026-06-01", end: "2026-06-30" },
+      group_by: "category",
+      buckets: [{ label: "Groceries", amount: 82, count: 2 }],
+    });
+    expect(result.map((m) => m.type)).toEqual(["say", "summary"]);
+    expect(result[0].done).toBe(true);
+    expect(result[1].total).toBe(200);
+    expect(result[1].group_by).toBe("category");
+    expect(result[1].buckets[0].label).toBe("Groceries");
+    expect(result[1].period).toEqual({ start: "2026-06-01", end: "2026-06-30" });
   });
 });
