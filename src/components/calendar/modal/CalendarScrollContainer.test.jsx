@@ -2,7 +2,7 @@ import { useState } from "react";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarScrollContainer from "./CalendarScrollContainer.jsx";
-import { monthBlockHeight, monthIndexToDate } from "../../../hooks/calendar/calendarScrollModel.js";
+import { monthBlockHeight, monthIndexToDate, SCROLL_SETTLE_MS } from "../../../hooks/calendar/calendarScrollModel.js";
 import eventsView from "../views/eventsView.jsx";
 
 afterEach(cleanup);
@@ -173,19 +173,81 @@ describe("CalendarScrollContainer", () => {
     expect(blocks).toHaveLength(5);
   });
 
-  it("scroll container has scroll-snap-type y proximity", () => {
-    const { container } = renderContainer();
-    const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-    expect(scrollEl.style.scrollSnapType).toBe("y proximity");
-  });
-
-  it("week-row wrappers have scroll-snap-align start", () => {
+  it("does not use native CSS scroll snap — settle alignment owns row snapping", () => {
+    // Native snap fights Windows discrete-wheel scrolling: Chromium drops
+    // wheel events while a snap animation runs, so notch input kept dying
+    // mid-gesture. Row alignment now happens on scroll settle instead.
     const { container } = renderContainer({ viewData: { events: [], isLoading: false } });
+    const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
+    expect(scrollEl.style.scrollSnapType).toBe("");
     const rows = container.querySelectorAll("[data-testid='calendar-week-row']");
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
-      expect(row.style.scrollSnapAlign).toBe("start");
+      expect(row.style.scrollSnapAlign).toBe("");
     }
+  });
+
+  describe("settle week-row alignment", () => {
+    const PITCH = CELL_HEIGHT + GRID_GAP;
+
+    it("aligns the grid to the nearest week-row start after a user scroll settles", async () => {
+      const onFetchSettle = vi.fn();
+      const { container } = renderContainer({ onFetchSettle });
+      const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
+      await awaitMountSettle(onFetchSettle);
+
+      scrollEl.scrollTop = monthOffset(0) + PITCH * 2 + 37;
+      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
+
+      expect(scrollEl.scrollTop).toBe(monthOffset(0) + PITCH * 2);
+    });
+
+    it("leaves programmatic-navigation settles unaligned", async () => {
+      // Mount centering and explicit navigations land where they intend
+      // (month starts, centered focus month); only user gestures get the
+      // resting row alignment.
+      const onFetchSettle = vi.fn();
+      const { container } = renderContainer({ onFetchSettle });
+      const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
+      await awaitMountSettle(onFetchSettle);
+
+      document.dispatchEvent(new CustomEvent("calendar-grid-scroll-reset"));
+      const offMidRow = monthOffset(0) + PITCH * 2 + 37;
+      scrollEl.scrollTop = offMidRow;
+      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
+
+      expect(scrollEl.scrollTop).toBe(offMidRow);
+    });
+
+    it("treats scrolling after an alignment as user scrolling again", async () => {
+      // The alignment write is marked programmatic; its settle must clear
+      // that mark so the next real gesture keeps user semantics.
+      const onCancelFloatingEditor = vi.fn();
+      const onFetchSettle = vi.fn();
+      const { container } = renderContainer({
+        floatingDetailOpen: true,
+        floatingDetailMode: "create",
+        floatingEditorDirty: false,
+        onCancelFloatingEditor,
+        onFetchSettle,
+      });
+      const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
+      await awaitMountSettle(onFetchSettle);
+
+      scrollEl.scrollTop = monthOffset(0) + PITCH + 40;
+      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
+      expect(scrollEl.scrollTop).toBe(monthOffset(0) + PITCH);
+      onFetchSettle.mockClear();
+      // The alignment write echoes no scroll event in jsdom; its settle still
+      // runs off the explicit re-arm and must hand control back to the user.
+      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
+
+      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+      expect(onCancelFloatingEditor).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("dispatches calendar-overflow-close on scroll", () => {
@@ -444,6 +506,39 @@ describe("CalendarScrollContainer", () => {
       // updates the display month, which re-renders with a new activeIndex.
       scrollEl.scrollTop = monthOffset(1) + 10;
       scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+
+      const next = monthIndexToDate(1, CURRENT_YEAR, CURRENT_MONTH);
+      await waitFor(() => {
+        expect(onFetchSettle).toHaveBeenCalledWith(
+          expect.objectContaining({ year: next.year, month: next.month, scrollDriven: true }),
+        );
+      }, { timeout: 5000 });
+    });
+
+    it("reports the crossed month when the settle timer beats the crossing's commit", async () => {
+      // The crossing's setState commits in a separate scheduler task; under
+      // CPU load that task can land after the settle timer expires, and Node
+      // services expired timers before the scheduler's task. A settle that
+      // fired pre-commit read the stale mounted index (reporting the origin
+      // month) and left nothing for the re-arm effect, so the real settle
+      // never came. Force that ordering: run the scroll's rAF synchronously
+      // (states queued, uncommitted), then block the thread past the settle
+      // window so the timer is due before React can commit.
+      const onFetchSettle = vi.fn();
+      const { container } = render(<ControlledContainer onFetchSettle={onFetchSettle} />);
+      const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
+      await awaitMountSettle(onFetchSettle);
+
+      const rafSpy = vi.spyOn(window, "requestAnimationFrame")
+        .mockImplementation((cb) => { cb(performance.now()); return 0; });
+      try {
+        scrollEl.scrollTop = monthOffset(1) + 10;
+        scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+        const blockUntil = Date.now() + SCROLL_SETTLE_MS + 30;
+        while (Date.now() < blockUntil) { /* starve the event loop */ }
+      } finally {
+        rafSpy.mockRestore();
+      }
 
       const next = monthIndexToDate(1, CURRENT_YEAR, CURRENT_MONTH);
       await waitFor(() => {

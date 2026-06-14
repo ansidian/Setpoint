@@ -1,4 +1,3 @@
-import { htmlToPlainText } from "../email/html-to-text.js";
 import { cacheAlfredItems, readAlfredItems } from "./alfred-conversations.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -170,7 +169,7 @@ async function runGetEmailBody(input, { userId, deps }) {
   if (!uid) return { error: "uid is required" };
   const body = await deps.getEmailBody(userId, uid);
   if (!body) return { error: `No email found for uid ${uid}` };
-  const text = htmlToPlainText(body.html_body || "").slice(0, BODY_CHAR_LIMIT);
+  const text = deps.htmlToPlainText(body.html_body || "").slice(0, BODY_CHAR_LIMIT);
   return {
     uid,
     subject: body.subject || "",

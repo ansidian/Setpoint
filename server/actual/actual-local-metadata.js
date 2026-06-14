@@ -1,15 +1,20 @@
 import AdmZip from "adm-zip";
 import { createClient } from "@libsql/client";
 import {
-  SyncProtoBuf,
+  MessageSchema,
+  SyncRequestSchema,
+  SyncResponseSchema,
   Timestamp,
+  create,
   deserializeClock,
+  fromBinary,
   makeClientId,
   makeClock,
   merkle,
   serializeClock,
   setClock,
   getClock,
+  toBinary,
 } from "@actual-app/crdt";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
@@ -366,32 +371,33 @@ function deserializeSyncValue(value) {
 }
 
 function encodeSyncRequest({ groupId, cloudFileId, since }) {
-  const requestPb = new SyncProtoBuf.SyncRequest();
-  requestPb.setGroupid(groupId);
-  requestPb.setFileid(cloudFileId);
-  requestPb.setSince(String(since));
-  return requestPb.serializeBinary();
+  const requestPb = create(SyncRequestSchema, {
+    groupId,
+    fileId: cloudFileId,
+    since: String(since),
+  });
+  return toBinary(SyncRequestSchema, requestPb);
 }
 
 function decodeSyncResponse(buffer) {
-  const responsePb = SyncProtoBuf.SyncResponse.deserializeBinary(new Uint8Array(buffer));
-  const messages = responsePb.getMessagesList().map((envelopePb) => {
-    if (envelopePb.getIsencrypted()) {
+  const responsePb = fromBinary(SyncResponseSchema, new Uint8Array(buffer));
+  const messages = responsePb.messages.map((envelopePb) => {
+    if (envelopePb.isEncrypted) {
       throw Object.assign(new Error("Encrypted Actual sync messages are not supported by lightweight metadata refresh"), {
         status: 400,
       });
     }
-    const messagePb = SyncProtoBuf.Message.deserializeBinary(envelopePb.getContent());
+    const messagePb = fromBinary(MessageSchema, envelopePb.content);
     return {
-      timestamp: Timestamp.parse(envelopePb.getTimestamp()),
-      dataset: messagePb.getDataset(),
-      row: messagePb.getRow(),
-      column: messagePb.getColumn(),
-      value: messagePb.getValue(),
-      rawValue: deserializeSyncValue(messagePb.getValue()),
+      timestamp: Timestamp.parse(envelopePb.timestamp),
+      dataset: messagePb.dataset,
+      row: messagePb.row,
+      column: messagePb.column,
+      value: messagePb.value,
+      rawValue: deserializeSyncValue(messagePb.value),
     };
   });
-  const merkleText = responsePb.getMerkle();
+  const merkleText = responsePb.merkle;
   return {
     messages,
     merkle: merkleText ? JSON.parse(merkleText) : null,

@@ -14,7 +14,7 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `buildContextContent.jsx` — context-rail content router (editor/detail/empty/summary)
 
 ### Grid + cells
-- `CalendarScrollContainer.jsx` — infinite multi-month scroll viewport: grid stacking, week-row snap, boundary stepping
+- `CalendarScrollContainer.jsx` — infinite multi-month scroll viewport: grid stacking, settle-driven week-row alignment (no native CSS snap — it fights Windows wheel input), boundary stepping
 - `CalendarGrid.jsx` — month grid orchestration: cells, overlays, selection handlers
 - `CalendarGridCells.jsx` — renders day cells, derives per-cell state
 - `CalendarCell.jsx` — single day cell: styling, header, weather, drag-drop targets
@@ -24,6 +24,7 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `CalendarSelectedCellFrame.jsx` — selected-cell content wrapper
 - `calendarGridUtils.js` — grid constants, month cell builder, boundary helpers
 - `calendarGridCellModel.js` — per-cell derived state: filtering, overdue/complete status
+- `calendarMonthPreviewModel.js` — preview entries for mounted non-active months, reused while inputs are unchanged
 
 ### Chips, stacks, overflow
 - `CalendarCellItemChip.jsx` — item chip button with metrics-driven sizing
@@ -42,6 +43,7 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 
 ### Floating detail
 - `CalendarFloatingDetailPanel.jsx` — anchored floating panel: drag, resize response
+- `CalendarFloatingDetailCaret.jsx` — anchored caret triangle pointing back to the source cell
 - `CalendarFloatingDetailCloseButton.jsx` — close control shared by detail and editor headers
 - `CalendarFloatingDetailContent.jsx` — routes detail/editor for deadlines vs events
 - `calendarFloatingDetailPlacement.js` — anchor placement with viewport clamping and side flip

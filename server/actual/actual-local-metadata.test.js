@@ -3,11 +3,17 @@ import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";
 import {
-  SyncProtoBuf,
+  MessageEnvelopeSchema,
+  MessageSchema,
+  SyncRequestSchema,
+  SyncResponseSchema,
   Timestamp,
+  create,
+  fromBinary,
   makeClientId,
   makeClock,
   serializeClock,
+  toBinary,
 } from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -97,22 +103,20 @@ async function createActualBudgetFixture() {
 }
 
 function syncResponseBuffer(messages) {
-  const response = new SyncProtoBuf.SyncResponse();
-  response.setMerkle(JSON.stringify({}));
-  for (const message of messages) {
-    const messagePb = new SyncProtoBuf.Message();
-    messagePb.setDataset(message.dataset);
-    messagePb.setRow(message.row);
-    messagePb.setColumn(message.column);
-    messagePb.setValue(message.value);
-
-    const envelopePb = new SyncProtoBuf.MessageEnvelope();
-    envelopePb.setTimestamp(String(message.timestamp));
-    envelopePb.setIsencrypted(false);
-    envelopePb.setContent(messagePb.serializeBinary());
-    response.addMessages(envelopePb);
-  }
-  return response.serializeBinary();
+  const response = create(SyncResponseSchema, {
+    merkle: JSON.stringify({}),
+    messages: messages.map((message) => create(MessageEnvelopeSchema, {
+      timestamp: String(message.timestamp),
+      isEncrypted: false,
+      content: toBinary(MessageSchema, create(MessageSchema, {
+        dataset: message.dataset,
+        row: message.row,
+        column: message.column,
+        value: message.value,
+      })),
+    })),
+  });
+  return toBinary(SyncResponseSchema, response);
 }
 
 async function writeSyncPullFixture(budgetDir, { lastSyncedTimestamp } = {}) {
@@ -314,8 +318,8 @@ describe("readLocalActualMetadata", () => {
         }),
       }),
     );
-    const request = SyncProtoBuf.SyncRequest.deserializeBinary(global.fetch.mock.calls[0][1].body);
-    expect(request.getSince()).toBe(baseTimestamp);
+    const request = fromBinary(SyncRequestSchema, global.fetch.mock.calls[0][1].body);
+    expect(request.since).toBe(baseTimestamp);
   });
 
   it("syncs the existing local budget when a refresh is explicitly requested", async () => {

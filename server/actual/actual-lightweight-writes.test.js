@@ -3,11 +3,15 @@ import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";
 import {
-  SyncProtoBuf,
+  SyncRequestSchema,
+  SyncResponseSchema,
   Timestamp,
+  create,
+  fromBinary,
   makeClientId,
   makeClock,
   serializeClock,
+  toBinary,
 } from "@actual-app/crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,9 +36,8 @@ function settingsDbClient() {
 }
 
 function syncResponseBuffer() {
-  const response = new SyncProtoBuf.SyncResponse();
-  response.setMerkle(JSON.stringify({}));
-  return response.serializeBinary();
+  const response = create(SyncResponseSchema, { merkle: JSON.stringify({}) });
+  return toBinary(SyncResponseSchema, response);
 }
 
 function mockActualRequests(count = 1) {
@@ -208,10 +211,10 @@ describe("sendBillLightweight", () => {
       }),
     );
     const syncBody = global.fetch.mock.calls[1][1].body;
-    const request = SyncProtoBuf.SyncRequest.deserializeBinary(syncBody);
-    expect(request.getGroupid()).toBe("sync-123");
-    expect(request.getFileid()).toBe("cloud-file-1");
-    expect(request.getMessagesList().length).toBeGreaterThan(0);
+    const request = fromBinary(SyncRequestSchema, syncBody);
+    expect(request.groupId).toBe("sync-123");
+    expect(request.fileId).toBe("cloud-file-1");
+    expect(request.messages.length).toBeGreaterThan(0);
   });
 
   it("writes a future bill schedule into the local Actual DB and syncs schedule CRDT messages", async () => {

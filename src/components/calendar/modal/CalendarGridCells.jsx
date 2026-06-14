@@ -72,7 +72,6 @@ export default function CalendarGridCells({
         gridTemplateColumns: "repeat(7, 1fr)",
         gap: layout.gridGap,
         minHeight: 0,
-        scrollSnapAlign: "start",
       }}
     >
       {weekIndex === 0 && boundaryType === "step" && (

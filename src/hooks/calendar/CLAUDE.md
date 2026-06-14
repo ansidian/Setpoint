@@ -6,7 +6,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Models (pure)
 - `calendarRangeModel.js` — month key arithmetic, range expansion, fetch grouping
-- `calendarScrollModel.js` — month index math, navigable radius, scroll direction, prefetch range
+- `calendarScrollModel.js` — month index math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
 - `calendarScrollSyncModel.js` — pure decisions for grid↔agenda scroll sync
 - `calendarGridRowModel.js` — fixed week-row heights and per-month row layout math
 - `agendaFetchModel.js` — agenda month fetch planning: initial months, scroll prefetch

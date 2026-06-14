@@ -7,6 +7,7 @@ import {
   visibleMonthIndices,
   activeMonthIndex,
   midpointActiveMonthIndex,
+  nearestWeekRowOffset,
   prefetchRange,
   mountedWindow,
   deriveScrollDirection,
@@ -230,6 +231,57 @@ describe("calendarScrollModel", () => {
         searchLast: 2,
         threshold: 1 / 3,
       })).toBe(1);
+    });
+  });
+
+  describe("nearestWeekRowOffset", () => {
+    // Two 5-row months (height 5*140 + 4*8 = 732) starting at 0 and 732;
+    // week-row pitch = cellHeight + gridGap = 148.
+    const args = {
+      cellHeight: 140,
+      gridGap: 8,
+      getMonthOffset: (i) => i * 732,
+      getMonthHeight: () => 732,
+      searchFirst: -2,
+      searchLast: 2,
+    };
+
+    it("returns the offset unchanged when already on a row start", () => {
+      expect(nearestWeekRowOffset({ ...args, scrollOffset: 296 })).toBe(296);
+    });
+
+    it("rounds down to the previous row start within half a pitch", () => {
+      expect(nearestWeekRowOffset({ ...args, scrollOffset: 2 * 148 + 37 })).toBe(296);
+    });
+
+    it("rounds up to the next row start past half a pitch", () => {
+      expect(nearestWeekRowOffset({ ...args, scrollOffset: 2 * 148 + 100 })).toBe(444);
+    });
+
+    it("snaps to the next month start when that is nearer than the last row", () => {
+      // Last row start = 732 - 140 = 592; offset 700 is 108 from it but only
+      // 32 from the next month start.
+      expect(nearestWeekRowOffset({ ...args, scrollOffset: 700 })).toBe(732);
+    });
+
+    it("resolves rows inside a later month block", () => {
+      expect(nearestWeekRowOffset({ ...args, scrollOffset: 732 + 148 + 60 })).toBe(732 + 148);
+    });
+
+    it("snaps slightly negative offsets to the row start at zero", () => {
+      expect(nearestWeekRowOffset({ ...args, scrollOffset: -5 })).toBe(0);
+    });
+
+    it("handles months with different row counts via getMonthHeight", () => {
+      // Month 0 has 4 rows (height 4*140 + 3*8 = 584), month 1 starts at 584.
+      const mixed = {
+        ...args,
+        getMonthOffset: (i) => (i <= 0 ? i * 732 : 584 + (i - 1) * 732),
+        getMonthHeight: (i) => (i === 0 ? 584 : 732),
+      };
+      // Offset 520: last row of month 0 starts at 584 - 140 = 444 (76 away);
+      // month 1 starts at 584 (64 away) → next month start wins.
+      expect(nearestWeekRowOffset({ ...mixed, scrollOffset: 520 })).toBe(584);
     });
   });
 

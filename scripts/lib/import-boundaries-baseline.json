@@ -57,6 +57,8 @@
     "server/routes/accounts.js -> server/email/email-index.js",
     "server/routes/accounts.js -> server/email/gmail.js",
     "server/routes/accounts.js -> server/email/icloud.js",
+    "server/routes/alfred.js -> server/email/html-to-text.js",
+    "server/routes/alfred.js -> server/email/search/email-search-retrieval.js",
     "server/routes/briefing/email-index.js -> server/email/email-index.js",
     "server/routes/calendar.js -> server/calendar/calendar-search.js",
     "server/routes/calendar.js -> server/reminders/reminder-hydration.js",

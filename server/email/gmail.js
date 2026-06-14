@@ -7,7 +7,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.NODE_ENV === "production"
   ? process.env.GOOGLE_REDIRECT_URI
-  : `http://localhost:${process.env.PORT || 3001}/api/ea/accounts/gmail/callback`;
+  : `http://localhost:${process.env.EA_SERVER_PORT || 3001}/api/ea/accounts/gmail/callback`;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",

@@ -9,6 +9,7 @@ import {
 import { runAlfred } from "../alfred/alfred-run.js";
 import { getEmailBody } from "../email/email-service.js";
 import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
+import { htmlToPlainText } from "../email/html-to-text.js";
 import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.js";
 import { loadUserConfig } from "../platform/config-service.js";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.js";
@@ -17,6 +18,7 @@ import { readBillsMirrorRange } from "../bills/bills-service.js";
 const ALFRED_DEPS = {
   retrieve: retrieveInboxAiSearch,
   getEmailBody,
+  htmlToPlainText,
   fetchCalendar,
   pacificDayBoundaries,
   loadUserConfig,
