@@ -1,10 +1,11 @@
+import { memo } from "react";
 import DigestStrip from "./DigestStrip";
 import Sidebar from "./Sidebar";
 import InboxList from "./InboxList";
 import Reader from "./reader/Reader";
 import InboxUndoToast from "./InboxUndoToast";
 
-export default function InboxDesktopPane({
+function InboxDesktopPane({
   accent,
   nowTick,
   briefingSummary,
@@ -183,3 +184,9 @@ export default function InboxDesktopPane({
     </div>
   );
 }
+
+// Memoize the desktop pane so a parent re-render with stable props does not
+// cascade into DigestStrip + Sidebar + InboxList + Reader. Combined with the
+// per-lane LaneSection memo, a single item mutation no longer re-renders the
+// whole pane.
+export default memo(InboxDesktopPane);

@@ -3,13 +3,14 @@ import {
   Mail, Search, CheckCheck, RefreshCw,
   ChevronRight, ChevronDown, X,
 } from "lucide-react";
-import { LANE, briefingPhaseLabel } from "../../lib/shell-helpers";
-import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
+import { briefingPhaseLabel } from "../../lib/shell-helpers";
+import { Kbd, StickyHeader, IconBtn } from "./primitives";
 import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
 import InboxCategoryFilterChips from "./InboxCategoryFilterChips";
+import LaneSection from "./LaneSection";
 
 /* ======================================================================
  * LIST (swimlane or flat)
@@ -408,70 +409,17 @@ export default function InboxList({
             )}
             {["queued", "carryover", "needs_attention", "catch_up", "fyi", "handled", "untriaged_read", "noise"].map((k) => (
               grouped[k].length > 0 && (
-                <div key={k}>
-                  <StickyHeader borderColor="rgba(255,255,255,0.03)">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => toggleLane(k)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleLane(k); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8, width: "100%",
-                        cursor: "pointer", background: "transparent", border: "none",
-                        fontFamily: "inherit", color: "inherit", padding: 0,
-                      }}
-                    >
-                      <span style={{ flexShrink: 0, display: "inline-flex" }}>
-                        <LaneIcon laneKey={k} />
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 10, fontWeight: 700, letterSpacing: 2,
-                          textTransform: "uppercase", color: LANE[k].color,
-                          minWidth: 0, whiteSpace: "nowrap",
-                          overflow: "hidden", textOverflow: "ellipsis",
-                        }}
-                      >
-                        {LANE[k].label}
-                      </span>
-                      <span
-                        style={{
-                          flexShrink: 0,
-                          fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-                          background: LANE[k].soft, color: `${LANE[k].color}cc`,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {grouped[k].length}
-                      </span>
-                      {k === "noise" && noiseUnreadCount > 0 && (
-                        <span
-                          style={{
-                            flexShrink: 0,
-                            fontSize: 9,
-                            fontWeight: 650,
-                            padding: "2px 6px",
-                            borderRadius: 999,
-                            background: "rgba(205,214,244,0.07)",
-                            border: "1px solid rgba(205,214,244,0.12)",
-                            color: "rgba(205,214,244,0.58)",
-                            fontVariantNumeric: "tabular-nums",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {noiseUnreadCount} unread
-                        </span>
-                      )}
-                      <span style={{ flex: 1 }} />
-                      {effectiveCollapsed[k] ? <ChevronRight size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} /> : <ChevronDown size={12} color="rgba(205,214,244,0.4)" style={{ flexShrink: 0 }} />}
-                    </div>
-                  </StickyHeader>
-                  {!effectiveCollapsed[k] && (
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      {renderRows(grouped[k])}
-                    </div>
-                  )}
-                </div>
+                <LaneSection
+                  key={k}
+                  laneKey={k}
+                  emails={grouped[k]}
+                  collapsed={!!effectiveCollapsed[k]}
+                  // Only the noise lane renders the unread pill; pass a stable 0 to the
+                  // others so a noise-count change doesn't bust every lane's memo.
+                  noiseUnreadCount={k === "noise" ? noiseUnreadCount : 0}
+                  onToggle={toggleLane}
+                  renderRows={renderRows}
+                />
               )
             ))}
           </>

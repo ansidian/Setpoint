@@ -15,6 +15,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 
 ### List + rows
 - `InboxList.jsx` — list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
+- `LaneSection.jsx` — memoized swimlane lane section: sticky header + collapsible row body
 - `EmailRow.jsx` — single email row: avatar, preview, urgency/lane bar
 - `DigestStrip.jsx` — header strip: live/snapshot status, lane counts, processing activity
 - `Sidebar.jsx` — account and lane navigation
