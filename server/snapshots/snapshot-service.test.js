@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   advanceSnapshotBoundary,
+  CARRYOVER_MAX_DEPTH,
   getActiveSnapshotView,
   getOrCreateActiveSnapshot,
   getSnapshotViewById,
@@ -910,5 +911,161 @@ describe("active briefing snapshots", () => {
     expect(firstResult).toBe(secondResult);
     expect(fetchAllEmailsFn).toHaveBeenCalledTimes(1);
     expect(processNextEmailTriageJobFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops carrying an unhandled needs_attention item after CARRYOVER_MAX_DEPTH boundaries", async () => {
+    const dbClient = await createMigratedDb();
+    const seedNow = new Date("2026-05-03T15:00:00.000Z");
+    await seedSnapshotItem(dbClient, {
+      emailId: "msg-stale",
+      lane: "needs_attention",
+      now: seedNow,
+    });
+
+    const carryoverCountFor = async (emailId) => {
+      const rows = await dbClient.execute({
+        sql: `SELECT carryover_count
+              FROM ea_briefing_snapshot_items i
+              JOIN ea_briefing_snapshots s ON s.id = i.snapshot_id AND s.status = 'active'
+              WHERE i.email_id = ?`,
+        args: [emailId],
+      });
+      return rows.rows.length ? Number(rows.rows[0].carryover_count) : null;
+    };
+
+    for (let carry = 1; carry <= CARRYOVER_MAX_DEPTH + 2; carry++) {
+      // Advance one daily boundary per carry via real date arithmetic, so the loop
+      // stays correct even if CARRYOVER_MAX_DEPTH is tuned past a month boundary
+      // (string-built "2026-05-${3+carry}" dates would overflow day 31).
+      const now = new Date(seedNow.getTime() + carry * 24 * 60 * 60 * 1000);
+      await advanceSnapshotBoundary("user-1", { dbClient, now });
+      const view = await getActiveSnapshotView("user-1", { dbClient, now });
+
+      if (carry <= CARRYOVER_MAX_DEPTH) {
+        expect(view.carryover.map((item) => item.email_id)).toEqual(["msg-stale"]);
+        expect(await carryoverCountFor("msg-stale")).toBe(carry);
+      } else {
+        expect(view.carryover.map((item) => item.email_id)).toEqual([]);
+        expect(await carryoverCountFor("msg-stale")).toBeNull();
+      }
+    }
+  });
+
+  it("excludes handled and dismissed items from carryover regardless of depth", async () => {
+    const dbClient = await createMigratedDb();
+    const previousNow = new Date("2026-05-03T15:00:00.000Z");
+    const handled = await seedSnapshotItem(dbClient, {
+      emailId: "msg-handled",
+      lane: "needs_attention",
+      now: previousNow,
+    });
+    const dismissed = await seedSnapshotItem(dbClient, {
+      emailId: "msg-dismissed",
+      lane: "needs_attention",
+      now: previousNow,
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_email_triage SET handled_at = ? WHERE id = ?",
+      args: ["2026-05-03T18:00:00.000Z", handled.triageId],
+    });
+    await dbClient.execute({
+      sql: "UPDATE ea_briefing_snapshot_items SET dismissed_from_today_at = ? WHERE id = ?",
+      args: ["2026-05-03T18:00:00.000Z", dismissed.itemId],
+    });
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+    expect(view.carryover.map((item) => item.email_id)).toEqual([]);
+  });
+
+  it("keeps carrying a queued arrival-grace row under the depth bound", async () => {
+    const dbClient = await createMigratedDb();
+    const previousNow = new Date("2026-05-03T18:00:00.000Z");
+    const previous = await getOrCreateActiveSnapshot("user-1", { dbClient, now: previousNow });
+    const triageResult = await dbClient.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status, triage_source)
+            VALUES ('user-1', 'gmail-work', 'msg-queued-carry', 'pending', 'arrival_grace')
+            RETURNING id`,
+      args: [],
+    });
+    const triageId = Number(triageResult.rows[0].id);
+    await dbClient.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id,
+               lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+               urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+               source, source_at)
+            VALUES (?, ?, 'user-1', 'gmail-work', 'msg-queued-carry',
+                    'queued', 'Queued for triage.', 'Waiting briefly before triage.',
+                    'normal', 'uncategorized', 'Queued carry',
+                    'arrival_grace', '2026-05-03T18:03:00.000Z')`,
+      args: [previous.id, triageId],
+    });
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+    expect(view.carryover.map((item) => ({
+      email_id: item.email_id,
+      lane: item.lane,
+      is_carryover: item.is_carryover,
+    }))).toEqual([
+      { email_id: "msg-queued-carry", lane: "queued", is_carryover: true },
+    ]);
+  });
+
+  it("reports how many items aged out of carryover only because of the depth bound", async () => {
+    const dbClient = await createMigratedDb();
+    const previous = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    // msg-aged: at the bound -> excluded ONLY by the bound (counts)
+    // msg-live: below the bound -> still carries (does not count)
+    // msg-handled: at the bound BUT handled -> excluded for another reason (does not count)
+    for (const [emailId, carryoverCount, handledAt] of [
+      ["msg-aged", CARRYOVER_MAX_DEPTH, null],
+      ["msg-live", CARRYOVER_MAX_DEPTH - 1, null],
+      ["msg-handled", CARRYOVER_MAX_DEPTH, "2026-05-03T18:00:00.000Z"],
+    ]) {
+      const triageResult = await dbClient.execute({
+        sql: `INSERT INTO ea_email_triage
+                (user_id, account_id, email_id, lane, triage_status, handled_at)
+              VALUES ('user-1', 'gmail-work', ?, 'needs_attention', 'complete', ?)
+              RETURNING id`,
+        args: [emailId, handledAt],
+      });
+      await dbClient.execute({
+        sql: `INSERT INTO ea_briefing_snapshot_items
+                (snapshot_id, triage_id, user_id, account_id, email_id,
+                 lane_at_snapshot, carryover_count, handled_at)
+              VALUES (?, ?, 'user-1', 'gmail-work', ?, 'needs_attention', ?, ?)`,
+        args: [previous.id, Number(triageResult.rows[0].id), emailId, carryoverCount, handledAt],
+      });
+    }
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T15:00:00.000Z"),
+    });
+
+    expect(view.carryover.map((item) => item.email_id)).toEqual(["msg-live"]);
+    expect(view.carryoverAgedOut).toBe(1);
+  });
+
+  it("reports zero aged-out carryover for a historical snapshot view", async () => {
+    const dbClient = await createMigratedDb();
+    const snapshot = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    const view = await getSnapshotViewById("user-1", snapshot.id, { dbClient });
+    expect(view.carryoverAgedOut).toBe(0);
   });
 });
