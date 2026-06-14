@@ -120,7 +120,9 @@ export default function usePlanningReadinessState({
       signal.addEventListener("abort", onAbort);
 
       const softTimer = window.setTimeout(() => {
-        if (canceled || !deadlineOverlayVisible) return;
+        // P3-5: no-op once the pass has already settled, so a fast successful
+        // load is never flipped back to "slow" by this leaked timer.
+        if (canceled || !deadlineOverlayVisible || (eventsDone && deadlinesDone)) return;
         setPlanningReadiness((current) => planningSlowState(current, {
           eventsDone,
           deadlinesDone,
@@ -173,6 +175,11 @@ export default function usePlanningReadinessState({
         : Promise.resolve(null);
 
       Promise.allSettled([eventsPromise, deadlinesPromise]).then((results) => {
+        // P3-5: the pass has settled — clear the escalation timers so a fast
+        // load can't be flipped to "slow"/"degraded" ~2-3s later. Teardown
+        // cleanup still clears them on effect re-run/unmount.
+        window.clearTimeout(softTimer);
+        window.clearTimeout(hardTimer);
         if (canceled) return;
         const failed = results.find((result) => result.status === "rejected");
         if (failed) {

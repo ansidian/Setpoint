@@ -45,7 +45,10 @@ router.get("/geocode", async (req, res) => {
   try {
     res.json(await geocodeLocation(q));
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    // P3-54: do not leak raw err.message to the client; keep detail in the log
+    // only, matching the other /settings handlers in this file.
+    console.error("Error geocoding location:", err.message);
+    res.status(400).json({ message: "Failed to geocode location" });
   }
 });
 
@@ -145,13 +148,44 @@ router.put("/settings", async (req, res) => {
       updates.push("schedules_json = ?");
       args.push(JSON.stringify(validation.value));
     }
-    if (email_lookback_hours !== undefined) { updates.push("email_lookback_hours = ?"); args.push(email_lookback_hours); }
-    if (weather_lat !== undefined) { updates.push("weather_lat = ?"); args.push(weather_lat); }
-    if (weather_lng !== undefined) { updates.push("weather_lng = ?"); args.push(weather_lng); }
+    // MERGE-NOTE[P3-55] (P3 worktree): minimal type/range coercion at the write
+    // boundary for the scalar settings fields (hours/coords/url/sync_id), 400 on
+    // failure, mirroring the JSON/model-field validation already in this handler.
+    // Shares this PUT handler with P1-3 (blank-label early-return validation) on
+    // another worktree. On conflict: keep BOTH — P1-3 guards labels above the
+    // UPDATE, these guard different fields. Remove this note after merge.
+    if (email_lookback_hours !== undefined) {
+      if (!Number.isInteger(email_lookback_hours) || email_lookback_hours < 1 || email_lookback_hours > 168) {
+        return res.status(400).json({ message: "email_lookback_hours must be an integer between 1 and 168" });
+      }
+      updates.push("email_lookback_hours = ?"); args.push(email_lookback_hours);
+    }
+    if (weather_lat !== undefined) {
+      if (typeof weather_lat !== "number" || !Number.isFinite(weather_lat) || weather_lat < -90 || weather_lat > 90) {
+        return res.status(400).json({ message: "weather_lat must be a number between -90 and 90" });
+      }
+      updates.push("weather_lat = ?"); args.push(weather_lat);
+    }
+    if (weather_lng !== undefined) {
+      if (typeof weather_lng !== "number" || !Number.isFinite(weather_lng) || weather_lng < -180 || weather_lng > 180) {
+        return res.status(400).json({ message: "weather_lng must be a number between -180 and 180" });
+      }
+      updates.push("weather_lng = ?"); args.push(weather_lng);
+    }
     if (weather_location !== undefined) { updates.push("weather_location = ?"); args.push(weather_location); }
-    if (actual_budget_url !== undefined) { updates.push("actual_budget_url = ?"); args.push(actual_budget_url); }
+    if (actual_budget_url !== undefined) {
+      if (typeof actual_budget_url !== "string") {
+        return res.status(400).json({ message: "actual_budget_url must be a string" });
+      }
+      updates.push("actual_budget_url = ?"); args.push(actual_budget_url);
+    }
     if (actual_budget_password !== undefined) { updates.push("actual_budget_password_encrypted = ?"); args.push(actual_budget_password ? encrypt(actual_budget_password) : null); }
-    if (actual_budget_sync_id !== undefined) { updates.push("actual_budget_sync_id = ?"); args.push(actual_budget_sync_id); }
+    if (actual_budget_sync_id !== undefined) {
+      if (typeof actual_budget_sync_id !== "string") {
+        return res.status(400).json({ message: "actual_budget_sync_id must be a string" });
+      }
+      updates.push("actual_budget_sync_id = ?"); args.push(actual_budget_sync_id);
+    }
     if (email_ai_provider !== undefined || email_ai_model !== undefined) {
       const resolved = resolveEmailAiModelConfig({
         provider: email_ai_provider,
@@ -303,8 +337,9 @@ router.get("/models", async (_req, res) => {
   try {
     res.json(emailAiModelAvailability());
   } catch (err) {
+    // P3-54: fixed user-facing string; raw err.message stays in the log only.
     console.error("Error fetching models:", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to fetch models" });
   }
 });
 
@@ -312,8 +347,9 @@ router.get("/bill-extract-models", async (_req, res) => {
   try {
     res.json(billExtractAvailability());
   } catch (err) {
+    // P3-54: fixed user-facing string; raw err.message stays in the log only.
     console.error("Error fetching bill-extract catalog:", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to fetch bill-extract models" });
   }
 });
 
@@ -329,8 +365,9 @@ router.get("/important-senders", async (req, res) => {
     const raw = result.rows[0]?.important_senders_json || "[]";
     res.json(JSON.parse(raw));
   } catch (err) {
+    // P3-54: fixed user-facing string; raw err.message stays in the log only.
     console.error("Error fetching important senders:", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to fetch important senders" });
   }
 });
 
@@ -348,8 +385,9 @@ router.put("/important-senders", async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
+    // P3-54: fixed user-facing string; raw err.message stays in the log only.
     console.error("Error updating important senders:", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to update important senders" });
   }
 });
 

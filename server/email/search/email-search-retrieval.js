@@ -74,12 +74,17 @@ function buildPlanFilters(plan, readFilter, alias = "idx") {
     filters.push(`${alias}.read = ?`);
     args.push(readFilter);
   }
+  // Rows with an unparseable/missing Date header have an empty (or NULL) email_date_utc
+  // — the column is NOT NULL DEFAULT ''. Let them PASS the window rather than be silently
+  // dropped (P3-51); email_date holds the raw header string, so COALESCE-ing to it would
+  // be unsound. Test the raw column directly: NULLIF(x,'') is NULL when x is empty, so a
+  // NULLIF-based "= ''" guard can never match.
   if (plan?.date_window?.after) {
-    filters.push(`NULLIF(${alias}.email_date_utc, '') >= ?`);
+    filters.push(`(${alias}.email_date_utc IS NULL OR ${alias}.email_date_utc = '' OR ${alias}.email_date_utc >= ?)`);
     args.push(plan.date_window.after);
   }
   if (plan?.date_window?.before) {
-    filters.push(`NULLIF(${alias}.email_date_utc, '') <= ?`);
+    filters.push(`(${alias}.email_date_utc IS NULL OR ${alias}.email_date_utc = '' OR ${alias}.email_date_utc <= ?)`);
     args.push(plan.date_window.before);
   }
   return {

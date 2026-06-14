@@ -81,17 +81,38 @@ export function resolveDashboardShellHotkey({
   editableTarget = false,
   actionChord = null,
   calendarOpen = false,
+  anyBlockingOverlayOpen = false,
+  analyticsOpen = false,
+  historyOpen = false,
 } = {}) {
-  // Alfred hotkeys fire everywhere, including editable targets, so the panel
-  // can be toggled from its own composer (CONTEXT.md: ⌘\ toggle, ⌘⇧\ new chat).
+  // Alfred hotkeys fire everywhere, including editable targets and while a
+  // blocking overlay is open, so the panel can be toggled from its own composer
+  // (CONTEXT.md: ⌘\ toggle, ⌘⇧\ new chat).
   if ((metaKey || ctrlKey) && code === "Backslash") {
     return { action: shiftKey ? "alfred-new-chat" : "toggle-alfred" };
   }
   if (editableTarget) return { action: "clear-chord" };
   const normalized = String(key || "").toLowerCase();
 
+  // ⌘K command palette must keep working over any overlay; it is the global
+  // entry point and overlays close themselves on Escape (their own handlers).
   if ((metaKey || ctrlKey) && normalized === "k") return { action: "open-palette" };
   if (repeat || metaKey || ctrlKey || altKey) return { action: "ignore" };
+
+  // P3-26: when a non-input blocking overlay (Analytics / Customize / History)
+  // is open, suppress single-key commands that would open calendar/analytics/
+  // snapshots/deadline overlays *behind* the modal. The one exception is the
+  // toggle that CLOSES the overlay currently in the foreground (`a` while
+  // Analytics is open, `y` while History is open) — like Escape, it only ever
+  // dismisses, never opens-behind. Everything else (incl. an in-flight g-chord,
+  // `c`, or a toggle whose overlay is NOT the open one) is ignored. ⌘K/⌘\ are
+  // handled above and Escape is never a command here.
+  if (anyBlockingOverlayOpen) {
+    if (actionChord === "g") return { action: "clear-chord" };
+    if (normalized === "a" && analyticsOpen) return { action: "toggle-analytics" };
+    if (normalized === "y" && historyOpen) return { action: "toggle-history" };
+    return { action: "ignore" };
+  }
 
   if (actionChord === "g") {
     if (normalized === "t") return { action: "open-deadline-create", clearChord: true };
@@ -106,6 +127,26 @@ export function resolveDashboardShellHotkey({
   if (normalized === "c" && !calendarOpen) return { action: "open-calendar" };
   if (normalized === "y") return { action: "toggle-history" };
   return { action: "ignore" };
+}
+
+// P3-27: pure resolver for ShellHeader's 1/2 tab hotkeys. Suppressed while a
+// blocking overlay (Customize / Analytics / History) is open so the underlying
+// shell tab can't desync from the visible overlay. Keeps the same input guards
+// as the single-key shell commands (editable targets and meta combos pass).
+export function resolveShellTabHotkey({
+  key,
+  metaKey = false,
+  ctrlKey = false,
+  altKey = false,
+  editableTarget = false,
+  anyBlockingOverlayOpen = false,
+} = {}) {
+  if (editableTarget) return null;
+  if (metaKey || ctrlKey || altKey) return null;
+  if (anyBlockingOverlayOpen) return null;
+  if (key === "1") return "dashboard";
+  if (key === "2") return "inbox";
+  return null;
 }
 
 export function buildDashboardEventsData(calendarRange = {}) {

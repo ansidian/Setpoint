@@ -23,7 +23,10 @@ vi.mock("../calendar/calendar.js", () => ({
     body: { code: err.code || "unknown", message: err.message || "unknown" },
   })),
 }));
-vi.mock("../calendar/calendar-search-mirror.js", () => ({
+vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
+  // Keep the real pure helpers (addMonthsIso powers calendarSearchRange in the route);
+  // only the DB-touching functions are stubbed below.
+  ...(await importActual()),
   deleteCalendarSearchMirrorOccurrence: vi.fn(),
   getCalendarSearchMirrorHealth: vi.fn(),
   listCalendarSearchMirrorOccurrences: vi.fn(),

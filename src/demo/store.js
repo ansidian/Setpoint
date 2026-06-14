@@ -4,6 +4,19 @@ const PERSONAL_COLOR = "#cba6f7";
 const CAREER_COLOR = "#f5c2e7";
 const BILLS_COLOR = "#a6e3a1";
 
+// Demo calendar events are built in the viewer's local zone (atLocalIso), but
+// the app filters/ranges by the Pacific calendar day to match the real server.
+// Deriving the day from an event's local-time ISO string via `.slice(0, 10)`
+// is the UTC day, which drops boundary events for non-Pacific viewers. Resolve
+// the Pacific calendar day from the epoch instead, mirroring the UI's pacificYMD.
+const PACIFIC_TIME_ZONE = "America/Los_Angeles";
+const PACIFIC_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PACIFIC_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 let cachedSeed = null;
 let cachedDateKey = null;
 
@@ -791,6 +804,10 @@ export function getDemoSeed() {
 
 export function readDemoSeed() {
   return clone(getDemoSeed());
+}
+
+export function pacificYMD(ms) {
+  return PACIFIC_YMD_FORMATTER.format(new Date(ms));
 }
 
 export function demoDateRange(items, start, end, getDate) {

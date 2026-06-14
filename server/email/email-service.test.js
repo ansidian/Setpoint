@@ -32,10 +32,18 @@ vi.mock("./icloud.js", () => ({
   batchMarkAsRead: vi.fn(),
 }));
 vi.mock("../platform/config-service.js", () => ({ loadUserConfig: vi.fn() }));
+// Partial mock: keep every real adapter export (findAccountByUid is re-exported
+// through __testing__ and exercised below) and override only trashEmailWithProvider
+// so the trash() tests can drive provider success/failure deterministically.
+vi.mock("./email-provider-adapters.js", async (importActual) => {
+  const actual = await importActual();
+  return { ...actual, trashEmailWithProvider: vi.fn() };
+});
 
 const gmail = await import("./gmail.js");
 const icloud = await import("./icloud.js");
 const configService = await import("../platform/config-service.js");
+const providerAdapters = await import("./email-provider-adapters.js");
 const emailService = await import("./email-service.js");
 const { __testing__ } = emailService;
 
@@ -711,5 +719,93 @@ describe("markAllRead", () => {
       }),
       [gmailUid],
     );
+  });
+});
+
+describe("snooze atomicity (P3-60)", () => {
+  it("rolls back the committed snooze row when the pending-triage defer fails", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      email: "work@example.com",
+    });
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-1",
+      account_id: "gmail-work",
+      account_email: "work@example.com",
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status)
+            VALUES (?, ?, ?, 'pending')`,
+      args: ["user-1", "gmail-work", "gmail-work-msg-1"],
+    });
+    configService.loadUserConfig.mockResolvedValue({
+      accounts: [{ id: "gmail-work", email: "work@example.com", type: "gmail" }],
+    });
+
+    // Force only the defer helper's pending-triage read to fail; the snooze
+    // INSERT and the rollback DELETE must still execute against the real DB.
+    mockDb.execute.mockImplementation((arg) => {
+      const sql = typeof arg === "string" ? arg : arg?.sql;
+      if (
+        sql?.includes("decision_metadata_json")
+        && sql.includes("FROM ea_email_triage")
+        && sql.includes("'pending'")
+      ) {
+        return Promise.reject(new Error("defer read exploded"));
+      }
+      return testState.db.current.execute(arg);
+    });
+
+    const untilTs = Date.parse("2026-05-04T16:00:00.000Z");
+    await expect(
+      emailService.snooze("user-1", "gmail-work-msg-1", untilTs, {
+        account_id: "gmail-work",
+        account_email: "work@example.com",
+        uid: "gmail-work-msg-1",
+        subject: "Pending",
+      }),
+    ).rejects.toThrow("defer read exploded");
+
+    // The snooze row must be rolled back, and Gmail snooze-modify must not run
+    // (the defer is the gate before the external call).
+    const rows = await testState.db.current.execute({
+      sql: "SELECT * FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
+      args: ["user-1", "gmail-work-msg-1"],
+    });
+    expect(rows.rows).toEqual([]);
+    expect(gmail.snoozeAtGmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("trash post-provider cleanup (P3-74)", () => {
+  it("does not throw or report trash failed when a post-provider local write fails", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    providerAdapters.trashEmailWithProvider.mockResolvedValue({
+      providerAccountId: "gmail-work",
+    });
+
+    // The provider trash already committed; force the local snooze-row delete to
+    // reject while leaving the snapshot-removal cleanup to run normally.
+    let snoozeDeleteAttempted = false;
+    mockDb.execute.mockImplementation((arg) => {
+      const sql = typeof arg === "string" ? arg : arg?.sql;
+      if (sql?.includes("DELETE FROM ea_snoozed_emails")) {
+        snoozeDeleteAttempted = true;
+        return Promise.reject(new Error("snooze delete exploded"));
+      }
+      return testState.db.current.execute(arg);
+    });
+
+    await expect(
+      emailService.trash("user-1", "gmail-work-msg-1"),
+    ).resolves.toBeUndefined();
+
+    expect(providerAdapters.trashEmailWithProvider).toHaveBeenCalledWith(
+      "user-1",
+      "gmail-work-msg-1",
+    );
+    expect(snoozeDeleteAttempted).toBe(true);
   });
 });

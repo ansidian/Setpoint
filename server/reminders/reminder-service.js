@@ -256,17 +256,25 @@ export async function listDueReminders({
   return result.rows.map(normalizeRow);
 }
 
+// P3-45: atomic delivery claim. The `AND status = 'pending'` guard is the durable
+// (DB-level) protection against the same reminder being marked sent twice — e.g. a
+// stale/duplicate processor re-marking an already-sent row. The in-process
+// single-flight flag in server/scheduler.js (reminderSchedulerInFlight) only guards
+// one process; this conditional UPDATE is the real guard. Mirrors the
+// claim-on-condition + gate-on-rowsAffected pattern from claimNextEmailTriageJob.
+// Returns true iff this call won the claim (1 row updated).
 export async function markReminderSent(id, { sentAt = new Date() } = {}, options = {}) {
-  await client(options).execute({
+  const result = await client(options).execute({
     sql: `UPDATE ea_reminders
           SET status = 'sent',
               sent_at = ?,
               retry_after = NULL,
               last_error = NULL,
               updated_at = datetime('now')
-          WHERE id = ?`,
+          WHERE id = ? AND status = 'pending'`,
     args: [new Date(sentAt).toISOString(), id],
   });
+  return Number(result.rowsAffected || 0) === 1;
 }
 
 export async function markReminderMissed(id, { missedAt = new Date() } = {}, options = {}) {

@@ -583,6 +583,224 @@ describe("syncTodoistMirror", () => {
     });
   });
 
+  it("resets status to idle and records last_error when the '*' full retry fails (P3-62)", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "stored-sync-token",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+    });
+
+    const invalidTokenError = new Error("Invalid sync token");
+    invalidTokenError.status = 400;
+    const retryFailure = new Error("Todoist API 502: upstream");
+    retryFailure.status = 502;
+    const syncApiClient = vi.fn()
+      .mockRejectedValueOnce(invalidTokenError)
+      .mockRejectedValueOnce(retryFailure);
+
+    await expect(syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:15:00.000Z"),
+    })).rejects.toThrow("Todoist API 502");
+
+    expect(syncApiClient).toHaveBeenCalledTimes(2);
+
+    const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
+    expect(state.rows[0]).toMatchObject({
+      status: "idle",
+      sync_token: "stored-sync-token",
+      last_error: "Todoist API 502: upstream",
+      sync_started_at: null,
+      last_check_failed_at: "2026-05-04T15:15:00.000Z",
+      failed_check_count: 1,
+    });
+
+    await expect(getTodoistMirrorHealth("u1", {
+      dbClient: testState.db.current,
+      now: new Date("2026-05-04T15:16:00.000Z"),
+    })).resolves.toMatchObject({
+      state: "current",
+      lastError: "Todoist API 502: upstream",
+    });
+  });
+
+  it("resets status to idle and records last_error when applySyncResponse write fails (P3-62)", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "stored-sync-token",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+    });
+
+    const syncApiClient = vi.fn(async () => ({
+      full_sync: false,
+      sync_token: "sync-token-2",
+      items: [{ id: "item-1", content: "Task", checked: false, due: { date: "2026-05-06" } }],
+      projects: [],
+      labels: [],
+    }));
+
+    const realBatch = testState.db.current.batch.bind(testState.db.current);
+    const batchSpy = vi.spyOn(testState.db.current, "batch")
+      .mockRejectedValueOnce(new Error("DB write failed: disk I/O"));
+
+    try {
+      await expect(syncTodoistMirror("u1", {
+        dbClient: testState.db.current,
+        syncApiClient,
+        now: new Date("2026-05-04T15:20:00.000Z"),
+      })).rejects.toThrow("DB write failed");
+    } finally {
+      batchSpy.mockRestore();
+      void realBatch;
+    }
+
+    const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
+    expect(state.rows[0]).toMatchObject({
+      status: "idle",
+      sync_token: "stored-sync-token",
+      last_error: "DB write failed: disk I/O",
+      sync_started_at: null,
+      last_check_failed_at: "2026-05-04T15:20:00.000Z",
+      failed_check_count: 1,
+    });
+  });
+
+  it("runs at most one sync per user and coalesces concurrent triggers (P3-63)", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "stored-sync-token",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+    });
+
+    let releaseFetch;
+    const fetchGate = new Promise((resolve) => {
+      releaseFetch = resolve;
+    });
+    const syncApiClient = vi.fn(async () => {
+      await fetchGate;
+      return {
+        full_sync: true,
+        sync_token: "coalesced-sync-token",
+        items: [],
+        projects: [],
+        labels: [],
+      };
+    });
+
+    const first = syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:10:00.000Z"),
+      forceFull: true,
+    });
+    const second = syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-05-04T15:10:05.000Z"),
+    });
+
+    expect(second).toBe(first);
+
+    releaseFetch();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(syncApiClient).toHaveBeenCalledTimes(1);
+    expect(firstResult).toBe(secondResult);
+    expect(firstResult).toMatchObject({
+      status: "current",
+      syncToken: "coalesced-sync-token",
+    });
+
+    // The in-flight entry is cleared on settle: a later trigger runs a fresh sync.
+    const followUp = vi.fn(async () => ({
+      full_sync: false,
+      sync_token: "follow-up-token",
+      items: [],
+      projects: [],
+      labels: [],
+    }));
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient: followUp,
+      now: new Date("2026-05-04T15:11:00.000Z"),
+    });
+    expect(followUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a sync request recorded after the sync start (P3-66)", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "stored-sync-token",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+    });
+
+    // A webhook lands mid-sync: its sync_requested_at is newer than the sync's
+    // start timestamp, so a successful sync must not clear it.
+    const syncStart = new Date("2026-05-04T15:10:00.000Z");
+    const syncApiClient = vi.fn(async () => {
+      await recordTodoistSyncRequest("u1", {
+        dbClient: testState.db.current,
+        reason: "todoist-webhook",
+        now: new Date("2026-05-04T15:10:02.000Z"),
+      });
+      return {
+        full_sync: false,
+        sync_token: "sync-token-2",
+        items: [],
+        projects: [],
+        labels: [],
+      };
+    });
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: syncStart,
+    });
+
+    const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
+    expect(state.rows[0]).toMatchObject({
+      sync_token: "sync-token-2",
+      sync_requested_at: "2026-05-04T15:10:02.000Z",
+      sync_request_reason: "todoist-webhook",
+      status: "idle",
+    });
+  });
+
+  it("clears a sync request recorded before the sync start (P3-66)", async () => {
+    await seedTodoistToken();
+    await seedSyncState({
+      syncToken: "stored-sync-token",
+      lastSuccessAt: "2026-05-04T15:00:00.000Z",
+      syncRequestedAt: "2026-05-04T15:09:00.000Z",
+      syncRequestReason: "todoist-webhook",
+    });
+
+    const syncApiClient = vi.fn(async () => ({
+      full_sync: false,
+      sync_token: "sync-token-2",
+      items: [],
+      projects: [],
+      labels: [],
+    }));
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      // Sync start is after the pending request, so the request predates it.
+      now: new Date("2026-05-04T15:10:00.000Z"),
+    });
+
+    const state = await testState.db.current.execute("SELECT * FROM ea_todoist_sync_state WHERE user_id = 'u1'");
+    expect(state.rows[0]).toMatchObject({
+      sync_token: "sync-token-2",
+      sync_requested_at: null,
+      sync_request_reason: null,
+      status: "idle",
+    });
+  });
+
   it("leaves pending evidence visible after a requested sync fails", async () => {
     await seedTodoistToken();
     await seedSyncState({

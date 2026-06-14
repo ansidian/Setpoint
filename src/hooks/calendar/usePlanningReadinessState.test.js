@@ -84,6 +84,26 @@ describe("usePlanningReadinessState", () => {
     expect(result.current.lateDeadlineOverlayData).toBeNull();
   });
 
+  it("does not flip a fast successful load back to slow after the soft timer would fire", async () => {
+    // P3-5: both sources resolve well before PLANNING_SLOW_TIMEOUT_MS. Once the
+    // pass settles, the leaked soft/hard timers must be cleared so the state
+    // stays "ready" instead of spuriously transitioning to "slow" ~2s later.
+    const deadlineData = { upcoming: [] };
+    const props = planningProps({
+      eventsEnsureRange: vi.fn().mockResolvedValue([]),
+      deadlinesEnsureRange: vi.fn().mockResolvedValue(deadlineData),
+    });
+    const { result } = renderHook(() => usePlanningReadinessState(props));
+
+    await advance(0);
+    expect(result.current.planningReadiness.state).toBe("ready");
+
+    // Advance past both the soft (2000ms) and hard (3000ms) escalation windows.
+    await advance(3500);
+    expect(result.current.planningReadiness.state).toBe("ready");
+    expect(result.current.planningReadiness.slowSource).toBeNull();
+  });
+
   it("clears an unconsumed scroll-driven flag when the modal closes", async () => {
     const props = planningProps();
     const { rerender } = renderHook((p) => usePlanningReadinessState(p), { initialProps: props });

@@ -20,6 +20,23 @@ export function mergeReadState(read, uid, readOverrides) {
   return override == null ? !!read : !!override;
 }
 
+// Layer several override sources (Maps or plain objects) into one plain-object
+// lookup consumable by readOverrideForUid/mergeReadState. Later sources win, so
+// pass session-wide overrides first and the most local toggles last. A null
+// override entry is treated as "no opinion" and does not shadow earlier layers.
+export function composeReadOverrides(...sources) {
+  const merged = {};
+  for (const source of sources) {
+    if (!source) continue;
+    const entries = source instanceof Map ? source.entries() : Object.entries(source);
+    for (const [uid, value] of entries) {
+      if (!uid || value == null) continue;
+      merged[uid] = !!value;
+    }
+  }
+  return merged;
+}
+
 export function buildInboxRow(raw, {
   uid,
   id = raw.id || uid,

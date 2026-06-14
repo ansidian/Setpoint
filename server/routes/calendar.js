@@ -46,6 +46,7 @@ import {
   rankCalendarSearchCandidates,
 } from "../calendar/calendar-search.js";
 import {
+  addMonthsIso,
   deleteCalendarSearchMirrorOccurrence,
   getCalendarSearchMirrorHealth,
   listCalendarSearchMirrorOccurrences,
@@ -159,12 +160,9 @@ function todayPacific() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date());
 }
 
-function addMonthsIso(iso, n) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1 + n, d));
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
-}
-
+// P3-40: month math (addMonthsIso) shared from calendar-search-mirror.js, which clamps
+// day-of-month to the target month's last day so the 29th-31st no longer overflow and shift
+// the search window by up to 3 days. The previous local copy here had the same overflow bug.
 function calendarSearchRange({ now = new Date() } = {}) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
   return {

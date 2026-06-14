@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
-import { createAuthTestDb, hashSessionToken, seedSession } from "../test-utils/auth-db.js";
+import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from "../test-utils/auth-db.js";
 
 const testState = vi.hoisted(() => ({
   db: { current: null },
@@ -12,7 +12,14 @@ vi.mock("../db/connection.js", () => ({
   },
 }));
 
-const { createSession, validateSession, deleteSession } = await import("./auth.js");
+const { createSession, validateSession, deleteSession, validateBearer } = await import("./auth.js");
+
+async function seedApiToken(db, raw, { scopes = ["actual:write"], expiresAt } = {}) {
+  await db.execute({
+    sql: "INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+    args: [hashApiToken(raw), "test-token", JSON.stringify(scopes), Date.now(), expiresAt],
+  });
+}
 
 describe("auth middleware session storage", () => {
   beforeEach(async () => {
@@ -72,6 +79,32 @@ describe("auth middleware session storage", () => {
     });
     expect(ok).toBe(true);
     expect(result.rows.map((row) => row.token)).toEqual([hashSessionToken("raw-session")]);
+  });
+
+  it("authenticates an unexpired api token and returns its scopes", async () => {
+    await seedApiToken(testState.db.current, "eatk_live", {
+      scopes: ["actual:write", "actual:read"],
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const ctx = await validateBearer("eatk_live");
+
+    expect(ctx).not.toBeNull();
+    expect(ctx.scopes).toEqual(["actual:write", "actual:read"]);
+  });
+
+  it("rejects an api token whose expires_at has passed", async () => {
+    await seedApiToken(testState.db.current, "eatk_expired", {
+      expiresAt: Date.now() - 1,
+    });
+
+    expect(await validateBearer("eatk_expired")).toBeNull();
+  });
+
+  it("rejects a legacy api token with NULL expires_at (fail closed)", async () => {
+    await seedApiToken(testState.db.current, "eatk_legacy", { expiresAt: null });
+
+    expect(await validateBearer("eatk_legacy")).toBeNull();
   });
 
   it("deletes both raw and hashed token forms on logout", async () => {

@@ -18,13 +18,12 @@ import {
   applyUpcomingReminderState,
   projectUpcomingReminderState,
 } from "../../calendar/reminderDisplay.js";
-import { buildDeadlineMutationPayload } from "./submitPayload";
+import { buildDeadlineMutationPayload, canSubmitTask } from "./submitPayload";
+import { applyTodoistReminderMutations } from "./applyTodoistReminderMutations.js";
 import {
-  buildTodoistReminderCreatePayload,
   createTodoistReminderDraftFromCustom,
   createTodoistReminderDraftFromOffset,
   getTodoistReminderPresetState,
-  isUnsavedTodoistReminder,
   TODOIST_REMINDER_PRESETS,
   todoistAnchorFromTask,
 } from "./todoistReminderModel.js";
@@ -606,7 +605,11 @@ export default function useAddTaskPanelController({
     return () => element.removeEventListener("wheel", handleWheel);
   }, []);
 
-  const canSubmit = parsed.stripped.length > 0 || input.trim().length > 0;
+  // MERGE-NOTE[P3-30] (P3 worktree): base canSubmit on the effective (token-stripped)
+  // title so tokens-only input like "#Work @home" disables submit instead of firing a
+  // doomed 400. Shares this file with two P2 fixes on another worktree (canSubmit region).
+  // On conflict: keep BOTH unless they touch this exact line. Remove this note after merge.
+  const canSubmit = canSubmitTask({ parsed, input });
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
@@ -637,24 +640,28 @@ export default function useAddTaskPanelController({
         committedTaskRef.current = task;
       }
       const savedTask = isEdit ? { ...editingTask, ...task, id: editingTask.id } : task;
-      for (const reminderId of removedReminderIds) {
-        await deleteReminder(reminderId);
-      }
-      let reminderCreates = 0;
-      for (const reminder of todoistReminders) {
-        if (!isUnsavedTodoistReminder(reminder)) continue;
-        await createReminder(buildTodoistReminderCreatePayload({
-          task: savedTask,
-          reminder,
-        }));
-        reminderCreates += 1;
-      }
-      const remindersChanged = removedReminderIds.length > 0 || reminderCreates > 0;
-      const shouldProjectReminderState = remindersChanged || todoistReminders.length > 0;
+
+      // MERGE-NOTE[P3-29] (P3 worktree): the deadline mutation above is already
+      // committed, so reminder failures must NOT abort the flow. Collect each
+      // reminder op's error instead of throwing, always fire onTaskUpdated/onTaskAdded
+      // with best-known projected state, and only close when every reminder op
+      // succeeded — leaving the panel open on partial failure so badges reconcile.
+      // Shares this file with two P2 fixes on another worktree (reminder-mutation region).
+      // On conflict: keep BOTH unless they touch the same lines. Remove note after merge.
+      const { appliedReminders, created, deleted, errors } = await applyTodoistReminderMutations({
+        savedTask,
+        todoistReminders,
+        removedReminderIds,
+        createReminder,
+        deleteReminder,
+      });
+
+      const remindersChanged = deleted > 0 || created > 0;
+      const shouldProjectReminderState = remindersChanged || appliedReminders.length > 0;
       const projectedTask = shouldProjectReminderState
         ? applyUpcomingReminderState(
           savedTask,
-          projectUpcomingReminderState(todoistReminders, {
+          projectUpcomingReminderState(appliedReminders, {
             anchorAt: todoistAnchorFromTask(savedTask)?.anchorAt || null,
           }),
         )
@@ -663,6 +670,18 @@ export default function useAddTaskPanelController({
         onTaskUpdated?.(projectedTask);
       } else {
         onTaskAdded?.(projectedTask);
+      }
+
+      if (errors.length > 0) {
+        // Deadline saved, but some reminders did not. Keep the panel open and
+        // surface the reminder failure so the user can retry/reconcile rather than
+        // closing on a half-applied state with stale badges.
+        setReminderError(
+          created + deleted > 0
+            ? "Task saved, but some reminders could not be updated."
+            : "Task saved, but reminders could not be updated.",
+        );
+        return;
       }
       requestClose();
     } catch (err) {

@@ -4,6 +4,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { describe, expect, it, vi } from "vitest";
 import { getActiveSnapshotView } from "./snapshot-service.js";
+import { seedSnapshotItem } from "./snapshot-test-fixtures.js";
 import { wakeDueSnoozes } from "./snooze-waker.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -262,6 +263,162 @@ describe("snooze waker", () => {
         source_at: "2026-05-04T17:33:00.000Z",
       },
     ]);
+  });
+
+  // P3-59: overlapping cron ticks must not double-process the same due snoozes.
+  it("does not double-process when a tick re-enters while one is in flight", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-04T17:30:00.000Z");
+    const resurfacedAt = now.getTime();
+
+    await dbClient.execute({
+      sql: `INSERT INTO ea_snoozed_emails
+              (user_id, email_id, until_ts, email_snapshot, status)
+            VALUES (?, ?, ?, ?, 'snoozed')`,
+      args: ["user-1", "gmail-work-msg-1", resurfacedAt - 1_000, JSON.stringify({
+        uid: "gmail-work-msg-1",
+        id: "gmail-work-msg-1",
+        account_id: "gmail-work",
+        account_email: "work@example.test",
+        subject: "Wake this thread",
+        summary: "Follow up",
+        category: "school",
+        urgency: "high",
+        lane: "needs_attention",
+      })],
+    });
+
+    // First tick hangs inside the Gmail wake-modify so the second tick overlaps it.
+    let releaseFirst;
+    const firstHang = new Promise((resolve) => { releaseFirst = resolve; });
+    let wakeCalls = 0;
+    const wakeAtGmailFn = vi.fn(async () => {
+      wakeCalls += 1;
+      await firstHang;
+    });
+    const loadUserConfigFn = vi.fn(async () => ({
+      accounts: [{ id: "gmail-work", email: "work@example.test", type: "gmail" }],
+    }));
+
+    const firstTick = wakeDueSnoozes({ userId: "user-1", dbClient, now, loadUserConfigFn, wakeAtGmailFn });
+    // Let the first tick reach the awaiting Gmail call before re-entering.
+    await Promise.resolve();
+    await Promise.resolve();
+    const secondTick = await wakeDueSnoozes({ userId: "user-1", dbClient, now, loadUserConfigFn, wakeAtGmailFn });
+
+    expect(secondTick).toEqual({ woke: 0, skipped: "in_flight" });
+
+    releaseFirst();
+    const firstResult = await firstTick;
+    expect(firstResult).toEqual({ woke: 1 });
+
+    // The due snooze was processed exactly once: one Gmail wake-modify, one resurfaced item.
+    expect(wakeCalls).toBe(1);
+    const snoozeRows = await dbClient.execute({
+      sql: "SELECT status FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
+      args: ["user-1", "gmail-work-msg-1"],
+    });
+    expect(snoozeRows.rows).toEqual([{ status: "resurfaced" }]);
+
+    const view = await getActiveSnapshotView("user-1", { dbClient, now });
+    expect(view.lanes.needs_attention).toHaveLength(1);
+  });
+
+  // P3-61: a completed-triage snooze must resurface by un-hiding the live item,
+  // keeping the owner's real lane/summary, not re-deriving from the snapshot JSON.
+  it("resurfaces a completed-triage snooze by un-hiding the existing item without clobbering triage", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-04T17:30:00.000Z");
+    const resurfacedAt = now.getTime();
+    const wakeAtGmailFn = vi.fn().mockResolvedValue(undefined);
+
+    // Live, already-triaged item the owner filed into the 'fyi' lane.
+    const { triageId } = await seedSnapshotItem(dbClient, {
+      userId: "user-1",
+      accountId: "gmail-work",
+      emailId: "gmail-work-done-msg",
+      lane: "fyi",
+      category: "newsletter",
+      now,
+    });
+    await dbClient.execute({
+      sql: `UPDATE ea_email_triage
+            SET triage_status = 'complete',
+                last_triaged_at = ?,
+                summary = 'Filed FYI by owner',
+                urgency = 'low'
+            WHERE id = ?`,
+      args: ["2026-05-04T16:00:00.000Z", triageId],
+    });
+    // The item was hidden when it got snoozed.
+    await dbClient.execute({
+      sql: `UPDATE ea_briefing_snapshot_items
+            SET dismissed_from_today_at = ?
+            WHERE triage_id = ?`,
+      args: ["2026-05-04T16:00:00.000Z", triageId],
+    });
+
+    // The snooze JSON carries a STALE lane (needs_attention) — re-deriving from it
+    // would demote the real 'fyi' item. The fix must ignore this and un-hide in place.
+    await dbClient.execute({
+      sql: `INSERT INTO ea_snoozed_emails
+              (user_id, email_id, until_ts, email_snapshot, status)
+            VALUES (?, ?, ?, ?, 'snoozed')`,
+      args: ["user-1", "gmail-work-done-msg", resurfacedAt - 1_000, JSON.stringify({
+        uid: "gmail-work-done-msg",
+        id: "gmail-work-done-msg",
+        account_id: "gmail-work",
+        account_email: "work@example.test",
+        subject: "Filed thread",
+        summary: "STALE summary from snapshot",
+        category: "uncategorized",
+        urgency: "high",
+        lane: "needs_attention",
+      })],
+    });
+
+    const result = await wakeDueSnoozes({
+      userId: "user-1",
+      dbClient,
+      now,
+      loadUserConfigFn: vi.fn(async () => ({
+        accounts: [{ id: "gmail-work", email: "work@example.test", type: "gmail" }],
+      })),
+      wakeAtGmailFn,
+    });
+    expect(result).toEqual({ woke: 1 });
+
+    // Triage fields are untouched: still complete, still 'fyi', summary preserved.
+    const triageRows = await dbClient.execute({
+      sql: `SELECT triage_status, triage_source, lane, urgency, summary
+            FROM ea_email_triage WHERE id = ?`,
+      args: [triageId],
+    });
+    expect(triageRows.rows).toEqual([
+      {
+        triage_status: "complete",
+        triage_source: "unknown",
+        lane: "fyi",
+        urgency: "low",
+        summary: "Filed FYI by owner",
+      },
+    ]);
+
+    // The existing item was un-hidden in place (no new resurfaced_snooze item).
+    const itemRows = await dbClient.execute({
+      sql: `SELECT lane_at_snapshot, dismissed_from_today_at, source
+            FROM ea_briefing_snapshot_items WHERE triage_id = ?`,
+      args: [triageId],
+    });
+    expect(itemRows.rows).toEqual([
+      { lane_at_snapshot: "fyi", dismissed_from_today_at: null, source: null },
+    ]);
+
+    // It resurfaces in its real 'fyi' lane, not needs_attention.
+    const view = await getActiveSnapshotView("user-1", { dbClient, now });
+    expect(view.lanes.needs_attention).toHaveLength(0);
+    expect(view.lanes.fyi).toHaveLength(1);
+    expect(view.lanes.fyi[0]).toMatchObject({ uid: "gmail-work-done-msg" });
   });
 
   it("leaves a snooze 'snoozed' when reattach throws, so the next tick retries it (P2-29)", async () => {

@@ -6,7 +6,9 @@ import {
   daysBetweenYmd,
   pacificTime24,
   pacificYMD,
+  parseYmd,
 } from "../calendarDateUtils.js";
+import { epochFromLa } from "../../inbox/helpers.js";
 import { planCalendarEventClipboardPaste } from "./calendarEventSelectionModel.js";
 
 const DAY_MS = 86400000;
@@ -56,16 +58,23 @@ function isOptimisticCloneEvent(event) {
     || (typeof event?.id === "string" && event.id.startsWith("optimistic-calendar-copy-"));
 }
 
-export function buildReschedulePayload(event, shiftedEvent, scope) {
+export function buildReschedulePayload(event, deltaDays = 0, scope) {
+  // Derive the new dates by calendar-day arithmetic from the source YMD rather
+  // than by re-reading pacificYMD of a fixed-ms (event.startMs + deltaDays*DAY_MS)
+  // shift. A fixed 86_400_000ms/day shift crosses a DST boundary off by an hour,
+  // so a late-evening event dragged across spring-forward lands on the wrong
+  // calendar day. This mirrors the DST-safe approach in buildCloneEventPayload.
+  const sourceStartDate = pacificYMD(event.startMs);
+  const sourceEndDate = event.allDay
+    ? addDaysYmd(pacificYMD(event.endMs), -1)
+    : pacificYMD(event.endMs || event.startMs);
   return {
     accountId: event.accountId,
     calendarId: event.calendarId,
     title: event.title || "",
     allDay: !!event.allDay,
-    startDate: pacificYMD(shiftedEvent.startMs),
-    endDate: shiftedEvent.allDay
-      ? addDaysYmd(pacificYMD(shiftedEvent.endMs), -1)
-      : pacificYMD(shiftedEvent.endMs || shiftedEvent.startMs),
+    startDate: addDaysYmd(sourceStartDate, deltaDays),
+    endDate: addDaysYmd(sourceEndDate, deltaDays),
     startTime: event.allDay ? null : pacificTime24(event.startMs),
     endTime: event.allDay ? null : pacificTime24(event.endMs || event.startMs),
     location: event.location || "",
@@ -124,8 +133,18 @@ export function buildOptimisticCloneEvent(event, targetDate = null) {
 function payloadDateTimeMs(date, time, { allDay = false, end = false } = {}) {
   const datePart = allDay && end ? addDaysYmd(date, 1) : date;
   const timePart = allDay ? "00:00" : time || "00:00";
-  const parsed = new Date(`${datePart}T${timePart}:00`).getTime();
-  return Number.isFinite(parsed) ? parsed : Date.now();
+  // Build the optimistic epoch from Pacific wall-clock components so it matches
+  // the server (which interprets the same date/time strings in Pacific). The
+  // prior `new Date("YYYY-MM-DDTHH:mm:00")` parsed offsetless strings in the
+  // browser's local zone, so a non-Pacific session placed the optimistic event
+  // hours off until the server result reconciled it.
+  const parsedDate = parseYmd(datePart);
+  if (!parsedDate) return Date.now();
+  const [hourStr, minuteStr] = String(timePart).split(":");
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return Date.now();
+  return epochFromLa(parsedDate.year, parsedDate.month, parsedDate.day, hour, minute);
 }
 
 export function buildOptimisticClipboardPasteEvent(item, index = 0) {
@@ -160,7 +179,8 @@ export function buildOptimisticClipboardPasteEvent(item, index = 0) {
 
 export function buildColorUpdatePayload(event, colorId, scope) {
   return {
-    ...buildReschedulePayload(event, event, scope),
+    // A color change keeps the event on its current days, so deltaDays = 0.
+    ...buildReschedulePayload(event, 0, scope),
     colorId,
   };
 }
@@ -252,7 +272,7 @@ export default function useCalendarQuickActions({
     onSelectEvent?.(eventSelectionId(shiftedEvent), pacificYMD(shiftedEvent.startMs));
 
     try {
-      const result = await updateCalendarEvent(event.id, buildReschedulePayload(event, shiftedEvent, scope));
+      const result = await updateCalendarEvent(event.id, buildReschedulePayload(event, deltaDays, scope));
       if (result?.event) upsertEvents?.(result.event);
       if (event.isRecurring && scope !== "one" && changedBounds) {
         await refreshRange?.(changedBounds.start, changedBounds.end);
@@ -320,13 +340,27 @@ export default function useCalendarQuickActions({
 
   const runBatchDelete = useCallback(async ({ events }) => {
     const scopedEvents = Array.isArray(events) ? events : [];
-    if (!scopedEvents.length) return;
+    const succeeded = [];
+    const failed = [];
+    if (!scopedEvents.length) return { succeeded, failed };
+    // Collect per-event outcomes instead of throwing on the first failure.
+    // Throwing aborted the loop, leaving the still-undeleted tail of events in
+    // a half-applied state and the whole selection set cleared by the caller —
+    // i.e. selection that still referenced live events was dropped while a
+    // failed event silently survived. Now we attempt every event and report
+    // which identities actually deleted so the caller can prune precisely.
     for (const event of scopedEvents) {
-      await runDelete({
-        event,
-        scope: event?.isRecurring ? "one" : undefined,
-      });
+      try {
+        await runDelete({
+          event,
+          scope: event?.isRecurring ? "one" : undefined,
+        });
+        succeeded.push({ event, identity: eventSelectionId(event) });
+      } catch (err) {
+        failed.push({ event, identity: eventSelectionId(event), error: err });
+      }
     }
+    return { succeeded, failed };
   }, [runDelete]);
 
   const runClone = useCallback(async ({ event, targetDate = null }) => {
@@ -411,7 +445,10 @@ export default function useCalendarQuickActions({
           onSelectEvent?.(eventSelectionId(result.event), pacificYMD(result.event.startMs));
         }
       } catch {
+        // Surface paste failure instead of silently rolling back the optimistic
+        // row, matching the reschedule/delete error UX.
         removeEvent?.(optimisticEvent.id);
+        setStatus({ tone: "error", message: "Failed to paste event." });
       }
       return true;
     }
@@ -443,10 +480,23 @@ export default function useCalendarQuickActions({
       if (firstCreated) {
         onSelectEvent?.(eventSelectionId(firstCreated), pacificYMD(firstCreated.startMs));
       }
+      // A partially-rejected batch was previously silent: failed rows vanished
+      // with no feedback. Report the failure count when any item did not paste.
+      const failedCount = optimisticEvents.length - createdByIndex.size;
+      if (failedCount > 0) {
+        setStatus({
+          tone: "error",
+          message: createdByIndex.size
+            ? `Pasted ${createdByIndex.size}, failed ${failedCount}.`
+            : "Failed to paste event.",
+        });
+      }
     } catch {
+      // Surface paste failure instead of silently rolling back optimistic rows.
       for (const event of optimisticEvents) {
         removeEvent?.(event.id);
       }
+      setStatus({ tone: "error", message: "Failed to paste event." });
     }
     return true;
   }, [editable]);
@@ -632,8 +682,21 @@ export default function useCalendarQuickActions({
     setContextMenu((current) => (current ? { ...current, busy: true, error: null } : current));
     try {
       if (scopedEvents?.length) {
-        await runBatchDelete({ events: scopedEvents });
-        externalHandlersRef.current.onBatchDeleted?.(scopedEvents);
+        const { succeeded, failed } = await runBatchDelete({ events: scopedEvents });
+        // Prune only the events that actually deleted. Surface a partial-failure
+        // error and keep the menu open when some deletes failed, so the user can
+        // retry the survivors instead of being left with a stale selection that
+        // silently referenced already-deleted events.
+        if (succeeded.length) {
+          externalHandlersRef.current.onBatchDeleted?.(succeeded.map((entry) => entry.event));
+        }
+        if (failed.length) {
+          const message = succeeded.length
+            ? `Deleted ${succeeded.length}, failed ${failed.length}.`
+            : (failed[0]?.error?.message || "Failed to delete events.");
+          setContextMenu((current) => (current ? { ...current, busy: false, error: message } : current));
+          return;
+        }
       } else {
         await runDelete({ event });
       }

@@ -158,11 +158,14 @@ describe("AddTaskPanel due picker", () => {
     });
     fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
 
-    // First submit: task is created, reminder create fails → error shown, panel stays open.
+    // First submit: task is created, reminder create fails. Per P3-29 the deadline
+    // is already committed, so reminder failures are collected (not thrown) and the
+    // panel stays open with a "task saved, reminders failed" notice instead of the
+    // raw error. P2-14's no-duplicate-on-retry guarantee (below) is unaffected.
     fireEvent.click(screen.getByText("Add task"));
     await vi.runAllTimersAsync();
     expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Reminder service down")).toBeTruthy();
+    expect(screen.getByText("Task saved, but reminders could not be updated.")).toBeTruthy();
 
     // Retry: must UPDATE the already-committed task, never create a second one.
     fireEvent.click(screen.getByText("Add task"));

@@ -17,7 +17,7 @@ vi.mock("../db/connection.js", () => ({
 }));
 
 const emailIndex = await import("./email-index.js");
-const { EMAIL_INDEX_BODY_TEXT_MAX_CHARS } = emailIndex;
+const { EMAIL_INDEX_BODY_TEXT_MAX_CHARS, parseFrom } = emailIndex;
 
 beforeEach(async () => {
   testState.db.current = await createEmailIndexTestDb();
@@ -26,6 +26,63 @@ beforeEach(async () => {
 afterEach(async () => {
   await testState.db.current?.close?.();
   testState.db.current = null;
+});
+
+describe("parseFrom", () => {
+  it("prefers iCloud's separate from_email without touching the display name", () => {
+    expect(parseFrom({ from: 'Jane Doe', from_email: "jane@icloud.com" }))
+      .toEqual({ fromName: "Jane Doe", fromAddress: "jane@icloud.com" });
+  });
+
+  it("splits a plain display-name + angle-bracket address", () => {
+    expect(parseFrom({ from: "Jane Doe <jane@example.com>" }))
+      .toEqual({ fromName: "Jane Doe", fromAddress: "jane@example.com" });
+  });
+
+  it("strips a balanced surrounding quote pair from a quoted display name", () => {
+    expect(parseFrom({ from: '"Doe, John" <john@example.com>' }))
+      .toEqual({ fromName: "Doe, John", fromAddress: "john@example.com" });
+    expect(parseFrom({ from: "'Doe, John' <john@example.com>" }))
+      .toEqual({ fromName: "Doe, John", fromAddress: "john@example.com" });
+  });
+
+  it("keeps internal punctuation that is not a balanced quote pair", () => {
+    // Apostrophe is not a wrapping pair, so it must survive intact.
+    expect(parseFrom({ from: "O'Brien <obrien@example.com>" }))
+      .toEqual({ fromName: "O'Brien", fromAddress: "obrien@example.com" });
+    // A trailing inch mark is not balanced by a leading quote.
+    expect(parseFrom({ from: 'Sized 5" <sales@example.com>' }))
+      .toEqual({ fromName: 'Sized 5"', fromAddress: "sales@example.com" });
+  });
+
+  it("treats a bare email address as the address with no name", () => {
+    expect(parseFrom({ from: "bare@example.com" }))
+      .toEqual({ fromName: "", fromAddress: "bare@example.com" });
+    expect(parseFrom({ from: "  spaced@example.com  " }))
+      .toEqual({ fromName: "", fromAddress: "spaced@example.com" });
+  });
+
+  it("treats a name with no email shape as a name, not an address", () => {
+    expect(parseFrom({ from: "Marketing Team" }))
+      .toEqual({ fromName: "Marketing Team", fromAddress: "" });
+  });
+
+  it("does not promote a non-email angle-bracket token to from_address", () => {
+    // Mangled header: the bracket content is not an address, so keep the whole
+    // string as a display name instead of storing a malformed from_address.
+    expect(parseFrom({ from: "Newsletter <not-an-address>" }))
+      .toEqual({ fromName: "Newsletter <not-an-address>", fromAddress: "" });
+  });
+
+  it("handles an angle-bracket address with an empty display name", () => {
+    expect(parseFrom({ from: "<solo@example.com>" }))
+      .toEqual({ fromName: "", fromAddress: "solo@example.com" });
+  });
+
+  it("returns empty fields for an empty from header", () => {
+    expect(parseFrom({ from: "" })).toEqual({ fromName: "", fromAddress: "" });
+    expect(parseFrom({})).toEqual({ fromName: "", fromAddress: "" });
+  });
 });
 
 describe("email index health", () => {
@@ -527,6 +584,106 @@ describe("email indexing", () => {
     const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
     const ftsDelete = statements.find((statement) => statement.sql.includes("DELETE FROM ea_email_fts"));
     expect(ftsDelete?.sql).toContain("WHERE rowid = (SELECT rowid FROM ea_email_index WHERE uid = ?)");
+  });
+
+  it("invalidates the stale search embedding when searchable content changes", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-embedded",
+      subject: "Original subject",
+      body_snippet: "Original preview",
+      body_text: "Original body",
+      read: 1,
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_search_embeddings
+              (uid, user_id, account_id, document_text, document_json,
+               source_hash, document_version, embedding_model,
+               embedding_dimensions, embedding)
+            VALUES (?, ?, ?, ?, ?, ?, 1, 'text-embedding-3-small', 1536, ?)`,
+      args: [
+        "gmail-work-msg-embedded",
+        "user-1",
+        "gmail-work",
+        "Subject: Original subject",
+        JSON.stringify({ subject: "Original subject" }),
+        "stale-hash",
+        Buffer.from(new Float32Array([0.1, 0.2]).buffer),
+      ],
+    });
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-embedded",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Updated subject",
+        body_preview: "Updated preview",
+        body_text: "Updated body",
+        date: "2026-05-01T12:00:00Z",
+        read: true,
+      },
+    ]);
+
+    const embeddingRows = await testState.db.current.execute({
+      sql: "SELECT uid FROM ea_email_search_embeddings WHERE uid = ?",
+      args: ["gmail-work-msg-embedded"],
+    });
+    // Row deleted -> the re-embedding worker re-selects it as a missing
+    // candidate and recomputes the vector against the new content.
+    expect(embeddingRows.rows).toHaveLength(0);
+  });
+
+  it("leaves the search embedding intact when only read state changes", async () => {
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-msg-embedded-readonly",
+      subject: "Same subject",
+      body_snippet: "Same preview",
+      body_text: "Same body",
+      read: 0,
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_search_embeddings
+              (uid, user_id, account_id, document_text, document_json,
+               source_hash, document_version, embedding_model,
+               embedding_dimensions, embedding)
+            VALUES (?, ?, ?, ?, ?, ?, 1, 'text-embedding-3-small', 1536, ?)`,
+      args: [
+        "gmail-work-msg-embedded-readonly",
+        "user-1",
+        "gmail-work",
+        "Subject: Same subject",
+        JSON.stringify({ subject: "Same subject" }),
+        "fresh-hash",
+        Buffer.from(new Float32Array([0.1, 0.2]).buffer),
+      ],
+    });
+
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-embedded-readonly",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Same subject",
+        body_preview: "Same preview",
+        body_text: "Same body",
+        date: "2026-05-01T12:00:00Z",
+        read: true,
+      },
+    ]);
+
+    const embeddingRows = await testState.db.current.execute({
+      sql: "SELECT source_hash FROM ea_email_search_embeddings WHERE uid = ?",
+      args: ["gmail-work-msg-embedded-readonly"],
+    });
+    expect(embeddingRows.rows).toEqual([{ source_hash: "fresh-hash" }]);
   });
 
   it("logs indexing with a scoped current-system prefix", async () => {

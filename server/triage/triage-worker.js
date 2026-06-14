@@ -23,6 +23,11 @@ const STALE_RUNNING_JOB_TYPES = ["email_triage", "gmail_history_sync"];
 const DEFAULT_STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 const WEAK_SECURITY_GRACE_MS = 10 * 60 * 1000;
 const ARRIVAL_GRACE_READ_EXIT_DEFER_MS = 30 * 60 * 1000;
+// P3-67: a deterministically-failing job is recovered (re-queued) by every stale
+// sweep, re-claimed, incremented, and re-run forever — burning model spend each
+// pass. Cap recovery attempts; past the ceiling the job moves to a terminal
+// 'failed' status instead of being re-queued.
+const MAX_STALE_RECOVERY_ATTEMPTS = 5;
 
 function safeJson(value, fallback = {}) {
   if (!value) return fallback;
@@ -42,7 +47,9 @@ const TRIAGE_BACKOFF_CAP_MS = 10 * 60_000;
 const MAX_TRIAGE_RETRY_ATTEMPTS = 5;
 
 // Capped exponential backoff for re-queuing a triage job after a transient
-// failure (provider 429/5xx or a mid-finalize error), so it isn't terminal.
+// failure (provider 429/5xx or a mid-finalize error), so it isn't terminal
+// (P2-31/32/37). P3-67's stale-recovery attempt cap lives in
+// recoverStaleRunningTriageJobs below (auto-merged) — the two fixes are independent.
 function triageRetryBackoffIso(now, attempts) {
   const ms = Math.min(2 ** Number(attempts || 0) * TRIAGE_BACKOFF_BASE_MS, TRIAGE_BACKOFF_CAP_MS);
   return new Date(now.getTime() + ms).toISOString();
@@ -52,21 +59,83 @@ export async function recoverStaleRunningTriageJobs({
   dbClient = db,
   now = new Date(),
   staleAfterMs = DEFAULT_STALE_RUNNING_JOB_MS,
+  maxAttempts = MAX_STALE_RECOVERY_ATTEMPTS,
 } = {}) {
   const staleBefore = new Date(now.getTime() - staleAfterMs).toISOString();
+  const jobTypePlaceholders = STALE_RUNNING_JOB_TYPES.map(() => "?").join(", ");
+  const staleStatusFilter = `status = 'running'
+            AND job_type IN (${jobTypePlaceholders})
+            AND locked_at IS NOT NULL
+            AND locked_at <= ?`;
+
+  // P3-67: identify stale running jobs that have already burned through the
+  // attempt ceiling before re-queueing the rest. These are deterministically
+  // failing — re-queueing them again would re-run the model and loop forever.
+  // Capture them first so we can emit a triage_failed event per job.
+  const overCeiling = await dbClient.execute({
+    sql: `SELECT id, user_id, account_id, email_id, attempts
+          FROM ea_triage_jobs
+          WHERE ${staleStatusFilter}
+            AND attempts >= ?`,
+    args: [...STALE_RUNNING_JOB_TYPES, staleBefore, maxAttempts],
+  });
+
+  // Move the over-ceiling jobs to a terminal 'failed' status. The conditional
+  // guard (still running + still stale + at/over the ceiling) keeps the claim
+  // atomic against a concurrent sweep or claim.
+  const failResult = await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'failed',
+              locked_at = NULL,
+              completed_at = datetime('now'),
+              last_error = ?,
+              updated_at = datetime('now')
+          WHERE ${staleStatusFilter}
+            AND attempts >= ?`,
+    args: [
+      `Triage job exceeded ${maxAttempts} recovery attempts; marked failed`,
+      ...STALE_RUNNING_JOB_TYPES,
+      staleBefore,
+      maxAttempts,
+    ],
+  });
+
+  for (const job of overCeiling.rows) {
+    publishCurrentDashboardEvent(job.user_id, {
+      source: "email_triage",
+      reason: "triage_failed",
+      state: "current",
+      occurredAt: nowIso(now),
+      details: {
+        triggerType: "triage_failed",
+        eventKey: `triage_failed:${job.account_id}:${job.email_id}:max_attempts`,
+        emailId: job.email_id,
+        reason: "max_recovery_attempts_exceeded",
+        attempts: Number(job.attempts),
+      },
+    });
+  }
+
+  // Re-queue the remaining stale running jobs (still under the ceiling).
   const result = await dbClient.execute({
     sql: `UPDATE ea_triage_jobs
           SET status = 'queued',
               locked_at = NULL,
               last_error = ?,
               updated_at = datetime('now')
-          WHERE status = 'running'
-            AND job_type IN (${STALE_RUNNING_JOB_TYPES.map(() => "?").join(", ")})
-            AND locked_at IS NOT NULL
-            AND locked_at <= ?`,
-    args: ["Recovered stale running job", ...STALE_RUNNING_JOB_TYPES, staleBefore],
+          WHERE ${staleStatusFilter}
+            AND attempts < ?`,
+    args: [
+      "Recovered stale running job",
+      ...STALE_RUNNING_JOB_TYPES,
+      staleBefore,
+      maxAttempts,
+    ],
   });
-  return { recovered: Number(result.rowsAffected || 0) };
+  return {
+    recovered: Number(result.rowsAffected || 0),
+    failed: Number(failResult.rowsAffected || 0),
+  };
 }
 
 function toText(value) {
@@ -326,6 +395,20 @@ async function loadEmailForJob(job, dbClient) {
             ON sz.user_id = t.user_id
            AND sz.email_id = t.email_id
            AND sz.status = 'snoozed'
+            -- MERGE-NOTE[P3-68] (P3 worktree): ea_snoozed_emails has no account_id
+            -- (PK is user_id+email_id), so a cross-account uid collision (icloud uids
+            -- don't embed account.id) could defer the wrong account's email. Scope the
+            -- snooze to this account by requiring the uid to resolve to t.account_id in
+            -- the account-scoped index (ea_email_index.uid is a global PK -> one account).
+            -- Full fix (add account_id column + backfill) is flagged out-of-scope.
+            -- Shares this file with two P2 triage-worker fixes on sibling worktrees; on
+            -- conflict keep BOTH unless they touch loadEmailForJob's JOIN. Remove after merge.
+           AND EXISTS (
+             SELECT 1 FROM ea_email_index si
+             WHERE si.uid = sz.email_id
+               AND si.user_id = sz.user_id
+               AND si.account_id = t.account_id
+           )
           WHERE t.user_id = ?
             AND t.account_id = ?
             AND t.email_id = ?

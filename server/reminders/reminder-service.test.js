@@ -206,6 +206,40 @@ describe("reminder service", () => {
     }, { dbClient: db }))[0]).toMatchObject({ status: "missed" });
   });
 
+  it("claims sending atomically so a duplicate processor cannot re-send an already-sent reminder", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "due",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T16:00:00.000Z",
+      offsetMinutes: -5,
+    }, { dbClient: db, idFactory: () => "claim-1" });
+
+    // First processor wins the claim.
+    const firstClaim = await markReminderSent("claim-1", {
+      sentAt: "2026-05-10T15:55:00.000Z",
+    }, { dbClient: db });
+    expect(firstClaim).toBe(true);
+
+    // A stale/duplicate processor re-marking the same row affects 0 rows: the
+    // status='pending' guard rejects it and the original sent_at is preserved.
+    const secondClaim = await markReminderSent("claim-1", {
+      sentAt: "2026-05-10T16:30:00.000Z",
+    }, { dbClient: db });
+    expect(secondClaim).toBe(false);
+
+    const [row] = await listRemindersForSource({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "due",
+    }, { dbClient: db });
+    expect(row).toMatchObject({
+      status: "sent",
+      sent_at: "2026-05-10T15:55:00.000Z",
+    });
+  });
+
   it("projects upcoming reminder state for source keys only from future pending reminders", async () => {
     await createReminder({
       userId: "u1",

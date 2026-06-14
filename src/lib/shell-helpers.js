@@ -169,6 +169,8 @@ export function dueDateToMs(dateStr, dueTime) {
   if (!dateStr) return null;
   // Anchor the wall-clock instant in Pacific time via the DST-aware epochFromLa,
   // instead of a fixed +7h UTC offset (which was an hour early all winter/PST).
+  // (P3-15 fixed the same fixed-offset bug with a local pacificOffsetHours; resolved
+  // onto the shared epochFromLa already used by buildTimeline below.)
   const dm = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!dm) return null;
   const year = Number(dm[1]);

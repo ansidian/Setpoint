@@ -83,6 +83,23 @@ describe("triage decision normalization", () => {
     expect(decision.strong_model_result).toMatchObject({ latency_ms: 80 });
   });
 
+  it("never carries a misleading estimated_cost_usd from the model result (P3-69)", () => {
+    // The model client never returns a real per-email cost. A result that smuggles one
+    // in must not masquerade as real spend; the normalized decision stays null.
+    const withFakeCost = normalizeModelDecision({
+      decision: { lane: "fyi", category: "updates", confidence: 0.9 },
+      usage: { input_tokens: 10 },
+      estimated_cost_usd: 0.004,
+    }, "cheap");
+    const withoutCost = normalizeModelDecision({
+      decision: { lane: "fyi", category: "updates", confidence: 0.9 },
+      usage: { input_tokens: 10 },
+    }, "cheap");
+
+    expect(withFakeCost.estimated_cost_usd).toBeNull();
+    expect(withoutCost.estimated_cost_usd).toBeNull();
+  });
+
   it("drops escalation badges outside needs_attention and treats 'none' as null", () => {
     const offLane = normalizeModelDecision({
       decision: { lane: "fyi", escalation_badge: "High Risk", confidence: 0.9 },

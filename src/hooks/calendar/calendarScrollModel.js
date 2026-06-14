@@ -68,6 +68,35 @@ export const LABEL_MONTH_THRESHOLD = 1 / 3;
 // settled (fetch anchor + trailing agenda sync + week-row alignment).
 export const SCROLL_SETTLE_MS = 150;
 
+// P3-11: shared keep-overflow-open window. A keep-overflow-open chip interaction
+// in a child CalendarGrid triggers a programmatic alignment scroll; the parent
+// CalendarScrollContainer's overflow-close dispatcher must skip that scroll so it
+// does not dismiss the overflow the user just acted in. The interaction
+// (markOverflowInteraction) and the scroll dispatcher live in sibling components
+// with no shared ref, so the window is bridged through this module (already
+// imported by both areas).
+
+// How long after an overflow keep-open interaction a programmatic grid scroll
+// must NOT dispatch calendar-overflow-close. Matches the per-grid
+// ignoreOverflowScrollUntilRef window in useCalendarGridOverflow.js.
+export const OVERFLOW_INTERACTION_IGNORE_MS = 220;
+
+let overflowInteractionUntil = 0;
+
+// Record a keep-overflow-open interaction; opens the ignore window.
+export function markOverflowScrollIgnoreWindow(now = performance.now()) {
+  overflowInteractionUntil = now + OVERFLOW_INTERACTION_IGNORE_MS;
+}
+
+// Pure predicate: should a programmatic grid scroll dispatch
+// calendar-overflow-close? False while inside the keep-open window (a scroll
+// the user's own interaction provoked); true otherwise. The escape/hotkey
+// close path dispatches from a different site and is never routed through here,
+// so escape always closes immediately.
+export function shouldDispatchOverflowCloseOnScroll(now = performance.now()) {
+  return now >= overflowInteractionUntil;
+}
+
 export function midpointActiveMonthIndex({ scrollOffset, containerHeight, getMonthOffset, searchFirst, searchLast, threshold = 0.5 }) {
   const point = scrollOffset + containerHeight * threshold;
   let active = searchFirst;

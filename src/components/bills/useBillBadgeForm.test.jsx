@@ -80,6 +80,55 @@ describe("useBillBadgeForm notes", () => {
   });
 });
 
+describe("useBillBadgeForm custom CC fee", () => {
+  it("clamps a negative custom fee to 0 so totalAmount never drops below base", () => {
+    const { result } = renderForm({ payee: "U.S. Bank", amount: 100 });
+
+    act(() => {
+      result.current.setFeeOverride(true);
+    });
+    act(() => {
+      result.current.setCustomFee("-40");
+    });
+
+    expect(result.current.parsedFee).toBe(0);
+    expect(result.current.totalAmount).toBe(result.current.baseAmount);
+    expect(result.current.totalAmount).toBeGreaterThanOrEqual(100);
+  });
+
+  it("sends the clamped (base-only) amount when a negative custom fee is entered", () => {
+    const { result } = renderForm({ payee: "U.S. Bank", amount: 100 });
+
+    act(() => {
+      result.current.setFeeOverride(true);
+    });
+    act(() => {
+      result.current.setCustomFee("-40");
+    });
+    act(() => {
+      result.current.handleSend({ stopPropagation: vi.fn() });
+    });
+
+    expect(sendToActualBudget).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 100,
+    }));
+  });
+
+  it("still adds a positive custom fee to the total", () => {
+    const { result } = renderForm({ payee: "U.S. Bank", amount: 100 });
+
+    act(() => {
+      result.current.setFeeOverride(true);
+    });
+    act(() => {
+      result.current.setCustomFee("2.50");
+    });
+
+    expect(result.current.parsedFee).toBe(2.5);
+    expect(result.current.totalAmount).toBe(102.5);
+  });
+});
+
 describe("useBillBadgeForm async seeds", () => {
   it("applies resolver seed fields that the user has not touched", async () => {
     const { result, rerender } = renderForm({

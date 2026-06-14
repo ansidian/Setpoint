@@ -10,11 +10,7 @@ import {
   TODOIST_DEADLINE_SOURCE,
   TODOIST_DEADLINE_SOURCE_LABEL,
 } from "../../shared/deadline-source-colors.js";
-import {
-  computeDeadlineStats,
-  filterCompletedTodoistTasks,
-  loadCompletedTaskIds,
-} from "./deadline-helpers.js";
+import { computeDeadlineStats } from "./deadline-helpers.js";
 import { hydrateTodoistTasksWithReminderState } from "../reminders/reminder-hydration.js";
 import { hydrateRecurringTombstones } from "./tombstones.js";
 
@@ -91,12 +87,13 @@ export async function readCurrentDeadlines(userId, {
     }),
   ]);
 
-  const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
-  const activeTodoistTasks = filterCompletedTodoistTasks(todoistTasks, completedIds);
+  // Completed-task suppression is handled upstream: the local mirror read path
+  // filters checked=0 rows, and completed recurring occurrences flow back in via
+  // hydrateRecurringTombstones (see migration 014). No reconciliation pass here.
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
     viewBoundary: "today",
   });
-  const todoistWithCompleted = mergeTodoistRowsWithTombstones(activeTodoistTasks, tombstones);
+  const todoistWithCompleted = mergeTodoistRowsWithTombstones(todoistTasks, tombstones);
 
   return deadlinePayload({
     todoistTasks: todoistWithCompleted,
@@ -116,13 +113,13 @@ export async function readCalendarDeadlines(userId) {
     getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
   ]);
 
-  const completedIds = await loadCompletedTaskIds(userId, todoistTasks);
-  const activeTodoistTasks = filterCompletedTodoistTasks(todoistTasks, completedIds);
+  // Suppression handled upstream (mirror checked=0 + hydrateRecurringTombstones);
+  // see migration 014. No completed-id reconciliation pass here.
   const tombstones = await hydrateRecurringTombstones(userId, todoistDueTaskIds, {
     viewBoundary: "today",
   });
   const todoistWithCompleted = await hydrateTodoistTasksWithReminderState(userId, [
-    ...mergeTodoistRowsWithTombstones(activeTodoistTasks, tombstones),
+    ...mergeTodoistRowsWithTombstones(todoistTasks, tombstones),
   ]);
 
   return deadlinePayload({

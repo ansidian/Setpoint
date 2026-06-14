@@ -103,6 +103,44 @@ describe("NotesRail input", () => {
     expect(input.value).toBe("");
   });
 
+  it("does not create on Enter while an IME composition is in flight", async () => {
+    render(<NotesRail accent="#cba6da" />);
+
+    const input = screen.getByPlaceholderText("Jot something down...");
+    fireEvent.change(input, { target: { value: "未確定" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(mockCreateNote).not.toHaveBeenCalled();
+    // Buffer is preserved so the user can keep composing.
+    expect(input.value).toBe("未確定");
+  });
+
+  it("commits a note edit on Enter only after IME composition ends", async () => {
+    mockGetNotes.mockResolvedValue([
+      { id: "note-1", content: "First note", sort_order: 0 },
+    ]);
+
+    render(<NotesRail accent="#cba6da" />);
+
+    const noteText = await screen.findByText("First note");
+    fireEvent.doubleClick(noteText);
+
+    const editor = screen.getByDisplayValue("First note");
+    fireEvent.change(editor, { target: { value: "未確定" } });
+
+    // Enter during composition must not commit the partial buffer.
+    fireEvent.keyDown(editor, { key: "Enter", isComposing: true });
+    expect(mockUpdateNote).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue("未確定")).toBeTruthy();
+
+    // Once composition has resolved, Enter commits as usual.
+    fireEvent.change(editor, { target: { value: "Updated note" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    await waitFor(() => {
+      expect(mockUpdateNote).toHaveBeenCalledWith("note-1", "Updated note");
+    });
+  });
+
   it("renders a bounded dashboard preview when many notes exist", async () => {
     mockGetNotes.mockResolvedValue([
       { id: "note-1", content: "First note", sort_order: 0 },

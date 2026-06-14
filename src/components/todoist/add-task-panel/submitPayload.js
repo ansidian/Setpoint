@@ -1,3 +1,17 @@
+// The title the server actually receives: the input with resolved tokens
+// (#project, @label, !priority, dates) stripped out. `parsed.stripped` is always
+// a string, so this collapses to it whenever parsing has run.
+export function effectiveTaskTitle({ parsed, input = "" }) {
+  return (parsed?.stripped ?? input).trim();
+}
+
+// Submit is allowed only when the effective title is non-empty. Basing this on
+// `parsed.stripped` (not raw input) prevents tokens-only input like "#Work @home"
+// from firing a create the server rejects with a 400 for an empty title.
+export function canSubmitTask({ parsed, input = "" }) {
+  return effectiveTaskTitle({ parsed, input }).length > 0;
+}
+
 export function buildDeadlineMutationPayload({
   parsed,
   input = "",

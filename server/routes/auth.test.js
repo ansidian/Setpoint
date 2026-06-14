@@ -96,6 +96,36 @@ describe("auth routes", () => {
     expect(result.rows[0].created_at).toBeGreaterThanOrEqual(before);
   });
 
+  it("does not let unauthenticated token-mint attempts consume the rate-limit budget", async () => {
+    await seedSession(testState.db.current, "cookie-session");
+    const app = makeApp();
+
+    // Fire more unauthenticated mint attempts than the 5/15min budget. With auth ahead of the
+    // limiter these are all rejected by auth (401) and never count against the IP budget.
+    for (let i = 0; i < 8; i++) {
+      const blocked = await request(app)
+        .post("/api/auth/api-tokens")
+        .send({ label: "Spoofed", scopes: ["actual:write"] });
+      expect(blocked.status).toBe(401);
+    }
+
+    // The real, authenticated user can still mint — budget was untouched (not 429).
+    const res = await request(app)
+      .post("/api/auth/api-tokens")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ label: "Phone", scopes: ["actual:write"] });
+
+    const tokens = await testState.db.current.execute({
+      sql: "SELECT label FROM ea_api_tokens",
+      args: [],
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toMatch(/^eatk_/);
+    expect(tokens.rows).toHaveLength(1);
+    expect(tokens.rows[0].label).toBe("Phone");
+  });
+
   it("creates a session and recommends setup when no passkeys exist", async () => {
     const res = await request(makeApp())
       .post("/api/auth/login")

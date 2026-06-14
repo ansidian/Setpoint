@@ -67,6 +67,13 @@ quickTxnRouter.post("/actual/quick-txn", requireCookieSessionOrApiTokenScope("ac
   if (!Number.isFinite(numericAmount)) {
     return res.status(400).json({ message: "amount must be a number" });
   }
+  // MERGE-NOTE[P3-33] (P3 worktree): reject zero/negative quick-txn amounts before
+  // createQuickTxn, mirroring validateSendBillPayload — stops $0 writes and silent Math.abs.
+  // Shares this file with a P2 bills route fix on another worktree. On conflict: keep BOTH
+  // unless they touch the same lines (different region from the P2 change). Remove note after merge.
+  if (numericAmount <= 0) {
+    return res.status(400).json({ message: "amount must be greater than 0" });
+  }
   try {
     const result = await billsService.createQuickTxn(EA_USER_ID, {
       accountName: account,

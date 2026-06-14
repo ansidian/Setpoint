@@ -131,6 +131,144 @@ describe("triage sound playback", () => {
     expect(context.close).toHaveBeenCalled();
   });
 
+  it("closes the audio context on a terminal event other than ended (pause)", async () => {
+    vi.useFakeTimers();
+    const play = vi.fn(() => Promise.resolve());
+    const listeners = {};
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.volume = 0;
+      this.duration = 0.5;
+      this.currentTime = 0;
+      this.play = play;
+      this.addEventListener = vi.fn((eventName, handler) => {
+        listeners[eventName] = handler;
+      });
+    }));
+    const gain = {
+      gain: {
+        value: 0,
+        cancelScheduledValues: vi.fn(),
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    };
+    const context = {
+      currentTime: 10,
+      state: "running",
+      destination: {},
+      createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+      createGain: vi.fn(() => gain),
+      close: vi.fn(),
+    };
+    vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
+      return context;
+    }));
+
+    await playTriageNotificationSound(
+      { path: "/sounds/notifications/clear-chime.mp3" },
+      { volume: 1 },
+    );
+
+    expect(context.close).not.toHaveBeenCalled();
+
+    listeners.pause();
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(context.close).toHaveBeenCalled();
+  });
+
+  it("force-closes the audio context via the safety timeout when no terminal event fires", async () => {
+    vi.useFakeTimers();
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.volume = 0;
+      // Unknown duration: forces the conservative fallback ceiling.
+      this.duration = NaN;
+      this.currentTime = 0;
+      this.play = play;
+      this.addEventListener = vi.fn();
+    }));
+    const gain = {
+      gain: {
+        value: 0,
+        cancelScheduledValues: vi.fn(),
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    };
+    const context = {
+      currentTime: 10,
+      state: "running",
+      destination: {},
+      createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+      createGain: vi.fn(() => gain),
+      close: vi.fn(),
+    };
+    vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
+      return context;
+    }));
+
+    await playTriageNotificationSound(
+      { path: "/sounds/notifications/clear-chime.mp3" },
+      { volume: 1 },
+    );
+
+    // Before the fallback ceiling (30s) the context is still open.
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(context.close).not.toHaveBeenCalled();
+
+    // After the ceiling plus the close delay it is force-closed.
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect(context.close).toHaveBeenCalled();
+  });
+
+  it("closes a created audio context when play() rejects", async () => {
+    vi.useFakeTimers();
+    const play = vi.fn(() => Promise.reject(new Error("blocked")));
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.volume = 0;
+      this.duration = 0.5;
+      this.currentTime = 0;
+      this.play = play;
+      this.addEventListener = vi.fn();
+    }));
+    const gain = {
+      gain: {
+        value: 0,
+        cancelScheduledValues: vi.fn(),
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    };
+    const context = {
+      currentTime: 10,
+      state: "running",
+      destination: {},
+      createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+      createGain: vi.fn(() => gain),
+      close: vi.fn(),
+    };
+    vi.stubGlobal("AudioContext", vi.fn(function AudioContextMock() {
+      return context;
+    }));
+
+    const result = await playTriageNotificationSound(
+      { path: "/sounds/notifications/clear-chime.mp3" },
+      { volume: 1 },
+    );
+
+    expect(result).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(60);
+    expect(context.close).toHaveBeenCalled();
+  });
+
   it("falls back to native playback if Web Audio setup fails", async () => {
     const play = vi.fn(() => Promise.resolve());
     vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {

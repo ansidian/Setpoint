@@ -7,6 +7,14 @@ import { indexEmails, queueEmailIndexBackfill } from "./email-index.js";
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_TARGET_DAYS = 365;
 const DEFAULT_PAUSE_MS = 45_000;
+// Per-window page size for iCloud, which fetches a whole window into memory.
+// Caps the in-memory array and lets a heavy window page via a continuation
+// cursor instead of pulling everything at once (P3-46). Gmail paginates
+// natively via nextPageToken so it does not need this.
+const ICLOUD_WINDOW_PAGE_LIMIT = 200;
+// Non-auth (retry) failures stop retrying after this many attempts so a window
+// that keeps failing for a non-recoverable reason cannot loop forever (P3-47).
+const MAX_BACKFILL_ATTEMPTS = 5;
 
 let workerTimer = null;
 let workerRunning = false;
@@ -48,13 +56,21 @@ function calculateWindow(state, { now, windowDays }) {
     start: boundedStart.toISOString(),
     end: endDate.toISOString(),
     pageToken: cursor.pageToken,
+    // Generic per-window continuation cursor (iCloud); paired with pageToken
+    // (Gmail) so either provider can page within a window (P3-46).
+    providerCursor: cursor.providerCursor,
   };
 }
 
-function classifyFailure(err) {
+function classifyFailure(err, attempts = 0) {
   const message = err?.message || String(err);
   if (/(401|403|429|auth|invalid_grant|rate.?limit)/i.test(message)) {
     return "paused";
+  }
+  // Non-auth errors are retryable, but only up to a ceiling. Past it the row
+  // goes terminal ('failed') so a stuck window stops being re-selected (P3-47).
+  if (attempts >= MAX_BACKFILL_ATTEMPTS) {
+    return "failed";
   }
   return "retry";
 }
@@ -94,6 +110,22 @@ async function markRunning(state, attempts) {
   });
 }
 
+// Mark a row terminal ('failed') so it is no longer selected by
+// getNextBackfillState. Used when the account is gone or attempts are exhausted
+// — retrying would loop forever (P3-47).
+async function markBackfillFailed(state, attempts, message) {
+  await db.execute({
+    sql: `UPDATE ea_email_backfill_state
+          SET status = 'failed',
+              last_error = ?,
+              attempts = ?,
+              updated_at = datetime('now')
+          WHERE user_id = ? AND account_id = ? AND mailbox_scope = ?`,
+    args: [message, attempts, state.user_id, state.account_id, state.mailbox_scope],
+  });
+  return { processed: true, status: "failed", error: message };
+}
+
 async function loadAccount(state) {
   const result = await db.execute({
     sql: `SELECT *
@@ -106,6 +138,8 @@ async function loadAccount(state) {
 
 async function fetchProviderWindow(account, state, window) {
   if (account.type === "gmail") {
+    // Gmail already caps each page (maxResults default) and continues via
+    // nextPageToken, so it is not the unbounded-array case (P3-46).
     return fetchGmailEmailsInRange(account, {
       start: window.start,
       end: window.end,
@@ -113,10 +147,18 @@ async function fetchProviderWindow(account, state, window) {
     });
   }
   if (account.type === "icloud") {
+    // Cap the per-window IMAP fetch with a page size and hand back the stored
+    // continuation cursor so a heavy window pages instead of pulling an
+    // unbounded array into memory (P3-46).
     return fetchIcloudEmailsInRange(
       account,
       decrypt(account.credentials_encrypted),
-      { start: window.start, end: window.end },
+      {
+        start: window.start,
+        end: window.end,
+        limit: ICLOUD_WINDOW_PAGE_LIMIT,
+        cursor: window.providerCursor,
+      },
     );
   }
   throw new Error(`Unsupported email account type: ${account.type}`);
@@ -128,9 +170,15 @@ async function persistWindowSuccess(state, window, result, { now }) {
     currentWindow: { start: window.start, end: window.end },
   };
   let nextStatus = "queued";
+  // Honor a continuation token from either provider: Gmail's nextPageToken or a
+  // generic per-window cursor (iCloud). Either keeps us on the same window so
+  // un-returned messages get backfilled instead of being skipped (P3-46).
   if (result.nextPageToken) {
     nextCursor.nextWindowEnd = window.end;
     nextCursor.pageToken = result.nextPageToken;
+  } else if (result.cursor) {
+    nextCursor.nextWindowEnd = window.end;
+    nextCursor.providerCursor = result.cursor;
   } else {
     nextCursor.nextWindowEnd = window.start;
     if (new Date(window.start) <= window.targetDate) nextStatus = "completed";
@@ -166,12 +214,13 @@ async function persistWindowSuccess(state, window, result, { now }) {
 }
 
 async function persistWindowFailure(state, window, err, attempts) {
-  const status = classifyFailure(err);
+  const status = classifyFailure(err, attempts);
   const cursor = {
     ...parseCursor(state),
     currentWindow: { start: window.start, end: window.end },
     nextWindowEnd: window.end,
     pageToken: window.pageToken,
+    providerCursor: window.providerCursor,
   };
   await db.execute({
     sql: `UPDATE ea_email_backfill_state
@@ -220,8 +269,14 @@ export async function processNextBackfillWindow({
 
   const account = await loadAccount(state);
   if (!account) {
-    const err = new Error(`Email account not found: ${state.account_id}`);
-    return persistWindowFailure(state, window, err, attempts);
+    // The account was deleted. There is nothing left to backfill, so go
+    // terminal instead of treating provider-not-found as retryable and looping
+    // forever on a deleted account (P3-47).
+    return markBackfillFailed(
+      state,
+      attempts,
+      `Email account not found: ${state.account_id}`,
+    );
   }
 
   try {

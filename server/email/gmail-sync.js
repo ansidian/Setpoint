@@ -301,6 +301,25 @@ export async function fetchGmailMessageMetadata(account, messageId, {
   return res.json();
 }
 
+// MERGE-NOTE[P3-75] (P3 worktree): new helper that returns the account's CURRENT
+// historyId via users.getProfile, used by the 404-recovery branch so it never
+// re-persists the stale cursor that just 404'd. Shares this file with two P2
+// gmail-sync fixes on other worktrees; this is a new function (no overlap) — keep both.
+export async function fetchGmailProfileHistoryId(account, {
+  fetchImpl = fetch,
+  token,
+} = {}) {
+  const accessToken = token || await getAccessToken(account);
+  const res = await fetchImpl(
+    "https://www.googleapis.com/gmail/v1/users/me/profile?fields=historyId",
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) throw new Error(`Gmail profile fetch failed for ${account.email}: ${res.status}`);
+  const profile = await res.json();
+  const historyId = profile?.historyId ? String(profile.historyId) : null;
+  return historyId;
+}
+
 async function getStoredHistoryId(account, dbClient) {
   const result = await dbClient.execute({
     sql: `SELECT last_history_id
@@ -470,6 +489,7 @@ export async function syncGmailHistoryForAccount(account, {
   fetchEmailsByIdsFn = fetchEmailsByIds,
   fetchMessageReadStateFn = isMessageRead,
   fetchMessageMetadataFn = fetchGmailMessageMetadata,
+  fetchProfileHistoryIdFn = fetchGmailProfileHistoryId,
   indexEmailsFn = indexEmails,
   targetHistoryId = null,
   now = new Date(),
@@ -529,26 +549,55 @@ export async function syncGmailHistoryForAccount(account, {
       }
     } while (pageToken);
   } catch (err) {
+    // P2-26 broadened this catch to also handle the page-cap recovery path
+    // (err.recoverViaLookback, thrown above) — not just a 404 — so both reach the
+    // lookback re-fetch below instead of discarding collected progress.
     if (err.status !== 404 && !err.recoverViaLookback) throw err;
+    // P3-75: recovery must NEVER persist the cursor that just 404'd (startHistoryId
+    // / a page-derived id). Persist the freshest KNOWN id: prefer targetHistoryId,
+    // else the account's current historyId from users.getProfile.
+    let recoveredHistoryId = targetHistoryId || null;
+    if (!recoveredHistoryId) {
+      try {
+        recoveredHistoryId = await fetchProfileHistoryIdFn(account);
+      } catch (profileErr) {
+        console.warn(
+          `[Gmail Sync] Could not fetch current historyId for ${account.email} during 404 recovery: ${profileErr.message}`,
+        );
+      }
+    }
     const emails = await fetchEmailsFn(account, GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS);
     if (emails.length) await indexEmailsFn(account.user_id, emails);
     const statements = emails.flatMap((email) =>
       triageStatementsForEmail(account.user_id, account.id, email, { arrivalGrace: false, now }),
     );
-    statements.push({
-      sql: `UPDATE ea_gmail_watch_state
-            SET last_history_id = ?,
-                last_sync_at = ?,
-                last_error = ?,
-                updated_at = datetime('now')
-            WHERE user_id = ? AND account_id = ?`,
-      args: [lastHistoryId, now.toISOString(), "", account.user_id, account.id],
-    });
+    // Only advance the cursor when we resolved a fresh id; otherwise leave the stored
+    // cursor untouched so we don't re-write the stale 404'd value and re-trigger backfill.
+    if (recoveredHistoryId) {
+      statements.push({
+        sql: `UPDATE ea_gmail_watch_state
+              SET last_history_id = ?,
+                  last_sync_at = ?,
+                  last_error = ?,
+                  updated_at = datetime('now')
+              WHERE user_id = ? AND account_id = ?`,
+        args: [recoveredHistoryId, now.toISOString(), "", account.user_id, account.id],
+      });
+    } else {
+      statements.push({
+        sql: `UPDATE ea_gmail_watch_state
+              SET last_sync_at = ?,
+                  last_error = ?,
+                  updated_at = datetime('now')
+              WHERE user_id = ? AND account_id = ?`,
+        args: [now.toISOString(), "", account.user_id, account.id],
+      });
+    }
     await dbClient.batch(statements);
     return {
       account_id: account.id,
       start_history_id: startHistoryId,
-      last_history_id: lastHistoryId,
+      last_history_id: recoveredHistoryId || startHistoryId,
       indexed: emails.length,
       queued: emails.length,
       read_state_reconciled: 0,
@@ -743,9 +792,28 @@ export async function processNextGmailHistorySyncJob({
     const account = await loadGmailAccount(job.user_id, job.account_id, dbClient);
     if (!account) throw new Error(`Missing Gmail account ${job.account_id}`);
     const payload = parsePayloadJson(job.payload_json);
+    // MERGE-NOTE[P3-75] (P3 worktree): defense in depth — a gmail_history_sync job whose
+    // payload lacks a historyId can't advance the cursor and would force a 404-recovery
+    // backfill; skip it instead of running. Shares this file with two P2 gmail-sync fixes
+    // on other worktrees; new guard region — keep both. Remove this note after merge.
+    const targetHistoryId = payload.historyId ? String(payload.historyId).trim() : "";
+    if (!targetHistoryId) {
+      // Mirror triage-worker no-op convention: terminal 'complete' status so the claim
+      // query never re-picks it, with skipped:true surfaced in the return value.
+      await dbClient.execute({
+        sql: `UPDATE ea_triage_jobs
+              SET status = 'complete',
+                  completed_at = ?,
+                  last_error = 'missing historyId in payload',
+                  updated_at = datetime('now')
+              WHERE id = ?`,
+        args: [now.toISOString(), job.id],
+      });
+      return { processed: true, job_id: Number(job.id), skipped: true };
+    }
     const result = await syncGmailHistoryForAccount(account, {
       dbClient,
-      targetHistoryId: payload.historyId || null,
+      targetHistoryId,
       now,
     });
     await dbClient.execute({

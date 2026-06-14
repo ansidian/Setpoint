@@ -197,9 +197,26 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       }
       runEventRefetch({ allowHidden: true });
     };
+    // MERGE-NOTE[P3-2] (P3 worktree): route an expired-session SSE failure to /login instead of
+    // letting the browser reconnect-loop forever. Shares this file with a P2 fix on another
+    // worktree. On conflict: keep BOTH unless they touch the same lines. Remove note after merge.
+    const handleError = () => {
+      // A 401 (or any rejected handshake) closes the stream terminally — readyState stays CLOSED
+      // and the browser will NOT auto-reconnect. Transient network blips set readyState back to
+      // CONNECTING, which we ignore so a single flicker does not bounce the user to login.
+      const closedState = typeof EventSource !== "undefined" ? EventSource.CLOSED : 2;
+      if (source.readyState === closedState) {
+        source.close();
+        // Mirror apiFetch's 401 handling (src/api.js) so recovery is immediate and not
+        // dependent on an unrelated poll firing its own redirect.
+        window.location.href = "/login";
+      }
+    };
     source.addEventListener("dashboard-current-changed", handleChanged);
+    source.onerror = handleError;
     return () => {
       source.removeEventListener?.("dashboard-current-changed", handleChanged);
+      source.onerror = null;
       source.close();
     };
   }, [disabled, runEventRefetch]);

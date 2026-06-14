@@ -31,4 +31,41 @@ describe("useEmailBody", () => {
     expect(result.current.body).toBe("Cached preview from the active snapshot.");
     expect(result.current.source).toBe("fallback");
   });
+
+  it("falls back to the preview on a non-404 failure when a fallback exists", async () => {
+    getEmailBody.mockRejectedValueOnce(
+      Object.assign(new Error("Internal Server Error"), { status: 503 }),
+    );
+
+    const { result } = renderHook(() => useEmailBody({
+      uid: "icloud-9001",
+      preview: "Preview survives a transient 5xx.",
+    }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.body).toBe("Preview survives a transient 5xx.");
+    expect(result.current.source).toBe("fallback");
+  });
+
+  it("surfaces an error when a failure has no fallback body", async () => {
+    getEmailBody.mockRejectedValueOnce(
+      Object.assign(new Error("Network request failed"), { status: 500 }),
+    );
+
+    const { result } = renderHook(() => useEmailBody({
+      uid: "icloud-9002",
+    }));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.source).toBe("error");
+    expect(result.current.body).toBeNull();
+    expect(result.current.error).toBe("Network request failed");
+  });
 });

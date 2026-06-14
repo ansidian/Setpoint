@@ -270,6 +270,79 @@ describe("snapshot item mutations", () => {
     expect(view.lanes.handled.map((item) => item.email_id)).toEqual(["msg-handled"]);
   });
 
+  it("commits the lane-move paired writes through a single atomic batch", async () => {
+    const dbClient = await createMigratedDb();
+    const { itemId, triageId } = await seedSnapshotItem(dbClient, {
+      emailId: "msg-batch-commit",
+      lane: "needs_attention",
+    });
+
+    const batchCalls = [];
+    const spyClient = {
+      ...dbClient,
+      execute: (...args) => dbClient.execute(...args),
+      batch: (statements, ...rest) => {
+        batchCalls.push(statements);
+        return dbClient.batch(statements, ...rest);
+      },
+    };
+
+    await moveSnapshotItemLane("user-1", itemId, "fyi", { dbClient: spyClient });
+
+    // The snapshot-item update, the triage update, and the feedback insert all
+    // ride one batch so they commit (or roll back) together (P3-44).
+    expect(batchCalls).toHaveLength(1);
+    expect(batchCalls[0]).toHaveLength(3);
+
+    const rows = await dbClient.execute({
+      sql: `SELECT i.lane_at_snapshot, t.lane, f.feedback_type
+            FROM ea_briefing_snapshot_items i
+            JOIN ea_email_triage t ON t.id = i.triage_id
+            JOIN ea_triage_feedback f ON f.snapshot_item_id = i.id
+            WHERE i.id = ?`,
+      args: [itemId],
+    });
+    expect(rows.rows).toEqual([
+      { lane_at_snapshot: "fyi", lane: "fyi", feedback_type: "lane_move" },
+    ]);
+    expect(triageId).toBeGreaterThan(0);
+  });
+
+  it("rolls back every paired write when the lane-move batch fails mid-write", async () => {
+    const dbClient = await createMigratedDb();
+    const { itemId } = await seedSnapshotItem(dbClient, {
+      emailId: "msg-batch-rollback",
+      lane: "needs_attention",
+    });
+
+    // Simulate a mid-write failure: the batch throws so none of the paired
+    // statements may land. Under the old per-statement execute() path the
+    // snapshot-item lane update would have committed before the error,
+    // diverging lane state — this test pins the atomic behavior.
+    const failingClient = {
+      ...dbClient,
+      execute: (...args) => dbClient.execute(...args),
+      batch: () => Promise.reject(new Error("simulated mid-write failure")),
+    };
+
+    await expect(
+      moveSnapshotItemLane("user-1", itemId, "fyi", { dbClient: failingClient }),
+    ).rejects.toThrow("simulated mid-write failure");
+
+    const rows = await dbClient.execute({
+      sql: `SELECT i.lane_at_snapshot, t.lane,
+                   (SELECT COUNT(*) FROM ea_triage_feedback f
+                     WHERE f.snapshot_item_id = i.id) AS feedback_count
+            FROM ea_briefing_snapshot_items i
+            JOIN ea_email_triage t ON t.id = i.triage_id
+            WHERE i.id = ?`,
+      args: [itemId],
+    });
+    expect(rows.rows).toEqual([
+      { lane_at_snapshot: "needs_attention", lane: "needs_attention", feedback_count: 0 },
+    ]);
+  });
+
   it("reopens an active handled FYI item back into FYI and clears canonical handled state", async () => {
     const dbClient = await createMigratedDb();
     const { itemId, triageId } = await seedSnapshotItem(dbClient, {

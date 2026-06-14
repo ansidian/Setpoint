@@ -354,7 +354,13 @@ export function validateSingleDraft({ draft, effectiveTitle }) {
   return null;
 }
 
-export function validateBatchDrafts({ draft, batchDrafts, effectiveTitle }) {
+export function validateBatchDrafts({ draft, batchDrafts, effectiveTitle, recurrenceDraft = null }) {
+  // P3-9: a multi-date batch and a recurrence rule are mutually exclusive. A
+  // recurrence-then-batch title sequence (e.g. an active recurrence draft that
+  // survives a manualRecurrenceOverride while the title resolves to a batch)
+  // would otherwise drop the recurrence silently and create one-off events.
+  // Block the save so the user must resolve the conflict.
+  if (recurrenceDraft) return "Recurrence cannot be combined with a multi-date batch.";
   if (!effectiveTitle) return "Title is required.";
   if (!draft.accountId || !draft.calendarId) return "Choose a writable calendar.";
   if (!batchDrafts.length) return "Add at least one batch event before saving.";

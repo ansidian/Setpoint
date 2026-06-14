@@ -52,12 +52,15 @@ function buildEmbeddingQueryFilters({ readFilter = null, dateWindow = null } = {
     filters.push("idx.read = ?");
     args.push(readFilter);
   }
+  // P3-51: rows with an unparseable/missing Date header have an empty/NULL email_date_utc
+  // (NOT NULL DEFAULT ''); let them PASS the window rather than be silently dropped, matching
+  // buildPlanFilters in email-search-retrieval.js so the plan and embedding paths agree.
   if (dateWindow?.after) {
-    filters.push("NULLIF(idx.email_date_utc, '') >= ?");
+    filters.push("(idx.email_date_utc IS NULL OR idx.email_date_utc = '' OR idx.email_date_utc >= ?)");
     args.push(dateWindow.after);
   }
   if (dateWindow?.before) {
-    filters.push("NULLIF(idx.email_date_utc, '') <= ?");
+    filters.push("(idx.email_date_utc IS NULL OR idx.email_date_utc = '' OR idx.email_date_utc <= ?)");
     args.push(dateWindow.before);
   }
   return {

@@ -166,6 +166,71 @@ describe("deadline-domain mutations", () => {
     expect(await listCompletedTasks(testState.db.current, "u1")).toEqual([]);
   });
 
+  it("does not discard a completed close when post-close reminder cleanup fails (P2-30 claim + P3-64 commit-point)", async () => {
+    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-rec",
+      title: "Daily review",
+      due_date: "2026-05-12",
+      status: "incomplete",
+      is_recurring: true,
+    }]);
+
+    // The completion is recorded by the pre-close atomic claim (P2-30). The remote
+    // /close then succeeds, but the post-close reminder cleanup throws (P3-64's
+    // "/close is the commit point" failure window). The completion must survive.
+    reminderService.deleteSourceReminders.mockRejectedValueOnce(new Error("disk I/O error"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12");
+
+    // The remote close already happened, so the completion must not be lost.
+    expect(result).toEqual({
+      completed: true,
+      alreadyCompleted: false,
+      deadlineId: "td-rec",
+      occurrenceDate: "2026-05-12",
+    });
+    expect(todoist.completeTodoistTask).toHaveBeenCalledWith("u1", "td-rec");
+    // The pre-close claim persisted the completion row, so the occurrence is
+    // recorded even though the post-close reminder cleanup threw.
+    expect(await listCompletedTasks(testState.db.current, "u1")).toHaveLength(1);
+    expect(reminderService.deleteSourceReminders).toHaveBeenCalledWith({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "td-rec",
+      unsentOnly: true,
+    });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("does not discard a completed close when reminder cleanup fails after /close", async () => {
+    todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
+      id: "td-rec",
+      title: "Daily review",
+      due_date: "2026-05-12",
+      status: "incomplete",
+      is_recurring: true,
+    }]);
+    reminderService.deleteSourceReminders.mockRejectedValueOnce(new Error("reminders down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await completeDeadlineOccurrence("u1", "td-rec", "2026-05-12");
+
+    expect(result).toEqual({
+      completed: true,
+      alreadyCompleted: false,
+      deadlineId: "td-rec",
+      occurrenceDate: "2026-05-12",
+    });
+    // The tombstone is still durably recorded despite the reminder failure.
+    expect(await listCompletedTasks(testState.db.current, "u1")).toMatchObject([
+      { todoist_id: "td-rec", due_date: "2026-05-12" },
+    ]);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it("completes and stores the matching active occurrence", async () => {
     todoist.fetchTodoistTasksAll.mockResolvedValueOnce([{
       id: "td-rec",

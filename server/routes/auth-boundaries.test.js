@@ -238,10 +238,12 @@ async function seedSession(expiresAt = Date.now() + 60_000) {
 }
 
 async function seedBearer(scopes = ["actual:write"]) {
+  // Mirror production token creation (server/routes/auth.js) with a live
+  // expires_at; validateBearer now fails closed on NULL/expired rows.
   await testState.db.current.execute({
     sql: `INSERT INTO ea_api_tokens (token_hash, label, scopes, created_at, expires_at)
-          VALUES (?, ?, ?, ?, NULL)`,
-    args: [bearerHash, "Shortcut", JSON.stringify(scopes), Date.now()],
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [bearerHash, "Shortcut", JSON.stringify(scopes), Date.now(), Date.now() + 60_000],
   });
 }
 

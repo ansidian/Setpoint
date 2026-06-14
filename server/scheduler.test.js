@@ -40,6 +40,7 @@ const {
   runEmailTriageWorker,
   runReminderSchedulerWorker,
   startReminderSchedulerWorker,
+  stopScheduler,
 } = await import("./scheduler.js");
 
 beforeEach(() => {
@@ -175,6 +176,103 @@ describe("initScheduler", () => {
       }),
     );
     expect(snapshotApi.advanceSnapshotBoundary).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers other users' schedules even when one row has malformed JSON (P3-56)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockDb.execute.mockResolvedValueOnce({
+      rows: [
+        { user_id: "user-bad", schedules_json: "{not valid json" },
+        {
+          user_id: "user-good",
+          schedules_json: JSON.stringify([
+            { label: "Morning", time: "08:30", tz: "America/Los_Angeles", enabled: true },
+          ]),
+        },
+      ],
+    });
+
+    await initScheduler();
+
+    // The bad row is logged with its user_id and skipped; the good row still registers.
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("user-bad"),
+      expect.any(String),
+    );
+    expect(cronApi.schedule).toHaveBeenCalledTimes(1);
+    expect(cronApi.schedule).toHaveBeenCalledWith(
+      "30 8 * * *",
+      expect.any(Function),
+      { timezone: "America/Los_Angeles" },
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("logs 'not yet available' only on a missing-table read error (P3-56)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockDb.execute.mockRejectedValueOnce(new Error("no such table: ea_settings"));
+
+    await initScheduler();
+
+    expect(logSpy).toHaveBeenCalledWith("[EA Scheduler] Skipping — ea_settings not yet available");
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it("does not mislabel a non-missing-table read error as 'not yet available' (P3-56)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockDb.execute.mockRejectedValueOnce(new Error("database is locked"));
+
+    await initScheduler();
+
+    expect(logSpy).not.toHaveBeenCalledWith(
+      "[EA Scheduler] Skipping — ea_settings not yet available",
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[EA Scheduler] Failed to load schedules:",
+      "database is locked",
+    );
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+});
+
+describe("stopScheduler (graceful shutdown drain, P3-58)", () => {
+  it("awaits the in-flight reminder batch before resolving", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    let resolveBatch;
+    let drained = false;
+    reminderSchedulerApi.processDueReminderBatch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveBatch = () => {
+          drained = true;
+          resolve({ processed: 0, sent: 0, missed: 0, failed: 0 });
+        };
+      }),
+    );
+
+    // Start a batch (single-flight promise is now tracked) without awaiting it.
+    const inFlight = runReminderSchedulerWorker();
+
+    const stopPromise = stopScheduler();
+    let stopResolved = false;
+    stopPromise.then(() => {
+      stopResolved = true;
+    });
+
+    // stopScheduler must not resolve while the reminder batch is still running.
+    await Promise.resolve();
+    expect(stopResolved).toBe(false);
+    expect(drained).toBe(false);
+
+    resolveBatch();
+    await stopPromise;
+    await inFlight;
+
+    expect(drained).toBe(true);
+    logSpy.mockRestore();
   });
 });
 

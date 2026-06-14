@@ -3,10 +3,12 @@ import {
   ALFRED_MODELS,
   alfredModelByKey,
   alfredPriorityLabel,
+  alfredScrollKey,
   alfredToolRunningLabel,
   applyAlfredEvent,
   formatAlfredAgo,
   formatAlfredDate,
+  isNearBottom,
   splitSayText,
 } from "./alfredPanelModel.js";
 
@@ -127,5 +129,40 @@ describe("helpers", () => {
     expect(alfredPriorityLabel(1)).toBeNull();
     expect(formatAlfredAgo("2026-06-12T17:30:00.000Z", new Date("2026-06-12T18:00:00.000Z"))).toBe("30m ago");
     expect(formatAlfredAgo("2026-06-10T18:00:00.000Z", new Date("2026-06-12T18:00:00.000Z"))).toBe("2d ago");
+  });
+});
+
+describe("auto-scroll decision (P3-4)", () => {
+  it("isNearBottom is true at the bottom and within the threshold", () => {
+    // parked exactly at the bottom: 1000 - (800 + 200) === 0
+    expect(isNearBottom(800, 200, 1000)).toBe(true);
+    // 40px from the bottom is still "near" (default threshold)
+    expect(isNearBottom(760, 200, 1000)).toBe(true);
+    // 41px from the bottom is not
+    expect(isNearBottom(759, 200, 1000)).toBe(false);
+  });
+
+  it("isNearBottom is true when content does not overflow yet", () => {
+    expect(isNearBottom(0, 400, 300)).toBe(true);
+  });
+
+  it("isNearBottom respects a custom threshold and coerces junk to 0", () => {
+    expect(isNearBottom(700, 200, 1000, 120)).toBe(true);
+    expect(isNearBottom(679, 200, 1000, 120)).toBe(false);
+    expect(isNearBottom(undefined, undefined, undefined)).toBe(true);
+  });
+
+  it("alfredScrollKey bumps on new messages and on tail growth", () => {
+    expect(alfredScrollKey([])).toBe("0");
+    const one = [{ type: "say", text: "Hi" }];
+    const grown = [{ type: "say", text: "Hi there" }];
+    const two = [{ type: "say", text: "Hi" }, { type: "say", text: "More" }];
+    expect(alfredScrollKey(one)).toBe("1:2");
+    // same message count, longer streamed text → different key
+    expect(alfredScrollKey(grown)).not.toBe(alfredScrollKey(one));
+    // new message appended → different key
+    expect(alfredScrollKey(two)).not.toBe(alfredScrollKey(one));
+    // a message without text (e.g. tools/rows) contributes tail length 0
+    expect(alfredScrollKey([{ type: "tools", tools: [] }])).toBe("1:0");
   });
 });

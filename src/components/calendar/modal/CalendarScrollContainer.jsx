@@ -9,6 +9,7 @@ import {
   midpointActiveMonthIndex,
   mountedWindow,
   nearestWeekRowOffset,
+  shouldDispatchOverflowCloseOnScroll,
   LABEL_MONTH_THRESHOLD,
   NAVIGABLE_MONTH_RADIUS,
   SCROLL_SETTLE_MS,
@@ -247,6 +248,12 @@ export default function CalendarScrollContainer({
     const container = containerRef.current;
     if (!container) return;
     function onScrollDismissOverflow() {
+      // P3-11: skip the close when a keep-overflow-open chip interaction just
+      // fired (its programmatic alignment scroll lands within the shared ignore
+      // window) so the overflow the user acted in is not dismissed. The
+      // escape/hotkey close dispatches from useCalendarModalHotkeys.js, never
+      // through here, so escape stays immediate.
+      if (!shouldDispatchOverflowCloseOnScroll()) return;
       document.dispatchEvent(new CustomEvent("calendar-overflow-close"));
     }
     container.addEventListener("scroll", onScrollDismissOverflow, { passive: true });

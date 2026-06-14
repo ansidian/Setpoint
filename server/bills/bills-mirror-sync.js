@@ -1,6 +1,7 @@
 import db from "../db/connection.js";
 import { buildBillOccurrencesFromSchedules } from "../actual/actual-bill-occurrences.js";
 import {
+  hasActualMetadataRows,
   loadActualMetadataForProjection,
   metadataWithPayeeMap,
   upsertMetadataProjectionQuery,
@@ -196,6 +197,17 @@ export async function loadActualBudgetUrl(userId, { dbClient = db } = {}) {
   return result.rows?.[0]?.actual_budget_url || null;
 }
 
+// P3-38: cheap existence check for the empty-read guard — does the user's bills
+// mirror already hold any occurrence rows? Used to decide whether a transient empty
+// metadata read should preserve the prior mirror instead of wiping it.
+async function priorMirrorHasRows(userId, { dbClient = db } = {}) {
+  const result = await dbClient.execute({
+    sql: `SELECT 1 FROM ea_bill_occurrence_mirror WHERE user_id = ? LIMIT 1`,
+    args: [userId],
+  });
+  return Boolean(result.rows?.length);
+}
+
 function clearBillsMirrorTimer(userId) {
   const timer = BILLS_MIRROR_REFRESH_TIMERS.get(userId);
   if (timer) clearTimeout(timer);
@@ -284,6 +296,15 @@ export async function scheduleBillsMirrorRefresh(userId, {
 } = {}) {
   const dueAt = new Date(now.getTime() + delayMs).toISOString();
   const timestamp = isoNow(now);
+  // MERGE-NOTE[P3-37] (P3 worktree): read the existing pending_refresh_at before the
+  // upsert so we can arm the in-process timer to the value the DB actually keeps
+  // (the earlier of any already-pending time and dueAt), not unconditionally to dueAt.
+  // Shares this file's settle/refresh timer area with the P1 settle/refresh-timer fix on
+  // another worktree. On conflict: keep BOTH unless they touch these exact lines.
+  const existing = await dbClient.execute({
+    sql: `SELECT pending_refresh_at FROM ea_bills_mirror_state WHERE user_id = ?`,
+    args: [userId],
+  });
   await dbClient.execute({
     sql: `INSERT INTO ea_bills_mirror_state
             (user_id, status, pending_refresh_at, updated_at)
@@ -301,8 +322,12 @@ export async function scheduleBillsMirrorRefresh(userId, {
             updated_at = excluded.updated_at`,
     args: [userId, dueAt, timestamp],
   });
-  if (dbClient === db) armBillsMirrorTimer(userId, dueAt);
-  return { pendingRefreshAt: dueAt };
+  // P3-37: mirror the DB's earlier-wins rule in JS so a sooner already-armed refresh
+  // is not pushed back to the new (later) dueAt.
+  const existingPending = existing.rows?.[0]?.pending_refresh_at || null;
+  const persistedDueAt = existingPending && existingPending < dueAt ? existingPending : dueAt;
+  if (dbClient === db) armBillsMirrorTimer(userId, persistedDueAt);
+  return { pendingRefreshAt: persistedDueAt };
 }
 
 export async function consumeDueBillsMirrorRefresh(userId, {
@@ -310,22 +335,21 @@ export async function consumeDueBillsMirrorRefresh(userId, {
   now = new Date(),
 } = {}) {
   const dueAt = isoNow(now);
+  // P3-39: claim the due refresh atomically. A SELECT-then-UPDATE let two
+  // concurrent callers both observe a pending refresh and dispatch it twice.
+  // A single conditional UPDATE gated on rowsAffected makes the claim a
+  // compare-and-clear: only the writer that actually nulled pending_refresh_at
+  // wins; everyone else sees rowsAffected === 0 and bails.
   const result = await dbClient.execute({
-    sql: `SELECT pending_refresh_at
-          FROM ea_bills_mirror_state
-          WHERE user_id = ?
-            AND pending_refresh_at IS NOT NULL
-            AND pending_refresh_at <= ?`,
-    args: [userId, dueAt],
-  });
-  if (!result.rows?.length) return false;
-  await dbClient.execute({
     sql: `UPDATE ea_bills_mirror_state
           SET pending_refresh_at = NULL,
               updated_at = ?
-          WHERE user_id = ?`,
-    args: [dueAt, userId],
+          WHERE user_id = ?
+            AND pending_refresh_at IS NOT NULL
+            AND pending_refresh_at <= ?`,
+    args: [dueAt, userId, dueAt],
   });
+  if (Number(result.rowsAffected || 0) === 0) return false;
   if (dbClient === db) clearBillsMirrorTimer(userId);
   return true;
 }
@@ -496,6 +520,18 @@ async function refreshBillsMirrorInner(userId, {
       allowWorkerFallback: false,
       preferFreshLocal: refreshLocalActual,
     }));
+    // P3-38: a transient empty-but-successful local Actual read (no accounts/payees/
+    // categories/schedules) must NOT wipe a populated mirror and commit an empty
+    // 'current' state. If the metadata read came back empty yet the mirror already
+    // holds occurrence rows, treat it as a degraded read: skip the destructive
+    // DELETE/replace, keep the prior rows, and route through the catch block which
+    // already writes 'degraded' (without deleting) and returns the prior mirror.
+    if (!hasActualMetadataRows(metadata) && await priorMirrorHasRows(userId, { dbClient })) {
+      throw Object.assign(
+        new Error("Actual metadata read returned empty; preserving prior bills mirror"),
+        { code: "BILLS_MIRROR_EMPTY_READ_GUARD" },
+      );
+    }
     const occurrences = occurrencesFromMetadata(metadata, refreshRange)
       .map(normalizeMirrorOccurrence)
       .filter((occurrence) => occurrence.scheduleId && occurrence.next_date && occurrence.type !== "income");

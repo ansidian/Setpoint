@@ -1,5 +1,5 @@
 import { createDemoApiError } from "./config.js";
-import { demoDateRange, getDemoSeed, readDemoSeed } from "./store.js";
+import { demoDateRange, getDemoSeed, pacificYMD, readDemoSeed } from "./store.js";
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -119,9 +119,23 @@ const DEMO_CALENDARS = {
   "demo-career": { name: "Demo Career", color: "#f5c2e7" },
 };
 
+function ymdTimeToIso(date, time, fallbackTime) {
+  if (!date) return null;
+  const clock = (time || fallbackTime || "00:00").slice(0, 5);
+  // Build a local-zone ISO so batch drafts (which carry startDate/startTime
+  // rather than a full ISO) land on a real timestamp, consistent with how the
+  // seed builds events via atLocalIso.
+  const parsed = new Date(`${date}T${clock}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 function makeCalendarEvent(data, id = `demo-event-${Date.now()}`) {
-  const start = data.start || data.startIso || data.startDateTime || new Date().toISOString();
-  const end = data.end || data.endIso || data.endDateTime || new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString();
+  const start = data.start || data.startIso || data.startDateTime
+    || ymdTimeToIso(data.startDate, data.startTime, "00:00")
+    || new Date().toISOString();
+  const end = data.end || data.endIso || data.endDateTime
+    || ymdTimeToIso(data.endDate || data.startDate, data.endTime, data.startTime || "00:30")
+    || new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString();
   const startMs = new Date(start).getTime();
   const endMs = new Date(end).getTime();
   // Resolve the calendar's name/color FROM its id so the calendarId/calendarName/
@@ -246,13 +260,17 @@ function searchCalendar({ scope, q, limit }) {
       payload: clone(bill),
     }));
 
-  const results = (scope === "bills" ? billResults : [...eventResults, ...deadlineResults]).slice(0, cappedLimit);
+  const all = scope === "bills" ? billResults : [...eventResults, ...deadlineResults];
+  const results = all.slice(0, cappedLimit);
   return {
     query: q || "",
     scope,
     results,
     coverage: calendarCoverage(scope, start, end),
-    truncated: results.length >= cappedLimit,
+    // Truncation must reflect whether results were actually dropped, so compare
+    // the pre-slice count against the cap. Comparing the post-slice length with
+    // `>=` falsely flagged truncation when results landed exactly on the limit.
+    truncated: all.length > cappedLimit,
   };
 }
 
@@ -385,6 +403,20 @@ export async function handleDemoApiRequest(path, options = {}) {
     return clone(created);
   }
 
+  if (pathname === "/api/calendar/events/batch" && method === "POST") {
+    // Multi-event clipboard paste / clone posts items[] here. Without a demo
+    // handler the request fell through to DEMO_API_UNHANDLED and every pasted
+    // event was silently dropped. Mirror the server contract: { created, failed }
+    // where each created entry carries its source index and the new event. See P3-17.
+    const items = Array.isArray(body.items) ? body.items : [];
+    const created = items.map((item, index) => {
+      const event = makeCalendarEvent(item || {}, `demo-event-${Date.now()}-${index}`);
+      seed.calendarEvents.push(event);
+      return { index, event: clone(event) };
+    });
+    return { created, failed: [] };
+  }
+
   if (pathname.match(/^\/api\/calendar\/events\/[^/]+$/) && method === "PATCH") {
     const eventId = decodeURIComponent(pathname.split("/").at(-1));
     const index = seed.calendarEvents.findIndex((event) => String(event.id) === String(eventId));
@@ -397,6 +429,18 @@ export async function handleDemoApiRequest(path, options = {}) {
     const eventId = decodeURIComponent(pathname.split("/").at(-1));
     seed.calendarEvents = seed.calendarEvents.filter((event) => String(event.id) !== String(eventId));
     seed.currentDashboard.calendar = seed.calendarEvents;
+    return { ok: true };
+  }
+
+  // Reminders are not modeled in the demo seed; the calendar editor still calls
+  // these routes when opening/saving an event. Return inert demo-safe shapes so
+  // the editor never surfaces DEMO_API_UNHANDLED. See P3-16.
+  if (pathname === "/api/ea/reminders" && method === "POST") {
+    const id = `demo-reminder-${Date.now()}`;
+    return clone({ id, ...body, demo: true });
+  }
+
+  if (pathname.match(/^\/api\/ea\/reminders\/[^/]+$/) && method === "DELETE") {
     return { ok: true };
   }
 
@@ -486,7 +530,11 @@ export async function handleDemoApiRequest(path, options = {}) {
     const start = url.searchParams.get("start");
     const end = url.searchParams.get("end");
     return {
-      events: demoDateRange(seed.calendarEvents, start, end, (event) => event.start.slice(0, 10)),
+      // Filter by the event's Pacific calendar day (derived from startMs) rather
+      // than event.start.slice(0,10) (the UTC day). The seed builds events in the
+      // viewer's local zone, so a UTC-day filter drops boundary events for any
+      // non-UTC viewer. See P3-19.
+      events: demoDateRange(seed.calendarEvents, start, end, (event) => pacificYMD(event.startMs)),
     };
   }
 
@@ -597,6 +645,15 @@ export async function handleDemoApiRequest(path, options = {}) {
   }
   if (pathname === "/api/ea/important-senders") return clone(seed.importantSenders);
   if (pathname === "/api/ea/triage/cache-stats") return { enabled: false, demo: true };
+  // GET reminders: the editor reads `result.reminders || []`. No demo reminders
+  // exist, so return an empty list rather than DEMO_API_UNHANDLED. See P3-16.
+  if (pathname === "/api/ea/reminders") return { reminders: [] };
+  // Location autocomplete (Google Places) has no demo backend. Return empty,
+  // demo-safe shapes so typing in the location field never surfaces the raw
+  // DEMO_API_UNHANDLED string. The consumer reads `data.places` / `data.place`.
+  // See P3-18.
+  if (pathname === "/api/calendar/places/suggest") return { places: [] };
+  if (pathname.match(/^\/api\/calendar\/places\/[^/]+$/)) return { place: null };
   if (pathname === "/api/briefing/email-search") {
     const rows = allSnapshotRows(seed.activeSnapshot);
     return { emails: rows, accountsById: {} };

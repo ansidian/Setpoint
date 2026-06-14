@@ -204,4 +204,28 @@ describe("calendarEventEditorModel", () => {
       recurrenceDraft: { frequency: "weekly", interval: 1, weekdays: ["WE"], ends: { type: "never" } },
     })).toBeNull();
   });
+
+  it("blocks a batch save when a recurrence draft is still active (P3-9)", () => {
+    const draft = {
+      accountId: "gmail-main",
+      calendarId: "primary",
+      allDay: false,
+    };
+    const batchDrafts = [
+      { startDate: "2026-05-06", endDate: "2026-05-06", startTime: "09:00", endTime: "09:30" },
+      { startDate: "2026-05-13", endDate: "2026-05-13", startTime: "09:00", endTime: "09:30" },
+    ];
+
+    // An otherwise-valid batch passes when no recurrence is attached.
+    expect(validateBatchDrafts({ draft, batchDrafts, effectiveTitle: "Standup" })).toBeNull();
+
+    // A recurrence-then-batch sequence leaves recurrenceDraft set; the batch must be
+    // blocked rather than silently dropping the recurrence and creating one-offs.
+    expect(validateBatchDrafts({
+      draft,
+      batchDrafts,
+      effectiveTitle: "Standup",
+      recurrenceDraft: { frequency: "weekly", interval: 1, weekdays: ["WE"], ends: { type: "never" } },
+    })).toBe("Recurrence cannot be combined with a multi-date batch.");
+  });
 });

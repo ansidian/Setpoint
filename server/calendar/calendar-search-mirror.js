@@ -32,9 +32,26 @@ function normalizeText(value) {
     .replace(/\s+/g, " ");
 }
 
-function addMonthsIso(isoDate, months) {
+// MERGE-NOTE[P3-41] (P3 worktree): escape LIKE metacharacters so a query containing
+// `_` or `%` matches literally instead of acting as a wildcard. Used with `ESCAPE '\'`
+// in listCalendarSearchMirrorOccurrences. Shares this file with a P2 fix on another
+// worktree. On conflict: keep BOTH unless they touch these same lines. Remove after merge.
+function escapeLikePattern(value) {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+// MERGE-NOTE[P3-40] (P3 worktree): addMonthsIso now clamps day-of-month to the target
+// month's last day so 29th-31st no longer overflow into the next month (shifting the
+// mirror/search window by up to 3 days). Exported as the single source of truth shared with
+// server/routes/calendar.js. Shares this file with a P2 fix on another worktree. On conflict:
+// keep BOTH unless they touch these same lines. Remove this note after merge.
+export function addMonthsIso(isoDate, months) {
   const [year, month, day] = isoDate.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1 + months, day));
+  const targetYear = year;
+  const targetMonth = month - 1 + months;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(day, lastDayOfTargetMonth);
+  const date = new Date(Date.UTC(targetYear, targetMonth, clampedDay));
   return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
 }
 
@@ -766,7 +783,11 @@ export async function listCalendarSearchMirrorOccurrences(userId, {
   const startMs = dateMs(start || "0001-01-01");
   const endMs = dateMs(end || "9999-12-31", true);
   const normalizedQuery = normalizeText(query);
-  const querySql = normalizedQuery ? " AND searchable_text LIKE ?" : "";
+  // MERGE-NOTE[P3-41] (P3 worktree): bind an escaped LIKE pattern with ESCAPE '\' so user
+  // `_`/`%` are literal. Shares this file with a P2 fix on another worktree; keep BOTH on
+  // conflict unless touching these same lines. Remove after merge.
+  const likePattern = normalizedQuery ? `%${escapeLikePattern(normalizedQuery)}%` : null;
+  const querySql = normalizedQuery ? " AND searchable_text LIKE ? ESCAPE '\\'" : "";
   const centerMs = centerDate ? dateMs(centerDate) + (12 * 60 * 60 * 1000) : null;
   const orderSql = Number.isFinite(centerMs)
     ? "ABS(start_ms - ?) ASC, start_ms ASC, title COLLATE NOCASE ASC"
@@ -784,7 +805,7 @@ export async function listCalendarSearchMirrorOccurrences(userId, {
       userId,
       startMs,
       endMs,
-      ...(normalizedQuery ? [`%${normalizedQuery}%`] : []),
+      ...(likePattern ? [likePattern] : []),
       ...(Number.isFinite(centerMs) ? [centerMs] : []),
       limit,
     ],

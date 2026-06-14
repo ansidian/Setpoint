@@ -42,6 +42,11 @@ export async function __waitForCurrentDashboardRefreshesForTests() {
   await Promise.allSettled([...BACKGROUND_REFRESH_IN_FLIGHT.values()]);
 }
 
+export const __currentDashboardInternalsForTests = {
+  markRowsRefreshing,
+  markCacheRowRefreshFailed,
+};
+
 function isFresh(row, now = new Date()) {
   if (!row?.expires_at) return false;
   return new Date(row.expires_at).getTime() > now.getTime();
@@ -402,6 +407,12 @@ async function markRowsRefreshing(userId, rows, refreshKeys, {
     const currentPayload = rows[key]?.payload_json || JSON.stringify(fallbackPayloadForKey(key));
     const fetchedAt = rows[key]?.fetched_at || null;
     const expiresAt = rows[key]?.expires_at || timestamp;
+    // MERGE-NOTE[P3-42] (P3 worktree): carry refresh_failure_count / last_refresh_failed_at
+    // from rows[key] into the in-memory refreshing row so a subsequent
+    // markCacheRowRefreshFailed escalates the returned failureCount instead of resetting to 1
+    // (the persisted COALESCE already escalates). Shares this file with P1 (/current hot-path)
+    // on another worktree. On conflict: keep BOTH unless they touch these same lines (different
+    // region). Remove this note after merge.
     nextRows[key] = {
       user_id: userId,
       cache_key: key,
@@ -411,6 +422,9 @@ async function markRowsRefreshing(userId, rows, refreshKeys, {
       status: "refreshing",
       error_message: null,
       refresh_started_at: timestamp,
+      last_refresh_failed_at: rows[key]?.last_refresh_failed_at ?? null,
+      last_refresh_error: rows[key]?.last_refresh_error ?? null,
+      refresh_failure_count: Number(rows[key]?.refresh_failure_count || 0),
     };
     return {
       sql: `INSERT INTO ea_current_data_cache

@@ -4,6 +4,25 @@ import { normalizeEmailDateUtc } from "./email-date.js";
 export const EMAIL_INDEX_BODY_TEXT_MAX_CHARS = 20_000;
 const EMAIL_INDEX_LOOKUP_CHUNK_SIZE = 500;
 
+// Loose check that a token looks like a single bare email address.
+// Intentionally permissive (no full RFC parse) but rejects whitespace and
+// display-name fragments so we never store a name in from_address.
+const EMAIL_SHAPE = /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/;
+
+// Strip a single balanced surrounding quote pair from a display name,
+// e.g. "Doe, John" -> Doe, John  but leaves 5" or O'Brien untouched.
+function stripBalancedQuotes(value) {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed[trimmed.length - 1];
+    if ((first === '"' || first === "'") && first === last) {
+      return trimmed.slice(1, -1).trim();
+    }
+  }
+  return trimmed;
+}
+
 // split Gmail's "Display Name <addr>" into components
 // iCloud already provides from_email separately
 export function parseFrom(email) {
@@ -11,20 +30,29 @@ export function parseFrom(email) {
     return { fromName: email.from || "", fromAddress: email.from_email };
   }
 
-  const raw = email.from || "";
-  const match = raw.match(/^(.+?)\s*<([^>]+)>$/);
+  const raw = (email.from || "").trim();
+
+  // Angle-bracket form: only treat the bracketed token as the address when it
+  // actually looks like an email. Otherwise fall through and keep the whole
+  // string as a display name rather than emitting a malformed address.
+  const match = raw.match(/^(.*)<([^>]*)>\s*$/);
   if (match) {
-    return {
-      fromName: match[1].replace(/^["']|["']$/g, "").trim(),
-      fromAddress: match[2],
-    };
+    const address = match[2].trim();
+    if (EMAIL_SHAPE.test(address)) {
+      return {
+        fromName: stripBalancedQuotes(match[1]),
+        fromAddress: address,
+      };
+    }
   }
 
-  if (raw.includes("@")) {
-    return { fromName: "", fromAddress: raw.trim() };
+  // No usable angle-bracket address: only assign from_address when the bare
+  // token is itself email-shaped; anything else is a display name.
+  if (EMAIL_SHAPE.test(raw)) {
+    return { fromName: "", fromAddress: raw };
   }
 
-  return { fromName: raw, fromAddress: "" };
+  return { fromName: stripBalancedQuotes(raw), fromAddress: "" };
 }
 
 export async function isIndexEmpty(userId) {
@@ -279,7 +307,22 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
       subject, bodySnippet, bodyText,
       emailDate, emailDateUtc, read,
     ];
+    // When an already-indexed email's searchable content changed, drop any
+    // existing search embedding so the re-embedding worker re-selects it as a
+    // missing (CASE=0) candidate. Without this, a re-indexed *older* email whose
+    // content changed keeps its stale embedding row and can sit permanently
+    // below the worker's recency-ordered scan window, never re-embedding. New
+    // emails (no existing index row) have no embedding to invalidate.
+    const embeddingInvalidation = existing
+      ? [{
+        sql: `DELETE FROM ea_email_search_embeddings
+              WHERE uid = ? AND user_id = ?`,
+        args: [uid, userId],
+      }]
+      : [];
+
     return [
+      ...embeddingInvalidation,
       // Upsert: insert new rows and refresh provider-derived presentation state
       // plus searchable content without touching indexed_at.
       {

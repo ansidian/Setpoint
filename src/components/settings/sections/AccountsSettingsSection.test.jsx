@@ -70,6 +70,29 @@ describe("AccountsSettingsSection", () => {
     expect(screen.getByText("34.0522, -118.2437")).toBeTruthy();
   });
 
+  it("surfaces an error instead of an unhandled rejection when Gmail auth fails", async () => {
+    mockApi.getGmailAuthUrl.mockRejectedValue(
+      Object.assign(new Error("Demo mode has no API handler for /api/ea/accounts/gmail/auth."), {
+        status: 501,
+      }),
+    );
+
+    render(
+      <AccountsSettingsSection
+        accounts={[]}
+        setAccounts={vi.fn()}
+        settings={{}}
+        patch={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Gmail" }));
+
+    // The error surfaces in the UI, which proves handleAddGmail caught the
+    // rejection instead of letting it bubble as an unhandled rejection.
+    expect(await screen.findByText(/no API handler for/i)).toBeTruthy();
+  });
+
   it("saves and tests Discord reminder webhook settings", async () => {
     mockApi.updateSettings.mockResolvedValue({ success: true });
     mockApi.testDiscordReminderWebhook.mockResolvedValue({ success: true });

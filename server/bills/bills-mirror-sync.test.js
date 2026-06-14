@@ -34,6 +34,7 @@ const {
   scheduleBillsMirrorRefresh,
   consumeDueBillsMirrorRefresh,
   isBillsMirrorMaintenanceDue,
+  __resetBillsMirrorRefreshTimersForTests,
 } = await import("./bills-mirror-sync.js");
 
 function rowResult(rows = []) {
@@ -423,7 +424,10 @@ describe("Bills mirror", () => {
   });
 
   it("schedules and consumes server-owned delayed refreshes", async () => {
-    mockDb.execute.mockResolvedValueOnce(rowResult());
+    // schedule reads existing pending_refresh_at (none) then upserts the new dueAt.
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult([]))
+      .mockResolvedValueOnce(rowResult());
     await scheduleBillsMirrorRefresh("u1", {
       delayMs: 60_000,
       now: new Date("2026-05-06T12:00:00.000Z"),
@@ -434,17 +438,162 @@ describe("Bills mirror", () => {
     }));
 
     mockDb.execute.mockReset();
-    mockDb.execute
-      .mockResolvedValueOnce(rowResult([{ pending_refresh_at: "2026-05-06T12:01:00.000Z" }]))
-      .mockResolvedValueOnce(rowResult());
+    // P3-39: consume is now a single conditional UPDATE; rowsAffected drives the claim.
+    mockDb.execute.mockResolvedValueOnce({ rows: [], rowsAffected: 1 });
     const due = await consumeDueBillsMirrorRefresh("u1", {
       now: new Date("2026-05-06T12:01:01.000Z"),
     });
 
     expect(due).toBe(true);
+    expect(mockDb.execute).toHaveBeenCalledTimes(1);
     expect(mockDb.execute).toHaveBeenLastCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/pending_refresh_at = NULL/i),
     }));
+  });
+
+  it("P3-39: claims a due refresh atomically so a second concurrent claim returns false", async () => {
+    // The atomic claim is a single conditional UPDATE. The first writer clears
+    // pending_refresh_at (rowsAffected: 1) and wins; the second sees nothing left to
+    // clear (rowsAffected: 0) and must not dispatch a duplicate refresh.
+    mockDb.execute
+      .mockResolvedValueOnce({ rows: [], rowsAffected: 1 })
+      .mockResolvedValueOnce({ rows: [], rowsAffected: 0 });
+
+    const now = new Date("2026-05-06T12:01:01.000Z");
+    const [first, second] = await Promise.all([
+      consumeDueBillsMirrorRefresh("u1", { now }),
+      consumeDueBillsMirrorRefresh("u1", { now }),
+    ]);
+
+    expect([first, second].sort()).toEqual([false, true]);
+    // No SELECT-then-UPDATE: each claim is exactly one conditional UPDATE.
+    expect(mockDb.execute).toHaveBeenCalledTimes(2);
+    for (const call of mockDb.execute.mock.calls) {
+      expect(call[0].sql).toMatch(/UPDATE ea_bills_mirror_state/i);
+      expect(call[0].sql).toMatch(/pending_refresh_at IS NOT NULL/i);
+    }
+  });
+
+  it("P3-37: arms to the earlier already-pending refresh instead of pushing it later", async () => {
+    // A sooner refresh is already pending; scheduling a later one must keep the earlier
+    // due time (the DB keeps it via earlier-wins) rather than re-arming to the new later one.
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult([{ pending_refresh_at: "2026-05-06T12:00:30.000Z" }]))
+      .mockResolvedValueOnce(rowResult());
+
+    const out = await scheduleBillsMirrorRefresh("u1", {
+      delayMs: 60_000,
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    // dueAt would be 12:01:00; the earlier pending 12:00:30 must win.
+    expect(out.pendingRefreshAt).toBe("2026-05-06T12:00:30.000Z");
+    __resetBillsMirrorRefreshTimersForTests();
+  });
+
+  it("P3-37: arms to the new due time when no earlier refresh is pending", async () => {
+    mockDb.execute
+      .mockResolvedValueOnce(rowResult([]))
+      .mockResolvedValueOnce(rowResult());
+
+    const out = await scheduleBillsMirrorRefresh("u1", {
+      delayMs: 60_000,
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    expect(out.pendingRefreshAt).toBe("2026-05-06T12:01:00.000Z");
+    __resetBillsMirrorRefreshTimersForTests();
+  });
+
+  it("P3-38: an empty Actual read does not wipe a non-empty bills mirror", async () => {
+    // Lightweight read succeeds but returns no rows (transient empty). The prior mirror
+    // already holds occurrence rows, so the destructive DELETE/replace must be skipped:
+    // no batch runs, the state goes degraded, and the prior rows are returned.
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+      accounts: [],
+      payees: [],
+      categories: [],
+      schedules: [],
+      recentTransactions: [],
+    });
+    mockDb.execute
+      // priorMirrorHasRows -> mirror already populated
+      .mockResolvedValueOnce(rowResult([{ "1": 1 }]))
+      // degraded state write (catch block)
+      .mockResolvedValueOnce(rowResult())
+      // readBillsMirrorRange: state row
+      .mockResolvedValueOnce(rowResult([
+        {
+          status: "degraded",
+          actual_configured: 1,
+          actual_budget_url: "https://actual.example.test",
+          last_success_at: "2026-05-05T12:00:00.000Z",
+          last_attempt_at: "2026-05-06T12:00:00.000Z",
+          last_error: null,
+          pending_refresh_at: null,
+          refresh_started_at: null,
+        },
+      ]))
+      // readBillsMirrorRange: occurrence rows (the preserved prior mirror)
+      .mockResolvedValueOnce(rowResult([
+        {
+          occurrence_id: "sched-1:2026-05-10",
+          schedule_id: "sched-1",
+          occurrence_date: "2026-05-10",
+          name: "Mortgage",
+          payee: "Mortgage Co",
+          amount: 1500,
+          type: "bill",
+          paid: 0,
+          open_action_disabled: 0,
+        },
+      ]));
+
+    const out = await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    // Destructive replace was skipped entirely.
+    expect(mockDb.batch).not.toHaveBeenCalled();
+    // A degraded state was written (catch-block INSERT with 'degraded' literal), not an
+    // empty 'current'. No success-path UPDATE ... SET status = 'current' ran.
+    const degradedWrite = mockDb.execute.mock.calls.find((call) =>
+      /INSERT INTO ea_bills_mirror_state/i.test(call[0].sql) && /'degraded'/i.test(call[0].sql),
+    );
+    expect(degradedWrite).toBeTruthy();
+    const currentWrite = mockDb.execute.mock.calls.find((call) =>
+      /status = 'current'/i.test(call[0].sql),
+    );
+    expect(currentWrite).toBeFalsy();
+    // Prior mirror rows survive and are returned.
+    expect(out.allSchedules).toEqual([
+      expect.objectContaining({ id: "sched-1:2026-05-10", payee: "Mortgage Co" }),
+    ]);
+    expect(out.billsSyncHealth).toMatchObject({ state: "degraded" });
+  });
+
+  it("P3-38: still wipes/replaces when an empty read meets an empty prior mirror", async () => {
+    // No prior rows to protect: an empty read with an empty mirror is a legitimately
+    // empty budget and the normal replace path must run (batch, 'current').
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce({
+      accounts: [],
+      payees: [],
+      categories: [],
+      schedules: [],
+      recentTransactions: [],
+    });
+    mockDb.execute.mockResolvedValueOnce(rowResult([])); // priorMirrorHasRows -> empty
+    mockDb.batch.mockResolvedValueOnce([]);
+
+    const out = await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    expect(mockDb.batch).toHaveBeenCalledTimes(1);
+    expect(out.billsSyncHealth).toMatchObject({ state: "current" });
+    expect(out.allSchedules).toEqual([]);
   });
 
   it("flags maintenance due only for old successful configured mirrors", () => {

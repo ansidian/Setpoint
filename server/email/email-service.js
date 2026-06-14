@@ -245,7 +245,11 @@ export async function markUnread(userId, uid) {
 
 export async function trash(userId, uid) {
   const adapter = await trashEmailWithProvider(userId, uid);
-  await Promise.all([
+  // P3-74: the provider trash above has already committed. The two local
+  // cleanups are best-effort follow-ups; a failure in either must NOT surface
+  // as a request error implying the trash failed (and must not abort the
+  // other cleanup). Use allSettled and log individual failures.
+  const cleanups = await Promise.allSettled([
     db.execute({
       sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
       args: [userId, uid],
@@ -257,6 +261,15 @@ export async function trash(userId, uid) {
       "trashed",
     ),
   ]);
+  const cleanupLabels = ["snooze-row-delete", "snapshot-provider-removal"];
+  cleanups.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.error(
+        `[EA Trash] post-trash local cleanup failed (${cleanupLabels[index]}) for ${uid}:`,
+        result.reason?.message || result.reason,
+      );
+    }
+  });
 }
 
 export async function markAllRead(userId, uids) {
@@ -428,6 +441,15 @@ export async function markAllRead(userId, uids) {
 
 export async function snooze(userId, uid, untilTs, snapshot) {
   const snapshotJson = snapshot ? JSON.stringify(snapshot) : null;
+  const accountId = snapshot?.account_id;
+
+  // P3-60: the snooze-row write and the pending-triage defer must succeed or
+  // fail together, and the external Gmail snooze-modify is the last (and only
+  // non-rollbackable-by-DELETE) step. We do all local writes first, then call
+  // Gmail. A defer failure rolls back the just-written snooze row; a Gmail
+  // failure rolls back BOTH the defer and the snooze row. This guarantees we
+  // never leave a committed snooze whose pending triage is still scheduled
+  // (which would let the triage worker process content the user deferred).
   await db.execute({
     sql: `INSERT INTO ea_snoozed_emails (user_id, email_id, until_ts, email_snapshot)
           VALUES (?, ?, ?, ?)
@@ -436,31 +458,46 @@ export async function snooze(userId, uid, untilTs, snapshot) {
     args: [userId, uid, untilTs, snapshotJson],
   });
 
-  const accountId = snapshot?.account_id;
-  if (accountId) {
+  if (!accountId) return;
+
+  async function rollbackSnoozeRow() {
     try {
-      const { accounts } = await loadUserConfig(userId);
-      const acc = accounts.find(
-        (a) => a.id === accountId || a.email === snapshot?.account_email,
-      );
-      if (acc?.type === "gmail") {
-        await snoozeAtGmail(acc, uid);
-      }
-    } catch (archiveErr) {
-      console.error("[EA Snooze] Gmail snooze-modify failed, rolling back DB row:", archiveErr.message);
-      try {
-        await db.execute({
-          sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
-          args: [userId, uid],
-        });
-      } catch (rollbackErr) {
-        console.error("[EA Snooze] Rollback DELETE failed:", rollbackErr.message);
-      }
-      const err = new Error("Failed to snooze on Gmail");
-      err.status = 502;
-      throw err;
+      await db.execute({
+        sql: "DELETE FROM ea_snoozed_emails WHERE user_id = ? AND email_id = ?",
+        args: [userId, uid],
+      });
+    } catch (rollbackErr) {
+      console.error("[EA Snooze] Rollback DELETE failed:", rollbackErr.message);
     }
+  }
+
+  try {
     await deferPendingTriageForSnooze(userId, accountId, uid, untilTs);
+  } catch (deferErr) {
+    console.error("[EA Snooze] Pending-triage defer failed, rolling back DB row:", deferErr.message);
+    await rollbackSnoozeRow();
+    throw deferErr;
+  }
+
+  const { accounts } = await loadUserConfig(userId);
+  const acc = accounts.find(
+    (a) => a.id === accountId || a.email === snapshot?.account_email,
+  );
+  if (acc?.type !== "gmail") return;
+
+  try {
+    await snoozeAtGmail(acc, uid);
+  } catch (archiveErr) {
+    console.error("[EA Snooze] Gmail snooze-modify failed, rolling back DB row and defer:", archiveErr.message);
+    try {
+      await restorePendingTriageEligibilityForEmail(userId, accountId, uid);
+    } catch (restoreErr) {
+      console.error("[EA Snooze] Rollback of pending-triage defer failed:", restoreErr.message);
+    }
+    await rollbackSnoozeRow();
+    const err = new Error("Failed to snooze on Gmail");
+    err.status = 502;
+    throw err;
   }
 }
 

@@ -115,7 +115,9 @@ export default function useBillBadgeForm({
 
   const feeEnabled = feeOverride !== null ? feeOverride : !!detectedFee;
   const activeFee = detectedFee ? String(detectedFee.fee) : customFee;
-  const parsedFee = feeEnabled ? (parseFloat(activeFee) || 0) : 0;
+  // Clamp at the model boundary: a CC fee is additive, so a negative custom entry
+  // must never reduce totalAmount below baseAmount (server only rejects totals <= 0).
+  const parsedFee = feeEnabled ? Math.max(0, parseFloat(activeFee) || 0) : 0;
   const baseAmount = parseFloat(editAmount) || 0;
   const totalAmount = baseAmount + parsedFee;
 
@@ -160,7 +162,7 @@ export default function useBillBadgeForm({
   };
 
   const handleFeeOverrideChange = (nextValue) => {
-    const nextFee = nextValue ? (parseFloat(activeFee) || 0) : 0;
+    const nextFee = nextValue ? Math.max(0, parseFloat(activeFee) || 0) : 0;
     const nextFeeNote = nextFee > 0 ? `$${baseAmount.toFixed(2)} + $${nextFee.toFixed(2)} CC fee` : "";
     setFeeOverride(nextValue);
     maybeSetAutoFeeNote(nextFeeNote);
@@ -169,7 +171,7 @@ export default function useBillBadgeForm({
   const handleCustomFeeChange = (value) => {
     setCustomFee(value);
     if (detectedFee || !feeEnabled) return;
-    const nextFee = parseFloat(value) || 0;
+    const nextFee = Math.max(0, parseFloat(value) || 0);
     const nextFeeNote = nextFee > 0 ? `$${baseAmount.toFixed(2)} + $${nextFee.toFixed(2)} CC fee` : "";
     maybeSetAutoFeeNote(nextFeeNote);
   };
