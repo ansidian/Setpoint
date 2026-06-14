@@ -78,7 +78,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
   {
     name: "search_transactions",
-    description: "List the owner's past spending — individual expense transactions in a date range, with amounts, payee, category, and account. This is money already spent, NOT upcoming obligations; use get_upcoming_bills for bills and card payments coming due. Income and transfers are excluded. Optional filters: payee, category, account, min_amount, max_amount. Returns compact rows; call show_items to display them.",
+    description: "List the owner's past spending — individual expense transactions in a date range, with amounts, payee, category, account, and notes. This is money already spent, NOT upcoming obligations; use get_upcoming_bills for bills and card payments coming due. Income and transfers are excluded. Optional filters: payee, category, account, min_amount, max_amount, notes. Returns compact rows; call show_items to display them.",
     input_schema: {
       type: "object",
       properties: {
@@ -89,6 +89,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
         account: { type: "string", description: "Optional account name" },
         min_amount: { type: "number", description: "Optional minimum amount in dollars (absolute value)" },
         max_amount: { type: "number", description: "Optional maximum amount in dollars (absolute value)" },
+        notes: { type: "string", description: "Optional substring to match against the transaction's note/memo (case-insensitive)" },
         limit: { type: "integer", description: "Max results (default 25, max 50)" },
       },
       required: ["start", "end"],
@@ -106,6 +107,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
         payee: { type: "string", description: "Optional payee/merchant name" },
         category: { type: "string", description: "Optional budget category name" },
         account: { type: "string", description: "Optional account name" },
+        notes: { type: "string", description: "Optional substring to match against the transaction's note/memo (case-insensitive)" },
       },
       required: ["start", "end"],
     },
@@ -190,6 +192,7 @@ function transactionFilters(input) {
   if (input.account) out.account = String(input.account);
   if (Number.isFinite(Number(input.min_amount))) out.min_amount = Number(input.min_amount);
   if (Number.isFinite(Number(input.max_amount))) out.max_amount = Number(input.max_amount);
+  if (input.notes) out.notes = String(input.notes);
   return out;
 }
 
@@ -364,6 +367,7 @@ async function runSearchTransactions(input, { userId, conversation, deps }) {
       amount: txn.amount,
       category: txn.category,
       account: txn.account,
+      notes: txn.notes,
     })),
   };
 }

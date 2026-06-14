@@ -77,7 +77,7 @@ function aggregate(transactions, groupBy) {
 }
 
 export async function summarizeSpending(userId, {
-  start, end, group_by = "category", payee, category, account,
+  start, end, group_by = "category", payee, category, account, notes,
 }, {
   readRange = readTransactionsRange,
   mirrorState = getBillsMirrorState,
@@ -85,7 +85,7 @@ export async function summarizeSpending(userId, {
   const groupBy = ["category", "payee", "month"].includes(group_by) ? group_by : "category";
   const { data, error } = await readOrError(
     userId,
-    { start, end, payee, category, account, limit: SUMMARY_SCAN_CAP },
+    { start, end, payee, category, account, notes, limit: SUMMARY_SCAN_CAP },
     readRange,
   );
   if (error) return { error };

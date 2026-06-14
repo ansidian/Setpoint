@@ -11,6 +11,14 @@ const reader = (rows = ROWS, truncated = false) => vi.fn(async () => ({ transact
 const stateCurrent = vi.fn(async () => ({ syncHealth: { state: "current" } }));
 
 describe("queryTransactions", () => {
+  it("forwards notes filter to readRange", async () => {
+    const readRange = reader();
+    await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
+      readRange, mirrorState: stateCurrent,
+    });
+    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ notes: "coffee" }));
+  });
+
   it("returns the list with total and no sync_state when current", async () => {
     const result = await queryTransactions("u1", { start: "2026-04-01", end: "2026-05-31" }, {
       readRange: reader(), mirrorState: stateCurrent,
@@ -45,6 +53,14 @@ describe("queryTransactions", () => {
 });
 
 describe("summarizeSpending", () => {
+  it("forwards notes filter to readRange", async () => {
+    const readRange = reader();
+    await summarizeSpending("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
+      readRange, mirrorState: stateCurrent,
+    });
+    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ notes: "coffee" }));
+  });
+
   it("aggregates by category with total", async () => {
     const result = await summarizeSpending("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "category" }, {
       readRange: reader(), mirrorState: stateCurrent,

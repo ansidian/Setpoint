@@ -429,8 +429,8 @@ describe("transaction tools", () => {
         total: 2,
         truncated: false,
         transactions: [
-          { id: "t1", date: "2026-05-05", amount: 42.1, payee: "Trader Joes", category: "Groceries", account: "Checking" },
-          { id: "t2", date: "2026-05-18", amount: 39.9, payee: "Trader Joes", category: "Groceries", account: "Checking" },
+          { id: "t1", date: "2026-05-05", amount: 42.1, payee: "Trader Joes", category: "Groceries", account: "Checking", notes: "" },
+          { id: "t2", date: "2026-05-18", amount: 39.9, payee: "Trader Joes", category: "Groceries", account: "Checking", notes: "" },
         ],
       })),
     };
@@ -444,6 +444,40 @@ describe("transaction tools", () => {
     const shown = await executeAlfredTool("show_items", { kind: "transaction", ids: ["t1", "t2"] }, ctx);
     expect(shown.shown).toBe(2);
     expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({ type: "rows", kind: "transaction" }));
+  });
+
+  it("search_transactions passes notes filter and returns notes in result rows", async () => {
+    const deps = {
+      queryTransactions: vi.fn(async () => ({
+        total: 1,
+        truncated: false,
+        transactions: [
+          { id: "t-coffee", date: "2026-05-10", amount: 5.5, payee: "Blue Bottle", category: "Dining", account: "Checking", notes: "morning coffee" },
+        ],
+      })),
+    };
+    const ctx = ctxWith(deps);
+    const result = await executeAlfredTool("search_transactions", {
+      start: "2026-05-01", end: "2026-05-31", notes: "coffee",
+    }, ctx);
+    expect(deps.queryTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ notes: "coffee" }));
+    expect(result.transactions[0].notes).toBe("morning coffee");
+  });
+
+  it("summarize_spending passes notes filter to deps.summarizeSpending", async () => {
+    const deps = {
+      summarizeSpending: vi.fn(async () => ({
+        total: 5.5,
+        period: { start: "2026-05-01", end: "2026-05-31" },
+        group_by: "category",
+        buckets: [{ label: "Dining", amount: 5.5, count: 1 }],
+      })),
+    };
+    const ctx = ctxWith(deps);
+    await executeAlfredTool("summarize_spending", {
+      start: "2026-05-01", end: "2026-05-31", notes: "coffee",
+    }, ctx);
+    expect(deps.summarizeSpending).toHaveBeenCalledWith("user-1", expect.objectContaining({ notes: "coffee" }));
   });
 
   it("search_transactions rejects a bad date range", async () => {

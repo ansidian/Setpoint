@@ -6,6 +6,11 @@ import {
 
 const DEFAULT_LIMIT = 50;
 
+// Escape LIKE wildcards so a literal % or _ in the search term is matched literally.
+function escapeLike(value) {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 function nameMap(rows) {
   return Object.fromEntries((rows || []).map((r) => [r.id, r.name || ""]));
 }
@@ -28,6 +33,7 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
   const limit = Number.isFinite(filters.limit) ? filters.limit : DEFAULT_LIMIT;
   const minAmount = filters.minAmount ?? filters.min_amount;
   const maxAmount = filters.maxAmount ?? filters.max_amount;
+  const notes = filters.notes;
 
   const client = await openLocalBudgetClient(userId, options);
   try {
@@ -63,10 +69,14 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
     if (accountF) { clauses.push("t.account = ?"); args.push(accountF); }
     if (Number.isFinite(minAmount)) { clauses.push("ABS(t.amount) >= ?"); args.push(Math.round(minAmount * 100)); }
     if (Number.isFinite(maxAmount)) { clauses.push("ABS(t.amount) <= ?"); args.push(Math.round(maxAmount * 100)); }
+    if (notes) {
+      clauses.push("LOWER(COALESCE(t.notes,'')) LIKE ? ESCAPE '\\'");
+      args.push(`%${escapeLike(String(notes).toLowerCase())}%`);
+    }
     args.push(limit + 1);
 
     const result = await client.execute({
-      sql: `SELECT t.id, t.date, t.amount, t.payee, t.category, t.account
+      sql: `SELECT t.id, t.date, t.amount, t.payee, t.category, t.account, t.notes
             FROM v_transactions t
             WHERE ${clauses.join(" AND ")}
             ORDER BY t.date DESC
@@ -80,6 +90,7 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
       payee: payeeName[r.payee] || "Unknown",
       category: categoryName[r.category] || "Uncategorized",
       account: accountName[r.account] || "",
+      notes: r.notes || "",
     }));
     const truncated = all.length > limit;
     return { transactions: truncated ? all.slice(0, limit) : all, truncated };
