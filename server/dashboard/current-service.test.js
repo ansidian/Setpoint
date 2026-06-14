@@ -75,6 +75,11 @@ vi.mock("../bills/bills-service.js", () => ({
   consumeDueBillsMirrorRefresh: (...args) => testState.consumeDueBillsMirrorRefresh(...args),
   clearPendingBillsMirrorRefresh: (...args) => testState.clearPendingBillsMirrorRefresh(...args),
   scheduleBillsMirrorRefresh: (...args) => testState.scheduleBillsMirrorRefresh(...args),
+  shouldScheduleImmediateBillsRefresh: (health, now) => {
+    if (health?.state !== "needs_sync") return false;
+    const pendingAt = health?.pendingRefreshAt ? new Date(health.pendingRefreshAt).getTime() : null;
+    return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
+  },
 }));
 vi.mock("../snapshots/snapshot-service.js", () => ({
   getActiveSnapshotView: (...args) => testState.getActiveSnapshotView(...args),
@@ -192,6 +197,7 @@ describe("GET /api/dashboard/current", () => {
   beforeEach(async () => {
     testState.db.current = await createMigratedDb();
     delete process.env.EA_DASHBOARD_SYNC_SNAPSHOT_TIMEOUT_MS;
+    delete process.env.EA_DASHBOARD_PROVIDER_FETCH_TIMEOUT_MS;
     testState.fetchWeather.mockReset().mockResolvedValue({ temp: 72 });
     testState.fetchCalendar.mockReset().mockResolvedValue([]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
@@ -1160,10 +1166,32 @@ describe("GET /api/dashboard/current", () => {
       ]),
     });
   });
+
+  it("returns a fallback within the deadline instead of hanging when a cold-cache provider stalls (P1-6)", async () => {
+    process.env.EA_DASHBOARD_PROVIDER_FETCH_TIMEOUT_MS = "20";
+    // Cold cache (no seedCache) + a weather provider fetch that never resolves.
+    testState.fetchWeather.mockReset().mockReturnValueOnce(new Promise(() => {}));
+
+    const { status, body } = await getCurrentResponse();
+
+    expect(status).toBe(200);
+    // The stalled provider must fall back (the aggregated current-data source
+    // goes unavailable) rather than blocking the entire /current response on the
+    // slowest external call.
+    expect(body.systemStatus.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "currentData",
+          state: expect.stringMatching(/unavailable|degraded/),
+        }),
+      ]),
+    );
+  }, 3000);
 });
 
 describe("POST /api/dashboard/current/sync", () => {
   beforeEach(async () => {
+    delete process.env.EA_DASHBOARD_PROVIDER_FETCH_TIMEOUT_MS;
     testState.db.current = await createMigratedDb();
     testState.fetchWeather.mockReset().mockResolvedValue({ temp: 80, summary: "Synced" });
     testState.fetchCalendar.mockReset().mockResolvedValue([{ id: "synced-event" }]);

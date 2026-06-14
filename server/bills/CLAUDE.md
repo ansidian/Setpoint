@@ -14,6 +14,7 @@ Bill domain logic: AI extraction from emails, user bill-matching rules, and the 
 - `bill-pay-resolver.js` — applies mappings to extracted/pasted bills: amounts, dates
 - `bill-pay-service.js` — loads mappings + metadata, resolves bills against user rules
 - `bills-mirror-sync.js` — syncs bill occurrences into `ea_bills_mirror_*`, schedules maintenance
+- `bills-mirror-refresh-policy.js` — pure guard: should a reader kick an immediate mirror refresh, or is a settle window already armed
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

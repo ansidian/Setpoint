@@ -23,6 +23,26 @@ function retryAfterFromResult(result, now) {
   return new Date(new Date(now).getTime() + result.retryAfterMs).toISOString();
 }
 
+const RETRY_BACKOFF_BASE_MS = 60_000; // 1 minute
+const RETRY_BACKOFF_MAX_MS = 30 * 60_000; // 30 minutes
+
+// Backoff for an unexpected THROW during delivery (corrupt-webhook decrypt,
+// network reject, etc.). retryAfterFromResult only handles structured Discord
+// 429s, so a thrown error needs its own non-null FUTURE retry_after — otherwise
+// listDueReminders re-selects the same reminder every 10s and head-of-line-
+// blocks the entire batch until it ages out of the 6h grace (P1-10).
+//
+// MERGE-NOTE (P1-10 ↔ P2-27): P2-27 is "non-rate-limited Discord failures set no
+// retry_after, so a permanently-failing reminder re-fires every 10s" — that is
+// the structured delivery.ok===false path in the loop below, where
+// retryAfterFromResult returns null for non-429 results. When fixing P2-27,
+// REUSE this helper for that path rather than adding a second backoff.
+function computeReminderRetryAfter(reminder, now) {
+  const attempts = Number(reminder.retry_count) || 0;
+  const delayMs = Math.min(RETRY_BACKOFF_BASE_MS * 2 ** attempts, RETRY_BACKOFF_MAX_MS);
+  return new Date(new Date(now).getTime() + delayMs).toISOString();
+}
+
 function publishReminderChange(reminder, reason, state = "current") {
   publishCurrentDashboardEvent(reminder.user_id, {
     source: "reminders",
@@ -50,45 +70,70 @@ export async function processDueReminderBatch({
 
   for (const reminder of due) {
     result.processed += 1;
-    if (computeReminderState({ remindAt: reminder.remind_at, now: nowIso }) === "missed") {
-      await markReminderMissed(reminder.id, { missedAt: nowIso }, { dbClient });
-      publishReminderChange(reminder, "reminder_missed");
-      result.missed += 1;
-      continue;
-    }
+    // Per-item isolation (P1-10): a throw from decrypt/send/db inside one
+    // reminder must not abort the batch or block every later due reminder.
+    try {
+      if (computeReminderState({ remindAt: reminder.remind_at, now: nowIso }) === "missed") {
+        await markReminderMissed(reminder.id, { missedAt: nowIso }, { dbClient });
+        publishReminderChange(reminder, "reminder_missed");
+        result.missed += 1;
+        continue;
+      }
 
-    const settings = await loadDiscordSettings(reminder.user_id, { dbClient });
-    if (!settings?.discord_webhook_url_encrypted) {
+      const settings = await loadDiscordSettings(reminder.user_id, { dbClient });
+      if (!settings?.discord_webhook_url_encrypted) {
+        await markReminderDeliveryFailed(reminder.id, {
+          error: "Discord webhook not configured",
+        }, { dbClient });
+        publishReminderChange(reminder, "reminder_delivery_failed", "degraded");
+        result.failed += 1;
+        continue;
+      }
+
+      const webhookUrl = decryptFn(settings.discord_webhook_url_encrypted);
+      const payload = formatDiscordReminderPayload({
+        reminder,
+        discordUserId: settings.discord_user_id,
+      });
+      const delivery = sendFn
+        ? await sendFn(webhookUrl, payload, { reminder })
+        : await sendDiscordWebhook(webhookUrl, payload);
+
+      if (delivery.ok) {
+        await markReminderSent(reminder.id, { sentAt: nowIso }, { dbClient });
+        publishReminderChange(reminder, "reminder_sent");
+        result.sent += 1;
+        continue;
+      }
+
       await markReminderDeliveryFailed(reminder.id, {
-        error: "Discord webhook not configured",
+        error: delivery.error || `Discord ${delivery.status || "error"}`,
+        retryAfter: retryAfterFromResult(delivery, nowIso),
       }, { dbClient });
       publishReminderChange(reminder, "reminder_delivery_failed", "degraded");
       result.failed += 1;
-      continue;
+    } catch (err) {
+      // Treat any thrown error as a delivery failure with a backoff retry_after
+      // (non-null + future) so the worker stops re-selecting this reminder every
+      // 10s, then fall through to the next one (P1-10).
+      try {
+        await markReminderDeliveryFailed(reminder.id, {
+          error: err?.message || String(err),
+          retryAfter: computeReminderRetryAfter(reminder, nowIso),
+        }, { dbClient });
+      } catch (markErr) {
+        // If the failure source was the DB itself, this status write can also
+        // throw. Swallow it so one reminder's DB error cannot re-abort the batch
+        // or head-of-line-block the rest — the retry_after simply will not
+        // advance for this row until the DB recovers (P1-10).
+        console.error(
+          `[Reminders] failed to record delivery failure for ${reminder.id}:`,
+          markErr?.message || markErr,
+        );
+      }
+      publishReminderChange(reminder, "reminder_delivery_failed", "degraded");
+      result.failed += 1;
     }
-
-    const webhookUrl = decryptFn(settings.discord_webhook_url_encrypted);
-    const payload = formatDiscordReminderPayload({
-      reminder,
-      discordUserId: settings.discord_user_id,
-    });
-    const delivery = sendFn
-      ? await sendFn(webhookUrl, payload, { reminder })
-      : await sendDiscordWebhook(webhookUrl, payload);
-
-    if (delivery.ok) {
-      await markReminderSent(reminder.id, { sentAt: nowIso }, { dbClient });
-      publishReminderChange(reminder, "reminder_sent");
-      result.sent += 1;
-      continue;
-    }
-
-    await markReminderDeliveryFailed(reminder.id, {
-      error: delivery.error || `Discord ${delivery.status || "error"}`,
-      retryAfter: retryAfterFromResult(delivery, nowIso),
-    }, { dbClient });
-    publishReminderChange(reminder, "reminder_delivery_failed", "degraded");
-    result.failed += 1;
   }
 
   return result;

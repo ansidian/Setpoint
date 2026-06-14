@@ -32,6 +32,7 @@ import { resolveWebAuthnConfig } from "./auth/webauthn-config.js";
 import { buildStartupWorkerDelays } from "./startup-delays.js";
 import { logTiming, timeAsync } from "./timing.js";
 import { installProductionFrontend } from "./static-assets.js";
+import { errorHandler } from "./middleware/async-handler.js";
 
 
 // fail fast if critical env vars are missing
@@ -94,6 +95,14 @@ app.use("/api/gmail", gmailPushRoutes);
 if (process.env.NODE_ENV === "production") {
   installProductionFrontend(app, join(__dirname, "../dist"));
 }
+
+// Terminal error middleware (P1-12). MUST stay last, after every route mount and
+// the static block above. Async route rejections are forwarded here by each
+// router's wrapRouterAsync (see server/middleware/async-handler.js); without
+// this, even forwarded errors would fall through to Express's default HTML
+// handler. MERGE-NOTE: keep this registration last if any concurrent change
+// reorders middleware in this file.
+app.use(errorHandler);
 
 function scheduleStartupWorker(worker, delayMs, fn) {
   logTiming({

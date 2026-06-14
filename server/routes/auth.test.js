@@ -7,6 +7,7 @@ import { createAuthTestDb, hashApiToken, hashSessionToken, seedSession } from ".
 import { createPasskeyStore } from "../auth/passkey-store.js";
 import { createPendingAuthStore, hashPendingAuthToken } from "../auth/pending-auth-store.js";
 import { createWebAuthnChallengeStore } from "../auth/webauthn-challenge-store.js";
+import { errorHandler } from "../middleware/async-handler.js";
 
 const testState = vi.hoisted(() => ({
   db: { current: null },
@@ -48,6 +49,7 @@ function makeApp() {
   app.use(cookieParser());
   app.use("/api/auth", authRoutes);
   app.get("/protected", requireCookieSession, (_req, res) => res.json({ ok: true }));
+  app.use(errorHandler); // mirror server/index.js terminal error middleware
   return app;
 }
 
@@ -111,6 +113,34 @@ describe("auth routes", () => {
     expect(res.headers["set-cookie"].join(";")).toContain("ea_session=");
     expect(res.headers["set-cookie"].join(";")).toContain("ea_pending_auth=;");
   });
+
+  it("returns a 500 instead of hanging when a login handler rejects (P1-12)", async () => {
+    // Force the DB read inside countPasskeys to reject after the password check
+    // passes, so the async /login handler rejects mid-flight. Without
+    // async-rejection forwarding the request produces no response and hangs.
+    testState.db.current.execute = vi.fn().mockRejectedValue(new Error("db down"));
+
+    const res = await request(makeApp())
+      .post("/api/auth/login")
+      .send({ password: "correct-password" });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ message: "Internal server error" });
+  }, 3000);
+
+  it("returns a 500 instead of hanging when the auth guard's DB read rejects (P1-12)", async () => {
+    await seedSession(testState.db.current, "cookie-session");
+    // requireCookieSession runs as non-final middleware and does an unguarded DB
+    // read (validateSession); a transient DB failure there must not hang the
+    // request the way wrapRouterAsync (final-handler only) would leave it.
+    testState.db.current.execute = vi.fn().mockRejectedValue(new Error("db down"));
+
+    const res = await request(makeApp())
+      .get("/protected")
+      .set("Cookie", ["ea_session=cookie-session"]);
+
+    expect(res.status).toBe(500);
+  }, 3000);
 
   it("creates only pending auth when passkeys exist", async () => {
     await seedPasskey();

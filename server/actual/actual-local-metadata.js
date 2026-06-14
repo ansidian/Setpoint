@@ -20,6 +20,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
 import path from "path";
 import db from "../db/connection.js";
 import { decrypt } from "../platform/encryption.js";
+import { withActualClockLock } from "./actual-clock-lock.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -547,12 +548,20 @@ async function applySyncMessages(client, messages) {
 async function syncDownloadedBudget(config, token, { budgetDir, metadata }) {
   const client = createClient({ url: `file:${path.join(budgetDir, "db.sqlite")}` });
   try {
-    await loadClock(client);
-    const since = metadata.lastSyncedTimestamp
-      || await latestLocalMessageTimestamp(client)
-      || new Timestamp(Date.now() - 5 * 60 * 1000, 0, "0").toString();
-    const syncResult = await postActualSync(config, token, { metadata, since });
-    const applyResult = await applySyncMessages(client, syncResult.messages);
+    // Serialize the global-clock read-modify-write (loadClock -> postActualSync
+    // -> applySyncMessages/clockUpdateQuery) against the lightweight bill-write
+    // path, which mutates the same @actual-app/crdt process-global clock. The
+    // network sync sits inside the lock because the clock is "held" in the
+    // global across it; a concurrent loadClock would otherwise clobber it (P1-4).
+    const { syncResult, applyResult, since } = await withActualClockLock(async () => {
+      await loadClock(client);
+      const sinceTimestamp = metadata.lastSyncedTimestamp
+        || await latestLocalMessageTimestamp(client)
+        || new Timestamp(Date.now() - 5 * 60 * 1000, 0, "0").toString();
+      const sync = await postActualSync(config, token, { metadata, since: sinceTimestamp });
+      const apply = await applySyncMessages(client, sync.messages);
+      return { syncResult: sync, applyResult: apply, since: sinceTimestamp };
+    });
     const latestRemoteTimestamp = syncResult.messages
       .map((message) => String(message.timestamp))
       .sort()

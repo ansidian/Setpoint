@@ -24,6 +24,7 @@ import {
   getActualConfig,
   pruneActualBudgetBackups,
 } from "./actual-local-metadata.js";
+import { withActualClockLock } from "./actual-clock-lock.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const TRANSACTION_SORT_INCREMENT = 65_536;
@@ -31,7 +32,6 @@ const SCHEDULE_FIELD_MAP = {
   account: "acct",
   payee: "description",
 };
-let lightweightWriteLock = Promise.resolve();
 
 function unsupported(message) {
   return Object.assign(new Error(message), {
@@ -863,10 +863,13 @@ async function sendBillLightweightInner(userId, billData, { now = new Date(), db
 }
 
 export function sendBillLightweight(userId, billData, options = {}) {
-  const run = () => sendBillLightweightInner(userId, billData, options);
-  const result = lightweightWriteLock.then(run, run);
-  lightweightWriteLock = result.catch(() => {});
-  return result;
+  // MERGE-NOTE (P1-4 ↔ P2-15, P2-16): the serializing lock moved out of this
+  // file into the shared withActualClockLock (server/actual/actual-clock-lock.js)
+  // so the metadata-refresh path serializes against lightweight writes on the
+  // same process-global crdt clock. P2-15 (lightweight `since` window) and P2-16
+  // (schedule reuse-by-name) also edit this file, but at different lines
+  // (~532 / ~837) — reconcile independently; do not reintroduce a private lock.
+  return withActualClockLock(() => sendBillLightweightInner(userId, billData, options));
 }
 
 export const __testing__ = {

@@ -28,6 +28,7 @@ export {
   refreshActualMetadataProjection,
 } from "../actual/actual-metadata-projection.js";
 export { extractBill } from "./bill-extraction-service.js";
+export { shouldScheduleImmediateBillsRefresh } from "./bills-mirror-refresh-policy.js";
 export {
   BILLS_MIRROR_MAINTENANCE_TTL_MS,
   __resetBillsMirrorRefreshTimersForTests,

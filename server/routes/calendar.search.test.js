@@ -40,6 +40,11 @@ vi.mock("../bills/bills-service.js", () => ({
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
   scheduleBillsMirrorRefresh: vi.fn(),
+  shouldScheduleImmediateBillsRefresh: (health, now) => {
+    if (health?.state !== "needs_sync") return false;
+    const pendingAt = health?.pendingRefreshAt ? new Date(health.pendingRefreshAt).getTime() : null;
+    return pendingAt === null || pendingAt <= new Date(now ?? Date.now()).getTime();
+  },
 }));
 vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),

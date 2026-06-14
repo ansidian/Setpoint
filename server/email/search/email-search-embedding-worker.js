@@ -192,17 +192,7 @@ async function loadWorkerState(dbClient, userId) {
   return result.rows[0] || null;
 }
 
-export async function getEmailSearchEmbeddingCoverageStatus(userId, {
-  dbClient = db,
-  capability = null,
-} = {}) {
-  const [rows, state] = await Promise.all([
-    loadIndexedRowsForCoverage(dbClient, userId),
-    loadWorkerState(dbClient, userId),
-  ]);
-  const counts = summarizeCoverage(rows);
-  const mode = capability?.mode || state?.mode || "fallback";
-
+function buildCoverageStatus(counts, state, mode) {
   return {
     semantic_status: semanticStatus({
       total: counts.total_indexed,
@@ -219,6 +209,71 @@ export async function getEmailSearchEmbeddingCoverageStatus(userId, {
   };
 }
 
+// On-demand, hash-aware coverage. Scans full bodies to detect content/hash
+// staleness; used by the status route and exercised directly by tests. The
+// 5-min cron uses getCoverageStatusFast instead (see below) to avoid this scan.
+export async function getEmailSearchEmbeddingCoverageStatus(userId, {
+  dbClient = db,
+  capability = null,
+} = {}) {
+  const [rows, state] = await Promise.all([
+    loadIndexedRowsForCoverage(dbClient, userId),
+    loadWorkerState(dbClient, userId),
+  ]);
+  const counts = summarizeCoverage(rows);
+  const mode = capability?.mode || state?.mode || "fallback";
+  return buildCoverageStatus(counts, state, mode);
+}
+
+// Cheap coverage for the 5-min cron: counts via a SQL aggregate so full email
+// bodies never leave the DB (P1-9 — the old path scanned every body twice per
+// tick, even when idle). "stale" here is config-staleness only (document_version
+// / model / dimensions mismatch). Content/hash staleness is detected
+// authoritatively by the bounded candidate query (listRowsNeedingEmbeddings),
+// which drives what actually gets re-embedded, so embedding correctness is
+// unaffected — only the cron's stored display counts skip the hash check.
+async function loadCoverageCounts(dbClient, userId) {
+  const result = await dbClient.execute({
+    sql: `SELECT
+            COUNT(*) AS total_indexed,
+            COUNT(CASE WHEN emb.uid IS NULL THEN 1 END) AS missing_embeddings,
+            COUNT(CASE WHEN emb.uid IS NOT NULL
+                        AND (emb.document_version != ?
+                             OR emb.embedding_model != ?
+                             OR emb.embedding_dimensions != ?) THEN 1 END) AS stale_embeddings
+          FROM ea_email_index idx
+          LEFT JOIN ea_email_search_embeddings emb ON emb.uid = idx.uid
+          WHERE idx.user_id = ?`,
+    args: [
+      EMAIL_SEARCH_EMBEDDING_DOCUMENT_VERSION,
+      EMAIL_SEARCH_EMBEDDING_MODEL,
+      EMAIL_SEARCH_EMBEDDING_DIMENSIONS,
+      userId,
+    ],
+  });
+  const row = result.rows[0] || {};
+  const total = Number(row.total_indexed || 0);
+  const missing = Number(row.missing_embeddings || 0);
+  const stale = Number(row.stale_embeddings || 0);
+  const fresh = Math.max(0, total - missing - stale);
+  return {
+    total_indexed: total,
+    fresh_embeddings: fresh,
+    stale_embeddings: stale,
+    missing_embeddings: missing,
+    coverage_ratio: total ? fresh / total : 0,
+  };
+}
+
+async function getCoverageStatusFast(userId, { dbClient = db, capability = null } = {}) {
+  const [counts, state] = await Promise.all([
+    loadCoverageCounts(dbClient, userId),
+    loadWorkerState(dbClient, userId),
+  ]);
+  const mode = capability?.mode || state?.mode || "fallback";
+  return buildCoverageStatus(counts, state, mode);
+}
+
 export async function processEmailSearchEmbeddingBatch(userId, {
   dbClient = db,
   embeddingClient = createEmailSearchEmbeddingClient(),
@@ -231,7 +286,7 @@ export async function processEmailSearchEmbeddingBatch(userId, {
   const store = createEmailSearchEmbeddingStore(dbClient, resolvedCapability);
   const maxRows = clampPositiveInteger(limit, DEFAULT_BATCH_LIMIT, 100);
   const embedBatchSize = clampPositiveInteger(batchSize, DEFAULT_EMBEDDING_BATCH_SIZE, 100);
-  const before = await getEmailSearchEmbeddingCoverageStatus(userId, {
+  const before = await getCoverageStatusFast(userId, {
     dbClient,
     capability: resolvedCapability,
   });
@@ -316,7 +371,7 @@ export async function processEmailSearchEmbeddingBatch(userId, {
     };
   }
 
-  const after = await getEmailSearchEmbeddingCoverageStatus(userId, {
+  const after = await getCoverageStatusFast(userId, {
     dbClient,
     capability: resolvedCapability,
   });

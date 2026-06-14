@@ -61,6 +61,12 @@ export default function useCalendarEventEditor({
   const titleInputRef = useRef("");
   const titleDebounceRef = useRef(null);
   const pendingSaveRef = useRef(false);
+  // Synchronous in-flight guard (P1-1). `saving` state updates asynchronously
+  // and the Cmd/Ctrl+Enter hotkey bypasses the Save button's disabled state, so
+  // a ref is the only thing that can block a second synchronous save() before
+  // the first one's await resolves. Distinct from pendingSaveRef (debounce-flush
+  // re-fire), which is not a concurrency guard.
+  const savingRef = useRef(false);
   const [titleInputPending, setTitleInputPending] = useState(false);
   const [titleInputKey, setTitleInputKey] = useState(0);
   const [titleParseNow, setTitleParseNow] = useState(() => Date.now());
@@ -713,6 +719,11 @@ export default function useCalendarEventEditor({
     pendingSaveRef.current = false;
     setSaveAttempted(true);
     if (validationMessage) return;
+    // Placed AFTER the validation/debounce-flush early-returns so a press
+    // blocked by validation (or the deliberate debounce-flush bounce) never
+    // latches the ref. Protects the hotkey, button, and pendingSaveRef re-fire.
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     setErrorCode(null);
@@ -773,6 +784,7 @@ export default function useCalendarEventEditor({
       setError(formatCalendarEditorError(err, "Failed to save event."));
       setErrorCode(err.code || null);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, upsertEvents, validationMessage]);

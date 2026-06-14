@@ -5,6 +5,7 @@ import {
   readBillsMirrorCurrent,
   refreshBillsMirror,
   scheduleBillsMirrorRefresh,
+  shouldScheduleImmediateBillsRefresh,
 } from "../../bills/bills-service.js";
 import { publishCurrentDashboardEvent } from "../current-events.js";
 
@@ -100,7 +101,9 @@ const billsProvider = {
     }
 
     const payload = await readBillsMirrorCurrent(userId, options);
-    if (payload.billsSyncHealth?.state === "needs_sync") {
+    // Only kick an immediate refresh when no future settle window is already
+    // armed; otherwise the 2s poll collapses the 60s post-write settle (P1-5).
+    if (shouldScheduleImmediateBillsRefresh(payload.billsSyncHealth, options.now)) {
       scheduleBillsMirrorRefresh(userId, options).catch((err) => {
         console.error("[Dashboard] Bills mirror refresh scheduling failed:", err.message);
       });

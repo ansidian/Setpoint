@@ -89,6 +89,40 @@ describe("BriefingSchedulesCard", () => {
     });
   });
 
+  it("never patches a blank schedule label, restoring a non-blank fallback on blur (P1-3)", async () => {
+    const patch = vi.fn();
+    renderCard({ patch });
+
+    const labelInput = screen.getByDisplayValue("Morning");
+    fireEvent.focus(labelInput);
+    fireEvent.change(labelInput, { target: { value: "" } });
+    fireEvent.blur(labelInput);
+
+    // The server rejects a blank label with a 400 for the WHOLE PUT, which also
+    // drops every co-batched setting in the same debounce window. The card must
+    // never send a blank label.
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    const lastPayload = patch.mock.calls.at(-1)[0];
+    expect(lastPayload.schedules_json[0].label.trim()).not.toBe("");
+  });
+
+  it("never patches a blank schedule time, restoring a default on blur (P1-3)", async () => {
+    const patch = vi.fn();
+    renderCard({ patch });
+
+    const timeInput = screen.getByDisplayValue("08:00");
+    fireEvent.focus(timeInput);
+    fireEvent.change(timeInput, { target: { value: "" } });
+    fireEvent.blur(timeInput);
+
+    // A cleared native time input sends time:"" which the server rejects with a
+    // 400, dropping every co-batched setting — and the autosave re-queue would
+    // then re-send the invalid payload on every subsequent flush.
+    await waitFor(() => expect(patch).toHaveBeenCalled());
+    const lastPayload = patch.mock.calls.at(-1)[0];
+    expect(lastPayload.schedules_json[0].time.trim()).not.toBe("");
+  });
+
   it("applies skip results returned by the API", async () => {
     mockApi.skipSchedule.mockResolvedValue({
       schedules: [

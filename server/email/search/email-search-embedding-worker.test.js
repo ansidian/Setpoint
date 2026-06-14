@@ -318,4 +318,33 @@ describe("email search embedding worker", () => {
       ],
     });
   });
+
+  it("does not run an unbounded full-body coverage scan on a steady-state cron run (P1-9)", async () => {
+    db = await createWorkerTestDb();
+    const fresh = await seedIndexedEmail(db, { uid: "fresh", subject: "Already embedded" });
+    await upsertFreshEmbedding(db, fresh);
+
+    const executed = [];
+    const realExecute = db.execute.bind(db);
+    db.execute = (arg) => {
+      executed.push(typeof arg === "string" ? arg : arg.sql);
+      return realExecute(arg);
+    };
+
+    const result = await processEmailSearchEmbeddingBatch("user-1", {
+      dbClient: db,
+      embeddingClient: { embed: vi.fn() },
+      capability: { mode: "fallback" },
+    });
+
+    expect(result).toMatchObject({ status: "active", embedded: 0 });
+
+    // The bounded candidate query may fetch bodies (it is LIMIT-guarded); the bug
+    // is the EXTRA unbounded full-table body scan the coverage status ran twice
+    // per cron tick. After the fix, no body_text SELECT runs without a LIMIT.
+    const unboundedBodyScans = executed.filter(
+      (sql) => /body_text/.test(sql) && !/\blimit\b/i.test(sql),
+    );
+    expect(unboundedBodyScans).toEqual([]);
+  });
 });

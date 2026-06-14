@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DesktopReader from "./DesktopReader.jsx";
 
@@ -18,6 +18,7 @@ afterEach(() => {
 
 function renderReader(overrides = {}) {
   const onAction = vi.fn();
+  const setDrafting = overrides.setDrafting || vi.fn();
   render(
     <DesktopReader
       email={{
@@ -37,7 +38,7 @@ function renderReader(overrides = {}) {
       onAction={onAction}
       onClose={() => {}}
       showTriage={false}
-      showDraft={false}
+      showDraft={overrides.showDraft || false}
       billOpen={overrides.billOpen || false}
       billMounted={overrides.billMounted || false}
       setBillOpen={() => {}}
@@ -47,12 +48,12 @@ function renderReader(overrides = {}) {
       snoozeOpen={false}
       setSnoozeOpen={() => {}}
       bodyState={overrides.bodyState || { loading: false, error: null, body: "" }}
-      drafting={false}
-      setDrafting={() => {}}
+      drafting={overrides.drafting || false}
+      setDrafting={setDrafting}
       readOnly={overrides.readOnly || false}
     />,
   );
-  return { onAction };
+  return { onAction, setDrafting };
 }
 
 describe("DesktopReader snapshot actions", () => {
@@ -249,5 +250,29 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+  });
+});
+
+describe("DesktopReader draft reply (P1-2)", () => {
+  it("copies the AI draft to the clipboard without trashing the email", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const { onAction, setDrafting } = renderReader({
+      showDraft: true,
+      email: { claude: { draftReply: "Thanks, that works for me." } },
+    });
+
+    // The draft panel's primary action must copy, not send-and-trash. There is
+    // no send endpoint, so the old "Send" button silently trashed the email.
+    fireEvent.click(screen.getByRole("button", { name: /copy draft/i }));
+
+    await waitFor(() => expect(setDrafting).toHaveBeenCalledWith(false));
+    expect(writeText).toHaveBeenCalledWith("Thanks, that works for me.");
+    expect(onAction).not.toHaveBeenCalledWith("trash");
+    expect(screen.queryByRole("button", { name: /^send$/i })).toBeNull();
   });
 });
