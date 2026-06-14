@@ -77,28 +77,30 @@ describe("useCalendarFloatingDetail DOM anchoring", () => {
       mode: "create",
       dateKey: "2026-04-08",
       anchorKind: "day-cell",
-      parked: false,
     });
     expect(hookHolder.current.floatingDetail.anchorElement).toBe(screen.getByTestId("calendar-cell-8"));
   });
 
-  it("re-resolves the anchor to the matching cell when reanchored by date", () => {
+  it("re-resolves the anchor to the matching cell when reopened for another date", () => {
     render(<Harness />);
 
     fireEvent.click(screen.getByTestId("calendar-cell-8"));
     act(() => {
-      hookHolder.current.reanchorFloatingDetail({ dateKey: "2026-04-07" });
+      hookHolder.current.openFloatingDetail({ mode: "create", view: "events", dateKey: "2026-04-07" });
     });
 
     expect(hookHolder.current.floatingDetail).toMatchObject({
       dateKey: "2026-04-07",
       anchorKind: "day-cell",
-      parked: false,
     });
     expect(hookHolder.current.floatingDetail.anchorElement).toBe(screen.getByTestId("calendar-cell-7"));
+    expect(hookHolder.current.findDateCell("2026-04-08")).toBe(screen.getByTestId("calendar-cell-8"));
   });
 
-  it("parks the panel when no cell satisfies the anchor contract", () => {
+  it("opens with a null anchor when no cell satisfies the anchor contract", () => {
+    // Parking is rAF-driven at the placement layer now; the hook's contract is
+    // that an unmatched dateKey yields no anchor element instead of a stale or
+    // wrong-cell anchor.
     render(<Harness />);
 
     act(() => {
@@ -107,8 +109,7 @@ describe("useCalendarFloatingDetail DOM anchoring", () => {
 
     expect(hookHolder.current.floatingDetail).toMatchObject({
       open: true,
-      anchorKind: "parked",
-      parked: true,
+      dateKey: "2026-05-01",
     });
     expect(hookHolder.current.floatingDetail.anchorElement).toBeNull();
   });

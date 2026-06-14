@@ -7,6 +7,7 @@ import { isPinnedCalendarEvent, visualEventDateRange } from "../modal/calendarEv
 import {
   getDeadlineOverlayComputed,
   getPlanningItemId,
+  matchesPlanningItemId,
   mergeDeadlineOverlayIntoEvents,
   orderPlanningItems,
 } from "./events/eventsPlanningModel.js";
@@ -113,6 +114,7 @@ const eventsView = {
   icon: CalendarIcon,
   getDefaultSelectedItemId,
   getItemId: getPlanningItemId,
+  matchesItemId: matchesPlanningItemId,
   label: "Events",
 };
 

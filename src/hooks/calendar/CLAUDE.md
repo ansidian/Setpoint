@@ -6,6 +6,11 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Models (pure)
 - `calendarRangeModel.js` — month key arithmetic, range expansion, fetch grouping
+- `calendarScrollModel.js` — month index math, navigable radius, scroll direction, prefetch range
+- `calendarScrollSyncModel.js` — pure decisions for grid↔agenda scroll sync
+- `calendarGridRowModel.js` — fixed week-row heights and per-month row layout math
+- `agendaFetchModel.js` — agenda month fetch planning: initial months, scroll prefetch
+- `agendaScrollModel.js` — agenda scroll math (no runtime consumers yet; covered by its tests)
 - `calendarPlanningSessionModel.js` — planning state transitions (idle/loading/slow/degraded)
 - `calendarFloatingDetailModel.js` — floating detail predicates, anchor logic, reanchoring rules
 - `calendarModalInteractionModel.js` — storage keys, view normalization, deadline-create logic
@@ -31,6 +36,8 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ### Domain state + lifecycle
 - `useCalendarRange.js` — per-month event caching/fetching, prefetch radius, staleness
 - `useCalendarDomainRange.js` — deadline/bill prefetch planning from visible bounds
+- `useAgendaFetch.js` — agenda month fetching: initial mount fetch, scroll-driven prefetch
+- `useCalendarScrollSync.js` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands
 - `useStaleDomainCache.js` — generic TTL-gated cache wrapper for domain fetches
 - `useDeadlineOverlayState.js` — overlay visibility triad with persistence
 - `usePlanningReadinessState.js` — planning state machine, deadline fetch orchestration

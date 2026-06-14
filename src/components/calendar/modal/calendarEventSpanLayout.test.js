@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCalendarEventSpanLayout,
   isPinnedCalendarEvent,
+  maxSpanLanes,
+  spanLaneMetrics,
   visualEventDateRange,
 } from "./calendarEventSpanLayout.js";
 
@@ -152,5 +154,145 @@ describe("buildCalendarEventSpanLayout", () => {
       segmentEnd: "2026-04-20",
     });
     expect(layout.pinnedGhostCountByDate["2026-04-20"]).toBe(1);
+  });
+
+  it("keeps timed overnight events out of the pinned layer on their start date", () => {
+    const weekSpan = event({
+      id: "week-span",
+      title: "Week span",
+      allDay: true,
+      startMs: ms("2026-05-16T07:00:00Z"),
+      endMs: ms("2026-05-23T07:00:00Z"),
+    });
+    const overnight = event({
+      id: "overnight",
+      title: "Work",
+      startMs: ms("2026-05-17T03:15:00Z"),
+      endMs: ms("2026-05-17T09:15:00Z"),
+    });
+
+    const layout = buildCalendarEventSpanLayout({
+      monthCells: monthCells("2026-05-10", 14),
+      events: [weekSpan, overnight],
+      layout: { tier: "lg", cellHeight: 164 },
+    });
+
+    expect(layout.pinnedByDate["2026-05-16"].map((item) => item.id)).toEqual(["week-span"]);
+    expect(layout.pinnedByDate["2026-05-17"].map((item) => item.id)).toEqual(["week-span", "overnight"]);
+    expect(layout.spanSegments.find((segment) => (
+      segment.eventId === "overnight" && segment.segmentStart <= "2026-05-16"
+    ))).toBeUndefined();
+  });
+});
+
+describe("spanLaneMetrics", () => {
+  it("returns default metrics for lg tier", () => {
+    const m = spanLaneMetrics({ tier: "lg" });
+    expect(m).toEqual({ rowTop: 30, height: 36, gap: 4 });
+  });
+
+  it("returns taller rowTop for uhd tier", () => {
+    expect(spanLaneMetrics({ tier: "uhd" }).rowTop).toBe(32);
+    expect(spanLaneMetrics({ tier: "xl" }).rowTop).toBe(32);
+  });
+});
+
+describe("maxSpanLanes", () => {
+  it("computes lanes that fit within cellHeight", () => {
+    expect(maxSpanLanes(164, { tier: "lg" })).toBe(3);
+  });
+
+  it("returns 1 when only one lane fits", () => {
+    expect(maxSpanLanes(70, { tier: "lg" })).toBe(1);
+  });
+
+  it("returns at least 1 even for very small cells", () => {
+    expect(maxSpanLanes(30, { tier: "lg" })).toBe(1);
+  });
+});
+
+describe("span lane capacity overflow", () => {
+  it("caps visible segments at maxLanes and routes excess to pinnedOverflowByDate", () => {
+    const cells = monthCells("2026-04-19", 7);
+    const events = Array.from({ length: 5 }, (_, i) => event({
+      id: `ad-${i}`,
+      title: `All-day ${i}`,
+      allDay: true,
+      startMs: ms("2026-04-20T07:00:00Z"),
+      endMs: ms("2026-04-21T07:00:00Z"),
+    }));
+
+    const layout = buildCalendarEventSpanLayout({
+      monthCells: cells,
+      events,
+      layout: { tier: "lg", cellHeight: 164 },
+    });
+
+    const maxLanes = maxSpanLanes(164, { tier: "lg" });
+    expect(layout.spanSegments.length).toBe(maxLanes);
+
+    expect(layout.pinnedOverflowByDate["2026-04-20"]).toBeDefined();
+    expect(layout.pinnedOverflowByDate["2026-04-20"].size).toBe(5 - maxLanes);
+  });
+
+  it("caps reservedLaneCountByDate at maxLanes", () => {
+    const cells = monthCells("2026-04-19", 7);
+    const events = Array.from({ length: 5 }, (_, i) => event({
+      id: `ad-${i}`,
+      title: `All-day ${i}`,
+      allDay: true,
+      startMs: ms("2026-04-20T07:00:00Z"),
+      endMs: ms("2026-04-21T07:00:00Z"),
+    }));
+
+    const layout = buildCalendarEventSpanLayout({
+      monthCells: cells,
+      events,
+      layout: { tier: "lg", cellHeight: 164 },
+    });
+
+    const maxLanes = maxSpanLanes(164, { tier: "lg" });
+    expect(layout.reservedLaneCountByDate["2026-04-20"]).toBe(maxLanes);
+  });
+
+  it("keeps all events in pinnedIds even when overflowed", () => {
+    const cells = monthCells("2026-04-19", 7);
+    const events = Array.from({ length: 5 }, (_, i) => event({
+      id: `ad-${i}`,
+      title: `All-day ${i}`,
+      allDay: true,
+      startMs: ms("2026-04-20T07:00:00Z"),
+      endMs: ms("2026-04-21T07:00:00Z"),
+    }));
+
+    const layout = buildCalendarEventSpanLayout({
+      monthCells: cells,
+      events,
+      layout: { tier: "lg", cellHeight: 164 },
+    });
+
+    for (let i = 0; i < 5; i++) {
+      expect(layout.pinnedIds.has(`ad-${i}`)).toBe(true);
+    }
+  });
+
+  it("has no overflow when all spans fit", () => {
+    const cells = monthCells("2026-04-19", 7);
+    const events = Array.from({ length: 2 }, (_, i) => event({
+      id: `ad-${i}`,
+      title: `All-day ${i}`,
+      allDay: true,
+      startMs: ms("2026-04-20T07:00:00Z"),
+      endMs: ms("2026-04-21T07:00:00Z"),
+    }));
+
+    const layout = buildCalendarEventSpanLayout({
+      monthCells: cells,
+      events,
+      layout: { tier: "lg", cellHeight: 164 },
+    });
+
+    expect(layout.spanSegments.length).toBe(2);
+    expect(Object.keys(layout.pinnedOverflowByDate)).toHaveLength(0);
   });
 });

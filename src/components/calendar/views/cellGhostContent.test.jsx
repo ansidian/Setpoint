@@ -234,4 +234,37 @@ describe("calendar cell ghost content", () => {
     const chips = screen.getAllByText(/Earlier calendar event|Air fry dinner|Draft event/).map((node) => node.textContent);
     expect(chips).toEqual(["Earlier calendar event", "Air fry dinner", "Draft event"]);
   });
+
+  it("keeps overnight timed event starts in chronological order with normal event chips", () => {
+    render(renderEventsCellContents({
+      items: [
+        {
+          id: "overnight",
+          title: "Work overnight",
+          startMs: new Date("2026-05-17T03:15:00.000Z").getTime(),
+          endMs: new Date("2026-05-17T09:15:00.000Z").getTime(),
+          color: "#4285f4",
+          source: "gmail",
+        },
+        {
+          id: "early",
+          title: "Work early",
+          startMs: new Date("2026-05-16T11:00:00.000Z").getTime(),
+          endMs: new Date("2026-05-16T15:00:00.000Z").getTime(),
+          color: "#4285f4",
+          source: "gmail",
+        },
+      ],
+      pinnedIds: new Set(["overnight"]),
+      pinnedIdsByDate: {
+        "2026-05-17": new Set(["overnight"]),
+      },
+      layout,
+      day: 16,
+      dateKey: "2026-05-16",
+    }));
+
+    const chips = screen.getAllByTestId("calendar-cell-item-chip").map((node) => node.textContent);
+    expect(chips).toEqual(["4aWork early", "8:15pWork overnight"]);
+  });
 });

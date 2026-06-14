@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CURRENT_MONTH_BOUNDARY_COLOR,
+  OTHER_MONTH_BOUNDARY_COLOR,
   overflowHiddenSignature,
   overflowStateIsLiveInScope,
   resolveOverflowPresentation,
@@ -17,6 +19,9 @@ function overflowItemMatchesId(item, itemId) {
 export default function useCalendarGridOverflow({
   activeView,
   currentSelectionKey,
+  currentMonth,
+  currentYear,
+  enabled = true,
   gridBodyRef,
   gridSelectedItemId,
   gridShellRef,
@@ -27,7 +32,6 @@ export default function useCalendarGridOverflow({
 }) {
   const ignoreOverflowScrollUntilRef = useRef(0);
   const [suppressedSelectedHiddenAutoOpenKey, setSuppressedSelectedHiddenAutoOpenKey] = useState(null);
-  const [overflowReanchorDateKey, setOverflowReanchorDateKey] = useState(null);
   const [overflowState, setOverflowState] = useState(null);
   const resolvedOverflow =
     overflowStateIsLiveInScope(overflowState, { view, viewYear, viewMonth })
@@ -35,6 +39,18 @@ export default function useCalendarGridOverflow({
       : null;
   const resolvedPopover =
     resolvedOverflow?.mode === "fallback" ? resolvedOverflow : null;
+
+  const getTrailingBoundaryColor = useCallback((cellBoundaryColor) => {
+    if (cellBoundaryColor) return cellBoundaryColor;
+    const nextMonth = viewMonth === 11 ? 0 : viewMonth + 1;
+    const nextYear = viewMonth === 11 ? viewYear + 1 : viewYear;
+    const boundaryTouchesCurrentMonth =
+      (viewYear === currentYear && viewMonth === currentMonth)
+      || (nextYear === currentYear && nextMonth === currentMonth);
+    return boundaryTouchesCurrentMonth
+      ? CURRENT_MONTH_BOUNDARY_COLOR
+      : OTHER_MONTH_BOUNDARY_COLOR;
+  }, [currentMonth, currentYear, viewMonth, viewYear]);
 
   const closeOverflow = useCallback(
     ({ restoreFocus = false } = {}) => {
@@ -68,13 +84,14 @@ export default function useCalendarGridOverflow({
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     function handleOverflowCloseRequest() {
       if (currentSelectionKey) setSuppressedSelectedHiddenAutoOpenKey(currentSelectionKey);
       setOverflowState(null);
     }
     document.addEventListener("calendar-overflow-close", handleOverflowCloseRequest);
     return () => document.removeEventListener("calendar-overflow-close", handleOverflowCloseRequest);
-  }, [currentSelectionKey]);
+  }, [currentSelectionKey, enabled]);
 
   const validateOverflowHiddenItems = useCallback((composition) => {
     setOverflowState((current) => {
@@ -113,22 +130,14 @@ export default function useCalendarGridOverflow({
     ignoreOverflowScrollUntilRef.current = performance.now() + 220;
   }, []);
 
-  const clearOverflowReanchorRequest = useCallback((dateKey) => {
-    setOverflowReanchorDateKey((current) => (
-      !dateKey || current === dateKey ? null : current
-    ));
-  }, []);
-
   const handleOpenOverflow = useCallback(({
     triggerElement,
     hiddenItems,
     totalCount,
     visibleCount,
-    hiddenStackHeight,
     leadingColumnWidth,
     focusOnOpen,
     forceOpen,
-    reanchorItemId,
     anchorKey,
     cell,
     day,
@@ -144,18 +153,15 @@ export default function useCalendarGridOverflow({
         });
         if (sameLiveOverflow) {
           if (!forceOpen) return null;
-          if (reanchorItemId == null) return current;
-          return {
-            ...current,
-            keepOpenItemId: String(reanchorItemId),
-          };
+          return current;
         }
       }
       const presentation = resolveOverflowPresentation({
         triggerElement,
-        hiddenStackHeight,
         layout,
         containerElement: gridBodyRef.current,
+        hiddenItemCount: hiddenItems?.length ?? 0,
+        boundaryColor: getTrailingBoundaryColor(cell.boundaryColor),
       });
       if (!presentation) return current;
       return {
@@ -163,8 +169,9 @@ export default function useCalendarGridOverflow({
         triggerElement,
         sourceCellElement,
         inlineAnchor: presentation.inlineAnchor,
+        carryBoundaryToBottom: presentation.carryBoundaryToBottom,
         boundarySides: cell.boundarySides,
-        boundaryColor: cell.boundaryColor,
+        boundaryColor: presentation.boundaryColor,
         items: hiddenItems,
         totalCount,
         visibleCount,
@@ -187,33 +194,18 @@ export default function useCalendarGridOverflow({
         viewMonth,
         anchorKey,
         hiddenSignature: overflowHiddenSignature(hiddenItems),
-        keepOpenItemId: forceOpen && reanchorItemId != null ? String(reanchorItemId) : null,
+        keepOpenItemId: null,
       };
     });
-  }, [activeView.label, gridBodyRef, layout, view, viewMonth, viewYear]);
-
-  const openOverflowForReanchor = useCallback((dateKey) => {
-    if (!dateKey || resolvedOverflow?.dateKey === dateKey) return false;
-    if (overflowReanchorDateKey === dateKey) return true;
-    const trigger = gridShellRef.current?.querySelector?.(
-      `[role='gridcell'][data-date-key='${dateKey}'] [data-calendar-overflow-trigger='true']`,
-    );
-    if (!trigger) return false;
-    markOverflowInteraction();
-    setOverflowReanchorDateKey(dateKey);
-    return true;
-  }, [gridShellRef, markOverflowInteraction, overflowReanchorDateKey, resolvedOverflow?.dateKey]);
+  }, [activeView.label, getTrailingBoundaryColor, gridBodyRef, layout, view, viewMonth, viewYear]);
 
   return {
-    clearOverflowReanchorRequest,
     clearSuppressedSelectedHiddenAutoOpenKey,
     closeOverflow,
     closeOverflowWithoutFocus,
     handleOpenOverflow,
     ignoreOverflowScrollUntilRef,
     markOverflowInteraction,
-    openOverflowForReanchor,
-    overflowReanchorDateKey,
     resolvedOverflow,
     resolvedPopover,
     setOverflowState,

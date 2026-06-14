@@ -1,5 +1,4 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { GRID_ROWS } from "./calendarGridUtils.js";
 
 export default function CalendarGridSkeleton({
   firstDay,
@@ -7,8 +6,7 @@ export default function CalendarGridSkeleton({
   trailingEmpty,
   cellHeight,
   gridGap,
-  fillHeight,
-  rowCount,
+  weekRows,
 }) {
   const rowWidths = cellHeight >= 96 ? ["84%", "71%", "58%"] : ["86%", "63%"];
 
@@ -21,9 +19,7 @@ export default function CalendarGridSkeleton({
         inset: 0,
         display: "grid",
         gridTemplateColumns: "repeat(7, 1fr)",
-        gridTemplateRows: fillHeight
-          ? `repeat(${rowCount}, minmax(0, 1fr))`
-          : `repeat(${GRID_ROWS}, ${cellHeight}px)`,
+        gridTemplateRows: `repeat(${weekRows}, ${cellHeight}px)`,
         gap: gridGap,
         pointerEvents: "none",
       }}

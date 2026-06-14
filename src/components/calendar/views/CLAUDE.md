@@ -11,6 +11,7 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 
 ### agenda (shared rail infrastructure)
 - `agenda/AgendaRailShell.jsx` — scrollable rail container with focus and row navigation
+- `agenda/AgendaMonthScrollContainer.jsx` — multi-month rail scroller: section registration, topmost-date walk, entry anchor, passive-sync emission
 - `agenda/MiniCalendar.jsx` — month picker with day markers and counts
 - `agenda/agendaDateModel.js` — date grouping, month bounds, header label formatting
 - `agenda/miniCalendarModel.js` — mini-calendar cells, marker colors, item dedup

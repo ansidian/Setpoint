@@ -7,12 +7,14 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 ### Shell + header
 - `CalendarModalShell.jsx` — three-rail modal layout, floating detail, backdrop composition
 - `CalendarModalHeader.jsx` — month/year title, view toggle, search, close
+- `CalendarJumpToMonth.jsx` — month/year jump picker popover with crossfade transitions
 - `CalendarModalBackdrop.jsx` — fixed gradient backdrop
 - `CalendarModalTexture.jsx` — decorative noise overlay
 - `buildCalendarModalShellProps.js` — adapter: controller bundles → shell props contract
 - `buildContextContent.jsx` — context-rail content router (editor/detail/empty/summary)
 
 ### Grid + cells
+- `CalendarScrollContainer.jsx` — infinite multi-month scroll viewport: grid stacking, week-row snap, boundary stepping
 - `CalendarGrid.jsx` — month grid orchestration: cells, overlays, selection handlers
 - `CalendarGridCells.jsx` — renders day cells, derives per-cell state
 - `CalendarCell.jsx` — single day cell: styling, header, weather, drag-drop targets
@@ -37,10 +39,10 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 ### Spans + boundaries
 - `CalendarEventSpanOverlay.jsx` — multi-day events as pinned row-spanning segments
 - `calendarEventSpanLayout.js` — span lane allocation, segment splitting, lane height single-source
-- `CalendarMonthBoundaryOverlay.jsx` — month boundary separators
 
 ### Floating detail
 - `CalendarFloatingDetailPanel.jsx` — anchored floating panel: drag, resize response
+- `CalendarFloatingDetailCloseButton.jsx` — close control shared by detail and editor headers
 - `CalendarFloatingDetailContent.jsx` — routes detail/editor for deadlines vs events
 - `calendarFloatingDetailPlacement.js` — anchor placement with viewport clamping and side flip
 

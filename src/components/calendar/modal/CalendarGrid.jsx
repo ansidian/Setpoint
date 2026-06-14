@@ -1,22 +1,25 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
-import { buildCalendarEventSpanLayout } from "./calendarEventSpanLayout.js";
+import {
+  buildCalendarEventSpanLayout,
+  isPinnedCalendarGhost,
+} from "./calendarEventSpanLayout.js";
 import { getEventSelectionId } from "../../../lib/shell-helpers";
 import CalendarGridCells from "./CalendarGridCells.jsx";
 import CalendarGridLayers from "./CalendarGridLayers.jsx";
+import CalendarGridSkeleton from "./CalendarGridSkeleton.jsx";
 import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";
 import useCalendarGridEffects from "./useCalendarGridEffects.js";
 import useCalendarGridOverflow from "./useCalendarGridOverflow.js";
 import {
-  GRID_ROWS,
   buildCalendarMonthCells,
-  createMonthWheelState,
   sameOverflowDate,
   spanCoversOverflowDate,
 } from "./calendarGridUtils.js";
+import { renderedRows } from "../../../hooks/calendar/calendarGridRowModel.js";
 
-export default function CalendarGrid({
+export default memo(function CalendarGrid({
   view,
   viewYear,
   viewMonth,
@@ -25,7 +28,6 @@ export default function CalendarGrid({
   todayDate,
   firstDay,
   daysInMonth,
-  trailingEmpty,
   itemsByDay,
   itemsByDate,
   cellMetaByDate,
@@ -45,17 +47,9 @@ export default function CalendarGrid({
   eventQuickActions,
   deadlineQuickActions,
   ghostPreview,
-  canGoPrev = true,
-  navigateMonth,
-  monthWheelStateRef,
-  monthMotionDirection = 0,
   onOpenFloatingDetail,
   onCloseFloatingDetail,
-  onReanchorFloatingDetail,
-  floatingDetailAnchorElement = null,
-  floatingDetailAnchorKind = null,
   floatingDetailOpen = false,
-  floatingDetailParked = false,
   floatingDetailItemId = null,
   floatingDetailMode = null,
   floatingDetailDateKey = null,
@@ -64,26 +58,23 @@ export default function CalendarGrid({
   onShakeFloatingEditor,
   onDirectDateAction,
   onDirectItemAction,
+  showWeekHeader = true,
+  isActiveMonth = true,
+  previewEvents = null,
+  previewDeadlineOverlay = null,
 }) {
   const gridShellRef = useRef(null);
   const gridBodyRef = useRef(null);
-  const fallbackMonthWheelStateRef = useRef(createMonthWheelState());
-  const activeMonthWheelStateRef = monthWheelStateRef || fallbackMonthWheelStateRef;
   const [activeSpanSegmentId, setActiveSpanSegmentId] = useState(null);
-  const fillGridHeight = !layout.stacked;
-  const gridRowCount = fillGridHeight
-    ? Math.max(1, Math.ceil((firstDay + daysInMonth) / 7))
-    : GRID_ROWS;
-  const resolvedTrailingEmpty = fillGridHeight
-    ? Math.max(0, gridRowCount * 7 - firstDay - daysInMonth)
-    : trailingEmpty;
-  const gridSelectedDateKey =
-    floatingDetailParked && floatingDetailDateKey
-      ? floatingDetailDateKey
-      : selectedDateKey;
-  const gridSelectedItemId = floatingDetailParked
-    ? (floatingDetailItemId != null ? String(floatingDetailItemId) : null)
-    : selectedItemId;
+  const weekRows = renderedRows(viewYear, viewMonth);
+  const resolvedTrailingEmpty = Math.max(0, weekRows * 7 - firstDay - daysInMonth);
+  const gridSelectedDateKey = selectedDateKey;
+  const floatingDetailSelectionItemId = floatingDetailOpen
+    && floatingDetailMode === "detail"
+    && floatingDetailItemId != null
+    ? String(floatingDetailItemId)
+    : null;
+  const gridSelectedItemId = selectedItemId ?? floatingDetailSelectionItemId;
   const eventDateCells = view === "events";
   const shouldFilterCompletedDeadlines = false;
   const eventsPlanningQuickActions = useMemo(() => {
@@ -102,15 +93,12 @@ export default function CalendarGrid({
     ? `${gridSelectedDateKey}:${gridSelectedItemId}`
     : null;
   const {
-    clearOverflowReanchorRequest,
     clearSuppressedSelectedHiddenAutoOpenKey,
     closeOverflow,
     closeOverflowWithoutFocus,
     handleOpenOverflow,
     ignoreOverflowScrollUntilRef,
     markOverflowInteraction,
-    openOverflowForReanchor,
-    overflowReanchorDateKey,
     resolvedOverflow,
     resolvedPopover,
     setOverflowState,
@@ -118,7 +106,10 @@ export default function CalendarGrid({
     validateOverflowHiddenItems,
   } = useCalendarGridOverflow({
     activeView,
+    currentMonth,
+    currentYear,
     currentSelectionKey,
+    enabled: true,
     gridBodyRef,
     gridSelectedItemId,
     gridShellRef,
@@ -128,16 +119,38 @@ export default function CalendarGrid({
     viewYear,
   });
   const floatingEditorOpen = floatingDetailMode === "edit" || floatingDetailMode === "create";
-  const eventCellCount = (fillGridHeight ? gridRowCount : GRID_ROWS) * 7;
-  const monthCells = buildCalendarMonthCells({
-    cellCount: eventCellCount,
-    currentMonth,
-    currentYear,
-    firstDay,
-    viewMonth,
-    viewYear,
-  });
+  const eventCellCount = weekRows * 7;
+  const monthCells = useMemo(
+    () => buildCalendarMonthCells({
+      cellCount: eventCellCount,
+      currentMonth,
+      currentYear,
+      firstDay,
+      viewMonth,
+      viewYear,
+    }),
+    [eventCellCount, currentMonth, currentYear, firstDay, viewMonth, viewYear],
+  );
 
+  const previewComputed = useMemo(() => {
+    if (isActiveMonth) return null;
+    if (!previewEvents?.length && !previewDeadlineOverlay?.data) return null;
+    if (typeof activeView.compute !== "function") return null;
+    return activeView.compute({
+      data: {
+        events: previewEvents || [],
+        deadlineOverlay: previewDeadlineOverlay,
+      },
+      viewYear,
+      viewMonth,
+    });
+  }, [isActiveMonth, previewEvents, previewDeadlineOverlay, activeView, viewYear, viewMonth]);
+
+  const resolvedItemsByDate = previewComputed?.itemsByDate || itemsByDate;
+  const resolvedItemsByDay = previewComputed?.itemsByDay || itemsByDay;
+
+  const resolvedEvents = viewData?.events || previewEvents || emptyEvents;
+  const spanLayoutGhosts = useStableSpanLayoutGhosts(ghostPreview?.ghosts);
   const spanLayout = useMemo(() => {
     if (view !== "events") {
       return {
@@ -146,43 +159,17 @@ export default function CalendarGrid({
         reservedLaneCountByDate: {},
         pinnedGhostCountByDate: {},
         pinnedIds: new Set(),
+        pinnedIdsByDate: {},
+        pinnedOverflowByDate: {},
       };
     }
     return buildCalendarEventSpanLayout({
       monthCells,
-      events: viewData?.events || [],
-      ghosts: ghostPreview?.ghosts || [],
+      events: resolvedEvents,
+      ghosts: spanLayoutGhosts,
       layout,
     });
-  }, [ghostPreview?.ghosts, layout, monthCells, view, viewData?.events]);
-
-  const handleReanchorFloatingDetail = useCallback((payload) => {
-    if (payload?.day != null) {
-      setSelectedDay?.(payload.day);
-    }
-    if (payload?.dateKey) {
-      setSelectedDateKey?.(payload.dateKey);
-    }
-    if (payload?.itemId != null) {
-      setSelectedItemId?.(String(payload.itemId));
-      if (payload.dateKey) {
-        onDirectItemAction?.(payload.itemId, payload.dateKey);
-      }
-    } else if (payload?.mode !== "detail") {
-      setSelectedItemId?.(null);
-      if (payload?.dateKey) {
-        onDirectDateAction?.(payload.dateKey);
-      }
-    }
-    onReanchorFloatingDetail?.(payload);
-  }, [
-    onDirectDateAction,
-    onDirectItemAction,
-    onReanchorFloatingDetail,
-    setSelectedDateKey,
-    setSelectedDay,
-    setSelectedItemId,
-  ]);
+  }, [layout, monthCells, resolvedEvents, spanLayoutGhosts, view]);
 
   function handleSelectDay(
     day,
@@ -311,39 +298,22 @@ export default function CalendarGrid({
   }
 
   useCalendarGridEffects({
-    activeMonthWheelStateRef,
-    canGoPrev,
+    enabled: isActiveMonth,
+    overflowInteractionEnabled: true,
     closeOverflow,
-    floatingDetailAnchorElement,
-    floatingDetailAnchorKind,
-    floatingDetailDateKey,
-    floatingDetailItemId,
-    floatingDetailMode,
     floatingDetailOpen,
-    floatingDetailParked,
     gridShellRef,
     ignoreOverflowScrollUntilRef,
-    layout,
     eventSelectionActive: !!eventQuickActions?.eventSelectionActive,
-    navigateMonth,
-    onOpenOverflowForReanchor: openOverflowForReanchor,
-    onRefreshFloatingDetailAnchor: onReanchorFloatingDetail,
-    onReanchorFloatingDetail: handleReanchorFloatingDetail,
     resolvedOverflow,
-    selectedDateKey: gridSelectedDateKey,
-    selectedDay,
-    selectedItemId: gridSelectedItemId,
     setOverflowState,
     suppressOutsideClick,
-    view,
-    viewMonth,
-    viewYear,
   });
 
   return (
     <div
       ref={gridShellRef}
-      data-testid="calendar-grid-shell"
+      data-testid={isActiveMonth ? "calendar-grid-shell" : undefined}
       style={{
         minWidth: 0,
         width: "100%",
@@ -355,14 +325,14 @@ export default function CalendarGrid({
         height: "100%",
       }}
     >
-      <CalendarGridWeekHeader gap={layout.weekHeaderGap} />
+      {showWeekHeader ? <CalendarGridWeekHeader gap={layout.weekHeaderGap} /> : null}
 
       <div
         ref={gridBodyRef}
         style={{ position: "relative", flex: 1, minHeight: 0 }}
       >
         <div
-          data-testid="calendar-grid-month"
+          data-testid={isActiveMonth ? "calendar-grid-month" : undefined}
           role="grid"
           aria-label={`${activeView.label || view} calendar for ${new Date(
             viewYear,
@@ -372,42 +342,26 @@ export default function CalendarGrid({
             year: "numeric",
           })}`}
           key={`${view}-${viewYear}-${viewMonth}`}
-          data-month-motion={
-            monthMotionDirection > 0
-              ? "next"
-              : monthMotionDirection < 0
-                ? "prev"
-                : "none"
-          }
           style={{
             position: "relative",
-            height: "100%",
             display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gridTemplateRows: fillGridHeight
-              ? `repeat(${gridRowCount}, minmax(0, 1fr))`
-              : `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
+            gridTemplateColumns: "1fr",
+            gridTemplateRows: `repeat(${weekRows}, ${layout.cellHeight}px)`,
             gap: layout.gridGap,
-            animation:
-              monthMotionDirection > 0
-                ? "calendarMonthSlideNext 170ms cubic-bezier(0.16, 1, 0.3, 1)"
-                : monthMotionDirection < 0
-                  ? "calendarMonthSlidePrev 170ms cubic-bezier(0.16, 1, 0.3, 1)"
-                  : "none",
-            willChange: monthMotionDirection ? "transform, opacity" : "auto",
           }}
         >
           <CalendarGridCells
             activeView={activeView}
             buildFallbackDayState={buildFallbackDayState}
+            isActiveMonth={isActiveMonth}
             cellMetaByDate={cellMetaByDate}
             currentMonth={currentMonth}
             currentYear={currentYear}
             eventDateCells={eventDateCells}
             ghostPreview={ghostPreview}
             itemQuickActions={itemQuickActions}
-            itemsByDate={itemsByDate}
-            itemsByDay={itemsByDay}
+            itemsByDate={resolvedItemsByDate}
+            itemsByDay={resolvedItemsByDay}
             layout={layout}
             monthCells={monthCells}
             onBeforeItemAction={onCloseFloatingDetail}
@@ -415,10 +369,8 @@ export default function CalendarGrid({
             onHiddenItemsChange={validateOverflowHiddenItems}
             onInlineOverflowInteraction={markOverflowInteraction}
             onOpenOverflow={handleOpenOverflow}
-            onOverflowReanchorRequestHandled={clearOverflowReanchorRequest}
             onSelectDay={handleSelectDay}
             onSelectItem={handleSelectItem}
-            overflowReanchorDateKey={overflowReanchorDateKey}
             resolvedOverflow={resolvedOverflow}
             selectedCellKey={selectedCellKey}
             selectedDay={selectedDay}
@@ -438,9 +390,8 @@ export default function CalendarGrid({
           daysInMonth={daysInMonth}
           eventDateCells={eventDateCells}
           eventQuickActions={eventQuickActions}
-          fillGridHeight={fillGridHeight}
           firstDay={firstDay}
-          gridRowCount={gridRowCount}
+          weekRows={weekRows}
           itemQuickActions={itemQuickActions}
           layout={layout}
           monthCells={monthCells}
@@ -491,4 +442,40 @@ export default function CalendarGrid({
       />
     </div>
   );
+});
+
+const emptyEvents = [];
+
+function useStableSpanLayoutGhosts(ghosts) {
+  const signature = spanLayoutGhostSignature(ghosts);
+  return useMemo(() => (
+    signature ? JSON.parse(signature) : emptyEvents
+  ), [signature]);
+}
+
+function selectSpanLayoutGhosts(ghosts) {
+  const pinnedGhosts = (ghosts || []).filter((ghost) => (
+    ghost?.kind === "event" && isPinnedCalendarGhost(ghost)
+  ));
+  return pinnedGhosts.length ? pinnedGhosts : emptyEvents;
+}
+
+function spanLayoutGhostSignature(ghosts) {
+  const pinnedGhosts = selectSpanLayoutGhosts(ghosts);
+  if (!pinnedGhosts.length) return "";
+  return JSON.stringify(pinnedGhosts.map((ghost) => ({
+    id: ghost?.id || "",
+    kind: "event",
+    title: ghost?.title || "",
+    startDate: ghost?.startDate || "",
+    endDate: ghost?.endDate || "",
+    startTime: ghost?.startTime || "",
+    endTime: ghost?.endTime || "",
+    allDay: !!ghost?.allDay,
+    color: ghost?.color || "",
+    sourceColor: ghost?.sourceColor || "",
+    isRecurring: !!ghost?.isRecurring,
+    recurring: !!ghost?.recurring,
+    startMs: ghost?.startMs || null,
+  })));
 }

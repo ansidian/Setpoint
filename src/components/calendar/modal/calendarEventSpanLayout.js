@@ -66,10 +66,32 @@ function visualGhostDateRange(ghost) {
   return normalizeRange(ghost.startDate, ghost.endDate);
 }
 
+export function spanLaneMetrics(layout) {
+  return {
+    rowTop: layout?.tier === "uhd" || layout?.tier === "xl" ? 32 : 30,
+    height: SPAN_LANE_HEIGHT,
+    gap: SPAN_LANE_GAP,
+  };
+}
+
+export function maxSpanLanes(cellHeight, layout) {
+  const { rowTop, height, gap } = spanLaneMetrics(layout);
+  if (cellHeight <= rowTop + height) return 1;
+  return Math.floor((cellHeight - rowTop - height) / (height + gap)) + 1;
+}
+
 export function isPinnedCalendarEvent(event) {
+  const range = pinnedEventDateRange(event);
+  return !!range;
+}
+
+function pinnedEventDateRange(event) {
   const range = visualEventDateRange(event);
-  if (!range) return false;
-  return !!event?.allDay || range.startDate !== range.endDate;
+  if (!range) return null;
+  if (event?.allDay) return range;
+  if (range.startDate === range.endDate) return null;
+  const continuationStart = addDaysYmd(range.startDate, 1);
+  return normalizeRange(continuationStart, range.endDate);
 }
 
 export function isPinnedCalendarGhost(ghost) {
@@ -87,7 +109,8 @@ function ghostSpanId(ghost) {
 }
 
 function toCandidate(item, kind) {
-  const range = kind === "event" ? visualEventDateRange(item) : visualGhostDateRange(item);
+  const visualRange = kind === "event" ? visualEventDateRange(item) : visualGhostDateRange(item);
+  const range = kind === "event" ? pinnedEventDateRange(item) : visualRange;
   if (!range) return null;
 
   const id = kind === "event" ? eventSpanId(item) : ghostSpanId(item);
@@ -98,6 +121,7 @@ function toCandidate(item, kind) {
     eventId: kind === "event" ? String(id) : null,
     kind,
     item,
+    originalStartDate: visualRange?.startDate || range.startDate,
     startDate: range.startDate,
     endDate: range.endDate,
     interactive: kind === "event",
@@ -156,7 +180,7 @@ function splitCandidateByRows(candidate, dateIndex, firstVisible, lastVisible) {
       columnStart: startPos.column,
       columnEnd: endPos.column + 1,
       lane: 0,
-      startsBeforeSegment: candidate.startDate < cursor,
+      startsBeforeSegment: candidate.originalStartDate < cursor,
       endsAfterSegment: candidate.endDate > segmentEnd,
       interactive: candidate.interactive,
       readOnly: candidate.readOnly,
@@ -254,18 +278,22 @@ export function buildCalendarEventSpanLayout({
   monthCells,
   events,
   ghosts,
+  layout,
 } = {}) {
   const dateIndex = buildDateIndex(monthCells);
   const visibleDates = (monthCells || []).map((cell) => cell?.dateKey).filter(Boolean);
   const firstVisible = visibleDates[0];
   const lastVisible = visibleDates[visibleDates.length - 1];
   const pinnedByDate = {};
+  const pinnedIdsByDate = {};
   const reservedLaneCountByDate = {};
   const pinnedGhostCountByDate = {};
   const pinnedIds = new Set();
+  const pinnedOverflowByDate = {};
+  const laneCapacity = layout?.cellHeight ? maxSpanLanes(layout.cellHeight, layout) : 12;
 
   if (!firstVisible || !lastVisible) {
-    return { spanSegments: [], pinnedByDate, reservedLaneCountByDate, pinnedGhostCountByDate, pinnedIds };
+    return { spanSegments: [], pinnedByDate, pinnedIdsByDate, reservedLaneCountByDate, pinnedGhostCountByDate, pinnedIds, pinnedOverflowByDate };
   }
 
   const eventCandidates = (events || [])
@@ -287,6 +315,10 @@ export function buildCalendarEventSpanLayout({
       if (dateIndex.has(cursor)) {
         if (!pinnedByDate[cursor]) pinnedByDate[cursor] = [];
         pinnedByDate[cursor].push(candidate.item);
+        if (candidate.kind === "event" && candidate.eventId) {
+          if (!pinnedIdsByDate[cursor]) pinnedIdsByDate[cursor] = new Set();
+          pinnedIdsByDate[cursor].add(candidate.eventId);
+        }
         if (candidate.kind === "ghost") {
           pinnedGhostCountByDate[cursor] = (pinnedGhostCountByDate[cursor] || 0) + 1;
         }
@@ -312,19 +344,29 @@ export function buildCalendarEventSpanLayout({
       const lane = firstFreeLane(rowLanes, segment, preferredLane);
       preferredLaneByCandidate.set(candidate.id, lane);
       occupyLane(rowLanes, lane, segment);
-      const nextSegment = { ...segment, lane };
-      segmentDates(nextSegment).forEach((date) => {
-        reservedLaneCountByDate[date] = Math.max(reservedLaneCountByDate[date] || 0, lane + 1);
-      });
-      spanSegments.push(nextSegment);
+
+      if (lane < laneCapacity) {
+        const nextSegment = { ...segment, lane };
+        segmentDates(nextSegment).forEach((date) => {
+          reservedLaneCountByDate[date] = Math.max(reservedLaneCountByDate[date] || 0, lane + 1);
+        });
+        spanSegments.push(nextSegment);
+      } else {
+        segmentDates(segment).forEach((date) => {
+          if (!pinnedOverflowByDate[date]) pinnedOverflowByDate[date] = new Set();
+          if (candidate.eventId) pinnedOverflowByDate[date].add(candidate.eventId);
+        });
+      }
     }
   }
 
   return {
     spanSegments,
     pinnedByDate,
+    pinnedIdsByDate,
     reservedLaneCountByDate,
     pinnedGhostCountByDate,
     pinnedIds,
+    pinnedOverflowByDate,
   };
 }

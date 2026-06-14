@@ -10,8 +10,13 @@ function planningProps(overrides = {}) {
   return {
     open: true,
     view: "events",
-    viewYear: 2026,
-    viewMonth: 3,
+    fetchYear: 2026,
+    fetchMonth: 3,
+    currentYear: 2026,
+    currentMonth: 5,
+    scrollDrivenRef: { current: false },
+    scrollDirectionRef: { current: "idle" },
+    fetchAbortRef: { current: null },
     eventsEnsureRange: vi.fn().mockResolvedValue([]),
     eventsRevision: 0,
     eventEditorIsEditorOpen: false,
@@ -77,6 +82,20 @@ describe("usePlanningReadinessState", () => {
     expect(result.current.planningReadiness.state).toBe("ready");
     expect(result.current.committedDeadlineOverlayData).toMatchObject({ data: deadlineData });
     expect(result.current.lateDeadlineOverlayData).toBeNull();
+  });
+
+  it("clears an unconsumed scroll-driven flag when the modal closes", async () => {
+    const props = planningProps();
+    const { rerender } = renderHook((p) => usePlanningReadinessState(p), { initialProps: props });
+    await advance(0);
+
+    // A settle can set the flag just as the modal closes; the closed-modal
+    // pass must consume it or the next open runs against a stale flag and
+    // skips its planning reset.
+    props.scrollDrivenRef.current = true;
+    rerender({ ...props, open: false });
+
+    expect(props.scrollDrivenRef.current).toBe(false);
   });
 
   it("defers the ensure pass while the event editor is open", async () => {

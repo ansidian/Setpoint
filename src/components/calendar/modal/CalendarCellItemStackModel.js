@@ -42,26 +42,36 @@ export function getReservedCellItemLaneHeight(count, metrics) {
 }
 
 export function getMeasuredVisibleCellItemCount(items, availableHeight, metrics) {
+  return getMeasuredCellItemStackPlan(items, availableHeight, metrics).visibleCount;
+}
+
+export function getMeasuredCellItemStackPlan(items, availableHeight, metrics) {
   const itemCount = items.length;
-  if (itemCount <= 0) return 0;
+  if (itemCount <= 0) return { visibleCount: 0, overflowVisible: false };
   const reservedHeight = Math.max(0, metrics?.reservedHeight || 0);
   const effectiveAvailableHeight = Number.isFinite(availableHeight)
     ? Math.max(0, availableHeight - reservedHeight)
     : availableHeight;
   if (!Number.isFinite(effectiveAvailableHeight) || effectiveAvailableHeight <= 0) {
-    return getVisibleCellItemCount(itemCount, metrics);
+    const visibleCount = Number.isFinite(effectiveAvailableHeight)
+      ? 0
+      : getVisibleCellItemCount(itemCount, metrics);
+    return {
+      visibleCount,
+      overflowVisible: visibleCount < itemCount,
+    };
   }
 
   if (getCellItemStackHeight({ visibleCount: itemCount, hasOverflow: false, metrics }) <= effectiveAvailableHeight) {
-    return itemCount;
+    return { visibleCount: itemCount, overflowVisible: false };
   }
 
   const minimumVisible = items.some((item) => item.isGhost) ? 1 : 0;
   for (let count = itemCount - 1; count >= minimumVisible; count -= 1) {
     if (getCellItemStackHeight({ visibleCount: count, hasOverflow: true, metrics }) <= effectiveAvailableHeight) {
-      return count;
+      return { visibleCount: count, overflowVisible: true };
     }
   }
 
-  return minimumVisible;
+  return { visibleCount: minimumVisible, overflowVisible: false };
 }

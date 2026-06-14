@@ -119,4 +119,56 @@ describe("CalendarInlineOverflowLayer", () => {
 
     expect(document.activeElement).toBe(chips[1]);
   });
+
+  it("carries a month boundary below adjacent-month inline overflow", () => {
+    render(
+      <CalendarInlineOverflowLayer
+        overflow={{
+          inlineAnchor: { top: 0, left: 0, width: 320 },
+          dateKey: "2026-04-26",
+          boundarySides: ["bottom"],
+          boundaryColor: "#0095FF",
+          items: [
+            { id: "event-1", leadingLabel: "10:00 AM", title: "Submit taxes" },
+          ],
+        }}
+        selectedItemId={null}
+      />,
+    );
+
+    const boundary = screen.getByTestId("calendar-cell-inline-overflow")
+      .querySelector("[data-calendar-inline-overflow-boundary='bottom']");
+
+    expect(boundary).toBeTruthy();
+    expect(boundary.style.bottom).toBe("0px");
+    expect(boundary.style.background).toBe("rgb(0, 149, 255)");
+    expect(
+      screen.getByTestId("calendar-cell-inline-overflow")
+        .querySelector("[data-calendar-inline-overflow-boundary='cross-month']"),
+    ).toBeNull();
+  });
+
+  it("carries a crossed current-month boundary below inline overflow", () => {
+    render(
+      <CalendarInlineOverflowLayer
+        overflow={{
+          inlineAnchor: { top: 0, left: 0, width: 320 },
+          dateKey: "2026-05-26",
+          carryBoundaryToBottom: true,
+          boundaryColor: "#0095FF",
+          items: [
+            { id: "event-1", leadingLabel: "1:00 PM", title: "Return adapter" },
+          ],
+        }}
+        selectedItemId={null}
+      />,
+    );
+
+    const boundary = screen.getByTestId("calendar-cell-inline-overflow")
+      .querySelector("[data-calendar-inline-overflow-boundary='bottom']");
+
+    expect(boundary).toBeTruthy();
+    expect(boundary.style.bottom).toBe("0px");
+    expect(boundary.style.background).toBe("rgb(0, 149, 255)");
+  });
 });

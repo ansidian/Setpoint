@@ -83,7 +83,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
     return all;
   }, []);
 
-  const fetchMonthGroup = useCallback((keys, { force = false, background = false } = {}) => {
+  const fetchMonthGroup = useCallback((keys, { force = false, background = false, signal } = {}) => {
     const flightRef = background ? backgroundInFlightRef : inFlightRef;
     const targetKeys = keys.filter((key) => {
       if (inFlightRef.current.has(key) || backgroundInFlightRef.current.has(key)) return false;
@@ -96,7 +96,10 @@ export default function useCalendarRange({ disabled = false } = {}) {
     const { end } = monthBounds(targetKeys[targetKeys.length - 1]);
     const promise = (async () => {
       try {
-        const { events } = await getCalendarRange(start, end);
+        const fetchOpts = signal ? { signal } : undefined;
+        const { events } = fetchOpts
+          ? await getCalendarRange(start, end, fetchOpts)
+          : await getCalendarRange(start, end);
         if (cacheGenerationRef.current !== generation) return false;
         const fetchedAt = Date.now();
         const buckets = new Map(targetKeys.map((key) => [key, []]));
@@ -172,11 +175,11 @@ export default function useCalendarRange({ disabled = false } = {}) {
     });
   }, [fetchMonthGroup]);
 
-  const ensureRange = useCallback(async (start, end) => {
+  const ensureRange = useCallback(async (start, end, { signal, prefetchKeys: explicitPrefetchKeys } = {}) => {
     if (disabled) return [];
 
     const keys = monthsInRange(start, end);
-    const fetchKeys = expandMonthKeys(keys, PREFETCH_MONTH_RADIUS);
+    const fetchKeys = explicitPrefetchKeys || expandMonthKeys(keys, PREFETCH_MONTH_RADIUS);
     const visibleKeySet = new Set(keys);
     const pending = [...new Set(
       keys
@@ -196,12 +199,37 @@ export default function useCalendarRange({ disabled = false } = {}) {
       try {
         const results = await Promise.allSettled([
           ...pending,
-          ...groupMonthKeys(missing).map(fetchMonthGroup),
+          ...groupMonthKeys(missing).map((group) => fetchMonthGroup(group, { signal })),
         ]);
         const failed = results.find((result) => result.status === "rejected");
         if (failed) throw failed.reason;
       } catch (err) {
-        setError(err);
+        if (err?.name === "AbortError") {
+          if (signal?.aborted) return eventsForRange(start, end, keys);
+          // Inherited abort: an earlier pass's in-flight fetch was aborted
+          // while this pass awaited it. Those months are still missing, so
+          // refetch them once with this pass's own signal instead of
+          // returning cached-only data the caller then treats as complete.
+          const stillMissing = keys.filter((key) =>
+            !cacheRef.current.has(key)
+            && !inFlightRef.current.has(key)
+            && !backgroundInFlightRef.current.has(key),
+          );
+          if (stillMissing.length) {
+            try {
+              const retried = await Promise.allSettled(
+                groupMonthKeys(stillMissing).map((group) => fetchMonthGroup(group, { signal })),
+              );
+              const retryFailed = retried.find((result) => result.status === "rejected");
+              if (retryFailed) throw retryFailed.reason;
+            } catch (retryErr) {
+              if (retryErr?.name === "AbortError") return eventsForRange(start, end, keys);
+              setError(retryErr);
+            }
+          }
+        } else {
+          setError(err);
+        }
       } finally {
         setLoading(false);
         forceUpdate((n) => n + 1);

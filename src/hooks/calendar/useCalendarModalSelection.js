@@ -27,6 +27,11 @@ export default function useCalendarModalSelection({
       ? resolveFocusViewDate(initialFocus, currentViewDate)
       : currentViewDate
   ));
+  const [fetchAnchor, setFetchAnchor] = useState(() => (
+    initialFocus
+      ? resolveFocusViewDate(initialFocus, currentViewDate)
+      : currentViewDate
+  ));
   const [selectedDay, setSelectedDay] = useState(() => (
     initialFocus ? initialFocus.getDate() : shouldSeedToday ? todayDate : null
   ));
@@ -75,6 +80,11 @@ export default function useCalendarModalSelection({
           ? current
           : snapshot.nextViewDate
       ));
+      setFetchAnchor((current) => (
+        current.month === snapshot.nextViewDate.month && current.year === snapshot.nextViewDate.year
+          ? current
+          : snapshot.nextViewDate
+      ));
       setSelectedDay((current) => (
         current === snapshot.nextSelectedDay ? current : snapshot.nextSelectedDay
       ));
@@ -106,6 +116,7 @@ export default function useCalendarModalSelection({
     if (!focus) return null;
     const dateKey = ymdFromParts(focus.getFullYear(), focus.getMonth(), focus.getDate());
     setViewDate((current) => resolveFocusViewDate(focus, current));
+    setFetchAnchor((current) => resolveFocusViewDate(focus, current));
     setSelectedDay(focus.getDate());
     setSelectedDateKey(dateKey);
     return { dateKey, day: focus.getDate() };
@@ -117,6 +128,8 @@ export default function useCalendarModalSelection({
     todayDate,
     viewDate,
     setViewDate,
+    fetchAnchor,
+    setFetchAnchor,
     selectedDay,
     setSelectedDay,
     selectedDateKey,

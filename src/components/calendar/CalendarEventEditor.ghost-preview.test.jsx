@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "./CalendarEventEditor.test-setup.js";
 import { renderModal, openFloatingEventEditorFromSelectedChip } from "./CalendarEventEditor.test-utils.jsx";
 
@@ -167,18 +167,25 @@ describe("CalendarEventEditor ghost preview behavior", () => {
   });
 
   it("debounces ghost-driven month navigation for NLP date changes", async () => {
-    renderModal();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-20T19:00:00.000Z"));
 
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+    try {
+      renderModal();
 
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Planning block May 12 at 9am" },
-    });
+      fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+      expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
-      expect(screen.getByTestId("calendar-ghost-chip").getAttribute("data-ghost-start")).toBe("2026-05-12");
-    });
+      fireEvent.input(screen.getByTestId("calendar-event-title"), {
+        target: { value: "Planning block May 12 at 9am" },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2026/i);
+        expect(screen.getByTestId("calendar-ghost-chip").getAttribute("data-ghost-start")).toBe("2026-05-12");
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -285,6 +285,70 @@ describe("useCalendarRange", () => {
     expect(getCalendarRange).toHaveBeenCalledTimes(4);
   });
 
+  it("refetches months whose inherited in-flight fetch was aborted by a previous pass", async () => {
+    const event = { id: "april-event", startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "April" };
+    const controllerA = new AbortController();
+    const controllerB = new AbortController();
+    getCalendarRange.mockImplementation((start, end, opts) => {
+      if (opts?.signal === controllerA.signal) {
+        return new Promise((_resolve, reject) => {
+          opts.signal.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        });
+      }
+      return Promise.resolve({ events: [event] });
+    });
+    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
+
+    let passA;
+    act(() => {
+      passA = result.current.ensureRange("2026-04-18", "2026-04-25", { signal: controllerA.signal });
+    });
+    expect(getCalendarRange).toHaveBeenCalledTimes(1);
+
+    // The controller's scroll-driven pattern: the next pass aborts the
+    // previous one, then synchronously re-ensures the same range while the
+    // aborted months are still registered as in flight.
+    let passB;
+    await act(async () => {
+      controllerA.abort();
+      passB = result.current.ensureRange("2026-04-18", "2026-04-25", { signal: controllerB.signal });
+      await passA;
+      await passB;
+    });
+
+    expect(result.current.hasMonth(2026, 3)).toBe(true);
+    expect(result.current.getEvents(2026, 3)).toEqual([event]);
+    await expect(passB).resolves.toEqual([event]);
+  });
+
+  it("returns cached-only data when its own signal aborted", async () => {
+    const controller = new AbortController();
+    getCalendarRange.mockImplementation((start, end, opts) => (
+      new Promise((_resolve, reject) => {
+        opts?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      })
+    ));
+    const { result } = renderHook(() => useCalendarRange({ disabled: false }));
+
+    let pass;
+    act(() => {
+      pass = result.current.ensureRange("2026-04-18", "2026-04-25", { signal: controller.signal });
+    });
+    await act(async () => {
+      controller.abort();
+      await pass;
+    });
+
+    // A genuinely aborted pass must not refetch on its own behalf.
+    expect(getCalendarRange).toHaveBeenCalledTimes(1);
+    expect(result.current.hasMonth(2026, 3)).toBe(false);
+    await expect(pass).resolves.toEqual([]);
+  });
+
   it("returns trimmed events via ensureRange's resolved value", async () => {
     const before = { startMs: new Date("2026-04-17T18:00:00Z").getTime(), title: "before", source: "s", color: "#1" };
     const within = { startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "within", source: "s", color: "#1" };

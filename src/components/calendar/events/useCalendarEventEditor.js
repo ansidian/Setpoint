@@ -58,6 +58,11 @@ export default function useCalendarEventEditor({
   const [recurringEditScope, setRecurringEditScope] = useState(null);
   const [createSeedDraft, setCreateSeedDraft] = useState(() => defaultDraft(null));
   const [titleInput, setTitleInput] = useState("");
+  const titleInputRef = useRef("");
+  const titleDebounceRef = useRef(null);
+  const pendingSaveRef = useRef(false);
+  const [titleInputPending, setTitleInputPending] = useState(false);
+  const [titleInputKey, setTitleInputKey] = useState(0);
   const [titleParseNow, setTitleParseNow] = useState(() => Date.now());
   const [manualOverrides, setManualOverrides] = useState(() => createManualOverrides());
   const [editingEvent, setEditingEvent] = useState(null);
@@ -191,6 +196,11 @@ export default function useCalendarEventEditor({
       setManualRecurrenceOverride(false);
       setRecurringEditScope(null);
       setTitleInput("");
+      titleInputRef.current = "";
+      if (titleDebounceRef.current) {
+        clearTimeout(titleDebounceRef.current);
+        titleDebounceRef.current = null;
+      }
       setEventReminders([]);
       setRemovedReminderIds([]);
       setReminderError(null);
@@ -269,6 +279,11 @@ export default function useCalendarEventEditor({
     setRecurrenceDraft(null);
     setManualRecurrenceOverride(false);
     setRecurringEditScope(null);
+    titleInputRef.current = "";
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
     setEventReminders([]);
     setRemovedReminderIds([]);
     setReminderError(null);
@@ -300,6 +315,12 @@ export default function useCalendarEventEditor({
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
     setTitleInput("");
+    titleInputRef.current = "";
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
+    setTitleInputKey((k) => k + 1);
     setTitleParseNow(Date.now());
     setManualOverrides(createManualOverrides());
     setRecurrenceDraft(null);
@@ -363,6 +384,12 @@ export default function useCalendarEventEditor({
     setDraft(nextDraft);
     setCreateSeedDraft(nextDraft);
     setTitleInput(nextDraft.title);
+    titleInputRef.current = nextDraft.title;
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
+    setTitleInputKey((k) => k + 1);
     setTitleParseNow(Date.now());
     setManualOverrides(createManualOverrides());
     setBatchDrafts([]);
@@ -531,7 +558,13 @@ export default function useCalendarEventEditor({
     if (intentState.mode !== "batch") return;
     const singleDraft = titleAssist.singleDraft || batchDrafts[0] || null;
     const nextTitle = titleAssist.cleanTitle || singleDraft?.title || effectiveTitle || titleInput;
+    titleInputRef.current = nextTitle;
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
     setTitleInput(nextTitle);
+    setTitleInputKey((k) => k + 1);
     setTitleParseNow(Date.now());
     setDraft((current) => ({
       ...current,
@@ -637,18 +670,47 @@ export default function useCalendarEventEditor({
     setErrorCode(null);
   }, [draft]);
 
+  const TITLE_DEBOUNCE_MS = 120;
+
   const handleTitleInputChange = useCallback((value) => {
-    setTitleInput(value);
-    if (isEditing) {
-      setDraft((current) => ({ ...current, title: value }));
-    }
-    setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
+    titleInputRef.current = value;
     setError(null);
     setErrorCode(null);
+    setTitleInputPending(true);
+
+    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+    titleDebounceRef.current = setTimeout(() => {
+      titleDebounceRef.current = null;
+      setTitleInputPending(false);
+      setTitleInput(value);
+      setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
+      if (isEditing) {
+        setDraft((current) => {
+          if (current.title === value) return current;
+          return { ...current, title: value };
+        });
+      }
+    }, TITLE_DEBOUNCE_MS);
   }, [isEditing]);
 
   const save = useCallback(async () => {
     if (!editable) return;
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+      setTitleInput(titleInputRef.current);
+      setTouchedFields((current) => (current.title ? current : { ...current, title: true }));
+      if (isEditing) {
+        setDraft((current) => {
+          if (current.title === titleInputRef.current) return current;
+          return { ...current, title: titleInputRef.current };
+        });
+      }
+      pendingSaveRef.current = true;
+      setSaveAttempted(true);
+      return;
+    }
+    pendingSaveRef.current = false;
     setSaveAttempted(true);
     if (validationMessage) return;
     setSaving(true);
@@ -713,7 +775,13 @@ export default function useCalendarEventEditor({
     } finally {
       setSaving(false);
     }
-  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, upsertEvents, validationMessage]);
+  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, upsertEvents, validationMessage]);
+
+  useEffect(() => {
+    if (!pendingSaveRef.current) return;
+    pendingSaveRef.current = false;
+    save();
+  });
 
   const reconnect = useCallback(async () => {
     try {
@@ -773,7 +841,7 @@ export default function useCalendarEventEditor({
   }), [batchDrafts, draft, effectiveTitle, intentState.mode, recurrenceDraft, recurringEditScope, titleInput]);
   const isDirty = mode === "editor"
     && !!dirtyBaselineRef.current
-    && dirtyBaselineRef.current !== dirtySnapshot;
+    && (dirtyBaselineRef.current !== dirtySnapshot || titleInputPending);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -820,6 +888,8 @@ export default function useCalendarEventEditor({
     editingEvent,
     draft,
     titleInput,
+    titleInputRef,
+    titleInputKey,
     titleAssist,
     intentState,
     batchDrafts,

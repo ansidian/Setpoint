@@ -127,18 +127,18 @@ describe("eventsView.canNavigateBack", () => {
 
 describe("eventsView.getVisibleEventCount", () => {
   it("uses stable tier-based capacity for regular and overflow states", () => {
-    expect(eventsView.getVisibleEventCount(3, { tier: "lg" })).toBe(3);
-    expect(eventsView.getVisibleEventCount(4, { tier: "lg" })).toBe(2);
+    expect(eventsView.getVisibleEventCount(4, { tier: "lg" })).toBe(4);
+    expect(eventsView.getVisibleEventCount(5, { tier: "lg" })).toBe(3);
   });
 
   it("allows denser xl cells without measuring rendered height", () => {
-    expect(eventsView.getVisibleEventCount(4, { tier: "xl" })).toBe(4);
-    expect(eventsView.getVisibleEventCount(5, { tier: "xl" })).toBe(3);
+    expect(eventsView.getVisibleEventCount(6, { tier: "xl" })).toBe(6);
+    expect(eventsView.getVisibleEventCount(7, { tier: "xl" })).toBe(5);
   });
 
   it("uses the 4K uhd tier for high-density event cells", () => {
-    expect(eventsView.getVisibleEventCount(8, { tier: "uhd" })).toBe(8);
-    expect(eventsView.getVisibleEventCount(9, { tier: "uhd" })).toBe(7);
+    expect(eventsView.getVisibleEventCount(11, { tier: "uhd" })).toBe(11);
+    expect(eventsView.getVisibleEventCount(12, { tier: "uhd" })).toBe(10);
   });
 });
 

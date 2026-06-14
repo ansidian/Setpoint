@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import AddTaskPanelFloatingEditor from "./AddTaskPanelFloatingEditor.jsx";
 import AddTaskPanelInlineEditor from "./AddTaskPanelInlineEditor.jsx";
@@ -52,19 +52,8 @@ export default function AddTaskPanelView({ controller }) {
     resolvedLabels,
     resolvedPriority,
     resolvedProject,
-    transientCloseToken,
   } = controller;
-  const [openCompactPanelState, setOpenCompactPanelState] = useState(() => ({ token: transientCloseToken, value: null }));
-  const openCompactPanel = openCompactPanelState.token === transientCloseToken ? openCompactPanelState.value : null;
-  const setOpenCompactPanel = useCallback((nextValue) => {
-    setOpenCompactPanelState((prev) => {
-      const currentValue = prev.token === transientCloseToken ? prev.value : null;
-      return {
-        token: transientCloseToken,
-        value: typeof nextValue === "function" ? nextValue(currentValue) : nextValue,
-      };
-    });
-  }, [transientCloseToken]);
+  const [openCompactPanel, setOpenCompactPanel] = useState(null);
 
   if (!isInline && !pos) return null;
 

@@ -833,6 +833,36 @@ describe("calendar detail timeline", () => {
     expect(indicator.textContent).not.toContain("2 reminders");
   });
 
+  it("uses the compressed card density for all floating deadline details", () => {
+    const briefing = {
+      emails: { accounts: [] },
+      deadlines: {
+        upcoming: [
+          {
+            id: "todo-1",
+            title: "Ship report",
+            due_date: "2026-04-22",
+            due_time: "5:00 PM",
+            source: "todoist",
+            class_name: "Inbox",
+            status: "open",
+          },
+        ],
+      },
+    };
+
+    render(
+      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+        {deadlinesDetail.renderFloatingDetail({
+          items: briefing.deadlines.upcoming,
+          selectedItemId: "todo-1",
+        })}
+      </DashboardProvider>,
+    );
+
+    expect(screen.getByTestId("calendar-selected-deadline-card").getAttribute("data-density")).toBe("compressed");
+  });
+
   it("uses domain deadline identity in floating detail gradients", () => {
     const briefing = {
       emails: { accounts: [] },
@@ -891,9 +921,9 @@ describe("calendar detail timeline", () => {
       </DashboardProvider>,
     );
 
-    const complete = screen.getByRole("button", { name: /^mark complete$/i });
+    const complete = screen.getByRole("button", { name: /^complete$/i });
     expect(complete.getAttribute("aria-busy")).toBe("true");
-    expect(complete.textContent).toContain("Mark complete");
+    expect(complete.textContent).toContain("Complete");
     expect(screen.queryByText(/completing/i)).toBeNull();
   });
 
@@ -928,7 +958,7 @@ describe("calendar detail timeline", () => {
       </DashboardProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^mark complete$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^complete$/i }));
 
     expect(mockCompleteDeadlineOccurrence).toHaveBeenCalledWith("todo-1", "2026-04-22");
     expect(onCloseFloatingDetail).not.toHaveBeenCalled();

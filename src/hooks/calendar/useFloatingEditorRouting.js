@@ -133,7 +133,6 @@ export default function useFloatingEditorRouting({
       anchorElement: dateCell,
       sourceCellElement: dateCell,
       anchorKind: "day-cell",
-      parked: !dateCell,
     });
   }, [activeSelectedDateKey, eventEditorRef, findDateCell, openFloatingDetail, selectedDay, setSelectedDateKey, setSelectedDay, setSelectedItemId, suppressAgendaPassiveSync, viewMonth, viewYear]);
 
@@ -153,8 +152,7 @@ export default function useFloatingEditorRouting({
     const current = floatingDetailRef.current;
     const reuseCurrentAnchor = current?.open
       && current.view === "events"
-      && String(current.itemId) === String(itemId)
-      && !current.parked;
+      && String(current.itemId) === String(itemId);
     openFloatingDetail({
       mode: "edit",
       view: "events",
@@ -164,8 +162,7 @@ export default function useFloatingEditorRouting({
       anchorElement: options.anchorElement || (reuseCurrentAnchor ? current.anchorElement : null) || fallbackCell,
       sourceCellElement: options.sourceCellElement || (reuseCurrentAnchor ? current.sourceCellElement : null) || fallbackCell,
       exclusionElement: options.exclusionElement || null,
-      anchorKind: options.anchorKind || (reuseCurrentAnchor ? current.anchorKind : fallbackCell ? "day-cell" : "parked"),
-      parked: options.parked ?? (!options.anchorElement && !reuseCurrentAnchor && !fallbackCell),
+      anchorKind: options.anchorKind || (reuseCurrentAnchor ? current.anchorKind : "day-cell"),
       itemsSnapshot: [item],
     });
   }, [activeSelectedDateKey, activeView, eventEditorRef, findDateCell, floatingDetailRef, openFloatingDetail, setSelectedDateKey, setSelectedDay, setSelectedItemId, suppressAgendaPassiveSync]);
@@ -193,7 +190,6 @@ export default function useFloatingEditorRouting({
       anchorElement: dateCell,
       sourceCellElement: dateCell,
       anchorKind: "day-cell",
-      parked: !dateCell,
     });
   }, [activeSelectedDateKey, findDateCell, openFloatingDetail, selectedDay, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId, viewMonth, viewYear]);
 
@@ -214,8 +210,7 @@ export default function useFloatingEditorRouting({
     const current = floatingDetailRef.current;
     const reuseCurrentAnchor = current?.open
       && current.detailKind === "deadline"
-      && String(current.itemId) === String(itemId)
-      && !current.parked;
+      && String(current.itemId) === String(itemId);
     openFloatingDetail({
       mode: "edit",
       view: "events",
@@ -226,8 +221,7 @@ export default function useFloatingEditorRouting({
       anchorElement: options.anchorElement || (reuseCurrentAnchor ? current.anchorElement : null) || fallbackCell,
       sourceCellElement: options.sourceCellElement || (reuseCurrentAnchor ? current.sourceCellElement : null) || fallbackCell,
       exclusionElement: options.exclusionElement || null,
-      anchorKind: options.anchorKind || (reuseCurrentAnchor ? current.anchorKind : fallbackCell ? "day-cell" : "parked"),
-      parked: options.parked ?? (!options.anchorElement && !reuseCurrentAnchor && !fallbackCell),
+      anchorKind: options.anchorKind || (reuseCurrentAnchor ? current.anchorKind : "day-cell"),
       itemsSnapshot: [task],
     });
   }, [activeSelectedDateKey, activeView, findDateCell, floatingDetailRef, openFloatingDetail, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId]);

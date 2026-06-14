@@ -68,10 +68,10 @@ describe("CalendarModal shell and search layout", () => {
     ));
 
     const monthGrid = screen.getByTestId("calendar-grid-month");
-    const skeleton = screen.getByTestId("calendar-grid-skeleton");
+    const skeletons = screen.getAllByTestId("calendar-grid-skeleton");
 
     expect(monthGrid).toBeTruthy();
-    expect(skeleton).toBeTruthy();
+    expect(skeletons.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId("calendar-month-title-month").style.color).toBe("rgb(248, 250, 255)");
     expect(screen.getByTestId("calendar-month-title-year").style.color).toBe("rgb(255, 69, 58)");
     expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();

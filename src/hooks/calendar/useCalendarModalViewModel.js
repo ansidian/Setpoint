@@ -30,6 +30,8 @@ export default function useCalendarModalViewModel({
   currentMonth,
   viewYear,
   viewMonth,
+  labelYear,
+  labelMonthValue,
   activeSelectedDay,
   activeSelectedDateKey,
   activeSelectedItemId,
@@ -38,13 +40,16 @@ export default function useCalendarModalViewModel({
   deadlineDraftPreview,
   weatherData,
   floatingDetail,
-  setMonthMotionDirection,
   setViewDate,
+  setFetchAnchor,
+  setLabelMonth,
   setSelectedDay,
   setSelectedDateKey,
   setSelectedItemId,
   manualMonthBrowseKey,
 }) {
+  const headerYear = labelYear ?? viewYear;
+  const headerMonth = labelMonthValue ?? viewMonth;
   const computed = useMemo(
     () => activeView.compute({ data: viewData, viewYear, viewMonth, weatherData }),
     [activeView, viewData, viewYear, viewMonth, weatherData],
@@ -60,8 +65,9 @@ export default function useCalendarModalViewModel({
     deadlineDraftPreview,
     viewYear,
     viewMonth,
-    setMonthMotionDirection,
     setViewDate,
+    setFetchAnchor,
+    setLabelMonth,
     setSelectedDay,
     setSelectedDateKey,
     setSelectedItemId,
@@ -125,7 +131,7 @@ export default function useCalendarModalViewModel({
     : "";
   const layout = activeLayout;
   const panelWidth = layout.panelWidth || `calc(100vw - ${layout.viewportMargin * 2}px)`;
-  const monthName = new Date(viewYear, viewMonth).toLocaleDateString("en-US", { month: "long" });
+  const monthName = new Date(headerYear, headerMonth).toLocaleDateString("en-US", { month: "long" });
 
   return {
     buildFallbackDayState,
@@ -139,7 +145,7 @@ export default function useCalendarModalViewModel({
     itemsByDay,
     layout,
     monthName,
-    monthYear: String(viewYear),
+    monthYear: String(headerYear),
     panelWidth,
     pendingUpdate: false,
     selectedDayState,

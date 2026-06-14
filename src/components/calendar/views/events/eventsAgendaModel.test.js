@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEventsAgendaGroups, formatAgendaHeaderLabel } from "./eventsAgendaModel.js";
+import { buildEventsAgendaGroups, buildMultiMonthAgendaGroups, formatAgendaHeaderLabel } from "./eventsAgendaModel.js";
 
 function event(overrides) {
   return {
@@ -140,5 +140,109 @@ describe("events agenda model", () => {
     expect(formatAgendaHeaderLabel("2026-05-10", "2026-05-10")).toBe("TODAY 5/10/26");
     expect(formatAgendaHeaderLabel("2026-05-11", "2026-05-10")).toBe("TOMORROW 5/11/26");
     expect(formatAgendaHeaderLabel("2026-05-12", "2026-05-10")).toBe("TUESDAY 5/12/26");
+  });
+});
+
+describe("buildMultiMonthAgendaGroups", () => {
+  it("builds groups for multiple months in order", () => {
+    const result = buildMultiMonthAgendaGroups({
+      months: [
+        { year: 2026, month: 4 },
+        { year: 2026, month: 5 },
+      ],
+      events: [
+        event({ id: "may", title: "May event", start: "2026-05-10T16:00:00Z", end: "2026-05-10T17:00:00Z" }),
+        event({ id: "jun", title: "Jun event", start: "2026-06-15T16:00:00Z", end: "2026-06-15T17:00:00Z" }),
+      ],
+      todayKey: "2026-05-10",
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result[0].monthKey).toBe("2026-05");
+    expect(result[1].monthKey).toBe("2026-06");
+    expect(result[0].year).toBe(2026);
+    expect(result[0].month).toBe(4);
+    expect(result[1].year).toBe(2026);
+    expect(result[1].month).toBe(5);
+  });
+
+  it("empty months produce a fallback header group", () => {
+    const result = buildMultiMonthAgendaGroups({
+      months: [{ year: 2026, month: 6 }],
+      events: [],
+      todayKey: "2026-05-10",
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].visibleGroups).toHaveLength(1);
+    expect(result[0].visibleGroups[0]).toMatchObject({
+      dateKey: "2026-07-01",
+      isFallback: true,
+    });
+  });
+
+  it("distributes deadline overlay across months correctly", () => {
+    const result = buildMultiMonthAgendaGroups({
+      months: [
+        { year: 2026, month: 4 },
+        { year: 2026, month: 5 },
+      ],
+      events: [],
+      deadlineOverlay: {
+        showCompleted: true,
+        data: {
+          upcoming: [
+            { id: "d1", title: "May deadline", due_date: "2026-05-15", status: "in_progress" },
+            { id: "d2", title: "Jun deadline", due_date: "2026-06-10", status: "in_progress" },
+          ],
+        },
+      },
+      todayKey: "2026-05-10",
+    });
+
+    const mayDeadlines = result[0].visibleGroups
+      .filter((g) => g.hasDeadlines)
+      .flatMap((g) => g.deadlines);
+    const junDeadlines = result[1].visibleGroups
+      .filter((g) => g.hasDeadlines)
+      .flatMap((g) => g.deadlines);
+
+    expect(mayDeadlines).toHaveLength(1);
+    expect(mayDeadlines[0].agendaTitle).toBe("May deadline");
+    expect(junDeadlines).toHaveLength(1);
+    expect(junDeadlines[0].agendaTitle).toBe("Jun deadline");
+  });
+
+  it("single-month call matches existing buildEventsAgendaGroups output", () => {
+    const params = {
+      events: [event({ id: "e1", title: "Test", start: "2026-05-05T10:00:00Z", end: "2026-05-05T11:00:00Z" })],
+      todayKey: "2026-05-10",
+    };
+
+    const single = buildEventsAgendaGroups({ ...params, viewYear: 2026, viewMonth: 4 });
+    const multi = buildMultiMonthAgendaGroups({ ...params, months: [{ year: 2026, month: 4 }] });
+
+    expect(multi).toHaveLength(1);
+    expect(multi[0].visibleGroups.map((g) => g.dateKey)).toEqual(single.visibleGroups.map((g) => g.dateKey));
+    expect(multi[0].firstVisibleDateKey).toBe(single.firstVisibleDateKey);
+    expect(multi[0].monthStartDateKey).toBe(single.monthStartDateKey);
+  });
+
+  it("applies forceVisibleDateKey only to the containing month", () => {
+    const result = buildMultiMonthAgendaGroups({
+      months: [
+        { year: 2026, month: 4 },
+        { year: 2026, month: 5 },
+      ],
+      events: [],
+      todayKey: "2026-04-01",
+      forceVisibleDateKey: "2026-06-20",
+    });
+
+    const mayDates = result[0].visibleGroups.map((g) => g.dateKey);
+    const junDates = result[1].visibleGroups.map((g) => g.dateKey);
+
+    expect(mayDates).not.toContain("2026-06-20");
+    expect(junDates).toContain("2026-06-20");
   });
 });

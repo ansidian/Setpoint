@@ -96,8 +96,8 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       expect(screen.queryByTestId("calendar-event-validation")).toBeNull();
       expect(screen.getByTestId("calendar-event-end-date").textContent).toMatch(/apr 21, 2026/i);
       expect(screen.getByTestId("calendar-event-end-time").textContent).toMatch(/8:00 am/i);
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
     });
-    expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
@@ -275,7 +275,9 @@ describe("CalendarEventEditor source and location assist behavior", () => {
       target: { value: "McDonald's" },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: /^McDonald's 123 Main St/i }));
+    // The suggestion dropdown renders after a debounced fetch; the default 1s
+    // findBy timeout flakes under full-suite worker load.
+    fireEvent.click(await screen.findByRole("button", { name: /^McDonald's 123 Main St/i }, { timeout: 5000 }));
 
     await waitFor(() => {
       expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-1", expect.any(String));
@@ -545,6 +547,9 @@ describe("CalendarEventEditor source and location assist behavior", () => {
 
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
       target: { value: "Planning block" },
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
     });
     fireEvent.click(screen.getByTestId("calendar-event-save"));
 

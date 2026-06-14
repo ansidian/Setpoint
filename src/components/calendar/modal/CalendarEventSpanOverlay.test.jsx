@@ -31,7 +31,7 @@ describe("CalendarEventSpanOverlay", () => {
           },
         }]}
         layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
-        gridRowCount={6}
+        weekRows={6}
       />,
     );
 
@@ -86,7 +86,7 @@ describe("CalendarEventSpanOverlay", () => {
           },
         ]}
         layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
-        gridRowCount={6}
+        weekRows={6}
         selectedItemId="event-selected"
       />,
     );
@@ -127,7 +127,7 @@ describe("CalendarEventSpanOverlay", () => {
           },
         }]}
         layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
-        gridRowCount={6}
+        weekRows={6}
       />,
     );
 
@@ -168,7 +168,7 @@ describe("CalendarEventSpanOverlay", () => {
           item: event,
         }]}
         layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
-        gridRowCount={6}
+        weekRows={6}
         quickActions={{
           isEventSelectionSelected: (candidate) => candidate?.id === "event-span",
           toggleEventSelection,
@@ -230,7 +230,7 @@ describe("CalendarEventSpanOverlay", () => {
           readOnly: true,
         }]}
         layout={{ cellHeight: 120, gridGap: 4, tier: "lg" }}
-        gridRowCount={6}
+        weekRows={6}
         quickActions={{
           isEventSelectionSelected: () => true,
           toggleEventSelection,

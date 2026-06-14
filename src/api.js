@@ -230,8 +230,8 @@ export const getCalendarSearch = ({ scope, q, limit } = {}) => {
   return apiFetch(`/api/calendar/search?${params.toString()}`);
 };
 // Calendar range fetch — used by useCalendarRange hook
-export const getCalendarRange = (start, end) =>
-  apiFetch(`/api/calendar/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+export const getCalendarRange = (start, end, { signal } = {}) =>
+  apiFetch(`/api/calendar/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { signal });
 export const getCalendarSources = () => apiFetch("/api/calendar/calendars");
 export const getCalendarPlaceSuggestions = (query, sessionToken) =>
   apiFetch(`/api/calendar/places/suggest?q=${encodeURIComponent(query)}${sessionToken ? `&sessionToken=${encodeURIComponent(sessionToken)}` : ""}`);

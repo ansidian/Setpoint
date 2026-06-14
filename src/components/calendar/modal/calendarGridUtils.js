@@ -2,53 +2,14 @@ import { parseYmd, ymdFromParts } from "../calendarDateUtils.js";
 import { isPinnedCalendarGhost } from "./calendarEventSpanLayout.js";
 
 export const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-export const GRID_ROWS = 6;
 export const CELL_HEADER_HEIGHT = 24;
-const MONTH_WHEEL_NOTCH_MIN_PX = 1;
-export const MONTH_WHEEL_COOLDOWN_MS = 180;
-const MONTH_WHEEL_INTENT_INTERVAL_MS = 100;
-const WHEEL_LINE_PX = 32;
 export const CURRENT_MONTH_BOUNDARY_COLOR = "#0095FF";
 export const OTHER_MONTH_BOUNDARY_COLOR = "rgba(137,180,250,0.32)";
-const INLINE_OVERFLOW_PANEL_PADDING = 12;
+const INLINE_OVERFLOW_LAYER_PADDING = 4;
+const INLINE_OVERFLOW_LAYER_BORDER_WIDTH = 1;
+const INLINE_OVERFLOW_LAYER_ITEM_HEIGHT = 36;
+const INLINE_OVERFLOW_LAYER_GAP = 4;
 
-export function createMonthWheelState() {
-  return {
-    lastNavigateAt: -Infinity,
-    ignoreUntil: -Infinity,
-    lastWheelAt: -Infinity,
-    lastWheelDelta: 0,
-  };
-}
-
-export function normalizeWheelDeltaY(event, fallbackPagePx) {
-  if (event.deltaMode === 1) return event.deltaY * WHEEL_LINE_PX;
-  if (event.deltaMode === 2) return event.deltaY * fallbackPagePx;
-  return event.deltaY;
-}
-
-export function isCoarseMonthWheel(event, normalizedY) {
-  if (!Number.isFinite(normalizedY)) return false;
-  if (Math.abs(normalizedY) < MONTH_WHEEL_NOTCH_MIN_PX) return false;
-
-  if (event.deltaMode !== 0) return true;
-
-  if (event.deltaMode === 0 && !Number.isInteger(event.deltaY)) {
-    return false;
-  }
-
-  return true;
-}
-
-export function isIntentionalMonthWheel({ normalizedY, now, wheelState }) {
-  const lastDelta = wheelState.lastWheelDelta || 0;
-  const rapidSuccession =
-    now - wheelState.lastWheelAt < MONTH_WHEEL_INTENT_INTERVAL_MS;
-  const sameDirection = Math.sign(lastDelta) === Math.sign(normalizedY);
-  const tapering = Math.abs(normalizedY) <= Math.abs(lastDelta);
-
-  return !rapidSuccession || !sameDirection || !tapering;
-}
 
 export function sameOverflowDate(overflow, dateKey, day) {
   if (!overflow) return false;
@@ -107,6 +68,11 @@ export function isCalendarInlineOverflowTarget(target) {
     && !!target.closest("[data-calendar-inline-overflow-layer='true']");
 }
 
+export function isCalendarOverflowTriggerTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-calendar-overflow-trigger='true']");
+}
+
 export function isCalendarEventSpanTarget(target) {
   return target instanceof HTMLElement
     && !!target.closest(
@@ -114,16 +80,9 @@ export function isCalendarEventSpanTarget(target) {
     );
 }
 
-export function canUseInlineOverflow({ triggerElement, hiddenStackHeight, layout }) {
+export function canUseInlineOverflow({ triggerElement, layout }) {
   if (layout?.stacked || !triggerElement?.isConnected) return false;
-  if (!Number.isFinite(hiddenStackHeight) || hiddenStackHeight <= 0) return false;
-
-  const panel = triggerElement.closest("[data-testid='calendar-modal-panel']");
-  const panelRect = panel?.getBoundingClientRect?.();
-  const triggerRect = triggerElement.getBoundingClientRect();
-  if (!panelRect) return false;
-
-  return triggerRect.top + hiddenStackHeight <= panelRect.bottom - INLINE_OVERFLOW_PANEL_PADDING;
+  return true;
 }
 
 export function resolveInlineOverflowAnchor(triggerElement, containerElement) {
@@ -137,29 +96,54 @@ export function resolveInlineOverflowAnchor(triggerElement, containerElement) {
   };
 }
 
+function estimateInlineOverflowLayerHeight(itemCount) {
+  if (!Number.isFinite(itemCount) || itemCount <= 0) return 0;
+  return (
+    itemCount * INLINE_OVERFLOW_LAYER_ITEM_HEIGHT
+    + (itemCount - 1) * INLINE_OVERFLOW_LAYER_GAP
+    + INLINE_OVERFLOW_LAYER_PADDING * 2
+    + INLINE_OVERFLOW_LAYER_BORDER_WIDTH * 2
+  );
+}
+
+function resolveBoundaryCarry({
+  triggerElement,
+  hiddenItemCount,
+}) {
+  const monthBlock = triggerElement?.closest?.("[data-month-block]");
+  if (!monthBlock) return false;
+
+  const triggerRect = triggerElement?.getBoundingClientRect?.();
+  const monthBlockRect = monthBlock.getBoundingClientRect?.();
+  if (!triggerRect || !monthBlockRect) return false;
+
+  const layerBottom = triggerRect.top + estimateInlineOverflowLayerHeight(hiddenItemCount);
+  return layerBottom > monthBlockRect.bottom;
+}
+
 export function resolveOverflowPresentation({
   triggerElement,
-  hiddenStackHeight,
   layout,
   containerElement,
+  hiddenItemCount,
+  boundaryColor,
 }) {
   if (layout?.stacked) return { mode: "fallback", inlineAnchor: null };
   if (!triggerElement?.isConnected) return null;
-  if (!Number.isFinite(hiddenStackHeight) || hiddenStackHeight <= 0) return null;
-
-  const panel = triggerElement.closest("[data-testid='calendar-modal-panel']");
-  const panelRect = panel?.getBoundingClientRect?.();
-  if (!panelRect) return null;
-
-  const inlineFits = canUseInlineOverflow({
-    triggerElement,
-    hiddenStackHeight,
-    layout,
-  });
-  if (!inlineFits) return { mode: "fallback", inlineAnchor: null };
 
   const inlineAnchor = resolveInlineOverflowAnchor(triggerElement, containerElement);
   if (!inlineAnchor) return null;
+  if (Number.isFinite(hiddenItemCount) || boundaryColor) {
+    return {
+      mode: "inline",
+      inlineAnchor,
+      carryBoundaryToBottom: resolveBoundaryCarry({
+        triggerElement,
+        hiddenItemCount,
+      }),
+      boundaryColor,
+    };
+  }
   return { mode: "inline", inlineAnchor };
 }
 
@@ -238,10 +222,13 @@ export function buildCalendarMonthCells({
       parsed.month,
       parsed.day,
     ).toLocaleDateString("en-US", { month: "short" });
+    const showMonthPrefix = parsed.day === 1 && index >= 1 && index < 7;
     return {
       day: parsed.day,
       dateKey,
-      dateLabel: String(parsed.day),
+      dateLabel: showMonthPrefix
+        ? `${monthLabel} ${parsed.day}`
+        : String(parsed.day),
       inCurrentMonth,
       inActualCurrentMonth:
         parsed?.year === currentYear && parsed?.month === currentMonth,

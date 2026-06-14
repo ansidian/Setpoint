@@ -20,11 +20,11 @@ export default function CalendarEventEditorRail({
   editor,
   ghostPreview = null,
   host = "rail",
-  transientCloseToken = 0,
 }) {
   const {
     draft,
-    titleInput,
+    titleInputRef,
+    titleInputKey,
     titleAssist,
     intentState,
     batchDrafts,
@@ -56,7 +56,7 @@ export default function CalendarEventEditorRail({
     removeEventReminder,
   } = editor;
 
-  const pickers = useCalendarEditorPickers(editor, transientCloseToken);
+  const pickers = useCalendarEditorPickers(editor);
   const {
     setOpenPicker,
     titleRef,
@@ -121,7 +121,8 @@ export default function CalendarEventEditorRail({
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16, flex: 1, minHeight: 0 }}>
         <CalendarEventTitleField
           titleRef={titleRef}
-          titleInput={titleInput}
+          titleInputRef={titleInputRef}
+          titleInputKey={titleInputKey}
           onTitleKeyDown={onTitleKeyDown}
           onTitleChange={onTitleChange}
           disabled={disabled}

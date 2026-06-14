@@ -1,4 +1,6 @@
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search, X } from "lucide-react";
+import CalendarJumpToMonth from "./CalendarJumpToMonth.jsx";
 
 const TITLE_MONTH_WHITE = "#f8faff";
 const TITLE_YEAR_RED = "#ff453a";
@@ -111,6 +113,9 @@ export default function CalendarModalHeader({
   layout,
   canGoPrev,
   navigateMonth,
+  jumpToMonth,
+  currentYear,
+  currentMonth,
   onViewChange,
   HeaderExtras,
   viewData,
@@ -130,6 +135,22 @@ export default function CalendarModalHeader({
   const selectedDateLabel = formatSelectedDate(viewYear, viewMonth, selectedDay, selectedDateKey);
   const selectedDate = selectedDateYmd(viewYear, viewMonth, selectedDay, selectedDateKey);
   const showPendingUpdate = !!viewData?.pendingUpdate;
+
+  const titleRef = useRef(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const handleTitleClick = useCallback(() => {
+    setPickerOpen((open) => !open);
+  }, []);
+
+  const handlePickerSelect = useCallback((year, month) => {
+    setPickerOpen(false);
+    jumpToMonth?.(year, month);
+  }, [jumpToMonth]);
+
+  const handlePickerClose = useCallback(() => {
+    setPickerOpen(false);
+  }, []);
 
   return (
     <div
@@ -214,10 +235,27 @@ export default function CalendarModalHeader({
             >
               Calendar Workspace · {viewLabel || "Bills"}
             </div>
-            <div
+            <button
+              ref={titleRef}
+              type="button"
               id="calendar-modal-title"
               className="ea-display"
               data-testid="calendar-month-title"
+              onClick={handleTitleClick}
+              aria-expanded={pickerOpen}
+              aria-haspopup="dialog"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                const chevron = e.currentTarget.querySelector("[data-title-chevron]");
+                if (chevron) chevron.style.opacity = "1";
+              }}
+              onMouseLeave={(e) => {
+                if (!pickerOpen) {
+                  e.currentTarget.style.background = "transparent";
+                  const chevron = e.currentTarget.querySelector("[data-title-chevron]");
+                  if (chevron) chevron.style.opacity = "0";
+                }
+              }}
               style={{
                 fontSize: titleSize,
                 fontWeight: 500,
@@ -225,6 +263,18 @@ export default function CalendarModalHeader({
                 letterSpacing: -0.7,
                 lineHeight: 0.96,
                 whiteSpace: layout.headerWrap ? "normal" : "nowrap",
+                cursor: "pointer",
+                background: pickerOpen ? "rgba(255,255,255,0.04)" : "transparent",
+                border: "none",
+                borderRadius: 8,
+                padding: "4px 8px",
+                margin: "-4px -8px",
+                fontFamily: "inherit",
+                textAlign: "left",
+                display: "inline-flex",
+                alignItems: "baseline",
+                gap: 6,
+                transition: "background 140ms",
               }}
             >
               <span data-testid="calendar-month-title-month" style={{ color: TITLE_MONTH_WHITE }}>
@@ -233,7 +283,30 @@ export default function CalendarModalHeader({
               <span data-testid="calendar-month-title-year" style={{ color: TITLE_YEAR_RED, fontWeight: 400 }}>
                 {monthYear}
               </span>
-            </div>
+              <ChevronDown
+                data-title-chevron=""
+                size={titleSize * 0.45}
+                strokeWidth={2.2}
+                style={{
+                  color: "rgba(205,214,244,0.45)",
+                  opacity: pickerOpen ? 1 : 0,
+                  transition: "opacity 140ms, transform 140ms",
+                  transform: pickerOpen ? "rotate(180deg)" : "rotate(0)",
+                  flexShrink: 0,
+                }}
+              />
+            </button>
+            {pickerOpen ? (
+              <CalendarJumpToMonth
+                anchorRef={titleRef}
+                viewYear={viewYear}
+                viewMonth={viewMonth}
+                currentYear={currentYear}
+                currentMonth={currentMonth}
+                onSelect={handlePickerSelect}
+                onClose={handlePickerClose}
+              />
+            ) : null}
           </div>
         </div>
 

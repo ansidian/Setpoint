@@ -1,11 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import DeadlineQuickActionLayer from "../views/deadlines/DeadlineQuickActionLayer.jsx";
 import CalendarModalContextRail from "./CalendarModalContextRail.jsx";
 import CalendarFloatingDetailContent from "./CalendarFloatingDetailContent.jsx";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
-import CalendarGrid from "./CalendarGrid.jsx";
+import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";
+import CalendarScrollContainer from "./CalendarScrollContainer.jsx";
 import buildContextContent from "./buildContextContent.jsx";
 import CalendarModalAgendaRailContent from "./CalendarModalAgendaRailContent.jsx";
 import CalendarModalBackdrop from "./CalendarModalBackdrop.jsx";
@@ -35,8 +36,6 @@ export default function CalendarModalShell({
     currentYear,
     currentMonth,
     todayDate,
-    monthMotionDirection,
-    workspaceTransientCloseToken = 0,
     suppressFocusRing = false,
   } = viewState;
   const {
@@ -46,9 +45,6 @@ export default function CalendarModalShell({
     monthYear,
     canGoPrev,
     computed,
-    firstDay,
-    daysInMonth,
-    trailingEmpty,
     itemsByDay,
     itemsByDate,
     cellMetaByDate,
@@ -62,7 +58,18 @@ export default function CalendarModalShell({
     ghostPreview,
     floatingDetailLabel,
   } = viewModel;
-  const { activeView, HeaderExtras, viewData, weatherData } = data;
+  const {
+    activeView,
+    HeaderExtras,
+    viewData,
+    weatherData,
+    isMonthCached,
+    getMonthEvents,
+    getMonthDeadlines,
+    eventsRange = null,
+    deadlinesRange = null,
+    dataRevision = 0,
+  } = data;
   const { selectedDay, selectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId } = selection;
   const { eventEditor, deadlineEditor, setDeadlineEditor, closeEventEditor, onDeadlineDraftPreviewChange } = editors;
   const { eventQuickActions, deadlineQuickActions } = quickActions;
@@ -81,9 +88,7 @@ export default function CalendarModalShell({
     floatingDetail,
     onOpenFloatingDetail,
     onCloseFloatingDetail,
-    onParkFloatingDetail,
     onFloatingDetailDragged,
-    onReanchorFloatingDetail,
     onOpenFloatingEventCreate,
     onOpenFloatingEventEdit,
     onOpenFloatingDeadlineCreate,
@@ -95,8 +100,17 @@ export default function CalendarModalShell({
     onFloatingDeadlineSaved,
     onFloatingDeadlineDeleted,
   } = floating;
-  const { navigateMonth, onViewChange, onClose, suppressOutsideClick, focusDeadlineTask } = handlers;
-  const monthWheelStateRef = useRef({ lastNavigateAt: -Infinity, ignoreUntil: -Infinity, lastWheelAt: -Infinity, lastWheelDelta: 0 });
+  const {
+    navigateMonth,
+    jumpToMonth,
+    onViewChange,
+    onClose,
+    suppressOutsideClick,
+    focusDeadlineTask,
+    onDisplayMonthChange,
+    onLabelMonthChange,
+    onFetchSettle,
+  } = handlers;
   const floatingEditorOpen = !layout.stacked
     && !!floatingDetail?.open
     && (floatingDetail.mode === "edit" || floatingDetail.mode === "create");
@@ -126,7 +140,7 @@ export default function CalendarModalShell({
   }, [eventEditor.isDirty, floatingDeadlineDetail, floatingDetail?.view, floatingEditorOpen, onFloatingEditorDirtyChange]);
 
   const contentKey = useAgendaRail
-    ? `agenda-${viewYear}-${viewMonth}`
+    ? `agenda-${view}`
     : view === "events" && railEventEditor.isEditorOpen
     ? `editor-${eventEditor.isEditing ? eventEditor.editingEvent?.id || "edit" : "new"}`
     : view === "events" && railDeadlineEditor?.mode
@@ -189,6 +203,10 @@ export default function CalendarModalShell({
       onDateAction={onAgendaDateAction}
       miniCalendarActions={miniCalendarActions}
       onEventAction={onAgendaEventAction}
+      getMonthEvents={getMonthEvents}
+      eventsRange={eventsRange}
+      deadlinesRange={deadlinesRange}
+      dataRevision={dataRevision}
       onFilteredSelectedDeadlineHidden={() => {
         setSelectedItemId(null);
         onCloseFloatingDetail?.();
@@ -230,7 +248,6 @@ export default function CalendarModalShell({
     ghostPreview,
     onDeadlineDraftPreviewChange,
     onCloseFloatingDetail,
-    transientCloseToken: workspaceTransientCloseToken,
   });
 
   const floatingDetailContent = (
@@ -264,7 +281,6 @@ export default function CalendarModalShell({
       viewData={viewData}
       viewMonth={viewMonth}
       viewYear={viewYear}
-      workspaceTransientCloseToken={workspaceTransientCloseToken}
       focusDeadlineTask={focusDeadlineTask}
     />
   );
@@ -324,7 +340,7 @@ export default function CalendarModalShell({
         <CalendarModalTexture />
         <div
           ref={scrollRef}
-          className="overflow-y-auto overscroll-contain flex-1"
+          className="flex-1"
           style={{
             position: "relative",
             zIndex: 1,
@@ -343,6 +359,9 @@ export default function CalendarModalShell({
             layout={layout}
             canGoPrev={canGoPrev}
             navigateMonth={navigateMonth}
+            jumpToMonth={jumpToMonth}
+            currentYear={currentYear}
+            currentMonth={currentMonth}
             onViewChange={onViewChange}
             HeaderExtras={HeaderExtras}
             viewData={viewData}
@@ -365,6 +384,8 @@ export default function CalendarModalShell({
             viewLabel={activeView.label}
             search={search}
           />
+
+          <CalendarGridWeekHeader gap={layout.weekHeaderGap} />
 
           <div
             data-testid="calendar-modal-body"
@@ -393,70 +414,62 @@ export default function CalendarModalShell({
               style={{
                 minWidth: 0,
                 minHeight: 0,
-                display: "grid",
-                gridTemplateRows: layout.stacked ? "auto" : "minmax(0, 1fr)",
-                overflow: layout.stacked ? "visible" : "hidden",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
-              <div style={{ minWidth: 0, minHeight: 0, display: "flex", flex: 1 }}>
-                <CalendarGrid
-                  key={`${view}-${viewYear}-${viewMonth}`}
-                  view={view}
-                  viewYear={viewYear}
-                  viewMonth={viewMonth}
-                  currentYear={currentYear}
-                  currentMonth={currentMonth}
-                  todayDate={todayDate}
-                  firstDay={firstDay}
-                  daysInMonth={daysInMonth}
-                  trailingEmpty={trailingEmpty}
-                  itemsByDay={itemsByDay}
-                  itemsByDate={itemsByDate}
-                  cellMetaByDate={cellMetaByDate}
-                  selectedDay={selectedDay}
-                  selectedDateKey={selectedDateKey}
-                  selectedItemId={effectiveSelectedItemId}
-                  viewData={viewData}
-                  activeView={activeView}
-                  layout={layout}
-                  suppressOutsideClick={suppressOutsideClick}
-                  showGridSkeleton={showGridSkeleton}
-                  buildFallbackDayState={buildFallbackDayState}
-                  closeEventEditor={closeEventEditor}
-                  setSelectedDay={setSelectedDay}
-                  setSelectedDateKey={setSelectedDateKey}
-                  setSelectedItemId={setSelectedItemId}
-                  eventQuickActions={eventQuickActions}
-                  deadlineQuickActions={deadlineQuickActions}
-                  setDeadlineEditor={setDeadlineEditor}
-                  canGoPrev={canGoPrev}
-                  navigateMonth={navigateMonth}
-                  monthWheelStateRef={monthWheelStateRef}
-                  monthMotionDirection={monthMotionDirection}
-                  ghostPreview={ghostPreview}
-                  onOpenFloatingDetail={onOpenFloatingDetail}
-                  onCloseFloatingDetail={onCloseFloatingDetail}
-                  onReanchorFloatingDetail={onReanchorFloatingDetail}
-                  floatingDetailAnchorElement={floatingDetail?.anchorElement || null}
-                  floatingDetailAnchorKind={floatingDetail?.anchorKind || null}
-                  floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
-                  floatingDetailParked={!!floatingDetail?.parked}
-                  floatingDetailItemId={floatingDetail?.itemId || null}
-                  floatingDetailMode={floatingDetail?.mode || null}
-                  floatingDetailDateKey={floatingDetailGridDateKey}
-                  floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
-                  onCancelFloatingEditor={onCancelFloatingEditor}
-                  onShakeFloatingEditor={onShakeFloatingEditor}
-                  onDirectDateAction={onGridDateAction}
-                  onDirectItemAction={onGridEventAction}
-                />
-                {view === "events" ? (
-                  <>
-                    <CalendarQuickActionLayer quickActions={eventQuickActions} />
-                    <DeadlineQuickActionLayer quickActions={deadlineQuickActions} />
-                  </>
-                ) : null}
-              </div>
+              <CalendarScrollContainer
+                view={view}
+                activeView={activeView}
+                layout={layout}
+                currentYear={currentYear}
+                currentMonth={currentMonth}
+                todayDate={todayDate}
+                viewYear={viewYear}
+                viewMonth={viewMonth}
+                onDisplayMonthChange={onDisplayMonthChange}
+                onLabelMonthChange={onLabelMonthChange}
+                onFetchSettle={onFetchSettle}
+                viewData={viewData}
+                itemsByDay={itemsByDay}
+                itemsByDate={itemsByDate}
+                cellMetaByDate={cellMetaByDate}
+                selectedDay={selectedDay}
+                selectedDateKey={selectedDateKey}
+                selectedItemId={effectiveSelectedItemId}
+                showGridSkeleton={showGridSkeleton}
+                isMonthCached={isMonthCached}
+                getMonthEvents={getMonthEvents}
+                getMonthDeadlines={getMonthDeadlines}
+                dataRevision={dataRevision}
+                buildFallbackDayState={buildFallbackDayState}
+                closeEventEditor={closeEventEditor}
+                setSelectedDay={setSelectedDay}
+                setSelectedDateKey={setSelectedDateKey}
+                setSelectedItemId={setSelectedItemId}
+                eventQuickActions={eventQuickActions}
+                deadlineQuickActions={deadlineQuickActions}
+                ghostPreview={ghostPreview}
+                suppressOutsideClick={suppressOutsideClick}
+                onOpenFloatingDetail={onOpenFloatingDetail}
+                onCloseFloatingDetail={onCloseFloatingDetail}
+                floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
+                floatingDetailItemId={floatingDetail?.itemId || null}
+                floatingDetailMode={floatingDetail?.mode || null}
+                floatingDetailDateKey={floatingDetailGridDateKey}
+                floatingEditorDirty={floatingEditorOpen && !!floatingDetail?.dirty}
+                onCancelFloatingEditor={onCancelFloatingEditor}
+                onShakeFloatingEditor={onShakeFloatingEditor}
+                onDirectDateAction={onGridDateAction}
+                onDirectItemAction={onGridEventAction}
+              />
+              {view === "events" ? (
+                <>
+                  <CalendarQuickActionLayer quickActions={eventQuickActions} />
+                  <DeadlineQuickActionLayer quickActions={deadlineQuickActions} />
+                </>
+              ) : null}
             </div>
 
             {showContextRail ? (
@@ -478,7 +491,6 @@ export default function CalendarModalShell({
             suppressOutsideClick={suppressOutsideClick}
             suppressFocusRing={suppressFocusRing}
             onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
-            onPark={onParkFloatingDetail}
             onUserDraggedChange={onFloatingDetailDragged}
           >
             {floatingDetailContent}

@@ -4,6 +4,7 @@ import {
   getDeadlineOverlayComputed,
   getPlanningItemId,
   isDeadlinePlanningItem,
+  matchesPlanningItemId,
   mergeDeadlineOverlayIntoEvents,
   orderPlanningItems,
 } from "./eventsPlanningModel.js";
@@ -115,6 +116,26 @@ describe("events planning model", () => {
       "deadline:same:2026-05-12",
       "deadline:same:2026-05-13",
     ]);
+  });
+
+  it("matches Events deadline planning items by occurrence, raw task id, and legacy ids", () => {
+    const task = deadline({
+      id: "todo-1",
+      title: "Project due",
+      due_date: "2026-05-12",
+      source: "todoist",
+    });
+    const descriptor = deadlinePlanningDescriptor(task);
+
+    expect(matchesPlanningItemId(task, "deadline:todo-1:2026-05-12")).toBe(true);
+    expect(matchesPlanningItemId(task, "todo-1")).toBe(true);
+    expect(matchesPlanningItemId(task, "todoist:todo-1-2026-05-12")).toBe(true);
+    expect(descriptor.matchItemIds).toEqual(expect.arrayContaining([
+      "todo-1",
+      "deadline:todo-1:2026-05-12",
+      "todoist:todo-1-2026-05-12",
+      "todoist:todo-1",
+    ]));
   });
 
   it("describes completed and in-progress deadline status for Events chips", () => {

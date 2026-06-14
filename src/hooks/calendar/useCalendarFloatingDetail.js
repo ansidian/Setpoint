@@ -105,7 +105,6 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     const suppliedAnchor = nextDetail.anchorElement || null;
     const inferredDayCell = !suppliedAnchor && mode !== "detail" ? findDateCell(nextDateKey) : null;
     const anchorElement = suppliedAnchor || inferredDayCell;
-    const parked = !!nextDetail.parked || !anchorElement;
     if (mode === "detail" && (!nextDetail.itemId || !anchorElement)) return;
     const preferredSide = nextDetail.preferredSide
       || (String(nextDetail.anchorKind || "").startsWith("agenda") ? "left" : null);
@@ -136,7 +135,6 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         railRect: elementRect(railRef?.current),
         panelHeight: mode === "detail" ? 300 : 560,
         mode,
-        parked,
         preferredSide: resolvedPreferredSide,
         forcedSide,
         allowRailOverlap: sideIntent === "user-flip",
@@ -168,11 +166,10 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
         anchorElement,
         sourceCellElement: nextDetail.sourceCellElement || inferredDayCell || null,
         exclusionElement: nextDetail.exclusionElement || null,
-        anchorKind: parked ? "parked" : nextDetail.anchorKind || (inferredDayCell ? "day-cell" : "chip"),
+        anchorKind: nextDetail.anchorKind || (inferredDayCell ? "day-cell" : mode === "detail" ? "chip" : "day-cell"),
         preferredSide: resolvedPreferredSide,
         forcedSide,
         sideIntent,
-        parked,
         userDragged: false,
         initialPlacement,
         itemsSnapshot: Array.isArray(nextDetail.itemsSnapshot)
@@ -193,58 +190,6 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     });
   }, [findDateCell, panelRef, railRef, setSyncedFloatingDetail, view]);
 
-  const reanchorFloatingDetail = useCallback((nextAnchor) => {
-    if (!nextAnchor) return;
-    setSyncedFloatingDetail((current) => {
-      if (!current?.open) return current;
-      const mode = current.mode || "detail";
-      const nextView = current.view || nextAnchor.view || view;
-      const nextDateKey = nextAnchor.dateKey || current.dateKey || null;
-      const suppliedAnchor = nextAnchor.anchorElement || null;
-      const inferredDayCell = !suppliedAnchor && mode !== "detail" ? findDateCell(nextDateKey) : null;
-      const anchorElement = suppliedAnchor || inferredDayCell;
-      if (!anchorElement) return current;
-      const sourceCellElement = nextAnchor.sourceCellElement || inferredDayCell || null;
-      const preferredSide = current.preferredSide || null;
-      const forcedSide = current.forcedSide || null;
-      const sideIntent = current.sideIntent || "auto";
-      const initialPlacement = resolveFloatingDetailPlacement({
-        anchorRect: elementRect(anchorElement),
-        sourceRect: elementRect(sourceCellElement),
-        exclusionRect: elementRect(nextAnchor.exclusionElement),
-        calendarRect: elementRect(panelRef.current),
-        railRect: elementRect(railRef?.current),
-        panelHeight: mode === "detail" ? 300 : 560,
-        mode,
-        parked: false,
-        preferredSide,
-        forcedSide,
-        allowRailOverlap: sideIntent === "user-flip",
-      });
-      return {
-        ...current,
-        placementKey: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        view: nextView,
-        itemId: nextAnchor.itemId != null ? String(nextAnchor.itemId) : current.itemId,
-        dateKey: nextDateKey,
-        day: nextAnchor.day ?? current.day ?? null,
-        anchorElement,
-        sourceCellElement,
-        exclusionElement: nextAnchor.exclusionElement || null,
-        anchorKind: nextAnchor.anchorKind || (inferredDayCell ? "day-cell" : current.anchorKind || "chip"),
-        preferredSide,
-        forcedSide,
-        sideIntent,
-        parked: false,
-        userDragged: false,
-        initialPlacement,
-        itemsSnapshot: Array.isArray(nextAnchor.itemsSnapshot)
-          ? nextAnchor.itemsSnapshot
-          : current.itemsSnapshot,
-      };
-    });
-  }, [findDateCell, panelRef, railRef, setSyncedFloatingDetail, view]);
-
   const closeFloatingDetail = useCallback(() => {
     const current = floatingDetailRef.current;
     if (current?.open && (current.mode === "edit" || current.mode === "create")) {
@@ -257,25 +202,6 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     setSyncedFloatingDetail(null);
     return true;
   }, [setSyncedFloatingDetail, shakeFloatingEditor]);
-
-  const parkFloatingDetail = useCallback(() => {
-    clearSessionSide(sessionSideByViewRef, floatingDetailRef.current);
-    setSyncedFloatingDetail((current) => (
-      current?.open
-        ? {
-            ...current,
-            anchorElement: null,
-            sourceCellElement: null,
-            exclusionElement: null,
-            anchorKind: "parked",
-            parked: true,
-            userDragged: false,
-            forcedSide: null,
-            sideIntent: "auto",
-          }
-        : current
-    ));
-  }, [setSyncedFloatingDetail]);
 
   const setFloatingDetailDragged = useCallback((userDragged, placementKey = null) => {
     if (userDragged) {
@@ -323,9 +249,7 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
     floatingDetailRef,
     findDateCell,
     openFloatingDetail,
-    reanchorFloatingDetail,
     closeFloatingDetail,
-    parkFloatingDetail,
     setFloatingDetailDragged,
     flipFloatingDetailSide,
     shakeFloatingEditor,

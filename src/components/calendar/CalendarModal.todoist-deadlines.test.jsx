@@ -115,6 +115,42 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
+  it("tints a focused Events deadline overlay chip when the focus id is a raw Todoist id", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        openRequestId={1}
+        onClose={() => {}}
+        view="events"
+        forceDeadlineOverlay
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        focusItemId="todo-1"
+        focusOpenDetail
+        eventsData={{
+          editable: true,
+          getEvents: () => [],
+        }}
+        billsData={{}}
+        deadlinesData={{
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-04-20", status: "open" },
+          ],
+        }}
+      />,
+    ));
+
+    const panel = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
+
+    const chip = within(screen.getByTestId("calendar-cell-20"))
+      .getByText("Project due")
+      .closest("[data-testid='calendar-cell-item-chip']");
+    expect(chip?.getAttribute("data-selected")).toBe("true");
+  });
+
   it("edits selected Todoist overlay items from the Events E hotkey", async () => {
     window.innerWidth = 1900;
     const onViewChange = vi.fn();
@@ -232,7 +268,7 @@ describe("CalendarModal deadlines rail behavior", () => {
     fireEvent.click(row);
 
     expect(within(await screen.findByTestId("calendar-floating-detail-panel")).getByTestId("calendar-selected-deadline-title").textContent).toContain("Project due");
-    expect(screen.getAllByRole("button", { name: /mark complete/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /^complete$/i }).length).toBeGreaterThan(0);
   });
 
   it("activates the live recurring Todoist occurrence when dashboard focus has a stale due date", async () => {
@@ -361,7 +397,8 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    expect(screen.queryByTestId("calendar-grid-skeleton")).toBeNull();
+    const activeGrid = screen.getByTestId("calendar-grid-shell");
+    expect(within(activeGrid).queryByTestId("calendar-grid-skeleton")).toBeNull();
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Backfill notes")).toBeTruthy();
   });
 
@@ -484,8 +521,10 @@ describe("CalendarModal deadlines rail behavior", () => {
     const { rerender } = render(modal("todo-1"));
 
     await waitFor(() => {
-      expect(ensureRange).toHaveBeenCalledTimes(1);
+      expect(ensureRange.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
+
+    const initialCallCount = ensureRange.mock.calls.length;
 
     rerender(modal("todo-1"));
 
@@ -493,7 +532,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       await Promise.resolve();
     });
 
-    expect(ensureRange).toHaveBeenCalledTimes(1);
+    expect(ensureRange).toHaveBeenCalledTimes(initialCallCount);
   });
 
   it("opens event create after closing a Todoist create focus request", async () => {

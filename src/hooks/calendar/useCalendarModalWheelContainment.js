@@ -2,14 +2,16 @@ import { useEffect } from "react";
 
 export default function useCalendarModalWheelContainment({ open, scrollRef }) {
   useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || !open) return undefined;
+    const wrapper = scrollRef.current;
+    if (!wrapper || !open) return undefined;
+
+    const scrollContainer = wrapper.querySelector("[data-testid='calendar-scroll-container']") || wrapper;
 
     function onWheel(event) {
       const localScrollElement = event.target instanceof HTMLElement
         ? event.target.closest("[data-calendar-local-scroll='true']")
         : null;
-      if (localScrollElement && localScrollElement !== element) {
+      if (localScrollElement && localScrollElement !== scrollContainer) {
         const localMaxScroll = localScrollElement.scrollHeight - localScrollElement.clientHeight;
         if (localMaxScroll > 0) {
           const localAtTop = localScrollElement.scrollTop <= 0 && event.deltaY < 0;
@@ -18,7 +20,7 @@ export default function useCalendarModalWheelContainment({ open, scrollRef }) {
         }
       }
 
-      const { scrollTop, scrollHeight, clientHeight } = element;
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       const maxScroll = scrollHeight - clientHeight;
       if (maxScroll <= 0) {
         event.preventDefault();
@@ -29,7 +31,7 @@ export default function useCalendarModalWheelContainment({ open, scrollRef }) {
       if (atTop || atBottom) event.preventDefault();
     }
 
-    element.addEventListener("wheel", onWheel, { passive: false });
-    return () => element.removeEventListener("wheel", onWheel);
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
   }, [open, scrollRef]);
 }

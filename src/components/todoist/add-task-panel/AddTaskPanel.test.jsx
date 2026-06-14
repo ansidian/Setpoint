@@ -475,48 +475,6 @@ describe("AddTaskPanel due picker", () => {
     );
   });
 
-  it("closes compact transient panels when the transient token changes without clearing the draft", async () => {
-    mockGetTodoistProjects.mockResolvedValue([
-      { id: "inbox", name: "Inbox", isInbox: true },
-      { id: "school", name: "School", color: "#89b4fa" },
-    ]);
-    mockGetTodoistLabels.mockResolvedValue([
-      { id: "lab", name: "lab" },
-    ]);
-
-    const { rerender } = render(
-      <AddTaskPanel
-        host="inline"
-        transientCloseToken={0}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-    await vi.runAllTimersAsync();
-
-    fireEvent.change(screen.getByPlaceholderText(/Buy groceries tomorrow/i), {
-      target: { value: "Submit lab notes" },
-    });
-    fireEvent.click(screen.getByTestId("todoist-project-trigger"));
-    expect(screen.getByRole("option", { name: "School" })).toBeTruthy();
-
-    rerender(
-      <AddTaskPanel
-        host="inline"
-        transientCloseToken={1}
-        onClose={() => {}}
-        onTaskAdded={() => {}}
-        onTaskUpdated={() => {}}
-        onTaskDeleted={() => {}}
-      />,
-    );
-
-    expect(screen.queryByRole("option", { name: "School" })).toBeNull();
-    expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
-  });
-
   it("suppresses unchanged edit previews until the due placement changes", () => {
     const onDraftPreviewChange = vi.fn();
 

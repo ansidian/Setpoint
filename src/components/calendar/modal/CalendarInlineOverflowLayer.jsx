@@ -208,7 +208,9 @@ export default function CalendarInlineOverflowLayer({
 
   if (!overflow?.inlineAnchor || !overflow.items?.length) return null;
   const boundaryColor = overflow.boundaryColor || CURRENT_MONTH_BOUNDARY_COLOR;
-  const drawBottomBoundary = overflow.boundarySides?.includes?.("bottom");
+  const drawBottomBoundary =
+    overflow.carryBoundaryToBottom === true
+    || overflow.boundarySides?.includes?.("bottom");
   const leadingColumnWidth = overflow.leadingColumnWidth ?? getChipLeadingColumnWidth(overflow.items);
 
   return (

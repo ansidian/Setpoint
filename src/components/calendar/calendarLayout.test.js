@@ -13,6 +13,12 @@ describe("BREAKPOINTS", () => {
 });
 
 describe("getCalendarLayoutMetrics", () => {
+  it("returns stable objects while the viewport stays in the same layout tier", () => {
+    expect(getCalendarLayoutMetrics(1512)).toBe(getCalendarLayoutMetrics(1400));
+    expect(getCalendarLayoutMetrics(1399)).toBe(getCalendarLayoutMetrics(1240));
+    expect(getCalendarLayoutMetrics(1239)).toBe(getCalendarLayoutMetrics(900));
+  });
+
   it("selects tiers at and just below each breakpoint", () => {
     expect(getCalendarLayoutMetrics(2560).tier).toBe("uhd");
     expect(getCalendarLayoutMetrics(2559).tier).toBe("xl");
@@ -39,7 +45,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 380,
       searchWidth: 304,
       editorWidth: 680,
-      cellHeight: 150,
+      cellHeight: 200,
       railHeightOffset: 92,
       stacked: false,
       stickyRail: true,
@@ -63,7 +69,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 320,
       searchWidth: 288,
       editorWidth: 620,
-      cellHeight: 140,
+      cellHeight: 186,
       railHeightOffset: 92,
       stacked: false,
       stickyRail: true,
@@ -87,7 +93,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 296,
       searchWidth: 268,
       editorWidth: 560,
-      cellHeight: 124,
+      cellHeight: 164,
       railHeightOffset: 82,
       stacked: false,
       stickyRail: true,
@@ -111,7 +117,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 272,
       searchWidth: 260,
       editorWidth: 480,
-      cellHeight: 108,
+      cellHeight: 144,
       railHeightOffset: 72,
       stacked: false,
       stickyRail: true,
@@ -135,7 +141,7 @@ describe("getCalendarLayoutMetrics", () => {
       contextWidth: 0,
       searchWidth: 0,
       editorWidth: 0,
-      cellHeight: 76,
+      cellHeight: 100,
       railHeightOffset: 48,
       stacked: true,
       stickyRail: false,

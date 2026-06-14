@@ -161,101 +161,111 @@ describe("overflowStateIsLiveInScope", () => {
 });
 
 describe("resolveOverflowPresentation", () => {
-  function buildOverflowFixture({
-    panelBottom = 600,
-    triggerTop = 100,
-    hiddenStackHeight = 120,
-    withContainer = true,
-  } = {}) {
-    const panel = document.createElement("section");
-    panel.setAttribute("data-testid", "calendar-modal-panel");
-    panel.getBoundingClientRect = () => ({
-      top: 0,
-      bottom: panelBottom,
-      left: 0,
-      right: 800,
-      width: 800,
-      height: panelBottom,
-    });
-
+  function buildOverflowFixture({ withContainer = true } = {}) {
     const container = document.createElement("div");
     container.getBoundingClientRect = () => ({
-      top: 40,
-      bottom: 580,
-      left: 60,
-      right: 760,
-      width: 700,
-      height: 540,
+      top: 40, bottom: 580, left: 60, right: 760, width: 700, height: 540,
     });
 
     const trigger = document.createElement("button");
     trigger.getBoundingClientRect = () => ({
-      top: triggerTop,
-      bottom: triggerTop + 28,
-      left: 220,
-      right: 340,
-      width: 120,
-      height: 28,
+      top: 100, bottom: 128, left: 220, right: 340, width: 120, height: 28,
     });
 
-    panel.append(container);
     container.append(trigger);
-    document.body.append(panel);
+    document.body.append(container);
 
     return {
-      hiddenStackHeight,
       trigger,
       container: withContainer ? container : null,
-      cleanup: () => panel.remove(),
+      cleanup: () => container.remove(),
     };
   }
 
-  it("uses inline overflow when the hidden stack fits below the trigger", () => {
+  function attachMonthBlock(fixture, rect) {
+    const monthBlock = document.createElement("div");
+    monthBlock.setAttribute("data-month-block", "");
+    monthBlock.getBoundingClientRect = () => rect;
+    monthBlock.append(fixture.trigger);
+    fixture.container.append(monthBlock);
+  }
+
+  it("uses inline overflow on desktop layout", () => {
     const fixture = buildOverflowFixture();
 
     expect(resolveOverflowPresentation({
       triggerElement: fixture.trigger,
-      hiddenStackHeight: fixture.hiddenStackHeight,
       layout: { stacked: false },
       containerElement: fixture.container,
     })).toEqual({
       mode: "inline",
-      inlineAnchor: {
-        top: 60,
-        left: 156,
-        width: 128,
-      },
+      inlineAnchor: { top: 60, left: 156, width: 128 },
     });
 
     fixture.cleanup();
   });
 
-  it("uses fallback overflow only when inline placement would leave the panel viewport", () => {
-    const fixture = buildOverflowFixture({
-      panelBottom: 260,
-      triggerTop: 180,
-      hiddenStackHeight: 96,
+  it("carries the month boundary to the bottom edge when inline overflow crosses the month block", () => {
+    const fixture = buildOverflowFixture();
+    attachMonthBlock(fixture, {
+      top: 40, bottom: 170, left: 60, right: 760, width: 700, height: 130,
     });
 
     expect(resolveOverflowPresentation({
       triggerElement: fixture.trigger,
-      hiddenStackHeight: fixture.hiddenStackHeight,
       layout: { stacked: false },
       containerElement: fixture.container,
+      hiddenItemCount: 3,
+      boundaryColor: "#0095FF",
     })).toEqual({
-      mode: "fallback",
-      inlineAnchor: null,
+      mode: "inline",
+      inlineAnchor: { top: 60, left: 156, width: 128 },
+      carryBoundaryToBottom: true,
+      boundaryColor: "#0095FF",
     });
 
     fixture.cleanup();
   });
 
-  it("does not fall back when inline would fit but the inline anchor cannot be resolved", () => {
+  it("does not carry the boundary when inline overflow stays inside the month block", () => {
+    const fixture = buildOverflowFixture();
+    attachMonthBlock(fixture, {
+      top: 40, bottom: 360, left: 60, right: 760, width: 700, height: 320,
+    });
+
+    expect(resolveOverflowPresentation({
+      triggerElement: fixture.trigger,
+      layout: { stacked: false },
+      containerElement: fixture.container,
+      hiddenItemCount: 2,
+      boundaryColor: "#0095FF",
+    })).toEqual({
+      mode: "inline",
+      inlineAnchor: { top: 60, left: 156, width: 128 },
+      carryBoundaryToBottom: false,
+      boundaryColor: "#0095FF",
+    });
+
+    fixture.cleanup();
+  });
+
+  it("falls back on stacked (mobile) layout", () => {
+    const fixture = buildOverflowFixture();
+
+    expect(resolveOverflowPresentation({
+      triggerElement: fixture.trigger,
+      layout: { stacked: true },
+      containerElement: fixture.container,
+    })).toEqual({ mode: "fallback", inlineAnchor: null });
+
+    fixture.cleanup();
+  });
+
+  it("returns null when the inline anchor cannot be resolved", () => {
     const fixture = buildOverflowFixture({ withContainer: false });
 
     expect(resolveOverflowPresentation({
       triggerElement: fixture.trigger,
-      hiddenStackHeight: fixture.hiddenStackHeight,
       layout: { stacked: false },
       containerElement: fixture.container,
     })).toBeNull();

@@ -1,10 +1,9 @@
-import { X } from "lucide-react";
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import CalendarFloatingDetailCloseButton from "./CalendarFloatingDetailCloseButton.jsx";
 import {
   clampFloatingPosition,
-  isRectInside,
   resolveFloatingDetailPlacement,
 } from "./calendarFloatingDetailPlacement.js";
 
@@ -50,7 +49,6 @@ export default function CalendarFloatingDetailPanel({
   suppressOutsideClick,
   suppressFocusRing = false,
   onClose,
-  onPark,
   onUserDraggedChange,
 }) {
   const reducedMotion = useReducedMotion();
@@ -75,70 +73,86 @@ export default function CalendarFloatingDetailPanel({
   const open = !!detail?.open && !!children;
   const mode = detail?.mode || "detail";
   const editorMode = mode === "edit" || mode === "create";
-  const agendaAnchored = String(detail?.anchorKind || "").startsWith("agenda");
-  const overflowAnchored = String(detail?.anchorKind || "") === "overflow-row";
   const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
   const placementKey = detail?.placementKey;
-  const placement = placementState.key === detail?.placementKey
-    ? placementState.placement
-    : detail?.initialPlacement || null;
+  const placement =
+    placementState.key === detail?.placementKey
+      ? placementState.placement
+      : detail?.initialPlacement || null;
   const manualDragActive = !!detail?.userDragged;
-  const manualPlacementActive = !detail?.parked && manualPosition?.placementKey === placementKey;
+  const manualPlacementActive = manualPosition?.placementKey === placementKey;
 
-  const computePlacement = useCallback(({ allowPark = true } = {}) => {
-    if (!detail || typeof window === "undefined") return null;
+  const computePlacement = useCallback(
+    () => {
+      if (!detail || typeof window === "undefined") return null;
 
-    const calendarRect = rectFromElement(calendarPanelRef?.current);
-    const railRect = rectFromElement(railRef?.current);
-    const anchorRect = rectFromElement(detail.anchorElement);
-    const sourceRect = rectFromElement(detail.sourceCellElement);
-    const exclusionRect = rectFromElement(detail.exclusionElement);
+      const calendarRect = rectFromElement(calendarPanelRef?.current);
+      const railRect = rectFromElement(railRef?.current);
+      const anchorRect = rectFromElement(detail.anchorElement);
+      const sourceRect = rectFromElement(detail.sourceCellElement);
+      const exclusionRect = rectFromElement(detail.exclusionElement);
 
-    if (!detail.parked && !anchorRect) {
-      if (agendaAnchored) return null;
-      if (!allowPark) return null;
-      onPark?.();
-      return null;
-    }
+      if (!anchorRect) {
+        return null;
+      }
 
-    if (!detail.parked && !overflowAnchored && calendarRect && !isRectInside(anchorRect, calendarRect)) {
-      return null;
-    }
-
-    return resolveFloatingDetailPlacement({
-      anchorRect,
-      sourceRect,
-      exclusionRect,
-      calendarRect,
-      railRect,
-      panelHeight: measuredSize.height,
+      return resolveFloatingDetailPlacement({
+        anchorRect,
+        sourceRect,
+        exclusionRect,
+        calendarRect,
+        railRect,
+        panelHeight: measuredSize.height,
+        mode,
+        preferredSide: detail.preferredSide || null,
+        forcedSide: detail.forcedSide || null,
+        allowRailOverlap: detail.sideIntent === "user-flip",
+      });
+    },
+    [
+      calendarPanelRef,
+      detail,
+      measuredSize.height,
       mode,
-      parked: !!detail.parked,
-      preferredSide: detail.preferredSide || null,
-      forcedSide: detail.forcedSide || null,
-      allowRailOverlap: detail.sideIntent === "user-flip",
-    });
-  }, [agendaAnchored, calendarPanelRef, detail, measuredSize.height, mode, onPark, overflowAnchored, railRef]);
+      railRef,
+    ],
+  );
 
-  const updatePlacement = useCallback(({ allowPark = true } = {}) => {
-    if (!open || detail?.userDragged || draggingRef.current || manualPlacementActive) return;
-    const next = computePlacement({ allowPark });
-    if (!next) return;
-    if (snapNextMeasuredPlacementKeyRef.current === detail?.placementKey) {
-      snapNextMeasuredPlacementKeyRef.current = null;
-      setSnapPlacementKey(detail?.placementKey || null);
-    }
-    setMeasuredSize((current) => (
-      current.width === next.width && current.maxHeight === next.maxHeight
-        ? current
-        : { ...current, width: next.width, maxHeight: next.maxHeight }
-    ));
-    setPlacementState((current) => (
-      current.key === detail?.placementKey && samePlacement(current.placement, next)
-        ? current
-        : { key: detail?.placementKey || null, placement: next }
-    ));
-  }, [computePlacement, detail?.placementKey, detail?.userDragged, manualPlacementActive, open]);
+  const updatePlacement = useCallback(
+    () => {
+      if (
+        !open ||
+        detail?.userDragged ||
+        draggingRef.current ||
+        manualPlacementActive
+      )
+        return;
+      const next = computePlacement();
+      if (!next) return;
+      if (snapNextMeasuredPlacementKeyRef.current === detail?.placementKey) {
+        snapNextMeasuredPlacementKeyRef.current = null;
+        setSnapPlacementKey(detail?.placementKey || null);
+      }
+      setMeasuredSize((current) =>
+        current.width === next.width && current.maxHeight === next.maxHeight
+          ? current
+          : { ...current, width: next.width, maxHeight: next.maxHeight },
+      );
+      setPlacementState((current) =>
+        current.key === detail?.placementKey &&
+        samePlacement(current.placement, next)
+          ? current
+          : { key: detail?.placementKey || null, placement: next },
+      );
+    },
+    [
+      computePlacement,
+      detail?.placementKey,
+      detail?.userDragged,
+      manualPlacementActive,
+      open,
+    ],
+  );
 
   const schedulePlacement = useCallback(() => {
     if (positionRafRef.current) return;
@@ -151,19 +165,23 @@ export default function CalendarFloatingDetailPanel({
   useLayoutEffect(() => {
     // Pre-paint DOM measurement prevents the panel from animating through the rail before it flips.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    updatePlacement({ allowPark: false });
+    updatePlacement();
   }, [updatePlacement]);
 
   useLayoutEffect(() => {
     const element = panelRef.current;
-    if (!open || !element || typeof ResizeObserver === "undefined") return undefined;
+    if (!open || !element || typeof ResizeObserver === "undefined")
+      return undefined;
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect) return;
       setMeasuredSize((current) => {
         const nextHeight = Math.round(rect.height);
         const nextWidth = Math.round(rect.width || current.width);
-        if (placementKey && !measuredPlacementKeysRef.current.has(placementKey)) {
+        if (
+          placementKey &&
+          !measuredPlacementKeysRef.current.has(placementKey)
+        ) {
           measuredPlacementKeysRef.current.add(placementKey);
           if (!hasRevealedMeasuredPlacement) {
             snapNextMeasuredPlacementKeyRef.current = placementKey;
@@ -171,8 +189,13 @@ export default function CalendarFloatingDetailPanel({
           }
           setMeasuredPlacementKey(placementKey);
         }
-        if (current.height === nextHeight && current.width === nextWidth) return current;
-        return { ...current, height: nextHeight, width: nextWidth || current.width };
+        if (current.height === nextHeight && current.width === nextWidth)
+          return current;
+        return {
+          ...current,
+          height: nextHeight,
+          width: nextWidth || current.width,
+        };
       });
     });
     observer.observe(element);
@@ -190,7 +213,9 @@ export default function CalendarFloatingDetailPanel({
 
   useEffect(() => {
     const nextRevealed = open
-      ? (!placementKey || measuredPlacementKey === placementKey) || hasRevealedMeasuredPlacement
+      ? !placementKey ||
+        measuredPlacementKey === placementKey ||
+        hasRevealedMeasuredPlacement
       : false;
     if (nextRevealed === hasRevealedMeasuredPlacement) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -199,19 +224,9 @@ export default function CalendarFloatingDetailPanel({
 
   useEffect(() => {
     if (!open) return undefined;
-    function handleScroll(event) {
-      const target = event.target;
-      if (target instanceof HTMLElement) {
-        if (panelRef.current?.contains(target)) return;
-        if (target.closest("[data-calendar-local-scroll='true']")) return;
-      }
-      schedulePlacement();
-    }
     window.addEventListener("resize", schedulePlacement);
-    window.addEventListener("scroll", handleScroll, true);
     return () => {
       window.removeEventListener("resize", schedulePlacement);
-      window.removeEventListener("scroll", handleScroll, true);
       if (positionRafRef.current) {
         window.cancelAnimationFrame(positionRafRef.current);
         positionRafRef.current = 0;
@@ -226,10 +241,13 @@ export default function CalendarFloatingDetailPanel({
 
   useEffect(() => {
     if (!open || !suppressOutsideClick) return undefined;
-    suppressOutsideClick((target) => (
-      panelRef.current?.contains(target)
-      || (target instanceof HTMLElement && !!target.closest("[data-calendar-floating-detail='true']"))
-    ), "floating-detail");
+    suppressOutsideClick(
+      (target) =>
+        panelRef.current?.contains(target) ||
+        (target instanceof HTMLElement &&
+          !!target.closest("[data-calendar-floating-detail='true']")),
+      "floating-detail",
+    );
     return () => suppressOutsideClick(null, "floating-detail");
   }, [open, suppressOutsideClick]);
 
@@ -257,7 +275,10 @@ export default function CalendarFloatingDetailPanel({
     let timer = 0;
     const raf = window.requestAnimationFrame(() => {
       setFeedbackActive(true);
-      timer = window.setTimeout(() => setFeedbackActive(false), reducedMotion ? 180 : 260);
+      timer = window.setTimeout(
+        () => setFeedbackActive(false),
+        reducedMotion ? 180 : 260,
+      );
     });
     return () => {
       window.cancelAnimationFrame(raf);
@@ -265,93 +286,113 @@ export default function CalendarFloatingDetailPanel({
     };
   }, [detail?.shakeKey, editorMode, open, reducedMotion]);
 
-  const applyManualPosition = useCallback((clientX, clientY) => {
-    const session = dragSessionRef.current;
-    if (!session || session.placementKey !== placementKey) return;
-    const next = clampFloatingPosition(
-      {
-        left: clientX - session.offsetX,
-        top: clientY - session.offsetY,
-      },
-      {
-        width: session.panelWidth || measuredSize.width,
-        height: session.panelHeight || measuredSize.height || 300,
-        maxHeight: session.maxHeight || measuredSize.maxHeight,
-      },
-      session.calendarRect,
-    );
-    setManualPosition((current) => (
-      current
-        && current.placementKey === session.placementKey
-        && Math.round(current.left) === Math.round(next.left)
-        && Math.round(current.top) === Math.round(next.top)
-        ? current
-        : { ...next, placementKey: session.placementKey }
-    ));
-  }, [measuredSize.height, measuredSize.maxHeight, measuredSize.width, placementKey]);
-
-  const scheduleManualPosition = useCallback((clientX, clientY) => {
-    pendingDragPointRef.current = { clientX, clientY };
-    if (dragRafRef.current) return;
-    dragRafRef.current = window.requestAnimationFrame(() => {
-      dragRafRef.current = 0;
-      const point = pendingDragPointRef.current;
-      pendingDragPointRef.current = null;
-      if (point) applyManualPosition(point.clientX, point.clientY);
-    });
-  }, [applyManualPosition]);
-
-  const handleDragPointerDown = useCallback((event) => {
-    if ((event.button ?? 0) !== 0) return;
-    const panelRect = rectFromElement(panelRef.current);
-    if (!panelRect || !placementKey) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    draggingRef.current = true;
-    dragSessionRef.current = {
-      pointerId: event.pointerId,
+  const applyManualPosition = useCallback(
+    (clientX, clientY) => {
+      const session = dragSessionRef.current;
+      if (!session || session.placementKey !== placementKey) return;
+      const next = clampFloatingPosition(
+        {
+          left: clientX - session.offsetX,
+          top: clientY - session.offsetY,
+        },
+        {
+          width: session.panelWidth || measuredSize.width,
+          height: session.panelHeight || measuredSize.height || 300,
+          maxHeight: session.maxHeight || measuredSize.maxHeight,
+        },
+        session.calendarRect,
+      );
+      setManualPosition((current) =>
+        current &&
+        current.placementKey === session.placementKey &&
+        Math.round(current.left) === Math.round(next.left) &&
+        Math.round(current.top) === Math.round(next.top)
+          ? current
+          : { ...next, placementKey: session.placementKey },
+      );
+    },
+    [
+      measuredSize.height,
+      measuredSize.maxHeight,
+      measuredSize.width,
       placementKey,
-      offsetX: event.clientX - panelRect.left,
-      offsetY: event.clientY - panelRect.top,
-      panelWidth: panelRect.width,
-      panelHeight: panelRect.height,
-      maxHeight: measuredSize.maxHeight,
-      calendarRect: rectFromElement(calendarPanelRef?.current),
-      startX: event.clientX,
-      startY: event.clientY,
-      moved: false,
-    };
-  }, [calendarPanelRef, measuredSize.maxHeight, placementKey]);
+    ],
+  );
 
-  const handleDragPointerMove = useCallback((event) => {
-    const session = dragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - session.startX;
-    const deltaY = event.clientY - session.startY;
-    if (!session.moved && Math.hypot(deltaX, deltaY) < 2) return;
-    session.moved = true;
-    setDragging((current) => (current ? current : true));
-    scheduleManualPosition(event.clientX, event.clientY);
-  }, [scheduleManualPosition]);
-
-  const finishManualDrag = useCallback((event) => {
-    const session = dragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) return;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    if (session.moved) {
-      if (dragRafRef.current) {
-        window.cancelAnimationFrame(dragRafRef.current);
+  const scheduleManualPosition = useCallback(
+    (clientX, clientY) => {
+      pendingDragPointRef.current = { clientX, clientY };
+      if (dragRafRef.current) return;
+      dragRafRef.current = window.requestAnimationFrame(() => {
         dragRafRef.current = 0;
+        const point = pendingDragPointRef.current;
+        pendingDragPointRef.current = null;
+        if (point) applyManualPosition(point.clientX, point.clientY);
+      });
+    },
+    [applyManualPosition],
+  );
+
+  const handleDragPointerDown = useCallback(
+    (event) => {
+      if ((event.button ?? 0) !== 0) return;
+      const panelRect = rectFromElement(panelRef.current);
+      if (!panelRect || !placementKey) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      draggingRef.current = true;
+      dragSessionRef.current = {
+        pointerId: event.pointerId,
+        placementKey,
+        offsetX: event.clientX - panelRect.left,
+        offsetY: event.clientY - panelRect.top,
+        panelWidth: panelRect.width,
+        panelHeight: panelRect.height,
+        maxHeight: measuredSize.maxHeight,
+        calendarRect: rectFromElement(calendarPanelRef?.current),
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+      };
+    },
+    [calendarPanelRef, measuredSize.maxHeight, placementKey],
+  );
+
+  const handleDragPointerMove = useCallback(
+    (event) => {
+      const session = dragSessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      const deltaX = event.clientX - session.startX;
+      const deltaY = event.clientY - session.startY;
+      if (!session.moved && Math.hypot(deltaX, deltaY) < 2) return;
+      session.moved = true;
+      setDragging((current) => (current ? current : true));
+      scheduleManualPosition(event.clientX, event.clientY);
+    },
+    [scheduleManualPosition],
+  );
+
+  const finishManualDrag = useCallback(
+    (event) => {
+      const session = dragSessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      if (session.moved) {
+        if (dragRafRef.current) {
+          window.cancelAnimationFrame(dragRafRef.current);
+          dragRafRef.current = 0;
+        }
+        pendingDragPointRef.current = null;
+        applyManualPosition(event.clientX, event.clientY);
       }
-      pendingDragPointRef.current = null;
-      applyManualPosition(event.clientX, event.clientY);
-    }
-    dragSessionRef.current = null;
-    draggingRef.current = false;
-    setDragging(false);
-    if (!session.moved) return;
-    onUserDraggedChange?.(true, session.placementKey);
-  }, [applyManualPosition, onUserDraggedChange]);
+      dragSessionRef.current = null;
+      draggingRef.current = false;
+      setDragging(false);
+      if (!session.moved) return;
+      onUserDraggedChange?.(true, session.placementKey);
+    },
+    [applyManualPosition, onUserDraggedChange],
+  );
 
   if (!open || typeof document === "undefined") return null;
 
@@ -372,29 +413,32 @@ export default function CalendarFloatingDetailPanel({
         caretTop: 0,
       }
     : anchoredPlacement;
-  const manualTransitionActive = manualPlacementActive || dragging || manualDragActive;
-  const snapTransitionActive = !detail?.parked
-    && snapPlacementKey === placementKey
-    && (
-      snapPlacementIntent === "user-flip"
-      || !(detail?.sideIntent === "user-flip" && hasRevealedMeasuredPlacement)
-    );
-  const awaitingMeasuredPlacement = open
-    && !detail?.parked
-    && !!placementKey
-    && typeof ResizeObserver !== "undefined"
-    && !manualPlacementActive
-    && !hasRevealedMeasuredPlacement
-    && measuredPlacementKey !== placementKey;
-  const feedbackVisible = feedbackActive && open && editorMode && !!detail?.shakeKey;
-  const instantPlacementTransition = manualTransitionActive || snapTransitionActive || awaitingMeasuredPlacement;
+  const manualTransitionActive =
+    manualPlacementActive || dragging || manualDragActive;
+  const snapTransitionActive =
+    snapPlacementKey === placementKey &&
+    (snapPlacementIntent === "user-flip" ||
+      !(detail?.sideIntent === "user-flip" && hasRevealedMeasuredPlacement));
+  const awaitingMeasuredPlacement =
+    open &&
+    !!placementKey &&
+    typeof ResizeObserver !== "undefined" &&
+    !manualPlacementActive &&
+    !hasRevealedMeasuredPlacement &&
+    measuredPlacementKey !== placementKey;
+  const feedbackVisible =
+    feedbackActive && open && editorMode && !!detail?.shakeKey;
+  const instantPlacementTransition =
+    manualTransitionActive || snapTransitionActive || awaitingMeasuredPlacement;
 
   return createPortal(
     <AnimatePresence initial={false}>
       <Motion.div
         ref={panelRef}
         data-calendar-floating-detail="true"
-        data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
+        data-calendar-suppress-focus-ring={
+          suppressFocusRing ? "true" : undefined
+        }
         data-forced-side={detail?.forcedSide || undefined}
         data-side-intent={detail?.sideIntent || "auto"}
         data-testid="calendar-floating-detail-panel"
@@ -433,7 +477,8 @@ export default function CalendarFloatingDetailPanel({
           scale: contentTransition(reducedMotion),
         }}
       >
-        {!detail.parked && !manualPlacementActive && resolvedPlacement.caretSide ? (
+        {!manualPlacementActive &&
+        resolvedPlacement.caretSide ? (
           <span
             aria-hidden="true"
             data-testid="calendar-floating-detail-caret"
@@ -445,10 +490,22 @@ export default function CalendarFloatingDetailPanel({
               height: 12,
               transform: "rotate(45deg)",
               background: "#1b1b27",
-              borderLeft: resolvedPlacement.caretSide === "left" ? "1px solid rgba(203,166,218,0.22)" : 0,
-              borderBottom: resolvedPlacement.caretSide === "left" ? "1px solid rgba(203,166,218,0.22)" : 0,
-              borderRight: resolvedPlacement.caretSide === "right" ? "1px solid rgba(203,166,218,0.22)" : 0,
-              borderTop: resolvedPlacement.caretSide === "right" ? "1px solid rgba(203,166,218,0.22)" : 0,
+              borderLeft:
+                resolvedPlacement.caretSide === "left"
+                  ? "1px solid rgba(203,166,218,0.22)"
+                  : 0,
+              borderBottom:
+                resolvedPlacement.caretSide === "left"
+                  ? "1px solid rgba(203,166,218,0.22)"
+                  : 0,
+              borderRight:
+                resolvedPlacement.caretSide === "right"
+                  ? "1px solid rgba(203,166,218,0.22)"
+                  : 0,
+              borderTop:
+                resolvedPlacement.caretSide === "right"
+                  ? "1px solid rgba(203,166,218,0.22)"
+                  : 0,
               boxShadow: "0 0 10px rgba(203,166,218,0.10)",
               zIndex: 0,
               pointerEvents: "none",
@@ -456,7 +513,9 @@ export default function CalendarFloatingDetailPanel({
           />
         ) : null}
         <div
-          data-calendar-floating-editor-feedback={feedbackVisible ? "active" : undefined}
+          data-calendar-floating-editor-feedback={
+            feedbackVisible ? "active" : undefined
+          }
           style={{
             position: "relative",
             display: "flex",
@@ -479,98 +538,59 @@ export default function CalendarFloatingDetailPanel({
               : "none",
           }}
         >
-        <div
-          onPointerDown={handleDragPointerDown}
-          onPointerMove={handleDragPointerMove}
-          onPointerUp={finishManualDrag}
-          onPointerCancel={finishManualDrag}
-          style={{
-            position: "relative",
-            zIndex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            minHeight: 36,
-            padding: "9px 10px 8px 12px",
-            cursor: dragging ? "grabbing" : "grab",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-            background: "rgba(255,255,255,0.018)",
-            userSelect: "none",
-            touchAction: "none",
-          }}
-        >
           <div
+            onPointerDown={handleDragPointerDown}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={finishManualDrag}
+            onPointerCancel={finishManualDrag}
             style={{
-              minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 1.7,
-              textTransform: "uppercase",
-              color: "rgba(205,214,244,0.52)",
-            }}
-          >
-            {label}
-          </div>
-          <button
-            type="button"
-            aria-label={editorMode ? "Cancel editor" : "Close floating detail"}
-            data-calendar-focus-ring="true"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClose?.();
-            }}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.06)",
-              background: "rgba(255,255,255,0.03)",
-              color: "rgba(205,214,244,0.72)",
-              display: "inline-flex",
+              position: "relative",
+              zIndex: 1,
+              display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              flexShrink: 0,
-              transition: "background 140ms, border-color 140ms, transform 140ms, color 140ms",
-            }}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = "rgba(255,255,255,0.07)";
-              event.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
-              event.currentTarget.style.color = "#eef2ff";
-              event.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "rgba(255,255,255,0.03)";
-              event.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-              event.currentTarget.style.color = "rgba(205,214,244,0.72)";
-              event.currentTarget.style.transform = "translateY(0)";
+              justifyContent: "space-between",
+              gap: 10,
+              minHeight: 36,
+              padding: "9px 10px 8px 12px",
+              cursor: dragging ? "grabbing" : "grab",
+              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              background: "rgba(255,255,255,0.018)",
+              userSelect: "none",
+              touchAction: "none",
             }}
           >
-            <X size={14} />
-          </button>
-        </div>
-        <div
-          data-calendar-local-scroll="true"
-          style={{
-            position: "relative",
-            zIndex: 1,
-            overflowY: "auto",
-            overscrollBehavior: "contain",
-            padding: 12,
-            minHeight: 0,
-            maxHeight: Math.max(120, resolvedPlacement.maxHeight - 37),
-            scrollbarGutter: "stable",
-          }}
-        >
-          <div key={contentKey}>
-            {children}
+            <div
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 1.7,
+                textTransform: "uppercase",
+                color: "rgba(205,214,244,0.52)",
+              }}
+            >
+              {label}
+            </div>
+            <CalendarFloatingDetailCloseButton editorMode={editorMode} onClose={onClose} />
           </div>
-        </div>
+          <div
+            data-calendar-local-scroll="true"
+            style={{
+              position: "relative",
+              zIndex: 1,
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              padding: 12,
+              minHeight: 0,
+              maxHeight: Math.max(120, resolvedPlacement.maxHeight - 37),
+              scrollbarGutter: "stable",
+            }}
+          >
+            <div key={contentKey}>{children}</div>
+          </div>
         </div>
       </Motion.div>
     </AnimatePresence>,

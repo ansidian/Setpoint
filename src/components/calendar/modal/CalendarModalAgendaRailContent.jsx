@@ -24,6 +24,10 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
   onDateAction,
   miniCalendarActions = null,
   onEventAction,
+  getMonthEvents = null,
+  eventsRange = null,
+  deadlinesRange = null,
+  dataRevision = 0,
 }, ref) {
   const miniCalendarNavigation = {
     canGoPrev: monthNavigation?.canGoPrev ?? true,
@@ -60,6 +64,10 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         onMiniCalendarDateAction={miniCalendarActions?.onDateAction}
         onMiniCalendarDateCreate={miniCalendarActions?.onDateCreate}
         onEventAction={onEventAction}
+        getMonthEvents={getMonthEvents}
+        eventsRange={eventsRange}
+        deadlinesRange={deadlinesRange}
+        dataRevision={dataRevision}
       />
     );
   }

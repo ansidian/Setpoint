@@ -34,6 +34,12 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/api": "http://localhost:3001",
       },
+      watch: {
+        // .grepai index churn (stats.json appends, .gob rewrites) must never
+        // reach the watcher: Tailwind v4 scans non-gitignored files and each
+        // write triggered a full page reload in dev.
+        ignored: ["**/.grepai/**", "**/server/db/**"],
+      },
     },
   };
 })

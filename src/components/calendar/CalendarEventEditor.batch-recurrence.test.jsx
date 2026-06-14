@@ -33,6 +33,7 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
     await waitFor(() => {
       expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
       expect(screen.getByTestId("calendar-event-save").textContent).toMatch(/create recurring event/i);
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
     });
 
     fireEvent.click(getActiveEventSaveButton());
@@ -307,6 +308,9 @@ describe("CalendarEventEditor batch and recurrence behavior", () => {
 
     fireEvent.input(screen.getByTestId("calendar-event-title"), {
       target: { value: "Work at 3am to 8am every monday" },
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-draft-preview-summary").textContent).toMatch(/every mon/i);
     });
 
     fireEvent.click(getActiveRepeatTrigger(/repeat/i));

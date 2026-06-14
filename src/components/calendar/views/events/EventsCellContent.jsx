@@ -32,6 +32,8 @@ const MD_EVENT_CHIP_METRICS = {
   fallback: 2,
 };
 
+const EMPTY_PINNED_IDS = new Set();
+
 function resolveEventChipMetrics(layout) {
   const tier = layout?.tier;
   const base = tier === "uhd" || tier === "xl" || tier === "lg" ? LG_EVENT_CHIP_METRICS : MD_EVENT_CHIP_METRICS;
@@ -92,7 +94,7 @@ function toEventDescriptor(ev) {
     detail: eventDetail(ev),
     leadingLabel: specialDate ? "" : ev?.allDay ? "All day" : pacificTime(ev?.startMs),
     accent,
-    leadingColor: specialDate ? accent : ev?.allDay ? "rgba(205,214,244,0.7)" : ev?.color || ev?.sourceColor || "#89b4fa",
+    leadingColor: specialDate ? accent : ev?.allDay ? (ev?.color || ev?.sourceColor || "rgba(205,214,244,0.7)") : ev?.color || ev?.sourceColor || "#89b4fa",
     allDay: !!ev?.allDay,
     sortMs: ev?.startMs || 0,
     specialDate,
@@ -160,6 +162,8 @@ export function renderEventsCellContents({
   dateKey,
   ghosts = [],
   pinnedIds = null,
+  pinnedIdsByDate = null,
+  pinnedOverflowByDate = null,
   reservedLaneCount = 0,
 }) {
   const singleDayEventGhosts = ghosts.filter((ghost) => (
@@ -169,12 +173,15 @@ export function renderEventsCellContents({
     ghost?.kind === "deadline" && ghost.startDate === dateKey
   ));
   if (!items?.length && !singleDayEventGhosts.length && !singleDayDeadlineGhosts.length) return null;
+  const pinnedIdsForDate = pinnedIdsByDate ? (pinnedIdsByDate[dateKey] || EMPTY_PINNED_IDS) : pinnedIds;
   const descriptors = orderEventDescriptors([
     ...(items || [])
-      .filter((item) => (
-        isDeadlinePlanningItem(item)
-        || !pinnedIds?.has?.(String(getEventSelectionId(item)))
-      ))
+      .filter((item) => {
+        if (isDeadlinePlanningItem(item)) return true;
+        const eid = String(getEventSelectionId(item));
+        if (!pinnedIdsForDate?.has?.(eid)) return true;
+        return !!pinnedOverflowByDate?.[dateKey]?.has?.(eid);
+      })
       .map((item) => (isDeadlinePlanningItem(item) ? deadlinePlanningDescriptor(item) : toEventDescriptor(item))),
     ...singleDayEventGhosts.map(toEventGhostDescriptor),
     ...singleDayDeadlineGhosts.map(toDeadlineGhostDescriptor),

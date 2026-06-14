@@ -389,6 +389,13 @@ export default function useCalendarDomainRange({
     setRevision((current) => current + 1);
   }, [cacheMode, disabled]);
 
+  const getMonthData = useCallback((year, month) => {
+    if (cacheMode !== "month") return null;
+    const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const entry = cacheRef.current.get(key);
+    return entry?.data ?? null;
+  }, [cacheMode]);
+
   return {
     data,
     dataRange,
@@ -397,6 +404,7 @@ export default function useCalendarDomainRange({
     markStale,
     updateData,
     seedData,
+    getMonthData,
     loading,
     error,
     revision,

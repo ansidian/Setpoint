@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { expect, vi } from "vitest";
 import "./CalendarEventEditor.test-setup.js";
 import CalendarModal from "./CalendarModal.jsx";
 
@@ -66,6 +66,14 @@ export function setCompactSchedulePickerTime(picker, fieldLabel, { hour, minute,
   fireEvent.blur(within(picker).getByLabelText("minute"));
   fireEvent.click(within(picker).getByRole("button", { name: period.toUpperCase() }));
   fireEvent.click(within(picker).getByRole("button", { name: new RegExp(`set ${fieldLabel}`, "i") }));
+}
+
+export async function typeTitle(value) {
+  const input = screen.getByTestId("calendar-event-title");
+  fireEvent.change(input, { target: { value } });
+  await waitFor(() => {
+    expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+  });
 }
 
 export function createDataTransfer() {

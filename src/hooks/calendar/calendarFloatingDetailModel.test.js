@@ -3,6 +3,7 @@ import {
   floatingDetailOwnsGridSelection,
   formatFloatingDetailLabel,
   formatFloatingEditorLabel,
+  isGridOriginAnchorKind,
   isGridOriginFloatingDetail,
   isFloatingDetailTriggerTarget,
   preservedReanchorSide,
@@ -14,7 +15,6 @@ describe("calendarFloatingDetailModel", () => {
       open: true,
       mode: "detail",
       anchorKind: "chip",
-      parked: false,
       userDragged: false,
     })).toBe(true);
 
@@ -22,29 +22,17 @@ describe("calendarFloatingDetailModel", () => {
       open: true,
       mode: "detail",
       anchorKind: "chip",
-      parked: true,
-      userDragged: false,
+      userDragged: true,
     })).toBe(false);
   });
 
-  it("keeps grid-origin parked details in charge of grid selection", () => {
+  it("lets grid-origin details own passive grid selection while open", () => {
     expect(floatingDetailOwnsGridSelection({
       open: true,
       mode: "detail",
       anchorKind: "span",
       itemId: "birthday-1",
       dateKey: "2026-05-10",
-      parked: false,
-      userDragged: false,
-    })).toBe(true);
-
-    expect(floatingDetailOwnsGridSelection({
-      open: true,
-      mode: "detail",
-      anchorKind: "parked",
-      itemId: "birthday-1",
-      dateKey: "2026-05-10",
-      parked: true,
       userDragged: false,
     })).toBe(true);
 
@@ -54,7 +42,6 @@ describe("calendarFloatingDetailModel", () => {
       anchorKind: "agenda-row",
       itemId: "event-1",
       dateKey: "2026-05-10",
-      parked: false,
       userDragged: false,
     })).toBe(false);
   });
@@ -69,7 +56,6 @@ describe("calendarFloatingDetailModel", () => {
       forcedSide: null,
       preferredSide: null,
       initialPlacement: { caretSide: "left" },
-      parked: false,
       userDragged: false,
       dirty: false,
     };
@@ -85,6 +71,16 @@ describe("calendarFloatingDetailModel", () => {
     expect(formatFloatingDetailLabel("events", "2026-05-02", 2026, 4, null)).toBe("Event · Sat, May 2");
     expect(formatFloatingEditorLabel("create", "events", null, 2026, 4, 3, "deadline")).toBe("New deadline · Sun, May 3");
     expect(formatFloatingEditorLabel("edit", "bills", null, 2026, 4, null)).toBe("Edit bill · Selected");
+  });
+
+  describe("isGridOriginAnchorKind", () => {
+    it("recognizes grid-origin anchor kinds", () => {
+      expect(isGridOriginAnchorKind("chip")).toBe(true);
+      expect(isGridOriginAnchorKind("span")).toBe(true);
+      expect(isGridOriginAnchorKind("overflow-row")).toBe(true);
+      expect(isGridOriginAnchorKind("agenda-row")).toBe(false);
+      expect(isGridOriginAnchorKind("parked")).toBe(false);
+    });
   });
 
   it("treats overflow triggers as floating-detail-safe targets", () => {
