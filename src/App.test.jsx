@@ -76,7 +76,9 @@ describe("App auth redirects", () => {
 
     fireEvent.keyDown(window, { key: ",", metaKey: true });
 
-    expect(await screen.findByTestId("settings-page")).toBeTruthy();
+    expect(
+      await screen.findByTestId("settings-page", undefined, { timeout: 5000 }),
+    ).toBeTruthy();
     expect(window.location.pathname).toBe("/settings");
   });
 

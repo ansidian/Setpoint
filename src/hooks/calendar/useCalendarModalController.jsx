@@ -12,6 +12,7 @@ import {
   createCalendarEventSelectionSet,
   getOrderedCalendarEventSelection,
   isCalendarEventSelected,
+  removeCalendarEventSelection,
   resolveCalendarEventActionScope,
   toggleCalendarEventSelection,
 } from "../../components/calendar/events/calendarEventSelectionModel.js";
@@ -453,6 +454,22 @@ export default function useCalendarModalController({
     setCalendarEventSelectionSet((current) => (
       calendarEventSelectionSize(current) > 0 ? clearCalendarEventSelection() : current
     ));
+  }, []);
+  const removeFromCalendarEventSelectionSet = useCallback((events) => {
+    const identities = (Array.isArray(events) ? events : [events])
+      .map((event) => calendarEventSelectionIdentity(event))
+      .filter(Boolean);
+    if (!identities.length) return;
+    setCalendarEventSelectionSet((current) => {
+      if (calendarEventSelectionSize(current) === 0) return current;
+      const next = identities.reduce(
+        (selection, identity) => removeCalendarEventSelection(selection, identity),
+        current,
+      );
+      return calendarEventSelectionSize(next) === calendarEventSelectionSize(current)
+        ? current
+        : next;
+    });
   }, []);
 
   function focusEditorDate(ymd) {
@@ -965,7 +982,7 @@ export default function useCalendarModalController({
     upsertEvents: eventsUpsertEvents,
     removeEvent: eventsRemoveEvent,
     onCopyEvent: copyCalendarEvent,
-    onBatchDeleted: clearCalendarEventSelectionSet,
+    onBatchDeleted: removeFromCalendarEventSelectionSet,
     resolveEventActionScope: resolveContextEventActionScope,
     onSelectEvent: (itemId, dateKey) => {
       const parsed = parseYmd(dateKey);
