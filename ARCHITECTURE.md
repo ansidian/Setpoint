@@ -587,7 +587,7 @@ erDiagram
 | `ea_bill_occurrence_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_bill_schedule_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_bills_mirror_state` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
-| `ea_briefing_snapshot_items` | `001_ea_tables.sql` |
+| `ea_briefing_snapshot_items` | `001_ea_tables.sql`, `018_carryover_depth_bound.sql` |
 | `ea_briefing_snapshots` | `001_ea_tables.sql` |
 | `ea_calendar_search_mirror_state` | `011_calendar_search_mirror.sql` |
 | `ea_calendar_search_occurrences` | `011_calendar_search_mirror.sql` |

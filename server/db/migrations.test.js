@@ -335,4 +335,39 @@ describe("database migrations", () => {
     expect(column.type).toBe("TEXT");
     expect(column.notnull).toBe(0);
   });
+
+  it("adds the bounded carryover depth counter to snapshot items", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "018_carryover_depth_bound.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_briefing_snapshot_items')");
+    const column = columns.rows.find((row) => row.name === "carryover_count");
+
+    expect(column).toBeDefined();
+    expect(column.type).toBe("INTEGER");
+    expect(column.notnull).toBe(1);
+    expect(column.dflt_value).toBe("0");
+
+    await db.execute({
+      sql: `INSERT INTO ea_briefing_snapshots (user_id, start_at, end_at, timezone, status)
+            VALUES ('user-1', '2026-05-03T07:00:00.000Z', '2026-05-04T07:00:00.000Z', 'America/Los_Angeles', 'active')`,
+      args: [],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_email_triage (user_id, account_id, email_id, lane, triage_status)
+            VALUES ('user-1', 'gmail-work', 'msg-1', 'needs_attention', 'complete')`,
+      args: [],
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_briefing_snapshot_items
+              (snapshot_id, triage_id, user_id, account_id, email_id, lane_at_snapshot)
+            VALUES (1, 1, 'user-1', 'gmail-work', 'msg-1', 'needs_attention')`,
+      args: [],
+    });
+    const row = await db.execute("SELECT carryover_count FROM ea_briefing_snapshot_items WHERE email_id = 'msg-1'");
+    expect(Number(row.rows[0].carryover_count)).toBe(0);
+  });
 });

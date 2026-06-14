@@ -17,6 +17,11 @@ export const migrationSql = readFileSync(
 export async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(migrationSql);
+  const migration018 = readFileSync(
+    join(__dirname, "../db/migrations/018_carryover_depth_bound.sql"),
+    "utf8",
+  );
+  await db.executeMultiple(migration018);
   return db;
 }
 

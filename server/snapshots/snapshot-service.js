@@ -42,6 +42,12 @@ export {
   restoreSnapshotItemForToday,
 } from "./snapshot-item-mutations.js";
 
+// Max times an unhandled needs_attention/queued item re-copies into a new active
+// snapshot before it ages out of carryover (per-item age expiry, NOT a capacity
+// cap -- see ADR 0007 / exec-plan SS5.6). Boundaries fire ~twice daily, so 6 ~ 3
+// days of re-surfacing.
+export const CARRYOVER_MAX_DEPTH = 6;
+
 const ACTIVE_SNAPSHOT_SYNC_IN_FLIGHT = new Map();
 
 async function findActiveSnapshot(dbClient, userId, window) {
@@ -130,7 +136,7 @@ async function copyCarryoverItems(dbClient, userId, snapshot, window) {
              from_name_at_snapshot, from_address_at_snapshot, email_date_at_snapshot,
              account_label_at_snapshot, account_email_at_snapshot,
              account_color_at_snapshot, account_icon_at_snapshot, sort_order,
-             is_carryover, source, source_at, resurfaced_at)
+             is_carryover, carryover_count, source, source_at, resurfaced_at)
           SELECT ?, i.triage_id, i.user_id, i.account_id, i.email_id,
                  CASE WHEN i.lane_at_snapshot = 'queued' THEN 'queued' ELSE 'needs_attention' END,
                  i.summary_at_snapshot, i.action_at_snapshot,
@@ -139,7 +145,7 @@ async function copyCarryoverItems(dbClient, userId, snapshot, window) {
                  i.from_name_at_snapshot, i.from_address_at_snapshot, i.email_date_at_snapshot,
                  i.account_label_at_snapshot, i.account_email_at_snapshot,
                  i.account_color_at_snapshot, i.account_icon_at_snapshot, i.sort_order,
-                 1, i.source, i.source_at, i.resurfaced_at
+                 1, COALESCE(i.carryover_count, 0) + 1, i.source, i.source_at, i.resurfaced_at
           FROM ea_briefing_snapshot_items i
           JOIN ea_email_triage t
             ON t.id = i.triage_id
@@ -150,6 +156,7 @@ async function copyCarryoverItems(dbClient, userId, snapshot, window) {
             AND i.dismissed_from_today_at IS NULL
             AND i.handled_at IS NULL
             AND i.provider_removed_at IS NULL
+            AND COALESCE(i.carryover_count, 0) < ?
             AND (
               (i.lane_at_snapshot = 'needs_attention' AND t.lane = 'needs_attention')
               OR (i.lane_at_snapshot = 'queued'
@@ -159,7 +166,7 @@ async function copyCarryoverItems(dbClient, userId, snapshot, window) {
             AND t.handled_at IS NULL
             AND t.dismissed_at IS NULL
             AND t.provider_state = 'available'`,
-    args: [snapshot.id, previous.id, userId],
+    args: [snapshot.id, previous.id, userId, CARRYOVER_MAX_DEPTH],
   });
 }
 
@@ -314,6 +321,42 @@ async function loadActiveCatchUpItems(dbClient, userId, snapshot) {
     args: [previous.id, userId, snapshot.id],
   });
   return result.rows.map(normalizeSnapshotItem);
+}
+
+async function loadCarryoverAgedOutCount(dbClient, userId, snapshot) {
+  if (!snapshot?.id || !snapshot.start_at) return 0;
+  const previous = await loadPreviousFrozenSnapshot(dbClient, userId, {
+    start_at: snapshot.start_at,
+  });
+  if (!previous) return 0;
+
+  // Items eligible to carry on every condition EXCEPT the depth bound -- i.e. the
+  // ones copyCarryoverItems dropped solely because carryover_count >= maxDepth.
+  const result = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count
+          FROM ea_briefing_snapshot_items i
+          JOIN ea_email_triage t
+            ON t.id = i.triage_id
+           AND t.user_id = i.user_id
+          WHERE i.snapshot_id = ?
+            AND i.user_id = ?
+            AND i.lane_at_snapshot IN ('needs_attention', 'queued')
+            AND i.dismissed_from_today_at IS NULL
+            AND i.handled_at IS NULL
+            AND i.provider_removed_at IS NULL
+            AND COALESCE(i.carryover_count, 0) >= ?
+            AND (
+              (i.lane_at_snapshot = 'needs_attention' AND t.lane = 'needs_attention')
+              OR (i.lane_at_snapshot = 'queued'
+                  AND t.triage_status = 'pending'
+                  AND t.triage_source = 'arrival_grace')
+            )
+            AND t.handled_at IS NULL
+            AND t.dismissed_at IS NULL
+            AND t.provider_state = 'available'`,
+    args: [previous.id, userId, CARRYOVER_MAX_DEPTH],
+  });
+  return Number(result.rows[0]?.count || 0);
 }
 
 async function loadActiveSnapshotItemsForEmail(dbClient, userId, accountId, emailId) {
@@ -546,7 +589,7 @@ function emptyProcessingState() {
   };
 }
 
-function buildSnapshotView(snapshot, items, processing = emptyProcessingState(), accountOrder = null) {
+function buildSnapshotView(snapshot, items, processing = emptyProcessingState(), accountOrder = null, carryoverAgedOut = 0) {
   const { lanes, carryover } = buildLanes(items);
   const laneCounts = {
     queued: lanes.queued.length,
@@ -563,6 +606,7 @@ function buildSnapshotView(snapshot, items, processing = emptyProcessingState(),
     readOnly: snapshot?.status !== "active",
     lanes,
     carryover,
+    carryoverAgedOut,
     laneCounts,
     processing,
     filters: buildFilters(items, accountOrder),
@@ -695,13 +739,14 @@ export async function getActiveSnapshotView(userId, {
   // resolves, the four reads are mutually independent pure SELECTs, so run them
   // concurrently instead of as five serial Turso round-trips (P1-7).
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
-  const [items, catchUpItems, accountOrder, processing] = await Promise.all([
+  const [items, catchUpItems, accountOrder, processing, carryoverAgedOut] = await Promise.all([
     snapshot ? loadSnapshotItems(dbClient, snapshot.id) : [],
     snapshot ? loadActiveCatchUpItems(dbClient, userId, snapshot) : [],
     loadAccountFilterOrder(dbClient, userId),
     loadProcessingState(dbClient, userId),
+    snapshot ? loadCarryoverAgedOutCount(dbClient, userId, snapshot) : 0,
   ]);
-  return buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder);
+  return buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut);
 }
 
 async function runActiveSnapshotSync(userId, {
