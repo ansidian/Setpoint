@@ -113,7 +113,7 @@ async function runAlfredInner({
       } catch (err) {
         result = { error: err?.message || "tool failed" };
       }
-      if (toolUse.name === "show_items") {
+      if (toolUse.name === "show_items" || toolUse.name === "group_items") {
         showItemsCalled = true;
       } else if (!result?.error && typeof result?.total === "number" && toolUse.name !== "summarize_transactions") {
         // summarize_transactions.total is a dollar sum, not a row count — never contributes to retrievedCount.

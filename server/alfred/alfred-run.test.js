@@ -264,6 +264,38 @@ describe("runAlfred", () => {
     expect(events.at(-1).type).toBe("run_end");
   });
 
+  it("does not nudge when the run grouped retrieved items via group_items", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
+      toolUseTurn("group_items", { kind: "bill", title: "By status", groups: [{ label: "Unpaid", ids: ["b-1"] }] }, "tu_2"),
+      textTurn("One unpaid bill."),
+    ]);
+    const readBillsMirrorRange = vi.fn().mockResolvedValue({
+      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
+      syncHealth: { state: "current" },
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "group my bills by status",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readBillsMirrorRange },
+      recordUsage,
+    });
+
+    // group_items satisfies cite-by-reference → no nudge → 3 model calls, not 4.
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(events.some((e) => e.type === "breakdown")).toBe(true);
+    const nudge = conversation.messages.find(
+      (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("<system-reminder>"),
+    );
+    expect(nudge).toBeUndefined();
+  });
+
   it("nudge text includes 'transactions' when a small search_transactions result is returned without show_items", async () => {
     const fetchImpl = fetchScript([
       toolUseTurn("search_transactions", { start: "2026-05-01", end: "2026-05-31" }),
