@@ -257,3 +257,26 @@ describe("countBreakdownRows", () => {
     expect(rows.map((r) => r.label)).toEqual(["B", "A"]);
   });
 });
+
+describe("applyAlfredEvent breakdown", () => {
+  it("turns a breakdown event into a breakdown message", () => {
+    const out = applyAlfredEvent([], {
+      type: "breakdown", kind: "email", title: "By status", caption: "last 3 months", total: 8,
+      buckets: [{ label: "Ghosted", count: 6, items: [] }, { label: "Rejected", count: 2, items: [] }],
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ type: "breakdown", kind: "email", title: "By status", caption: "last 3 months", total: 8 });
+    expect(out[0].buckets.map((b) => b.label)).toEqual(["Ghosted", "Rejected"]);
+    expect(out[0].id).toBeTruthy();
+  });
+
+  it("closes an open say block before the breakdown", () => {
+    const out = play([
+      { type: "text_delta", text: "Here is the split." },
+      { type: "breakdown", kind: "email", title: "x", total: 0, buckets: [] },
+    ]);
+    expect(out[0].type).toBe("say");
+    expect(out[0].done).toBe(true);
+    expect(out[1].type).toBe("breakdown");
+  });
+});
