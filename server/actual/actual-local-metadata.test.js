@@ -470,6 +470,29 @@ describe("readLocalActualMetadata", () => {
     ]);
   });
 
+  it("openLocalBudgetClient opens the on-disk budget for direct queries", async () => {
+    const { openLocalBudgetClient } = await import("./actual-local-metadata.js");
+    await createActualBudgetFixture();
+    const client = await openLocalBudgetClient("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+      localOnly: true,
+    });
+    const rows = await client.execute("SELECT id FROM accounts ORDER BY id");
+    await client.close();
+    expect(rows.rows.map((r) => r.id)).toContain("acct-1");
+  });
+
+  it("openLocalBudgetClient throws 503 when the local budget is missing", async () => {
+    const { openLocalBudgetClient } = await import("./actual-local-metadata.js");
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
+    await expect(openLocalBudgetClient("u1", {
+      dbClient: settingsDbClient(),
+      dataDir: tempDir,
+      localOnly: true,
+    })).rejects.toMatchObject({ status: 503 });
+  });
+
   it("prunes backups across local Actual budget folders", async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-actual-local-"));
     const budgetDir = path.join(tempDir, "My-Finances-d8e502a");

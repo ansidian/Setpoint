@@ -81,6 +81,8 @@
     "server/triage/triage-cache-stats.js -> server/email/search/email-search-cost-stats.js",
     "server/triage/triage-model-client.js -> server/bills/bill-extractors/catalog.js",
     "server/triage/triage-model-client.js -> server/email/email-ai-models.js",
-    "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js"
+    "server/triage/triage-worker.js -> server/snapshots/arrival-grace.js",
+    "server/transactions/transactions-service.js -> server/actual/actual-transactions-read.js",
+    "server/transactions/transactions-service.js -> server/bills/bills-mirror-sync.js"
   ]
 }

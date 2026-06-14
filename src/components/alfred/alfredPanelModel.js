@@ -26,6 +26,8 @@ const TOOL_RUNNING_LABELS = {
   get_deadlines: "Checking deadlines…",
   get_upcoming_bills: "Checking bills…",
   show_items: "Gathering rows…",
+  search_transactions: "Searching transactions…",
+  summarize_spending: "Tallying spending…",
 };
 
 export function alfredToolRunningLabel(name) {
@@ -40,6 +42,7 @@ export const ALFRED_SUGGESTIONS = [
   { icon: "deadlines", label: "What deadlines are coming up this month?" },
   { icon: "calendar", label: "What's on my calendar tomorrow?" },
   { icon: "search", label: "Find the car insurance renewal email" },
+  { icon: "bills", label: "How much did I spend on groceries this month?" },
 ];
 
 function closeOpenSay(messages) {

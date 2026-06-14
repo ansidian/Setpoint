@@ -123,6 +123,11 @@ describe("helpers", () => {
     expect(alfredToolRunningLabel("unknown_tool")).toBe("Working…");
   });
 
+  it("labels the transaction tools while running", () => {
+    expect(alfredToolRunningLabel("search_transactions")).toBe("Searching transactions…");
+    expect(alfredToolRunningLabel("summarize_spending")).toBe("Tallying spending…");
+  });
+
   it("formats dates and priorities", () => {
     expect(formatAlfredDate("2026-06-21")).toBe("Jun 21");
     expect(formatAlfredDate(null)).toBe("");

@@ -2,7 +2,7 @@
 // the server's `rows` event (ADR 0006: cite-by-reference — never reshape or
 // recompute amounts/dates beyond display formatting).
 import { Fragment, memo, useMemo, useState } from "react";
-import { Check, CheckCircle2, Circle, Clock, CreditCard, Flag, MapPin, Video } from "lucide-react";
+import { Check, CheckCircle2, Circle, Clock, CreditCard, Flag, MapPin, Receipt, Video } from "lucide-react";
 import {
   alfredPriorityLabel,
   formatAlfredAbsolute,
@@ -166,6 +166,21 @@ function EmailRow({ item, onActivate }) {
   );
 }
 
+function TransactionRow({ item }) {
+  return (
+    <RowShell>
+      <Receipt size={13} color={dimmer} />
+      <TitleCell title={item.payee} sub={item.category} />
+      <span style={{ fontSize: 12, fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>
+        {formatAlfredMoney(item.amount)}
+      </span>
+      <span style={{ fontSize: 10, color: dim, fontVariantNumeric: "tabular-nums" }}>
+        {formatAlfredDate(item.date)}
+      </span>
+    </RowShell>
+  );
+}
+
 const SECTION_TONES = {
   attention: { Icon: Flag, color: "#f38ba8" },
   done: { Icon: CheckCircle2, color: dimmer },
@@ -191,7 +206,7 @@ function SectionHeader({ label, tone }) {
 // per-render chip-action resolution + fresh per-row closures (now useMemo'd by
 // items). Items are verbatim and referentially stable once a rows event lands.
 export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActivateItem, now }) {
-  const Row = { bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow }[kind];
+  const Row = { bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow, transaction: TransactionRow }[kind];
   // One `now` per block mount: a surfaced block is historical, so its time buckets
   // shouldn't drift as the session ticks on (tests inject a fixed `now`).
   const stableNow = useMemo(() => now ?? new Date(), [now]);

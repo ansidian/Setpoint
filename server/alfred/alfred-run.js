@@ -13,7 +13,7 @@ const MAX_TOKENS = 2000;
 // certainly named result set and is about to end without rows, remind once.
 // Above this size the answer is likely a summary/count, where rows would spam.
 const MAX_NUDGE_ITEMS = 8;
-const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, or bills, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
+const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, bills, or transactions, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
 
 // Multi-turn prompt caching: mark the last block of the last message so the
 // cached prefix covers tools + system + the whole transcript. Only the outgoing
@@ -115,7 +115,8 @@ async function runAlfredInner({
       }
       if (toolUse.name === "show_items") {
         showItemsCalled = true;
-      } else if (!result?.error && typeof result?.total === "number") {
+      } else if (!result?.error && typeof result?.total === "number" && toolUse.name !== "summarize_spending") {
+        // summarize_spending.total is a dollar sum, not a row count — never contributes to retrievedCount.
         retrievedCount += result.total;
       }
       emit({
