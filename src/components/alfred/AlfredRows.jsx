@@ -67,7 +67,7 @@ function TitleCell({ title, sub, strike }) {
   );
 }
 
-function BillRow({ item, onActivate, todayYmd }) {
+export function BillRow({ item, onActivate, todayYmd }) {
   const overdue = !item.paid && isOverdueYmd(item.next_date, todayYmd);
   return (
     <RowShell onActivate={onActivate} dim={item.paid}>
@@ -92,7 +92,7 @@ function BillRow({ item, onActivate, todayYmd }) {
   );
 }
 
-function EventRow({ item, accent, onActivate, now, isNext }) {
+export function EventRow({ item, accent, onActivate, now, isNext }) {
   const passed = eventPassed(item, now);
   const location = item.location || "";
   // Day context now lives in the section header, so the sub line carries the
@@ -122,7 +122,7 @@ function EventRow({ item, accent, onActivate, now, isNext }) {
   );
 }
 
-function DeadlineRow({ item, onActivate, todayYmd }) {
+export function DeadlineRow({ item, onActivate, todayYmd }) {
   // The cached row carries `status`, not `completed` — deadlineDone reads both.
   const done = deadlineDone(item);
   const StatusIcon = done ? CheckCircle2 : Circle;
@@ -144,7 +144,7 @@ function DeadlineRow({ item, onActivate, todayYmd }) {
   );
 }
 
-function EmailRow({ item, onActivate }) {
+export function EmailRow({ item, onActivate }) {
   // Dot encodes two signals: attention lane → color, unread → fill vs ring.
   const { unread, attention } = emailDotState(item);
   const dotColor = attention ? "#f38ba8" : "#94e2d5";
@@ -166,7 +166,7 @@ function EmailRow({ item, onActivate }) {
   );
 }
 
-function TransactionRow({ item }) {
+export function TransactionRow({ item }) {
   return (
     <RowShell>
       <Receipt size={13} color={dimmer} />
