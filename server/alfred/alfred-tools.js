@@ -88,6 +88,18 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
 ];
 
+// Candidates carry `from` as a { name, address } object; get_email_body carries
+// it as a string. Flatten to a readable "Name <address>" before fencing so the
+// model sees the actual sender instead of "[object Object]".
+function formatSender(from) {
+  if (!from) return "";
+  if (typeof from === "string") return from;
+  const name = String(from.name || "").trim();
+  const address = String(from.address || "").trim();
+  if (name && address && name !== address) return `${name} <${address}>`;
+  return name || address || "";
+}
+
 function wrapEmailContent(uid, text) {
   // Neutralize any attacker-supplied delimiter in the untrusted text so it can't
   // close the trust fence early and smuggle "trusted" instructions after it.
@@ -157,7 +169,7 @@ async function runSearchEmail(input, { userId, conversation, deps }) {
       uid: candidate.uid,
       // subject/from are attacker-controlled too — wrap them in the untrusted
       // delimiter so the system prompt's distrust rule covers them, not just the body.
-      from: wrapEmailContent(candidate.uid, candidate.from),
+      from: wrapEmailContent(candidate.uid, formatSender(candidate.from)),
       subject: wrapEmailContent(candidate.uid, candidate.subject),
       date: candidate.email_date,
       read: candidate.read,

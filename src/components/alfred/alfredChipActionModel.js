@@ -34,7 +34,9 @@ export function resolveAlfredChipAction(kind, item) {
     return { type: "calendar", request: dashboardDeadlineCalendarRequest(item) };
   }
   if (kind === "bill") {
-    if (!item.id) return null;
+    // openActionDisabled (e.g. a paid occurrence) means the bills view offers no
+    // open action, so a chip click would dead-end — leave it non-interactive.
+    if (!item.id || item.openActionDisabled) return null;
     return { type: "calendar", request: dashboardBillCalendarRequest(item.next_date, item.id) };
   }
   return null;

@@ -127,6 +127,18 @@ export function formatAlfredDate(isoDate) {
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Full absolute date+time for the row tooltip — the relative "Nd ago" label is
+// fine at a glance but hides the actual date; this fills it in on hover.
+export function formatAlfredAbsolute(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+}
+
 export function formatAlfredAgo(iso, now = new Date()) {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return "";

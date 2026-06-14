@@ -6,6 +6,7 @@ import {
   alfredScrollKey,
   alfredToolRunningLabel,
   applyAlfredEvent,
+  formatAlfredAbsolute,
   formatAlfredAgo,
   formatAlfredDate,
   isNearBottom,
@@ -164,5 +165,18 @@ describe("auto-scroll decision (P3-4)", () => {
     expect(alfredScrollKey(two)).not.toBe(alfredScrollKey(one));
     // a message without text (e.g. tools/rows) contributes tail length 0
     expect(alfredScrollKey([{ type: "tools", tools: [] }])).toBe("1:0");
+  });
+});
+
+describe("formatAlfredAbsolute", () => {
+  it("renders a full absolute date with year for a valid timestamp", () => {
+    const out = formatAlfredAbsolute("2026-06-05T19:42:00.000Z");
+    expect(out).toContain("2026");
+    expect(out).toMatch(/Jun/);
+  });
+
+  it("returns an empty string for a missing or invalid timestamp", () => {
+    expect(formatAlfredAbsolute("")).toBe("");
+    expect(formatAlfredAbsolute("not-a-date")).toBe("");
   });
 });

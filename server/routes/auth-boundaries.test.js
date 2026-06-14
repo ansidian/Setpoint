@@ -372,7 +372,7 @@ describe("auth boundaries", () => {
   });
 
   it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-07T12:00:00.000Z"));
     await seedSession();
     await testState.db.current.batch([

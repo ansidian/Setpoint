@@ -38,6 +38,12 @@ describe("AlfredEmailPreview", () => {
     await waitFor(() => expect(screen.getByText("Snippet fallback text")).toBeTruthy());
   });
 
+  it("exposes the absolute received date as a tooltip on the header", () => {
+    api.getEmailBody.mockResolvedValue({ body: "Body" });
+    render(<AlfredEmailPreview item={item} onClose={() => {}} />);
+    expect(screen.getByTitle(/Received .*2026/)).toBeTruthy();
+  });
+
   it("closes on pointerdown outside the preview, not inside it", () => {
     api.getEmailBody.mockResolvedValue({ body: "Body" });
     const onClose = vi.fn();

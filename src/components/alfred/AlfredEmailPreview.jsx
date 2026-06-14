@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import EmailBodyPane from "../inbox/reader/EmailBodyPane.jsx";
 import useEmailBody from "../inbox/reader/useEmailBody.js";
-import { formatAlfredAgo } from "./alfredPanelModel.js";
+import { formatAlfredAbsolute, formatAlfredAgo } from "./alfredPanelModel.js";
 
 const dim = "rgba(205,214,244,0.55)";
 const text = "#cdd6f4";
@@ -27,6 +27,7 @@ export default function AlfredEmailPreview({ item, onClose }) {
 
   const fromName = item.from?.name || item.from?.address || "";
   const fromAddress = item.from?.address || "";
+  const absoluteDate = item.email_date ? formatAlfredAbsolute(item.email_date) : "";
 
   return createPortal(
     <div
@@ -52,7 +53,10 @@ export default function AlfredEmailPreview({ item, onClose }) {
           <div style={{ fontSize: 13.5, fontWeight: 600, color: text, lineHeight: 1.35 }}>
             {item.subject || "(No subject)"}
           </div>
-          <div style={{ fontSize: 11, color: dim, marginTop: 3 }}>
+          <div
+            title={absoluteDate ? `Received ${absoluteDate}` : undefined}
+            style={{ fontSize: 11, color: dim, marginTop: 3 }}
+          >
             {fromName}{fromAddress && fromAddress !== fromName ? ` <${fromAddress}>` : ""}
             {" · "}{formatAlfredAgo(item.email_date)}
           </div>

@@ -104,7 +104,7 @@ function makeApp() {
 
 describe("GET /api/calendar/range", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     loadUserConfig.mockResolvedValue({
       accounts: [
@@ -224,7 +224,7 @@ describe("GET /api/calendar/range", () => {
 
 describe("GET /api/calendar/deadlines", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     fetchTodoistTasksAll.mockResolvedValue([
       { id: "todo-open", title: "Open task", due_date: "2026-05-04", source: "todoist", status: "incomplete" },
@@ -274,7 +274,7 @@ describe("GET /api/calendar/deadlines/range", () => {
   });
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     loadCompletedTaskIds.mockResolvedValue(new Set());
     hydrateRecurringTombstones.mockResolvedValue([
@@ -360,7 +360,7 @@ describe("GET /api/calendar/deadlines/range", () => {
 
 describe("GET /api/calendar/bills/range", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-03T19:00:00.000Z"));
     readBillsMirrorRange.mockResolvedValue({
       schedules: [{ id: "sched-1:2026-05-10", name: "Mortgage", next_date: "2026-05-10", paid: false }],

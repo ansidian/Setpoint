@@ -54,6 +54,13 @@ describe("resolveAlfredChipAction", () => {
     });
   });
 
+  it("returns null for a bill whose open action is disabled (e.g. paid) so the chip isn't a dead end", () => {
+    const action = resolveAlfredChipAction("bill", {
+      id: "b1", name: "Rent", next_date: "2026-06-14", paid: true, openActionDisabled: true,
+    });
+    expect(action).toBeNull();
+  });
+
   it("returns null for missing items, missing ids, and unknown kinds", () => {
     expect(resolveAlfredChipAction("event", null)).toBeNull();
     expect(resolveAlfredChipAction("event", { title: "no id" })).toBeNull();

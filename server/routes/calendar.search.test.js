@@ -122,7 +122,7 @@ const currentMirrorHealth = {
 
 describe("GET /api/calendar/search", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-05-12T19:00:00.000Z"));
     process.env.EA_USER_ID = "test-user";
     loadUserConfig.mockResolvedValue({
