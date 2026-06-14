@@ -115,8 +115,8 @@ async function runAlfredInner({
       }
       if (toolUse.name === "show_items") {
         showItemsCalled = true;
-      } else if (!result?.error && typeof result?.total === "number" && toolUse.name !== "summarize_spending") {
-        // summarize_spending.total is a dollar sum, not a row count — never contributes to retrievedCount.
+      } else if (!result?.error && typeof result?.total === "number" && toolUse.name !== "summarize_transactions") {
+        // summarize_transactions.total is a dollar sum, not a row count — never contributes to retrievedCount.
         retrievedCount += result.total;
       }
       emit({

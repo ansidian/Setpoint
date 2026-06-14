@@ -147,4 +147,23 @@ describe("readTransactionsRange", () => {
     }, opts());
     expect(result.transactions.map((t) => t.id)).toEqual(["t-pct"]);
   });
+
+  it("returns only income rows when direction:'income', excluding expenses and transfers", async () => {
+    await fixture();
+    const { transactions } = await readTransactionsRange(
+      "u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, opts(),
+    );
+    const ids = transactions.map((t) => t.id);
+    // t-income has amount +500000 (payee: Employer) — the one income row in May
+    expect(ids).toEqual(["t-income"]);
+    // expense rows must be absent
+    expect(ids).not.toContain("t-grocery1");
+    expect(ids).not.toContain("t-grocery2");
+    expect(ids).not.toContain("t-rent");
+    // transfer must still be excluded even in income mode
+    expect(ids).not.toContain("t-transfer");
+    // amount is a positive magnitude
+    expect(transactions[0].amount).toBe(5000.00);
+    expect(transactions[0].payee).toBe("Employer");
+  });
 });

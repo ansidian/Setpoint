@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { queryTransactions, summarizeSpending } from "./transactions-service.js";
+import { queryTransactions, summarizeTransactions } from "./transactions-service.js";
 
 const ROWS = [
   { id: "a", date: "2026-05-05", amount: 42.10, payee: "Trader Joes", category: "Groceries", account: "Checking" },
@@ -17,6 +17,14 @@ describe("queryTransactions", () => {
       readRange, mirrorState: stateCurrent,
     });
     expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ notes: "coffee" }));
+  });
+
+  it("forwards direction:'income' to readRange", async () => {
+    const readRange = reader();
+    await queryTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
+      readRange, mirrorState: stateCurrent,
+    });
+    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ direction: "income" }));
   });
 
   it("returns the list with total and no sync_state when current", async () => {
@@ -52,17 +60,25 @@ describe("queryTransactions", () => {
   });
 });
 
-describe("summarizeSpending", () => {
+describe("summarizeTransactions", () => {
   it("forwards notes filter to readRange", async () => {
     const readRange = reader();
-    await summarizeSpending("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
+    await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", notes: "coffee" }, {
       readRange, mirrorState: stateCurrent,
     });
     expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ notes: "coffee" }));
   });
 
+  it("forwards direction:'income' to readRange", async () => {
+    const readRange = reader();
+    await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", direction: "income" }, {
+      readRange, mirrorState: stateCurrent,
+    });
+    expect(readRange).toHaveBeenCalledWith("u1", expect.objectContaining({ direction: "income" }));
+  });
+
   it("aggregates by category with total", async () => {
-    const result = await summarizeSpending("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "category" }, {
+    const result = await summarizeTransactions("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "category" }, {
       readRange: reader(), mirrorState: stateCurrent,
     });
     expect(result.total).toBe(142.00);
@@ -75,14 +91,14 @@ describe("summarizeSpending", () => {
   });
 
   it("aggregates by month and by payee", async () => {
-    const byMonth = await summarizeSpending("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "month" }, {
+    const byMonth = await summarizeTransactions("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "month" }, {
       readRange: reader(), mirrorState: stateCurrent,
     });
     expect(byMonth.buckets).toEqual([
       { label: "2026-05", amount: 82.00, count: 2 },
       { label: "2026-04", amount: 60.00, count: 1 },
     ]);
-    const byPayee = await summarizeSpending("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "payee" }, {
+    const byPayee = await summarizeTransactions("u1", { start: "2026-04-01", end: "2026-05-31", group_by: "payee" }, {
       readRange: reader(), mirrorState: stateCurrent,
     });
     expect(byPayee.buckets[0]).toEqual({ label: "Trader Joes", amount: 82.00, count: 2 });
@@ -92,7 +108,7 @@ describe("summarizeSpending", () => {
     const many = Array.from({ length: 20 }, (_, i) => ({
       id: `x${i}`, date: "2026-05-01", amount: 20 - i, payee: `P${i}`, category: `Cat${i}`, account: "Checking",
     }));
-    const result = await summarizeSpending("u1", { start: "2026-05-01", end: "2026-05-31", group_by: "category" }, {
+    const result = await summarizeTransactions("u1", { start: "2026-05-01", end: "2026-05-31", group_by: "category" }, {
       readRange: reader(many), mirrorState: stateCurrent,
     });
     expect(result.buckets).toHaveLength(16); // 15 + Other

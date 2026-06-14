@@ -1,4 +1,4 @@
-// Auto-rendered spending breakdown card for the summarize_spending tool result.
+// Auto-rendered breakdown card for the summarize_transactions tool result (spending or income).
 // Non-interactive display-only component (ADR 0006: read-only v1).
 import { memo } from "react";
 import { spendingBreakdownRows, formatAlfredMoney } from "./alfredPanelModel.js";
@@ -24,7 +24,7 @@ function periodLabel(period) {
   return `${a} – ${b}`;
 }
 
-function AlfredSpendingBreakdown({ buckets, period, group_by, accent }) {
+function AlfredTransactionBreakdown({ buckets, period, group_by, accent }) {
   const rows = spendingBreakdownRows(buckets);
   if (!rows.length) return null;
   return (
@@ -55,4 +55,4 @@ function AlfredSpendingBreakdown({ buckets, period, group_by, accent }) {
   );
 }
 
-export default memo(AlfredSpendingBreakdown);
+export default memo(AlfredTransactionBreakdown);

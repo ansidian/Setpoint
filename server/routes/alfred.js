@@ -14,7 +14,7 @@ import { fetchCalendar, pacificDayBoundaries } from "../calendar/calendar.js";
 import { loadUserConfig } from "../platform/config-service.js";
 import { readCalendarDeadlineRange } from "../tasks/deadlines-read.js";
 import { readBillsMirrorRange } from "../bills/bills-service.js";
-import { queryTransactions, summarizeSpending } from "../transactions/transactions-service.js";
+import { queryTransactions, summarizeTransactions } from "../transactions/transactions-service.js";
 
 const ALFRED_DEPS = {
   retrieve: retrieveInboxAiSearch,
@@ -26,7 +26,7 @@ const ALFRED_DEPS = {
   readCalendarDeadlineRange,
   readBillsMirrorRange,
   queryTransactions,
-  summarizeSpending,
+  summarizeTransactions,
 };
 
 export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred } = {}) {
