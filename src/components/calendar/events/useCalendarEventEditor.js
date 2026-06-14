@@ -74,6 +74,7 @@ export default function useCalendarEventEditor({
   const [editingEvent, setEditingEvent] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState(null);
   const [errorCode, setErrorCode] = useState(null);
@@ -839,6 +840,8 @@ export default function useCalendarEventEditor({
 
   const remove = useCallback(async () => {
     if (!editingEvent) return;
+    if (deletingRef.current) return;
+    deletingRef.current = true;
     setDeleting(true);
     setError(null);
     setErrorCode(null);
@@ -859,6 +862,7 @@ export default function useCalendarEventEditor({
       setError(err.message || "Failed to delete event.");
       setErrorCode(err.code || null);
     } finally {
+      deletingRef.current = false;
       setDeleting(false);
     }
   }, [closeEditor, editingEvent, isEditingRecurring, onDeleted, recurringEditScope, refreshRange, removeEvent]);
