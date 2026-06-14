@@ -22,6 +22,7 @@ function isEventSelectionModifier(event) {
 }
 
 export default function CalendarCell({
+  isActiveMonth = true,
   view,
   viewYear,
   viewMonth,
@@ -30,7 +31,6 @@ export default function CalendarCell({
   dateKey,
   dateLabel,
   inCurrentMonth = true,
-  boundarySides = [],
   items,
   ghosts,
   cellMeta,
@@ -196,13 +196,12 @@ export default function CalendarCell({
       aria-selected={isSelected}
       data-calendar-focus-ring="true"
       data-testid={
-        inCurrentMonth ? `calendar-cell-${day}` : `calendar-cell-${dateKey}`
+        isActiveMonth
+          ? (inCurrentMonth ? `calendar-cell-${day}` : `calendar-cell-${dateKey}`)
+          : (inCurrentMonth ? `calendar-cell-${dateKey}` : undefined)
       }
       data-date-key={dateKey || undefined}
       data-current-month={inCurrentMonth ? "true" : "false"}
-      data-boundary-side={
-        boundarySides.length ? boundarySides.join(" ") : "none"
-      }
       data-past-tone={pastTone || "none"}
       data-overflow-open={overflowOpen ? "true" : "false"}
       data-overflow-mode={overflowMode || "none"}
@@ -241,7 +240,7 @@ export default function CalendarCell({
       style={{
         position: "relative",
         minWidth: 0,
-        overflow: "visible",
+        overflow: "hidden",
         borderRadius: 8,
         padding: "6px 8px",
         background: cellBg,

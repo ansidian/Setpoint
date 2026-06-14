@@ -65,6 +65,8 @@ export default function useCalendarModalHotkeys({
   flipFloatingDetailSide,
   shakeFloatingEditor,
   setViewDate,
+  setFetchAnchor,
+  setLabelMonth,
   setSelectedDay,
   setSelectedDateKey,
   setSelectedItemId,
@@ -132,6 +134,10 @@ export default function useCalendarModalHotkeys({
       if (commandKey && !event.altKey && !event.shiftKey && normalizedKey === "2") {
         if (view !== "bills") handleViewChange("bills");
         consumeCalendarKey();
+        return;
+      }
+
+      if (event.key === "Escape" && document.querySelector("[data-calendar-month-picker]")) {
         return;
       }
 
@@ -254,10 +260,15 @@ export default function useCalendarModalHotkeys({
           setDeadlineEditor(null);
           setDeadlineDraftPreview(null);
           setViewDate({ month: currentMonth, year: currentYear });
+          setFetchAnchor({ month: currentMonth, year: currentYear });
+          setLabelMonth({ month: currentMonth, year: currentYear });
           setSelectedDay(todayDate);
           setSelectedDateKey(ymdFromParts(currentYear, currentMonth, todayDate));
           setSelectedItemId(null);
           requestAgendaScroll({ type: "today" });
+          if (viewYear === currentYear && viewMonth === currentMonth) {
+            document.dispatchEvent(new CustomEvent("calendar-grid-scroll-reset"));
+          }
           consumeCalendarKey();
           break;
         case "e":

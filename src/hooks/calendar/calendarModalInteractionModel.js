@@ -93,18 +93,3 @@ export function dashboardDetailFocusRequest({
   };
 }
 
-export function floatingWorkspaceNavigationEffect({
-  currentFloating,
-  eventEditorOpen = false,
-  deadlineEditorMode = null,
-}) {
-  const floatingEditorOpen = !!currentFloating?.open
-    && (currentFloating.mode === "edit" || currentFloating.mode === "create");
-  const preserveEditor = !!eventEditorOpen || !!deadlineEditorMode || floatingEditorOpen;
-  return {
-    preserveEditor,
-    shouldParkFloatingEditor: floatingEditorOpen,
-    shouldParkFloatingDetail: !preserveEditor && !!currentFloating?.open,
-    shouldClearSelection: !preserveEditor && !currentFloating?.open,
-  };
-}

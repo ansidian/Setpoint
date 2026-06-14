@@ -2,6 +2,28 @@ import { describe, expect, it } from "vitest";
 import { parseCalendarTitle } from "./parseCalendarTitle";
 
 describe("parseCalendarTitle", () => {
+  it("keeps ordinary title typing on the default draft schedule without invoking assist parsing", () => {
+    const parsed = parseCalendarTitle("Planning block", {
+      now: new Date("2026-04-20T19:00:00.000Z").getTime(),
+      baseDate: "2026-04-29",
+      defaultStartTime: "10:00",
+      defaultEndTime: "10:30",
+    });
+
+    expect(parsed.cleanTitle).toBe("Planning block");
+    expect(parsed.mode).toBe("single");
+    expect(parsed.matchedText).toBe("");
+    expect(parsed.parsedDateTime).toBeNull();
+    expect(parsed.preview).toBe("");
+    expect(parsed.singleDraft).toMatchObject({
+      title: "Planning block",
+      startDate: "2026-04-29",
+      endDate: "2026-04-29",
+      startTime: "10:00",
+      endTime: "10:30",
+    });
+  });
+
   it("consumes date/time tokens from the title and builds a schedule preview", () => {
     const parsed = parseCalendarTitle("Dinner on Tue at 5pm", {
       now: new Date("2026-04-20T19:00:00.000Z").getTime(),

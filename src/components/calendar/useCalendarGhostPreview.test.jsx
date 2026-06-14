@@ -21,6 +21,8 @@ function buildProps(overrides = {}) {
     viewMonth: 3,
     setMonthMotionDirection: vi.fn(),
     setViewDate: vi.fn(),
+    setFetchAnchor: vi.fn(),
+    setLabelMonth: vi.fn(),
     setSelectedDay: vi.fn(),
     setSelectedDateKey: vi.fn(),
     setSelectedItemId: vi.fn(),
@@ -149,5 +151,113 @@ describe("useCalendarGhostPreview manual month browse", () => {
         dueTime: "9:00 AM",
       }),
     ]);
+  });
+
+  it("keeps event ghost conflict metadata stable when only editor text changes", () => {
+    const events = [{
+      id: "meeting",
+      title: "Existing meeting",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-05-02T16:05:00.000Z").getTime(),
+      endMs: new Date("2026-05-02T16:20:00.000Z").getTime(),
+    }];
+    const eventEditor = {
+      isEditorOpen: true,
+      draft: {
+        accountId: "gmail-main",
+        calendarId: "primary",
+        allDay: false,
+        title: "Draft title",
+        startDate: "2026-05-02",
+        endDate: "2026-05-02",
+        startTime: "09:00",
+        endTime: "09:30",
+      },
+      effectiveTitle: "Draft title",
+      intentState: { mode: "single" },
+      writableCalendars: [{ value: "gmail-main::primary", color: "#4285f4" }],
+    };
+    const { result, rerender } = renderHook((props) => useCalendarGhostPreview(props), {
+      initialProps: buildProps({
+        eventEditor,
+        deadlineEditor: null,
+        deadlineDraftPreview: null,
+        viewData: { events },
+      }),
+    });
+    const initialConflictTitles = result.current?.ghosts?.[0]?.conflictTitles;
+    expect(result.current?.ghosts?.[0]).toMatchObject({
+      title: "Draft title",
+      conflictCount: 1,
+      conflictTitles: ["Existing meeting"],
+    });
+
+    rerender(buildProps({
+      eventEditor: {
+        ...eventEditor,
+        draft: {
+          ...eventEditor.draft,
+          title: "Draft title, still typing",
+        },
+        effectiveTitle: "Draft title, still typing",
+      },
+      deadlineEditor: null,
+      deadlineDraftPreview: null,
+      viewData: { events },
+    }));
+
+    expect(result.current?.ghosts?.[0]).toMatchObject({
+      title: "Draft title, still typing",
+      conflictCount: 1,
+      conflictTitles: ["Existing meeting"],
+    });
+    expect(result.current?.ghosts?.[0]?.conflictTitles).toBe(initialConflictTitles);
+  });
+
+  it("keeps deadline ghost crowding metadata stable when only draft title changes", () => {
+    const dateItems = { activeCount: 3 };
+    const computed = {
+      itemsByDate: {
+        "2026-05-02": dateItems,
+      },
+    };
+    const { result, rerender } = renderHook((props) => useCalendarGhostPreview(props), {
+      initialProps: buildProps({
+        computed,
+        deadlineDraftPreview: {
+          kind: "deadline",
+          title: "Draft task",
+          dueDate: "2026-05-02",
+          dueTime: "9:00 AM",
+          placementChanged: true,
+        },
+      }),
+    });
+    const initialGhost = result.current?.ghosts?.[0];
+    expect(initialGhost).toMatchObject({
+      title: "Draft task",
+      crowdedCount: 3,
+    });
+
+    rerender(buildProps({
+      computed,
+      deadlineDraftPreview: {
+        kind: "deadline",
+        title: "Draft task, still typing",
+        dueDate: "2026-05-02",
+        dueTime: "9:00 AM",
+        placementChanged: true,
+      },
+    }));
+
+    expect(result.current?.ghosts?.[0]).toMatchObject({
+      title: "Draft task, still typing",
+      crowdedCount: 3,
+    });
+    expect(result.current?.ghosts?.[0]).toEqual({
+      ...initialGhost,
+      title: "Draft task, still typing",
+    });
   });
 });

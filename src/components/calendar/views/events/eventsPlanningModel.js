@@ -1,8 +1,10 @@
 import {
   DEADLINE_COLOR,
   deadlineAccentFor,
+  deadlineMatchesItemId,
   getDayState,
   getDeadlineSelectionId,
+  getDeadlineOccurrenceDate,
   normalizeStatus,
   statusLabel,
   compute as computeDeadlines,
@@ -16,6 +18,15 @@ export function isDeadlinePlanningItem(item) {
 export function getPlanningItemId(item) {
   if (isDeadlinePlanningItem(item)) return getDeadlineSelectionId(item, item.agendaDateKey || item.due_date);
   return getEventSelectionId(item);
+}
+
+export function matchesPlanningItemId(item, itemId) {
+  if (itemId == null) return false;
+  if (isDeadlinePlanningItem(item)) {
+    return deadlineMatchesItemId(item, itemId, item.agendaDateKey || item.due_date);
+  }
+  return String(getEventSelectionId(item)) === String(itemId)
+    || String(item?.id) === String(itemId);
 }
 
 export function deadlinePlanningAccent(task) {
@@ -144,11 +155,20 @@ export function mergeDeadlineOverlayIntoEvents({ eventComputed, deadlineOverlayC
 export function deadlinePlanningDescriptor(task) {
   const accent = deadlinePlanningAccent(task);
   const status = normalizeStatus(task.status);
+  const selectionId = getDeadlineSelectionId(task, task.agendaDateKey || task.due_date);
+  const occurrenceDate = getDeadlineOccurrenceDate(task, task.agendaDateKey || task.due_date);
+  const source = task?.source || "deadline";
   return {
-    id: getDeadlineSelectionId(task, task.agendaDateKey || task.due_date),
+    id: selectionId,
     sourceItem: task,
     itemKind: "deadline",
     detailKind: "deadline",
+    matchItemIds: [
+      task?.id,
+      selectionId,
+      `${source}:${task?.id}-${occurrenceDate}`,
+      `${source}:${task?.id}`,
+    ].filter((value) => value != null).map(String),
     title: deadlinePlanningTitle(task),
     detail: [deadlinePlanningSubtitle(task), statusLabel(status)].filter(Boolean).join(" · "),
     leadingLabel: deadlinePlanningTimeLabel(task),

@@ -34,7 +34,6 @@ function DeadlinesDetail({
   onTaskDeleted,
   onDraftPreviewChange,
   onEditorDirtyChange,
-  transientCloseToken,
   accent = "var(--ea-accent)",
   data,
 }) {
@@ -76,7 +75,6 @@ function DeadlinesDetail({
         initialDueDate={seedDate}
         onDraftPreviewChange={onDraftPreviewChange}
         onDirtyChange={onEditorDirtyChange}
-        transientCloseToken={transientCloseToken}
         onClose={onCloseEditor}
         onTaskAdded={(task) => {
           handleAddTask(task);
@@ -218,9 +216,6 @@ function DeadlinesFloatingDetail({
   const state = getDayState(items);
   const allItems = [...state.activeItems, ...state.completedItems];
   const selectedTask = allItems.find((task) => deadlineMatchesItemId(task, selectedItemId, selectedDateKey)) || null;
-  const compressedSelectedCard = state.totalCount >= 2 || shouldCompressDeadlineCard(selectedTask);
-  const compactDetail = state.totalCount >= 2;
-  const effectiveCompactDetail = compactDetail || compressedSelectedCard;
 
   if (!selectedTask) return null;
   const sourceAccent = deadlineAccentFor(selectedTask, accent);
@@ -237,15 +232,15 @@ function DeadlinesFloatingDetail({
     <DeadlineDetailCard
       task={selectedTask}
       accent={sourceAccent}
-      compact={effectiveCompactDetail}
-      ultraCompact={compressedSelectedCard}
+      compact
+      ultraCompact
       actions={
         <DeadlineSelectedActions
           task={selectedTask}
           accent={sourceAccent}
           onEdit={onStartEdit}
           onComplete={handleFloatingComplete}
-          compact={effectiveCompactDetail}
+          compact
         />
       }
     />

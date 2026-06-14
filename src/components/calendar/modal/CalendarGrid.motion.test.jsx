@@ -7,7 +7,7 @@ import { renderEventsCellContents } from "../views/events/EventsCellContent.jsx"
 const VIEW_YEAR = 2026;
 const VIEW_MONTH = 3;
 const TODAY_DAY = 14;
-const CELL_HEIGHT = 140;
+const CELL_HEIGHT = 164;
 
 const activeView = {
   label: "Events",
@@ -43,14 +43,6 @@ function buildFallbackDayState(items) {
   };
 }
 
-function dayLabel(day) {
-  return new Date(VIEW_YEAR, VIEW_MONTH, day).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 function buildEvent(day, index) {
   const start = new Date(Date.UTC(VIEW_YEAR, VIEW_MONTH, day, 16 + index, 0, 0));
   return {
@@ -63,8 +55,8 @@ function buildEvent(day, index) {
   };
 }
 
-function renderGrid(itemsByDay, overrides = {}) {
-  const props = {
+function buildGridProps(itemsByDay, overrides = {}) {
+  return {
     view: "events",
     viewYear: VIEW_YEAR,
     viewMonth: VIEW_MONTH,
@@ -93,10 +85,12 @@ function renderGrid(itemsByDay, overrides = {}) {
     setSelectedDay: vi.fn(),
     setSelectedItemId: vi.fn(),
     setDeadlineEditor: vi.fn(),
-    canGoPrev: true,
-    navigateMonth: vi.fn(),
     ...overrides,
   };
+}
+
+function renderGrid(itemsByDay, overrides = {}) {
+  const props = buildGridProps(itemsByDay, overrides);
   const wrapGrid = (ui) => (
     <div data-testid="calendar-modal-panel">
       {ui}
@@ -155,117 +149,32 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(setSelectedDay).toHaveBeenCalledWith(20);
   });
 
-  it("uses one coarse mouse-wheel notch on the month grid to navigate one month", () => {
-    const navigateMonth = vi.fn();
-    renderGrid({}, { navigateMonth });
-
-    const gridShell = screen.getByTestId("calendar-grid-shell");
-    fireEvent.wheel(gridShell, { deltaY: 100, deltaMode: 0, cancelable: true });
-    expect(navigateMonth).toHaveBeenCalledWith(1, { source: "month-grid-wheel" });
-    expect(navigateMonth).toHaveBeenCalledTimes(1);
-  });
-
-  it("collapses a tapering wheel stream into one month navigation", () => {
-    const navigateMonth = vi.fn();
-    renderGrid({}, { navigateMonth });
-
-    const gridShell = screen.getByTestId("calendar-grid-shell");
-    fireEvent.wheel(gridShell, { deltaY: 24, deltaMode: 0, cancelable: true });
-    fireEvent.wheel(gridShell, { deltaY: 19, deltaMode: 0, cancelable: true });
-    fireEvent.wheel(gridShell, { deltaY: 13, deltaMode: 0, cancelable: true });
-
-    expect(navigateMonth).toHaveBeenCalledWith(1, { source: "month-grid-wheel" });
-    expect(navigateMonth).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the month wheel lock through grid remounts", () => {
-    const navigateMonth = vi.fn();
-    vi.spyOn(performance, "now").mockReturnValue(1000);
-    const monthWheelStateRef = {
-      current: {
-        lastNavigateAt: -Infinity,
-        ignoreUntil: -Infinity,
-        lastWheelAt: -Infinity,
-        lastWheelDelta: 0,
-      },
-    };
-    const { props, rerender } = renderGrid({}, { navigateMonth, monthWheelStateRef });
-
-    const gridShell = screen.getByTestId("calendar-grid-shell");
-    fireEvent.wheel(gridShell, { deltaY: 100, deltaMode: 0, cancelable: true });
-    expect(navigateMonth).toHaveBeenCalledTimes(1);
-
-    rerender(<CalendarGrid key="next-month" {...props} viewMonth={VIEW_MONTH + 1} />);
-
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: 100,
-      deltaMode: 0,
-      cancelable: true,
-    });
-
-    expect(navigateMonth).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not navigate the month grid for horizontal-dominant wheel gestures", () => {
-    const navigateMonth = vi.fn();
-    renderGrid({}, { navigateMonth });
-
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaX: 260,
-      deltaY: 80,
-      deltaMode: 0,
-      cancelable: true,
-    });
-
-    expect(navigateMonth).not.toHaveBeenCalled();
-  });
-
-  it("does not wheel-navigate to a previous month when the view disallows it", () => {
-    const navigateMonth = vi.fn();
-    renderGrid({}, { canGoPrev: false, navigateMonth });
-
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: -260,
-      deltaMode: 0,
-      cancelable: true,
-    });
-
-    expect(navigateMonth).not.toHaveBeenCalled();
-  });
-
-  it("renders adjacent-month boundary segments around the actual current month", () => {
+  it("renders continuous boundary step line on leading boundary row", () => {
     renderGrid({}, {
       viewMonth: 4,
       currentMonth: 3,
       firstDay: 5,
       daysInMonth: 31,
-      trailingEmpty: 6,
     });
 
-    const boundary = screen.getByTestId("calendar-month-boundary-overlay");
-    const rightStroke = within(boundary)
-      .getByTestId("calendar-month-boundary-right-2026-04-30-2026-04-30");
-
-    expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
+    const step = screen.getByTestId("calendar-boundary-step");
+    expect(step).toBeTruthy();
   });
 
-  it("renders adjacent-month boundary segments outside the actual current month", () => {
+  it("renders straight boundary line when month starts on Sunday", () => {
     renderGrid({}, {
-      viewMonth: 5,
-      currentMonth: 3,
-      firstDay: 1,
-      daysInMonth: 30,
-      trailingEmpty: 4,
+      viewMonth: 2,
+      currentMonth: 1,
+      firstDay: 0,
+      daysInMonth: 31,
     });
 
-    const boundary = screen.getByTestId("calendar-month-boundary-overlay");
-    const rightStroke = within(boundary)
-      .getByTestId("calendar-month-boundary-right-2026-05-31-2026-05-31");
-
-    expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
+    expect(screen.queryByTestId("calendar-boundary-step")).toBeNull();
+    const straight = screen.getByTestId("calendar-boundary-straight");
+    expect(straight).toBeTruthy();
   });
 
-  it("renders date-keyed adjacent day items for non-event views", () => {
+  it("renders date-keyed items for non-event views in boundary row cells", () => {
     renderGrid({}, {
       view: "bills",
       activeView: groupedDayView,
@@ -273,27 +182,25 @@ describe("CalendarGrid overflow motion coverage", () => {
       currentMonth: 3,
       firstDay: 5,
       daysInMonth: 31,
-      trailingEmpty: 6,
       itemsByDate: {
-        "2026-04-30": groupedDayView.getDayState([
-          { id: "bill-apr-30", title: "April utility" },
+        "2026-05-01": groupedDayView.getDayState([
+          { id: "bill-may-1", title: "May utility" },
         ]),
       },
     });
 
-    const adjacentCell = screen.getByTestId("calendar-cell-2026-04-30");
-    const boundary = screen.getByTestId("calendar-month-boundary-overlay");
-    const rightStroke = within(boundary)
-      .getByTestId("calendar-month-boundary-right-2026-04-30-2026-04-30");
+    const mayCell = screen.getByTestId("calendar-cell-1");
+    expect(within(mayCell).getByText("May utility")).toBeTruthy();
 
-    expect(within(adjacentCell).getByText("April utility")).toBeTruthy();
-    expect(rightStroke.getAttribute("data-boundary-side")).toBe("right");
+    expect(screen.queryByTestId("calendar-month-boundary-overlay")).toBeNull();
+    expect(screen.queryAllByRole("gridcell")
+      .find((el) => el.getAttribute("data-boundary-pass-through") === "true")).toBeUndefined();
   });
 
   it("shows same visible chip count for today and non-today cells with matching event counts", async () => {
     renderGrid({
-      14: Array.from({ length: 4 }, (_, index) => buildEvent(14, index)),
-      15: Array.from({ length: 4 }, (_, index) => buildEvent(15, index)),
+      14: Array.from({ length: 5 }, (_, index) => buildEvent(14, index)),
+      15: Array.from({ length: 5 }, (_, index) => buildEvent(15, index)),
     });
 
     const todayCell = screen.getByTestId("calendar-cell-14");
@@ -307,8 +214,8 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
 
     const visibleCount = within(todayCell).getAllByTestId("calendar-cell-item-chip").length;
-    expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").textContent).toBe(`+${4 - visibleCount} more`);
-    expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe(`+${4 - visibleCount} more`);
+    expect(within(todayCell).getByTestId("calendar-cell-overflow-trigger-14").textContent).toBe(`+${5 - visibleCount} more`);
+    expect(within(siblingCell).getByTestId("calendar-cell-overflow-trigger-15").textContent).toBe(`+${5 - visibleCount} more`);
   });
 
   it("renders real pinned spans as selectable buttons and removes duplicate normal chips", () => {
@@ -383,15 +290,12 @@ describe("CalendarGrid overflow motion coverage", () => {
     });
 
     fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
-    await screen.findByText(dayLabel(20));
+    await screen.findByTestId("calendar-cell-inline-overflow");
 
     fireEvent.click(screen.getByTestId("calendar-event-span-segment"), { clientX: 4 });
 
     await waitFor(() => {
-      expect(
-        screen.queryByTestId("calendar-cell-overflow-popover") ||
-        screen.queryByTestId("calendar-cell-inline-overflow"),
-      ).toBeTruthy();
+      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeTruthy();
     });
   });
 
@@ -414,8 +318,8 @@ describe("CalendarGrid overflow motion coverage", () => {
     }, { onOpenFloatingDetail });
 
     fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
-    const popover = await screen.findByTestId("calendar-cell-overflow-popover");
-    fireEvent.click(within(popover).getByText("Hidden deadline"));
+    const overflowLayer = await screen.findByTestId("calendar-cell-inline-overflow");
+    fireEvent.click(within(overflowLayer).getByText("Hidden deadline"));
 
     expect(onOpenFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
       itemId: "deadline:todo-hidden:2026-04-20",
@@ -447,7 +351,7 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(ghost.getAttribute("data-ghost-kind")).toBe("event");
   });
 
-  it("retargets open overflow popover to second trigger without remounting or closing first", async () => {
+  it("retargets open inline overflow to second trigger without closing first", async () => {
     renderGrid({
       15: Array.from({ length: 5 }, (_, index) => buildEvent(15, index)),
       16: Array.from({ length: 5 }, (_, index) => buildEvent(16, index)),
@@ -458,21 +362,18 @@ describe("CalendarGrid overflow motion coverage", () => {
 
     fireEvent.click(firstTrigger);
 
-    const firstPopover = await screen.findByTestId("calendar-cell-overflow-popover");
-    expect(within(firstPopover).getByText(dayLabel(15))).toBeTruthy();
-    expect(within(firstPopover).getByText("Day 15 event 4")).toBeTruthy();
-    expect(screen.getAllByTestId("calendar-cell-overflow-popover")).toHaveLength(1);
+    const firstLayer = await screen.findByTestId("calendar-cell-inline-overflow");
+    expect(within(firstLayer).getByText("Day 15 event 4")).toBeTruthy();
+    expect(screen.getAllByTestId("calendar-cell-inline-overflow")).toHaveLength(1);
 
     fireEvent.pointerDown(secondTrigger);
     fireEvent.click(secondTrigger);
 
     await waitFor(() => {
-      const popovers = screen.getAllByTestId("calendar-cell-overflow-popover");
-      expect(popovers).toHaveLength(1);
-      expect(popovers[0]).toBe(firstPopover);
-      expect(within(popovers[0]).getByText(dayLabel(16))).toBeTruthy();
-      expect(within(popovers[0]).getByText("Day 16 event 4")).toBeTruthy();
-      expect(within(popovers[0]).queryByText("Day 15 event 4")).toBeNull();
+      const layers = screen.getAllByTestId("calendar-cell-inline-overflow");
+      expect(layers).toHaveLength(1);
+      expect(within(layers[0]).getByText("Day 16 event 4")).toBeTruthy();
+      expect(within(layers[0]).queryByText("Day 15 event 4")).toBeNull();
     });
   });
 
@@ -505,21 +406,56 @@ describe("CalendarGrid overflow motion coverage", () => {
     trigger.remove();
   });
 
-  it("closes overflow popover when clicking same trigger again", async () => {
+  it("closes inline overflow on Escape", async () => {
     renderGrid({
       15: Array.from({ length: 5 }, (_, index) => buildEvent(15, index)),
     });
 
-    const trigger = screen.getByTestId("calendar-cell-overflow-trigger-15");
+    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-15"));
+    expect(await screen.findByTestId("calendar-cell-inline-overflow")).toBeTruthy();
 
-    fireEvent.click(trigger);
-    expect(await screen.findByTestId("calendar-cell-overflow-popover")).toBeTruthy();
-
-    fireEvent.pointerDown(trigger);
-    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
 
     await waitFor(() => {
-      expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
+    });
+  });
+
+  it("closes non-active month overflow when selecting a cell in another mounted month", async () => {
+    const dayEvents = Array.from({ length: 5 }, (_, index) => buildEvent(20, index));
+    const baseProps = buildGridProps({});
+
+    render(
+      <div data-testid="calendar-modal-panel">
+        <CalendarGrid
+          {...baseProps}
+          isActiveMonth={false}
+          itemsByDay={{ 20: dayEvents }}
+          selectedDay={null}
+          selectedItemId={null}
+        />
+        <CalendarGrid
+          {...baseProps}
+          viewMonth={VIEW_MONTH + 1}
+          currentMonth={VIEW_MONTH + 1}
+          firstDay={5}
+          daysInMonth={31}
+          itemsByDay={{}}
+          selectedDay={null}
+          selectedItemId={null}
+        />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
+    expect(await screen.findByTestId("calendar-cell-inline-overflow")).toBeTruthy();
+
+    const adjacentMonthCell = screen.getByTestId("calendar-cell-10");
+    fireEvent.pointerDown(adjacentMonthCell);
+    fireEvent.click(adjacentMonthCell);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
     });
   });
 
@@ -557,66 +493,12 @@ describe("CalendarGrid overflow motion coverage", () => {
     expect(setSelectedItemId).toHaveBeenCalledWith("birthday-1");
   });
 
-  it("reanchors parked birthday detail from its floating-detail item id when selection drifted", async () => {
-    const onReanchorFloatingDetail = vi.fn();
-    const onDirectItemAction = vi.fn();
-    const setSelectedDay = vi.fn();
-    const setSelectedDateKey = vi.fn();
-    const setSelectedItemId = vi.fn();
-    const birthday = {
-      id: "birthday-1",
-      title: "Maya's birthday",
-      eventType: "birthday",
-      birthdayProperties: { type: "birthday" },
-      allDay: true,
-      writable: false,
-      startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
-      sourceColor: "#ff887c",
-      color: "#ff887c",
-    };
-    const unrelatedEvent = buildEvent(21, 0);
-
-    renderGrid(
-      { 20: [birthday], 21: [unrelatedEvent] },
-      {
-        viewData: { isLoading: false, events: [birthday] },
-        floatingDetailParked: true,
-        floatingDetailDateKey: "2026-04-20",
-        floatingDetailItemId: "birthday-1",
-        selectedDay: 21,
-        selectedDateKey: "2026-04-21",
-        selectedItemId: "21-0",
-        onDirectItemAction,
-        onReanchorFloatingDetail,
-        setSelectedDay,
-        setSelectedDateKey,
-        setSelectedItemId,
-      },
-    );
-
-    expect(screen.getByTestId("calendar-cell-20").getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByTestId("calendar-cell-21").getAttribute("aria-selected")).toBe("false");
-
-    await waitFor(() => {
-      expect(onReanchorFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
-        itemId: "birthday-1",
-        dateKey: "2026-04-20",
-        anchorKind: "chip",
-      }));
-    });
-    expect(setSelectedDay).toHaveBeenCalledWith(20);
-    expect(setSelectedDateKey).toHaveBeenCalledWith("2026-04-20");
-    expect(setSelectedItemId).toHaveBeenCalledWith("birthday-1");
-    expect(onDirectItemAction).toHaveBeenCalledWith("birthday-1", "2026-04-20");
-  });
-
   it("does not revive stale overflow anchors after month navigation", async () => {
     const dayEvents = Array.from({ length: 5 }, (_, index) => buildEvent(20, index));
     const { props, rerender } = renderGrid({ 20: dayEvents });
 
     fireEvent.click(screen.getByTestId("calendar-cell-overflow-trigger-20"));
-    expect(await screen.findByTestId("calendar-cell-overflow-popover")).toBeTruthy();
+    expect(await screen.findByTestId("calendar-cell-inline-overflow")).toBeTruthy();
 
     rerender(
       <CalendarGrid
@@ -627,44 +509,13 @@ describe("CalendarGrid overflow motion coverage", () => {
       />,
     );
 
-    expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+    expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
 
     rerender(<CalendarGrid {...props} itemsByDay={{ 20: dayEvents }} />);
 
     await waitFor(() => {
-      expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
       expect(screen.getByTestId("calendar-cell-overflow-trigger-20")).toBeTruthy();
-    });
-  });
-
-  it("opens overflow when a parked floating detail targets a hidden item", async () => {
-    const dayEvents = Array.from({ length: 8 }, (_, index) => buildEvent(20, index));
-    const onReanchorFloatingDetail = vi.fn();
-
-    renderGrid(
-      { 20: dayEvents },
-      {
-        floatingDetailParked: true,
-        floatingDetailDateKey: "2026-04-20",
-        floatingDetailItemId: "20-7",
-        onReanchorFloatingDetail,
-      },
-    );
-
-    expect(screen.getByTestId("calendar-cell-overflow-trigger-20")).toBeTruthy();
-    await waitFor(() => {
-      expect(
-        screen.queryByTestId("calendar-cell-overflow-popover") ||
-        screen.queryByTestId("calendar-cell-inline-overflow"),
-      ).toBeTruthy();
-    });
-    expect(screen.getByText("Day 20 event 8")).toBeTruthy();
-    await waitFor(() => {
-      expect(onReanchorFloatingDetail).toHaveBeenCalledWith(expect.objectContaining({
-        itemId: "20-7",
-        dateKey: "2026-04-20",
-        anchorKind: "overflow-row",
-      }));
     });
   });
 
@@ -686,12 +537,12 @@ describe("CalendarGrid overflow motion coverage", () => {
     const { props, rerender } = renderGrid({ 20: dayEvents }, { ghostPreview });
 
     fireEvent.click(await screen.findByTestId("calendar-cell-overflow-trigger-20"));
-    expect(await screen.findByTestId("calendar-cell-overflow-popover")).toBeTruthy();
+    expect(await screen.findByTestId("calendar-cell-inline-overflow")).toBeTruthy();
 
     rerender(<CalendarGrid {...props} itemsByDay={{ 20: dayEvents }} ghostPreview={null} />);
 
     await waitFor(() => {
-      expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
     });
   });
 });

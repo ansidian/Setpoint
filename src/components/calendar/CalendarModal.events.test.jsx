@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.js";
 import CalendarModal from "./CalendarModal.jsx";
 import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
+import { getCalendarLayoutMetrics } from "./calendarLayout.js";
+import { getVisibleGridRange } from "./calendarDateUtils.js";
+import { monthBlockHeight, monthIndexToDate } from "../../hooks/calendar/calendarScrollModel.js";
 
 const { createCalendarEvent, createCalendarEventsBatch } = await import("@/api");
 
@@ -37,7 +40,7 @@ describe("CalendarModal event grid behavior", () => {
     expect(screen.getAllByText("Design review").length).toBeGreaterThan(0);
   });
 
-  it("renders adjacent-month event cells and keeps create seeded to the actual selected date", async () => {
+  it("renders L-shaped boundary borders on leading boundary row cells", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -66,32 +69,14 @@ describe("CalendarModal event grid behavior", () => {
       />,
     ));
 
-    const mayCell = screen.getByTestId("calendar-cell-2026-05-01");
-    const marchCell = screen.getByTestId("calendar-cell-2026-03-31");
-    expect(mayCell.getAttribute("data-current-month")).toBe("false");
-    expect(mayCell.getAttribute("data-boundary-side")).toContain("left");
-    expect(mayCell.getAttribute("data-boundary-side")).toContain("top");
-    expect(within(marchCell).queryByText("Mar 31")).toBeNull();
-    expect(within(marchCell).getByText("31")).toBeTruthy();
-    expect(within(mayCell).getByText("May 1")).toBeTruthy();
-    expect(within(screen.getByTestId("calendar-cell-2026-05-02")).queryByText("May 2")).toBeNull();
-    expect(within(screen.getByTestId("calendar-cell-2026-05-02")).getByText("2")).toBeTruthy();
-    const boundaryOverlay = screen.getByTestId("calendar-month-boundary-overlay");
-    expect(within(boundaryOverlay)
-      .getByTestId("calendar-month-boundary-top-2026-05-01-2026-05-02")
-      .getAttribute("data-boundary-side")).toBe("top");
-    expect(within(boundaryOverlay)
-      .getByTestId("calendar-month-boundary-left-2026-05-01-2026-05-01")
-      .getAttribute("data-boundary-side")).toBe("left");
-    expect(within(mayCell).getByText("May planning")).toBeTruthy();
+    const gridShell = screen.getByTestId("calendar-grid-shell");
+    expect(within(gridShell).queryByTestId("calendar-month-boundary-overlay")).toBeNull();
 
-    fireEvent.click(mayCell);
-    fireEvent.click(screen.getByRole("button", { name: /new event on may 1/i }));
+    const step = within(gridShell).getByTestId("calendar-boundary-step");
+    expect(step).toBeTruthy();
 
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/may 1, 2026/i);
-    });
+    expect(within(gridShell).queryAllByRole("gridcell")
+      .find((el) => el.getAttribute("data-boundary-pass-through") === "true")).toBeUndefined();
   });
 
   it("keeps the selected event when clicking its selected day cell again", async () => {
@@ -731,9 +716,11 @@ describe("CalendarModal event grid behavior", () => {
     });
 
     await waitFor(() => {
-      expect(ensureRange).toHaveBeenCalledTimes(1);
+      expect(ensureRange.mock.calls.length).toBeGreaterThanOrEqual(1);
       expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
     });
+
+    const initialCallCount = ensureRange.mock.calls.length;
 
     rerender(renderModal());
     await act(async () => {
@@ -741,7 +728,7 @@ describe("CalendarModal event grid behavior", () => {
     });
 
     await waitFor(() => {
-      expect(ensureRange).toHaveBeenCalledTimes(1);
+      expect(ensureRange).toHaveBeenCalledTimes(initialCallCount);
       expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
     });
   });
@@ -831,9 +818,11 @@ describe("CalendarModal event grid behavior", () => {
     ));
 
     await waitFor(() => {
-      expect(ensureRange).toHaveBeenCalledTimes(1);
+      expect(ensureRange.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
     expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start: "2026-03-29", end: "2026-05-02" });
+
+    const callCountBeforeRerender = ensureRange.mock.calls.length;
 
     rerender(wrapWithDashboard(
       <CalendarModal
@@ -855,7 +844,7 @@ describe("CalendarModal event grid behavior", () => {
     ));
 
     await waitFor(() => {
-      expect(ensureRange).toHaveBeenCalledTimes(2);
+      expect(ensureRange).toHaveBeenCalledTimes(callCountBeforeRerender + 1);
     });
   });
 
@@ -883,5 +872,70 @@ describe("CalendarModal event grid behavior", () => {
     expect(indicator.textContent).toBe("");
     expect(indicator.getAttribute("aria-label")).toBe("Calendar updates pending");
     expect(indicator.querySelector(".calendar-pending-update-icon")).toBeTruthy();
+  });
+
+  it("keeps loading data for grid settles inside the agenda-sync suppression window", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z"));
+    try {
+      window.innerWidth = 1900;
+      const onEventsVisibleRangeChange = vi.fn();
+      const eventsData = {
+        editable: true,
+        ensureRange: vi.fn().mockResolvedValue([]),
+        getEvents: () => [],
+        revision: 0,
+      };
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          onViewChange={() => {}}
+          eventsData={eventsData}
+          onEventsVisibleRangeChange={onEventsVisibleRangeChange}
+          billsData={{}}
+          deadlinesData={{}}
+        />,
+      ));
+
+      const scrollEl = await screen.findByTestId("calendar-scroll-container");
+      // Wait out the mount-centering settle so its suppression window closes.
+      await act(async () => { await new Promise((r) => setTimeout(r, 250)); });
+
+      // Chevron navigation to June opens the 900ms grid↔agenda suppression
+      // window (the same window agenda-driven scrolling opens).
+      fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+      await waitFor(() => {
+        const { start, end } = getVisibleGridRange(2026, 5);
+        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
+      });
+
+      // The user grabs the grid inside that window and scrolls on into July.
+      // jsdom fires no scroll events for scrollTop writes; dispatch manually.
+      const layout = getCalendarLayoutMetrics(1900);
+      let julyOffset = 0;
+      for (let i = -24; i < 2; i++) {
+        const { year, month } = monthIndexToDate(i, 2026, 4);
+        julyOffset += monthBlockHeight({
+          year,
+          month,
+          cellHeight: layout.cellHeight,
+          gridGap: layout.gridGap,
+        });
+      }
+      scrollEl.scrollTop = julyOffset + 10;
+      scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
+
+      // The settle must still move the fetch anchor: data loading follows the
+      // settled month even while agenda rail re-targeting stays suppressed.
+      await waitFor(() => {
+        const { start, end } = getVisibleGridRange(2026, 6);
+        expect(onEventsVisibleRangeChange).toHaveBeenCalledWith({ start, end });
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -29,20 +29,6 @@ describe("resolveFloatingDetailPlacement", () => {
     expect(placement.left + placement.width).toBeLessThanOrEqual(railRect.left);
   });
 
-  it("keeps parked panels in the rail-side context area", () => {
-    const railRect = rect(900, 60, 280, 620);
-    const placement = resolveFloatingDetailPlacement({
-      calendarRect: rect(0, 0, 1200, 720),
-      railRect,
-      panelHeight: 300,
-      mode: "detail",
-      parked: true,
-    });
-
-    expect(placement.left + placement.width).toBeGreaterThan(railRect.left);
-    expect(placement.caretSide).toBeNull();
-  });
-
   it("honors a forced side while clamping inside calendar bounds", () => {
     const railRect = rect(900, 60, 280, 620);
     const placement = resolveFloatingDetailPlacement({

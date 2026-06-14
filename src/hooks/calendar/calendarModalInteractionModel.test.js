@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEADLINE_OVERLAY_STORAGE_KEY,
   dashboardDetailFocusRequest,
-  floatingWorkspaceNavigationEffect,
   initialDeadlineEditorState,
   normalizeCalendarWorkspaceView,
   readStoredBoolean,
@@ -92,31 +91,9 @@ describe("calendar modal interaction model", () => {
     })).toBeNull();
   });
 
-  it("summarizes workspace parking decisions for month navigation", () => {
-    expect(floatingWorkspaceNavigationEffect({
-      currentFloating: { open: true, mode: "edit" },
-    })).toMatchObject({
-      preserveEditor: true,
-      shouldParkFloatingEditor: true,
-      shouldParkFloatingDetail: false,
-      shouldClearSelection: false,
-    });
-
-    expect(floatingWorkspaceNavigationEffect({
-      currentFloating: { open: true, mode: "detail" },
-    })).toMatchObject({
-      preserveEditor: false,
-      shouldParkFloatingEditor: false,
-      shouldParkFloatingDetail: true,
-      shouldClearSelection: false,
-    });
-
-    expect(floatingWorkspaceNavigationEffect({ currentFloating: null })).toMatchObject({
-      preserveEditor: false,
-      shouldParkFloatingEditor: false,
-      shouldParkFloatingDetail: false,
-      shouldClearSelection: true,
-    });
+  it("does not export floatingWorkspaceNavigationEffect (parking is rAF-driven)", async () => {
+    const exports = await import("./calendarModalInteractionModel.js");
+    expect(exports).not.toHaveProperty("floatingWorkspaceNavigationEffect");
   });
 
   it("forces the deadline overlay only for open Events requests", () => {

@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import { Bell } from "lucide-react";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
+import AgendaMonthScrollContainer from "../agenda/AgendaMonthScrollContainer.jsx";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
 import { DeadlineStatusIcon } from "./DeadlineStatusIndicator.jsx";
 import { buildDeadlinesAgendaGroups } from "./deadlinesAgendaModel.js";
@@ -270,7 +271,6 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
   currentMonth,
   todayDate,
   floatingEditorDirty = false,
-  onDirtyBlocked,
   onPassiveDateChange,
   onDateAction,
   onDeadlineAction,
@@ -300,62 +300,78 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
     showCompleted: true,
   }), [computed, entryScrollTargetDateKey, selectedDateKey, todayKey, viewMonth, viewYear]);
 
+  const months = useMemo(() => [{
+    monthKey: `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`,
+    year: viewYear,
+    month: viewMonth,
+    ...agenda,
+  }], [viewYear, viewMonth, agenda]);
+
   useEffect(() => {
     if (showCompleted) return;
     if (!hasSelectedCompletedDeadline(unfilteredAgenda, selectedItemId)) return;
     onFilteredSelectedDeadlineHidden?.();
   }, [onFilteredSelectedDeadlineHidden, selectedItemId, showCompleted, unfilteredAgenda]);
 
+  const renderMonth = useCallback((month, { registerHeader, registerSection, registerRow, registerContent }) => (
+    <AgendaRailShell
+      groups={month.visibleGroups}
+      registerHeader={registerHeader}
+      registerSection={registerSection}
+      registerRow={registerRow}
+      registerContent={registerContent}
+      renderHeader={({ group, registerHeader: regHeader }) => (
+        <AgendaHeader
+          group={group}
+          todayKey={todayKey}
+          registerHeader={regHeader}
+          onActivate={onDateAction}
+        />
+      )}
+      renderGroup={({ group, registerRow: regRow, registerContent: regContent }) => (
+        <>
+          {group.items.map((task) => (
+            <span
+              key={task.agendaKey}
+              ref={(node) => regRow(task.agendaKey, node, group.dateKey)}
+            >
+              <DeadlineRow
+                task={task}
+                selected={deadlineMatchesItemId(task, selectedItemId, group.dateKey)}
+                quickActions={deadlineQuickActions}
+                onSelect={(item, element) => onDeadlineAction?.({
+                  item,
+                  dateKey: item.agendaDateKey,
+                  anchorElement: element,
+                  sourceCellElement: element,
+                  anchorKind: "agenda-row",
+                })}
+              />
+            </span>
+          ))}
+          {!group.hasDeadlines && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
+            <div ref={(node) => regContent(group.dateKey, node)}>
+              <EmptyDeadlineDay fallback={group.isFallback} />
+            </div>
+          ) : null}
+        </>
+      )}
+    />
+  ), [todayKey, selectedDateKey, selectedItemId, onDateAction, onDeadlineAction, deadlineQuickActions]);
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", background: "#1f1f24" }}>
-      <AgendaRailShell
+      <AgendaMonthScrollContainer
         ref={ref}
         testId="deadlines-agenda-rail"
-        groups={agenda.visibleGroups}
-        firstVisibleDateKey={agenda.firstVisibleDateKey}
+        months={months}
         todayKey={todayKey}
         selectedDateKey={selectedDateKey}
         scrollCommand={scrollCommand}
         entryScrollTargetDateKey={entryScrollTargetDateKey}
         floatingEditorDirty={floatingEditorDirty}
-        onDirtyBlocked={onDirtyBlocked}
-        onPassiveDateChange={onPassiveDateChange}
-        renderHeader={({ group, registerHeader }) => (
-          <AgendaHeader
-            group={group}
-            todayKey={todayKey}
-            registerHeader={registerHeader}
-            onActivate={onDateAction}
-          />
-        )}
-        renderGroup={({ group, registerRow, registerContent }) => (
-          <>
-            {group.items.map((task) => (
-              <span
-                key={task.agendaKey}
-                ref={(node) => registerRow(task.agendaKey, node, group.dateKey)}
-              >
-                <DeadlineRow
-                  task={task}
-                  selected={deadlineMatchesItemId(task, selectedItemId, group.dateKey)}
-                  quickActions={deadlineQuickActions}
-                  onSelect={(item, element) => onDeadlineAction?.({
-                    item,
-                    dateKey: item.agendaDateKey,
-                    anchorElement: element,
-                    sourceCellElement: element,
-                    anchorKind: "agenda-row",
-                  })}
-                />
-              </span>
-            ))}
-            {!group.hasDeadlines && (group.isFallback || selectedDateKey === group.dateKey || todayKey === group.dateKey) ? (
-              <div ref={(node) => registerContent(group.dateKey, node)}>
-                <EmptyDeadlineDay fallback={group.isFallback} />
-              </div>
-            ) : null}
-          </>
-        )}
+        onTopmostDateChange={onPassiveDateChange}
+        renderMonth={renderMonth}
       />
       <CompletedToggle
         enabled={showCompleted}

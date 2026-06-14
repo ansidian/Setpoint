@@ -27,6 +27,9 @@ describe("CalendarEventEditor reminder behavior", () => {
 
     expect(screen.getByTestId("calendar-event-reminder-chip").textContent).toMatch(/30 minutes before/i);
 
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+    });
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {
@@ -62,6 +65,9 @@ describe("CalendarEventEditor reminder behavior", () => {
       target: { value: "Planning block" },
     });
     fireEvent.click(screen.getByTestId("calendar-event-reminder-preset-30"));
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
+    });
     fireEvent.click(getActiveEventSaveButton());
 
     await waitFor(() => {

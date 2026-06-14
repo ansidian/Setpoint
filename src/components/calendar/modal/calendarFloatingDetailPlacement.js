@@ -1,6 +1,5 @@
 const VIEWPORT_PADDING = 16;
 const PANEL_GAP = 12;
-const PARKING_INSET = 12;
 const DEFAULT_PANEL_WIDTH = 380;
 const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 400;
@@ -78,7 +77,6 @@ export function resolveFloatingDetailPlacement({
   railRect,
   panelHeight,
   mode = "detail",
-  parked = false,
   preferredSide = null,
   forcedSide = null,
   allowRailOverlap = false,
@@ -94,36 +92,6 @@ export function resolveFloatingDetailPlacement({
   const height = isEditor
     ? maxHeight
     : clamp(panelHeight || DEFAULT_PANEL_HEIGHT, MIN_PANEL_HEIGHT, maxHeight);
-
-  if (parked) {
-    const parkingRect = railRect || calendarRect || bounds;
-    const parkingWidth = isEditor
-      ? clamp(width, Math.min(MIN_EDITOR_WIDTH, bounds.width), Math.min(MAX_EDITOR_WIDTH, bounds.width))
-      : clamp(
-          DEFAULT_PANEL_WIDTH,
-          MIN_PANEL_WIDTH,
-          Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, (parkingRect.width || width) - PARKING_INSET * 2)),
-        );
-    const left = clamp(
-      (parkingRect.left ?? bounds.right - parkingWidth - PARKING_INSET) + PARKING_INSET,
-      bounds.left,
-      bounds.right - parkingWidth,
-    );
-    const top = clamp(
-      (parkingRect.top ?? bounds.top) + PARKING_INSET,
-      bounds.top,
-      bounds.bottom - height,
-    );
-
-    return {
-      top,
-      left,
-      width: parkingWidth,
-      maxHeight,
-      caretSide: null,
-      caretTop: 0,
-    };
-  }
 
   const referenceRect = sourceRect || anchorRect;
   const caretRect = anchorRect || referenceRect;

@@ -101,11 +101,19 @@ describe("CalendarModal Mini Calendar activation", () => {
         if (this.getAttribute?.("data-date-key") === "2026-05-04") {
           return { top: -120, bottom: -86, left: 0, right: 280, width: 280, height: 34 };
         }
+        // Pinned "today" (May 15) always renders an agenda section; place it
+        // between May 4 and May 20 so the topmost-date walk stays monotonic.
+        if (this.getAttribute?.("data-date-key") === "2026-05-15") {
+          return { top: -60, bottom: -26, left: 0, right: 280, width: 280, height: 34 };
+        }
         if (this.getAttribute?.("data-date-key") === "2026-05-20") {
           return { top: 2, bottom: 36, left: 0, right: 280, width: 280, height: 34 };
         }
         if (this.getAttribute?.("data-date-key") === "2026-05-28") {
           return { top: 760, bottom: 794, left: 0, right: 280, width: 280, height: 34 };
+        }
+        if (this.getAttribute?.("data-date-key")) {
+          return { top: 9999, bottom: 9999, left: 0, right: 280, width: 280, height: 34 };
         }
         return originalGetBoundingClientRect.call(this);
       };
@@ -156,7 +164,9 @@ describe("CalendarModal Mini Calendar activation", () => {
       fireEvent.scroll(agendaRail);
       await flushAnimationFrame();
 
-      expect(miniDate(/Wednesday, May 20, selected/i).getAttribute("data-date-fill")).toBe("selected");
+      await waitFor(() => {
+        expect(miniDate(/Wednesday, May 20, selected/i).getAttribute("data-date-fill")).toBe("selected");
+      });
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
       expect(scrollTo).not.toHaveBeenCalled();
 

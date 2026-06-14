@@ -31,7 +31,6 @@ export default function CalendarFloatingDetailContent({
   viewData,
   viewMonth,
   viewYear,
-  workspaceTransientCloseToken,
   focusDeadlineTask,
 }) {
   if (layout.stacked || !floatingDetail?.open) return null;
@@ -50,11 +49,7 @@ export default function CalendarFloatingDetailContent({
         || String(activeView.getItemId(item)) === String(floatingDetail.itemId)
       ))
     : !!floatingDetail?.itemId;
-  const floatingDetailItems = floatingDetail?.parked
-    && !selectedItemResolves
-    && Array.isArray(floatingDetail.itemsSnapshot)
-      ? floatingDetail.itemsSnapshot
-    : !selectedItemResolves
+  const floatingDetailItems = !selectedItemResolves
       && Array.isArray(floatingDetail?.itemsSnapshot)
         ? floatingDetail.itemsSnapshot
     : String(floatingDetail?.anchorKind || "").startsWith("search")
@@ -93,7 +88,6 @@ export default function CalendarFloatingDetailContent({
       onDraftPreviewChange: onDeadlineDraftPreviewChange,
       onEditorDirtyChange: onFloatingEditorDirtyChange,
       ghostPreview,
-      transientCloseToken: workspaceTransientCloseToken,
     });
   }
 
@@ -112,7 +106,6 @@ export default function CalendarFloatingDetailContent({
         expandedDesktop
         host="floating"
         ghostPreview={ghostPreview}
-        transientCloseToken={workspaceTransientCloseToken}
       />
     );
   }

@@ -227,4 +227,33 @@ export function buildEventsMiniCalendarActivityItems({
   return [...eventItems, ...deadlineItems];
 }
 
+export function buildMultiMonthAgendaGroups({
+  months = [],
+  events = [],
+  deadlineOverlay = null,
+  weatherData = null,
+  todayKey = pacificYMD(Date.now()),
+  forceVisibleDateKey = null,
+} = {}) {
+  return months.map(({ year, month }) => {
+    const mk = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const forceKey = forceVisibleDateKey?.startsWith(mk) ? forceVisibleDateKey : null;
+    const result = buildEventsAgendaGroups({
+      events,
+      deadlineOverlay,
+      viewYear: year,
+      viewMonth: month,
+      weatherData,
+      todayKey,
+      forceVisibleDateKey: forceKey,
+    });
+    return {
+      monthKey: mk,
+      year,
+      month,
+      ...result,
+    };
+  });
+}
+
 export { formatAgendaHeaderLabel, monthBounds };

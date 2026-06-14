@@ -188,6 +188,22 @@ _Avoid_: One-row task completion flag, undated completion row, Todoist activity 
 The optional Setpoint-local cleanup of one persisted **Completed Deadline Occurrence** when a cleanup path is retained.
 _Avoid_: Product Dismiss button, tombstone UI, ghost UI, delete completed task, Todoist uncomplete/reopen/delete
 
+**Display Month**:
+The calendar month shown in the header and reflected by the **Mini Calendar**. During free scroll, it is the month whose block contains the viewport's vertical midpoint. During programmatic navigation, it is set imperatively to the target month.
+_Avoid_: Active month (ambiguous), view month, scroll month
+
+**Fetch Anchor**:
+The calendar month used to plan data-loading ranges and prefetch windows. Updated on a debounce after scroll settles, or immediately on programmatic navigation.
+_Avoid_: Active month, display month, view date
+
+**Midpoint Crossing**:
+The heuristic that determines the scroll-driven **Display Month**: whichever month block contains the vertical center of the scroll viewport is active.
+_Avoid_: Top-edge detection, majority pixel area, first visible day
+
+**Programmatic Navigation**:
+Any non-scroll month change initiated by a user action: arrow/chevron buttons, jump-to-month picker, **Mini Calendar Activation**, or **Calendar Search Activation**. Sets **Display Month** imperatively and triggers an immediate fetch, unlike scroll-driven changes which debounce.
+_Avoid_: Manual navigation, button navigation
+
 **Agenda Row Hover Preview**:
 A temporary **Mini Calendar** date emphasis shown while hovering or focusing an agenda rail item. It wraps the previewed date number and its **Mini Calendar Activity Markers** as one visual target.
 _Avoid_: Hover selection, delayed tooltip, agenda preview mode
@@ -324,6 +340,30 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - Mini Calendar dates remain ordinary focusable controls for activation even without internal keyboard grid navigation.
 - The **Mini Calendar** date grid renders immediately for the visible month; activity markers populate from confirmed available data rather than replacing the whole Mini Calendar with a loading skeleton.
 - Owner-driven agenda rail scrolling may update **Mini Calendar** date selection, but it does not navigate the shared calendar workspace month.
+- **Display Month** and **Fetch Anchor** are separate concepts updated through separate paths; the header/mini-calendar always reflects the **Display Month**, while data loading keys off the **Fetch Anchor**.
+- During free scroll, **Display Month** updates on every animation frame using **Midpoint Crossing**; **Fetch Anchor** updates only after the scroll settles.
+- During **Programmatic Navigation**, both **Display Month** and **Fetch Anchor** update immediately to the target month; scroll-driven **Display Month** updates are suppressed until the scroll animation settles at the target.
+- **Programmatic Navigation** centers the target month in the scroll viewport, matching the initial-open centering behavior.
+- Arrow/chevron navigation gating (`canGoPrev`) applies only to arrow controls; free scroll is unrestricted into the past.
+
+**Floating Detail**:
+The fixed-position panel that shows item detail, create, or edit content. It uses the triggering element for its initial placement, then stays fixed in that viewport position while the owner scrolls.
+_Avoid_: Popover, tooltip, sidebar detail
+
+**Floating Detail Anchor**:
+The DOM element used for the initial **Floating Detail** position and caret alignment. May be a grid chip, span segment, overflow row, agenda row, agenda event chip, day cell, or search result row.
+_Avoid_: Target element, reference element
+
+**Floating Detail Workspace**:
+One of three modes of the **Floating Detail**: detail (read-only item view), create (new item editor), or edit (existing item editor). Clean create/edit workspaces cancel on grid scroll; dirty create/edit workspaces stay fixed in place while scrolling continues.
+_Avoid_: Floating modal, editor dialog, detail drawer
+
+- A **Floating Detail** is a singleton; opening a new detail replaces any existing detail.
+- Scrolling does not move, park, dismiss, or re-anchor an open detail panel.
+- The placement loop may react to resize and content measurement, but not to owner scroll.
+- A **Floating Detail Anchor** is not a long-lived tether. If the original anchor scrolls out, disconnects, or later remounts, the open **Floating Detail** remains where it already is.
+- Clean create/edit workspaces cancel on grid scroll so accidental empty editors do not linger.
+- Dirty create/edit workspaces do not park or snap elsewhere; they keep their fixed position while the grid scrolls.
 
 ## Example Dialogue
 
@@ -375,3 +415,14 @@ _Avoid_: Hover selection, delayed tooltip, agenda preview mode
 - "Tombstone" was resolved as an internal persistence term; product/API surfaces should use **Completed Deadline Occurrence** and avoid exposing tombstone/ghost language.
 - "Dismiss completed deadline" was resolved as legacy **Completed Deadline Snapshot Cleanup**, not a required visible product action and not a Todoist provider mutation.
 - "Deadline detail" was resolved as **Deadline Detail**, not a "Deadlines view" or hidden deadline workspace.
+- "Active month" was resolved as two separate concepts: **Display Month** (what the header shows) and **Fetch Anchor** (what drives data loading). The single `viewDate` conflated both.
+- "Top-edge detection" for scroll-driven active month was replaced by **Midpoint Crossing**: the month whose block contains the viewport's vertical center is the **Display Month**.
+- "Debounced active month" was split: **Display Month** updates immediately on every animation frame during scroll; **Fetch Anchor** debounces after scroll settles. **Programmatic Navigation** updates both immediately.
+- "Centered vs top-aligned" for programmatic month navigation was resolved as centered, matching the initial-open centering behavior.
+- "Scroll-driven display during programmatic nav" was resolved as suppressed: **Programmatic Navigation** sets the **Display Month** imperatively; scroll-driven updates resume only after the scroll animation settles.
+- "Hysteresis at the midpoint boundary" was deferred: ship without it, add a dead zone only if flickering appears in testing.
+- "`canGoPrev` vs free scroll" asymmetry was preserved: arrow buttons are gated at the current month, scroll is unrestricted into the past.
+- "Parking and re-anchoring" were rejected for **Floating Detail** scroll behavior; scrolling keeps the open panel fixed in place.
+- "Scroll closes every editor" was rejected; clean create/edit workspaces cancel on grid scroll, while dirty create/edit workspaces keep their fixed position.
+- "Tether to remounted anchors" was rejected; the **Floating Detail Anchor** only determines initial placement, not later scroll recovery.
+- "Date breadcrumb for parked panels" was rejected with parking itself; no parked panel state or parked visual treatment remains.

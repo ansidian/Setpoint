@@ -5,7 +5,7 @@ import CalendarModal from "./CalendarModal.jsx";
 import { wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
 
 describe("CalendarModal deadline overlay behavior", () => {
-  it("holds Events first paint until deadline overlay readiness resolves on cold mount", () => {
+  it("shows cached events immediately while deadline overlay is still loading", () => {
     window.innerWidth = 1900;
     const ensureDeadlines = vi.fn(() => new Promise(() => {}));
 
@@ -43,8 +43,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       />,
     ));
 
-    expect(screen.getByTestId("calendar-grid-skeleton")).toBeTruthy();
-    expect(screen.queryByText("Design review")).toBeNull();
+    expect(screen.getByText("Design review")).toBeTruthy();
   });
 
   it("shows deadline overlay items in Events by default and persists the header toggle", async () => {
@@ -385,7 +384,7 @@ describe("CalendarModal deadline overlay behavior", () => {
       await act(async () => {
         await Promise.resolve();
       });
-      expect(ensureDeadlines).toHaveBeenCalledTimes(1);
+      expect(ensureDeadlines.mock.calls.length).toBeGreaterThanOrEqual(1);
 
       await act(async () => {
         vi.advanceTimersByTime(2000);
@@ -412,6 +411,66 @@ describe("CalendarModal deadline overlay behavior", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("renders deadline chips in non-active preview months using per-month data", async () => {
+    window.innerWidth = 1900;
+
+    const aprilDeadlines = {
+      upcoming: [
+        { id: "todo-apr", title: "April deadline", due_date: "2026-04-15", source: "todoist", status: "open" },
+      ],
+    };
+    const juneDeadlines = {
+      upcoming: [
+        { id: "todo-jun", title: "June deadline", due_date: "2026-06-10", source: "todoist", status: "open" },
+      ],
+    };
+    const monthCache = {
+      "2026-03": { upcoming: [] },
+      "2026-04": aprilDeadlines,
+      "2026-05": { upcoming: [] },
+      "2026-06": juneDeadlines,
+      "2026-07": { upcoming: [] },
+    };
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-06-10"
+        eventsData={{
+          editable: true,
+          ensureRange: vi.fn().mockResolvedValue([]),
+          getEvents: () => [],
+          hasMonth: () => true,
+          isMonthLoading: () => false,
+        }}
+        billsData={{}}
+        deadlinesData={juneDeadlines}
+        deadlinesRangeData={{
+          loading: false,
+          error: null,
+          data: juneDeadlines,
+          dataRange: { start: "2026-05-31", end: "2026-07-04" },
+          ensureRange: vi.fn().mockResolvedValue(null),
+          getMonthData: (year, month) => {
+            const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+            return monthCache[key] || null;
+          },
+          revision: 1,
+        }}
+      />,
+    ));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-10")).getByText("June deadline")).toBeTruthy();
+    });
+
+    const aprilBlock = screen.getByTestId("month-block-2026-3");
+    expect(within(aprilBlock).getByText("April deadline")).toBeTruthy();
   });
 
   // Characterization-at-seam (EAD-318): pin the D-CAL-4 refresh round-trip before

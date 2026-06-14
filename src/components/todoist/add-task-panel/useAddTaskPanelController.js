@@ -59,7 +59,6 @@ export default function useAddTaskPanelController({
   initialDueDate = null,
   onDraftPreviewChange,
   onDirtyChange,
-  transientCloseToken = 0,
 }) {
   const isInline = host === "inline";
   const isEdit = !!editingTask;
@@ -139,7 +138,6 @@ export default function useAddTaskPanelController({
   const inputRef = useRef(null);
   const dueTriggerRef = useRef(null);
   const duePickerRef = useRef(null);
-  const lastTransientCloseTokenRef = useRef(transientCloseToken);
 
   const requestClose = useCallback(() => {
     if (isInline) {
@@ -409,13 +407,6 @@ export default function useAddTaskPanelController({
     }));
     setReminderError(null);
   }, []);
-
-  useEffect(() => {
-    if (lastTransientCloseTokenRef.current === transientCloseToken) return;
-    lastTransientCloseTokenRef.current = transientCloseToken;
-    setDuePickerOpen(false);
-    setAutocompleteType(null);
-  }, [transientCloseToken]);
 
   const handleDueSelect = useCallback((epochMs) => {
     setManualDue(buildManualDue(epochMs));
@@ -759,6 +750,5 @@ export default function useAddTaskPanelController({
     cancelDelete,
     host,
     isInline,
-    transientCloseToken,
   };
 }

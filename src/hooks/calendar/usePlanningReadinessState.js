@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { getVisibleGridRange } from "../../components/calendar/calendarDateUtils.js";
 import {
+  dateToMonthIndex,
+  prefetchRange as computePrefetchRange,
+  monthIndexToDate,
+} from "./calendarScrollModel.js";
+import { monthKey } from "./calendarRangeModel.js";
+import {
   planningDeadlinesReadyState,
   planningDeadlineTimedOutState,
   planningEventsReadyState,
@@ -31,12 +37,23 @@ function makeDeadlineOverlayRecord(data, range) {
  *
  * The pure transitions live in calendarPlanningSessionModel.js; this hook only
  * orchestrates timers, async settlement, and React state.
+ *
+ * Scroll-driven fetches (infinite month scroll) are special-cased: the ensure pass
+ * anchors on the fetch anchor (fetchYear/fetchMonth, decoupled from the display
+ * month), prefetches ahead of the scroll direction, aborts any in-flight pass via
+ * fetchAbortRef, and skips the planning-state reset so cached months render without
+ * a skeleton flash.
  */
 export default function usePlanningReadinessState({
   open,
   view,
-  viewYear,
-  viewMonth,
+  fetchYear,
+  fetchMonth,
+  currentYear,
+  currentMonth,
+  scrollDrivenRef,
+  scrollDirectionRef,
+  fetchAbortRef,
   eventsEnsureRange,
   eventsRevision,
   eventEditorIsEditorOpen,
@@ -49,21 +66,58 @@ export default function usePlanningReadinessState({
   const [lateDeadlineOverlayData, setLateDeadlineOverlayData] = useState(null);
 
   useEffect(() => {
-    if (!open || view !== "events" || !eventsEnsureRange) return;
-    const { start, end } = getVisibleGridRange(viewYear, viewMonth);
+    if (!open || view !== "events" || !eventsEnsureRange) {
+      // Consume a flag set by a settle that landed as the modal closed (the
+      // modal stays mounted) or off the events view; the next pass must not
+      // skip its planning reset against stale scroll state.
+      scrollDrivenRef.current = false;
+      return;
+    }
+    const { start, end } = getVisibleGridRange(fetchYear, fetchMonth);
     onEventsVisibleRangeChange?.({ start, end });
+
+    const isScrollDriven = scrollDrivenRef.current;
+    scrollDrivenRef.current = false;
+
+    if (fetchAbortRef.current) {
+      fetchAbortRef.current.abort();
+      fetchAbortRef.current = null;
+    }
+    const abortController = new AbortController();
+    fetchAbortRef.current = abortController;
+    const { signal } = abortController;
+
+    const scrollDir = scrollDirectionRef.current;
+    const visibleIndex = dateToMonthIndex(fetchYear, fetchMonth, currentYear, currentMonth);
+    const { first: pfFirst, last: pfLast } = computePrefetchRange({
+      visibleFirst: visibleIndex,
+      visibleLast: visibleIndex,
+      scrollDirection: scrollDir,
+    });
+    const prefetchKeys = [];
+    for (let i = pfFirst; i <= pfLast; i++) {
+      const { year, month } = monthIndexToDate(i, currentYear, currentMonth);
+      prefetchKeys.push(monthKey(year, month));
+    }
+
     const runEnsure = () => {
+      if (signal.aborted) return;
       let canceled = false;
       let eventsDone = false;
       let deadlinesDone = !deadlineOverlayVisible || !deadlinesEnsureRange;
       let deadlinesTimedOut = false;
       const startedAt = performance.now();
-      setPlanningReadiness(planningInitialState({
-        deadlineOverlayVisible,
-        deadlinesDone,
-        startedAt,
-      }));
-      setLateDeadlineOverlayData(null);
+      if (!isScrollDriven) {
+        setPlanningReadiness(planningInitialState({
+          deadlineOverlayVisible,
+          deadlinesDone,
+          startedAt,
+        }));
+        setLateDeadlineOverlayData(null);
+      }
+
+      const onAbort = () => { canceled = true; };
+      signal.addEventListener("abort", onAbort);
 
       const softTimer = window.setTimeout(() => {
         if (canceled || !deadlineOverlayVisible) return;
@@ -79,7 +133,7 @@ export default function usePlanningReadinessState({
         setPlanningReadiness((current) => planningDeadlineTimedOutState(current));
       }, PLANNING_DEGRADED_TIMEOUT_MS);
 
-      const eventsPromise = eventsEnsureRange(start, end)
+      const eventsPromise = eventsEnsureRange(start, end, { signal, prefetchKeys })
         .then(() => {
           eventsDone = true;
           if (canceled) return;
@@ -149,6 +203,7 @@ export default function usePlanningReadinessState({
 
       return () => {
         canceled = true;
+        signal.removeEventListener("abort", onAbort);
         window.clearTimeout(softTimer);
         window.clearTimeout(hardTimer);
       };
@@ -161,11 +216,16 @@ export default function usePlanningReadinessState({
       }, PLANNING_EDITOR_OPEN_DELAY_MS);
       return () => {
         window.clearTimeout(id);
+        abortController.abort();
         cleanup?.();
       };
     }
-    return runEnsure();
-  }, [open, view, viewYear, viewMonth, eventsEnsureRange, eventsRevision, eventEditorIsEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
+    const cleanup = runEnsure();
+    return () => {
+      abortController.abort();
+      cleanup?.();
+    };
+  }, [open, view, fetchYear, fetchMonth, currentYear, currentMonth, scrollDrivenRef, scrollDirectionRef, fetchAbortRef, eventsEnsureRange, eventsRevision, eventEditorIsEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
 
   return {
     planningReadiness,

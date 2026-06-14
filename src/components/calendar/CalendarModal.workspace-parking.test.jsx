@@ -110,11 +110,11 @@ describe("CalendarModal floating detail behavior", () => {
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{
-          getEvents: () => Array.from({ length: 5 }, (_, index) => ({
+          getEvents: () => Array.from({ length: 7 }, (_, index) => ({
             id: `event-${index + 1}`,
             title: `Overflow event ${index + 1}`,
-            startMs: new Date(`2026-04-20T${String(15 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
-            endMs: new Date(`2026-04-20T${String(16 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
+            startMs: new Date(`2026-04-20T${String(10 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
+            endMs: new Date(`2026-04-20T${String(11 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
             allDay: false,
             color: "#4285f4",
             writable: true,
@@ -143,13 +143,13 @@ describe("CalendarModal floating detail behavior", () => {
       height: 28,
     });
     fireEvent.click(overflowTrigger);
-    const popover = await screen.findByTestId("calendar-cell-overflow-popover");
-    const overflowItem = within(popover).getAllByTestId("calendar-cell-overflow-item")[0];
+    const inlineOverflow = await screen.findByTestId("calendar-cell-inline-overflow");
+    const overflowItem = within(inlineOverflow).getAllByTestId("calendar-cell-item-chip")[0];
 
     fireEvent.click(overflowItem);
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    expect(screen.getByTestId("calendar-cell-overflow-popover")).toBe(popover);
+    expect(screen.getByTestId("calendar-cell-inline-overflow")).toBeTruthy();
     expect(panel.getAttribute("data-anchor-kind")).toBe("overflow-row");
     expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain(overflowItem.textContent?.match(/Overflow event \d/)?.[0] || "Overflow event");
 
@@ -158,11 +158,11 @@ describe("CalendarModal floating detail behavior", () => {
       expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
     });
     expect(screen.getByTestId("calendar-modal-panel").getAttribute("data-calendar-suppress-focus-ring")).toBe("true");
-    expect(screen.getByTestId("calendar-cell-overflow-popover")).toBe(popover);
+    expect(screen.getByTestId("calendar-cell-inline-overflow")).toBeTruthy();
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => {
-      expect(screen.queryByTestId("calendar-cell-overflow-popover")).toBeNull();
+      expect(screen.queryByTestId("calendar-cell-inline-overflow")).toBeNull();
     });
   });
 
@@ -177,11 +177,11 @@ describe("CalendarModal floating detail behavior", () => {
         onViewChange={() => {}}
         focusDate="2026-04-20"
         eventsData={{
-          getEvents: () => Array.from({ length: 5 }, (_, index) => ({
+          getEvents: () => Array.from({ length: 7 }, (_, index) => ({
             id: `event-${index + 1}`,
             title: `Inline overflow event ${index + 1}`,
-            startMs: new Date(`2026-04-20T${String(15 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
-            endMs: new Date(`2026-04-20T${String(16 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
+            startMs: new Date(`2026-04-20T${String(10 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
+            endMs: new Date(`2026-04-20T${String(11 + index).padStart(2, "0")}:00:00.000Z`).getTime(),
             allDay: false,
             color: "#4285f4",
             writable: true,
@@ -229,111 +229,6 @@ describe("CalendarModal floating detail behavior", () => {
     await waitFor(() => {
       expect(panel.getAttribute("data-forced-side")).toMatch(/^(left|right)$/);
       expect(panel.getAttribute("data-side-intent")).toBe("user-flip");
-    });
-  });
-
-  it("keeps a parked floating detail visible beyond the adjacent month data window", async () => {
-    window.innerWidth = 1900;
-    const aprilEvent = {
-      id: "event-1",
-      title: "Design review",
-      startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-      allDay: false,
-      color: "#4285f4",
-      writable: true,
-    };
-    const juneEvent = {
-      id: "event-june-20",
-      title: "Unrelated June hold",
-      startMs: new Date("2026-06-20T17:00:00.000Z").getTime(),
-      endMs: new Date("2026-06-20T18:00:00.000Z").getTime(),
-      allDay: false,
-      color: "#89b4fa",
-      writable: true,
-    };
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          getEvents: (year, month) => {
-            if (year === 2026 && month === 3) return [aprilEvent];
-            if (year === 2026 && month === 5) return [juneEvent];
-            return [];
-          },
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-
-    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/June\s+2026/i);
-      expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
-      expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Design review");
-      expect(within(panel).queryByText("Unrelated June hold")).toBeNull();
-    });
-  });
-
-  it("reanchors a parked birthday detail when its month returns", async () => {
-    window.innerWidth = 1900;
-    const birthday = {
-      id: "birthday-1",
-      title: "Maya's birthday",
-      eventType: "birthday",
-      birthdayProperties: { type: "birthday" },
-      startMs: new Date("2026-04-20T07:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
-      allDay: true,
-      sourceLabel: "Birthdays",
-      color: "#ff887c",
-      writable: false,
-    };
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          getEvents: (year, month) => (year === 2026 && month === 3 ? [birthday] : []),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(await screen.findByTestId("calendar-event-span-segment"), { clientX: 4 });
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    expect(panel.getAttribute("data-anchor-kind")).toBe("span");
-
-    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
-      expect(panel.getAttribute("data-anchor-kind")).toBe("parked");
-      expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Maya's birthday");
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
-      expect(panel.getAttribute("data-anchor-kind")).toBe("chip");
-      expect(within(panel).getByTestId("calendar-selected-event-title").textContent).toContain("Maya's birthday");
     });
   });
 

@@ -29,13 +29,12 @@ export function isGridOriginAnchorKind(anchorKind) {
 }
 
 export function isGridOriginFloatingDetail(detail) {
-  if (!detail?.open || detail.mode !== "detail" || detail.parked || detail.userDragged) return false;
+  if (!detail?.open || detail.mode !== "detail" || detail.userDragged) return false;
   return isGridOriginAnchorKind(detail.anchorKind);
 }
 
 export function floatingDetailOwnsGridSelection(detail) {
   if (!detail?.open || detail.mode !== "detail" || detail.itemId == null || !detail.dateKey) return false;
-  if (detail.parked) return true;
   return isGridOriginFloatingDetail(detail);
 }
 
@@ -46,7 +45,7 @@ export function placementSideFromCaret(caretSide) {
 }
 
 export function preservedReanchorSide(current, nextDetail, nextView, nextDateKey) {
-  if (!current?.open || current.mode !== "detail" || current.parked || current.userDragged || current.dirty) return null;
+  if (!current?.open || current.mode !== "detail" || current.userDragged || current.dirty) return null;
   if (current.sideIntent === "user-flip") return null;
   if (current.view !== nextView || current.dateKey !== nextDateKey) return null;
   if (!isGridOriginAnchorKind(current.anchorKind) || !isGridOriginAnchorKind(nextDetail.anchorKind)) return null;

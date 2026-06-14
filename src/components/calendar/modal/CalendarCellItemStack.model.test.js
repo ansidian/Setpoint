@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getMeasuredCellItemStackPlan,
   getMeasuredVisibleCellItemCount,
   getReservedCellItemLaneHeight,
   splitVisibleCellItems,
@@ -42,6 +43,26 @@ describe("CalendarCellItemStack model", () => {
       90,
       { ...metrics, reservedHeight },
     )).toBe(0);
+  });
+
+  it("only exposes overflow when the +more trigger fully fits after reserved span lanes", () => {
+    const items = [
+      { id: "first" },
+      { id: "second" },
+      { id: "third" },
+    ];
+    const reservedHeight = getReservedCellItemLaneHeight(1, metrics);
+
+    expect(getMeasuredCellItemStackPlan(
+      items,
+      reservedHeight + metrics.moreHeight,
+      { ...metrics, reservedHeight },
+    )).toEqual({ visibleCount: 0, overflowVisible: true });
+    expect(getMeasuredCellItemStackPlan(
+      items,
+      reservedHeight + metrics.moreHeight - 1,
+      { ...metrics, reservedHeight },
+    )).toEqual({ visibleCount: 0, overflowVisible: false });
   });
 
   it("reserves lanes using span-lane geometry when provided", () => {

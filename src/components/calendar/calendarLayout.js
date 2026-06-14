@@ -5,111 +5,94 @@ export const BREAKPOINTS = {
   md: 1240,
 };
 
-export function getCalendarLayoutMetrics(viewportWidth) {
-  if (viewportWidth >= BREAKPOINTS.uhd) {
-    const viewportMargin = 32;
-    return {
-      tier: "uhd",
-      viewportMargin,
-      panelWidth: "calc(100vw - 64px)",
-      panelMaxWidth: null,
-      shellHeight: "calc(100vh - 64px)",
-      shellMaxHeight: null,
-      shellPadding: 16,
-      contentGap: 14,
-      gridGap: 8,
-      weekHeaderGap: 6,
-      contextWidth: 380,
-      searchWidth: 304,
-      editorWidth: 680,
-      cellHeight: 150,
-      railHeightOffset: 92,
-      stacked: false,
-      stickyRail: true,
-      headerWrap: false,
-      headerStacked: false,
-    };
-  }
-
-  if (viewportWidth >= BREAKPOINTS.xl) {
-    const viewportMargin = 16;
-    return {
-      tier: "xl",
-      viewportMargin,
-      panelWidth: null,
-      panelMaxWidth: null,
-      shellHeight: "calc(100vh - 32px)",
-      shellMaxHeight: null,
-      shellPadding: 16,
-      contentGap: 12,
-      gridGap: 8,
-      weekHeaderGap: 6,
-      contextWidth: 320,
-      searchWidth: 288,
-      editorWidth: 620,
-      cellHeight: 140,
-      railHeightOffset: 92,
-      stacked: false,
-      stickyRail: true,
-      headerWrap: false,
-      headerStacked: false,
-    };
-  }
-
-  if (viewportWidth >= BREAKPOINTS.lg) {
-    const viewportMargin = 20;
-    return {
-      tier: "lg",
-      viewportMargin,
-      panelWidth: null,
-      panelMaxWidth: null,
-      shellHeight: "calc(100vh - 40px)",
-      shellMaxHeight: null,
-      shellPadding: 14,
-      contentGap: 12,
-      gridGap: 6,
-      weekHeaderGap: 5,
-      contextWidth: 296,
-      searchWidth: 268,
-      editorWidth: 560,
-      cellHeight: 124,
-      railHeightOffset: 82,
-      stacked: false,
-      stickyRail: true,
-      headerWrap: false,
-      headerStacked: false,
-    };
-  }
-
-  if (viewportWidth >= BREAKPOINTS.md) {
-    const viewportMargin = 24;
-    return {
-      tier: "md",
-      viewportMargin,
-      panelWidth: null,
-      panelMaxWidth: null,
-      shellHeight: "calc(100vh - 48px)",
-      shellMaxHeight: null,
-      shellPadding: 14,
-      contentGap: 12,
-      gridGap: 5,
-      weekHeaderGap: 4,
-      contextWidth: 272,
-      searchWidth: 260,
-      editorWidth: 480,
-      cellHeight: 108,
-      railHeightOffset: 72,
-      stacked: false,
-      stickyRail: true,
-      headerWrap: false,
-      headerStacked: false,
-    };
-  }
-
-  const viewportMargin = 16;
-  return {
+const LAYOUT_METRICS = Object.freeze({
+  uhd: Object.freeze({
+    tier: "uhd",
+    viewportMargin: 32,
+    panelWidth: "calc(100vw - 64px)",
+    panelMaxWidth: null,
+    shellHeight: "calc(100vh - 64px)",
+    shellMaxHeight: null,
+    shellPadding: 16,
+    contentGap: 14,
+    gridGap: 8,
+    weekHeaderGap: 6,
+    contextWidth: 380,
+    searchWidth: 304,
+    editorWidth: 680,
+    cellHeight: 200,
+    railHeightOffset: 92,
+    stacked: false,
+    stickyRail: true,
+    headerWrap: false,
+    headerStacked: false,
+  }),
+  xl: Object.freeze({
+    tier: "xl",
+    viewportMargin: 16,
+    panelWidth: null,
+    panelMaxWidth: null,
+    shellHeight: "calc(100vh - 32px)",
+    shellMaxHeight: null,
+    shellPadding: 16,
+    contentGap: 12,
+    gridGap: 8,
+    weekHeaderGap: 6,
+    contextWidth: 320,
+    searchWidth: 288,
+    editorWidth: 620,
+    cellHeight: 186,
+    railHeightOffset: 92,
+    stacked: false,
+    stickyRail: true,
+    headerWrap: false,
+    headerStacked: false,
+  }),
+  lg: Object.freeze({
+    tier: "lg",
+    viewportMargin: 20,
+    panelWidth: null,
+    panelMaxWidth: null,
+    shellHeight: "calc(100vh - 40px)",
+    shellMaxHeight: null,
+    shellPadding: 14,
+    contentGap: 12,
+    gridGap: 6,
+    weekHeaderGap: 5,
+    contextWidth: 296,
+    searchWidth: 268,
+    editorWidth: 560,
+    cellHeight: 164,
+    railHeightOffset: 82,
+    stacked: false,
+    stickyRail: true,
+    headerWrap: false,
+    headerStacked: false,
+  }),
+  md: Object.freeze({
+    tier: "md",
+    viewportMargin: 24,
+    panelWidth: null,
+    panelMaxWidth: null,
+    shellHeight: "calc(100vh - 48px)",
+    shellMaxHeight: null,
+    shellPadding: 14,
+    contentGap: 12,
+    gridGap: 5,
+    weekHeaderGap: 4,
+    contextWidth: 272,
+    searchWidth: 260,
+    editorWidth: 480,
+    cellHeight: 144,
+    railHeightOffset: 72,
+    stacked: false,
+    stickyRail: true,
+    headerWrap: false,
+    headerStacked: false,
+  }),
+  sm: Object.freeze({
     tier: "sm",
-    viewportMargin,
+    viewportMargin: 16,
     panelWidth: null,
     panelMaxWidth: null,
     shellHeight: "calc(100vh - 32px)",
@@ -121,13 +104,21 @@ export function getCalendarLayoutMetrics(viewportWidth) {
     contextWidth: 0,
     searchWidth: 0,
     editorWidth: 0,
-    cellHeight: 76,
+    cellHeight: 100,
     railHeightOffset: 48,
     stacked: true,
     stickyRail: false,
     headerWrap: true,
     headerStacked: true,
-  };
+  }),
+});
+
+export function getCalendarLayoutMetrics(viewportWidth) {
+  if (viewportWidth >= BREAKPOINTS.uhd) return LAYOUT_METRICS.uhd;
+  if (viewportWidth >= BREAKPOINTS.xl) return LAYOUT_METRICS.xl;
+  if (viewportWidth >= BREAKPOINTS.lg) return LAYOUT_METRICS.lg;
+  if (viewportWidth >= BREAKPOINTS.md) return LAYOUT_METRICS.md;
+  return LAYOUT_METRICS.sm;
 }
 
 export function getCalendarSearchLayoutMode(layout, searchOpen = false) {

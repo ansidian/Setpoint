@@ -1,15 +1,23 @@
+import { useEffect } from "react";
 import { FieldLabel } from "./CalendarEditorControls";
 import { textFieldStyle } from "./calendarEditorUtils";
 
 export default function CalendarEventTitleField({
   titleRef,
-  titleInput,
+  titleInputRef,
+  titleInputKey,
   onTitleKeyDown,
   onTitleChange,
   disabled,
   isEditing,
   validationMessage,
 }) {
+  useEffect(() => {
+    if (titleRef.current && titleInputRef?.current != null) {
+      titleRef.current.value = titleInputRef.current;
+    }
+  }, [titleInputKey, titleInputRef, titleRef]);
+
   return (
     <div>
       <FieldLabel>Title</FieldLabel>
@@ -19,7 +27,7 @@ export default function CalendarEventTitleField({
         data-calendar-editor-primary="true"
         type="text"
         aria-label="Event title"
-        value={titleInput}
+        defaultValue=""
         onKeyDown={onTitleKeyDown}
         onChange={onTitleChange}
         disabled={disabled}

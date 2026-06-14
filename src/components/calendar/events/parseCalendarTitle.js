@@ -36,9 +36,15 @@ const TEMPORAL_START_WORDS = new Set([
   "next",
   "this",
 ]);
+const RECURRENCE_TOKEN_RE = /\b(?:every|daily|weekly|monthly|yearly|annually|biweekly|first|1st|second|2nd|third|3rd|fourth|4th|last)\b/i;
 
 function cleanWhitespace(value) {
   return String(value || "").replace(/\s{2,}/g, " ").trim();
+}
+
+function currentPacificDate(now) {
+  const current = laComponents(now);
+  return toYmd(current.year, current.month + 1, current.day);
 }
 
 function timePartsFromString(value) {
@@ -155,6 +161,21 @@ function isSourceProducer(token) {
 
 function isLocationProducer(token) {
   return String(token || "").startsWith("@");
+}
+
+function hasCalendarAssistSyntax(title) {
+  if (!title) return false;
+  const tokens = cleanWhitespace(title).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  if (RECURRENCE_TOKEN_RE.test(title)) return true;
+  return tokens.some((token) => {
+    const normalized = token.toLowerCase().replace(/[.,]$/g, "");
+    return isLocationProducer(token)
+      || isSourceProducer(normalized)
+      || TEMPORAL_START_WORDS.has(normalized)
+      || DATE_LIKE_TOKEN_RE.test(normalized)
+      || TIME_LIKE_TOKEN_RE.test(normalized);
+  });
 }
 
 function isTemporalBoundary(tokens, index, now) {
@@ -338,6 +359,32 @@ export function parseCalendarTitle(input, options = {}) {
       sourceQuery: "",
       parsedDateTime: null,
       singleDraft: null,
+      batchDrafts: [],
+      recurrenceDraft: null,
+      preview: "",
+    };
+  }
+
+  if (!hasCalendarAssistSyntax(trimmed)) {
+    const startDate = baseDate || currentPacificDate(now);
+    return {
+      rawTitle,
+      mode: "single",
+      cleanTitle: trimmed,
+      titleAfterSourceCommit: "",
+      titleAfterLocationCommit: "",
+      matchedText: "",
+      locationQuery: "",
+      sourceQuery: "",
+      parsedDateTime: null,
+      singleDraft: {
+        title: trimmed,
+        allDay: false,
+        startDate,
+        endDate: startDate,
+        startTime: defaultStartTime,
+        endTime: defaultEndTime,
+      },
       batchDrafts: [],
       recurrenceDraft: null,
       preview: "",

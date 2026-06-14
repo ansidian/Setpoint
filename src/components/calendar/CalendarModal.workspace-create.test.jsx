@@ -4,6 +4,10 @@ import "./CalendarModal.test-setup.js";
 import CalendarModal from "./CalendarModal.jsx";
 import { flushAnimationFrame, pointerClick, stubRect, wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
 
+// These workspace flows wait on multi-step rAF parking cycles (1.5-2.7s each in
+// isolation); the global 10s testTimeout flakes under full-suite worker load.
+vi.setConfig({ testTimeout: 20000 });
+
 describe("CalendarModal floating event create workspace behavior", () => {
   it("opens the create event form from c and preserves the selected day seed", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -80,7 +84,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
     }
   });
 
-  it("keeps an event create workspace open while wheel-browsing the month grid", async () => {
+  it("keeps an event create workspace open across chevron month navigation", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -106,26 +110,24 @@ describe("CalendarModal floating event create workspace behavior", () => {
     fireEvent.click(screen.getByTestId("calendar-event-schedule-trigger"));
     expect(await screen.findByTestId("calendar-compact-schedule-picker")).toBeTruthy();
 
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: 100,
-      deltaMode: 0,
-      cancelable: true,
-    });
+    const headerNextButton = screen.getAllByRole("button", { name: /next month/i })
+      .find((btn) => btn.getAttribute("data-calendar-month-navigation") === "true");
+    fireEvent.click(headerNextButton);
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
     });
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
     expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
     expect(screen.getByTestId("calendar-event-start-date").textContent).toMatch(/Apr 20, 2026/i);
-    expect(screen.queryByTestId("calendar-compact-schedule-picker")).toBeNull();
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
 
-    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
+    const headerPrevButton = screen.getAllByRole("button", { name: /previous month/i })
+      .find((btn) => btn.getAttribute("data-calendar-month-navigation") === "true");
+    fireEvent.click(headerPrevButton);
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
     });
     expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
   });
@@ -153,28 +155,23 @@ describe("CalendarModal floating event create workspace behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /new event on apr 20/i }));
     expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
 
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: 100,
-      deltaMode: 0,
-      cancelable: true,
-    });
+    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
     });
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
 
     pointerClick(screen.getByRole("button", { name: /previous month/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
     });
     expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
   });
 
-  it("parks a clean event create workspace when month navigation immediately follows opening it", async () => {
+  it("preserves a clean event create workspace when month navigation immediately follows opening it", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -206,7 +203,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
     });
     expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
   });
@@ -293,7 +289,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/June\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
     });
 
     pointerClick(screen.getByRole("button", { name: /previous month/i }));
@@ -301,7 +296,6 @@ describe("CalendarModal floating event create workspace behavior", () => {
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
     });
 
     await act(async () => {
@@ -356,11 +350,7 @@ describe("CalendarModal floating event create workspace behavior", () => {
       target: { value: "Rough hold" },
     });
 
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: 100,
-      deltaMode: 0,
-      cancelable: true,
-    });
+    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);

@@ -8,6 +8,7 @@ export function buildCalendarGridCellModel({
   currentMonth,
   currentYear,
   eventDateCells,
+  cellGhosts: providedCellGhosts = null,
   ghostPreview,
   itemsByDate,
   itemsByDay,
@@ -39,7 +40,7 @@ export function buildCalendarGridCellModel({
         totalCount: dayState.activeCount || 0,
       }
     : dayState;
-  const cellGhosts = getCellGhosts(ghostPreview, cell.dateKey);
+  const cellGhosts = providedCellGhosts || getCellGhosts(ghostPreview, cell.dateKey);
   const cellItems = activeView.getDayState
     ? resolvedDayState
     : rawItems;

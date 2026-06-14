@@ -34,7 +34,7 @@ describe("CalendarModal Todoist editor behavior", () => {
     expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
   });
 
-  it("keeps a Todoist create workspace open and closes transient panels while wheel-browsing the month grid", async () => {
+  it("keeps a Todoist create workspace open across chevron month navigation", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -59,31 +59,29 @@ describe("CalendarModal Todoist editor behavior", () => {
     fireEvent.click(screen.getByTestId("todoist-due-trigger"));
     expect(await screen.findByRole("dialog", { name: /todoist due date picker/i })).toBeTruthy();
 
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: 100,
-      deltaMode: 0,
-      cancelable: true,
-    });
+    const headerNextButton = screen.getAllByRole("button", { name: /next month/i })
+      .find((btn) => btn.getAttribute("data-calendar-month-navigation") === "true");
+    fireEvent.click(headerNextButton);
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
     });
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
     expect(screen.getByTestId("todoist-inline-editor")).toBe(editor);
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
     expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
-    expect(screen.queryByRole("dialog", { name: /todoist due date picker/i })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
+    const headerPrevButton = screen.getAllByRole("button", { name: /previous month/i })
+      .find((btn) => btn.getAttribute("data-calendar-month-navigation") === "true");
+    fireEvent.click(headerPrevButton);
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("day-cell");
     });
     expect(screen.getByDisplayValue("Submit lab notes")).toBeTruthy();
   });
 
-  it("keeps a Todoist edit workspace open while wheel-browsing the month grid", async () => {
+  it("keeps a Todoist edit workspace open across chevron month navigation", async () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -121,27 +119,20 @@ describe("CalendarModal Todoist editor behavior", () => {
     fireEvent.click(screen.getByTestId("todoist-priority-trigger"));
     expect(await screen.findByRole("option", { name: "P2 High" })).toBeTruthy();
 
-    fireEvent.wheel(screen.getByTestId("calendar-grid-shell"), {
-      deltaY: 100,
-      deltaMode: 0,
-      cancelable: true,
-    });
+    fireEvent.click(screen.getByRole("button", { name: /next month/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May\s+2026/i);
     });
     expect(screen.getByTestId("todoist-inline-editor")).toBe(editor);
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("parked");
     expect(screen.getByDisplayValue("First task revised")).toBeTruthy();
-    expect(screen.queryByRole("option", { name: "P2 High" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /previous month/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/April\s+2026/i);
       expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-anchor-kind")).toBe("chip");
     });
     expect(screen.getByDisplayValue("First task revised")).toBeTruthy();
   });
@@ -170,42 +161,49 @@ describe("CalendarModal Todoist editor behavior", () => {
   });
 
   it("keeps a future-date deadline draft active after ghost navigation", async () => {
-    window.innerWidth = 1900;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-30T19:00:00.000Z"));
 
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        forceDeadlineOverlay
-        onViewChange={() => {}}
-        focusDate="2026-04-30"
-        focusItemId="new"
-        eventsData={{ getEvents: () => [] }}
-        billsData={{}}
-        deadlinesData={{ upcoming: [] }}
-      />,
-    ));
+    try {
+      window.innerWidth = 1900;
 
-    const input = await screen.findByPlaceholderText(/Buy groceries tomorrow/i);
-    fireEvent.change(input, {
-      target: { value: "Plan sprint May 2 2027 at 9am" },
-    });
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="events"
+          forceDeadlineOverlay
+          onViewChange={() => {}}
+          focusDate="2026-04-30"
+          focusItemId="new"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{}}
+          deadlinesData={{ upcoming: [] }}
+        />,
+      ));
 
-    expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("May 2, 2027 · 9 AM");
+      const input = await screen.findByPlaceholderText(/Buy groceries tomorrow/i);
+      fireEvent.change(input, {
+        target: { value: "Plan sprint May 2 2027 at 9am" },
+      });
 
-    await waitFor(() => {
+      expect((await screen.findByTestId("todoist-draft-preview-summary")).textContent).toContain("May 2, 2027 · 9 AM");
+
+      await waitFor(() => {
+        expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
+      }, { timeout: 1500 });
+
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 850));
+      });
+
       expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
-    }, { timeout: 1500 });
-
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 850));
-    });
-
-    expect(screen.getByTestId("calendar-month-title").textContent).toMatch(/May 2027/i);
-    expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
-    expect(screen.getByDisplayValue("Plan sprint May 2 2027 at 9am")).toBeTruthy();
-    expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 2, 2027 · 9 AM");
+      expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
+      expect(screen.getByDisplayValue("Plan sprint May 2 2027 at 9am")).toBeTruthy();
+      expect(screen.getByTestId("todoist-draft-preview-summary").textContent).toContain("May 2, 2027 · 9 AM");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("opens a blank inline Todoist editor from Shift+C in Events", async () => {

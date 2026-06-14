@@ -2,17 +2,7 @@ import { Repeat } from "lucide-react";
 import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
-import { SPAN_LANE_GAP, SPAN_LANE_HEIGHT, spanSegmentDisplay } from "./calendarEventSpanLayout.js";
-
-const GRID_ROWS = 6;
-
-function spanLaneMetrics(layout) {
-  return {
-    rowTop: layout?.tier === "uhd" || layout?.tier === "xl" ? 32 : 30,
-    height: SPAN_LANE_HEIGHT,
-    gap: SPAN_LANE_GAP,
-  };
-}
+import { spanLaneMetrics, spanSegmentDisplay } from "./calendarEventSpanLayout.js";
 
 function clickedSegmentDate(segment, event) {
   if (!event?.currentTarget || !Number.isFinite(event.clientX)) return segment.segmentStart;
@@ -105,8 +95,7 @@ function specialDateSpanTitleFit(title) {
 export default function CalendarEventSpanOverlay({
   segments,
   layout,
-  gridRowCount,
-  fillGridHeight,
+  weekRows,
   selectedItemId,
   activeSegmentId,
   onSetActive,
@@ -125,9 +114,7 @@ export default function CalendarEventSpanOverlay({
         inset: 0,
         display: "grid",
         gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-        gridTemplateRows: fillGridHeight
-          ? `repeat(${gridRowCount}, minmax(0, 1fr))`
-          : `repeat(${GRID_ROWS}, ${layout.cellHeight}px)`,
+        gridTemplateRows: `repeat(${weekRows}, ${layout.cellHeight}px)`,
         gap: layout.gridGap,
         pointerEvents: "none",
         zIndex: 7,

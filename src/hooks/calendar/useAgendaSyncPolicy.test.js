@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import useAgendaSyncPolicy from "./useAgendaSyncPolicy.js";
 
-const owningDetail = { open: true, mode: "detail", itemId: "x", dateKey: "2026-04-20", parked: true };
+const owningDetail = { open: true, mode: "detail", itemId: "x", dateKey: "2026-04-20", anchorKind: "chip" };
 
 describe("useAgendaSyncPolicy", () => {
   afterEach(() => vi.restoreAllMocks());
