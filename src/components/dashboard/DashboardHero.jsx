@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { CheckCircle, CalendarPlus } from "lucide-react";
 import { greetingFor } from "../../lib/shell-helpers";
 import { deriveFocusWindows } from "../../lib/focus-windows";
@@ -53,8 +53,11 @@ function HeroQuickActionButton({ accent, isMobile, item, onQuickAction }) {
 /**
  * DashboardHero — the single most-important block on the Dashboard.
  * Large serif greeting + AI state-of-day + weather/focus band + 3-up callouts.
+ *
+ * Wrapped in React.memo so the 2s poll loop / SSE refetch / 5-min refresh do not
+ * re-render the hero unless its (now reference-stable) data props actually change.
  */
-export default function DashboardHero({
+function DashboardHero({
   accent = "#cba6da",
   density = "comfortable",
   stack = false,
@@ -76,6 +79,13 @@ export default function DashboardHero({
     return () => clearInterval(id);
   }, []);
 
+  // Coarser clock for the Intl-heavy derivations: they all emit minute-granular
+  // labels/windows, so flooring to the minute means the 2x/min 30s tick no longer
+  // re-runs buildHeroCallouts/deriveFocusWindows/deriveOpenDaySummary on a raw-ms
+  // change that produces an identical result. Raw `now` is kept for the live time
+  // string (greet + HeroMessageBlock) which legitimately ticks every 30s.
+  const coarseNow = useMemo(() => Math.floor(now / 60000) * 60000, [now]);
+
   const greet = greetingFor(new Date(now), userName);
   const weather = liveWeather || briefing?.weather;
   const events = useMemo(
@@ -89,16 +99,16 @@ export default function DashboardHero({
   const bills = useMemo(() => liveBills || [], [liveBills]);
 
   const theCallouts = useMemo(
-    () => buildHeroCallouts({ events, deadlines, bills, now }),
-    [events, deadlines, bills, now],
+    () => buildHeroCallouts({ events, deadlines, bills, now: coarseNow }),
+    [events, deadlines, bills, coarseNow],
   );
   const focusWindows = useMemo(
-    () => deriveFocusWindows({ events, deadlines, now }),
-    [events, deadlines, now],
+    () => deriveFocusWindows({ events, deadlines, now: coarseNow }),
+    [events, deadlines, coarseNow],
   );
   const openDaySummary = useMemo(
-    () => deriveOpenDaySummary({ deadlines, bills, emails: null, now }),
-    [deadlines, bills, now],
+    () => deriveOpenDaySummary({ deadlines, bills, emails: null, now: coarseNow }),
+    [deadlines, bills, coarseNow],
   );
 
   const compact = density === "compact";
@@ -239,3 +249,5 @@ export default function DashboardHero({
     </div>
   );
 }
+
+export default memo(DashboardHero);

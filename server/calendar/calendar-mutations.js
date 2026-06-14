@@ -6,6 +6,7 @@ import {
   getRawEvent,
   googleCalendarFetch,
   ifMatchHeaders,
+  invalidateCalendarListCache,
   isGoogleEventAlreadyExistsError,
   isGoogleEventNotFoundError,
   listCalendarsForAccount,
@@ -167,7 +168,7 @@ async function getRecurringMutationContext(account, calendarId, eventId, input =
   const parentEventId = input.recurringEventId || selected.event.recurringEventId || selected.event.id;
   const parentEvent = parentEventId === selected.event.id
     ? selected.event
-    : (await getRawEvent(account, calendarId, parentEventId)).event;
+    : (await getRawEvent(account, calendarId, parentEventId, { auth: selected.auth })).event;
 
   return {
     ...selected,
@@ -178,7 +179,7 @@ async function getRecurringMutationContext(account, calendarId, eventId, input =
   };
 }
 
-export async function createCalendarEvent(account, input) {
+async function createCalendarEventImpl(account, input) {
   const { auth, calendar } = await getWritableCalendarContext(account, input.calendarId);
   const payload = toCalendarMutationPayload(input);
   const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
@@ -209,7 +210,7 @@ async function patchSingleCalendarEvent(account, { auth, calendar, event, eventI
   return normalizeGoogleEvent({ account, calendar, event: await res.json() });
 }
 
-export async function updateCalendarEvent(account, eventId, input) {
+async function updateCalendarEventImpl(account, eventId, input) {
   const scope = input.scope || null;
   const sourceCalendarId = input.sourceCalendarId || input.calendarId;
   const targetCalendarId = input.calendarId;
@@ -361,7 +362,7 @@ export async function updateCalendarEvent(account, eventId, input) {
   return normalizeGoogleEvent({ account, calendar, event: await inserted.json() });
 }
 
-export async function deleteCalendarEvent(account, eventId, input) {
+async function deleteCalendarEventImpl(account, eventId, input) {
   const scope = input.scope || null;
   const { auth, event } = await getMutableEventContext(account, input.calendarId, eventId);
 
@@ -414,4 +415,31 @@ export async function deleteCalendarEvent(account, eventId, input) {
     body: { recurrence: trimmedRecurrence },
     headers: ifMatchHeaders(recurring.parentEvent.etag || input.etag),
   });
+}
+
+// Public mutation entry points invalidate the cached calendar list for the
+// account on completion, so the next /range or /calendars read re-fetches a
+// fresh list rather than serving a pre-write snapshot for up to the cache TTL.
+export async function createCalendarEvent(account, input) {
+  try {
+    return await createCalendarEventImpl(account, input);
+  } finally {
+    invalidateCalendarListCache(account?.id);
+  }
+}
+
+export async function updateCalendarEvent(account, eventId, input) {
+  try {
+    return await updateCalendarEventImpl(account, eventId, input);
+  } finally {
+    invalidateCalendarListCache(account?.id);
+  }
+}
+
+export async function deleteCalendarEvent(account, eventId, input) {
+  try {
+    return await deleteCalendarEventImpl(account, eventId, input);
+  } finally {
+    invalidateCalendarListCache(account?.id);
+  }
 }

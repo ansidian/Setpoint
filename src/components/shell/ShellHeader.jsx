@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   AnalyticsTriggerButton,
   OverflowMenu,
@@ -15,8 +15,12 @@ import { resolveShellTabHotkey } from "../dashboard/dashboardShellModel.js";
  * ShellHeader — top chrome for the dashboard/inbox shell.
  * Tabs are hotkey-indexed (1 = dashboard, 2 = inbox). ⌘K opens the palette.
  * Sync now refreshes current dashboard data.
+ *
+ * Wrapped in React.memo: its callback props are now referentially stable from
+ * DashboardShell, so the header chrome no longer re-renders on every dashboard
+ * data refetch.
  */
-export default function ShellHeader({
+function ShellHeader({
   isMobile = false,
   tab,
   onTab,
@@ -154,3 +158,5 @@ export default function ShellHeader({
     </div>
   );
 }
+
+export default memo(ShellHeader);

@@ -1,9 +1,10 @@
 import db from "../db/connection.js";
-import { getAccessToken, fetchEmails, fetchEmailsByIds, isMessageRead } from "./gmail.js";
+import { getAccessToken, fetchEmails, fetchEmailsByIds, isMessageRead, chunkArray } from "./gmail.js";
 import { indexEmails } from "./email-index.js";
 import {
   attachArrivalGraceEmailToActiveSnapshot,
   markProviderRemovedFromActiveSnapshots,
+  getOrCreateActiveSnapshot,
 } from "../snapshots/snapshot-service.js";
 import { ARRIVAL_GRACE_SOURCE, arrivalGraceDeadline } from "../snapshots/arrival-grace.js";
 
@@ -11,6 +12,13 @@ const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_PAGES = 20;
 const GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS = 14 * 24;
+// SQLite caps bound parameters per statement; chunk uid IN lists to stay well
+// under it (mirrors EMAIL_INDEX_LOOKUP_CHUNK_SIZE in email-index.js).
+const GMAIL_ROW_LOOKUP_CHUNK_SIZE = 500;
+// Bound the parallel per-message metadata fetches during reconciliation (mirrors
+// the chunk size fetchMessages uses) so a large label-change burst does not open
+// hundreds of simultaneous Gmail requests.
+const GMAIL_METADATA_FETCH_CHUNK_SIZE = 15;
 
 function decodeBase64UrlJson(value) {
   if (!value || typeof value !== "string") {
@@ -366,27 +374,69 @@ function triageStatementsForEmail(userId, accountId, email, {
   ];
 }
 
+// Resolve every account_id that holds indexed rows for this Gmail mailbox: the
+// synced account plus any sibling ids carrying the same canonical email under a
+// stale account_id (re-OAuth / canonical drift). One DISTINCT lookup returns a
+// tiny id set instead of the wide all-rows scan the caller used to materialize.
+async function resolveGmailMailboxAccountIds(account, dbClient) {
+  const ids = new Set();
+  for (const id of [account.id, account.uid_account_id, account.canonical_id]) {
+    if (id) ids.add(id);
+  }
+  const email = account.email || "";
+  if (email) {
+    const result = await dbClient.execute({
+      sql: `SELECT DISTINCT account_id
+            FROM ea_email_index
+            WHERE user_id = ?
+              AND uid LIKE 'gmail-%'
+              AND lower(account_email) = lower(?)`,
+      args: [account.user_id, email],
+    });
+    for (const row of result.rows) {
+      if (row.account_id) ids.add(row.account_id);
+    }
+  }
+  return [...ids];
+}
+
 async function findExistingGmailRowsForMessageIds(account, messageIds, dbClient) {
   const uniqueMessageIds = [...new Set(messageIds)].filter(Boolean);
   if (!uniqueMessageIds.length) return new Map();
 
-  const result = await dbClient.execute({
-    sql: `SELECT uid, account_id, account_email
-          FROM ea_email_index
-          WHERE user_id = ?
-            AND uid LIKE 'gmail-%'
-            AND (
-              account_id = ?
-              OR lower(account_email) = lower(?)
-            )`,
-    args: [account.user_id, account.id, account.email || ""],
-  });
+  // P1-5: query the uid PRIMARY KEY with chunked IN lists for exactly the
+  // candidate uids (gmail-<accountId>-<messageId>) instead of scanning the whole
+  // gmail slice of ea_email_index and filtering messageIds in JS. Candidate uids
+  // are built from (accountId, messageId) pairs and mapped back to their
+  // messageId, which is robust to account_ids that themselves contain dashes.
+  const accountIds = await resolveGmailMailboxAccountIds(account, dbClient);
+  if (!accountIds.length) return new Map();
+
+  const uidToMessageId = new Map();
+  for (const accountId of accountIds) {
+    for (const messageId of uniqueMessageIds) {
+      uidToMessageId.set(`gmail-${accountId}-${messageId}`, messageId);
+    }
+  }
+  const candidateUids = [...uidToMessageId.keys()];
+
   const rowsByMessageId = new Map();
-  for (const messageId of uniqueMessageIds) {
-    const suffix = `-${messageId}`;
-    const candidates = result.rows.filter((row) => String(row.uid || "").endsWith(suffix));
-    if (!candidates.length) continue;
-    rowsByMessageId.set(messageId, candidates);
+  for (let i = 0; i < candidateUids.length; i += GMAIL_ROW_LOOKUP_CHUNK_SIZE) {
+    const chunk = candidateUids.slice(i, i + GMAIL_ROW_LOOKUP_CHUNK_SIZE);
+    const result = await dbClient.execute({
+      sql: `SELECT uid, account_id, account_email
+            FROM ea_email_index
+            WHERE user_id = ?
+              AND uid IN (${chunk.map(() => "?").join(",")})`,
+      args: [account.user_id, ...chunk],
+    });
+    for (const row of result.rows) {
+      const messageId = uidToMessageId.get(row.uid);
+      if (!messageId) continue;
+      const bucket = rowsByMessageId.get(messageId);
+      if (bucket) bucket.push(row);
+      else rowsByMessageId.set(messageId, [row]);
+    }
   }
   return rowsByMessageId;
 }
@@ -399,17 +449,32 @@ async function reconcileReadStateForExistingMessages(account, messageIds, {
   if (!uniqueMessageIds.length) return 0;
 
   const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, uniqueMessageIds, dbClient);
+  const pendingIds = uniqueMessageIds.filter((messageId) => (rowsByMessageId.get(messageId) || []).length);
+  if (!pendingIds.length) return 0;
+
+  // P2-13: fetch the authoritative per-message read state in bounded parallel
+  // chunks instead of one serial GET per id; build the UPDATE statements from the
+  // resolved results, then apply them in a single batch as before.
   const statements = [];
-  for (const messageId of uniqueMessageIds) {
-    const rows = rowsByMessageId.get(messageId) || [];
-    if (!rows.length) continue;
-    try {
-      const read = await fetchMessageReadStateFn(account, messageId);
+  for (const chunk of chunkArray(pendingIds, GMAIL_METADATA_FETCH_CHUNK_SIZE)) {
+    const results = await Promise.all(chunk.map((messageId) =>
+      Promise.resolve()
+        .then(() => fetchMessageReadStateFn(account, messageId))
+        .then((read) => ({ messageId, read }))
+        .catch((err) => ({ messageId, error: err })),
+    ));
+    for (const { messageId, read, error } of results) {
+      if (error) {
+        console.warn(
+          `[Gmail Sync] Failed to reconcile read state for ${account.email}/${messageId}: ${error.message}`,
+        );
+        continue;
+      }
       if (read == null) {
         console.warn(`[Gmail Sync] Could not confirm read state for ${account.email}/${messageId}`);
         continue;
       }
-      for (const row of rows) {
+      for (const row of rowsByMessageId.get(messageId) || []) {
         statements.push({
           sql: `UPDATE ea_email_index
                 SET read = ?
@@ -419,10 +484,6 @@ async function reconcileReadStateForExistingMessages(account, messageIds, {
           args: [read ? 1 : 0, account.user_id, row.account_id, row.uid],
         });
       }
-    } catch (err) {
-      console.warn(
-        `[Gmail Sync] Failed to reconcile read state for ${account.email}/${messageId}: ${err.message}`,
-      );
     }
   }
   if (statements.length) await dbClient.batch(statements);
@@ -446,13 +507,28 @@ async function reconcileProviderRemovalForExistingMessages(account, removalEvent
   if (!messageIds.length) return 0;
 
   const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, messageIds, dbClient);
+  const pendingIds = messageIds.filter((messageId) => (rowsByMessageId.get(messageId) || []).length);
+  if (!pendingIds.length) return 0;
+
+  // P2-13: fetch each message's metadata in bounded parallel chunks; the snapshot
+  // write-backs (markProviderRemovedFromActiveSnapshots) still run sequentially
+  // after the fetch so ordering and the removed count are unchanged.
   let removed = 0;
-  for (const messageId of messageIds) {
-    const rows = rowsByMessageId.get(messageId) || [];
-    if (!rows.length) continue;
-    const eventTypes = removalEvents.get(messageId) || new Set();
-    try {
-      const metadata = await fetchMessageMetadataFn(account, messageId);
+  for (const chunk of chunkArray(pendingIds, GMAIL_METADATA_FETCH_CHUNK_SIZE)) {
+    const results = await Promise.all(chunk.map((messageId) =>
+      Promise.resolve()
+        .then(() => fetchMessageMetadataFn(account, messageId))
+        .then((metadata) => ({ messageId, metadata }))
+        .catch((err) => ({ messageId, error: err })),
+    ));
+    for (const { messageId, metadata, error } of results) {
+      if (error) {
+        console.warn(
+          `[Gmail Sync] Failed to reconcile provider removal for ${account.email}/${messageId}: ${error.message}`,
+        );
+        continue;
+      }
+      const eventTypes = removalEvents.get(messageId) || new Set();
       let providerState = providerStateFromMetadata(metadata);
       if (!providerState && eventTypes.has("message_deleted")) providerState = "trashed";
       if (!providerState && eventTypes.has("trash_added")) providerState = "trashed";
@@ -463,7 +539,7 @@ async function reconcileProviderRemovalForExistingMessages(account, removalEvent
         }
         continue;
       }
-      for (const row of rows) {
+      for (const row of rowsByMessageId.get(messageId) || []) {
         await markProviderRemovedFromActiveSnapshots(
           account.user_id,
           row.account_id,
@@ -473,10 +549,6 @@ async function reconcileProviderRemovalForExistingMessages(account, removalEvent
         );
         removed++;
       }
-    } catch (err) {
-      console.warn(
-        `[Gmail Sync] Failed to reconcile provider removal for ${account.email}/${messageId}: ${err.message}`,
-      );
     }
   }
   return removed;
@@ -649,11 +721,17 @@ export async function syncGmailHistoryForAccount(account, {
     args: [lastHistoryId, now.toISOString(), "", account.user_id, account.id],
   });
   await dbClient.batch(statements);
-  for (const email of emails) {
-    await attachArrivalGraceEmailToActiveSnapshot(account.user_id, account.id, email, {
-      dbClient,
-      now,
-    });
+  if (emails.length) {
+    // P2-23: resolve the active snapshot once for the whole batch instead of
+    // re-resolving it (3 queries) inside attach for every new email.
+    const snapshot = await getOrCreateActiveSnapshot(account.user_id, { dbClient, now });
+    for (const email of emails) {
+      await attachArrivalGraceEmailToActiveSnapshot(account.user_id, account.id, email, {
+        dbClient,
+        now,
+        snapshot,
+      });
+    }
   }
 
   return {
@@ -676,11 +754,14 @@ export async function enqueueEmailTriageForEmails(userId, emails, {
     triageStatementsForEmail(userId, email.account_id, email, { arrivalGrace, now }),
   );
   if (statements.length) await dbClient.batch(statements);
-  if (arrivalGrace) {
+  if (arrivalGrace && emails.length) {
+    // P2-23: hoist active-snapshot resolution out of the per-email loop.
+    const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now });
     for (const email of emails) {
       await attachArrivalGraceEmailToActiveSnapshot(userId, email.account_id, email, {
         dbClient,
         now,
+        snapshot,
       });
     }
   }

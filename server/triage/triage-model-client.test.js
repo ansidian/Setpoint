@@ -79,6 +79,7 @@ afterEach(() => {
 describe("triage model client", () => {
   it("dispatches anthropic tiers with the triage tool and system prompt", async () => {
     process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
+    vi.spyOn(console, "log").mockImplementation(() => {});
     const fetchImpl = vi.fn(async () => anthropicResponse());
     const client = createTriageModelClient({ fetchImpl });
 
@@ -90,7 +91,11 @@ describe("triage model client", () => {
     const body = JSON.parse(options.body);
     expect(body.model).toBe("claude-sonnet-4-6");
     expect(body.tool_choice).toEqual({ type: "tool", name: "submit_email_triage" });
-    expect(body.system).toContain("Classify one email");
+    // System is now an ephemeral-cacheable block array; the tool carries a
+    // matching cache_control so the tools+system prefix is one cache breakpoint.
+    expect(body.system[0].text).toContain("Classify one email");
+    expect(body.system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(body.tools[0].cache_control).toEqual({ type: "ephemeral" });
     expect(body.messages[0].content).toContain("Routing reason: hard_risk_override");
     expect(result).toMatchObject({
       provider: "anthropic",

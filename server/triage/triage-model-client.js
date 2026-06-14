@@ -137,6 +137,15 @@ function logOpenAITriageCacheUsage({ tier, model, usage, cacheKey }) {
   );
 }
 
+function logAnthropicTriageCacheUsage({ tier, model, usage }) {
+  console.log(
+    `[Email Triage] Anthropic cache tier=${tier} model=${model} `
+    + `input=${usage?.input_tokens ?? "?"} output=${usage?.output_tokens ?? "?"} `
+    + `cache_read=${Number(usage?.cache_read_input_tokens ?? 0) || 0} `
+    + `cache_creation=${Number(usage?.cache_creation_input_tokens ?? 0) || 0}`,
+  );
+}
+
 function isOpenAICacheParameterError(status, text) {
   return Number(status) === 400 && /prompt_cache_(key|retention)/i.test(String(text || ""));
 }
@@ -321,8 +330,19 @@ export function createTriageModelClient({
         body: JSON.stringify({
           model: choice.model,
           max_tokens: 500,
-          system: TRIAGE_SYSTEM_PROMPT,
-          tools: [TRIAGE_TOOL],
+          // Mark the stable prefix (tools render before system) as ephemeral
+          // cacheable so repeated classifications in a tick reuse it instead of
+          // re-billing the prompt + schema. Prompt caching is GA — no beta
+          // header needed. Only the per-email user turn stays uncached.
+          // NB: caching engages only when the system+tools prefix exceeds the
+          // model's minimum cacheable size (2048 tok Sonnet, 4096 tok Haiku);
+          // below that it is a harmless no-op (cache_read stays 0).
+          system: [{
+            type: "text",
+            text: TRIAGE_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          }],
+          tools: [{ ...TRIAGE_TOOL, cache_control: { type: "ephemeral" } }],
           tool_choice: { type: "tool", name: "submit_email_triage" },
           messages: [{
             role: "user",
@@ -335,6 +355,11 @@ export function createTriageModelClient({
         throw Object.assign(new Error(`Anthropic triage API error (${res.status})${text ? `: ${text}` : ""}`), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
       }
       const data = await res.json();
+      logAnthropicTriageCacheUsage({
+        tier,
+        model: data.model || choice.model,
+        usage: data.usage || {},
+      });
       return {
         decision: extractAnthropicToolInput(data),
         usage: data.usage || {},

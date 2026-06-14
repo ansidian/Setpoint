@@ -35,7 +35,7 @@ export function pendingSecurityGraceLabel(classifyAtMs, nowMs = Date.now()) {
   return "Triage delayed";
 }
 
-export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = {}, { nowMs = Date.now() } = {}) {
+export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = {}) {
   if (!activeSnapshot?.snapshot) return [];
   const accountMap = new Map((activeSnapshot.filters?.accounts || []).map((account) => [
     account.account_id,
@@ -107,9 +107,9 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
         _untriagedRead: untriagedRead,
         _pendingSecurityGrace: pendingSecurityGrace,
         _pendingSecurityGraceAt: pendingSecurityGraceAt,
-        _pendingSecurityGraceLabel: pendingSecurityGrace
-          ? pendingSecurityGraceLabel(pendingSecurityGraceAt, nowMs)
-          : null,
+        // The human countdown label is computed live in EmailRow / LiveEmailNotice
+        // from _pendingSecurityGraceAt + the controller's nowTick, so it advances
+        // on each tick instead of freezing at row-build time.
         urgentFlag: item.escalation_badge
           ? { label: item.escalation_badge }
           : item.urgency === "high"

@@ -58,42 +58,47 @@ export default function SearchableDropdown({ options, value, onChange, placehold
           onPointerDown={(e) => e.stopPropagation()}
           className="w-[var(--anchor-width)] rounded bg-elevated border border-white/10 p-0 shadow-modal"
         >
-          <Command
-            className="bg-transparent"
-          >
-            <CommandInput
-              value={search}
-              onValueChange={setSearch}
-              placeholder={allowCreate ? "Search or type new..." : "Search..."}
-            />
-            <CommandList className="max-h-[180px]">
-              <CommandEmpty className="py-2 text-xs text-muted-foreground/50">No matches</CommandEmpty>
-              <CommandGroup>
-                {options.map(o => (
-                  <CommandItem
-                    key={o.id}
-                    value={o.name}
-                    onSelect={() => { onChange(o.id); setOpen(false); setSearch(""); }}
-                    data-checked={o.id === value ? "true" : undefined}
-                    className="text-[13px] text-foreground/80 cursor-pointer transition-all duration-150"
-                  >
-                    {o.name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-              {showCreateOption && (
+          {/* PopoverContent is keepMounted (shared popover.tsx default), so the
+              option DOM would otherwise persist while closed. Build the Command
+              body only when open and tear it down on close. */}
+          {open && (
+            <Command
+              className="bg-transparent"
+            >
+              <CommandInput
+                value={search}
+                onValueChange={setSearch}
+                placeholder={allowCreate ? "Search or type new..." : "Search..."}
+              />
+              <CommandList className="max-h-[180px]">
+                <CommandEmpty className="py-2 text-xs text-muted-foreground/50">No matches</CommandEmpty>
                 <CommandGroup>
-                  <CommandItem
-                    value={trimmedSearch}
-                    onSelect={handleCreate}
-                    className="text-primary"
-                  >
-                    <span className="text-sm">+</span> Create &ldquo;{trimmedSearch}&rdquo;
-                  </CommandItem>
+                  {options.map(o => (
+                    <CommandItem
+                      key={o.id}
+                      value={o.name}
+                      onSelect={() => { onChange(o.id); setOpen(false); setSearch(""); }}
+                      data-checked={o.id === value ? "true" : undefined}
+                      className="text-[13px] text-foreground/80 cursor-pointer transition-all duration-150"
+                    >
+                      {o.name}
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
+                {showCreateOption && (
+                  <CommandGroup>
+                    <CommandItem
+                      value={trimmedSearch}
+                      onSelect={handleCreate}
+                      className="text-primary"
+                    >
+                      <span className="text-sm">+</span> Create &ldquo;{trimmedSearch}&rdquo;
+                    </CommandItem>
+                  </CommandGroup>
+                )}
+              </CommandList>
+            </Command>
+          )}
         </PopoverContent>
       </Popover>
     </div>

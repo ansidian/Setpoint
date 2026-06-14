@@ -99,6 +99,10 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
   dbClient = db,
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
+  // P2-23: callers attaching a batch of new emails can resolve the active
+  // snapshot once and pass it here, so each email skips the 3-query
+  // getOrCreateActiveSnapshot. The active snapshot is invariant across a batch.
+  snapshot: providedSnapshot = null,
 } = {}) {
   const emailId = email?.uid || email?.email_id || email?.id;
   if (!userId || !accountId || !emailId) return null;
@@ -126,7 +130,7 @@ export async function attachArrivalGraceEmailToActiveSnapshot(userId, accountId,
   if (!triageRow?.id) return null;
 
   const scheduledFor = triageRow.scheduled_for || arrivalGraceDeadline(now);
-  const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
+  const snapshot = providedSnapshot || await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   const write = await dbClient.execute({
     sql: `INSERT INTO ea_briefing_snapshot_items
             (snapshot_id, triage_id, user_id, account_id, email_id,

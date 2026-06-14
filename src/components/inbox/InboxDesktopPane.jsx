@@ -6,6 +6,7 @@ import InboxUndoToast from "./InboxUndoToast";
 
 export default function InboxDesktopPane({
   accent,
+  nowTick,
   briefingSummary,
   briefingGeneratedAt,
   liveEmailsLoading = false,
@@ -23,12 +24,11 @@ export default function InboxDesktopPane({
   searchRef,
   selectedEmail,
   selectedAccount,
-  setSelectedId,
+  onOpen,
   closeSelectedEmail,
   billOpen,
   setBillOpen,
-  accountsById,
-  indexedSearchAccountsById,
+  rowAccountsById,
   indexedSearchActive,
   indexedSearchLoading,
   indexedSearchError,
@@ -58,10 +58,6 @@ export default function InboxDesktopPane({
   undo,
   onUndo,
 }) {
-  const rowAccountsById = indexedSearchActive
-    ? { ...accountsById, ...indexedSearchAccountsById }
-    : accountsById;
-
   return (
     <div
       data-testid="inbox-desktop-view"
@@ -132,10 +128,11 @@ export default function InboxDesktopPane({
           >
             <InboxList
               accent={accent}
+              nowTick={nowTick}
               emails={visibleEmails}
               accountsById={rowAccountsById}
               selectedId={selectedEmail?.id || selectedEmail?.uid || null}
-              onOpen={(email) => setSelectedId(email.id || email.uid)}
+              onOpen={onOpen}
               density={density}
               layout={indexedSearchActive ? "flat" : grouping}
               showPreview={showPreview}

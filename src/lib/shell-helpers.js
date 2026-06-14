@@ -139,11 +139,15 @@ export function getEventSelectionId(ev) {
   );
 }
 
+// Module-level singleton so dayBucket (called once per timeline/hero item on
+// every 30s tick) does not allocate a fresh Intl.DateTimeFormat per call.
+const PACIFIC_YMD_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
 // Bucket an instant-in-ms into a day offset relative to today (Pacific tz).
 export function dayBucket(ms, now = Date.now()) {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
-  });
+  const fmt = PACIFIC_YMD_FORMATTER;
   const todayYMD = fmt.format(new Date(now));
   const itemYMD = fmt.format(new Date(ms));
   const today = new Date(`${todayYMD}T12:00:00`).getTime();

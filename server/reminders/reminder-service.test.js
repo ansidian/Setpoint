@@ -95,6 +95,45 @@ describe("reminder service", () => {
     }, { dbClient: db })).toEqual([]);
   });
 
+  it("returns recompute mutations without executing them in collect mode (P2-21)", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-collect",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T17:00:00.000Z",
+      offsetMinutes: -30,
+    }, { dbClient: db, idFactory: () => "collect-1" });
+
+    const statements = await recomputeUnsentRemindersForSource({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-collect",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T18:00:00.000Z",
+    }, { dbClient: db, now: "2026-05-10T16:00:00.000Z", collect: true });
+
+    // Collect mode returns the mutation as data and does NOT touch the DB...
+    expect(Array.isArray(statements)).toBe(true);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].sql).toContain("UPDATE ea_reminders");
+    const before = await listRemindersForSource({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-collect",
+    }, { dbClient: db });
+    expect(before[0].remind_at).toBe("2026-05-10T16:30:00.000Z");
+
+    // ...and the returned statements apply the recompute when batched.
+    await db.batch(statements);
+    const after = await listRemindersForSource({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-collect",
+    }, { dbClient: db });
+    expect(after[0].remind_at).toBe("2026-05-10T17:30:00.000Z");
+  });
+
   it("cancels pending reminders that become untriggerable after an anchor moves into the past", async () => {
     await createReminder({
       userId: "u1",

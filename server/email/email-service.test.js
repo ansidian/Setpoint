@@ -261,6 +261,56 @@ describe("searchEmails contract", () => {
     expect(result.accounts[0].results[0].read).toBe(false);
   });
 
+  it("attaches the latest active snapshot row without dropping emails (bounded-CTE join)", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-snap-1",
+      account_id: "gmail-work",
+      account_email: "work@example.com",
+      subject: "Quarterly invoice",
+      body_snippet: "invoice attached",
+      read: 0,
+    });
+    const triage = await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, triage_status)
+            VALUES (?, ?, ?, 'pending')
+            RETURNING id`,
+      args: ["user-1", "gmail-work", "gmail-work-snap-1"],
+    });
+    const seedSnapshotItem = async ({ status, day, updatedAt }) => {
+      const snapshot = await testState.db.current.execute({
+        sql: `INSERT INTO ea_briefing_snapshots
+                (user_id, start_at, end_at, timezone, status)
+              VALUES (?, ?, ?, 'America/Los_Angeles', ?)
+              RETURNING id`,
+        // Distinct date range per snapshot (UNIQUE(user_id, start_at, end_at)).
+        args: ["user-1", `2026-05-0${day}T07:00:00.000Z`, `2026-05-0${day + 1}T07:00:00.000Z`, status],
+      });
+      await testState.db.current.execute({
+        sql: `INSERT INTO ea_briefing_snapshot_items
+                (snapshot_id, triage_id, user_id, account_id, email_id,
+                 lane_at_snapshot, summary_at_snapshot, action_at_snapshot,
+                 urgency_at_snapshot, category_at_snapshot, subject_at_snapshot,
+                 updated_at)
+              VALUES (?, ?, ?, ?, ?, 'needs_attention', '', '', 'high', 'finance', 'Quarterly invoice', ?)`,
+        args: [snapshot.rows[0].id, triage.rows[0].id, "user-1", "gmail-work", "gmail-work-snap-1", updatedAt],
+      });
+    };
+    // An older active item, a newer active item (the one the subquery must pick),
+    // and a frozen item the active filter must ignore.
+    await seedSnapshotItem({ status: "active", day: 1, updatedAt: "2026-05-03T08:00:00.000Z" });
+    await seedSnapshotItem({ status: "active", day: 2, updatedAt: "2026-05-03T09:00:00.000Z" });
+    await seedSnapshotItem({ status: "frozen", day: 3, updatedAt: "2026-05-03T10:00:00.000Z" });
+
+    // No-text branch and FTS branch both run the snapshot join against real rows.
+    const flagOnly = await emailService.searchEmails("user-1", { q: "is:unread", limit: 5 });
+    expect(flagOnly.accounts[0].results[0].uid).toBe("gmail-work-snap-1");
+
+    const textual = await emailService.searchEmails("user-1", { q: "invoice", limit: 5 });
+    expect(textual.accounts[0].results[0].uid).toBe("gmail-work-snap-1");
+  });
+
   it("smart-ranks flag-only unread searches by usefulness and recency", async () => {
     testState.db.current = await createEmailIndexTestDb();
     await seedIndexedEmail(testState.db.current, {

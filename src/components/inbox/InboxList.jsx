@@ -71,7 +71,7 @@ function InboxSearchSkeletonRows() {
 }
 
 export default function InboxList({
-  accent, emails, accountsById,
+  accent, nowTick, emails, accountsById,
   selectedId, onOpen, density, layout, showPreview,
   searchQuery, onSearchChange, onMarkAllRead, onRefresh,
   totalCount, unreadCount, noiseUnreadCount = 0, briefingGeneratedAt, searchRef,
@@ -94,7 +94,11 @@ export default function InboxList({
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
   const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 
+  // Only the swimlane layout consumes `grouped`; flat (and mobile, which passes
+  // grouping:'flat') render `emails` directly via renderRows. Gate the O(n)
+  // bucketing + live re-sort on the layout so non-swimlane views skip it.
   const grouped = useMemo(() => {
+    if (layout !== "swimlanes") return null;
     const g = { live: [], queued: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [] };
     for (const e of emails) {
       if (e._untriaged) g.live.push(e);
@@ -104,11 +108,13 @@ export default function InboxList({
       }
     }
     // Use resurfaced_at as the sort key for woken snooze emails so they land
-    // near the top of "live" alongside freshly-arrived mail.
+    // near the top of "live" alongside freshly-arrived mail. This re-sorts the
+    // live bucket purely by date, intentionally overriding the controller's
+    // lane-order sub-sort — do NOT drop it.
     const liveKey = (e) => e._resurfacedAt || new Date(e.date).getTime();
     g.live.sort((a, b) => liveKey(b) - liveKey(a));
     return g;
-  }, [emails]);
+  }, [emails, layout]);
 
   const renderRows = (list) => list.map((email) => {
     const rowKey = email.id || email.uid;
@@ -124,6 +130,7 @@ export default function InboxList({
           density={density}
           showPreview={showPreview}
           accent={accent}
+          nowTick={nowTick}
         />
       </div>
     );

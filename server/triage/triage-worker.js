@@ -138,6 +138,29 @@ export async function recoverStaleRunningTriageJobs({
   };
 }
 
+const COMPLETED_TRIAGE_JOB_RETENTION_DAYS = 7;
+
+// P3-8: completed jobs are marked 'complete' but never deleted, so ea_triage_jobs
+// grows one durable row per email forever. Durable triage history lives in
+// ea_email_triage, so completed job rows past the retention window are safe to
+// sweep. Runs on a low-frequency cron, off the hot status='queued' claim path
+// (completed rows already sit in a separate region of idx_triage_jobs_status).
+export async function pruneCompletedTriageJobs({
+  dbClient = db,
+  retentionDays = COMPLETED_TRIAGE_JOB_RETENTION_DAYS,
+  now = new Date(),
+} = {}) {
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const result = await dbClient.execute({
+    sql: `DELETE FROM ea_triage_jobs
+          WHERE status = 'complete'
+            AND completed_at IS NOT NULL
+            AND completed_at < ?`,
+    args: [cutoff],
+  });
+  return Number(result.rowsAffected || 0);
+}
+
 function toText(value) {
   return String(value || "").toLowerCase();
 }
@@ -230,14 +253,40 @@ async function classifyWithModel(getModelClient, tier, email, reason) {
   return normalizeModelDecision(await client.classify({ tier, email, reason }), tier);
 }
 
+// P1-7: per-batch, per-user memo so a backlog drain resolves mode, rules,
+// interests, and the model client ONCE per user instead of re-reading ea_settings
+// / ea_triage_rules and rebuilding the model client for every job in the tick.
+// Pass the returned context to processNextEmailTriageJob({ batch }). Each getter
+// caches the in-flight promise, so the value is loaded at most once per user.
+export function createTriageBatchContext({ dbClient = db } = {}) {
+  const memo = (cache, key, load) => {
+    if (!cache.has(key)) cache.set(key, load());
+    return cache.get(key);
+  };
+  const modes = new Map();
+  const rules = new Map();
+  const interests = new Map();
+  const modelClients = new Map();
+  return {
+    getMode: (userId) => memo(modes, userId, () => getEmailTriageModeForUser(userId, { dbClient })),
+    getRules: (userId) => memo(rules, userId, () => loadRules(userId, dbClient)),
+    getInterests: (userId) => memo(interests, userId, () => loadEmailInterests(userId, dbClient)),
+    getModelClient: (userId) => memo(modelClients, userId, async () =>
+      createTriageModelClient({ config: await loadTriageModelConfig(userId, dbClient) })),
+  };
+}
+
 export async function routeEmailForTriage(email, {
   dbClient = db,
   modelClient,
+  batch = null,
 } = {}) {
-  const [rules, interests] = await Promise.all([
-    loadRules(email.user_id, dbClient),
-    loadEmailInterests(email.user_id, dbClient),
-  ]);
+  const [rules, interests] = batch
+    ? await Promise.all([batch.getRules(email.user_id), batch.getInterests(email.user_id)])
+    : await Promise.all([
+      loadRules(email.user_id, dbClient),
+      loadEmailInterests(email.user_id, dbClient),
+    ]);
   const preflight = evaluateTriagePreflight(email, {
     rules,
     emailInterests: interests,
@@ -247,9 +296,11 @@ export async function routeEmailForTriage(email, {
   let resolvedModelClient = modelClient;
   const getModelClient = async () => {
     if (!resolvedModelClient) {
-      resolvedModelClient = createTriageModelClient({
-        config: await loadTriageModelConfig(email.user_id, dbClient),
-      });
+      resolvedModelClient = batch
+        ? await batch.getModelClient(email.user_id)
+        : createTriageModelClient({
+          config: await loadTriageModelConfig(email.user_id, dbClient),
+        });
     }
     return resolvedModelClient;
   };
@@ -348,18 +399,18 @@ async function claimNextEmailTriageJob(dbClient, now) {
   return job;
 }
 
-async function peekNextEmailTriageJob(dbClient, now) {
-  const result = await dbClient.execute({
-    sql: `SELECT *
-          FROM ea_triage_jobs
-          WHERE job_type = 'email_triage'
-            AND status = 'queued'
-            AND (scheduled_for IS NULL OR scheduled_for <= ?)
-          ORDER BY priority ASC, created_at ASC
-          LIMIT 1`,
-    args: [nowIso(now)],
+// P2-18: return a claimed job to the queue without consuming a retry attempt
+// (claimNextEmailTriageJob incremented attempts; reset it to the pre-claim value).
+async function requeueClaimedJob(job, dbClient) {
+  await dbClient.execute({
+    sql: `UPDATE ea_triage_jobs
+          SET status = 'queued',
+              attempts = ?,
+              locked_at = NULL,
+              updated_at = datetime('now')
+          WHERE id = ?`,
+    args: [Number(job.attempts || 0), job.id],
   });
-  return result.rows[0] || null;
 }
 
 async function loadEmailForJob(job, dbClient) {
@@ -639,21 +690,28 @@ export async function processNextEmailTriageJob({
   dbClient = db,
   modelClient,
   now = new Date(),
+  batch = null,
 } = {}) {
-  const nextJob = await peekNextEmailTriageJob(dbClient, now);
-  if (!nextJob) return { processed: false };
+  // P2-18: claim the next job first (one ordered scan + UPDATE), then check
+  // paused mode using the claimed row's user_id. This eliminates the separate
+  // peek SELECT that re-ran the identical ordered scan before every claim. A
+  // paused user's claimed job is requeued with its pre-claim attempt count, so
+  // pausing never consumes retry attempts.
+  const job = await claimNextEmailTriageJob(dbClient, now);
+  if (!job) return { processed: false };
 
-  const mode = await getEmailTriageModeForUser(nextJob.user_id, { dbClient });
+  // P1-7: reuse the per-batch mode read when a batch context is supplied.
+  const mode = batch
+    ? await batch.getMode(job.user_id)
+    : await getEmailTriageModeForUser(job.user_id, { dbClient });
   if (mode.effective_email_triage_mode === "paused") {
+    await requeueClaimedJob(job, dbClient);
     return {
       processed: false,
       paused: true,
       ...mode,
     };
   }
-
-  const job = await claimNextEmailTriageJob(dbClient, now);
-  if (!job) return { processed: false };
 
   const email = await loadEmailForJob(job, dbClient);
   if (!email) {
@@ -770,7 +828,7 @@ export async function processNextEmailTriageJob({
       decision = noModelDecision(email);
       modelCalls = [];
     } else {
-      const routed = await routeEmailForTriage(email, { dbClient, modelClient });
+      const routed = await routeEmailForTriage(email, { dbClient, modelClient, batch });
       if (routed.grace) {
         const classifyAfter = await delayWeakSecurityGrace(job, email, routed.preflight, {
           dbClient,

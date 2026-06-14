@@ -11,6 +11,41 @@ import {
 import { ARRIVAL_GRACE_SOURCE } from "./arrival-grace.js";
 
 const CRON_EXPR = "*/5 * * * *"; // every 5 minutes
+// P2-20: bound how many Gmail wake-modify round-trips run at once when a cluster
+// of snoozes comes due at the same boundary (e.g. "until tomorrow 9am").
+const SNOOZE_WAKE_CONCURRENCY = 5;
+const SNOOZE_TRIAGE_LOOKUP_CHUNK_SIZE = 500;
+
+function snoozeTriageKey(accountId, emailId) {
+  return `${accountId}:${emailId}`;
+}
+
+// P2-20: load every due snooze's triage row in one (chunked) query keyed by
+// (account_id, email_id), replacing the per-row SELECT inside the wake loop.
+async function loadTriageRowsForDueSnoozes(dbClient, userId, items) {
+  const uids = [...new Set(items.filter((item) => item.accountId).map((item) => item.uid))];
+  const byKey = new Map();
+  for (let i = 0; i < uids.length; i += SNOOZE_TRIAGE_LOOKUP_CHUNK_SIZE) {
+    const chunk = uids.slice(i, i + SNOOZE_TRIAGE_LOOKUP_CHUNK_SIZE);
+    const res = await dbClient.execute({
+      sql: `SELECT account_id, email_id, triage_status, triage_source,
+                   last_triaged_at, decision_metadata_json
+            FROM ea_email_triage
+            WHERE user_id = ? AND email_id IN (${chunk.map(() => "?").join(",")})`,
+      args: [userId, ...chunk],
+    });
+    for (const row of res.rows) {
+      byKey.set(snoozeTriageKey(row.account_id, row.email_id), row);
+    }
+  }
+  return byKey;
+}
+
+async function runWithBoundedConcurrency(items, limit, worker) {
+  for (let i = 0; i < items.length; i += limit) {
+    await Promise.all(items.slice(i, i + limit).map(worker));
+  }
+}
 // Resurfaced rows live this long after wake before cleanup. Gives the client a
 // window to surface them in the live/untriaged lane; after this they're gone
 // and the email is just a normal unread in Gmail.
@@ -80,64 +115,65 @@ async function runWakeDueSnoozes({
   console.log(`[EA Snooze] Waking ${result.rows.length} snooze(s)`);
   const { accounts } = await loadUserConfigFn(userId);
 
-  for (const row of result.rows) {
+  // Parse each due row once and resolve its account up front.
+  const items = result.rows.map((row) => {
     const uid = row.email_id;
     let snap = null;
     if (row.email_snapshot) {
       try { snap = JSON.parse(row.email_snapshot); } catch { /* ignore */ }
     }
-    try {
-      const acc = accounts.find((a) => a.id === snap?.account_id || a.email === snap?.account_email);
-      if (acc?.type === "gmail") {
-        await wakeAtGmailFn(acc, uid);
+    const accountId = snap ? (snap.account_id || snap.accountId || snap._accountKey) : null;
+    const acc = accounts.find((a) => a.id === snap?.account_id || a.email === snap?.account_email);
+    return { uid, snap, accountId, acc };
+  });
+
+  // P2-20: one batched triage lookup for the whole due set instead of a SELECT
+  // per row inside the loop.
+  const triageByKey = await loadTriageRowsForDueSnoozes(dbClient, userId, items);
+
+  // P2-20: fan out the Gmail wake-modify calls (the dominant external I/O) with
+  // bounded concurrency. A wake failure is logged and the row still proceeds to
+  // its reattach + status flip, exactly as the serial path did.
+  await runWithBoundedConcurrency(
+    items.filter((item) => item.acc?.type === "gmail"),
+    SNOOZE_WAKE_CONCURRENCY,
+    async (item) => {
+      try {
+        await wakeAtGmailFn(item.acc, item.uid);
+      } catch (err) {
+        console.error(`[EA Snooze] Gmail wake-modify failed for uid=${item.uid}:`, err.message);
       }
-    } catch (err) {
-      console.error(`[EA Snooze] Gmail wake-modify failed for uid=${uid}:`, err.message);
-      // Continue to the status flip so we don't retry forever on a bad row.
-      // The email is still in Gmail under the EA/Snoozed label — user can
-      // clear it manually if it got stuck.
-    }
+    },
+  );
+
+  // Reattach + status flip stay SERIAL: each row's reattach resolves/mutates the
+  // shared active snapshot (getOrCreateActiveSnapshot), so serializing avoids
+  // racing snapshot inserts. The per-row try/catch keeps the status flip gated on
+  // a successful reattach (a failure leaves the row 'snoozed' for the next tick).
+  for (const { uid, snap, accountId } of items) {
     try {
       if (snap) {
-        const accountId = snap.account_id || snap.accountId || snap._accountKey;
-        let pendingTriage = false;
-        let pendingArrivalGrace = false;
         // P3-61: a triage row that already settled (status 'complete', stamped
         // last_triaged_at) carries the owner's real lane/summary/category. The
         // cron path must NOT re-derive those from the stale email_snapshot JSON
         // or it demotes a 'fyi'/'noise' item back toward needs_attention.
-        let completedTriage = false;
-        if (accountId) {
-          const triage = await dbClient.execute({
-            sql: `SELECT triage_status,
-                         triage_source,
-                         last_triaged_at,
-                         decision_metadata_json
-                  FROM ea_email_triage
-                  WHERE user_id = ?
-                    AND account_id = ?
-                    AND email_id = ?
-                  LIMIT 1`,
-            args: [userId, accountId, uid],
-          });
-          const triageRow = triage.rows[0];
-          pendingTriage = triageRow?.triage_status === "pending";
-          completedTriage = triageRow?.triage_status === "complete"
-            && Boolean(triageRow?.last_triaged_at);
-          let metadata = {};
-          try {
-            metadata = triageRow?.decision_metadata_json
-              ? JSON.parse(triageRow.decision_metadata_json)
-              : {};
-          } catch {
-            metadata = {};
-          }
-          pendingArrivalGrace = pendingTriage
-            && (
-              triageRow?.triage_source === ARRIVAL_GRACE_SOURCE
-              || metadata?.snoozedPending?.previousTriageSource === ARRIVAL_GRACE_SOURCE
-            );
+        const triageRow = accountId ? triageByKey.get(snoozeTriageKey(accountId, uid)) : null;
+        const pendingTriage = triageRow?.triage_status === "pending";
+        const completedTriage = triageRow?.triage_status === "complete"
+          && Boolean(triageRow?.last_triaged_at);
+        let metadata = {};
+        try {
+          metadata = triageRow?.decision_metadata_json
+            ? JSON.parse(triageRow.decision_metadata_json)
+            : {};
+        } catch {
+          metadata = {};
         }
+        const pendingArrivalGrace = pendingTriage
+          && (
+            triageRow?.triage_source === ARRIVAL_GRACE_SOURCE
+            || metadata?.snoozedPending?.previousTriageSource === ARRIVAL_GRACE_SOURCE
+          );
         if (pendingArrivalGrace && accountId) {
           await requeueArrivalGraceTriageForEmailFn(userId, accountId, uid, { dbClient, now });
           await attachArrivalGraceEmailToActiveSnapshotFn(userId, accountId, {

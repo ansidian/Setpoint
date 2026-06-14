@@ -41,7 +41,7 @@ vi.mock("@simplewebauthn/server", () => webAuthnMocks);
 process.env.EA_USER_ID = "user-1";
 process.env.EA_PASSWORD_HASH = bcrypt.hashSync("correct-password", 4);
 const authRoutes = (await import("./auth.js")).default;
-const { requireCookieSession } = await import("../middleware/auth.js");
+const { requireCookieSession, __clearSessionValidationCache } = await import("../middleware/auth.js");
 
 function makeApp() {
   const app = express();
@@ -56,6 +56,10 @@ function makeApp() {
 describe("auth routes", () => {
   beforeEach(async () => {
     testState.db.current = await createAuthTestDb();
+    // P2-27: validateSession now memoizes positive results in a module-level cache;
+    // clear it between tests so each starts from a clean DB-backed state (otherwise
+    // a prior test's cached "cookie-session" masks this test's DB-error path).
+    __clearSessionValidationCache();
     webAuthnMocks.generateAuthenticationOptions.mockClear();
     webAuthnMocks.verifyAuthenticationResponse.mockReset();
     webAuthnMocks.generateRegistrationOptions.mockClear();

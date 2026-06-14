@@ -14,6 +14,7 @@ import {
 export {
   CALENDAR_WRITE_SCOPE,
   CALENDAR_FULL_SCOPE,
+  invalidateCalendarListCache,
   listCalendarsForAccount,
 } from "./calendar-google-client.js";
 export {
@@ -69,6 +70,36 @@ export function pacificDayBoundaries(date) {
   return { dayStart, dayEnd };
 }
 
+/**
+ * Flags every timed event that strictly overlaps at least one other timed event
+ * with `flag = "Conflict"`, mutating the passed events in place. All-day events
+ * are ignored. This is a sweep-line replacement for the previous O(n^2) all-pairs
+ * scan: sort by start, keep an active set of not-yet-ended intervals, evict the
+ * ones that close before the current event begins, and any survivors overlap it.
+ * O(n log n) for n timed events; behavior-identical for real (positive-duration)
+ * calendar events.
+ */
+export function markCalendarConflicts(events) {
+  const timed = events.filter(
+    (event) => !event.allDay && Number.isFinite(event.startMs) && Number.isFinite(event.endMs),
+  );
+  timed.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+
+  const active = [];
+  for (const event of timed) {
+    for (let i = active.length - 1; i >= 0; i -= 1) {
+      if (active[i].endMs <= event.startMs) active.splice(i, 1);
+    }
+    if (active.length > 0) {
+      event.flag = "Conflict";
+      for (const other of active) other.flag = "Conflict";
+    }
+    active.push(event);
+  }
+
+  return events;
+}
+
 export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, limit } = {}) {
   const allEvents = [];
   if (!gmailAccounts?.length) return allEvents;
@@ -85,12 +116,16 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, 
   }
   const isMultiDayRange = !!(startDate && endDate);
 
-  for (const account of gmailAccounts) {
+  // Fan out per account and per calendar concurrently. Each Google fetch is an
+  // independent network round-trip; serializing them made calendar-open latency
+  // scale with (accounts × calendars). Ordering is preserved by the ordered
+  // maps + flat, so the downstream conflict/sort passes are unaffected.
+  const perAccountEvents = await Promise.all(gmailAccounts.map(async (account) => {
     try {
       const auth = await getAuthorizedAccount(account);
       const calendars = await listCalendarsForAccount(account);
 
-      for (const calendar of calendars) {
+      const perCalendarEvents = await Promise.all(calendars.map(async (calendar) => {
         const res = await googleCalendarFetch(auth, `calendars/${encodeURIComponent(calendar.id)}/events`, {
           query: {
             timeMin: rangeStart.toISOString(),
@@ -108,34 +143,28 @@ export async function fetchCalendar(gmailAccounts, { startDate, endDate, query, 
           throw err;
         });
 
-        if (!res) continue;
+        if (!res) return [];
         const data = await res.json();
-        for (const event of data.items || []) {
-          allEvents.push(normalizeGoogleEvent({
-            account,
-            calendar,
-            event,
-            isMultiDayRange,
-          }));
-        }
-      }
+        return (data.items || []).map((event) => normalizeGoogleEvent({
+          account,
+          calendar,
+          event,
+          isMultiDayRange,
+        }));
+      }));
+
+      return perCalendarEvents.flat();
     } catch (err) {
       console.error(`Calendar error for ${account.email}:`, err.message);
+      return [];
     }
+  }));
+
+  for (const events of perAccountEvents) {
+    allEvents.push(...events);
   }
 
-  for (let i = 0; i < allEvents.length; i += 1) {
-    if (allEvents[i].allDay) continue;
-    for (let j = i + 1; j < allEvents.length; j += 1) {
-      if (allEvents[j].allDay) continue;
-      const a = allEvents[i];
-      const b = allEvents[j];
-      if (a.startMs < b.endMs && b.startMs < a.endMs) {
-        a.flag = "Conflict";
-        b.flag = "Conflict";
-      }
-    }
-  }
+  markCalendarConflicts(allEvents);
 
   const nowMs = Date.now();
   const isFutureRange = startDate && startDate.getTime() > nowMs;

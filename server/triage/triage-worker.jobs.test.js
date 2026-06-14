@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.js";
-import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage-worker.js";
+import {
+  processNextEmailTriageJob,
+  recoverStaleRunningTriageJobs,
+  createTriageBatchContext,
+  pruneCompletedTriageJobs,
+} from "./triage-worker.js";
 
 describe("email triage worker jobs", () => {
   it("does not process a job when another worker claims it first", async () => {
@@ -31,7 +36,10 @@ describe("email triage worker jobs", () => {
     await expect(processNextEmailTriageJob({ dbClient }))
       .resolves
       .toEqual({ processed: false });
-    expect(dbClient.execute).toHaveBeenCalledTimes(4);
+    // P2-18: claim-first means the lost-race path is just the claim SELECT + the
+    // 0-row claim UPDATE; the previous speculative peek SELECT (and the mode read,
+    // which no longer runs when the claim is lost) are gone.
+    expect(dbClient.execute).toHaveBeenCalledTimes(2);
     });
 
   it("recovers stale running email triage and Gmail history jobs without resetting attempts", async () => {
@@ -134,6 +142,77 @@ describe("email triage worker jobs", () => {
     ]);
     await dbClient.close();
     });
+
+  it("createTriageBatchContext resolves each user's config once per batch (P1-7)", async () => {
+    const dbClient = await createMigratedDb();
+    const batch = createTriageBatchContext({ dbClient });
+
+    // Repeated lookups for the same user return the SAME in-flight promise, so
+    // the underlying ea_settings / ea_triage_rules read happens once per batch.
+    expect(batch.getMode("user-1")).toBe(batch.getMode("user-1"));
+    expect(batch.getRules("user-1")).toBe(batch.getRules("user-1"));
+    expect(batch.getInterests("user-1")).toBe(batch.getInterests("user-1"));
+    expect(batch.getModelClient("user-1")).toBe(batch.getModelClient("user-1"));
+
+    // Distinct users get distinct cache entries (per-user correctness).
+    expect(batch.getRules("user-1")).not.toBe(batch.getRules("user-2"));
+
+    await Promise.allSettled([
+      batch.getMode("user-1"),
+      batch.getRules("user-1"),
+      batch.getInterests("user-1"),
+      batch.getModelClient("user-1"),
+      batch.getRules("user-2"),
+    ]);
+  });
+
+  it("processes a queued job when driven through a batch context (P1-7)", async () => {
+    const dbClient = await createMigratedDb();
+    await queueEmail(dbClient);
+    await dbClient.execute({
+      sql: "UPDATE ea_settings SET email_triage_mode = 'no_model' WHERE user_id = ?",
+      args: ["user-1"],
+    });
+    const batch = createTriageBatchContext({ dbClient });
+
+    const result = await processNextEmailTriageJob({
+      dbClient,
+      batch,
+      now: new Date("2026-05-03T12:12:00.000Z"),
+    });
+
+    expect(result.processed).toBe(true);
+    const jobs = await dbClient.execute({
+      sql: "SELECT status FROM ea_triage_jobs WHERE email_id = ?",
+      args: ["msg-1"],
+    });
+    expect(jobs.rows[0].status).toBe("complete");
+  });
+
+  it("prunes only completed triage jobs older than the retention window (P3-8)", async () => {
+    const dbClient = await createMigratedDb();
+    const now = new Date("2026-05-10T00:00:00.000Z");
+    const oldCompletedAt = new Date("2026-05-01T00:00:00.000Z").toISOString(); // 9d > 7d
+    const recentCompletedAt = new Date("2026-05-08T00:00:00.000Z").toISOString(); // 2d < 7d
+    await dbClient.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, status, completed_at, idempotency_key)
+            VALUES
+              ('user-1', 'gmail-work', 'old-msg', 'email_triage', 'complete', ?, 'k-old'),
+              ('user-1', 'gmail-work', 'recent-msg', 'email_triage', 'complete', ?, 'k-recent'),
+              ('user-1', 'gmail-work', 'queued-msg', 'email_triage', 'queued', NULL, 'k-queued')`,
+      args: [oldCompletedAt, recentCompletedAt],
+    });
+
+    const pruned = await pruneCompletedTriageJobs({ dbClient, now });
+    expect(pruned).toBe(1);
+
+    const remaining = await dbClient.execute({
+      sql: "SELECT email_id FROM ea_triage_jobs ORDER BY email_id",
+      args: [],
+    });
+    expect(remaining.rows.map((row) => row.email_id)).toEqual(["queued-msg", "recent-msg"]);
+  });
 
   it("leaves email triage jobs queued when mode is paused", async () => {
     const dbClient = await createMigratedDb();

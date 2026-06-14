@@ -163,6 +163,7 @@ function MobileLiveLoadingBlock({ compact = false, activeSnapshotMode = false })
 
 export default function MobileInboxView({
   accent,
+  nowTick,
   briefingSummary,
   emailAccounts,
   accountId,
@@ -176,14 +177,13 @@ export default function MobileInboxView({
   mobileFilterPanelRef,
   selectedEmail,
   selectedAccount,
-  setSelectedId,
+  onOpen,
   closeSelectedEmail,
   mobileFiltersOpen,
   setMobileFiltersOpen,
   billOpen,
   setBillOpen,
-  accountsById,
-  indexedSearchAccountsById,
+  rowAccountsById,
   indexedSearchActive,
   indexedSearchLoading,
   indexedSearchError,
@@ -208,9 +208,6 @@ export default function MobileInboxView({
   undo,
   onUndo,
 }) {
-  const rowAccountsById = indexedSearchActive
-    ? { ...accountsById, ...indexedSearchAccountsById }
-    : accountsById;
   const snapshotSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
     : briefingSummary;
@@ -465,10 +462,11 @@ export default function MobileInboxView({
                   email={email}
                   account={rowAccountsById[email.accountId] || rowAccountsById[email._accountKey]}
                   selected={false}
-                  onOpen={(opened) => setSelectedId(opened.id || opened.uid)}
+                  onOpen={onOpen}
                   density={density}
                   showPreview={showPreview}
                   accent={accent}
+                  nowTick={nowTick}
                 />
               ))
             ) : (

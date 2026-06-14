@@ -74,6 +74,26 @@ export async function processDueReminderBatch({
   const due = await listDueReminders({ now: nowIso, limit }, { dbClient });
   const result = { processed: 0, sent: 0, missed: 0, failed: 0 };
 
+  // P3-11: a due batch is almost always one user's reminders, so memoize the
+  // ea_settings read and the decrypted webhook per user instead of re-reading +
+  // re-decrypting for every reminder in the loop. The decrypted URL is cached
+  // only on success, so a corrupt-webhook decrypt still throws per reminder and
+  // is handled by the per-item try/catch below (P1-10 isolation preserved).
+  const settingsByUser = new Map();
+  const webhookByUser = new Map();
+  const getDiscordSettings = async (userId) => {
+    if (!settingsByUser.has(userId)) {
+      settingsByUser.set(userId, await loadDiscordSettings(userId, { dbClient }));
+    }
+    return settingsByUser.get(userId);
+  };
+  const getDiscordWebhookUrl = (userId, encrypted) => {
+    if (webhookByUser.has(userId)) return webhookByUser.get(userId);
+    const url = decryptFn(encrypted);
+    webhookByUser.set(userId, url);
+    return url;
+  };
+
   for (const reminder of due) {
     result.processed += 1;
     // Per-item isolation (P1-10): a throw from decrypt/send/db inside one
@@ -86,7 +106,7 @@ export async function processDueReminderBatch({
         continue;
       }
 
-      const settings = await loadDiscordSettings(reminder.user_id, { dbClient });
+      const settings = await getDiscordSettings(reminder.user_id);
       if (!settings?.discord_webhook_url_encrypted) {
         await markReminderDeliveryFailed(reminder.id, {
           error: "Discord webhook not configured",
@@ -96,7 +116,7 @@ export async function processDueReminderBatch({
         continue;
       }
 
-      const webhookUrl = decryptFn(settings.discord_webhook_url_encrypted);
+      const webhookUrl = getDiscordWebhookUrl(reminder.user_id, settings.discord_webhook_url_encrypted);
       const payload = formatDiscordReminderPayload({
         reminder,
         discordUserId: settings.discord_user_id,

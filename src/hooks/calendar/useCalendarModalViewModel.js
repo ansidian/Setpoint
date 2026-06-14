@@ -24,6 +24,8 @@ export default function useCalendarModalViewModel({
   open,
   view,
   viewData,
+  visibleCalendarEvents,
+  deadlineOverlay,
   activeView,
   activeLayout,
   currentYear,
@@ -50,9 +52,23 @@ export default function useCalendarModalViewModel({
 }) {
   const headerYear = labelYear ?? viewYear;
   const headerMonth = labelMonthValue ?? viewMonth;
+  // The events view's compute reads only data.events and data.deadlineOverlay,
+  // both of which the controller already isolates into stable memos
+  // (visibleCalendarEvents / deadlineOverlay). Keying the compute memo on those
+  // narrow inputs — instead of the whole viewData object whose identity bumps on
+  // every planning-status transition (loading/readiness/stale-refresh) — keeps
+  // the O(events x days) day-expansion from re-running on pure status churn.
+  // Bills' compute reads a different data shape (schedules/payeeMap), so it
+  // stays keyed on viewData.
+  const isEventsView = view === "events";
+  const eventsComputeData = useMemo(
+    () => ({ events: visibleCalendarEvents, deadlineOverlay }),
+    [visibleCalendarEvents, deadlineOverlay],
+  );
+  const computeData = isEventsView ? eventsComputeData : viewData;
   const computed = useMemo(
-    () => activeView.compute({ data: viewData, viewYear, viewMonth, weatherData }),
-    [activeView, viewData, viewYear, viewMonth, weatherData],
+    () => activeView.compute({ data: computeData, viewYear, viewMonth, weatherData }),
+    [activeView, computeData, viewYear, viewMonth, weatherData],
   );
   const itemsByDay = useMemo(() => computed.itemsByDay || {}, [computed.itemsByDay]);
   const ghostPreview = useCalendarGhostPreview({

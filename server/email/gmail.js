@@ -1,3 +1,4 @@
+import { simpleParser } from "mailparser";
 import db from "../db/connection.js";
 import { encrypt, decrypt } from "../platform/encryption.js";
 import { htmlToPlainText } from "./html-to-text.js";
@@ -357,7 +358,6 @@ export async function fetchEmailBody(account, uid) {
   if (!res.ok) throw new Error(`Gmail fetch body failed: ${res.status}`);
   const msg = await res.json();
 
-  const { simpleParser } = await import("mailparser");
   const rawBuffer = Buffer.from(msg.raw, "base64url");
   const parsed = await simpleParser(rawBuffer);
 

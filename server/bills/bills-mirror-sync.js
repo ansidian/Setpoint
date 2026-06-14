@@ -397,10 +397,13 @@ export async function armPendingBillsMirrorRefreshes({
   now = new Date(),
 } = {}) {
   const result = await dbClient.execute({
+    // P3-12: constrain the 5-minute scan to the configured single user
+    // (EA_USER_ID is load-bearing; this matches the per-user pattern every other
+    // ea_bills_mirror_state query already uses) instead of scanning the table.
     sql: `SELECT user_id, pending_refresh_at
           FROM ea_bills_mirror_state
-          WHERE pending_refresh_at IS NOT NULL`,
-    args: [],
+          WHERE user_id = ? AND pending_refresh_at IS NOT NULL`,
+    args: [process.env.EA_USER_ID],
   });
   const dueAt = now.toISOString();
   let dueCount = 0;
@@ -535,6 +538,16 @@ async function refreshBillsMirrorInner(userId, {
     const occurrences = occurrencesFromMetadata(metadata, refreshRange)
       .map(normalizeMirrorOccurrence)
       .filter((occurrence) => occurrence.scheduleId && occurrence.next_date && occurrence.type !== "income");
+    // P2-22: instead of deleting and re-inserting the whole 18-month set every
+    // refresh, upsert the fresh rows and prune only what is no longer present.
+    const freshScheduleIds = [...new Set(occurrences.map((occurrence) => occurrence.scheduleId))];
+    const freshOccurrenceIds = [...new Set(occurrences.map((occurrence) => occurrence.id))];
+    const pruneQuery = (table, idColumn, ids) => (ids.length
+      ? {
+          sql: `DELETE FROM ${table} WHERE user_id = ? AND ${idColumn} NOT IN (${ids.map(() => "?").join(",")})`,
+          args: [userId, ...ids],
+        }
+      : { sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] });
     const queries = [
       {
         sql: `INSERT INTO ea_bills_mirror_state
@@ -549,14 +562,6 @@ async function refreshBillsMirrorInner(userId, {
                 refresh_started_at = excluded.refresh_started_at,
                 updated_at = excluded.updated_at`,
         args: [userId, actualBudgetUrl, timestamp, timestamp, timestamp],
-      },
-      {
-        sql: `DELETE FROM ea_bill_occurrence_mirror WHERE user_id = ?`,
-        args: [userId],
-      },
-      {
-        sql: `DELETE FROM ea_bill_schedule_mirror WHERE user_id = ?`,
-        args: [userId],
       },
       upsertMetadataProjectionQuery(userId, metadata, timestamp),
       ...occurrences.map((occurrence) => ({
@@ -578,9 +583,24 @@ async function refreshBillsMirrorInner(userId, {
         sql: `INSERT INTO ea_bill_occurrence_mirror
                 (user_id, occurrence_id, schedule_id, occurrence_date, name, payee, amount,
                  type, paid, open_action_disabled, raw_json, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(user_id, occurrence_id) DO UPDATE SET
+                schedule_id = excluded.schedule_id,
+                occurrence_date = excluded.occurrence_date,
+                name = excluded.name,
+                payee = excluded.payee,
+                amount = excluded.amount,
+                type = excluded.type,
+                paid = excluded.paid,
+                open_action_disabled = excluded.open_action_disabled,
+                raw_json = excluded.raw_json,
+                updated_at = excluded.updated_at`,
         args: occurrenceMirrorArgs(userId, occurrence, timestamp),
       })),
+      // Prune rows no longer in the fresh set (replaces the unconditional
+      // delete-all above). Empty fresh set -> delete all this user's rows.
+      pruneQuery("ea_bill_schedule_mirror", "schedule_id", freshScheduleIds),
+      pruneQuery("ea_bill_occurrence_mirror", "occurrence_id", freshOccurrenceIds),
       {
         sql: `UPDATE ea_bills_mirror_state
               SET status = 'current',

@@ -3,7 +3,9 @@ const GOOGLE_PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 const RESTRICTED_RADIUS_METERS = 12_000;
 const BIASED_RADIUS_METERS = 24_000;
-const ENRICHED_SUGGESTION_COUNT = 5;
+// Target number of suggestions before widening the search radius from
+// locationRestriction to locationBias (see suggestGooglePlaces).
+const MIN_SUGGESTION_COUNT = 5;
 
 function buildPlacesError(status, code, message) {
   const error = new Error(message);
@@ -95,24 +97,6 @@ async function autocompleteRequest(body) {
     .filter((prediction) => prediction.placeId && prediction.primaryText);
 }
 
-async function enrichSuggestions(predictions) {
-  const enriched = await Promise.all(predictions.map(async (prediction, index) => {
-    if (index >= ENRICHED_SUGGESTION_COUNT) return prediction;
-    try {
-      const details = await getGooglePlaceDetails(prediction.placeId);
-      return {
-        ...prediction,
-        primaryText: details.displayName || prediction.primaryText,
-        secondaryText: details.formattedAddress || prediction.secondaryText,
-        fullText: details.location || prediction.fullText,
-      };
-    } catch {
-      return prediction;
-    }
-  }));
-  return enriched;
-}
-
 export async function suggestGooglePlaces(query, options = {}) {
   requirePlacesConfig();
 
@@ -139,7 +123,7 @@ export async function suggestGooglePlaces(query, options = {}) {
     });
   }
 
-  if (predictions.length < ENRICHED_SUGGESTION_COUNT) {
+  if (predictions.length < MIN_SUGGESTION_COUNT) {
     const locationBias = buildLocationCircle(options.lat, options.lng, BIASED_RADIUS_METERS);
     predictions = await autocompleteRequest({
       ...body,
@@ -147,7 +131,11 @@ export async function suggestGooglePlaces(query, options = {}) {
     });
   }
 
-  return enrichSuggestions(rankPredictions(predictions));
+  // P2-26: return autocomplete predictions directly. The dropdown renders from
+  // primaryText/secondaryText, and the full place is loaded once on selection via
+  // getGooglePlaceDetails — the previous per-keystroke Details pre-enrichment of
+  // the top suggestions was redundant billed work.
+  return rankPredictions(predictions);
 }
 
 export async function getGooglePlaceDetails(placeId, options = {}) {

@@ -16,6 +16,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarModalInteractionModel.js` — storage keys, view normalization, deadline-create logic
 - `calendarModalSearchModel.js` — search scope, placeholders, coverage checks, result filtering
 - `calendarModalSelectionModel.js` — focus date parsing, grid visibility, view sync snapshots
+- `calendarControllerHelpers.js` — pure controller helpers (month math, event dedupe, range/overlay matching, item-location/focus resolution, search-result mapping) extracted from `useCalendarModalController.jsx`
 
 ### Controller + view model
 - `useCalendarModalController.jsx` — main orchestrator wiring sub-hooks and editors
@@ -41,6 +42,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useStaleDomainCache.js` — generic TTL-gated cache wrapper for domain fetches
 - `useDeadlineOverlayState.js` — overlay visibility triad with persistence
 - `usePlanningReadinessState.js` — planning state machine, deadline fetch orchestration
+- `useCalendarDeadlineOverlay.js` — wraps planning readiness + derives the identity-stable deadline-overlay object and per-settle committed record (extracted from `useCalendarModalController.jsx`)
 - `useAgendaSyncPolicy.js` — passive sync suppression window, grid-owned selection gate
 
 ### Utilities

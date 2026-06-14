@@ -100,6 +100,9 @@ export function DashboardShell({
     setAlfredMounted(true);
     setAlfredOpen((v) => !v);
   }, []);
+  // Stable close handler so the memoized AlfredPanel's Esc-listener effect stops
+  // re-binding on every dashboard SSE/refresh re-render of DashboardShell.
+  const closeAlfred = useCallback(() => setAlfredOpen(false), []);
   const alfredNewChat = useCallback(() => {
     setAlfredMounted(true);
     setAlfredOpen(true);
@@ -123,7 +126,13 @@ export function DashboardShell({
     sourceRef: analyticsBackdropSourceRef,
     loadSurface: loadTriageAnalyticsModal,
     refreshing: bd.refreshing,
-    refreshKey: liveData.briefingGeneratedAt,
+    // refreshKey is intentionally left coarse (tab-only). Keying it on
+    // liveData.lastFetched — which the server restamps on every /current — made the
+    // SSE refetch and 5-min auto-refresh paths schedule a full-dashboard
+    // html-to-image rasterization on every data tick (the `refreshing` gate in the
+    // hook does not cover the SSE path). The backdrop re-prepares on
+    // refreshing-settle + tab change, and openAnalytics/openPalette capture on
+    // demand, so freshness is covered without per-tick rasterization.
     tab,
   });
   const closeAnalytics = useCallback(() => {
@@ -147,7 +156,10 @@ export function DashboardShell({
     historyKey: "eaDashboardCalendarModal",
     onDismiss: () => setCalendarOpen(false),
   });
-  const openCalendar = (viewKey, focusDate = null, focusItemId = null, options = {}) => {
+  // Memoized so the (memoized) AlfredPanel's onOpenCalendarItem can be stable and
+  // bail out on unrelated dashboard re-renders. State setters are referentially
+  // stable; deps are only the values openCalendar actually reads/calls.
+  const openCalendar = useCallback((viewKey, focusDate = null, focusItemId = null, options = {}) => {
     const request = resolveCalendarOpenState({
       isMobile,
       viewKey,
@@ -169,15 +181,27 @@ export function DashboardShell({
     setCalendarOpen(true);
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
     if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
-  };
+  }, [isMobile, calendarView, showBills, loadCalendarDeadlines, loadCalendarBills]);
   const openDeadlineCreate = useCallback(() => {
     if (isMobile) {
       setAddTaskOpen(true);
       return;
     }
     openCalendar("events", null, "new", { source: "dashboard", forceDeadlineOverlay: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile]);
+  }, [isMobile, openCalendar]);
+  // Stable handler for AlfredPanel chip deep-links — depends only on the now-stable
+  // openCalendar, so the memoized panel can bail on unrelated parent re-renders.
+  const handleAlfredOpenCalendarItem = useCallback((request) => {
+    setAlfredOpen(false);
+    openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+  }, [openCalendar]);
+
+  // Stable ShellHeader callbacks so the memoized header (+ its chrome children)
+  // stop re-rendering on every dashboard SSE/refresh re-render of DashboardShell.
+  const handleHeaderOpenAnalytics = useCallback(() => { void openAnalytics(); }, [openAnalytics]);
+  const handleHeaderToggleCustomize = useCallback(() => setCustomizeOpen((v) => !v), []);
+  const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
+  const handleHeaderOpenCalendar = useCallback(() => openCalendar(), [openCalendar]);
   const changeCalendarView = (v) => {
     const nextView = normalizeCalendarWorkspaceView(v);
     setCalendarView(nextView);
@@ -186,6 +210,11 @@ export function DashboardShell({
   };
 
   useEffect(() => {
+    // Pre-existing: force-close the desktop calendar modal when the viewport
+    // drops to mobile. setState-in-effect is intentional here (reacting to an
+    // external viewport change), not derivable from render. (Surfaced by the
+    // React-compiler lint once nearby callbacks were memoized — behavior unchanged.)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isMobile && calendarOpen) setCalendarOpen(false);
   }, [isMobile, calendarOpen]);
 
@@ -301,8 +330,7 @@ export function DashboardShell({
     // SPA navigation (honors the router basename, keeps SSE/caches alive) — the
     // old window.location.href forced a full reload and ignored a sub-path base.
     else if (item.kind === "settings") navigate("/settings");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closePalette, jumpToSection, navigate, onQuickRefresh, openAnalytics, openDeadlineCreate, setShellTab]);
+  }, [closePalette, jumpToSection, navigate, onQuickRefresh, openAnalytics, openCalendar, openDeadlineCreate, setHistoryOpen, setShellTab]);
 
   const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
 
@@ -312,6 +340,11 @@ export function DashboardShell({
       liveEmails: liveData.liveEmails,
       resurfacedEntries: liveData.resurfacedEntries,
     });
+    // Pre-existing: prune read-overrides whose emails left the active snapshot.
+    // The functional setState only commits when something actually changed (it
+    // returns prev otherwise), so no cascading render. (Surfaced by the
+    // React-compiler lint once nearby callbacks were memoized — behavior unchanged.)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLiveReadOverrides((prev) => {
       const next = {};
       let changed = false;
@@ -381,12 +414,12 @@ export function DashboardShell({
         onTab={setShellTab}
         anyBlockingOverlayOpen={anyBlockingOverlayOpen}
         analyticsOpen={analyticsOpen}
-        onOpenAnalytics={() => { void openAnalytics(); }}
+        onOpenAnalytics={handleHeaderOpenAnalytics}
         onPrepareAnalytics={prepareBackdropSnapshot}
         onOpenPalette={openPalette}
-        onOpenCustomize={() => setCustomizeOpen((v) => !v)}
-        onOpenHistory={() => setHistoryOpen((v) => !v)}
-        onOpenCalendar={() => openCalendar()}
+        onOpenCustomize={handleHeaderToggleCustomize}
+        onOpenHistory={handleHeaderToggleHistory}
+        onOpenCalendar={handleHeaderOpenCalendar}
         inboxUnreadSignalCount={inboxUnreadSignalCount}
         refreshing={bd.refreshing}
         onQuickRefresh={onQuickRefresh}
@@ -527,14 +560,11 @@ export function DashboardShell({
         <Suspense fallback={null}>
           <AlfredPanel
             open={alfredOpen}
-            onClose={() => setAlfredOpen(false)}
+            onClose={closeAlfred}
             accent={accent}
             handoff={alfredHandoff}
             newChatTick={alfredNewChatTick}
-            onOpenCalendarItem={(request) => {
-              setAlfredOpen(false);
-              openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
-            }}
+            onOpenCalendarItem={handleAlfredOpenCalendarItem}
           />
         </Suspense>
       )}

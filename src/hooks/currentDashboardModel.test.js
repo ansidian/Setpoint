@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  calendarContentSignature,
   currentToBriefing,
   currentToLiveData,
   hasActiveRefreshWork,
+  stabilizeCalendar,
 } from "./currentDashboardModel.js";
 
 describe("current dashboard model", () => {
@@ -64,6 +66,38 @@ describe("current dashboard model", () => {
       systemStatus: { state: "current" },
       refreshNow,
     });
+  });
+
+  it("reuses the prior calendar reference when contents are equivalent across refetches", () => {
+    const prev = [
+      { id: "event-1", startMs: 1000, endMs: 2000 },
+      { id: "event-2", startMs: 3000, endMs: 4000 },
+    ];
+    // A freshly-parsed array with identical contents (new object identities).
+    const nextEqual = [
+      { id: "event-1", startMs: 1000, endMs: 2000 },
+      { id: "event-2", startMs: 3000, endMs: 4000 },
+    ];
+    expect(stabilizeCalendar(prev, nextEqual)).toBe(prev);
+
+    // A genuine content change must adopt the new reference.
+    const nextChanged = [
+      { id: "event-1", startMs: 1000, endMs: 2000 },
+      { id: "event-2", startMs: 3000, endMs: 5000 },
+    ];
+    expect(stabilizeCalendar(prev, nextChanged)).toBe(nextChanged);
+
+    // Identical reference passes through untouched.
+    expect(stabilizeCalendar(prev, prev)).toBe(prev);
+  });
+
+  it("falls back to identity-derived signature keys when events lack an id", () => {
+    const a = [{ startMs: 10, endMs: 20, iCalUID: "uid-a" }];
+    const b = [{ startMs: 10, endMs: 20, iCalUID: "uid-a" }];
+    const c = [{ startMs: 10, endMs: 20, iCalUID: "uid-b" }];
+    expect(calendarContentSignature(a)).toBe(calendarContentSignature(b));
+    expect(calendarContentSignature(a)).not.toBe(calendarContentSignature(c));
+    expect(calendarContentSignature(null)).toBe("null");
   });
 
   it("detects active current refresh work across source and snapshot health", () => {

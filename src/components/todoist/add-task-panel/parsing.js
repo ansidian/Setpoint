@@ -1,5 +1,5 @@
 import { formatRecurrenceSummary } from "../../calendar/events/calendarEditorUtils";
-import { parseCalendarTitle } from "../../calendar/events/parseCalendarTitle";
+import { ensureChrono, isChronoReady, parseCalendarTitle } from "../../calendar/events/parseCalendarTitle";
 import { laComponents } from "../../inbox/helpers";
 
 const PRIORITY_RE = /(?:^|\s)(!([1-4])?)(?:\s|$)/;
@@ -147,6 +147,10 @@ function buildTodoistRecurringDueString(recurrenceDraft, includeTime = false) {
 }
 
 function parseRecurringDue(input) {
+  // parseCalendarTitle lazily imports chrono-node; warm it so a subsequent
+  // re-parse (the controller re-runs this memo on every keystroke) gets the
+  // full natural-language result. The recurrence-rule regexes work without it.
+  if (input && !isChronoReady()) ensureChrono();
   const parsed = parseCalendarTitle(input, {
     defaultStartTime: null,
     defaultEndTime: null,

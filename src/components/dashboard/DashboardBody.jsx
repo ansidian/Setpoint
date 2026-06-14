@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import DashboardHero from "./DashboardHero";
 import TodayTimeline from "./TodayTimeline";
 import { DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
@@ -10,10 +10,11 @@ import {
   DashboardSurface,
 } from "./layout/DashboardScenePrimitives";
 import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel";
+import { calendarContentSignature } from "../../hooks/currentDashboardModel";
 
 const EMPTY_EMAIL_ACCOUNTS = [];
 
-export function DashboardBody({
+function DashboardBodyInner({
   briefing, liveData, activeSnapshot, calendarRange, customize, accent,
   isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false, calendarDeadlinesError = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenDeadlineCreate, onJumpSection, setAddTaskOpen,
@@ -37,6 +38,16 @@ export function DashboardBody({
   const ensureCalendarRange = calendarRange.ensureRange;
   const calendarRevision = calendarRange.revision;
 
+  // The seed is only read by the effect's catch() fallback, so keep it in a ref
+  // (synced in its own effect) instead of the range-fetch effect's deps —
+  // otherwise a fresh liveCalendar identity on every poll/refetch re-fires the
+  // whole range fetch. The fetch effect legitimately re-runs only when the range
+  // fn / today / calendarRevision change.
+  const seededEventsRef = useRef(seededEvents);
+  useEffect(() => {
+    seededEventsRef.current = seededEvents;
+  }, [seededEvents]);
+
   useEffect(() => {
     const endDate = new Date(`${today}T12:00:00Z`);
     endDate.setUTCDate(endDate.getUTCDate() + 14);
@@ -45,18 +56,23 @@ export function DashboardBody({
     ensureCalendarRange(today, end)
       .then((result) => {
         if (!cancelled) {
-          setEvents(result);
+          // Only swap the events reference when the resolved range content
+          // actually differs, so an unchanged refetch doesn't reconcile the
+          // (memoized) timeline/hero with a new-but-equal array.
+          setEvents((prev) => (
+            calendarContentSignature(prev) === calendarContentSignature(result) ? prev : result
+          ));
           setLiveEventsReady(true);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setEvents((prev) => (prev.length > 0 ? prev : seededEvents));
+          setEvents((prev) => (prev.length > 0 ? prev : seededEventsRef.current));
           setLiveEventsReady(true);
         }
       });
     return () => { cancelled = true; };
-  }, [ensureCalendarRange, today, seededEvents, calendarRevision]);
+  }, [ensureCalendarRange, today, calendarRevision]);
   const calendarDeadlinesReady = calendarDeadlines != null;
   const allowCurrentDeadlineFallback = calendarDeadlines === undefined || calendarDeadlinesError;
   const currentDeadlines = liveData.liveDeadlines || {};
@@ -156,6 +172,41 @@ export function DashboardBody({
     }
   }, [onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 
+  // Stable callbacks for the (memoized) hero, so a pure poll/refresh re-render
+  // of DashboardBody does not hand DashboardHero fresh function identities.
+  const handleHeroOpenPressure = useCallback(() => {
+    onOpenDeadlinesCalendar?.(pressureFocusTarget?.date || null, pressureFocusTarget?.id || null);
+  }, [onOpenDeadlinesCalendar, pressureFocusTarget]);
+
+  const handleHeroQuickAction = useCallback((action) => {
+    if (action === "deadline") {
+      if (onOpenDeadlineCreate) onOpenDeadlineCreate();
+      else setAddTaskOpen?.(true);
+    } else if (action === "event") {
+      onOpenEventsCalendar(today, "new");
+    }
+  }, [onOpenDeadlineCreate, setAddTaskOpen, onOpenEventsCalendar, today]);
+
+  const handleHeroJump = useCallback((payload, anchor) => {
+    if (payload?.kind === "deadline") {
+      if (payload.data) {
+        onOpenDeadline(payload.data, anchor);
+      } else if (payload.id && payload.date) {
+        onOpenDeadlinesCalendar?.(payload.date, payload.id);
+      } else {
+        onOpenDeadlinesCalendar?.(payload.date || null);
+      }
+    } else if (payload?.kind === "event") {
+      if (payload.id && payload.date) onOpenEventsCalendar(payload.date, payload.id);
+      else onJumpSection("timeline");
+    } else if (payload?.kind === "bill") {
+      if (payload.id && payload.date) onOpenBillsCalendar(payload.date, payload.id);
+      else onOpenBillsCalendar(payload.date || null);
+    } else {
+      onJumpSection("timeline");
+    }
+  }, [onOpenDeadline, onOpenDeadlinesCalendar, onOpenEventsCalendar, onJumpSection, onOpenBillsCalendar]);
+
   const hero = (
     <DashboardHero
       accent={accent}
@@ -167,35 +218,10 @@ export function DashboardBody({
       liveCalendar={displayEvents}
       liveDeadlines={deadlines}
       liveBills={bills}
-      onOpenPressure={() => onOpenDeadlinesCalendar?.(pressureFocusTarget?.date || null, pressureFocusTarget?.id || null)}
+      onOpenPressure={handleHeroOpenPressure}
       eventLoadingState={eventLoadingState}
-      onQuickAction={(action) => {
-        if (action === "deadline") {
-          if (onOpenDeadlineCreate) onOpenDeadlineCreate();
-          else setAddTaskOpen?.(true);
-        } else if (action === "event") {
-          onOpenEventsCalendar(today, "new");
-        }
-      }}
-      onJump={(payload, anchor) => {
-        if (payload?.kind === "deadline") {
-          if (payload.data) {
-            onOpenDeadline(payload.data, anchor);
-          } else if (payload.id && payload.date) {
-            onOpenDeadlinesCalendar?.(payload.date, payload.id);
-          } else {
-            onOpenDeadlinesCalendar?.(payload.date || null);
-          }
-        } else if (payload?.kind === "event") {
-          if (payload.id && payload.date) onOpenEventsCalendar(payload.date, payload.id);
-          else onJumpSection("timeline");
-        } else if (payload?.kind === "bill") {
-          if (payload.id && payload.date) onOpenBillsCalendar(payload.date, payload.id);
-          else onOpenBillsCalendar(payload.date || null);
-        } else {
-          onJumpSection("timeline");
-        }
-      }}
+      onQuickAction={handleHeroQuickAction}
+      onJump={handleHeroJump}
     />
   );
 
@@ -271,3 +297,9 @@ export function DashboardBody({
     />
   );
 }
+
+// Memoized so the dashboard poll loop / SSE refetch / 5-min refresh skip
+// re-rendering the whole hero+timeline+rails subtree when DashboardBody's props
+// are referentially unchanged (the bulk liveData slice is now stable across the
+// isPolling/refreshing toggles — see useCurrentDashboard).
+export const DashboardBody = memo(DashboardBodyInner);

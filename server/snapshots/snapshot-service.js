@@ -738,10 +738,18 @@ async function runActiveSnapshotSync(userId, {
   }
 
   await timeSnapshotSyncSource("triageLoop", async () => {
+    // P1-7: resolve mode/rules/interests/model-client once for the whole drain.
+    // Only build the batch context when the real worker is in use; injected test
+    // doubles ignore `batch` and must not trigger the triage-worker import.
+    let batch = null;
+    if (processNextEmailTriageJobFn === defaultProcessNextEmailTriageJob) {
+      const { createTriageBatchContext } = await import("../triage/triage-worker.js");
+      batch = createTriageBatchContext({ dbClient });
+    }
     let processed = 0;
     let paused = false;
     for (let i = 0; i < 25; i++) {
-      const result = await processNextEmailTriageJobFn({ dbClient, now });
+      const result = await processNextEmailTriageJobFn({ dbClient, now, batch });
       if (result?.paused) {
         paused = true;
         break;

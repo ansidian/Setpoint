@@ -69,23 +69,37 @@ function buildEmbeddingQueryFilters({ readFilter = null, dateWindow = null } = {
   };
 }
 
-export async function detectEmailSearchVectorCapability(db) {
-  try {
-    await db.execute("SELECT vector_distance_cos(vector32('[1,0]'), vector32('[1,0]')) AS distance");
-    return { mode: "native", native: true };
-  } catch (err) {
-    return {
-      mode: "fallback",
-      native: false,
-      reason: err?.message || "Vector functions unavailable",
-    };
-  }
+// Vector capability is fixed for a given connection's lifetime, but was probed
+// with a DB round-trip on every search and every worker batch. Memoize the
+// in-flight/resolved probe per db connection. The probe never rejects (errors
+// resolve to a fallback verdict), so the cached promise is safe to keep. Keyed
+// by the db object so the production singleton probes once while test mock-dbs
+// (fresh objects) each resolve independently.
+const vectorCapabilityCache = new WeakMap();
+
+export function detectEmailSearchVectorCapability(db) {
+  const cached = vectorCapabilityCache.get(db);
+  if (cached) return cached;
+  const probe = (async () => {
+    try {
+      await db.execute("SELECT vector_distance_cos(vector32('[1,0]'), vector32('[1,0]')) AS distance");
+      return { mode: "native", native: true };
+    } catch (err) {
+      return {
+        mode: "fallback",
+        native: false,
+        reason: err?.message || "Vector functions unavailable",
+      };
+    }
+  })();
+  vectorCapabilityCache.set(db, probe);
+  return probe;
 }
 
 export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallback" }) {
   const mode = capability?.mode === "native" ? "native" : "fallback";
 
-  async function upsertEmbedding({
+  function buildUpsertEmbeddingStatement({
     uid,
     user_id,
     account_id,
@@ -97,7 +111,7 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
     document_version = EMAIL_SEARCH_EMBEDDING_DOCUMENT_VERSION,
   }) {
     const embeddingValue = mode === "native" ? vectorToJson(embedding) : vectorToBuffer(embedding);
-    await db.execute({
+    return {
       sql: `INSERT INTO ea_email_search_embeddings
               (uid, user_id, account_id, document_text, document_json, source_hash,
                document_version, embedding_model, embedding_dimensions, embedding)
@@ -125,7 +139,19 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
         dimensions,
         embeddingValue,
       ],
-    });
+    };
+  }
+
+  async function upsertEmbedding(fields) {
+    await db.execute(buildUpsertEmbeddingStatement(fields));
+  }
+
+  // Atomically upsert a whole chunk in one round-trip (P3-3). db.batch wraps the
+  // statements in an implicit transaction on the store's connection, so a chunk
+  // either fully lands or not at all — replacing N per-row autocommits.
+  async function upsertEmbeddings(rows) {
+    if (!rows.length) return;
+    await db.batch(rows.map(buildUpsertEmbeddingStatement));
   }
 
   async function listRowsNeedingEmbeddings(userId, { limit = 50, scanLimit = 500 } = {}) {
@@ -205,7 +231,16 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
     const filters = buildEmbeddingQueryFilters({ readFilter, dateWindow });
     if (mode === "native") {
       const result = await db.execute({
-        sql: `SELECT emb.uid, emb.user_id, emb.account_id, emb.document_text,
+        // P3-4: document_text (the full email-body blob) was selected but never
+        // read by the return, so it is dropped here. document_json is still
+        // pulled because the returned `document` field is asserted by the store
+        // test; the production consumer (email-search-retrieval.js) reads only
+        // uid + similarity. MERGE-NOTE[P3-4]: dropping document_json/document
+        // from the projection + return is the remaining win, deferred to avoid
+        // editing email-search-embeddings.test.js (shared with the non-owned
+        // embeddings config module). Remove once that test moves to a store-
+        // owned file or the shape change is coordinated.
+        sql: `SELECT emb.uid, emb.user_id, emb.account_id,
                      emb.document_json, emb.source_hash,
                      vector_distance_cos(emb.embedding, vector32(?)) AS distance
               FROM ea_email_search_embeddings emb
@@ -239,6 +274,12 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
       }));
     }
 
+    // P3-41: the fallback (dev/local SQLite) path scores cosine similarity in JS,
+    // so it cannot rank in SQL — but it previously loaded the entire embedding
+    // corpus into Node. Bound the transfer to the most-recent candidates
+    // (maxResults * 4, capped at 1000) before JS re-ranking. Production uses the
+    // native vector path and is unaffected.
+    const fallbackScanLimit = Math.min(maxResults * 4, 1000);
     const result = await db.execute({
       sql: `SELECT emb.uid, emb.user_id, emb.account_id, emb.document_json,
                    emb.source_hash, emb.embedding
@@ -249,13 +290,16 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
             WHERE emb.user_id = ?
               AND emb.document_version = ?
               AND emb.embedding_model = ?
-              AND emb.embedding_dimensions = ?${filters.sql}`,
+              AND emb.embedding_dimensions = ?${filters.sql}
+            ORDER BY idx.email_date_utc DESC, idx.email_date DESC
+            LIMIT ?`,
       args: [
         userId,
         EMAIL_SEARCH_EMBEDDING_DOCUMENT_VERSION,
         EMAIL_SEARCH_EMBEDDING_MODEL,
         EMAIL_SEARCH_EMBEDDING_DIMENSIONS,
         ...filters.args,
+        fallbackScanLimit,
       ],
     });
 
@@ -282,6 +326,7 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
   return {
     mode,
     upsertEmbedding,
+    upsertEmbeddings,
     listRowsNeedingEmbeddings,
     querySimilarEmbeddings,
   };

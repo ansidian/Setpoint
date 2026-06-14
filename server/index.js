@@ -32,6 +32,7 @@ import { resolveWebAuthnConfig } from "./auth/webauthn-config.js";
 import { buildStartupWorkerDelays } from "./startup-delays.js";
 import { logTiming, timeAsync } from "./timing.js";
 import { installProductionFrontend } from "./static-assets.js";
+import { responseCompression } from "./middleware/compression.js";
 import { errorHandler } from "./middleware/async-handler.js";
 
 
@@ -61,6 +62,11 @@ const bootStartedAt = performance.now();
 app.set("trust proxy", getTrustProxySetting());
 
 applySecurityMiddleware(app);
+// P1-2: gzip every compressible response (JSON APIs + static frontend) before the
+// routers run. zlib-based, no dependency; skips SSE/binary/pre-encoded responses
+// so the Alfred + dashboard event streams are never buffered. Sits ahead of the
+// routes and installProductionFrontend so both API and asset payloads shrink.
+app.use(responseCompression());
 app.use("/api/todoist/webhook", express.raw({ type: "*/*" }), todoistWebhookRoutes);
 app.use(express.json());
 app.use(cookieParser());

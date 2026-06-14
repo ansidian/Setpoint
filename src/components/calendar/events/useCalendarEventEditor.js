@@ -5,7 +5,12 @@ import {
   formatCalendarEditorError,
   saveCalendarEventAction,
 } from "./calendarEventEditorActions";
-import { parseCalendarTitle } from "./parseCalendarTitle";
+import {
+  ensureChrono,
+  isChronoReady,
+  parseCalendarTitle,
+  subscribeChronoReady,
+} from "./parseCalendarTitle";
 import useCalendarLocationSuggestions from "./useCalendarLocationSuggestions";
 import useCalendarSources from "./useCalendarSources";
 import {
@@ -70,6 +75,12 @@ export default function useCalendarEventEditor({
   const [titleInputPending, setTitleInputPending] = useState(false);
   const [titleInputKey, setTitleInputKey] = useState(0);
   const [titleParseNow, setTitleParseNow] = useState(() => Date.now());
+  // chrono-node is lazily imported (parseCalendarTitle keeps it out of the
+  // calendar-open payload). Warm it on the first non-empty title keystroke and
+  // bump this tick when it lands so the title-assist memo re-parses with the
+  // full natural-language result. Until then the parse degrades gracefully to
+  // the synchronous regex paths.
+  const [chronoReadyTick, setChronoReadyTick] = useState(() => (isChronoReady() ? 1 : 0));
   const [manualOverrides, setManualOverrides] = useState(() => createManualOverrides());
   const [editingEvent, setEditingEvent] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -136,12 +147,19 @@ export default function useCalendarEventEditor({
   );
   const isEditing = !!editingEvent;
   const isEditingRecurring = !!(editingEvent?.isRecurring);
+  useEffect(() => {
+    if (!titleInput || isChronoReady()) return undefined;
+    ensureChrono();
+    const unsubscribe = subscribeChronoReady(() => setChronoReadyTick((tick) => tick + 1));
+    return unsubscribe;
+  }, [titleInput]);
   const parsedTitleAssist = useMemo(() => parseCalendarTitle(titleInput, {
     now: titleParseNow,
     baseDate: createSeedDraft.startDate,
     defaultStartTime: createSeedDraft.startTime,
     defaultEndTime: createSeedDraft.endTime,
-  }), [createSeedDraft.endTime, createSeedDraft.startDate, createSeedDraft.startTime, titleInput, titleParseNow]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-parse once chrono lands
+  }), [createSeedDraft.endTime, createSeedDraft.startDate, createSeedDraft.startTime, titleInput, titleParseNow, chronoReadyTick]);
   const titleAssist = useMemo(() => (
     isEditing
       ? coerceEditingTitleAssist(parsedTitleAssist, {

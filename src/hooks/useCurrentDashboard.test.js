@@ -169,6 +169,42 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("dedups a refetch that returns the same fetchedAt, keeping current + liveData references stable", async () => {
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    const firstCurrent = result.current.current;
+    const firstCalendar = result.current.liveData.liveCalendar;
+    expect(firstCurrent.fetchedAt).toBe("2026-05-04T12:00:00.000Z");
+
+    // A poll/refetch returns a brand-new object with identical contents and the
+    // same server freshness key — dedup must keep the prior `current` reference.
+    getCurrentDashboard.mockResolvedValueOnce({
+      ...currentPayload,
+      calendar: [{ id: "event-1", title: "Focus" }],
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(2);
+    expect(result.current.current).toBe(firstCurrent);
+    expect(result.current.liveData.liveCalendar).toBe(firstCalendar);
+
+    // A refetch with a newer fetchedAt must adopt the fresh payload.
+    getCurrentDashboard.mockResolvedValueOnce({
+      ...currentPayload,
+      weather: { temp: 99, icon: "Sun" },
+      fetchedAt: "2026-05-04T12:10:00.000Z",
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.current).not.toBe(firstCurrent);
+    expect(result.current.liveData.liveWeather).toEqual({ temp: 99, icon: "Sun" });
+
+    unmount();
+  });
+
   it("uses light refresh for polling, background refresh for manual sync, and keeps force sync separate", async () => {
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});

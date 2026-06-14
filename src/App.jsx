@@ -6,7 +6,10 @@ import { resolveRouterBasename } from "./routerBase.js";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
 import RecoverableErrorBoundary from "./components/layout/RecoverableErrorBoundary";
-const Dashboard = lazy(() => import("./pages/Dashboard"));
+// Single import factory so we can both lazy-mount the Dashboard and warm its
+// chunk during the auth round trip — the bundler dedupes to one module fetch.
+const importDashboard = () => import("./pages/Dashboard");
+const Dashboard = lazy(importDashboard);
 const Login = lazy(() => import("./pages/Login"));
 const SettingsRoute = lazy(() => import("./pages/SettingsRoute"));
 
@@ -45,6 +48,13 @@ export default function App() {
 
   useEffect(() => {
     if (demoMode) return undefined;
+
+    // Warm the Dashboard chunk in parallel with the auth round trip so its fetch
+    // is no longer serialized behind checkAuth → Suspense mount. Correctness is
+    // unchanged: the gate below still renders Dashboard only when authenticated;
+    // this only overlaps the (otherwise wasted) waterfall. Swallow rejections so
+    // a prefetch failure never surfaces — the real lazy() mount handles errors.
+    importDashboard().catch(() => {});
 
     checkAuth()
       .then((res) => setAuthenticated(res.authenticated))

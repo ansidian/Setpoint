@@ -1,7 +1,7 @@
 // Embedded data rows for Alfred answers. Items are VERBATIM domain rows from
 // the server's `rows` event (ADR 0006: cite-by-reference — never reshape or
 // recompute amounts/dates beyond display formatting).
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Check, CheckCircle2, Circle, CreditCard } from "lucide-react";
 import {
   alfredPriorityLabel,
@@ -128,22 +128,32 @@ function EmailRow({ item, onActivate }) {
   );
 }
 
-export function RowsBlock({ kind, items, accent, onActivateItem }) {
+// React.memo so a completed rows-block goes inert during subsequent token
+// streaming (perf audit fe-alfred::rows-chip-action-rebuilt-every-render). The
+// churning prop was onActivateItem (now useCallback'd in AlfredPanel) and the
+// per-render chip-action resolution + fresh per-row closures (now useMemo'd by
+// items). Items are verbatim and referentially stable once a rows event lands.
+export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActivateItem }) {
   const Row = { bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow }[kind];
+  // Resolve chip actions once per items change rather than on every render, and
+  // build the per-row click closures here too. onActivate stays undefined when no
+  // action resolves, preserving the original interactivity gate (non-actionable
+  // rows render non-interactive). With a stable onActivateItem these closures
+  // keep identical identity across renders.
+  const rows = useMemo(() => (items || []).map((item, i) => {
+    const action = onActivateItem ? resolveAlfredChipAction(kind, item) : null;
+    return {
+      key: item.id ?? item.uid ?? i,
+      item,
+      onActivate: action ? () => onActivateItem(action) : undefined,
+    };
+  }), [kind, items, onActivateItem]);
   if (!Row) return null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-      {(items || []).map((item, i) => {
-        const action = onActivateItem ? resolveAlfredChipAction(kind, item) : null;
-        return (
-          <Row
-            key={item.id ?? item.uid ?? i}
-            item={item}
-            accent={accent}
-            onActivate={action ? () => onActivateItem(action) : undefined}
-          />
-        );
-      })}
+      {rows.map(({ key, item, onActivate }) => (
+        <Row key={key} item={item} accent={accent} onActivate={onActivate} />
+      ))}
     </div>
   );
-}
+});

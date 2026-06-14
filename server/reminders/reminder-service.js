@@ -182,11 +182,15 @@ export async function deleteSourceReminders({
 }, options = {}) {
   const where = sourceWhere({ sourceType, sourceItemId, sourceOccurrenceId });
   const statusSql = unsentOnly ? " AND status = 'pending'" : "";
-  const result = await client(options).execute({
+  const statement = {
     sql: `DELETE FROM ea_reminders
           WHERE user_id = ? AND ${where.sql}${statusSql}`,
     args: [userId, ...where.args],
-  });
+  };
+  // P2-21: in collect mode return the DELETE statement so a caller can fold it
+  // into a larger batched transaction instead of executing it standalone.
+  if (options.collect) return statement;
+  const result = await client(options).execute(statement);
   return Number(result.rowsAffected || 0);
 }
 
@@ -207,19 +211,19 @@ export async function recomputeUnsentRemindersForSource({
     sourceOccurrenceId,
   }, options);
   const pending = reminders.filter((reminder) => reminder.status === "pending");
-  const dbClient = client(options);
   const nowMs = new Date(options.now || now).getTime();
 
-  for (const reminder of pending) {
+  // Build the per-reminder mutations as pure data first (computeRemindAt is pure),
+  // so collect mode can return them and non-collect mode can execute them.
+  const statements = pending.map((reminder) => {
     const nextRemindAt = computeRemindAt(anchorAt, reminder.offset_minutes);
     if (Number.isFinite(nowMs) && new Date(nextRemindAt).getTime() <= nowMs) {
-      await dbClient.execute({
+      return {
         sql: "DELETE FROM ea_reminders WHERE id = ?",
         args: [reminder.id],
-      });
-      continue;
+      };
     }
-    await dbClient.execute({
+    return {
       sql: `UPDATE ea_reminders
             SET anchor_kind = ?,
                 anchor_at = ?,
@@ -233,9 +237,17 @@ export async function recomputeUnsentRemindersForSource({
         nextRemindAt,
         reminder.id,
       ],
-    });
-  }
+    };
+  });
 
+  // P2-21: return the statements so the caller (Todoist mirror reconcile) can
+  // fold them into the same batched transaction as the item upserts.
+  if (options.collect) return statements;
+
+  const dbClient = client(options);
+  for (const statement of statements) {
+    await dbClient.execute(statement);
+  }
   return pending.length;
 }
 

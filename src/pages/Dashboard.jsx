@@ -15,7 +15,6 @@ import useStaleDomainCache from "../hooks/calendar/useStaleDomainCache";
 import useCalendarRange from "../hooks/calendar/useCalendarRange";
 import { DashboardShell, DashboardBody } from "../components/dashboard/DashboardShell";
 import { makeCalendarBillsData } from "../components/dashboard/calendarBillsData";
-import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState";
 import {
@@ -90,22 +89,27 @@ export default function Dashboard() {
   const calendarWorkspaceRef = useRef({ open: false, view: "events", eventsRange: null });
   const markDeadlineRangeStale = deadlinesCache.range.markStale;
   const markBillRangeStale = billsCache.range.markStale;
-  dashboardEventHandlerRef.current = (event) => {
-    triageNotificationSounds.handleDashboardEvent(event);
-    const plan = resolveDashboardCurrentEventPlan(event);
-    if (plan.markBillsRefreshRequested) {
-      calendarBillsRefreshRequestedRef.current = true;
-    }
-    if (plan.markBillRangeStale) {
-      markBillRangeStale?.();
-    }
-    if (plan.markDeadlineRangeStale) {
-      markDeadlineRangeStale?.();
-    }
-    if (plan.refreshCalendarDomains) {
-      refreshCalendarDomains(plan.refreshCalendarDomains);
-    }
-  };
+  // Sync the SSE dashboard-event handler into its ref from an effect (not during
+  // render) — the EventSource reads `.current` at fire-time, so re-binding after
+  // each render that changes its closure is equivalent and keeps render pure.
+  useEffect(() => {
+    dashboardEventHandlerRef.current = (event) => {
+      triageNotificationSounds.handleDashboardEvent(event);
+      const plan = resolveDashboardCurrentEventPlan(event);
+      if (plan.markBillsRefreshRequested) {
+        calendarBillsRefreshRequestedRef.current = true;
+      }
+      if (plan.markBillRangeStale) {
+        markBillRangeStale?.();
+      }
+      if (plan.markDeadlineRangeStale) {
+        markDeadlineRangeStale?.();
+      }
+      if (plan.refreshCalendarDomains) {
+        refreshCalendarDomains(plan.refreshCalendarDomains);
+      }
+    };
+  });
   const markCalendarRangeStale = calendarRange.markStale;
   const refreshCalendarRangeInPlace = calendarRange.refreshRangeInPlace;
   const runDashboardRefresh = useCallback((trigger) => {
@@ -159,14 +163,6 @@ export default function Dashboard() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [bd.refreshing, currentSyncing, handleExplicitQuickRefresh]);
-
-  // Reconcile briefing read status from live data (kept from original)
-  useEffect(() => {
-    const status = liveData.briefingReadStatus;
-    if (!status || !Object.keys(status).length) return;
-    bd.setBriefing((prev) => reconcileBriefingReadStatus(prev, status));
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- bd.setBriefing is stable
-  }, [liveData.briefingReadStatus]);
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyTriggerRef = useRef(null);

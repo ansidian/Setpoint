@@ -8,8 +8,9 @@ import { isDemoMode } from "../demo/config.js";
 import { invalidateActualMetadata } from "../lib/actualMetadata.js";
 import {
   currentToBriefing,
-  currentToLiveData,
+  currentToLiveDataBulk,
   hasActiveRefreshWork,
+  stabilizeCalendar,
 } from "./currentDashboardModel.js";
 
 const POST_CLICK_POLL_MS = 2_000;
@@ -45,10 +46,16 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     // Ignore a response whose request has been superseded by a newer one, so a
     // slow older fetch can't clobber fresher data (last-issued request wins).
     if (seq != null && seq !== requestSeqRef.current) return data;
-    setCurrent(data);
-    setSelectedBriefing(null);
-    setError(null);
-    setLoaded(true);
+    // Dedup identical poll payloads on the server freshness key so a poll that
+    // returns the same snapshot doesn't re-derive liveData / re-render the tree.
+    // Same end state, fewer redundant dispatches (P3-27). Only dedup when both
+    // sides carry a truthy fetchedAt and they match — never skip a real change.
+    setCurrent((prev) => (
+      prev && prev.fetchedAt && data?.fetchedAt && prev.fetchedAt === data.fetchedAt ? prev : data
+    ));
+    setSelectedBriefing((prev) => (prev === null ? prev : null));
+    setError((prev) => (prev === null ? prev : null));
+    setLoaded((prev) => (prev === true ? prev : true));
     return data;
   }, []);
 
@@ -247,9 +254,37 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     handleQuickRefresh: refreshNow,
   }), [briefing, error, loaded, loading, refreshNow, refreshing]);
 
+  // Stabilize the calendar array's identity across refetches that did not change
+  // its contents — getCurrentDashboard re-parses `current.calendar` every poll,
+  // so without this the DashboardBody range effect + every liveCalendar-keyed
+  // effect re-fires on every tick even when the calendar is unchanged.
+  const stableCalendarRef = useRef(null);
+  const stableCalendar = useMemo(() => {
+    const next = stabilizeCalendar(stableCalendarRef.current, current?.calendar || null);
+    stableCalendarRef.current = next;
+    return next;
+  }, [current?.calendar]);
+
+  // Memoize the bulk slice on `current` (+ stable refreshNow) only, so the nested
+  // data arrays (liveCalendar/liveDeadlines/liveBills/…) keep stable references
+  // across loading/refreshing toggles. The volatile poll flags are layered on
+  // top separately — only liveData's top-level identity changes when they flip,
+  // not the contained arrays, so memoized children keyed on those arrays bail out.
+  const liveDataBulk = useMemo(
+    () => ({
+      ...currentToLiveDataBulk(current, { refreshNow }),
+      liveCalendar: stableCalendar,
+    }),
+    [current, refreshNow, stableCalendar],
+  );
+  const isPolling = loading || refreshing;
   const liveData = useMemo(
-    () => currentToLiveData(current, { refreshNow, isPolling: loading || refreshing }),
-    [current, loading, refreshNow, refreshing],
+    () => ({
+      ...liveDataBulk,
+      isPolling,
+      billsLoading: liveDataBulk.actualConfigured && isPolling && !liveDataBulk.liveBills.length,
+    }),
+    [liveDataBulk, isPolling],
   );
 
   const activeSnapshot = useMemo(() => ({

@@ -279,24 +279,30 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
     const emailDateUtc = normalizeEmailDateUtc(emailDate);
     const read = email.read ? 1 : 0;
     const existing = existingRows.get(uid);
+    // P3-2: body_snippet is the volatile Gmail preview and is NOT part of the
+    // searchable-content set. A snippet-only drift (common at backfill window
+    // boundaries) must not trigger the 3-statement FTS rewrite + embedding
+    // invalidation below — it rides the cheap metadata UPDATE instead, keeping
+    // the displayed preview fresh without re-embedding the message.
     const searchableChanged = !existing
       || existing.from_name !== fromName
       || existing.from_address !== fromAddress
       || existing.subject !== subject
-      || existing.body_snippet !== bodySnippet
       || existing.body_text !== bodyText;
+    const snippetChanged = !existing || existing.body_snippet !== bodySnippet;
     const indexMetadataChanged = !existing
       || existing.email_date !== emailDate
       || existing.email_date_utc !== emailDateUtc;
     if (!searchableChanged) {
-      if (!indexMetadataChanged && Number(existing.read) === read) return [];
+      if (!indexMetadataChanged && !snippetChanged && Number(existing.read) === read) return [];
       return [{
         sql: `UPDATE ea_email_index
-              SET email_date = ?,
+              SET body_snippet = ?,
+                  email_date = ?,
                   email_date_utc = ?,
                   read = ?
               WHERE uid = ? AND user_id = ?`,
-        args: [emailDate, emailDateUtc, read, uid, userId],
+        args: [bodySnippet, emailDate, emailDateUtc, read, uid, userId],
       }];
     }
 

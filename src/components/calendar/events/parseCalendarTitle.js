@@ -1,6 +1,60 @@
-import * as chrono from "chrono-node/en";
 import { epochFromLa, laComponents } from "@/components/inbox/helpers";
 import { parseCalendarIntent } from "./calendarTitleIntent";
+
+// chrono-node/en is ~530KB ESM and most calendar-modal opens never invoke the
+// natural-language date parser (it only fires once a temporal token is typed).
+// Loading it eagerly dragged the whole parser into the calendar-open payload via
+// the static import chain (parseCalendarTitle -> useCalendarEventEditor ->
+// useCalendarModalController -> the lazy CalendarModal route). It is now loaded
+// on demand and cached in a module singleton. parseCalendarTitle stays
+// synchronous: until chrono lands, the chrono-derived parse degrades to "no
+// temporal match" for that call (recurrence/weekday/explicit-date regexes still
+// work), and callers warm + re-parse once it is ready via ensureChrono().
+let chronoEn = null;
+let chronoLoadPromise = null;
+const chronoReadyListeners = new Set();
+
+export function isChronoReady() {
+  return !!chronoEn;
+}
+
+export function ensureChrono() {
+  if (chronoEn) return Promise.resolve(chronoEn);
+  if (!chronoLoadPromise) {
+    chronoLoadPromise = import("chrono-node/en").then((mod) => {
+      chronoEn = mod;
+      const listeners = [...chronoReadyListeners];
+      chronoReadyListeners.clear();
+      for (const listener of listeners) {
+        try {
+          listener();
+        } catch {
+          // a failing ready-listener must not reject the shared load promise
+        }
+      }
+      return mod;
+    });
+  }
+  return chronoLoadPromise;
+}
+
+// Register a one-shot callback fired when chrono finishes loading. Returns an
+// unsubscribe fn. If chrono is already loaded the callback is not called (the
+// caller can check isChronoReady() first).
+export function subscribeChronoReady(listener) {
+  if (typeof listener !== "function" || chronoEn) return () => {};
+  chronoReadyListeners.add(listener);
+  return () => chronoReadyListeners.delete(listener);
+}
+
+// Synchronous accessor used inside the parse paths. Returns the loaded chrono
+// module or null, kicking off a background load on the first miss so the next
+// re-parse (warmed by the editor) gets the full result.
+function chronoOrLoad() {
+  if (chronoEn) return chronoEn;
+  ensureChrono();
+  return null;
+}
 
 const DEFAULT_DURATION_MINUTES = 30;
 const TRAILING_CONNECTOR_RE = /(?:\s+(?:on|at|from|to|for))+\s*$/i;
@@ -186,6 +240,8 @@ function isTemporalBoundary(tokens, index, now) {
   if (isLocationProducer(firstToken) || isSourceProducer(firstToken)) return true;
   if (TEMPORAL_START_WORDS.has(normalizedFirst)) return true;
   if (DATE_LIKE_TOKEN_RE.test(firstToken) || TIME_LIKE_TOKEN_RE.test(firstToken)) return true;
+  const chrono = chronoOrLoad();
+  if (!chrono) return false;
   const parsed = chrono.parse(cleanWhitespace(remainingTokens.join(" ")), new Date(now))[0] || null;
   return !!parsed && parsed.index === 0;
 }
@@ -279,7 +335,8 @@ function parseTemporalTitle(inputTitle, options = {}) {
     };
   }
 
-  const parsed = chrono.parse(trimmedTitle, new Date(now))[0] || null;
+  const chrono = chronoOrLoad();
+  const parsed = chrono ? (chrono.parse(trimmedTitle, new Date(now))[0] || null) : null;
   let workingTitle = trimmedTitle;
   let matchedText = "";
   let parsedDateTime = null;

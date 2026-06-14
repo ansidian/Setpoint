@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import DOMPurify from "dompurify";
 
 // Renders a sanitized email body inside an iframe. The iframe always fills
@@ -9,8 +9,12 @@ export default function EmailIframe({ html }) {
   const iframeRef = useRef(null);
   const hotkeyDocumentRef = useRef(null);
 
-  // Sanitize then wrap in a full document so the email's own styles apply
-  const sanitized = DOMPurify.sanitize(html, {
+  // Sanitize then wrap in a full document so the email's own styles apply.
+  // Memoized on `html` only — the DOMPurify config and tracking-pixel regex are
+  // static literals — so reader-chrome state changes (bill panel, draft, snooze
+  // picker, bill-resolver completion) re-render without re-running the whole-
+  // document sanitize + regex scan over an unchanged body.
+  const sanitized = useMemo(() => DOMPurify.sanitize(html, {
     ADD_TAGS: ["style", "link", "meta", "img", "center"],
     ADD_ATTR: ["src", "alt", "width", "height", "style", "class", "align", "valign", "bgcolor", "cellpadding", "cellspacing", "border", "role"],
     FORBID_TAGS: ["script"],
@@ -18,7 +22,7 @@ export default function EmailIframe({ html }) {
   })
     // Strip tracking pixels (1x1 or 0x0 images). The digit must be the whole
     // value — not a prefix — otherwise width="100" / height="150" get eaten.
-    .replace(/<img[^>]*(?:width\s*=\s*["']?[01]["'\s/>]|height\s*=\s*["']?[01]["'\s/>])[^>]*\/?>/gi, "");
+    .replace(/<img[^>]*(?:width\s*=\s*["']?[01]["'\s/>]|height\s*=\s*["']?[01]["'\s/>])[^>]*\/?>/gi, ""), [html]);
 
   // Force every link to open in a new tab. Without this, anchors (especially
   // those with author-set target="_self"/"_top") navigate the iframe itself

@@ -9,7 +9,12 @@ import {
   processNextGmailHistorySyncJob,
   renewDueGmailWatches,
 } from "./email/gmail-sync.js";
-import { processNextEmailTriageJob, recoverStaleRunningTriageJobs } from "./triage/triage-worker.js";
+import {
+  processNextEmailTriageJob,
+  recoverStaleRunningTriageJobs,
+  createTriageBatchContext,
+  pruneCompletedTriageJobs,
+} from "./triage/triage-worker.js";
 import { processEmailSearchEmbeddingBatchesForAllUsers } from "./email/search/email-search-embedding-worker.js";
 import { processDueReminderBatch } from "./reminders/reminder-scheduler.js";
 
@@ -25,6 +30,7 @@ let emailTriageJob = null;
 let emailTriageInFlight = false;
 let emailSearchEmbeddingJob = null;
 let emailSearchEmbeddingInFlight = false;
+let triageJobPruneJob = null;
 let reminderSchedulerTimer = null;
 // Tracked as a PROMISE (not a boolean) so the shutdown handler can await an
 // in-flight reminder batch and let the last tick drain before exit. null when
@@ -38,8 +44,17 @@ const GMAIL_WATCH_RENEWAL_CRON = "17 3 * * *";
 const GMAIL_HISTORY_SYNC_CRON = "* * * * *";
 const EMAIL_TRIAGE_CRON = "* * * * *";
 const EMAIL_SEARCH_EMBEDDING_CRON = "*/5 * * * *";
+// P3-8: daily off-peak sweep of long-completed triage jobs (durable history lives
+// in ea_email_triage). Far below the stale-window / claim cadence, so it never
+// competes with the per-minute workers.
+const TRIAGE_JOB_PRUNE_CRON = "23 4 * * *";
 const REMINDER_SCHEDULER_INTERVAL_MS = 10_000;
 const EMAIL_SEARCH_EMBEDDINGS_DISABLED = process.env.EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED === "1";
+const EMAIL_TRIAGE_BATCH_SIZE = 10;
+// P2-4: cap consecutive self-reschedules so a deep queue drains promptly within a
+// minute without ever spinning forever; the cron tick resumes the drain anyway.
+const EMAIL_TRIAGE_MAX_SELF_RESCHEDULES = 50;
+let emailTriageSelfRescheduleCount = 0;
 
 function isMissingTableError(err) {
   // libsql surfaces a missing table as "no such table: ..." in the message;
@@ -237,7 +252,9 @@ async function runGmailHistorySyncWorker() {
   if (gmailHistorySyncInFlight) return;
   gmailHistorySyncInFlight = true;
   try {
-    await recoverStaleRunningTriageJobs();
+    // P2-7: stale triage-job recovery is owned solely by runEmailTriageWorker
+    // (both ran it every minute against the same table, racing on the same rows
+    // for a 15-minute stale window). One owner is sufficient.
     let processed = 0;
     for (let i = 0; i < 10; i++) {
       const result = await processNextGmailHistorySyncJob();
@@ -252,14 +269,19 @@ async function runGmailHistorySyncWorker() {
   }
 }
 
-export async function runEmailTriageWorker() {
+export async function runEmailTriageWorker({ selfRescheduled = false } = {}) {
   if (emailTriageInFlight) return;
   emailTriageInFlight = true;
+  let processed = 0;
   try {
-    await recoverStaleRunningTriageJobs();
-    let processed = 0;
-    for (let i = 0; i < 10; i++) {
-      const result = await processNextEmailTriageJob();
+    // Stale-job recovery is the per-minute responsibility; an immediate
+    // self-reschedule within the same drain skips it (it already ran this tick).
+    if (!selfRescheduled) await recoverStaleRunningTriageJobs();
+    // P1-7: one batch context resolves mode/rules/interests/model-client once per
+    // user for the whole drain instead of re-reading them on every job.
+    const batch = createTriageBatchContext();
+    for (let i = 0; i < EMAIL_TRIAGE_BATCH_SIZE; i++) {
+      const result = await processNextEmailTriageJob({ batch });
       if (result.paused) break;
       if (!result.processed) break;
       processed++;
@@ -267,8 +289,24 @@ export async function runEmailTriageWorker() {
     if (processed) console.log(`[Email Triage] Processed ${processed} email triage job(s)`);
   } catch (err) {
     console.error("[Email Triage] Worker failed:", err.message);
+    emailTriageSelfRescheduleCount = 0;
+    return;
   } finally {
     emailTriageInFlight = false;
+  }
+  // P2-4: a full batch means the queue is still deep — re-arm immediately via
+  // setImmediate instead of idling until the next cron minute. The in-flight
+  // guard above prevents overlap; the self-reschedule cap bounds the chain.
+  if (processed === EMAIL_TRIAGE_BATCH_SIZE
+      && emailTriageSelfRescheduleCount < EMAIL_TRIAGE_MAX_SELF_RESCHEDULES) {
+    emailTriageSelfRescheduleCount += 1;
+    setImmediate(() => {
+      runEmailTriageWorker({ selfRescheduled: true }).catch((err) =>
+        console.error("[Email Triage] Self-rescheduled worker failed:", err.message),
+      );
+    });
+  } else {
+    emailTriageSelfRescheduleCount = 0;
   }
 }
 
@@ -284,6 +322,15 @@ export async function runEmailSearchEmbeddingWorker() {
     console.error("[Email Search Embeddings] Worker failed:", err.message);
   } finally {
     emailSearchEmbeddingInFlight = false;
+  }
+}
+
+async function runTriageJobPruneWorker() {
+  try {
+    const pruned = await pruneCompletedTriageJobs();
+    if (pruned) console.log(`[Email Triage] Pruned ${pruned} completed triage job(s)`);
+  } catch (err) {
+    console.error("[Email Triage] Completed-job prune failed:", err.message);
   }
 }
 
@@ -339,6 +386,13 @@ export function startBackgroundIndexer() {
       console.error("[Email Triage] Initial worker failed:", err.message),
     );
   }, 12000);
+
+  if (triageJobPruneJob) {
+    triageJobPruneJob.stop();
+    triageJobPruneJob = null;
+  }
+  triageJobPruneJob = cron.schedule(TRIAGE_JOB_PRUNE_CRON, runTriageJobPruneWorker);
+  console.log(`[Email Triage] Completed-job prune scheduled (${TRIAGE_JOB_PRUNE_CRON})`);
 
   if (emailSearchEmbeddingJob) {
     emailSearchEmbeddingJob.stop();
@@ -410,6 +464,7 @@ export async function stopScheduler() {
     gmailHistorySyncJob,
     emailTriageJob,
     emailSearchEmbeddingJob,
+    triageJobPruneJob,
   ]) {
     job?.stop?.();
   }
@@ -418,6 +473,7 @@ export async function stopScheduler() {
   gmailHistorySyncJob = null;
   emailTriageJob = null;
   emailSearchEmbeddingJob = null;
+  triageJobPruneJob = null;
 
   if (reminderSchedulerTimer) {
     clearInterval(reminderSchedulerTimer);
