@@ -26,7 +26,7 @@ describe("CalendarCellItemStack model", () => {
     expect(getMeasuredVisibleCellItemCount(items, 100, metrics)).toBe(2);
   });
 
-  it("reserves span lanes before deciding normal chip capacity", () => {
+  it("reserves span lanes plus a trailing gap before deciding normal chip capacity", () => {
     const items = [
       { id: "first" },
       { id: "second" },
@@ -34,12 +34,24 @@ describe("CalendarCellItemStack model", () => {
     ];
     const reservedHeight = getReservedCellItemLaneHeight(1, metrics);
 
-    expect(reservedHeight).toBe(30);
+    expect(reservedHeight).toBe(34);
+    expect(getReservedCellItemLaneHeight(2, metrics)).toBe(68);
+    expect(getReservedCellItemLaneHeight(0, metrics)).toBe(0);
     expect(getMeasuredVisibleCellItemCount(
       items,
       90,
       { ...metrics, reservedHeight },
     )).toBe(0);
+  });
+
+  it("reserves lanes using span-lane geometry when provided", () => {
+    const reservedHeight = getReservedCellItemLaneHeight(2, {
+      ...metrics,
+      spanLaneHeight: 36,
+      spanLaneGap: 4,
+    });
+
+    expect(reservedHeight).toBe(80);
   });
 
   it("promotes hidden ghost chips into the visible preview slot", () => {

@@ -41,4 +41,6 @@ dist-ssr
 .continue/
 skills-lock.json
 docs/
-server/briefing/evals/local/
+server/email/search/evals/local/
+# grepai local semantic index (machine-local tooling, see AGENTS.md Search Routing)
+.grepai/

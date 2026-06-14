@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { resolveFloatingDetailPlacement } from "../../components/calendar/modal/calendarFloatingDetailPlacement.js";
 import {
+  dateCellSelector,
   isGridOriginAnchorKind,
   isGridOriginFloatingDetail,
   placementSideFromCaret,
@@ -66,7 +67,7 @@ export default function useCalendarFloatingDetail({ open, view, panelRef, railRe
 
   const findDateCell = useCallback((dateKey) => {
     if (!dateKey) return null;
-    return panelRef.current?.querySelector?.(`[role='gridcell'][data-date-key='${dateKey}']`) || null;
+    return panelRef.current?.querySelector?.(dateCellSelector(dateKey)) || null;
   }, [panelRef]);
 
   const shakeFloatingEditor = useCallback(() => {

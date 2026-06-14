@@ -5,10 +5,10 @@ import request from "supertest";
 vi.mock("../middleware/auth.js", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../briefing/config-service.js", () => ({
+vi.mock("../platform/config-service.js", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../briefing/calendar.js", () => ({
+vi.mock("../calendar/calendar.js", () => ({
   fetchCalendar: vi.fn(),
   pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
   getCalendarSourceGroups: vi.fn(),
@@ -20,21 +20,21 @@ vi.mock("../briefing/calendar.js", () => ({
     body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
   })),
 }));
-vi.mock("../briefing/google-places.js", () => ({
+vi.mock("../platform/google-places.js", () => ({
   getGooglePlaceDetails: vi.fn(),
   suggestGooglePlaces: vi.fn(),
 }));
-vi.mock("../briefing/deadlines-read.js", () => ({
+vi.mock("../tasks/deadlines-read.js", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
 }));
-vi.mock("../briefing/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.js", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
   updateDeadline: vi.fn(),
 }));
-vi.mock("../briefing/bills-service.js", () => ({
+vi.mock("../bills/bills-service.js", () => ({
   billMirrorRefreshRange: vi.fn(() => ({ start: "2026-05-01", end: "2026-05-31" })),
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
@@ -44,22 +44,22 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../briefing/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.js", () => ({
   deleteSourceReminders: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
 }));
-vi.mock("../briefing/reminder-hydration.js", () => ({
+vi.mock("../reminders/reminder-hydration.js", () => ({
   calendarEventAnchorAt: vi.fn(),
   hydrateCalendarEventsWithReminderState: vi.fn(async (_userId, events) => events),
 }));
-vi.mock("../briefing/calendar-search.js", () => ({
+vi.mock("../calendar/calendar-search.js", () => ({
   deadlineSearchCandidates: vi.fn(() => []),
   normalizeBillSearchCandidate: vi.fn((bill) => bill),
   normalizeEventSearchCandidate: vi.fn((event) => event),
   normalizeLimit: vi.fn(() => 20),
   rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
 }));
-vi.mock("../briefing/calendar-search-mirror.js", () => ({
+vi.mock("../calendar/calendar-search-mirror.js", () => ({
   deleteCalendarSearchMirrorOccurrence: vi.fn(),
   getCalendarSearchMirrorHealth: vi.fn(),
   listCalendarSearchMirrorOccurrences: vi.fn(),
@@ -70,7 +70,7 @@ vi.mock("../briefing/calendar-search-mirror.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const tasksService = await import("../briefing/tasks-service.js");
+const tasksService = await import("../tasks/tasks-service.js");
 const { applyDeadlineCurrentStatus } = await import("../dashboard/current-service.js");
 const calendarRoutes = (await import("./calendar.js")).default;
 

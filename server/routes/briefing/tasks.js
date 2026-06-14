@@ -1,5 +1,5 @@
 import { Router } from "express";
-import * as tasksService from "../../briefing/tasks-service.js";
+import * as tasksService from "../../tasks/tasks-service.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;

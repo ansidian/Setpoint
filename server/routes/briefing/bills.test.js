@@ -23,7 +23,7 @@ const mockBillsService = vi.hoisted(() => ({
 }));
 
 vi.mock("../../db/connection.js", () => ({ default: mockDb }));
-vi.mock("../../briefing/bills-service.js", () => mockBillsService);
+vi.mock("../../bills/bills-service.js", () => mockBillsService);
 
 process.env.EA_USER_ID = "user-1";
 

@@ -74,7 +74,6 @@ export function AllDayChip({
         if (isEventSelectionModifier(clickEvent)) {
           clickEvent.preventDefault();
           clickEvent.stopPropagation();
-          if (specialDate) return;
           quickActions?.toggleEventSelection?.({
             event,
             dateKey: event.agendaDateKey,

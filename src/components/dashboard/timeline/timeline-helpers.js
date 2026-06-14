@@ -1,4 +1,4 @@
-import { dayBucket } from "../../../lib/redesign-helpers";
+import { dayBucket } from "../../../lib/shell-helpers";
 
 export const PRIORITY_COLOR = {
   1: "#f38ba8",

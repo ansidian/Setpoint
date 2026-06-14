@@ -7,7 +7,7 @@ const taskService = vi.hoisted(() => ({
   listLabels: vi.fn(),
 }));
 
-vi.mock("../briefing/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.js", () => ({
   listProjects: (...args) => taskService.listProjects(...args),
   listLabels: (...args) => taskService.listLabels(...args),
 }));

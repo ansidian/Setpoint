@@ -3,14 +3,15 @@ import DashboardHero from "./DashboardHero";
 import TodayTimeline from "./TodayTimeline";
 import { DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
 import NotesRail from "../notes/NotesRail";
-import { useDashboard } from "../../context/DashboardContext";
 import { focusPressureTarget } from "../../lib/focus-windows";
-import { getEventSelectionId } from "../../lib/redesign-helpers";
+import { getEventSelectionId } from "../../lib/shell-helpers";
 import {
   DashboardBodyLayout,
   DashboardSurface,
 } from "./layout/DashboardScenePrimitives";
 import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel";
+
+const EMPTY_EMAIL_ACCOUNTS = [];
 
 export function DashboardBody({
   briefing, liveData, activeSnapshot, calendarRange, customize, accent,
@@ -25,7 +26,6 @@ export function DashboardBody({
     showNotes,
   });
   const effectiveLayout = layoutPlan.layoutMode;
-  const ctx = useDashboard();
 
   const seededEvents = useMemo(() => liveData.liveCalendar || [], [liveData.liveCalendar]);
   const [events, setEvents] = useState([]);
@@ -121,7 +121,7 @@ export function DashboardBody({
     }
     return Array.from(accounts.values());
   }, [accent, activeSnapshot]);
-  const emailAccounts = activeSnapshotEmailAccounts || ctx.emailAccounts;
+  const emailAccounts = activeSnapshotEmailAccounts || EMPTY_EMAIL_ACCOUNTS;
   const pressureNow = useMemo(() => new Date(`${today}T12:00:00Z`).getTime(), [today]);
   const displayEvents = liveEventsReady ? events : seededEvents;
   const eventLoadingState = liveEventsReady

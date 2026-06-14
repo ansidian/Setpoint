@@ -1,10 +1,11 @@
 import InboxDesktopPane from "./InboxDesktopPane";
 import MobileInboxView from "./mobile/MobileInboxView";
 import useInboxController from "./useInboxController";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import useActiveSnapshot from "../../hooks/useActiveSnapshot";
 import { settleArrivalGrace, settleArrivalGraceOnExit } from "../../api";
 import { EMPTY_INBOX_AI_SEARCH } from "./inboxAiSearchModel";
+import { useInboxSessionStore } from "./useInboxSessionState";
 import { getInboxTriageActivity } from "./inboxProcessingModel";
 
 const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
@@ -37,15 +38,9 @@ export default function InboxView({
   commitPendingUndoSignal,
   isMobile = false,
 }) {
-  const [localSessionState, setLocalSessionState] = useState(() => ({
-    accountId: "__all",
-    lane: "__all",
-    search: "",
-    selectedId: seedSelectedId || null,
-    inboxAiSearch: EMPTY_INBOX_AI_SEARCH,
-  }));
-  const resolvedSessionState = sessionState || localSessionState;
-  const setResolvedSessionState = onSessionStateChange || setLocalSessionState;
+  const [storeSessionState, setStoreSessionState] = useInboxSessionStore();
+  const resolvedSessionState = sessionState || storeSessionState;
+  const setResolvedSessionState = onSessionStateChange || setStoreSessionState;
 
   useEffect(() => {
     if (!seedSelectedId) return;

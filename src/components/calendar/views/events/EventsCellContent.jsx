@@ -1,13 +1,17 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity, getVisibleCellItemCount } from "../../modal/calendarCellItemMetrics.js";
 import { getLocationDisplayLabel } from "../../../../lib/calendar-links";
-import { dueDateToMs, getEventSelectionId } from "../../../../lib/redesign-helpers";
+import { dueDateToMs, getEventSelectionId } from "../../../../lib/shell-helpers";
 import {
   googleSpecialDateAccent,
   isGoogleSpecialDateEvent,
 } from "../../googleSpecialDateModel.js";
 import { formatTime12FromTime24 } from "../../ghostPreview.js";
-import { isPinnedCalendarGhost } from "../../modal/calendarEventSpanLayout.js";
+import {
+  SPAN_LANE_GAP,
+  SPAN_LANE_HEIGHT,
+  isPinnedCalendarGhost,
+} from "../../modal/calendarEventSpanLayout.js";
 import { toDeadlineGhostDescriptor } from "../deadlines/DeadlinesCellContent.jsx";
 import {
   deadlinePlanningDescriptor,
@@ -33,6 +37,8 @@ function resolveEventChipMetrics(layout) {
   const base = tier === "uhd" || tier === "xl" || tier === "lg" ? LG_EVENT_CHIP_METRICS : MD_EVENT_CHIP_METRICS;
   return {
     ...base,
+    spanLaneHeight: SPAN_LANE_HEIGHT,
+    spanLaneGap: SPAN_LANE_GAP,
     ...getCalendarCellCapacity(layout),
   };
 }

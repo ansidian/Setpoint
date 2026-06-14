@@ -1,5 +1,5 @@
 import db from "./connection.js";
-import { encrypt, decrypt } from "../briefing/encryption.js";
+import { encrypt, decrypt } from "../platform/encryption.js";
 
 // One-shot rewrite of CBC-encrypted column values into GCM format.
 // `decrypt()` accepts CBC values, but that path warns on every call. Walking

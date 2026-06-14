@@ -3,16 +3,14 @@ import { getSettings } from "@/api";
 import {
   resolveDashboardSoundForTrigger,
   resolveTriageSoundForEvent,
-  shouldAcceptTriageSoundEvent,
   TRIAGE_SOUND_SPACING_MS,
 } from "@/lib/triageSoundRouter";
+import { createTriageSoundGate } from "@/lib/triageSoundGate";
 import {
   isTriageSoundAudioUnlocked,
   playTriageNotificationSound,
 } from "@/lib/triageSoundPlayback";
 
-const DEDUPE_STORAGE_KEY = "ea_triage_sound_event_keys";
-const MAX_DEDUPE_KEYS = 200;
 const CALENDAR_LEAD_TIME_MS = 15 * 60 * 1000;
 
 function queuedSnapshotEventKey(item) {
@@ -32,31 +30,15 @@ function sleep(ms) {
   });
 }
 
-function readDedupeKeys() {
-  try {
-    return new Set(JSON.parse(sessionStorage.getItem(DEDUPE_STORAGE_KEY) || "[]"));
-  } catch {
-    return new Set();
-  }
-}
-
-function writeDedupeKeys(keys) {
-  try {
-    const recent = Array.from(keys).slice(-MAX_DEDUPE_KEYS);
-    sessionStorage.setItem(DEDUPE_STORAGE_KEY, JSON.stringify(recent));
-  } catch {
-    // Storage failure should never block dashboard updates.
-  }
-}
-
 export default function useTriageNotificationSounds() {
   const settingsRef = useRef(null);
   const registryRef = useRef(null);
-  const gateRef = useRef({ dedupeKeys: readDedupeKeys(), lastTriggerAt: {} });
+  const gateRef = useRef(null);
+  if (gateRef.current === null) gateRef.current = createTriageSoundGate();
   const playQueueRef = useRef(Promise.resolve());
   const lastPlayAtRef = useRef(0);
   const taskCompletionSequenceRef = useRef(0);
-  const queuedSnapshotKeysRef = useRef({ initialized: false, keys: new Set() });
+  const queuedSnapshotBaselineSeededRef = useRef(false);
   const calendarUpcomingTimersRef = useRef([]);
 
   const loadSettings = useCallback(() => {
@@ -113,16 +95,11 @@ export default function useTriageNotificationSounds() {
       registryRef.current,
     );
     if (!eventInfo) return;
-    const beforeDedupeSize = gateRef.current.dedupeKeys.size;
-    const accepted = shouldAcceptTriageSoundEvent(eventInfo, gateRef.current);
-    if (gateRef.current.dedupeKeys.size !== beforeDedupeSize) {
-      writeDedupeKeys(gateRef.current.dedupeKeys);
-    }
-    if (!accepted) return;
+    if (!gateRef.current.accept(eventInfo)) return;
     schedulePlayback(eventInfo.sound, eventInfo.volume);
   }, [schedulePlayback]);
 
-  const handleAppTrigger = useCallback((triggerType, eventKey, { coalesce = false, allowLocked = false } = {}) => {
+  const handleAppTrigger = useCallback((triggerType, eventKey, { allowLocked = false } = {}) => {
     const unlocked = isTriageSoundAudioUnlocked();
     if (!unlocked && !allowLocked) return;
     const eventInfo = resolveDashboardSoundForTrigger(
@@ -132,18 +109,7 @@ export default function useTriageNotificationSounds() {
       eventKey || `${triggerType}:${Date.now()}`,
     );
     if (!eventInfo) return;
-    if (coalesce) {
-      const beforeDedupeSize = gateRef.current.dedupeKeys.size;
-      const accepted = shouldAcceptTriageSoundEvent(eventInfo, gateRef.current);
-      if (gateRef.current.dedupeKeys.size !== beforeDedupeSize) {
-        writeDedupeKeys(gateRef.current.dedupeKeys);
-      }
-      if (!accepted) return;
-    } else if (eventInfo.eventKey) {
-      if (gateRef.current.dedupeKeys.has(eventInfo.eventKey)) return;
-      gateRef.current.dedupeKeys.add(eventInfo.eventKey);
-      writeDedupeKeys(gateRef.current.dedupeKeys);
-    }
+    if (!gateRef.current.accept(eventInfo)) return;
     schedulePlayback(eventInfo.sound, eventInfo.volume, {
       immediate: allowLocked,
       markUnlocked: allowLocked,
@@ -164,11 +130,11 @@ export default function useTriageNotificationSounds() {
       if (timeUntil <= 0) continue;
       const eventKey = calendarUpcomingEventKey(event);
       if (timeUntil > 0 && timeUntil <= CALENDAR_LEAD_TIME_MS) {
-        handleAppTrigger("event_upcoming", eventKey, { coalesce: true });
+        handleAppTrigger("event_upcoming", eventKey);
         continue;
       }
       const timerId = setTimeout(() => {
-        handleAppTrigger("event_upcoming", eventKey, { coalesce: true });
+        handleAppTrigger("event_upcoming", eventKey);
       }, timeUntil - CALENDAR_LEAD_TIME_MS);
       timerId.unref?.();
       calendarUpcomingTimersRef.current.push(timerId);
@@ -178,20 +144,21 @@ export default function useTriageNotificationSounds() {
   const handleActiveSnapshot = useCallback((activeSnapshot) => {
     if (!activeSnapshot?.snapshot) return;
     const queuedRows = activeSnapshot?.lanes?.queued || [];
-    const nextKeys = new Set(
-      queuedRows
-        .map(queuedSnapshotEventKey)
-        .filter(Boolean),
-    );
-    if (!queuedSnapshotKeysRef.current.initialized) {
-      queuedSnapshotKeysRef.current = { initialized: true, keys: nextKeys };
+    const eventKeys = queuedRows
+      .map(queuedSnapshotEventKey)
+      .filter(Boolean);
+    if (!queuedSnapshotBaselineSeededRef.current) {
+      queuedSnapshotBaselineSeededRef.current = true;
+      gateRef.current.remember(eventKeys);
       return;
     }
-    for (const eventKey of nextKeys) {
-      if (queuedSnapshotKeysRef.current.keys.has(eventKey)) continue;
+    const freshKeys = eventKeys.filter((eventKey) => !gateRef.current.has(eventKey));
+    for (const eventKey of freshKeys) {
       handleAppTrigger("email_queued", eventKey);
     }
-    queuedSnapshotKeysRef.current = { initialized: true, keys: nextKeys };
+    // Rows that arrived while audio was locked or the trigger was disabled
+    // still count as seen; they should not sound on a later snapshot.
+    gateRef.current.remember(freshKeys);
   }, [handleAppTrigger]);
 
   return useMemo(() => ({

@@ -1,4 +1,4 @@
-import { daysLabel } from "../../../../lib/redesign-helpers";
+import { daysLabel } from "../../../../lib/shell-helpers";
 
 export function deadlineTitle(task) {
   return task.title || task.name || "Untitled task";

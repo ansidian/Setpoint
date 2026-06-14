@@ -5,6 +5,7 @@ import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import { askInboxAiSearch, searchEmails } from "../../api";
 import InboxView from "./InboxView.jsx";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
+import { resetInboxSession } from "./useInboxSessionState.js";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -26,6 +27,7 @@ vi.mock("../../api", async () => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  resetInboxSession();
 });
 
 function deferred() {

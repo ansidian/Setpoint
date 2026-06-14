@@ -200,7 +200,7 @@ describe("CalendarModal event grid behavior", () => {
   it.each([
     ["Meta", { metaKey: true }],
     ["Control", { ctrlKey: true }],
-  ])("keeps selected birthday detail open when pressing %s for selection", async (key, modifiers) => {
+  ])("dismisses the selected birthday detail when pressing %s without starting a selection set", async (key, modifiers) => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -235,11 +235,13 @@ describe("CalendarModal event grid behavior", () => {
 
     const chip = await screen.findByTestId("calendar-event-span-segment");
     fireEvent.click(chip, { clientX: 4 });
-    const detail = await screen.findByTestId("calendar-floating-detail-panel");
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
 
     fireEvent.keyDown(document, { key, ...modifiers });
 
-    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(detail);
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
     expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
   });
 
@@ -342,6 +344,62 @@ describe("CalendarModal event grid behavior", () => {
     await waitFor(() => {
       expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
     });
+  });
+
+  it("dismisses the floating detail on modifier-clicked birthday chips without touching the selection set", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{
+          getEvents: () => ([
+            {
+              id: "event-1",
+              title: "Design review",
+              accountId: "gmail-main",
+              calendarId: "primary",
+              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
+              allDay: false,
+              color: "#4285f4",
+              writable: true,
+            },
+            {
+              id: "birthday-1",
+              title: "Maya's birthday",
+              accountId: "gmail-main",
+              calendarId: "primary",
+              eventType: "birthday",
+              startMs: new Date("2026-04-21T07:00:00.000Z").getTime(),
+              endMs: new Date("2026-04-22T07:00:00.000Z").getTime(),
+              allDay: true,
+              writable: false,
+            },
+          ]),
+        }}
+        billsData={{}}
+        deadlinesData={{}}
+      />,
+    ));
+
+    const chip = within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip");
+    fireEvent.click(chip);
+    expect(await screen.findByTestId("calendar-floating-detail-panel")).toBeTruthy();
+
+    const birthdaySpan = screen.getByTestId("calendar-event-span-segment");
+    expect(birthdaySpan.textContent).toContain("Maya's birthday");
+    fireEvent.click(birthdaySpan, { metaKey: true });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
+    });
+    expect(birthdaySpan.getAttribute("data-calendar-event-selection")).toBeNull();
+    expect(chip.getAttribute("data-calendar-event-selection")).toBeNull();
   });
 
   it("copies the seeded selected event with the Calendar Event Selection Set and clears only the visual set after keyboard paste", async () => {

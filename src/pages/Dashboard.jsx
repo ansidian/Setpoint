@@ -11,9 +11,10 @@ import useCurrentDashboard from "../hooks/useCurrentDashboard";
 import useAutoRefresh from "../hooks/useAutoRefresh";
 import useNotifications from "../hooks/useNotifications";
 import useTriageNotificationSounds from "../hooks/useTriageNotificationSounds";
-import useCalendarDomainRange from "../hooks/useCalendarDomainRange";
-import useCalendarRange from "../hooks/useCalendarRange";
-import { RedesignShell, DashboardBody } from "../components/dashboard/RedesignShell";
+import useStaleDomainCache from "../hooks/calendar/useStaleDomainCache";
+import useCalendarRange from "../hooks/calendar/useCalendarRange";
+import { DashboardShell, DashboardBody } from "../components/dashboard/DashboardShell";
+import { makeCalendarBillsData } from "../components/dashboard/calendarBillsData";
 import { reconcileBriefingReadStatus } from "../lib/briefing-email-state";
 import EmptyStateSplash from "../components/shared/EmptyStateSplash";
 import { resolveDashboardBriefingState } from "./Dashboard.bootState";
@@ -22,12 +23,7 @@ import {
   resolveDashboardRefreshPlan,
 } from "./Dashboard.refreshModel";
 
-const CALENDAR_DOMAIN_CACHE_TTL_MS = 30 * 60 * 1000;
 const SYNC_WATCHDOG_MS = 45_000;
-
-function isCalendarDomainCacheStale(fetchedAt) {
-  return !fetchedAt || Date.now() - fetchedAt > CALENDAR_DOMAIN_CACHE_TTL_MS;
-}
 
 function withSyncWatchdog(promise) {
   return Promise.race([
@@ -45,16 +41,37 @@ export default function Dashboard() {
   const liveData = currentDashboard.liveData;
   const activeSnapshot = currentDashboard.activeSnapshot;
   const calendarRange = useCalendarRange();
-  const calendarDeadlineRange = useCalendarDomainRange({
+  const calendarBillsRefreshRequestedRef = useRef(false);
+  const refreshLiveDataNow = liveData.refreshNow;
+  const billsCurrentRefreshing = liveData.providerHealth?.currentData?.sources?.some((source) =>
+    source.key === "bills_current" && source.state === "refreshing",
+  );
+  const deadlinesCache = useStaleDomainCache({
+    fetchDomain: getCalendarDeadlines,
+    seed: Array.isArray(liveData.liveDeadlines?.upcoming) ? liveData.liveDeadlines : null,
     fetchRange: getCalendarDeadlinesRange,
     emptyData: null,
     cacheMode: "month",
     prefetchMonthRadius: 1,
   });
-  const calendarBillRange = useCalendarDomainRange({
+  const billsCache = useStaleDomainCache({
+    fetchDomain: (opts) => {
+      if (opts?.refreshLive) {
+        calendarBillsRefreshRequestedRef.current = true;
+        refreshLiveDataNow?.();
+      }
+      return makeCalendarBillsData(liveData, { pendingUpdate: billsCurrentRefreshing });
+    },
+    initialData: null,
     fetchRange: getCalendarBillsRange,
     emptyData: null,
   });
+  const loadCalendarDeadlines = deadlinesCache.load;
+  const loadCalendarBills = billsCache.load;
+  const refreshCalendarDomains = useCallback(({ force = false, includeBills = true } = {}) => {
+    loadCalendarDeadlines({ force });
+    if (includeBills) loadCalendarBills({ force });
+  }, [loadCalendarBills, loadCalendarDeadlines]);
   useNotifications(liveData);
   const liveCalendar = liveData.liveCalendar;
   const liveLastFetched = liveData.lastFetched;
@@ -70,9 +87,9 @@ export default function Dashboard() {
   const bd = currentDashboard.briefingData;
   const [currentSyncing, setCurrentSyncing] = useState(false);
   const [lastQuickRefreshAt, setLastQuickRefreshAt] = useState(null);
-  const refreshCalendarDomainsRef = useRef(null);
   const calendarWorkspaceRef = useRef({ open: false, view: "events", eventsRange: null });
-  const calendarBillsRefreshRequestedRef = useRef(false);
+  const markDeadlineRangeStale = deadlinesCache.range.markStale;
+  const markBillRangeStale = billsCache.range.markStale;
   dashboardEventHandlerRef.current = (event) => {
     triageNotificationSounds.handleDashboardEvent(event);
     const plan = resolveDashboardCurrentEventPlan(event);
@@ -80,13 +97,13 @@ export default function Dashboard() {
       calendarBillsRefreshRequestedRef.current = true;
     }
     if (plan.markBillRangeStale) {
-      calendarBillRange.markStale?.();
+      markBillRangeStale?.();
     }
     if (plan.markDeadlineRangeStale) {
-      calendarDeadlineRange.markStale?.();
+      markDeadlineRangeStale?.();
     }
     if (plan.refreshCalendarDomains) {
-      refreshCalendarDomainsRef.current?.(plan.refreshCalendarDomains);
+      refreshCalendarDomains(plan.refreshCalendarDomains);
     }
   };
   const markCalendarRangeStale = calendarRange.markStale;
@@ -110,16 +127,16 @@ export default function Dashboard() {
       calendarBillsRefreshRequestedRef.current = true;
     }
     if (plan.markDeadlineRangeStale) {
-      calendarDeadlineRange.markStale?.();
+      markDeadlineRangeStale?.();
     }
     if (plan.markBillRangeStale) {
-      calendarBillRange.markStale?.();
+      markBillRangeStale?.();
     }
     if (plan.refreshCalendarDomains) {
-      refreshCalendarDomainsRef.current?.(plan.refreshCalendarDomains);
+      refreshCalendarDomains(plan.refreshCalendarDomains);
     }
     return withSyncWatchdog(activeSnapshot.sync?.()).finally(() => setCurrentSyncing(false));
-  }, [activeSnapshot, calendarBillRange, calendarDeadlineRange, currentSyncing, markCalendarRangeStale, refreshCalendarRangeInPlace]);
+  }, [activeSnapshot, currentSyncing, markBillRangeStale, markCalendarRangeStale, markDeadlineRangeStale, refreshCalendarDomains, refreshCalendarRangeInPlace]);
   const handleTimerQuickRefresh = useCallback(() => (
     runDashboardRefresh("timer")
   ), [runDashboardRefresh]);
@@ -154,93 +171,19 @@ export default function Dashboard() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyTriggerRef = useRef(null);
 
-  const [calendarDeadlines, setCalendarDeadlines] = useState(undefined);
-  const [calendarDeadlinesLoading, setCalendarDeadlinesLoading] = useState(false);
-  const [calendarDeadlinesError, setCalendarDeadlinesError] = useState(false);
-  const [calendarDeadlinesFetchedAt, setCalendarDeadlinesFetchedAt] = useState(0);
-  const updateCalendarDeadlineRangeData = calendarDeadlineRange.updateData;
-  const seedCalendarDeadlineRangeData = calendarDeadlineRange.seedData;
-  const calendarDeadlinesLoadingRef = useRef(false);
-  const seededCalendarDeadlinesRef = useRef(null);
-  const loadCalendarDeadlines = useCallback((opts) => {
-    const force = !!opts?.force;
-    if (calendarDeadlinesLoadingRef.current && !force) return;
-    if (!force && calendarDeadlines && !isCalendarDomainCacheStale(calendarDeadlinesFetchedAt)) return;
-    calendarDeadlinesLoadingRef.current = true;
-    setCalendarDeadlinesError(false);
-    setCalendarDeadlinesLoading(true);
-    getCalendarDeadlines()
-      .then((data) => {
-        setCalendarDeadlines(data);
-        setCalendarDeadlinesFetchedAt(Date.now());
-      })
-      .catch((err) => {
-        console.error("Calendar deadlines fetch failed:", err);
-        setCalendarDeadlinesError(true);
-      })
-      .finally(() => {
-        calendarDeadlinesLoadingRef.current = false;
-        setCalendarDeadlinesLoading(false);
-      });
-  }, [calendarDeadlines, calendarDeadlinesFetchedAt]);
-  const updateCalendarDeadlinesLocal = useCallback((updater) => {
-    setCalendarDeadlines(updater);
-    updateCalendarDeadlineRangeData?.(updater);
-  }, [updateCalendarDeadlineRangeData]);
-
-  useEffect(() => {
-    const seed = liveData.liveDeadlines;
-    if (!seed || !Array.isArray(seed.upcoming)) return;
-    if (seededCalendarDeadlinesRef.current === seed) return;
-    seededCalendarDeadlinesRef.current = seed;
-    seedCalendarDeadlineRangeData?.(seed);
-  }, [liveData.liveDeadlines, seedCalendarDeadlineRangeData]);
-
-  const [calendarBillsData, setCalendarBillsData] = useState(null);
-  const [calendarBillsFetchedAt, setCalendarBillsFetchedAt] = useState(0);
-  const refreshLiveDataNow = liveData.refreshNow;
-  const billsCurrentRefreshing = liveData.providerHealth?.currentData?.sources?.some((source) =>
-    source.key === "bills_current" && source.state === "refreshing",
-  );
-  const snapshotCalendarBills = useCallback(() => {
-    setCalendarBillsData({
-      schedules: (liveData.allSchedules || []).map((schedule) => ({ ...schedule })),
-      recentTransactions: [],
-      payeeMap: liveData.payeeMap || {},
-      actualBudgetUrl: liveData.actualBudgetUrl,
-      syncHealth: liveData.billsSyncHealth || null,
-      pendingUpdate: !!billsCurrentRefreshing,
-    });
-    setCalendarBillsFetchedAt(Date.now());
-  }, [billsCurrentRefreshing, liveData.actualBudgetUrl, liveData.allSchedules, liveData.billsSyncHealth, liveData.payeeMap]);
-  const loadCalendarBills = useCallback((opts) => {
-    const force = !!opts?.force;
-    const stale = isCalendarDomainCacheStale(calendarBillsFetchedAt);
-    if (!force && calendarBillsData && !stale) return;
-    if (opts?.refreshLive) {
-      calendarBillsRefreshRequestedRef.current = true;
-      refreshLiveDataNow?.();
-    }
-    snapshotCalendarBills();
-  }, [calendarBillsData, calendarBillsFetchedAt, refreshLiveDataNow, snapshotCalendarBills]);
-
+  // Re-snapshot bills once the live refresh requested via {refreshLive} lands.
   useEffect(() => {
     if (!calendarBillsRefreshRequestedRef.current) return;
     calendarBillsRefreshRequestedRef.current = false;
-    snapshotCalendarBills();
-  }, [liveData.lastFetched, snapshotCalendarBills]);
+    loadCalendarBills({ force: true });
+  }, [billsCurrentRefreshing, liveData.actualBudgetUrl, liveData.allSchedules, liveData.billsSyncHealth, liveData.lastFetched, liveData.payeeMap, loadCalendarBills]);
 
+  // Clear a pendingUpdate snapshot once the bills_current source settles.
+  const calendarBillsPendingUpdate = billsCache.data?.pendingUpdate;
   useEffect(() => {
-    if (!calendarBillsData?.pendingUpdate || billsCurrentRefreshing) return;
-    snapshotCalendarBills();
-  }, [billsCurrentRefreshing, calendarBillsData?.pendingUpdate, snapshotCalendarBills]);
-
-  useEffect(() => {
-    refreshCalendarDomainsRef.current = ({ force = false, includeBills = true } = {}) => {
-      loadCalendarDeadlines({ force });
-      if (includeBills) loadCalendarBills({ force });
-    };
-  }, [loadCalendarBills, loadCalendarDeadlines]);
+    if (!calendarBillsPendingUpdate || billsCurrentRefreshing) return;
+    loadCalendarBills({ force: true });
+  }, [billsCurrentRefreshing, calendarBillsPendingUpdate, loadCalendarBills]);
 
   const updateCalendarWorkspace = useCallback((snapshot) => {
     calendarWorkspaceRef.current = {
@@ -293,12 +236,11 @@ export default function Dashboard() {
   return (
     <TooltipProvider>
       <DashboardProvider
-        briefing={effectiveBriefing}
-        setBriefing={bd.setBriefing}
-        setCalendarDeadlines={updateCalendarDeadlinesLocal}
+        deadlines={deadlinesCache.data ?? liveData.liveDeadlines}
+        setCalendarDeadlines={deadlinesCache.update}
         onTaskCompletionIntent={triageNotificationSounds.handleTaskCompleted}
       >
-        <RedesignShell
+        <DashboardShell
           bd={shellBd}
           liveData={liveData}
           activeSnapshot={activeSnapshot}
@@ -307,13 +249,13 @@ export default function Dashboard() {
           historyOpen={historyOpen}
           setHistoryOpen={setHistoryOpen}
           historyTriggerRef={historyTriggerRef}
-          calendarDeadlines={calendarDeadlines}
-          calendarDeadlinesLoading={calendarDeadlinesLoading}
-          calendarDeadlinesError={calendarDeadlinesError}
+          calendarDeadlines={deadlinesCache.data}
+          calendarDeadlinesLoading={deadlinesCache.loading}
+          calendarDeadlinesError={deadlinesCache.error}
           loadCalendarDeadlines={loadCalendarDeadlines}
-          calendarBillsData={calendarBillsData}
-          calendarBillRange={calendarBillRange}
-          calendarDeadlineRange={calendarDeadlineRange}
+          calendarBillsData={billsCache.data}
+          calendarBillRange={billsCache.range}
+          calendarDeadlineRange={deadlinesCache.range}
           loadCalendarBills={loadCalendarBills}
           onCalendarWorkspaceChange={updateCalendarWorkspace}
         />
@@ -322,4 +264,4 @@ export default function Dashboard() {
   );
 }
 
-export { RedesignShell, DashboardBody };
+export { DashboardShell, DashboardBody };

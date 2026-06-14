@@ -1,25 +1,19 @@
+// Engine for the /api/dashboard/current envelope. All provider-specific
+// behavior (fetching, publish-on-change, backoff, maintenance) lives on the
+// provider modules in current-providers/; this file owns cache rows, refresh
+// planning/scheduling, and response composition.
 import db from "../db/connection.js";
-import {
-  clearPendingBillsMirrorRefresh,
-  consumeDueBillsMirrorRefresh,
-  getBillsMirrorState,
-  isBillsMirrorMaintenanceDue,
-  readBillsMirrorCurrent,
-  refreshBillsMirror,
-  scheduleBillsMirrorRefresh,
-} from "../briefing/bills-service.js";
+import { getBillsMirrorState } from "../bills/bills-service.js";
 import { publishCurrentDashboardEvent } from "./current-events.js";
-import { fetchCalendar } from "../briefing/calendar.js";
-import { computeDeadlineStats } from "../briefing/deadline-helpers.js";
-import { readCurrentDeadlines } from "../briefing/deadlines-read.js";
-import { loadUserConfig } from "../briefing/config-service.js";
-import { getActiveSnapshotView, syncActiveSnapshot } from "../briefing/snapshot-service.js";
-import { getTodoistSyncHealth } from "../briefing/todoist.js";
-import { fetchWeather } from "../briefing/weather.js";
+import { computeDeadlineStats } from "../tasks/deadline-helpers.js";
+import { loadUserConfig } from "../platform/config-service.js";
+import { getActiveSnapshotView, syncActiveSnapshot } from "../snapshots/snapshot-service.js";
+import { getTodoistSyncHealth } from "../tasks/todoist.js";
 import {
   hydrateCalendarEventsWithReminderState,
   hydrateTodoistTasksWithReminderState,
-} from "../briefing/reminder-hydration.js";
+} from "../reminders/reminder-hydration.js";
+import { CURRENT_DATA_PROVIDERS, providerFor } from "./current-providers/index.js";
 import {
   CURRENT_CACHE_KEYS,
   EMPTY_DEADLINES,
@@ -28,13 +22,11 @@ import {
   hasUsablePayload,
   isRefreshTimedOut,
   parsePayload,
-  shouldPublishBillsCurrentChange,
   sourceHealthForRow,
   summarizeCurrentDataHealth,
 } from "./current-sources.js";
 
 const PASSIVE_FAILURE_BACKOFF_MS = [2 * 60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000];
-const BILLS_PASSIVE_PROVIDER_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
 const BACKGROUND_REFRESH_IN_FLIGHT = new Map();
 
@@ -168,19 +160,6 @@ function composeSystemStatus(providerHealth, { generatedAt = new Date().toISOStr
     sources,
     generatedAt,
   };
-}
-
-function publishBillsCurrentChange(userId, previousRow, nextPayload, {
-  now = new Date(),
-  reason = "changed",
-} = {}) {
-  if (!shouldPublishBillsCurrentChange(previousRow, nextPayload)) return;
-  publishCurrentDashboardEvent(userId, {
-    source: "bills",
-    reason,
-    state: "current",
-    occurredAt: now.toISOString(),
-  });
 }
 
 export async function applyDeadlineCurrentStatus(userId, taskId, status, {
@@ -330,72 +309,6 @@ async function markCacheRowRefreshFailed(userId, cacheKey, err, {
   };
 }
 
-async function refreshWeatherCurrent(userId, config, options) {
-  const settings = config.settings || {};
-  const payload = {
-    ...(await fetchWeather(settings.weather_lat || 34.1442, settings.weather_lng || -117.9981)),
-    location: settings.weather_location || "El Monte, CA",
-  };
-  await saveCacheRow(userId, "weather_current", payload, options);
-  return payload;
-}
-
-async function refreshCalendarCurrent(userId, config, options) {
-  const calendarAccounts = (config.accounts || []).filter(
-    (account) => account.type === "gmail" && account.calendar_enabled,
-  );
-  const payload = await fetchCalendar(calendarAccounts);
-  await saveCacheRow(userId, "calendar_current", payload, options);
-  return payload;
-}
-
-async function refreshDeadlinesCurrent(userId, _config, options) {
-  const payload = await readCurrentDeadlines(userId, { force: !!options.force });
-  await saveCacheRow(userId, "deadlines_current", payload, options);
-  return payload;
-}
-
-async function refreshBillsCurrent(userId, config, options) {
-  const actualBudgetUrl = config.settings?.actual_budget_url || null;
-  if (!actualBudgetUrl) {
-    const payload = await refreshBillsMirror(userId, { ...options, actualBudgetUrl: null });
-    await saveCacheRow(userId, "bills_current", payload, options);
-    return payload;
-  }
-
-  let payload;
-  const dueRefresh = options.force
-    ? false
-    : await consumeDueBillsMirrorRefresh(userId, options).catch((err) => {
-        console.error("[Dashboard] Bills mirror due-refresh check failed:", err.message);
-        return false;
-      });
-  if (options.force || dueRefresh) {
-    await clearPendingBillsMirrorRefresh(userId, options);
-    payload = await refreshBillsMirror(userId, {
-      ...options,
-      actualBudgetUrl,
-      refreshLocalActual: true,
-    });
-  } else {
-    payload = await readBillsMirrorCurrent(userId, options);
-    if (payload.billsSyncHealth?.state === "needs_sync") {
-      scheduleBillsMirrorRefresh(userId, options).catch((err) => {
-        console.error("[Dashboard] Bills mirror refresh scheduling failed:", err.message);
-      });
-    }
-  }
-  await saveCacheRow(userId, "bills_current", payload, options);
-  return payload;
-}
-
-const DOMAIN_REFRESHERS = {
-  weather_current: refreshWeatherCurrent,
-  calendar_current: refreshCalendarCurrent,
-  deadlines_current: refreshDeadlinesCurrent,
-  bills_current: refreshBillsCurrent,
-};
-
 async function refreshRows(userId, rows, refreshKeys, {
   dbClient = db,
   now = new Date(),
@@ -407,8 +320,10 @@ async function refreshRows(userId, rows, refreshKeys, {
   const config = await loadUserConfig(userId);
   const refreshedRows = { ...rows };
   await Promise.all(refreshKeys.map(async (key) => {
+    const provider = providerFor(key);
     try {
-      const payload = await DOMAIN_REFRESHERS[key](userId, config, { dbClient, now, force });
+      const payload = await provider.fetchFresh(userId, config, { dbClient, now, force });
+      await saveCacheRow(userId, key, payload, { dbClient, now });
       refreshedRows[key] = {
         user_id: userId,
         cache_key: key,
@@ -421,12 +336,10 @@ async function refreshRows(userId, rows, refreshKeys, {
         last_refresh_error: null,
         refresh_failure_count: 0,
       };
-      if (key === "bills_current") {
-        publishBillsCurrentChange(userId, rows[key], payload, {
-          now,
-          reason: refreshReasons[key] === "bills_mirror_maintenance_due" ? "maintenance_refreshed" : "changed",
-        });
-      }
+      provider.onRefreshed?.(userId, {
+        previousRow: rows[key],
+        previousPayload: parsePayload(rows[key], null),
+      }, payload, { now, refreshReason: refreshReasons[key] || null });
     } catch (err) {
       console.error(`[Dashboard] ${key} refresh failed:`, err.message);
       refreshedRows[key] = await markCacheRowRefreshFailed(userId, key, err, {
@@ -540,37 +453,6 @@ function isInPassiveBackoff(row, now) {
   return now.getTime() - new Date(failedAt).getTime() < passiveBackoffMs(count);
 }
 
-function newestFailureTime(values) {
-  const times = values
-    .filter(Boolean)
-    .map((value) => new Date(value).getTime())
-    .filter((value) => Number.isFinite(value));
-  return times.length ? Math.max(...times) : null;
-}
-
-function isInBillsProviderFailureBackoff(row, billsMirror, now) {
-  const failureTime = newestFailureTime([
-    row?.last_refresh_failed_at,
-    billsMirror?.syncHealth?.lastAttemptAt,
-  ]);
-  if (!failureTime) return false;
-  const rowFailed = Number(row?.refresh_failure_count || 0) > 0;
-  const mirrorFailed = billsMirror?.syncHealth?.state === "degraded" || billsMirror?.syncHealth?.state === "unavailable";
-  if (!rowFailed && !mirrorFailed) return false;
-  return now.getTime() - failureTime < BILLS_PASSIVE_PROVIDER_FAILURE_BACKOFF_MS;
-}
-
-function suppressBillsPassiveRefreshDuringProviderBackoff(refreshPlan, rows, billsMirror, {
-  now,
-} = {}) {
-  if (!isInBillsProviderFailureBackoff(rows.bills_current, billsMirror, now)) return;
-  const scheduledBefore = refreshPlan.scheduled.length;
-  refreshPlan.scheduled = refreshPlan.scheduled.filter((entry) => entry.key !== "bills_current");
-  if (refreshPlan.scheduled.length !== scheduledBefore) {
-    refreshPlan.skipped.push(skippedEntry("bills_current", "provider_backoff"));
-  }
-}
-
 function refreshReasonForSource(key, row, mode, now) {
   if (!row) return "missing";
   const health = sourceHealthForRow(key, row, now);
@@ -581,24 +463,16 @@ function refreshReasonForSource(key, row, mode, now) {
   return null;
 }
 
-function hasTodoistNeedsSync(todoistHealth) {
-  return todoistHealth?.state === "needs_sync" || todoistHealth?.state === "stale";
-}
-
-function isTodoistMirrorNewerThanDeadlines(todoistHealth, row) {
-  if (!todoistHealth?.lastSuccessAt || !row?.fetched_at) return false;
-  return new Date(todoistHealth.lastSuccessAt).getTime() > new Date(row.fetched_at).getTime();
-}
-
 function planCurrentDataRefresh(rows, {
   mode,
   now,
   force = false,
-  todoistHealth = null,
+  context = {},
 } = {}) {
   const scheduled = [];
   const skipped = [];
-  for (const key of CURRENT_CACHE_KEYS) {
+  for (const provider of CURRENT_DATA_PROVIDERS) {
+    const key = provider.key;
     const row = rows[key];
     if (force) {
       scheduled.push(scheduledEntry(key, "force"));
@@ -609,11 +483,9 @@ function planCurrentDataRefresh(rows, {
       else skipped.push(skippedEntry(key, "already_refreshing"));
       continue;
     }
-    if (
-      key === "deadlines_current"
-      && (hasTodoistNeedsSync(todoistHealth) || isTodoistMirrorNewerThanDeadlines(todoistHealth, row))
-    ) {
-      scheduled.push(scheduledEntry(key, "needs_sync"));
+    const overrideReason = provider.refreshReasonOverride?.({ row, now, context });
+    if (overrideReason) {
+      scheduled.push(scheduledEntry(key, overrideReason));
       continue;
     }
     const reason = refreshReasonForSource(key, row, mode, now);
@@ -630,15 +502,40 @@ function planCurrentDataRefresh(rows, {
   return { scheduled, skipped };
 }
 
-function applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, {
-  forceKeys,
-  now,
-} = {}) {
-  if (!isBillsMirrorMaintenanceDue(billsMirror?.syncHealth, { now })) return;
-  if (isInPassiveBackoff(rows.bills_current, now)) return;
-  if (isInBillsProviderFailureBackoff(rows.bills_current, billsMirror, now)) return;
-  ensureScheduled(refreshPlan, "bills_current", "bills_mirror_maintenance_due");
-  forceKeys?.add("bills_current");
+function applyProviderPassiveSuppression(refreshPlan, rows, { now, context = {} } = {}) {
+  for (const provider of CURRENT_DATA_PROVIDERS) {
+    if (!provider.passiveSuppressReason) continue;
+    const reason = provider.passiveSuppressReason({ row: rows[provider.key], now, context });
+    if (!reason) continue;
+    const scheduledBefore = refreshPlan.scheduled.length;
+    refreshPlan.scheduled = refreshPlan.scheduled.filter((entry) => entry.key !== provider.key);
+    if (refreshPlan.scheduled.length !== scheduledBefore) {
+      refreshPlan.skipped.push(skippedEntry(provider.key, reason));
+    }
+  }
+}
+
+function applyProviderMaintenanceRefresh(refreshPlan, rows, { forceKeys, now, context = {} } = {}) {
+  for (const provider of CURRENT_DATA_PROVIDERS) {
+    if (!provider.maintenanceRefreshReason) continue;
+    const row = rows[provider.key];
+    const reason = provider.maintenanceRefreshReason({ row, now, context });
+    if (!reason) continue;
+    if (isInPassiveBackoff(row, now)) continue;
+    if (provider.passiveSuppressReason?.({ row, now, context })) continue;
+    ensureScheduled(refreshPlan, provider.key, reason);
+    forceKeys?.add(provider.key);
+  }
+}
+
+function applyProviderManualRefresh(refreshPlan, rows, { forceKeys, now, context = {} } = {}) {
+  for (const provider of CURRENT_DATA_PROVIDERS) {
+    if (!provider.manualRefreshReason) continue;
+    const reason = provider.manualRefreshReason({ row: rows[provider.key], now, context });
+    if (!reason) continue;
+    ensureScheduled(refreshPlan, provider.key, reason);
+    forceKeys?.add(provider.key);
+  }
 }
 
 async function hydrateCurrentReminderState(userId, {
@@ -683,13 +580,7 @@ async function composeCurrentDashboardResponse(userId, rows, {
   dbClient = db,
   now = new Date(),
 } = {}) {
-  const billsPayload = usablePayloadForKey("bills_current", rows.bills_current, {
-    bills: [],
-    allSchedules: [],
-    payeeMap: {},
-    actualConfigured: false,
-    actualBudgetUrl: null,
-  });
+  const billsPayload = usablePayloadForKey("bills_current", rows.bills_current, fallbackPayloadForKey("bills_current"));
 
   const nextProviderHealth = { ...providerHealth };
   if (activeSnapshotHealth) nextProviderHealth.activeSnapshot = activeSnapshotHealth;
@@ -717,6 +608,12 @@ async function composeCurrentDashboardResponse(userId, rows, {
   };
 }
 
+async function loadRefreshContext(userId, { dbClient = db } = {}) {
+  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
+  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
+  return { todoistHealth, billsMirror };
+}
+
 export async function getCurrentDashboard(userId, {
   dbClient = db,
   now = new Date(),
@@ -726,19 +623,18 @@ export async function getCurrentDashboard(userId, {
     await loadCacheRows(userId, { dbClient }),
     { dbClient, now },
   );
-  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
-  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
-  const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, todoistHealth });
-  suppressBillsPassiveRefreshDuringProviderBackoff(refreshPlan, rows, billsMirror, { now });
+  const context = await loadRefreshContext(userId, { dbClient });
+  const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, context });
+  applyProviderPassiveSuppression(refreshPlan, rows, { now, context });
   const forceKeys = new Set();
-  applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, { forceKeys, now });
+  applyProviderMaintenanceRefresh(refreshPlan, rows, { forceKeys, now, context });
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
   scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
-    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
+    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
     refresh: { mode: "passive", ...refreshPlan },
     dbClient,
     now,
@@ -785,19 +681,10 @@ export async function requestCurrentDashboardRefresh(userId, {
   now = new Date(),
 } = {}) {
   const rows = await loadCacheRows(userId, { dbClient });
-  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
-  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
-  const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, todoistHealth });
+  const context = await loadRefreshContext(userId, { dbClient });
+  const refreshPlan = planCurrentDataRefresh(rows, { mode: "manual", now, context });
   const forceKeys = new Set();
-  ensureScheduled(refreshPlan, "deadlines_current", "manual_todoist_sync");
-  forceKeys.add("deadlines_current");
-  if (billsMirror?.syncHealth?.pendingRefreshAt) {
-    ensureScheduled(refreshPlan, "bills_current", "pending_bills_mirror");
-    forceKeys.add("bills_current");
-  } else {
-    ensureScheduled(refreshPlan, "bills_current", "manual_bills_sync");
-    forceKeys.add("bills_current");
-  }
+  applyProviderManualRefresh(refreshPlan, rows, { forceKeys, now, context });
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
@@ -816,7 +703,7 @@ export async function requestCurrentDashboardRefresh(userId, {
   };
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
-    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth }),
+    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
     refresh,
     activeSnapshotHealth: {
       state: shouldSyncSnapshot ? "syncing" : "current",
@@ -837,7 +724,7 @@ export async function requestBillsCurrentMaintenanceRefresh(userId, {
   const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
   const refreshPlan = { scheduled: [], skipped: [] };
   const forceKeys = new Set();
-  applyBillsMirrorMaintenanceRefresh(refreshPlan, rows, billsMirror, { forceKeys, now });
+  applyProviderMaintenanceRefresh(refreshPlan, rows, { forceKeys, now, context: { billsMirror } });
   const scheduledKeys = refreshPlan.scheduled.map((entry) => entry.key);
   if (!scheduledKeys.length) return { scheduled: false, due: false };
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });

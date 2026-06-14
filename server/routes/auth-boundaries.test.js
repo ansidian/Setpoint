@@ -15,7 +15,7 @@ vi.mock("../db/connection.js", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../briefing/bills-service.js", () => ({
+vi.mock("../bills/bills-service.js", () => ({
   sendBill: vi.fn(async () => ({ success: true })),
   markBillPaid: vi.fn(async () => ({ success: true })),
   listAccounts: vi.fn(async () => [{ id: "acct-1", name: "Checking" }]),
@@ -28,7 +28,7 @@ vi.mock("../briefing/bills-service.js", () => ({
   createQuickTxn: vi.fn(async () => ({ success: true, account: "Checking" })),
   extractBill: vi.fn(async () => ({ payee: "Power", amount: 42 })),
 }));
-vi.mock("../briefing/email-service.js", () => ({
+vi.mock("../email/email-service.js", () => ({
   getEmailBody: vi.fn(),
   dismiss: vi.fn(),
   snooze: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock("../briefing/email-service.js", () => ({
   searchEmails: vi.fn(),
   settleArrivalGrace: vi.fn(async () => ({ settled: 2, emailIds: ["msg-1", "msg-2"] })),
 }));
-vi.mock("../briefing/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.js", () => ({
   completeTask: vi.fn(),
   dismissTombstone: vi.fn(),
   updateCTMStatus: vi.fn(),
@@ -50,58 +50,58 @@ vi.mock("../briefing/tasks-service.js", () => ({
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
 }));
-vi.mock("../briefing/dev-service.js", () => ({
+vi.mock("../email/dev-service.js", () => ({
   reindexEmails: vi.fn(),
 }));
-vi.mock("../briefing/email-index.js", () => ({
+vi.mock("../email/email-index.js", () => ({
   getEmailIndexHealth: vi.fn(async () => ({ accounts: [] })),
   queueEmailIndexBackfill: vi.fn(async () => ({ queued: true, accounts: [] })),
 }));
-vi.mock("../briefing/email-backfill-worker.js", () => ({
+vi.mock("../email/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: vi.fn(),
 }));
-vi.mock("../briefing/gmail.js", () => ({
+vi.mock("../email/gmail.js", () => ({
   fetchEmails: vi.fn(async () => []),
   isMessageRead: vi.fn(async () => null),
   getAuthUrl: vi.fn(),
   handleCallback: vi.fn(),
   testConnection: vi.fn(),
 }));
-vi.mock("../briefing/icloud.js", () => ({
+vi.mock("../email/icloud.js", () => ({
   fetchEmails: vi.fn(async () => []),
   isMessageRead: vi.fn(async () => null),
   testConnection: vi.fn(),
 }));
-vi.mock("../briefing/weather.js", () => ({
+vi.mock("../platform/weather.js", () => ({
   fetchWeather: vi.fn(async () => ({ temp: 0, high: 0, low: 0, summary: "", hourly: [] })),
   geocodeLocation: vi.fn(async () => []),
 }));
-vi.mock("../briefing/calendar.js", () => ({
+vi.mock("../calendar/calendar.js", () => ({
   fetchCalendar: vi.fn(async () => []),
   getNextWeekRange: vi.fn(() => [0, 0]),
   getTomorrowRange: vi.fn(() => [0, 0]),
 }));
-vi.mock("../briefing/actual.js", () => ({
+vi.mock("../actual/actual.js", () => ({
   getUpcomingBills: vi.fn(async () => []),
   getRecentTransactions: vi.fn(async () => []),
   getMetadata: vi.fn(async () => ({ schedules: [], payeeMap: {}, recentTransactions: [] })),
   isSchedulePaid: vi.fn(() => false),
 }));
-vi.mock("../briefing/scheduler.js", () => ({
+vi.mock("../scheduler.js", () => ({
   initScheduler: vi.fn(),
 }));
-vi.mock("../briefing/account-canonical.js", () => ({
+vi.mock("../platform/account-canonical.js", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
 }));
-vi.mock("../briefing/encryption.js", () => ({
+vi.mock("../platform/encryption.js", () => ({
   encrypt: vi.fn((value) => `enc:${value}`),
   decrypt: vi.fn((value) => value),
 }));
-vi.mock("../briefing/discord-reminders.js", () => ({
+vi.mock("../reminders/discord-reminders.js", () => ({
   formatGenericDiscordTestPayload: vi.fn(() => ({ embeds: [{ title: "Setpoint reminder test" }] })),
   sendDiscordWebhook: vi.fn(async () => ({ ok: true, status: 204 })),
 }));
-vi.mock("../briefing/bill-extractors/catalog.js", () => ({
+vi.mock("../bills/bill-extractors/catalog.js", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",
@@ -117,18 +117,18 @@ vi.mock("../dashboard/current-service.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const { createQuickTxn, sendBill } = await import("../briefing/bills-service.js");
-const emailService = await import("../briefing/email-service.js");
+const { createQuickTxn, sendBill } = await import("../bills/bills-service.js");
+const emailService = await import("../email/email-service.js");
 const briefingRoutes = (await import("./briefing/index.js")).default;
 const dashboardRoutes = (await import("./dashboard.js")).default;
 const accountsRoutes = (await import("./accounts.js")).default;
 const notesRoutes = (await import("./notes.js")).default;
-const discordReminders = await import("../briefing/discord-reminders.js");
+const discordReminders = await import("../reminders/discord-reminders.js");
 const {
   __resetCurrentDashboardEventsForTests,
   subscribeCurrentDashboardEvents,
 } = await import("../dashboard/current-events.js");
-const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../briefing/triage-sound-settings.js");
+const { TRIAGE_NOTIFICATION_SOUNDS } = await import("../triage/triage-sound-settings.js");
 const bearerHash = crypto.createHash("sha256").update("scoped-token").digest("hex");
 const sessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 

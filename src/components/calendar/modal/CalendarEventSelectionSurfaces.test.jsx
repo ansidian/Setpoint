@@ -65,7 +65,7 @@ describe("Calendar Event Selection Set surfaces", () => {
     expect(onSelectItem).not.toHaveBeenCalled();
   });
 
-  it("keeps special-date month-grid chips out of the Calendar Event Selection Set", () => {
+  it("forwards special-date month-grid chip modifier-clicks without marking selection", () => {
     const onSelectItem = vi.fn();
     const toggleEventSelection = vi.fn(() => true);
     render(
@@ -94,7 +94,11 @@ describe("Calendar Event Selection Set surfaces", () => {
 
     fireEvent.click(chip, { metaKey: true });
 
-    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: sourceEvent,
+      dateKey: "2026-05-04",
+      anchorKind: "chip",
+    }));
     expect(onSelectItem).not.toHaveBeenCalled();
 
     fireEvent.click(chip);
@@ -138,7 +142,7 @@ describe("Calendar Event Selection Set surfaces", () => {
     expect(onSelectItem).not.toHaveBeenCalled();
   });
 
-  it("keeps special-date inline overflow chips out of the Calendar Event Selection Set", () => {
+  it("forwards special-date inline overflow chip modifier-clicks without marking selection", () => {
     const onSelectItem = vi.fn();
     const toggleEventSelection = vi.fn(() => true);
     render(
@@ -168,7 +172,11 @@ describe("Calendar Event Selection Set surfaces", () => {
 
     fireEvent.click(chip, { metaKey: true });
 
-    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: sourceEvent,
+      dateKey: "2026-05-04",
+      anchorKind: "overflow-row",
+    }));
     expect(onSelectItem).not.toHaveBeenCalled();
 
     fireEvent.click(chip);
@@ -180,7 +188,7 @@ describe("Calendar Event Selection Set surfaces", () => {
     expect(onSelectItem.mock.calls[0][1].preserveEventSelection).toBeFalsy();
   });
 
-  it("renders special-date fallback overflow rows as markers outside batch selection", async () => {
+  it("forwards special-date fallback overflow row modifier-clicks without marking selection", async () => {
     const onSelectItem = vi.fn();
     const toggleEventSelection = vi.fn(() => true);
     render(
@@ -214,7 +222,11 @@ describe("Calendar Event Selection Set surfaces", () => {
 
     fireEvent.click(row, { metaKey: true });
 
-    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: sourceEvent,
+      dateKey: "2026-05-04",
+      anchorKind: "overflow-row",
+    }));
     expect(onSelectItem).not.toHaveBeenCalled();
 
     fireEvent.click(row);

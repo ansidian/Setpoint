@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Inbox, Mail, Briefcase, GraduationCap, DollarSign, Layers, Send } from "lucide-react";
-import { LANE } from "../../lib/redesign-helpers";
+import { LANE } from "../../lib/shell-helpers";
 import { Kbd, Eyebrow } from "./primitives";
 
 const ACCOUNT_ICON = { Mail, Briefcase, GraduationCap, DollarSign, Inbox };

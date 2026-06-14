@@ -1,5 +1,5 @@
 import { Router } from "express";
-import * as snapshotService from "../../briefing/snapshot-service.js";
+import * as snapshotService from "../../snapshots/snapshot-service.js";
 import { timeRoute } from "../../timing.js";
 
 const router = Router();

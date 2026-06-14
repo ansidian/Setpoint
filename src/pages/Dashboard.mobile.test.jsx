@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../context/DashboardContext.jsx";
 import { BrowserRouter } from "react-router-dom";
+import { resetInboxSession } from "../components/inbox/useInboxSessionState.js";
 
 let mockIsMobile = false;
 let mockCustomize = null;
@@ -102,7 +103,7 @@ vi.mock("../components/dashboard/DeadlineDetailPopover", () => ({
   },
 }));
 
-const { RedesignShell } = await import("./Dashboard.jsx");
+const { DashboardShell } = await import("./Dashboard.jsx");
 const { captureAnalyticsBackdropSnapshot } = await import("@/components/shell/analyticsBackdropSnapshot.js");
 
 afterEach(() => {
@@ -111,6 +112,7 @@ afterEach(() => {
   latestInboxProps = null;
   cleanup();
   vi.clearAllMocks();
+  resetInboxSession();
 });
 
 beforeEach(() => {
@@ -193,13 +195,13 @@ function renderShell() {
   return render(
     <BrowserRouter>
       <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-        <RedesignShell {...props} />
+        <DashboardShell {...props} />
       </DashboardProvider>
     </BrowserRouter>,
   );
 }
 
-describe("RedesignShell mobile behavior", () => {
+describe("DashboardShell mobile behavior", () => {
   it("uses the mobile task surface for task creation chords without mounting the desktop calendar", async () => {
     mockIsMobile = true;
     renderShell();
@@ -324,7 +326,7 @@ describe("RedesignShell mobile behavior", () => {
     render(
       <BrowserRouter>
         <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
+          <DashboardShell {...props} />
         </DashboardProvider>
       </BrowserRouter>,
     );
@@ -370,7 +372,7 @@ describe("RedesignShell mobile behavior", () => {
     const { rerender } = render(
       <BrowserRouter>
         <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
+          <DashboardShell {...props} />
         </DashboardProvider>
       </BrowserRouter>,
     );
@@ -394,7 +396,7 @@ describe("RedesignShell mobile behavior", () => {
     rerender(
       <BrowserRouter>
         <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...refreshedProps} />
+          <DashboardShell {...refreshedProps} />
         </DashboardProvider>
       </BrowserRouter>,
     );
@@ -425,7 +427,7 @@ describe("RedesignShell mobile behavior", () => {
     render(
       <BrowserRouter>
         <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
+          <DashboardShell {...props} />
         </DashboardProvider>
       </BrowserRouter>,
     );
@@ -456,7 +458,7 @@ describe("RedesignShell mobile behavior", () => {
     render(
       <BrowserRouter>
         <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
-          <RedesignShell {...props} />
+          <DashboardShell {...props} />
         </DashboardProvider>
       </BrowserRouter>,
     );

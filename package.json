@@ -9,9 +9,11 @@
   "scripts": {
     "dev:client": "vite",
     "dev:server": "node --watch server/index.js",
+    "predev": "node scripts/regen-architecture.mjs",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:ai-search-turso": "EA_DEV_DB_ADAPTER=turso AI_SEARCH_VECTOR_ADAPTER=turso EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED=1 concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "postinstall": "npm rebuild better-sqlite3",
+    "postinstall": "npm rebuild better-sqlite3 && simple-git-hooks",
+    "regen:architecture": "node scripts/regen-architecture.mjs",
     "build": "vite build",
     "build:demo": "VITE_EA_DEMO=1 vite build --outDir dist-demo && cp dist-demo/index.html dist-demo/404.html",
     "preview:demo": "vite preview --outDir dist-demo",
@@ -92,9 +94,13 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "jsdom": "^29.0.2",
+    "simple-git-hooks": "^2.13.1",
     "supertest": "^7.2.2",
     "typescript": "^6.0.3",
     "vite": "^8.0.1",
     "vitest": "^4.1.2"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "node scripts/regen-architecture.mjs && git add ARCHITECTURE.md"
   }
 }

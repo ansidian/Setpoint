@@ -99,10 +99,6 @@ TODOIST_CLIENT_SECRET=todoist-developer-app-client-secret
 # Pirate Weather (optional)
 PIRATE_WEATHER_API_KEY=
 
-# Render (auto-suspend to save costs — optional)
-RENDER_API_KEY=
-RENDER_SERVICE_ID=
-
 # Startup workers (optional)
 EA_STARTUP_WORKER_DELAY_MS=
 EA_STARTUP_WORKER_JITTER_MS=

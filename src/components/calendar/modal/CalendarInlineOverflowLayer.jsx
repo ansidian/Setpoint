@@ -279,7 +279,6 @@ export default function CalendarInlineOverflowLayer({
               target.focus({ preventScroll: true });
               if (isEventSelectionModifier(event)) {
                 event.preventDefault();
-                if (specialDate) return;
                 quickActions?.toggleEventSelection?.({
                   event: item.sourceEvent || item.sourceItem,
                   dateKey: overflow.dateKey || null,

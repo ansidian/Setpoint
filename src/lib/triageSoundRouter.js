@@ -4,7 +4,6 @@ import {
   TRIAGE_SOUND_TRIGGER_KEYS,
 } from "@/lib/triageSoundSettings";
 
-export const TRIAGE_SOUND_COALESCE_MS = 4_000;
 export const TRIAGE_SOUND_SPACING_MS = 650;
 
 const TRIGGER_TO_SETTING_KEY = {
@@ -53,17 +52,4 @@ export function resolveTriageSoundForEvent(event, settings, registry) {
     registry,
     details.eventKey || `${details.emailId || "unknown"}:${details.reason || details.triggerType}`,
   );
-}
-
-export function shouldAcceptTriageSoundEvent(eventInfo, gate, now = Date.now()) {
-  if (!eventInfo?.eventKey || !eventInfo?.triggerType) return false;
-  if (gate.dedupeKeys.has(eventInfo.eventKey)) return false;
-  const lastTriggerAt = gate.lastTriggerAt[eventInfo.triggerType] || 0;
-  if (now - lastTriggerAt < TRIAGE_SOUND_COALESCE_MS) {
-    gate.dedupeKeys.add(eventInfo.eventKey);
-    return false;
-  }
-  gate.dedupeKeys.add(eventInfo.eventKey);
-  gate.lastTriggerAt[eventInfo.triggerType] = now;
-  return true;
 }

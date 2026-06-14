@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Clock } from "lucide-react";
-import { LANE } from "../../lib/redesign-helpers";
+import { LANE } from "../../lib/shell-helpers";
 import { timeAgo } from "./helpers";
 import { Avatar } from "./primitives";
 

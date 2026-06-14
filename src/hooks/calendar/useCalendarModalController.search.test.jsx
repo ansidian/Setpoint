@@ -8,7 +8,7 @@ let latestShellProps = null;
 vi.mock("../../components/calendar/modal/CalendarModalShell.jsx", () => ({
   default: vi.fn((props) => {
     latestShellProps = props;
-    return <div ref={props.panelRef} data-testid="calendar-modal-shell" />;
+    return <div ref={props.refs.panelRef} data-testid="calendar-modal-shell" />;
   }),
 }));
 
@@ -202,10 +202,10 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(6);
-      expect(latestShellProps.selectedDateKey).toBe("2026-07-14");
-      expect(latestShellProps.effectiveSelectedItemId).toBe("event-9");
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(6);
+      expect(latestShellProps.selection.selectedDateKey).toBe("2026-07-14");
+      expect(latestShellProps.viewModel.effectiveSelectedItemId).toBe("event-9");
       expect(latestShellProps.search.open).toBe(true);
     });
   });
@@ -229,8 +229,8 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(3);
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(3);
     });
 
     act(() => {
@@ -254,10 +254,10 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(3);
-      expect(latestShellProps.selectedDateKey).toBe("2026-05-02");
-      expect(latestShellProps.effectiveSelectedItemId).toBe("event-trailing");
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(3);
+      expect(latestShellProps.selection.selectedDateKey).toBe("2026-05-02");
+      expect(latestShellProps.viewModel.effectiveSelectedItemId).toBe("event-trailing");
     });
   });
 
@@ -291,7 +291,7 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.floatingDetail).toMatchObject({
+      expect(latestShellProps.floating.floatingDetail).toMatchObject({
         open: true,
         mode: "detail",
         view: "events",
@@ -299,7 +299,7 @@ describe("useCalendarModalController search wiring", () => {
         dateKey: "2026-07-14",
         anchorKind: "search-result-row",
       });
-      expect(latestShellProps.floatingDetail.anchorElement).toBe(anchor);
+      expect(latestShellProps.floating.floatingDetail.anchorElement).toBe(anchor);
       expect(latestShellProps.search.open).toBe(true);
     });
 
@@ -312,8 +312,8 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(6);
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(6);
     });
 
     const panel = screen.getByTestId("calendar-modal-shell");
@@ -342,7 +342,7 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.floatingDetail).toMatchObject({
+      expect(latestShellProps.floating.floatingDetail).toMatchObject({
         open: true,
         mode: "detail",
         view: "events",
@@ -350,7 +350,7 @@ describe("useCalendarModalController search wiring", () => {
         dateKey: "2026-07-14",
         anchorKind: "chip",
       });
-      expect(latestShellProps.floatingDetail.anchorElement).toBe(chip);
+      expect(latestShellProps.floating.floatingDetail.anchorElement).toBe(chip);
     });
   });
 
@@ -358,8 +358,8 @@ describe("useCalendarModalController search wiring", () => {
     renderHarness({ focusDate: "2026-07-14" });
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(6);
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(6);
     });
 
     const result = {
@@ -390,8 +390,8 @@ describe("useCalendarModalController search wiring", () => {
     renderHarness({ focusDate: "2026-05-12" });
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(4);
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(4);
     });
 
     const result = {
@@ -448,7 +448,7 @@ describe("useCalendarModalController search wiring", () => {
     document.body.appendChild(row);
 
     await waitFor(() => {
-      expect(latestShellProps.viewData.deadlineOverlay.enabled).toBe(false);
+      expect(latestShellProps.data.viewData.deadlineOverlay.enabled).toBe(false);
     });
 
     const result = {
@@ -482,7 +482,7 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.floatingDetail).toMatchObject({
+      expect(latestShellProps.floating.floatingDetail).toMatchObject({
         open: true,
         mode: "detail",
         view: "events",
@@ -496,17 +496,17 @@ describe("useCalendarModalController search wiring", () => {
           status: "complete",
         })],
       });
-      expect(latestShellProps.viewData.deadlineOverlay.enabled).toBe(false);
+      expect(latestShellProps.data.viewData.deadlineOverlay.enabled).toBe(false);
       expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
     });
 
     act(() => {
-      latestShellProps.onCloseFloatingDetail();
+      latestShellProps.floating.onCloseFloatingDetail();
     });
 
     await waitFor(() => {
-      expect(latestShellProps.floatingDetail).toBeNull();
-      expect(latestShellProps.viewData.deadlineOverlay.enabled).toBe(false);
+      expect(latestShellProps.floating.floatingDetail).toBeNull();
+      expect(latestShellProps.data.viewData.deadlineOverlay.enabled).toBe(false);
       expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
     });
 
@@ -519,8 +519,8 @@ describe("useCalendarModalController search wiring", () => {
     document.body.appendChild(row);
 
     await waitFor(() => {
-      expect(latestShellProps.viewYear).toBe(2026);
-      expect(latestShellProps.viewMonth).toBe(4);
+      expect(latestShellProps.viewState.viewYear).toBe(2026);
+      expect(latestShellProps.viewState.viewMonth).toBe(4);
     });
 
     const result = {
@@ -556,7 +556,7 @@ describe("useCalendarModalController search wiring", () => {
     });
 
     await waitFor(() => {
-      expect(latestShellProps.floatingDetail).toMatchObject({
+      expect(latestShellProps.floating.floatingDetail).toMatchObject({
         open: true,
         mode: "detail",
         view: "events",
@@ -564,7 +564,7 @@ describe("useCalendarModalController search wiring", () => {
         dateKey: "2026-07-14",
         anchorKind: "search-result-row",
       });
-      expect(latestShellProps.floatingDetail.anchorElement).toBe(row);
+      expect(latestShellProps.floating.floatingDetail.anchorElement).toBe(row);
     });
 
     row.remove();

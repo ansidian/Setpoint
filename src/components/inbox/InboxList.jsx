@@ -3,7 +3,7 @@ import {
   Mail, Search, CheckCheck, RefreshCw,
   ChevronRight, ChevronDown, X,
 } from "lucide-react";
-import { LANE, briefingPhaseLabel } from "../../lib/redesign-helpers";
+import { LANE, briefingPhaseLabel } from "../../lib/shell-helpers";
 import { Kbd, StickyHeader, IconBtn, LaneIcon } from "./primitives";
 import EmailRow from "./EmailRow";
 import EmptyStateSplash from "../shared/EmptyStateSplash";

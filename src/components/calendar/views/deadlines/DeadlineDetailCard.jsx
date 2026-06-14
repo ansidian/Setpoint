@@ -1,7 +1,7 @@
 import { Bell, Flag } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import { daysUntil } from "../../../../lib/bill-utils";
-import { urgencyForDays } from "../../../../lib/redesign-helpers";
+import { urgencyForDays } from "../../../../lib/shell-helpers";
 import {
   RailFactTile,
   RailHeroCard,

@@ -7,7 +7,7 @@ const webhookApi = vi.hoisted(() => ({
   handleTodoistWebhookDelivery: vi.fn(async () => ({ accepted: true, duplicate: false })),
 }));
 
-vi.mock("../briefing/todoist-webhook.js", () => ({
+vi.mock("../tasks/todoist-webhook.js", () => ({
   handleTodoistWebhookDelivery: webhookApi.handleTodoistWebhookDelivery,
 }));
 

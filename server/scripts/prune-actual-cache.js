@@ -1,4 +1,4 @@
-import { pruneLocalActualBackups } from "../briefing/actual-local-metadata.js";
+import { pruneLocalActualBackups } from "../actual/actual-local-metadata.js";
 
 const keepArg = process.argv.find((arg) => arg.startsWith("--keep="));
 const keep = keepArg ? Number(keepArg.slice("--keep=".length)) : 1;

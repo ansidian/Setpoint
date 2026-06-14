@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History, Check, MailOpen, Clock } from "lucide-react";
-import { LANE } from "../../lib/redesign-helpers";
+import { LANE } from "../../lib/shell-helpers";
 import Tooltip from "../shared/Tooltip";
 
 export function Kbd({ children }) {

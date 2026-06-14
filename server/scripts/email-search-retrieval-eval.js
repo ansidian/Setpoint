@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { readFile } from "fs/promises";
 import db from "../db/connection.js";
-import { evaluateRetrievalCases } from "../briefing/email-search-retrieval-eval.js";
-import { retrieveInboxAiSearch } from "../briefing/email-search-retrieval.js";
+import { evaluateRetrievalCases } from "../email/search/email-search-retrieval-eval.js";
+import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
 
-const fixturePath = process.argv[2] || "server/briefing/evals/email-search-retrieval.synthetic.json";
+const fixturePath = process.argv[2] || "server/email/search/evals/email-search-retrieval.synthetic.json";
 const userId = process.argv[3] || process.env.EA_USER_ID || "eval-user";
 
 async function main() {

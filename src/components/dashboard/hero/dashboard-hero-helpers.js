@@ -17,7 +17,7 @@ import {
   formatDuration,
   getEventSelectionId,
   urgencyForDays,
-} from "../../../lib/redesign-helpers";
+} from "../../../lib/shell-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
 
 export const WEATHER_ICONS = {

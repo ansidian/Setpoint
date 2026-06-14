@@ -6,7 +6,7 @@ import sharedRegistry from "../../shared/triage-notification-sounds.json";
 import {
   DEFAULT_TRIAGE_SOUND_SETTINGS as SERVER_DEFAULT_TRIAGE_SOUND_SETTINGS,
   TRIAGE_NOTIFICATION_SOUNDS,
-} from "../../server/briefing/triage-sound-settings.js";
+} from "../../server/triage/triage-sound-settings.js";
 import {
   DEFAULT_TRIAGE_NOTIFICATION_SOUNDS,
   DEFAULT_TRIAGE_SOUND_SETTINGS,

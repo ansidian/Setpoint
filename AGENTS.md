@@ -7,6 +7,7 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Linear issues - source of truth for active executable work when an issue exists or the user intends Codex execution.
 - `README.md` - setup, env vars, and what the product does.
 - `ARCHITECTURE.md` - system shape, data flow, routes, database, briefing pipeline.
+- `FLOWS.md` - cross-layer pipelines and cross-cutting behaviors, hop by hop; check it before fixing anything that spans server/SSE/caches/UI.
 - `PRODUCT.md` - product intent, audience, voice, and non-goals.
 - `DESIGN.md` / `DESIGN.json` - visual language and design tokens.
 - `docs/index.md` - local documentation catalog when present.
@@ -32,6 +33,13 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - Keep Codex tasks bounded. If a plan spans multiple independent surfaces, split it into a parent/spec issue plus child implementation issues rather than asking Codex to execute one large issue.
 - When converting a plan into Linear for Codex, write issues as execution contracts, not vague backlog notes. Each issue should be small enough for one focused PR and should state what not to change.
 - Do not create new local markdown plans by default when Linear is available and the work is intended for Codex execution. Create local docs only for complex design exploration, rough scratch planning, or durable non-Linear project memory.
+
+## Search Routing
+
+- When the grepai MCP is connected, use `grepai_search` for concept/intent queries ("where is X decided", behavior you cannot name exactly). If results look stale or thin, check `grepai_index_status` before falling back.
+- Use cclsp (`find_definition`, `find_references`, call hierarchy) for exact-symbol navigation once you know a name.
+- Literal grep/rg is correct (not a fallback) for non-symbol text: DOM properties, string literals, log messages, CSS selectors, config keys.
+- In a directory that has its own `CLAUDE.md` map, read that map before bulk-reading files.
 
 ## Testing Judgment And TDD
 
@@ -77,6 +85,10 @@ When a broad test gets harder to maintain, extract the underlying rule into a na
 - If an unusually long component is kept on purpose, call out the reason in the handoff.
 - If you touch an already overloaded component for unrelated work, flag it in the handoff and advise future refactoring instead of silently adding more responsibility.
 
+## Area Maps
+
+Directories with a `CLAUDE.md` map (calendar, inbox, dashboard, settings, hooks, the `server/<domain>/` directories such as server/email and server/bills, server/routes, and others — enforced by `npm run check:harness`) document their own files, patterns, and boundaries. Read the area map before bulk-reading files there. Calendar specifics: hooks/models in `src/hooks/calendar/`, UI in `src/components/calendar/` — do not add calendar files elsewhere; see those maps.
+
 ## Floating Panel Pattern
 
 For dropdowns, popovers, and panels, follow the repo pattern in `src/components/briefing/BriefingHistoryPanel.jsx` and `src/components/shared/pickers/AnchoredFloatingPanel.jsx`:
@@ -90,7 +102,7 @@ For dropdowns, popovers, and panels, follow the repo pattern in `src/components/
 ## Context Outside The Repo
 
 - Prod DB is Turso; dev DB is `server/db/ea.db`, and can be probed through Turso CLI.
-- Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/briefing/actual.js`, not the CLI.
+- Actual Budget inspection can use `npm run actual -- <command>` for ad-hoc debugging only. Runtime paths must use the in-process `@actual-app/api` singleton in `server/actual/actual.js`, not the CLI.
 
 ## Demo Mode Contract
 

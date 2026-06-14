@@ -1,7 +1,7 @@
 import CalendarCellItemStack from "../../modal/CalendarCellItemStack.jsx";
 import { getCalendarCellCapacity } from "../../modal/calendarCellItemMetrics.js";
 import { minutesFromDisplayTime } from "../../ghostPreview.js";
-import { dueDateToMs } from "../../../../lib/redesign-helpers";
+import { dueDateToMs } from "../../../../lib/shell-helpers";
 import {
   DEADLINE_COLOR,
   deadlineAccentFor,

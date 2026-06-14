@@ -32,7 +32,7 @@ vi.mock("../api", () => ({
   getCalendarBillsRange: mocks.getCalendarBillsRange,
 }));
 
-vi.mock("../hooks/useCalendarRange", () => ({
+vi.mock("../hooks/calendar/useCalendarRange", () => ({
   default: () => ({
     invalidate: mocks.invalidateCalendarRange,
     markStale: mocks.markCalendarRangeStale,
@@ -40,7 +40,7 @@ vi.mock("../hooks/useCalendarRange", () => ({
   }),
 }));
 
-vi.mock("../hooks/useCalendarDomainRange", () => ({
+vi.mock("../hooks/calendar/useCalendarDomainRange", () => ({
   default: () => ({
     data: null,
     ensureRange: vi.fn(),
@@ -100,9 +100,9 @@ vi.mock("../hooks/useTriageNotificationSounds", () => ({
   }),
 }));
 
-vi.mock("../components/dashboard/RedesignShell", () => ({
+vi.mock("../components/dashboard/DashboardShell", () => ({
   DashboardBody: () => null,
-  RedesignShell: (props) => {
+  DashboardShell: (props) => {
     mocks.latestShellProps = props;
     return (
       <div>

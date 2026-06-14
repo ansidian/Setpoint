@@ -5,14 +5,14 @@ import request from "supertest";
 vi.mock("../middleware/auth.js", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../briefing/config-service.js", () => ({
+vi.mock("../platform/config-service.js", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../briefing/deadline-helpers.js", () => ({
+vi.mock("../tasks/deadline-helpers.js", () => ({
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
-vi.mock("../briefing/calendar.js", () => ({
+vi.mock("../calendar/calendar.js", () => ({
   fetchCalendar: vi.fn(),
   pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
   getCalendarSourceGroups: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock("../briefing/calendar.js", () => ({
     body: { code: err.code || "unknown", message: err.message || "unknown" },
   })),
 }));
-vi.mock("../briefing/calendar-search-mirror.js", () => ({
+vi.mock("../calendar/calendar-search-mirror.js", () => ({
   deleteCalendarSearchMirrorOccurrence: vi.fn().mockResolvedValue({ deleted: true }),
   getCalendarSearchMirrorHealth: vi.fn(),
   listCalendarSearchMirrorOccurrences: vi.fn(),
@@ -32,24 +32,24 @@ vi.mock("../briefing/calendar-search-mirror.js", () => ({
   requestCalendarSearchMirrorSync: vi.fn(),
   upsertCalendarSearchMirrorOccurrence: vi.fn().mockResolvedValue({ upserted: true }),
 }));
-vi.mock("../briefing/calendar-search.js", () => ({
+vi.mock("../calendar/calendar-search.js", () => ({
   deadlineSearchCandidates: vi.fn(() => []),
   normalizeBillSearchCandidate: vi.fn((bill) => bill),
   normalizeEventSearchCandidate: vi.fn((event) => event),
   normalizeLimit: vi.fn(() => 20),
   rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
 }));
-vi.mock("../briefing/deadlines-read.js", () => ({
+vi.mock("../tasks/deadlines-read.js", () => ({
   readCalendarDeadlines: vi.fn(),
   readCalendarDeadlineRange: vi.fn(),
 }));
-vi.mock("../briefing/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.js", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
   updateDeadline: vi.fn(),
 }));
-vi.mock("../briefing/bills-service.js", () => ({
+vi.mock("../bills/bills-service.js", () => ({
   billMirrorRefreshRange: vi.fn(() => ({ start: "2026-05-01", end: "2026-05-31" })),
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
@@ -59,22 +59,22 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../briefing/google-places.js", () => ({
+vi.mock("../platform/google-places.js", () => ({
   suggestGooglePlaces: vi.fn(),
   getGooglePlaceDetails: vi.fn(),
 }));
-vi.mock("../briefing/todoist.js", () => ({
+vi.mock("../tasks/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasks: vi.fn(),
   fetchTodoistTasksAll: vi.fn(),
   fetchTodoistTasksRange: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
 }));
-vi.mock("../briefing/tombstones.js", () => ({
+vi.mock("../tasks/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
-vi.mock("../briefing/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.js", () => ({
   recomputeUnsentRemindersForSource: vi.fn(),
   deleteSourceReminders: vi.fn(),
   listUpcomingReminderStatesForSources: vi.fn().mockResolvedValue(new Map()),
@@ -82,19 +82,19 @@ vi.mock("../briefing/reminder-service.js", () => ({
 }));
 vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
 
-const { loadUserConfig } = await import("../briefing/config-service.js");
+const { loadUserConfig } = await import("../platform/config-service.js");
 const {
   getCalendarSourceGroups,
   createCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-} = await import("../briefing/calendar.js");
-const calendarSearchMirror = await import("../briefing/calendar-search-mirror.js");
+} = await import("../calendar/calendar.js");
+const calendarSearchMirror = await import("../calendar/calendar-search-mirror.js");
 const {
   suggestGooglePlaces,
   getGooglePlaceDetails,
-} = await import("../briefing/google-places.js");
-const reminderService = await import("../briefing/reminder-service.js");
+} = await import("../platform/google-places.js");
+const reminderService = await import("../reminders/reminder-service.js");
 const calendarRoutes = (await import("./calendar.js")).default;
 
 function makeApp() {

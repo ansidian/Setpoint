@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Inbox } from "lucide-react";
-import { deriveLane } from "../../../lib/redesign-helpers";
+import { deriveLane } from "../../../lib/shell-helpers";
 import {
   EmptyRow,
   OpenInboxButton,

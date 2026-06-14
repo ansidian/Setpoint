@@ -413,4 +413,79 @@ describe("CalendarModal deadline overlay behavior", () => {
       vi.useRealTimers();
     }
   });
+
+  // Characterization-at-seam (EAD-318): pin the D-CAL-4 refresh round-trip before
+  // useDeadlineOverlayState is extracted, so the extraction is proven to preserve
+  // persistence. The existing suite asserts the write happens; these assert the
+  // stored "off" preference is read back on a fresh mount (i.e. survives refresh).
+  it("persists the deadline overlay preference across a remount (refresh)", async () => {
+    window.innerWidth = 1900;
+    const renderModal = () => render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ editable: true, getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          upcoming: [
+            { id: "todo-1", title: "Project due", due_date: "2026-04-20", source: "todoist", status: "open" },
+          ],
+        }}
+      />,
+    ));
+
+    const { unmount } = renderModal();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide deadlines in events/i }));
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Project due")).toBeNull();
+    });
+    expect(window.localStorage.getItem("calendar:eventsDeadlineOverlay")).toBe("false");
+
+    unmount();
+    renderModal();
+
+    expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Project due")).toBeNull();
+    expect(screen.getByRole("button", { name: /show deadlines in events/i })).toBeTruthy();
+  });
+
+  it("persists the completed-deadline preference across a remount (refresh)", async () => {
+    window.innerWidth = 1900;
+    const renderModal = () => render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ editable: true, getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{
+          upcoming: [
+            { id: "todo-1", title: "Open task", due_date: "2026-04-20", source: "todoist", status: "open" },
+            { id: "todo-2", title: "Done task", due_date: "2026-04-20", source: "todoist", status: "complete" },
+          ],
+        }}
+      />,
+    ));
+
+    const { unmount } = renderModal();
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Done task")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "d" });
+    await waitFor(() => {
+      expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Done task")).toBeNull();
+    });
+    expect(window.localStorage.getItem("calendar:eventsCompletedDeadlines")).toBe("false");
+
+    unmount();
+    renderModal();
+
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Open task")).toBeTruthy();
+    expect(within(screen.getByTestId("calendar-cell-20")).queryByText("Done task")).toBeNull();
+  });
 });

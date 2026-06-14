@@ -4,11 +4,17 @@ import {
   pacificYMD,
 } from "../calendarDateUtils.js";
 import { formatTime12FromTime24 } from "../ghostPreview.js";
-import { getEventSelectionId } from "../../../lib/redesign-helpers";
+import { getEventSelectionId } from "../../../lib/shell-helpers";
 import {
   googleSpecialDateAccent,
   isGoogleSpecialDateEvent,
 } from "../googleSpecialDateModel.js";
+
+// Lane geometry contract: CalendarEventSpanOverlay draws pinned lanes with
+// this height/gap, and EventsCellContent feeds the same values into
+// getReservedCellItemLaneHeight so stacked chips clear the lanes exactly.
+export const SPAN_LANE_HEIGHT = 36;
+export const SPAN_LANE_GAP = 4;
 
 function localDateFromMs(ms) {
   return Number.isFinite(ms) ? pacificYMD(ms) : null;

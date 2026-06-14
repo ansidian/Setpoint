@@ -2,8 +2,8 @@ import { Router } from "express";
 import {
   getEmailIndexHealth,
   queueEmailIndexBackfill,
-} from "../../briefing/email-index.js";
-import { wakeEmailBackfillWorker } from "../../briefing/email-backfill-worker.js";
+} from "../../email/email-index.js";
+import { wakeEmailBackfillWorker } from "../../email/email-backfill-worker.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;

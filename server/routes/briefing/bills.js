@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireCookieSessionOrApiTokenScope } from "../../middleware/auth.js";
-import * as billsService from "../../briefing/bills-service.js";
+import * as billsService from "../../bills/bills-service.js";
 
 const router = Router();
 const quickTxnRouter = Router();

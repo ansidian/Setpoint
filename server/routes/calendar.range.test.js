@@ -6,17 +6,17 @@ import request from "supertest";
 vi.mock("../middleware/auth.js", () => ({
   requireCookieSession: (_req, _res, next) => next(),
 }));
-vi.mock("../briefing/config-service.js", () => ({
+vi.mock("../platform/config-service.js", () => ({
   loadUserConfig: vi.fn(),
 }));
-vi.mock("../briefing/deadline-helpers.js", () => ({
+vi.mock("../tasks/deadline-helpers.js", () => ({
   filterCompletedTodoistTasks: vi.fn((tasks, completedIds) => (
     (tasks || []).filter((task) => !completedIds?.has(task.id) && !completedIds?.has(String(task.id)))
   )),
   computeDeadlineStats: vi.fn(),
   loadCompletedTaskIds: vi.fn(),
 }));
-vi.mock("../briefing/calendar.js", () => ({
+vi.mock("../calendar/calendar.js", () => ({
   fetchCalendar: vi.fn(),
   pacificDayBoundaries: vi.fn((date) => ({ dayStart: date, dayEnd: date })),
   getCalendarSourceGroups: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock("../briefing/calendar.js", () => ({
     body: { code: err.code || "calendar_error", message: err.message || "Calendar error" },
   })),
 }));
-vi.mock("../briefing/calendar-search-mirror.js", () => ({
+vi.mock("../calendar/calendar-search-mirror.js", () => ({
   deleteCalendarSearchMirrorOccurrence: vi.fn(),
   getCalendarSearchMirrorHealth: vi.fn(),
   listCalendarSearchMirrorOccurrences: vi.fn(),
@@ -36,14 +36,14 @@ vi.mock("../briefing/calendar-search-mirror.js", () => ({
   requestCalendarSearchMirrorSync: vi.fn(),
   upsertCalendarSearchMirrorOccurrence: vi.fn(),
 }));
-vi.mock("../briefing/todoist.js", () => ({
+vi.mock("../tasks/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: vi.fn(),
   fetchTodoistTasks: vi.fn(),
   fetchTodoistTasksAll: vi.fn(),
   fetchTodoistTasksRange: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
 }));
-vi.mock("../briefing/bills-service.js", () => ({
+vi.mock("../bills/bills-service.js", () => ({
   isBillsMirrorMaintenanceDue: vi.fn(),
   readBillsMirrorRange: vi.fn(),
   scheduleBillsMirrorRefresh: vi.fn(),
@@ -52,21 +52,21 @@ vi.mock("../dashboard/current-service.js", () => ({
   applyDeadlineCurrentStatus: vi.fn(),
   requestBillsCurrentMaintenanceRefresh: vi.fn(),
 }));
-vi.mock("../briefing/tasks-service.js", () => ({
+vi.mock("../tasks/tasks-service.js", () => ({
   completeDeadlineOccurrence: vi.fn(),
   createDeadline: vi.fn(),
   deleteDeadline: vi.fn(),
   updateDeadline: vi.fn(),
 }));
-vi.mock("../briefing/google-places.js", () => ({
+vi.mock("../platform/google-places.js", () => ({
   getGooglePlaceDetails: vi.fn(),
   suggestGooglePlaces: vi.fn(),
 }));
-vi.mock("../briefing/tombstones.js", () => ({
+vi.mock("../tasks/tombstones.js", () => ({
   hydrateRecurringTombstones: vi.fn(),
   addDaysIso: vi.fn(),
 }));
-vi.mock("../briefing/reminder-service.js", () => ({
+vi.mock("../reminders/reminder-service.js", () => ({
   deleteSourceReminders: vi.fn(),
   listUpcomingReminderStatesForSources: vi.fn(),
   recomputeUnsentRemindersForSource: vi.fn(),
@@ -77,14 +77,14 @@ vi.mock("../db/connection.js", () => ({ default: { execute: vi.fn() } }));
 const {
   computeDeadlineStats,
   loadCompletedTaskIds,
-} = await import("../briefing/deadline-helpers.js");
-const { loadUserConfig } = await import("../briefing/config-service.js");
-const { fetchCalendar } = await import("../briefing/calendar.js");
-const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../briefing/todoist.js");
-const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../briefing/bills-service.js");
+} = await import("../tasks/deadline-helpers.js");
+const { loadUserConfig } = await import("../platform/config-service.js");
+const { fetchCalendar } = await import("../calendar/calendar.js");
+const { fetchTodoistDueTaskIdSet, fetchTodoistTasksAll, fetchTodoistTasksRange, getTodoistSyncHealth } = await import("../tasks/todoist.js");
+const { isBillsMirrorMaintenanceDue, readBillsMirrorRange, scheduleBillsMirrorRefresh } = await import("../bills/bills-service.js");
 const { requestBillsCurrentMaintenanceRefresh } = await import("../dashboard/current-service.js");
-const { hydrateRecurringTombstones } = await import("../briefing/tombstones.js");
-const { listUpcomingReminderStatesForSources } = await import("../briefing/reminder-service.js");
+const { hydrateRecurringTombstones } = await import("../tasks/tombstones.js");
+const { listUpcomingReminderStatesForSources } = await import("../reminders/reminder-service.js");
 const db = (await import("../db/connection.js")).default;
 const calendarRoutes = (await import("./calendar.js")).default;
 

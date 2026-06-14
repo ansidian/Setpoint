@@ -1,4 +1,4 @@
-import { dayBucket, dueDateToMs, formatDuration } from "./redesign-helpers";
+import { dayBucket, dueDateToMs, formatDuration } from "./shell-helpers";
 
 const BUFFER_MS = 5 * 60 * 1000;
 const MIN_PROTECTED_MS = 25 * 60 * 1000;

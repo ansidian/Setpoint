@@ -168,6 +168,72 @@ describe("useTriageNotificationSounds", () => {
     });
   });
 
+  it("plays once when the same queued email arrives via SSE and a snapshot diff", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      // Seed the snapshot baseline, then deliver the same email through both
+      // publishers: the SSE event and a later snapshot diff.
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: { queued: [] },
+      });
+      result.current.handleDashboardEvent(queueEvent("email_triage:icloud:icloud-3232:email_triage_queued"));
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: {
+          queued: [{
+            account_id: "icloud",
+            email_id: "icloud-3232",
+          }],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("coalesces a burst of new queued snapshot rows into one sound", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: { queued: [] },
+      });
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: {
+          queued: [
+            { account_id: "icloud", email_id: "icloud-1" },
+            { account_id: "icloud", email_id: "icloud-2" },
+            { account_id: "icloud", email_id: "icloud-3" },
+          ],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("does not play queued sounds for rows already present on initial snapshot load", async () => {
     const play = vi.fn(() => Promise.resolve());
     vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {

@@ -474,7 +474,6 @@ export function ItemChip({
         event.currentTarget.focus({ preventScroll: true });
         if (isEventSelectionModifier(event)) {
           event.preventDefault();
-          if (specialDate) return;
           quickActions?.toggleEventSelection?.({
             event: item.sourceEvent || item.sourceItem,
             dateKey,
