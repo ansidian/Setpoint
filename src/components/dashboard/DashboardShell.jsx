@@ -235,12 +235,9 @@ export function DashboardShell({
     });
   }, [calendarOpen, calendarView, onCalendarWorkspaceChange]);
 
-  // MERGE-NOTE[P3-26/P3-27] (P3 worktree): single signal for "a non-input overlay
-  // owns the foreground", gating the global single-key shell hotkeys and ShellHeader's
-  // 1/2 tab hotkeys so neither opens overlays behind, nor desyncs the tab from, the open
-  // modal. Shares this file with a P2 fix on another worktree. On conflict: keep BOTH
-  // unless the same lines collide (this only adds a derived const + two props). Remove
-  // note after merge.
+  // Single signal for "a non-input overlay owns the foreground", gating the global
+  // single-key shell hotkeys and ShellHeader's 1/2 tab hotkeys so neither opens overlays
+  // behind, nor desyncs the tab from, the open modal.
   const anyBlockingOverlayOpen = customizeOpen || analyticsOpen || historyOpen;
 
   useDashboardShellHotkeys({

@@ -402,3 +402,20 @@ export function parseTokens(input, projects, labels, options = {}) {
   result.stripped = result.stripped.replace(/\s{2,}/g, " ").trim();
   return result;
 }
+
+// Paste-then-instant-submit can run the first parse while chrono-node is still
+// lazily loading, which drops the recurring time-of-day (it comes only from
+// chrono). Await the in-flight load so the synchronous parseTokens below sees the
+// full natural-language result. No React state is involved, so this is safe even
+// when the controller mounts late during a workspace-switch transition (the
+// reverted chronoReadyTick mirror set state post-mount and flaked there instead).
+export async function parseTokensWithChrono(input, projects, labels, options = {}) {
+  if (input && !isChronoReady()) {
+    try {
+      await ensureChrono();
+    } catch {
+      // Fall back to the cold regex-only parse rather than blocking submit.
+    }
+  }
+  return parseTokens(input, projects, labels, options);
+}

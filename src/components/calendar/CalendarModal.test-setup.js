@@ -1,5 +1,13 @@
 import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
+// Eagerly load the lazy AddTaskPanel chunk (the deadline create/edit inline
+// editor, behind React.lazy in DeadlinesDetailRail's Suspense) so calendar
+// tests assert on the editor's behavior rather than racing a cold dynamic
+// import against findBy's budget. The chunk transforms slowly on a cold cache
+// under full-suite CPU/transform contention, which intermittently times out
+// `findByTestId("todoist-inline-editor")`. Production still lazy-loads it; this
+// import only warms vitest's module cache for the test environment.
+import "@/components/todoist/AddTaskPanel";
 
 export const mockGetCalendarSources = vi.fn();
 

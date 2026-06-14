@@ -17,11 +17,38 @@ import {
   DeadlineStatusIcon,
 } from "./DeadlineStatusIndicator.jsx";
 import { shouldCompressDeadlineCard } from "./deadlineDetailModel.js";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Lazy-load AddTaskPanel so the calendar-open chunk stops statically pulling it
 // (and the natural-language parser it carries). It only mounts when the deadline
 // create/edit editor is actually opened.
 const AddTaskPanel = lazy(() => import("../../../todoist/AddTaskPanel"));
+
+// Suspense fallback while the AddTaskPanel chunk loads on a cold cache. Mirrors
+// AddTaskPanelInlineEditor's transparent flex-column footprint so the deadline
+// create/edit area shows a shimmer in place instead of a blank gap, and the swap
+// to the real editor does not jump the layout. Decorative (aria-hidden); it does
+// NOT carry the todoist-inline-editor testid, so consumers still wait for the
+// real editor to mount.
+function AddTaskPanelInlineFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 16 }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <Skeleton className="h-[14px] rounded-sm bg-white/8" style={{ width: 104 }} />
+        <Skeleton className="h-[10px] rounded-sm bg-white/8" style={{ width: "78%", opacity: 0.6 }} />
+      </div>
+      <Skeleton className="h-[40px] rounded-md bg-white/8" style={{ width: "100%" }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 2 }}>
+        <Skeleton className="h-[34px] rounded-md bg-white/6" style={{ width: "100%" }} />
+        <Skeleton className="h-[34px] rounded-md bg-white/6" style={{ width: "100%" }} />
+        <Skeleton className="h-[34px] rounded-md bg-white/6" style={{ width: "72%" }} />
+      </div>
+    </div>
+  );
+}
 
 function DeadlinesDetail({
   selectedDay,
@@ -73,7 +100,7 @@ function DeadlinesDetail({
     const seedDate = editingTask ? null : editorState.seedDate || null;
 
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<AddTaskPanelInlineFallback />}>
         <AddTaskPanel
           host="inline"
           editingTask={editingTask || undefined}

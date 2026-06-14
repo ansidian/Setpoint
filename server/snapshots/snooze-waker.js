@@ -51,12 +51,9 @@ async function runWithBoundedConcurrency(items, limit, worker) {
 // and the email is just a normal unread in Gmail.
 const RESURFACED_TTL_MS = 48 * 60 * 60 * 1000;
 
-// MERGE-NOTE[P3-59] (P3 worktree): module-level re-entrancy guard so overlapping
-// cron ticks can't double-process the same due snoozes (double Gmail wake-modify +
-// racing snapshot inserts). Mirrors email-backfill-worker.js's workerRunning latch.
-// Shares this file with a P2 snooze-waker robustness/non-atomic-resurface fix on
-// another worktree. On conflict: keep BOTH unless they touch the same lines.
-// Remove this note after merge.
+// Module-level re-entrancy guard so overlapping cron ticks can't double-process
+// the same due snoozes (double Gmail wake-modify + racing snapshot inserts).
+// Mirrors email-backfill-worker.js's workerRunning latch.
 let wakeInFlight = false;
 
 export async function wakeDueSnoozes({

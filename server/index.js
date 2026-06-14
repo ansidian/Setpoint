@@ -106,8 +106,7 @@ if (process.env.NODE_ENV === "production") {
 // the static block above. Async route rejections are forwarded here by each
 // router's wrapRouterAsync (see server/middleware/async-handler.js); without
 // this, even forwarded errors would fall through to Express's default HTML
-// handler. MERGE-NOTE: keep this registration last if any concurrent change
-// reorders middleware in this file.
+// handler.
 app.use(errorHandler);
 
 function scheduleStartupWorker(worker, delayMs, fn) {

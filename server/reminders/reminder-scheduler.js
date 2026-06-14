@@ -38,13 +38,10 @@ function retryAfterFromResult(result, now, retryCount = 0) {
 // listDueReminders re-selects the same reminder every 10s and head-of-line-
 // blocks the entire batch until it ages out of the grace window (P1-10).
 //
-// MERGE-NOTE (P1-10 ⇄ P2-27): RESOLVED. P1-10 (per-item throw isolation) and
-// P2-27 (non-rate-limited failures must back off, not re-fire every 10s) both
-// land in this loop. Per P1's original note, there is exactly ONE backoff curve
-// — retryAfterFromResult. This adapter supplies a synthetic non-rate-limited
-// result for the thrown-error path so the catch and the structured-failure path
-// share the same exponential backoff (and the same 1h cap), instead of carrying
-// a second, divergent backoff implementation.
+// There is exactly ONE backoff curve — retryAfterFromResult. This adapter
+// supplies a synthetic non-rate-limited result for the thrown-error path so the
+// catch and the structured-failure path share the same exponential backoff (and
+// the same 1h cap), instead of carrying a second, divergent backoff implementation.
 function computeReminderRetryAfter(reminder, now) {
   return retryAfterFromResult({ rateLimited: false }, now, Number(reminder.retry_count) || 0);
 }

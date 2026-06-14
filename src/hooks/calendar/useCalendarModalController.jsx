@@ -32,7 +32,7 @@ import {
   NAVIGABLE_MONTH_RADIUS,
 } from "./calendarScrollModel.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
-import useDashboardFocusRetry from "./useDashboardFocusRetry.js";
+import useDashboardDetailFocus from "./useDashboardDetailFocus.js";
 import useDeadlineOverlayState from "./useDeadlineOverlayState.js";
 import useFloatingEditorRouting from "./useFloatingEditorRouting.js";
 import useCalendarDeadlineOverlay from "./useCalendarDeadlineOverlay.js";
@@ -47,10 +47,7 @@ import useCalendarScrollSync from "./useCalendarScrollSync.js";
 import useViewportWidth from "./useViewportWidth.js";
 import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
 import { isGoogleSpecialDateEvent } from "../../components/calendar/googleSpecialDateModel.js";
-import {
-  dashboardDetailFocusRequest,
-  normalizeCalendarWorkspaceView,
-} from "./calendarModalInteractionModel.js";
+import { normalizeCalendarWorkspaceView } from "./calendarModalInteractionModel.js";
 import {
   addMonthOffset,
   dedupeEvents,
@@ -60,11 +57,8 @@ import {
   findItemLocation,
   hasDeadlineItemsInRange,
   isCompleteItem,
-  itemDueDate,
-  itemFromCalendarSearchResult,
   itemMatchesViewId,
   rangeMatches,
-  resolvePendingFocusItem,
   SCROLL_IDLE_THRESHOLD_MS,
   VIEWS,
 } from "./calendarControllerHelpers.js";
@@ -147,8 +141,6 @@ export default function useCalendarModalController({
   const agendaRailRef = useRef(null);
   const contextRailRef = useRef(null);
   const handledInitialDeadlineCreateRef = useRef(null);
-  const handledDashboardDetailFocusRef = useRef(null);
-  const dashboardDetailFocusRafRef = useRef(0);
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const agendaSelectionAnchorRef = useRef(null);
@@ -1335,179 +1327,30 @@ export default function useCalendarModalController({
 
   const shellViewData = viewData;
 
-  useEffect(() => {
-    const request = dashboardDetailFocusRequest({
-      open,
-      focusOpenDetail,
-      focusItemId,
-      focusDate,
-      activeSelectedDateKey,
-      openRequestId,
-      usesFloatingEditor,
-      view,
-      forceDeadlineOverlay,
-    });
-    if (!request) {
-      if (!open) {
-        setPendingItemDetailFocus(null);
-        handledDashboardDetailFocusRef.current = null;
-      }
-      return;
-    }
-    if (handledDashboardDetailFocusRef.current === request.requestKey) return;
-    setPendingItemDetailFocus((current) => {
-      if (
-        current?.openRequestId === request.openRequestId
-        && current.view === request.view
-        && current.detailKind === request.detailKind
-        && current.dateKey === request.dateKey
-        && current.itemId === request.itemId
-      ) {
-        return current;
-      }
-      return request;
-    });
-  }, [activeSelectedDateKey, focusDate, focusItemId, focusOpenDetail, forceDeadlineOverlay, open, openRequestId, usesFloatingEditor, view]);
-
-  // One attach attempt for a pending dashboard-detail focus request. Returns a
-  // status the retry scheduler understands: "done" (attached), "abort" (no
-  // longer applicable), or "retry" (target not in the DOM yet). The scheduler
-  // (useDashboardFocusRetry) owns the 250 ms cadence and give-up counting, so
-  // this reads the latest controller state on every poll without re-rendering.
-  const attemptDashboardDetailFocus = (request) => {
-    const currentDetail = floatingDetailRef.current;
-    if (
-      currentDetail?.open
-      && (currentDetail.mode === "edit" || currentDetail.mode === "create")
-      && currentDetail.dirty
-    ) {
-      shakeFloatingEditor();
-      setPendingItemDetailFocus(null);
-      return "abort";
-    }
-
-    const resolvedItem = resolvePendingFocusItem({
-      activeView,
-      computed,
-      dateKey: request.dateKey,
-      itemId: request.itemId,
-    });
-    const item = resolvedItem || (
-      request.anchorKind === "search-result-row"
-        ? itemFromCalendarSearchResult(request.searchResult)
-        : null
-    );
-    if (!item) return "retry";
-
-    const resolvedDateKey = itemDueDate(item) || request.dateKey;
-    const resolvedItemId = String(
-      activeView.getItemId ? activeView.getItemId(item) : item.id,
-    );
-
-    if (request.anchorKind === "grid-chip") {
-      const anchorElement = findGridChipAnchor(panelRef.current, resolvedItemId, resolvedDateKey);
-      if (!anchorElement) return "retry";
-      const parsed = parseYmd(resolvedDateKey);
-      if (!parsed) {
-        setPendingItemDetailFocus(null);
-        return "abort";
-      }
-      suppressAgendaPassiveSync();
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(resolvedDateKey);
-      setSelectedItemId(resolvedItemId != null ? String(resolvedItemId) : null);
-      openFloatingDetail({
-        mode: "detail",
-        view: request.view,
-        detailKind: request.detailKind || null,
-        itemId: resolvedItemId,
-        dateKey: resolvedDateKey,
-        day: parsed.day,
-        anchorElement,
-        sourceCellElement: anchorElement.closest?.("[role='gridcell']") || null,
-        anchorKind: "chip",
-        itemsSnapshot: [item],
-      });
-      handledDashboardDetailFocusRef.current = request.requestKey;
-      setPendingItemDetailFocus(null);
-      return "done";
-    }
-
-    if (request.anchorKind === "search-result-row") {
-      const anchorElement = request.anchorElement?.isConnected
-        ? request.anchorElement
-        : null;
-      if (!anchorElement) return "retry";
-      const parsed = parseYmd(resolvedDateKey);
-      if (!parsed) {
-        setPendingItemDetailFocus(null);
-        return "abort";
-      }
-      suppressAgendaPassiveSync();
-      setSelectedDay(parsed.day);
-      setSelectedDateKey(resolvedDateKey);
-      setSelectedItemId(resolvedItemId != null ? String(resolvedItemId) : null);
-      openFloatingDetail({
-        mode: "detail",
-        view: request.view,
-        detailKind: request.detailKind || null,
-        itemId: resolvedItemId,
-        dateKey: resolvedDateKey,
-        day: parsed.day,
-        anchorElement,
-        sourceCellElement: request.sourceCellElement?.isConnected
-          ? request.sourceCellElement
-          : anchorElement,
-        anchorKind: "search-result-row",
-        itemsSnapshot: [item],
-      });
-      handledDashboardDetailFocusRef.current = request.requestKey;
-      setPendingItemDetailFocus(null);
-      return "done";
-    }
-
-    // Defer agenda activation by one frame so the rail can lay out before we
-    // activate it (prevents a scroll jump). The synchronous call reports
-    // "retry" so the scheduler keeps polling until the deferred activation
-    // succeeds (which clears the pending request) or the loop gives up.
-    window.cancelAnimationFrame(dashboardDetailFocusRafRef.current);
-    dashboardDetailFocusRafRef.current = window.requestAnimationFrame(() => {
-      suppressAgendaPassiveSync();
-      const activated = agendaRailRef.current?.activateItem?.(
-        resolvedItemId,
-        resolvedDateKey,
-      );
-      if (!activated) return;
-      handledDashboardDetailFocusRef.current = request.requestKey;
-      setPendingItemDetailFocus(null);
-    });
-    return "retry";
-  };
-
-  const {
-    retryFocus: retryDashboardDetailFocus,
-    cancelFocus: cancelDashboardDetailFocus,
-  } = useDashboardFocusRetry({
-    attempt: attemptDashboardDetailFocus,
-    onGiveUp: () => setPendingItemDetailFocus(null),
-  });
-
-  useEffect(() => {
-    if (!pendingItemDetailFocus || !open || !usesFloatingEditor) return undefined;
-    if (pendingItemDetailFocus.view !== view) return undefined;
-    retryDashboardDetailFocus(pendingItemDetailFocus);
-    return () => {
-      cancelDashboardDetailFocus();
-      window.cancelAnimationFrame(dashboardDetailFocusRafRef.current);
-    };
-  }, [
-    pendingItemDetailFocus,
+  useDashboardDetailFocus({
     open,
-    usesFloatingEditor,
     view,
-    retryDashboardDetailFocus,
-    cancelDashboardDetailFocus,
-  ]);
+    focusOpenDetail,
+    focusItemId,
+    focusDate,
+    openRequestId,
+    forceDeadlineOverlay,
+    usesFloatingEditor,
+    activeView,
+    computed,
+    activeSelectedDateKey,
+    floatingDetailRef,
+    panelRef,
+    agendaRailRef,
+    shakeFloatingEditor,
+    suppressAgendaPassiveSync,
+    openFloatingDetail,
+    setSelectedDay,
+    setSelectedDateKey,
+    setSelectedItemId,
+    pendingItemDetailFocus,
+    setPendingItemDetailFocus,
+  });
 
   useCalendarModalHotkeys({
     open,

@@ -894,12 +894,10 @@ async function sendBillLightweightInner(userId, billData, { now = new Date(), db
 }
 
 export function sendBillLightweight(userId, billData, options = {}) {
-  // MERGE-NOTE (P1-4 ↔ P2-15, P2-16): the serializing lock moved out of this
-  // file into the shared withActualClockLock (server/actual/actual-clock-lock.js)
-  // so the metadata-refresh path serializes against lightweight writes on the
-  // same process-global crdt clock. P2-15 (lightweight `since` window) and P2-16
-  // (schedule reuse-by-name) also edit this file, but at different lines
-  // (~532 / ~837) — reconcile independently; do not reintroduce a private lock.
+  // The serializing lock lives in the shared withActualClockLock
+  // (server/actual/actual-clock-lock.js) so the metadata-refresh path serializes
+  // against lightweight writes on the same process-global crdt clock. Do not
+  // reintroduce a private lock here.
   return withActualClockLock(() => sendBillLightweightInner(userId, billData, options));
 }
 

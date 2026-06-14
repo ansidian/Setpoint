@@ -204,9 +204,8 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       }
       runEventRefetch({ allowHidden: true });
     };
-    // MERGE-NOTE[P3-2] (P3 worktree): route an expired-session SSE failure to /login instead of
-    // letting the browser reconnect-loop forever. Shares this file with a P2 fix on another
-    // worktree. On conflict: keep BOTH unless they touch the same lines. Remove note after merge.
+    // Route an expired-session SSE failure to /login instead of letting the browser
+    // reconnect-loop forever.
     const handleError = () => {
       // A 401 (or any rejected handshake) closes the stream terminally — readyState stays CLOSED
       // and the browser will NOT auto-reconnect. Transient network blips set readyState back to

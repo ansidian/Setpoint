@@ -115,7 +115,37 @@ export const reopenSnapshotItem = (itemId) =>
   apiFetch(`/api/briefing/snapshot/items/${encodeURIComponent(itemId)}/reopen`, { method: "POST" });
 
 // Current Dashboard
-export const getCurrentDashboard = () => apiFetch("/api/dashboard/current");
+// Single-use prime for the cold-start dashboard load. The auth-gated App-shell
+// prefetch (App.jsx) and useCurrentDashboard's mount fetch must collapse to ONE
+// /api/dashboard/current request instead of firing two. Only the first load
+// consumes the prime; every later poll / event-refetch / reload goes straight to
+// the network, so steady-state behavior is unchanged. The TTL is a safety expiry
+// for a prime that is never consumed (e.g. the user navigates away before mount).
+const CURRENT_DASHBOARD_PRIME_TTL_MS = 10 * 1000;
+let currentDashboardPrime = null; // { promise, expiresAt } | null
+// Fire-and-forget warm of the cold-start dashboard fetch. The caller (App.jsx)
+// only invokes this once auth is confirmed, so it never runs on an unauthenticated
+// session. Demo mode never reaches here (App returns early), and apiFetch routes
+// any demo request through the demo adapter regardless.
+export const prefetchCurrentDashboard = () => {
+  const now = Date.now();
+  if (currentDashboardPrime && currentDashboardPrime.expiresAt > now) return;
+  const promise = apiFetch("/api/dashboard/current");
+  const entry = { promise, expiresAt: now + CURRENT_DASHBOARD_PRIME_TTL_MS };
+  // Swallow the rejection on this handle so an unconsumed prefetch never becomes
+  // an unhandledrejection, and drop the prime on failure so the real load fetches
+  // fresh rather than inheriting the prefetch error (mirrors getEmailBody).
+  promise.catch(() => {
+    if (currentDashboardPrime === entry) currentDashboardPrime = null;
+  });
+  currentDashboardPrime = entry;
+};
+export const getCurrentDashboard = () => {
+  const prime = currentDashboardPrime;
+  currentDashboardPrime = null; // single-use: consume or discard on first read
+  if (prime && prime.expiresAt > Date.now()) return prime.promise;
+  return apiFetch("/api/dashboard/current");
+};
 export const getDashboardHealth = () => apiFetch("/api/dashboard/health");
 export const requestCurrentDashboardRefresh = () => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = () => apiFetch("/api/dashboard/current/sync", { method: "POST" });

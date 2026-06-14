@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockApi = vi.hoisted(() => ({
   checkAuth: vi.fn(),
+  prefetchCurrentDashboard: vi.fn(),
 }));
 
 vi.mock("./api", () => ({
   checkAuth: mockApi.checkAuth,
+  prefetchCurrentDashboard: mockApi.prefetchCurrentDashboard,
 }));
 
 vi.mock("./pages/Login", () => ({
@@ -82,6 +84,22 @@ describe("App auth redirects", () => {
     expect(window.location.pathname).toBe("/settings");
   });
 
+  it("warms the dashboard data prefetch once authenticated", async () => {
+    render(<App />);
+
+    expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
+    expect(mockApi.prefetchCurrentDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not prefetch dashboard data on an unauthenticated session", async () => {
+    mockApi.checkAuth.mockResolvedValue({ authenticated: false });
+
+    render(<App />);
+
+    expect(await screen.findByTestId("login-page")).toBeTruthy();
+    expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
+  });
+
   it("bypasses auth checks in demo mode", async () => {
     vi.stubEnv("VITE_EA_DEMO", "1");
     mockApi.checkAuth.mockClear();
@@ -90,6 +108,7 @@ describe("App auth redirects", () => {
 
     expect(await screen.findByTestId("dashboard-page")).toBeTruthy();
     expect(mockApi.checkAuth).not.toHaveBeenCalled();
+    expect(mockApi.prefetchCurrentDashboard).not.toHaveBeenCalled();
   });
 
   it("derives a router basename from Vite's deployment base", () => {

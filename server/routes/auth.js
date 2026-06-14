@@ -375,10 +375,8 @@ router.get("/api-tokens", requireCookieSession, async (req, res) => {
   }
 });
 
-// MERGE-NOTE[P3-35] (P3 worktree): run requireCookieSession BEFORE tokenMintLimiter so an
-// unauthenticated caller from the owner's egress IP can't burn the 5/15min mint budget and lock
-// the real user out. Shares this file with a P1 fix on the LOGIN limiter (~line 124) — that path
-// must KEEP its limiter-before-auth ordering. Different route/region; keep BOTH. Remove after merge.
+// Run requireCookieSession BEFORE tokenMintLimiter so an unauthenticated caller from the owner's
+// egress IP can't burn the 5/15min mint budget and lock the real user out.
 router.post("/api-tokens", requireCookieSession, tokenMintLimiter, async (req, res) => {
   const { label, scopes } = req.body || {};
   if (!label || typeof label !== "string" || !label.trim()) {

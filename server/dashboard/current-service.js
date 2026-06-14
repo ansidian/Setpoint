@@ -407,12 +407,9 @@ async function markRowsRefreshing(userId, rows, refreshKeys, {
     const currentPayload = rows[key]?.payload_json || JSON.stringify(fallbackPayloadForKey(key));
     const fetchedAt = rows[key]?.fetched_at || null;
     const expiresAt = rows[key]?.expires_at || timestamp;
-    // MERGE-NOTE[P3-42] (P3 worktree): carry refresh_failure_count / last_refresh_failed_at
-    // from rows[key] into the in-memory refreshing row so a subsequent
-    // markCacheRowRefreshFailed escalates the returned failureCount instead of resetting to 1
-    // (the persisted COALESCE already escalates). Shares this file with P1 (/current hot-path)
-    // on another worktree. On conflict: keep BOTH unless they touch these same lines (different
-    // region). Remove this note after merge.
+    // Carry refresh_failure_count / last_refresh_failed_at from rows[key] into the
+    // in-memory refreshing row so a subsequent markCacheRowRefreshFailed escalates the
+    // returned failureCount instead of resetting to 1 (the persisted COALESCE already escalates).
     nextRows[key] = {
       user_id: userId,
       cache_key: key,
@@ -790,14 +787,16 @@ export async function requestCurrentDashboardRefresh(userId, {
       : refreshPlan.scheduled,
     skipped: refreshPlan.skipped,
   };
-  // MERGE-NOTE[srv-snapshot-dash::snapshot-sync-snapshotview-double-load] (P2-19):
-  // This inline getActiveSnapshotView is the full ~8-trip rebuild and runs a
-  // SECOND time inside the fire-and-forget syncActiveSnapshot above (its trailing
-  // getActiveSnapshotView at snapshot-service.js runActiveSnapshotSync). The audit
-  // fix — return a *lightweight* activeSnapshot inline — would change the
-  // /current/refresh response shape (activeSnapshot is consumed by the frontend
-  // worktree's currentDashboardModel/poll dedup), so it is a cross-layer contract
-  // change. Per the work order, skipped here and flagged for coordinated follow-up.
+  // The inline getActiveSnapshotView returns the CURRENT briefing immediately so the
+  // manual-refresh response carries a snapshot the frontend renders right away
+  // (useCurrentDashboard exposes current.activeSnapshot to the UI). The fire-and-forget
+  // syncActiveSnapshot above fetches new mail, re-triages, and rebuilds the view in the
+  // background; its trailing rebuild reaches the client via the next SSE/poll. The two
+  // reads happen at different moments for different consumers, this inline read is already
+  // concurrency-bounded (P1-7), and this is the low-frequency manual-refresh path — so the
+  // second post-sync rebuild is accepted rather than returning a lightweight inline
+  // snapshot, which would blank the rendered briefing until the next poll and change the
+  // /current/refresh contract.
   return composeCurrentDashboardResponse(userId, rows, {
     activeSnapshot: await getActiveSnapshotView(userId),
     providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),

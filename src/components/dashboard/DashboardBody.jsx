@@ -172,6 +172,10 @@ function DashboardBodyInner({
     }
   }, [onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 
+  // Stable handler for the (memoized) InboxPeek rail's footer button, so a pure
+  // poll/refresh re-render of DashboardBody does not hand it a fresh arrow identity.
+  const handleOpenInbox = useCallback(() => onOpenEmail(null), [onOpenEmail]);
+
   // Stable callbacks for the (memoized) hero, so a pure poll/refresh re-render
   // of DashboardBody does not hand DashboardHero fresh function identities.
   const handleHeroOpenPressure = useCallback(() => {
@@ -271,7 +275,7 @@ function DashboardBodyInner({
       isMobile={isMobile}
       emailAccounts={emailAccounts}
       onJump={handleRailJump}
-      onOpenInbox={() => onOpenEmail(null)}
+      onOpenInbox={handleOpenInbox}
     />
   ) : null;
 

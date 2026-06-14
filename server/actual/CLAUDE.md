@@ -13,6 +13,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-local-metadata.js` — local budget cache: download, sync, prune, inspect
 - `actual-metadata-projection.js` — DB projection of Actual metadata with TTL for fast reads
 - `actual-bill-occurrences.js` — expands Actual schedules into dated bill occurrences with paid status
+- `actual-amount-condition.js` — single source of truth for interpreting an Actual `amount` schedule condition (scalar cents vs `isbetween` range)
 - `actual-connection-test.js` — HTTP-level reachability test for the Actual server
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)

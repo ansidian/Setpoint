@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { checkAuth } from "./api";
+import { checkAuth, prefetchCurrentDashboard } from "./api";
 import { isDemoMode } from "./demo/config.js";
 import { resolveRouterBasename } from "./routerBase.js";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
@@ -57,7 +57,14 @@ export default function App() {
     importDashboard().catch(() => {});
 
     checkAuth()
-      .then((res) => setAuthenticated(res.authenticated))
+      .then((res) => {
+        setAuthenticated(res.authenticated);
+        // Auth-gated data prefetch: warm /api/dashboard/current only once auth is
+        // confirmed, so it never fires on an unauthenticated session (which would
+        // 401-redirect). Primes the same single-use cache the Dashboard mount fetch
+        // consumes, so it overlaps the chunk load instead of double-fetching.
+        if (res.authenticated) prefetchCurrentDashboard();
+      })
       .catch(() => setAuthenticated(false));
   }, [demoMode]);
 

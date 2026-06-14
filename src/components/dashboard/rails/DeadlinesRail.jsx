@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { AlertCircle, Bell } from "lucide-react";
 import { daysUntil } from "../../../lib/bill-utils";
 import { formatFullDate } from "../../../lib/dashboard-helpers";
@@ -56,7 +56,7 @@ function DeadlinesRailLoadingPlaceholder({ isMobile = false }) {
   );
 }
 
-export default function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false, loadingState = "ready" }) {
+function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false, loadingState = "ready" }) {
   const grouped = useMemo(() => {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
     const visible = [...deadlines]
@@ -292,3 +292,7 @@ function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed })
     </div>
   );
 }
+
+// Memoized so dashboard poll/refresh ticks that leave deadlines/onJump/loadingState
+// untouched do not re-render this rail.
+export default memo(DeadlinesRail);

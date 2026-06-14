@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Check, CreditCard } from "lucide-react";
 import { daysUntil, formatAmount } from "../../../lib/bill-utils";
 import { formatFullDate } from "../../../lib/dashboard-helpers";
@@ -68,7 +68,7 @@ function BillsRailLoadingPlaceholder({ isMobile = false }) {
   );
 }
 
-export default function BillsRail({ accent, bills = [], onJump, isMobile = false, loadingState = "ready" }) {
+function BillsRail({ accent, bills = [], onJump, isMobile = false, loadingState = "ready" }) {
   const upcoming = useMemo(() => {
     return [...bills]
       .map((b) => ({ b, days: daysUntil(b.next_date) }))
@@ -267,3 +267,7 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
     </div>
   );
 }
+
+// Memoized so the dashboard poll / SSE refetch / 5-min refresh skip re-rendering
+// this rail when its (reference-stable) props are unchanged.
+export default memo(BillsRail);
