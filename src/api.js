@@ -1,5 +1,6 @@
 import { isDemoMode } from "./demo/config.js";
 import { handleDemoApiRequest } from "./demo/apiAdapter.js";
+import { readSseStream } from "./lib/sseStream.js";
 
 async function apiFetch(path, options = {}) {
   if (isDemoMode()) {
@@ -305,6 +306,40 @@ export const askInboxAiSearch = (query, limit) => (
       ...(limit ? { limit } : {}),
     }),
   })
+);
+
+// Alfred — streaming run + conversation reset. Not apiFetch: the response is
+// an SSE stream, not JSON.
+export async function runAlfredStream({ message, conversationId, model, signal, onEvent }) {
+  if (isDemoMode()) {
+    throw new Error("Alfred is not available in the demo");
+  }
+  const res = await fetch("/api/alfred/run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "Setpoint",
+    },
+    body: JSON.stringify({
+      message,
+      ...(conversationId ? { conversationId } : {}),
+      ...(model ? { model } : {}),
+    }),
+    ...(signal ? { signal } : {}),
+  });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Not authenticated");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message || `API error: ${res.status}`);
+  }
+  await readSseStream(res.body, onEvent);
+}
+
+export const deleteAlfredConversation = (id) => (
+  apiFetch(`/api/alfred/conversations/${encodeURIComponent(id)}`, { method: "DELETE" })
 );
 
 // Important Senders

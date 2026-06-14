@@ -13,6 +13,8 @@ import briefingRoutes from "./routes/briefing/index.js";
 import accountsRoutes from "./routes/accounts.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import calendarRoutes from "./routes/calendar.js";
+import alfredRoutes from "./routes/alfred.js";
+import { startAlfredConversationSweeper } from "./alfred/alfred-conversations.js";
 import notesRoutes from "./routes/notes.js";
 import gmailPushRoutes from "./routes/gmail-push.js";
 import todoistWebhookRoutes from "./routes/todoist-webhook.js";
@@ -81,6 +83,7 @@ app.use("/api/briefing", briefingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ea", accountsRoutes);
 app.use("/api/calendar", calendarRoutes);
+app.use("/api/alfred", alfredRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/gmail", gmailPushRoutes);
 
@@ -129,6 +132,7 @@ timeAsync("migrations", () => migrate())
       scheduleStartupWorker("bills-mirror", startupDelays.billsMirror, () => startBillsMirrorRefreshWorker());
       scheduleStartupWorker("calendar-search-mirror", startupDelays.calendarSearchMirror, () => startCalendarSearchMirrorSyncWorker());
       scheduleStartupWorker("reminders", startupDelays.reminders, () => startReminderSchedulerWorker());
+      startAlfredConversationSweeper();
     });
   }).catch((err) => {
     console.error("Migration failed:", err);

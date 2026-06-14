@@ -113,6 +113,7 @@ src/
 
 server/
 ├── actual/
+├── alfred/
 ├── auth/
 ├── bills/
 │   └── bill-extractors/
@@ -576,6 +577,7 @@ erDiagram
 |-------|------------|
 | `ea_accounts` | `001_ea_tables.sql` |
 | `ea_actual_metadata_mirror` | `009_actual_metadata_mirror.sql` |
+| `ea_alfred_usage` | `016_alfred_usage.sql` |
 | `ea_api_tokens` | `001_ea_tables.sql` |
 | `ea_bill_occurrence_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_bill_schedule_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
@@ -666,6 +668,8 @@ The structural route table below is regenerated from `server/index.js` and `serv
 <!-- BEGIN:routes -->
 | Method | Path | File |
 |--------|------|------|
+| DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.js` |
+| POST | `/api/alfred/run` | `server/routes/alfred.js` |
 | GET | `/api/auth/api-tokens` | `server/routes/auth.js` |
 | POST | `/api/auth/api-tokens` | `server/routes/auth.js` |
 | DELETE | `/api/auth/api-tokens/:id` | `server/routes/auth.js` |

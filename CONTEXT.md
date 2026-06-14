@@ -365,6 +365,33 @@ _Avoid_: Floating modal, editor dialog, detail drawer
 - Clean create/edit workspaces cancel on grid scroll so accidental empty editors do not linger.
 - Dirty create/edit workspaces do not park or snap elsewhere; they keep their fixed position while the grid scrolls.
 
+**Alfred**:
+The Setpoint assistant: a conversational surface that answers owner questions by reading Setpoint's existing domains (mail, calendar, deadlines, bills) and synthesizing an answer with cited items.
+_Avoid_: Chat layer, chatbot, AI search, Ask AI, generic "assistant"
+
+**Alfred Panel**:
+The right-docked dashboard surface where the owner converses with **Alfred**, toggled at will with Cmd/Ctrl+\. It overlays the dashboard without collapsing, shrinking, or reflowing the content beneath, because it is cheap to dismiss and reopen.
+_Avoid_: Chat window, chat panel, assistant sidebar, split view, launcher pill
+
+**Alfred Tool**:
+A named read capability **Alfred** can invoke against one Setpoint domain during a run, surfaced to the owner as a quiet one-line status row.
+_Avoid_: Plugin, API call row, agent action
+
+**Alfred Conversation**:
+The single rolling thread between the owner and **Alfred**. It survives closing and reopening the **Alfred Panel** within a dashboard session, is cleared by starting a new chat (Cmd/Ctrl+Shift+\), and is ephemeral — not a durable, browsable history.
+_Avoid_: Chat history, saved conversations, multi-thread chat
+
+**Alfred Coverage**:
+The honest boundary of what **Alfred** can read and truthfully answer about, told to the owner rather than papered over.
+_Avoid_: Knows everything Setpoint knows, silent best-effort
+
+- **Alfred** is read-only in its first release: no **Alfred Tool** mutates Setpoint or any provider.
+- **Alfred Coverage** in the first release is indexed inbox mail, calendar events, deadlines, and upcoming bills; budget metadata/transactions, focus windows, and weather are out of scope and Alfred should say so when asked.
+- **Alfred** answers email questions through the existing email search retrieval engine; it replaces the inbox Ask-AI answer surface, not the inbox keyword search.
+- The inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) become an Alfred handoff: the **Alfred Panel** opens and runs the inbox query immediately, with no intermediate confirmation step.
+- **Alfred** has exactly two entry points: Cmd/Ctrl+\ and the inbox Alfred handoff. There is no floating launcher pill.
+- Embedded item rows in an Alfred answer are resolved by reference: **Alfred** chooses which retrieved items to show, but row contents render verbatim from domain data, never from model-authored values.
+
 ## Example Dialogue
 
 > **Dev:** "After the **Dashboard Password** succeeds, should we create an **Authenticated Session**?"
@@ -426,3 +453,11 @@ _Avoid_: Floating modal, editor dialog, detail drawer
 - "Scroll closes every editor" was rejected; clean create/edit workspaces cancel on grid scroll, while dirty create/edit workspaces keep their fixed position.
 - "Tether to remounted anchors" was rejected; the **Floating Detail Anchor** only determines initial placement, not later scroll recovery.
 - "Date breadcrumb for parked panels" was rejected with parking itself; no parked panel state or parked visual treatment remains.
+- "Assistant" / "chat layer" was resolved as **Alfred**, a proper name; "Ask AI" language retires with the inbox surface it labeled.
+- "Ask AI confirmation step" was rejected for the Alfred handoff; deliberately submitting a query is the confirmation, so the handoff runs immediately.
+- "Model emits row JSON" was rejected for Alfred answers; embedded rows are resolved by reference from real domain data so Alfred cannot mistype an amount, date, or sender into an authoritative-looking row.
+- "Durable Alfred chat history" was rejected for the first release; an **Alfred Conversation** is a single ephemeral rolling thread.
+- The email search evidence floor was resolved as a shared token-budget gate that keeps strong lexical matches even at low vector similarity, fixed once for every caller rather than special-cased for Alfred.
+- Focus windows, budget metadata/transactions, and weather were deferred from first-release **Alfred Coverage**; the email tie-breaker plus calendar, deadlines, and bills is the v1 boundary.
+- The mock's ⌘J/⌘⇧O hotkeys were replaced by Cmd/Ctrl+\ (toggle) and Cmd/Ctrl+Shift+\ (new chat); the panel overlays rather than reflows because dismissal is cheap.
+- The mock's floating launcher pill was rejected; permanent chrome competing with dashboard content is not worth near-zero discoverability gains in a single-owner app.
