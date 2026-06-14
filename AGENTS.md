@@ -2,16 +2,15 @@
 
 Personal executive-assistant dashboard for one owner. It triages email, fetches calendar, weather, Todoist-backed deadlines/tasks, and Actual Budget finances. This is a single-user app: `EA_USER_ID` is load-bearing, and there is no multi-tenancy.
 
-Use this file as a map, not the full manual. Top-level tracked docs are the source of truth for standing product and system guidance. Linear issues are the source of truth for active executable work when an issue exists or the user intends Codex execution. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
+Use this file as a map, not the full manual. Top-level tracked docs are the source of truth for standing product and system guidance. The `docs/` tree is intentionally local and gitignored for this personal single-user repo; use it as owner-maintained working memory when present, but do not make tracked code depend on it.
 
-- Linear issues - source of truth for active executable work when an issue exists or the user intends Codex execution.
 - `README.md` - setup, env vars, and what the product does.
 - `ARCHITECTURE.md` - system shape, data flow, routes, database, briefing pipeline.
 - `FLOWS.md` - cross-layer pipelines and cross-cutting behaviors, hop by hop; check it before fixing anything that spans server/SSE/caches/UI.
 - `PRODUCT.md` - product intent, audience, voice, and non-goals.
 - `DESIGN.md` / `DESIGN.json` - visual language and design tokens.
 - `docs/index.md` - local documentation catalog when present.
-- `docs/exec-plans/active/` - optional local scratch/working memory for complex planning, research, or historical context. Do not treat local plans as more authoritative than an explicit Linear issue.
+- `docs/exec-plans/active/` - optional local scratch/working memory for complex planning, research, or historical context.
 - `docs/exec-plans/completed/` - local historical plans; useful context, not current requirements.
 - `docs/design-docs/history/` - local historical design specs; defer to `DESIGN.md` for current rules.
 
@@ -26,13 +25,9 @@ Use this file as a map, not the full manual. Top-level tracked docs are the sour
 - For UI work, add deliberate hover/focus motion to buttons and icon buttons unless the control is disabled or reduced-motion handling requires a static state.
 - Before handing off UI changes, scan every touched enabled button or icon button, including close/cancel controls in overlays, for hover, focus, and active-state styling.
 - Prefer repo patterns over new abstractions. Add abstractions only when they remove real complexity or match established structure.
-- When work references a Linear issue directly, through a `docs/` plan with explicit Linear scope, or through issue keys like `PER-11`, treat the Linear issue as the active execution contract. Keep it current as work progresses: update status when appropriate, leave concise implementation/verification notes, and reflect material scope changes or locked decisions in the issue. Use `docs/` only as local working memory or historical context unless the user explicitly asks for a local plan artifact.
-- For Codex-executable work, prefer creating/updating Linear issues over creating standalone markdown execution plans. A good Linear issue should include context, scope, non-goals, acceptance criteria, relevant files, implementation notes, and verification steps.
-- When turning a Linear issue into a ready-to-execute plan, set or leave the issue status as `Planned`. Move it to `In Progress` only when implementation actually begins.
-- When triaging or grilling Linear issues, record interim decisions in comments if useful, but update the issue description with the final execution contract: goal, context, scope, non-goals, locked decisions, acceptance criteria, and verification.
-- Keep Codex tasks bounded. If a plan spans multiple independent surfaces, split it into a parent/spec issue plus child implementation issues rather than asking Codex to execute one large issue.
-- When converting a plan into Linear for Codex, write issues as execution contracts, not vague backlog notes. Each issue should be small enough for one focused PR and should state what not to change.
-- Do not create new local markdown plans by default when Linear is available and the work is intended for Codex execution. Create local docs only for complex design exploration, rough scratch planning, or durable non-Linear project memory.
+- Capture executable plans as local markdown in `docs/exec-plans/active/` (gitignored working memory). Write them as execution contracts, not vague backlog notes: goal, context, scope, non-goals, locked decisions, relevant files, acceptance criteria, and verification steps.
+- Keep planned work bounded. If a plan spans multiple independent surfaces, split it into a parent/spec plan plus smaller per-surface plans, each small enough for one focused PR and explicit about what not to change.
+- Keep plans current as work progresses: reflect material scope changes and locked decisions in the plan, and leave concise implementation/verification notes.
 
 ## Search Routing
 
