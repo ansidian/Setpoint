@@ -32,15 +32,11 @@ async function runMigration(name, sql, { dbClient = db } = {}) {
   // an already-mutated schema, hit "duplicate column" / "no such table" on
   // ALTER/DROP/RENAME migrations, and exit(1) on every boot.
   //
-  // MERGE-NOTE (P1-8 ⇄ P2-21/P2-22): the P1 worktree ("make the runner
-  // transactional") and the P2 worktree ("run each migration in one transaction")
-  // independently landed the SAME fix; this is the single reconciled copy, on P2's
-  // signature (optional dbClient so the migrate() caller stays untouched). The
-  // per-file transaction makes every migration body atomic, covering the "014
-  // DROP+RENAME is not transactional" (P2-21) and "bare non-idempotent ALTER ADD
-  // COLUMN replay is fatal" (P2-22) concerns at the runner level. If the
-  // individual .sql files are also hardened (splitting 014, guarding ALTERs),
-  // treat those as defense-in-depth — do NOT remove this transaction wrapper.
+  // The per-file transaction makes every migration body atomic, covering both the
+  // "014 DROP+RENAME is not transactional" and "bare non-idempotent ALTER ADD
+  // COLUMN replay is fatal" failure modes at the runner level. If the individual
+  // .sql files are also hardened (splitting 014, guarding ALTERs), treat those as
+  // defense-in-depth — do NOT remove this transaction wrapper.
   const tx = await dbClient.transaction("write");
   try {
     // Transaction-level executeMultiple runs inside the open transaction and

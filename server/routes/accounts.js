@@ -17,12 +17,6 @@ const router = Router();
 // transient failure (e.g. the GET /accounts/gmail/auth CSRF-token INSERT)
 // returns a 500 instead of hanging the request. Must run before route
 // registration.
-//
-// MERGE-NOTE (P1-12 ↔ P2-40): P2-40 is reflected XSS in the GET
-// /accounts/gmail/callback error path (it reflects internal error text into the
-// HTML response, ~line 44). That is a DIFFERENT handler and an in-handler
-// response concern — this wrap only changes what happens on an unhandled
-// rejection, so the two fixes are orthogonal; keep both.
 wrapRouterAsync(router);
 const GMAIL_OAUTH_BIND_COOKIE = "ea_oauth_bind";
 const GMAIL_OAUTH_BIND_COOKIE_PATH = "/api/ea/accounts/gmail/callback";
@@ -106,10 +100,8 @@ router.get("/accounts/gmail/callback", async (req, res) => {
     const baseUrl = process.env.NODE_ENV === "production" ? "" : "http://localhost:5173";
     res.redirect(`${baseUrl}/settings?account_connected=${result.email}`);
   } catch (err) {
-    // MERGE-NOTE[P3-53] (P3 worktree): stop reflecting the internal error message into
-    // the HTTP response on this unauthenticated callback; log full error server-side, send
-    // a generic client message. Shares this file's OAuth callback with a P2 error-handling
-    // fix on another worktree. On conflict: keep BOTH unless they touch this same line.
+    // This callback is unauthenticated: log the full error server-side but send a
+    // generic client message so the internal error detail is never reflected back.
     console.error("Gmail OAuth callback error:", err);
     res.status(500).send("OAuth failed. Please try connecting the account again.");
   }

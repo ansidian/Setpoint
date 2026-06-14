@@ -231,17 +231,12 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
     const filters = buildEmbeddingQueryFilters({ readFilter, dateWindow });
     if (mode === "native") {
       const result = await db.execute({
-        // P3-4: document_text (the full email-body blob) was selected but never
-        // read by the return, so it is dropped here. document_json is still
-        // pulled because the returned `document` field is asserted by the store
-        // test; the production consumer (email-search-retrieval.js) reads only
-        // uid + similarity. MERGE-NOTE[P3-4]: dropping document_json/document
-        // from the projection + return is the remaining win, deferred to avoid
-        // editing email-search-embeddings.test.js (shared with the non-owned
-        // embeddings config module). Remove once that test moves to a store-
-        // owned file or the shape change is coordinated.
+        // Project only the columns consumers read: uid (+ identity/source_hash)
+        // and the cosine distance. The email-body blobs (document_text/document_json)
+        // are never read off this result — email-search-retrieval.js loads bodies by
+        // uid separately — so they stay out of the projection.
         sql: `SELECT emb.uid, emb.user_id, emb.account_id,
-                     emb.document_json, emb.source_hash,
+                     emb.source_hash,
                      vector_distance_cos(emb.embedding, vector32(?)) AS distance
               FROM ea_email_search_embeddings emb
               JOIN ea_email_index idx
@@ -267,7 +262,6 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
         uid: row.uid,
         user_id: row.user_id,
         account_id: row.account_id,
-        document: JSON.parse(row.document_json),
         source_hash: row.source_hash,
         distance: Number(row.distance),
         similarity: 1 - Number(row.distance),
@@ -281,7 +275,7 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
     // native vector path and is unaffected.
     const fallbackScanLimit = Math.min(maxResults * 4, 1000);
     const result = await db.execute({
-      sql: `SELECT emb.uid, emb.user_id, emb.account_id, emb.document_json,
+      sql: `SELECT emb.uid, emb.user_id, emb.account_id,
                    emb.source_hash, emb.embedding
             FROM ea_email_search_embeddings emb
             JOIN ea_email_index idx
@@ -310,7 +304,6 @@ export function createEmailSearchEmbeddingStore(db, capability = { mode: "fallba
           uid: row.uid,
           user_id: row.user_id,
           account_id: row.account_id,
-          document: JSON.parse(row.document_json),
           source_hash: row.source_hash,
           similarity,
           distance: 1 - similarity,

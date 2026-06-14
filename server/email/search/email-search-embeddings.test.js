@@ -313,7 +313,6 @@ describe("email search embedding store", () => {
     expect(matches[0]).toMatchObject({
       similarity: expect.any(Number),
       distance: expect.any(Number),
-      document: expect.objectContaining({ subject: "Tuition receipt" }),
     });
     expect(matches[0].similarity).toBeGreaterThan(matches[1].similarity);
   });

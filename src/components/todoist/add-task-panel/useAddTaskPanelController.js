@@ -11,7 +11,8 @@ import {
 } from "../../../api";
 import useIsMobile from "../../../hooks/useIsMobile";
 import { epochFromLa } from "../../inbox/helpers";
-import { formatResolvedDate, parseTokens } from "./parsing";
+import { formatResolvedDate, parseTokens, parseTokensWithChrono } from "./parsing";
+import { ensureChrono, isChronoReady } from "../../calendar/events/parseCalendarTitle";
 import { buildManualDue, getInitialDueEpoch } from "./due";
 import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.js";
 import {
@@ -193,6 +194,15 @@ export default function useAddTaskPanelController({
       })
       .catch(() => {});
     getTodoistLabels().then(setLabels).catch(() => {});
+  }, []);
+
+  // Warm chrono-node on mount so the common paste-then-submit case usually has the
+  // natural-language parser already loaded. Best-effort only and sets NO state — a
+  // post-mount setState would land mid workspace-switch transition and flake (the
+  // reverted chronoReadyTick fix did exactly that). The submit-time await in
+  // handleSubmit is the actual correctness guarantee; this just shrinks the window.
+  useEffect(() => {
+    ensureChrono();
   }, []);
 
   useEffect(() => {
@@ -605,10 +615,8 @@ export default function useAddTaskPanelController({
     return () => element.removeEventListener("wheel", handleWheel);
   }, []);
 
-  // MERGE-NOTE[P3-30] (P3 worktree): base canSubmit on the effective (token-stripped)
-  // title so tokens-only input like "#Work @home" disables submit instead of firing a
-  // doomed 400. Shares this file with two P2 fixes on another worktree (canSubmit region).
-  // On conflict: keep BOTH unless they touch this exact line. Remove this note after merge.
+  // Base canSubmit on the effective (token-stripped) title so tokens-only input
+  // like "#Work @home" disables submit instead of firing a doomed 400.
   const canSubmit = canSubmitTask({ parsed, input });
 
   const handleSubmit = async () => {
@@ -617,14 +625,30 @@ export default function useAddTaskPanelController({
     setSubmitting(true);
     setError(null);
     try {
+      // Paste-then-instant-submit may have parsed while chrono was still loading,
+      // dropping a recurring time-of-day (and leaking the time text into the title).
+      // Re-parse with chrono guaranteed loaded and recompute the due string before
+      // persisting. Scoped to recurring input only — that is the sole chrono-dependent
+      // case (non-recurring dates resolve their time via regex, cold-safe), so the
+      // await never touches the plain-date path. No-op once chrono is warm.
+      let effectiveParsed = parsed;
+      let effectiveDue = resolvedDue;
+      if (!overrides.due && input && parsed.recurrenceDraft && !isChronoReady()) {
+        effectiveParsed = await parseTokensWithChrono(input, projects, labels, { seededDueDate: seededNlpDueDate });
+        effectiveDue = effectiveParsed.recurringDueString
+          || effectiveParsed.dateDueString
+          || effectiveParsed.datePhrase
+          || seededCreateDue?.dueString
+          || null;
+      }
       const payload = buildDeadlineMutationPayload({
-        parsed,
+        parsed: effectiveParsed,
         input,
         description,
         resolvedProject,
         resolvedPriority,
         resolvedLabels,
-        resolvedDue,
+        resolvedDue: effectiveDue,
         isEdit,
       });
 
@@ -641,13 +665,11 @@ export default function useAddTaskPanelController({
       }
       const savedTask = isEdit ? { ...editingTask, ...task, id: editingTask.id } : task;
 
-      // MERGE-NOTE[P3-29] (P3 worktree): the deadline mutation above is already
-      // committed, so reminder failures must NOT abort the flow. Collect each
-      // reminder op's error instead of throwing, always fire onTaskUpdated/onTaskAdded
-      // with best-known projected state, and only close when every reminder op
-      // succeeded — leaving the panel open on partial failure so badges reconcile.
-      // Shares this file with two P2 fixes on another worktree (reminder-mutation region).
-      // On conflict: keep BOTH unless they touch the same lines. Remove note after merge.
+      // The deadline mutation above is already committed, so reminder failures must
+      // NOT abort the flow. Collect each reminder op's error instead of throwing, always
+      // fire onTaskUpdated/onTaskAdded with best-known projected state, and only close
+      // when every reminder op succeeded — leaving the panel open on partial failure so
+      // badges reconcile.
       const { appliedReminders, created, deleted, errors } = await applyTodoistReminderMutations({
         savedTask,
         todoistReminders,

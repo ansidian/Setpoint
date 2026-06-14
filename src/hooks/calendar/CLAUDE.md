@@ -47,6 +47,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 ### Utilities
 - `useDashboardFocusRetry.js` — polling/backoff retry for dashboard-detail focus attach
+- `useDashboardDetailFocus.js` — dashboard-detail focus-retry machine (pending-request derivation + attach attempt + retry wiring) extracted from `useCalendarModalController.jsx`
 - `useViewportWidth.js` — RAF-debounced viewport width listener
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)

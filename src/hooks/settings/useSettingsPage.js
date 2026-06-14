@@ -37,13 +37,11 @@ function useSettingsAutoSave() {
         );
       }
     } catch {
-      // MERGE-NOTE (P1-3 ⇄ P2-10): RESOLVED. Both worktrees fixed the same defect
-      // — a rejected debounced PUT cleared pendingRef at the top before the await,
-      // silently dropping every co-batched setting when one field was bad (e.g. a
-      // blank schedule label). Re-queue the failed payload; edits made DURING the
-      // in-flight request (already in pendingRef) win over the stale re-queued
-      // values. P1 extracted mergeFailedPayload (exported + unit-tested); P2
-      // inlined the equivalent spread. Keeping the named helper as the single copy.
+      // A rejected debounced PUT used to clear pendingRef at the top before the
+      // await, silently dropping every co-batched setting when one field was bad
+      // (e.g. a blank schedule label). Re-queue the failed payload; edits made
+      // DURING the in-flight request (already in pendingRef) win over the stale
+      // re-queued values.
       pendingRef.current = mergeFailedPayload(pendingRef.current, payload);
       if (updateUi) setStatus("error");
     }

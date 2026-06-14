@@ -131,7 +131,8 @@ server/
 ├── platform/
 ├── reminders/
 ├── routes/
-│   └── briefing/
+│   ├── briefing/
+│   └── dashboard/
 ├── scripts/
 ├── snapshots/
 ├── tasks/
@@ -221,6 +222,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.js` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.js` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.js` |
+| `useCalendarDeadlineOverlay` | `src/hooks/calendar/useCalendarDeadlineOverlay.js` |
 | `useCalendarDomainRange` | `src/hooks/calendar/useCalendarDomainRange.js` |
 | `useCalendarFloatingDetail` | `src/hooks/calendar/useCalendarFloatingDetail.js` |
 | `useFloatingEditorRouting` | `src/hooks/calendar/useCalendarModalEditorRouting.js` |
@@ -232,6 +234,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useCalendarModalWheelContainment` | `src/hooks/calendar/useCalendarModalWheelContainment.js` |
 | `useCalendarRange` | `src/hooks/calendar/useCalendarRange.js` |
 | `useCalendarScrollSync` | `src/hooks/calendar/useCalendarScrollSync.js` |
+| `useDashboardDetailFocus` | `src/hooks/calendar/useDashboardDetailFocus.js` |
 | `useDashboardFocusRetry` | `src/hooks/calendar/useDashboardFocusRetry.js` |
 | `useDeadlineOverlayState` | `src/hooks/calendar/useDeadlineOverlayState.js` |
 | `useFloatingEditorRouting` | `src/hooks/calendar/useFloatingEditorRouting.js` |

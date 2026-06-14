@@ -148,12 +148,9 @@ router.put("/settings", async (req, res) => {
       updates.push("schedules_json = ?");
       args.push(JSON.stringify(validation.value));
     }
-    // MERGE-NOTE[P3-55] (P3 worktree): minimal type/range coercion at the write
-    // boundary for the scalar settings fields (hours/coords/url/sync_id), 400 on
-    // failure, mirroring the JSON/model-field validation already in this handler.
-    // Shares this PUT handler with P1-3 (blank-label early-return validation) on
-    // another worktree. On conflict: keep BOTH — P1-3 guards labels above the
-    // UPDATE, these guard different fields. Remove this note after merge.
+    // Minimal type/range coercion at the write boundary for the scalar settings
+    // fields (hours/coords/url/sync_id), 400 on failure, mirroring the
+    // JSON/model-field validation already in this handler.
     if (email_lookback_hours !== undefined) {
       if (!Number.isInteger(email_lookback_hours) || email_lookback_hours < 1 || email_lookback_hours > 168) {
         return res.status(400).json({ message: "email_lookback_hours must be an integer between 1 and 168" });

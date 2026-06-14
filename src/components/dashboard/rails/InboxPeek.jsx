@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Inbox } from "lucide-react";
 import { deriveLane } from "../../../lib/shell-helpers";
 import {
@@ -11,7 +11,7 @@ import { timeAgo } from "./railModel.js";
 const MAX_VISIBLE_EMAILS = 4;
 const INBOX_ROW_MIN_HEIGHT = 46;
 
-export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox, isMobile = false }) {
+function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox, isMobile = false }) {
   const flat = useMemo(() => {
     const all = [];
     for (const acc of emailAccounts) {
@@ -131,3 +131,7 @@ export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJu
     </div>
   );
 }
+
+// Memoized so dashboard poll/refresh ticks that leave emailAccounts/onJump/onOpenInbox
+// untouched do not re-render this rail.
+export default memo(InboxPeek);

@@ -184,13 +184,10 @@ export async function completeDeadlineOccurrence(userId, deadlineId, occurrenceD
     wrapped.status = 502;
     throw wrapped;
   }
-  // MERGE-NOTE (P2-30 ⇄ P3-64): the completion is recorded by the atomic claim
-  // ABOVE (INSERT OR IGNORE, written BEFORE the /close), and that row is rolled
-  // back only if the /close itself throws. So once /close succeeds the completion
-  // is already durably recorded — P3-64's "treat /close as the commit point so a
-  // completed close is never lost" is satisfied by the pre-close claim, and a
-  // separate post-close tombstone re-write (P3's original approach) would be
-  // redundant. The only remaining post-close work is best-effort reminder cleanup;
+  // The completion is recorded by the atomic claim ABOVE (INSERT OR IGNORE,
+  // written BEFORE the /close) and that row is rolled back only if the /close
+  // itself throws — so once /close succeeds the completion is already durably
+  // recorded. The only remaining post-close work is best-effort reminder cleanup;
   // a failure here must be logged but must NOT surface as a failed completion.
   try {
     await deleteSourceReminders({

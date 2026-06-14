@@ -70,13 +70,6 @@ async function runInitScheduler() {
   for (const job of activeJobs) job.stop();
   activeJobs.length = 0;
 
-  // MERGE-NOTE[P3-56] (P3 worktree): narrowed the outer try to the initial
-  // table read only, and moved per-row JSON.parse + cron registration into the
-  // loop wrapped in their own try/catch (logs offending user_id, continues) so
-  // one malformed row no longer disables every schedule. Shares initScheduler
-  // with a P2 fix on another worktree. On conflict: keep BOTH unless they touch
-  // the same lines (different concerns — this guards row iteration). Remove
-  // this note after merge.
   let result;
   try {
     result = await db.execute(

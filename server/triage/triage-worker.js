@@ -446,14 +446,12 @@ async function loadEmailForJob(job, dbClient) {
             ON sz.user_id = t.user_id
            AND sz.email_id = t.email_id
            AND sz.status = 'snoozed'
-            -- MERGE-NOTE[P3-68] (P3 worktree): ea_snoozed_emails has no account_id
+            -- ea_snoozed_emails has no account_id
             -- (PK is user_id+email_id), so a cross-account uid collision (icloud uids
             -- don't embed account.id) could defer the wrong account's email. Scope the
             -- snooze to this account by requiring the uid to resolve to t.account_id in
             -- the account-scoped index (ea_email_index.uid is a global PK -> one account).
             -- Full fix (add account_id column + backfill) is flagged out-of-scope.
-            -- Shares this file with two P2 triage-worker fixes on sibling worktrees; on
-            -- conflict keep BOTH unless they touch loadEmailForJob's JOIN. Remove after merge.
            AND EXISTS (
              SELECT 1 FROM ea_email_index si
              WHERE si.uid = sz.email_id

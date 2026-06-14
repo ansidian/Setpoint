@@ -296,11 +296,9 @@ export async function scheduleBillsMirrorRefresh(userId, {
 } = {}) {
   const dueAt = new Date(now.getTime() + delayMs).toISOString();
   const timestamp = isoNow(now);
-  // MERGE-NOTE[P3-37] (P3 worktree): read the existing pending_refresh_at before the
-  // upsert so we can arm the in-process timer to the value the DB actually keeps
-  // (the earlier of any already-pending time and dueAt), not unconditionally to dueAt.
-  // Shares this file's settle/refresh timer area with the P1 settle/refresh-timer fix on
-  // another worktree. On conflict: keep BOTH unless they touch these exact lines.
+  // P3-37: read the existing pending_refresh_at before the upsert so we can arm the
+  // in-process timer to the value the DB actually keeps (the earlier of any
+  // already-pending time and dueAt), not unconditionally to dueAt.
   const existing = await dbClient.execute({
     sql: `SELECT pending_refresh_at FROM ea_bills_mirror_state WHERE user_id = ?`,
     args: [userId],

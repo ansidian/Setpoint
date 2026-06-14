@@ -51,13 +51,9 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
     if (!open && previewItem !== null) setPreviewItem(null);
   }
 
-  // MERGE-NOTE[P3-4] (P3 worktree): auto-scroll now keys on the message list and
-  // only follows the tail when the user is near the bottom (was: every render →
-  // every keystroke snapped to bottom). Shares this file with the Alfred panel P2
-  // fix on another worktree. On conflict: keep BOTH unless they touch these exact
-  // lines (P2 targets a different region). Remove this note after merge.
-  //
-  // keep scrolled to the newest message (handoff: scrollTop, not scrollIntoView),
+  // Auto-scroll keys on the message list and only follows the tail when the user
+  // is near the bottom (was: every render → every keystroke snapped to bottom).
+  // Keep scrolled to the newest message (handoff: scrollTop, not scrollIntoView),
   // but only on new/changed messages and only when the user hasn't scrolled up.
   const scrollKey = alfredScrollKey(messages);
   useEffect(() => {

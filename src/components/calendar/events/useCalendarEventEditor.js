@@ -181,10 +181,8 @@ export default function useCalendarEventEditor({
     [titleAssist.cleanTitle],
   );
 
-  // MERGE-NOTE[P3-9] (P3 worktree): pass recurrenceDraft into the batch validator so a
-  // recurrence-then-batch sequence blocks the save instead of silently dropping recurrence.
-  // Shares this file with P1-1 (in-flight savingRef guard at top of save()) on another worktree.
-  // On conflict: keep BOTH — P1-1 touches save() top; this touches validationMessage. Remove note after merge.
+  // Pass recurrenceDraft into the batch validator so a recurrence-then-batch
+  // sequence blocks the save instead of silently dropping recurrence.
   const validationMessage = useMemo(() => {
     if (isEditingRecurring && !recurringEditScope) {
       return "Choose whether to edit all events, upcoming only, or just this one.";
@@ -731,10 +729,8 @@ export default function useCalendarEventEditor({
     }, TITLE_DEBOUNCE_MS);
   }, [isEditing]);
 
-  // MERGE-NOTE[P3-70] (P3 worktree): cancel the pending title-input debounce on unmount
-  // so the timer cannot fire into an unmounted hook. New effect; shares this file with
-  // P1-1 (in-flight savingRef guard at top of save()). On conflict: keep BOTH (different
-  // regions). Remove note after merge.
+  // Cancel the pending title-input debounce on unmount so the timer cannot
+  // fire into an unmounted hook.
   useEffect(() => () => {
     if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
   }, []);

@@ -32,19 +32,17 @@ function normalizeText(value) {
     .replace(/\s+/g, " ");
 }
 
-// MERGE-NOTE[P3-41] (P3 worktree): escape LIKE metacharacters so a query containing
-// `_` or `%` matches literally instead of acting as a wildcard. Used with `ESCAPE '\'`
-// in listCalendarSearchMirrorOccurrences. Shares this file with a P2 fix on another
-// worktree. On conflict: keep BOTH unless they touch these same lines. Remove after merge.
+// Escape LIKE metacharacters so a query containing `_` or `%` matches literally
+// instead of acting as a wildcard. Used with `ESCAPE '\'` in
+// listCalendarSearchMirrorOccurrences.
 function escapeLikePattern(value) {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
-// MERGE-NOTE[P3-40] (P3 worktree): addMonthsIso now clamps day-of-month to the target
-// month's last day so 29th-31st no longer overflow into the next month (shifting the
-// mirror/search window by up to 3 days). Exported as the single source of truth shared with
-// server/routes/calendar.js. Shares this file with a P2 fix on another worktree. On conflict:
-// keep BOTH unless they touch these same lines. Remove this note after merge.
+// Clamps day-of-month to the target month's last day so 29th-31st no longer
+// overflow into the next month (which would shift the mirror/search window by up
+// to 3 days). Exported as the single source of truth shared with
+// server/routes/calendar.js.
 export function addMonthsIso(isoDate, months) {
   const [year, month, day] = isoDate.split("-").map(Number);
   const targetYear = year;
@@ -789,9 +787,7 @@ export async function listCalendarSearchMirrorOccurrences(userId, {
   const startMs = dateMs(start || "0001-01-01");
   const endMs = dateMs(end || "9999-12-31", true);
   const normalizedQuery = normalizeText(query);
-  // MERGE-NOTE[P3-41] (P3 worktree): bind an escaped LIKE pattern with ESCAPE '\' so user
-  // `_`/`%` are literal. Shares this file with a P2 fix on another worktree; keep BOTH on
-  // conflict unless touching these same lines. Remove after merge.
+  // Bind an escaped LIKE pattern with ESCAPE '\' so user `_`/`%` are literal.
   const likePattern = normalizedQuery ? `%${escapeLikePattern(normalizedQuery)}%` : null;
   const querySql = normalizedQuery ? " AND searchable_text LIKE ? ESCAPE '\\'" : "";
   const centerMs = centerDate ? dateMs(centerDate) + (12 * 60 * 60 * 1000) : null;

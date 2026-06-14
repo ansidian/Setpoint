@@ -4,13 +4,10 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// MERGE-NOTE (P1-8 ⇄ P2-21/P2-22): the P1 ("runner transactional") and P2
-// ("each migration in one transaction") worktrees both added a migrate.test.js
-// guarding the same boot-loop bug — runMigration must apply a migration's body
-// and its ledger row atomically, so a partial failure leaves NO schema change
-// and NO ledger row and the next boot can cleanly re-run it. Both suites are
-// kept here on the single reconciled API: __testing__.runMigration(name, sql,
-// { dbClient }).
+// These suites guard the boot-loop bug: runMigration must apply a migration's
+// body and its ledger row atomically, so a partial failure leaves NO schema
+// change and NO ledger row and the next boot can cleanly re-run it. The suites
+// exercise the API __testing__.runMigration(name, sql, { dbClient }).
 //
 // The runner imports the db singleton; stub it so importing migrate.js doesn't
 // open a real connection. Every test passes its own dbClient explicitly. A real

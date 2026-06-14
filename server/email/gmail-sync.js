@@ -309,10 +309,8 @@ export async function fetchGmailMessageMetadata(account, messageId, {
   return res.json();
 }
 
-// MERGE-NOTE[P3-75] (P3 worktree): new helper that returns the account's CURRENT
-// historyId via users.getProfile, used by the 404-recovery branch so it never
-// re-persists the stale cursor that just 404'd. Shares this file with two P2
-// gmail-sync fixes on other worktrees; this is a new function (no overlap) — keep both.
+// Returns the account's CURRENT historyId via users.getProfile, used by the
+// 404-recovery branch so it never re-persists the stale cursor that just 404'd.
 export async function fetchGmailProfileHistoryId(account, {
   fetchImpl = fetch,
   token,
@@ -873,10 +871,9 @@ export async function processNextGmailHistorySyncJob({
     const account = await loadGmailAccount(job.user_id, job.account_id, dbClient);
     if (!account) throw new Error(`Missing Gmail account ${job.account_id}`);
     const payload = parsePayloadJson(job.payload_json);
-    // MERGE-NOTE[P3-75] (P3 worktree): defense in depth — a gmail_history_sync job whose
-    // payload lacks a historyId can't advance the cursor and would force a 404-recovery
-    // backfill; skip it instead of running. Shares this file with two P2 gmail-sync fixes
-    // on other worktrees; new guard region — keep both. Remove this note after merge.
+    // Defense in depth — a gmail_history_sync job whose payload lacks a historyId
+    // can't advance the cursor and would force a 404-recovery backfill; skip it
+    // instead of running.
     const targetHistoryId = payload.historyId ? String(payload.historyId).trim() : "";
     if (!targetHistoryId) {
       // Mirror triage-worker no-op convention: terminal 'complete' status so the claim
