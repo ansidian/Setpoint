@@ -111,9 +111,12 @@ describe("demo mode in-memory mutations", () => {
     expect((await api.getCalendarSearch({ scope: "events", q: "edited" })).results).toEqual([]);
 
     await expect(api.getGmailAuthUrl()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
-    await expect(api.getCalendarPlaceSuggestions("coffee")).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testActualBudget()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testDiscordReminderWebhook()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
+
+    // P3-18: location autocomplete no longer surfaces DEMO_API_UNHANDLED; it
+    // returns an inert empty-places shape so typing in the field stays quiet.
+    expect(await api.getCalendarPlaceSuggestions("coffee")).toEqual({ places: [] });
   });
 
   it("preserves a non-Work demo calendar's identity when editing (P2-8)", async () => {

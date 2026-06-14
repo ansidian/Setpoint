@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { buildDeadlineMutationPayload } from "./submitPayload";
+import { buildDeadlineMutationPayload, canSubmitTask } from "./submitPayload";
+
+describe("canSubmitTask", () => {
+  it("disables submit for tokens-only input that strips to an empty title", () => {
+    // "#Work @home !1" -> all tokens resolved, parsed.stripped === "".
+    // Submitting would POST an empty title that the server rejects with 400.
+    expect(canSubmitTask({ parsed: { stripped: "" }, input: "#Work @home !1" })).toBe(false);
+  });
+
+  it("disables submit for whitespace-only stripped titles", () => {
+    expect(canSubmitTask({ parsed: { stripped: "   " }, input: "  " })).toBe(false);
+  });
+
+  it("enables submit when a real title survives token stripping", () => {
+    expect(canSubmitTask({ parsed: { stripped: "Pay rent" }, input: "Pay rent #Work" })).toBe(true);
+  });
+
+  it("falls back to raw input before parsing has run", () => {
+    expect(canSubmitTask({ parsed: null, input: "Draft notes" })).toBe(true);
+    expect(canSubmitTask({ parsed: null, input: "   " })).toBe(false);
+  });
+});
 
 describe("deadline add-task submit payload", () => {
   it("builds the create payload from parsed task metadata", () => {

@@ -12,11 +12,16 @@ const { default: useCurrentDashboard } = await import("./useCurrentDashboard");
 
 class FakeEventSource {
   static instances = [];
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 2;
 
   constructor(url) {
     this.url = url;
     this.listeners = new Map();
     this.closed = false;
+    this.readyState = FakeEventSource.OPEN;
+    this.onerror = null;
     FakeEventSource.instances.push(this);
   }
 
@@ -32,12 +37,21 @@ class FakeEventSource {
 
   close() {
     this.closed = true;
+    this.readyState = FakeEventSource.CLOSED;
   }
 
   emit(type, data = {}) {
     for (const listener of this.listeners.get(type) || []) {
       listener({ data: JSON.stringify(data) });
     }
+  }
+
+  // Simulate the browser firing onerror. `readyState` reflects what the browser
+  // would set: CLOSED for a terminal failure (e.g. a 401 handshake), CONNECTING
+  // for a transient drop the browser will auto-retry.
+  emitError(readyState = FakeEventSource.CLOSED) {
+    this.readyState = readyState;
+    this.onerror?.({ type: "error" });
   }
 }
 
@@ -448,6 +462,49 @@ describe("useCurrentDashboard", () => {
 
     expect(FakeEventSource.instances).toHaveLength(0);
     disabled.unmount();
+  });
+
+  it("routes to login when the dashboard-current stream fails terminally (expired session)", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const location = { href: "/dashboard" };
+    vi.stubGlobal("location", location);
+
+    const { unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    expect(FakeEventSource.instances).toHaveLength(1);
+    const source = FakeEventSource.instances[0];
+
+    await act(async () => {
+      // 401 handshake -> browser closes the stream (readyState CLOSED), no auto-reconnect.
+      source.emitError(FakeEventSource.CLOSED);
+      await Promise.resolve();
+    });
+
+    expect(source.closed).toBe(true);
+    expect(location.href).toBe("/login");
+    unmount();
+  });
+
+  it("does not redirect on a transient dashboard-current stream blip", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const location = { href: "/dashboard" };
+    vi.stubGlobal("location", location);
+
+    const { unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+
+    const source = FakeEventSource.instances[0];
+
+    await act(async () => {
+      // Transient drop -> browser is already reconnecting (readyState CONNECTING).
+      source.emitError(FakeEventSource.CONNECTING);
+      await Promise.resolve();
+    });
+
+    expect(source.closed).toBe(false);
+    expect(location.href).toBe("/dashboard");
+    unmount();
   });
 
   it("does not open the dashboard-current event stream in demo mode", async () => {

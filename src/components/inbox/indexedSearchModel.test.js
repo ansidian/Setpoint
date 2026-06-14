@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
+import { composeReadOverrides } from "./inboxRow.js";
 
 describe("normalizeIndexedSearchResults", () => {
   it("preserves top-level globally ranked result order across accounts", () => {
@@ -98,6 +99,59 @@ describe("normalizeIndexedSearchResults", () => {
       account_label: "Personal",
       _indexedSearch: true,
     }));
+  });
+
+  it("reconciles a fresh response against a local indexed-search read toggle (P3-21)", () => {
+    // Repro: user marks a search hit unread (local override only, not in
+    // liveReadOverrides), then immediately searches again. The fresh server
+    // response still reports read=true; the carried-forward local search
+    // override must win so the row does not flash the pre-toggle read state.
+    const liveReadOverrides = {};
+    const searchReadOverrides = new Map([["search-hit", false]]);
+    const data = {
+      query: "invoice",
+      results: [{
+        uid: "search-hit",
+        account_id: "gmail-work",
+        from_name: "Vendor",
+        from_address: "billing@example.com",
+        subject: "Invoice attached",
+        body_snippet: "See attached.",
+        email_date: "2026-05-09T12:00:00Z",
+        read: true,
+      }],
+      accounts: [],
+    };
+
+    const stale = normalizeIndexedSearchResults(data, liveReadOverrides);
+    expect(stale.emails[0].read).toBe(true); // unpatched merge: server read wins
+
+    const reconciled = normalizeIndexedSearchResults(
+      data,
+      composeReadOverrides(liveReadOverrides, searchReadOverrides),
+    );
+    expect(reconciled.emails[0].read).toBe(false); // local toggle survives
+  });
+
+  it("keeps live read overrides applied when no local search toggle exists", () => {
+    const reconciled = normalizeIndexedSearchResults(
+      {
+        query: "receipt",
+        results: [{
+          uid: "live-hit",
+          account_id: "gmail-personal",
+          from_name: "Store",
+          from_address: "store@example.com",
+          subject: "Receipt",
+          body_snippet: "Thanks",
+          email_date: "2026-05-09T12:00:00Z",
+          read: false,
+        }],
+        accounts: [],
+      },
+      composeReadOverrides({ "live-hit": true }, new Map()),
+    );
+    expect(reconciled.emails[0].read).toBe(true);
   });
 
   it("preserves triaged bill metadata for bill-pay form seeding", () => {

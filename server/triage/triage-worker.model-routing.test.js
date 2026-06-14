@@ -73,7 +73,9 @@ describe("email triage worker model routing", () => {
       triage_status: "complete",
       triage_source: "strong_model",
       cheap_model_result_json: null,
-      estimated_cost_usd: 0.004,
+      // P3-69: estimated_cost_usd is now always persisted as null (the model client
+      // never returns a real cost; spend is recomputed from tokens in triage-cache-stats).
+      estimated_cost_usd: null,
       latency_ms: 600,
       last_decision_reason: "routed_strong:hard_risk_override",
     });
@@ -373,7 +375,11 @@ describe("email triage worker model routing", () => {
     expect(rows.rows[0]).toMatchObject({
       lane: "needs_attention",
       triage_source: "strong_model",
-      estimated_cost_usd: 0.004,
+      // P3-69: per-result cost is no longer derived (always null), and the escalation
+      // path sums the cheap + strong costs — null + null === 0 — so an escalated
+      // decision persists 0 rather than the old fabricated 0.004. Either way it is a
+      // dead figure; real spend is recomputed from tokens in triage-cache-stats.
+      estimated_cost_usd: 0,
       latency_ms: 400,
       last_decision_reason: "escalated:cheap_confidence_below_floor",
     });

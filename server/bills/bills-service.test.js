@@ -78,10 +78,13 @@ afterEach(() => {
 const {
   getMetadata,
   sendBill,
+  markBillPaid,
+  createQuickTxn,
   listAccounts,
   hydrateActualCache,
   resolveBillPaySeed,
   resolveBillPaySample,
+  __resetBillsMirrorRefreshTimersForTests,
 } = await import("./bills-service.js");
 
 function rowResult(rows = []) {
@@ -213,6 +216,80 @@ describe("sendBill", () => {
     expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
       sql: expect.stringMatching(/ea_bills_mirror_state/i),
       args: expect.arrayContaining(["u1"]),
+    }));
+  });
+});
+
+describe("lightweight write reconciliation on sync-push failure", () => {
+  // A lightweight write applied locally but whose Actual-server push failed
+  // throws err.localWriteApplied === true. The local write is durable and
+  // re-syncs later, so the metadata mirror + bills mirror must still be
+  // invalidated/scheduled, and the call must NOT surface as a hard failure
+  // (a 5xx would prompt a duplicate-inducing retry).
+  function localWriteSyncError() {
+    return Object.assign(new Error("Actual sync push failed"), {
+      status: 502,
+      code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
+      localWriteApplied: true,
+    });
+  }
+
+  function expectMirrorRefreshScheduled() {
+    expect(mockDb.execute).toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
+      args: expect.arrayContaining(["u1"]),
+    }));
+  }
+
+  afterEach(() => {
+    __resetBillsMirrorRefreshTimersForTests();
+  });
+
+  it("sendBill: schedules a mirror refresh and returns partial success instead of throwing", async () => {
+    mockActual.sendBill.mockRejectedValueOnce(localWriteSyncError());
+    // SELECT pending_refresh_at (mirror state) then the upsert.
+    mockDb.execute.mockResolvedValue(rowResult());
+
+    const out = await sendBill("u1", { payee: "x", amount: 10, type: "bill" });
+
+    expect(out).toMatchObject({
+      syncPending: true,
+      localWriteApplied: true,
+      code: "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
+    });
+    expectMirrorRefreshScheduled();
+  });
+
+  it("markBillPaid: still reconciles and does not surface a hard failure", async () => {
+    mockActual.markBillPaid.mockRejectedValueOnce(localWriteSyncError());
+    mockDb.execute.mockResolvedValue(rowResult());
+
+    const out = await markBillPaid("u1", "sched-1");
+
+    expect(out).toMatchObject({ syncPending: true, localWriteApplied: true });
+    expectMirrorRefreshScheduled();
+  });
+
+  it("createQuickTxn: still reconciles and does not surface a hard failure", async () => {
+    mockActual.createQuickTxn.mockRejectedValueOnce(localWriteSyncError());
+    mockDb.execute.mockResolvedValue(rowResult());
+
+    const out = await createQuickTxn("u1", { accountName: "Checking", amount: 5, payee: "p" });
+
+    expect(out).toMatchObject({ syncPending: true, localWriteApplied: true });
+    expectMirrorRefreshScheduled();
+  });
+
+  it("re-throws errors without localWriteApplied and skips mirror scheduling", async () => {
+    mockActual.sendBill.mockRejectedValueOnce(
+      Object.assign(new Error("worker boot failed"), { code: "ACTUAL_WORKER_FAILED" }),
+    );
+    mockDb.execute.mockResolvedValue(rowResult());
+
+    await expect(sendBill("u1", { payee: "x", amount: 10, type: "bill" }))
+      .rejects.toMatchObject({ code: "ACTUAL_WORKER_FAILED" });
+    expect(mockDb.execute).not.toHaveBeenCalledWith(expect.objectContaining({
+      sql: expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
     }));
   });
 });

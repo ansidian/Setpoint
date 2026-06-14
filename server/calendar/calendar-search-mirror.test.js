@@ -668,6 +668,55 @@ describe("Calendar Search Mirror service", () => {
     ]);
   });
 
+  it("matches LIKE metacharacters (_ and %) literally instead of as wildcards", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMirrorMigration(db);
+    const {
+      listCalendarSearchMirrorOccurrences,
+      upsertCalendarSearchMirrorOccurrence,
+    } = await import("./calendar-search-mirror.js");
+
+    const rows = [
+      ["lit-underscore", "design a_b review"],
+      ["axb-decoy", "design axb review"],
+      ["lit-percent", "budget 50% done"],
+      ["plain-decoy", "budget anything done"],
+    ];
+    for (const [id, title] of rows) {
+      await upsertCalendarSearchMirrorOccurrence("test-user", {
+        ...occurrence,
+        id,
+        title,
+        location: "",
+        description: "",
+        originalStartTime: `2026-05-20T17:00:00.000Z#${id}`,
+      }, {
+        dbClient: db,
+        recordPendingSync: false,
+      });
+    }
+
+    // `a_b` must match only the literal underscore row, not `axb`.
+    await expect(listCalendarSearchMirrorOccurrences("test-user", {
+      dbClient: db,
+      start: "2025-05-12",
+      end: "2027-11-12",
+      query: "a_b",
+    })).resolves.toEqual([
+      expect.objectContaining({ id: "lit-underscore" }),
+    ]);
+
+    // `50%` must match only the literal percent row, not act as a match-anything wildcard.
+    await expect(listCalendarSearchMirrorOccurrences("test-user", {
+      dbClient: db,
+      start: "2025-05-12",
+      end: "2027-11-12",
+      query: "50%",
+    })).resolves.toEqual([
+      expect.objectContaining({ id: "lit-percent" }),
+    ]);
+  });
+
   it("runs a queued first-search mirror sync without blocking the caller", async () => {
     vi.useFakeTimers();
     db = createClient({ url: "file::memory:" });
@@ -736,5 +785,31 @@ describe("Calendar Search Mirror service", () => {
     expect(requestSyncFn).toHaveBeenCalledWith("test-user", {
       reason: "calendar-search-backstop",
     });
+  });
+});
+
+describe("addMonthsIso (P3-40 month-end clamp)", () => {
+  it("clamps day-of-month to the target month's last day instead of overflowing", async () => {
+    const { addMonthsIso } = await import("./calendar-search-mirror.js");
+    // Jan 31 + 1mo would naively roll to Mar 3; clamp keeps it inside February.
+    expect(addMonthsIso("2026-01-31", 1)).toBe("2026-02-28");
+    expect(addMonthsIso("2026-03-31", -1)).toBe("2026-02-28");
+    // Leap-year February still resolves to its real last day.
+    expect(addMonthsIso("2024-01-31", 1)).toBe("2024-02-29");
+  });
+
+  it("lands the +18mo / -12mo search window on the correct boundary from a month-end anchor", async () => {
+    const { addMonthsIso } = await import("./calendar-search-mirror.js");
+    // Aug 31 anchor: +18mo lands in a leap February (29th), -12mo stays on the 31st.
+    expect(addMonthsIso("2026-08-31", 18)).toBe("2028-02-29");
+    expect(addMonthsIso("2026-08-31", -12)).toBe("2025-08-31");
+    // May 31 + 18mo lands in 30-day November, clamped to the 30th.
+    expect(addMonthsIso("2026-05-31", 18)).toBe("2027-11-30");
+  });
+
+  it("leaves non-overflowing dates unchanged", async () => {
+    const { addMonthsIso } = await import("./calendar-search-mirror.js");
+    expect(addMonthsIso("2026-05-12", 18)).toBe("2027-11-12");
+    expect(addMonthsIso("2026-05-12", -12)).toBe("2025-05-12");
   });
 });

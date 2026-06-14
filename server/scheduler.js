@@ -26,7 +26,10 @@ let emailTriageInFlight = false;
 let emailSearchEmbeddingJob = null;
 let emailSearchEmbeddingInFlight = false;
 let reminderSchedulerTimer = null;
-let reminderSchedulerInFlight = false;
+// Tracked as a PROMISE (not a boolean) so the shutdown handler can await an
+// in-flight reminder batch and let the last tick drain before exit. null when
+// idle; non-null acts as the single-flight guard.
+let reminderSchedulerInFlight = null;
 // 2h lookback gives the 10-minute cadence generous overlap — nothing falls
 // through the cracks if one sweep runs long or a briefing pauses the pipeline.
 const INDEXER_LOOKBACK_HOURS = 2;
@@ -38,21 +41,63 @@ const EMAIL_SEARCH_EMBEDDING_CRON = "*/5 * * * *";
 const REMINDER_SCHEDULER_INTERVAL_MS = 10_000;
 const EMAIL_SEARCH_EMBEDDINGS_DISABLED = process.env.EA_EMAIL_SEARCH_EMBEDDINGS_DISABLED === "1";
 
+function isMissingTableError(err) {
+  // libsql surfaces a missing table as "no such table: ..." in the message;
+  // mirror the repo pattern used in migrate-encryption.js / snapshot-service.js.
+  return /no such table/i.test(String(err?.message || ""));
+}
+
+// P3-56 per-row-isolation init body. Invoked by the P2-28 serialization wrapper
+// initScheduler() below, which coalesces concurrent re-inits to avoid the
+// clear-then-await-then-push window double-registering every cron job.
 async function runInitScheduler() {
   // Clear any existing jobs (in case of re-init)
   for (const job of activeJobs) job.stop();
   activeJobs.length = 0;
 
+  // MERGE-NOTE[P3-56] (P3 worktree): narrowed the outer try to the initial
+  // table read only, and moved per-row JSON.parse + cron registration into the
+  // loop wrapped in their own try/catch (logs offending user_id, continues) so
+  // one malformed row no longer disables every schedule. Shares initScheduler
+  // with a P2 fix on another worktree. On conflict: keep BOTH unless they touch
+  // the same lines (different concerns — this guards row iteration). Remove
+  // this note after merge.
+  let result;
   try {
-    const result = await db.execute(
+    result = await db.execute(
       "SELECT user_id, schedules_json FROM ea_settings WHERE schedules_json IS NOT NULL",
     );
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      // ea_settings table may not exist yet on first run before migration
+      console.log("[EA Scheduler] Skipping — ea_settings not yet available");
+      return;
+    }
+    // Any other read failure is a real error: surface it instead of silently
+    // disabling every schedule behind a misleading "not yet available" log.
+    console.error("[EA Scheduler] Failed to load schedules:", err.message);
+    return;
+  }
 
-    for (const row of result.rows) {
-      const schedules = JSON.parse(row.schedules_json || "[]");
+  for (const row of result.rows) {
+    let schedules;
+    try {
+      schedules = JSON.parse(row.schedules_json || "[]");
+      if (!Array.isArray(schedules)) {
+        throw new Error("schedules_json is not an array");
+      }
+    } catch (err) {
+      // One malformed row must not suppress every other user's schedules.
+      console.error(
+        `[EA Scheduler] Skipping unparseable schedules for user ${row.user_id}:`,
+        err.message,
+      );
+      continue;
+    }
 
-      for (const schedule of schedules) {
-        if (!schedule.enabled) continue;
+    for (const schedule of schedules) {
+      try {
+        if (!schedule?.enabled) continue;
 
         const [hour, minute] = schedule.time.split(":");
         const cronExpr = `${parseInt(minute)} ${parseInt(hour)} * * *`;
@@ -103,15 +148,19 @@ async function runInitScheduler() {
         console.log(
           `[EA Scheduler] Scheduled ${schedule.label} snapshot boundary at ${schedule.time} ${schedule.tz || "America/Los_Angeles"} for user ${row.user_id}`,
         );
+      } catch (err) {
+        // A bad cron expression or registration failure on one entry must not
+        // abort the remaining schedules for this or any other user.
+        console.error(
+          `[EA Scheduler] Failed to register schedule "${schedule?.label}" for user ${row.user_id}:`,
+          err.message,
+        );
       }
     }
+  }
 
-    if (activeJobs.length === 0) {
-      console.log("[EA Scheduler] No enabled schedules found");
-    }
-  } catch {
-    // ea_settings table may not exist yet on first run before migration
-    console.log("[EA Scheduler] Skipping — ea_settings not yet available");
+  if (activeJobs.length === 0) {
+    console.log("[EA Scheduler] No enabled schedules found");
   }
 }
 
@@ -308,9 +357,7 @@ export function startBackgroundIndexer() {
   }, 15000);
 }
 
-export async function runReminderSchedulerWorker() {
-  if (reminderSchedulerInFlight) return;
-  reminderSchedulerInFlight = true;
+async function runReminderSchedulerBatch() {
   try {
     const result = await processDueReminderBatch();
     if (result.processed) {
@@ -320,9 +367,18 @@ export async function runReminderSchedulerWorker() {
     }
   } catch (err) {
     console.error("[Reminder Scheduler] Worker failed:", err.message);
-  } finally {
-    reminderSchedulerInFlight = false;
   }
+}
+
+export function runReminderSchedulerWorker() {
+  // Single-flight: while a batch is running, reminderSchedulerInFlight holds its
+  // promise so concurrent ticks no-op and the shutdown handler can await it.
+  if (reminderSchedulerInFlight) return reminderSchedulerInFlight;
+  const run = runReminderSchedulerBatch().finally(() => {
+    reminderSchedulerInFlight = null;
+  });
+  reminderSchedulerInFlight = run;
+  return run;
 }
 
 export function startReminderSchedulerWorker() {
@@ -338,4 +394,71 @@ export function startReminderSchedulerWorker() {
       console.error("[Reminder Scheduler] Initial worker failed:", err.message),
     );
   }, 2000);
+}
+
+// P3-58: graceful drain on shutdown. The reminder worker ran on an unref'd
+// setInterval, so on SIGTERM/SIGINT the last tick could be lost mid-send with
+// no chance to finish. This stops every cron job and the reminder interval so
+// no new work starts, then awaits any in-flight reminder batch so the current
+// send completes before the process exits. Idempotent — safe to call twice.
+export async function stopScheduler() {
+  for (const job of activeJobs) job.stop?.();
+  activeJobs.length = 0;
+  for (const job of [
+    indexerJob,
+    gmailWatchRenewalJob,
+    gmailHistorySyncJob,
+    emailTriageJob,
+    emailSearchEmbeddingJob,
+  ]) {
+    job?.stop?.();
+  }
+  indexerJob = null;
+  gmailWatchRenewalJob = null;
+  gmailHistorySyncJob = null;
+  emailTriageJob = null;
+  emailSearchEmbeddingJob = null;
+
+  if (reminderSchedulerTimer) {
+    clearInterval(reminderSchedulerTimer);
+    reminderSchedulerTimer = null;
+  }
+
+  // Await the tracked in-flight reminder promise so the last batch drains.
+  if (reminderSchedulerInFlight) {
+    try {
+      await reminderSchedulerInFlight;
+    } catch {
+      // runReminderSchedulerBatch already logs failures; never block exit on it.
+    }
+  }
+}
+
+let shutdownInFlight = null;
+function handleShutdownSignal(signal) {
+  if (shutdownInFlight) return shutdownInFlight;
+  console.log(`[EA Scheduler] Received ${signal} — draining workers before exit`);
+  shutdownInFlight = stopScheduler()
+    .catch((err) => console.error("[EA Scheduler] Shutdown drain failed:", err?.message || err))
+    .finally(() => {
+      // NOTE (out of scope): the HTTP server reference lives in server/index.js,
+      // so the listening socket is not closed here. index.js must own
+      // server.close() and call stopScheduler() before process.exit().
+      process.exit(0);
+    });
+  return shutdownInFlight;
+}
+
+// Register the drain handler when running as a real server process. Skipped
+// under Vitest (NODE_ENV=test / VITEST set) so the suite isn't torn down by a
+// process.exit() on signal; stopScheduler/handleShutdownSignal stay unit-testable
+// directly. The listenerCount check guards against duplicate registration if the
+// module is imported more than once.
+const RUNNING_UNDER_TEST = process.env.VITEST != null || process.env.NODE_ENV === "test";
+if (!RUNNING_UNDER_TEST) {
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    if (process.listenerCount(signal) === 0) {
+      process.on(signal, () => handleShutdownSignal(signal));
+    }
+  }
 }

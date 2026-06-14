@@ -9,6 +9,8 @@ export default function useDashboardShellHotkeys({
   isMobile,
   calendarOpen,
   analyticsOpen,
+  historyOpen = false,
+  anyBlockingOverlayOpen = false,
   openPalette,
   openAnalytics,
   closeAnalytics,
@@ -53,6 +55,9 @@ export default function useDashboardShellHotkeys({
         editableTarget,
         actionChord: actionChordRef.current,
         calendarOpen,
+        anyBlockingOverlayOpen,
+        analyticsOpen,
+        historyOpen,
       });
 
       if (command.action === "clear-chord") {
@@ -105,5 +110,5 @@ export default function useDashboardShellHotkeys({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyticsOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
+  }, [analyticsOpen, historyOpen, anyBlockingOverlayOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
 }

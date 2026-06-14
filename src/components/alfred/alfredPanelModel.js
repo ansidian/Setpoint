@@ -145,3 +145,25 @@ export function alfredPriorityLabel(priority) {
   if (p === 2) return "P3";
   return null;
 }
+
+// Auto-scroll decision (P3-4): the thread should only follow the tail when the
+// user is already parked near the bottom, so reading earlier messages mid-stream
+// isn't yanked back down. Returns true when the scroll position is within
+// `threshold` px of the bottom (or the content doesn't overflow yet).
+export function isNearBottom(scrollTop, clientHeight, scrollHeight, threshold = 40) {
+  const top = Number(scrollTop) || 0;
+  const view = Number(clientHeight) || 0;
+  const full = Number(scrollHeight) || 0;
+  return full - (top + view) <= threshold;
+}
+
+// Render key for the auto-scroll effect (P3-4): bumps when a new message is
+// added OR the last (streaming) say message grows. Keying the effect on this
+// instead of running it every render stops keystrokes/unrelated re-renders from
+// snapping the thread to the bottom.
+export function alfredScrollKey(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return "0";
+  const last = messages[messages.length - 1];
+  const tailLen = typeof last?.text === "string" ? last.text.length : 0;
+  return `${messages.length}:${tailLen}`;
+}

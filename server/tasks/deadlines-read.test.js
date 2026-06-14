@@ -6,8 +6,6 @@ const testState = vi.hoisted(() => ({
   fetchTodoistTasksRange: vi.fn(),
   fetchTodoistDueTaskIdSet: vi.fn(),
   getTodoistSyncHealth: vi.fn(),
-  loadCompletedTaskIds: vi.fn(),
-  filterCompletedTodoistTasks: vi.fn(),
   computeDeadlineStats: vi.fn(),
   hydrateRecurringTombstones: vi.fn(),
   listUpcomingReminderStatesForSources: vi.fn(),
@@ -22,8 +20,6 @@ vi.mock("./todoist.js", () => ({
 }));
 
 vi.mock("./deadline-helpers.js", () => ({
-  loadCompletedTaskIds: (...args) => testState.loadCompletedTaskIds(...args),
-  filterCompletedTodoistTasks: (...args) => testState.filterCompletedTodoistTasks(...args),
   computeDeadlineStats: (...args) => testState.computeDeadlineStats(...args),
 }));
 
@@ -49,10 +45,6 @@ describe("deadline read module", () => {
     vi.clearAllMocks();
     testState.fetchTodoistTasks.mockResolvedValue([{ id: "todo-1" }]);
     testState.fetchTodoistDueTaskIdSet.mockResolvedValue(new Set(["todo-1", "done-1"]));
-    testState.loadCompletedTaskIds.mockResolvedValue(new Set());
-    testState.filterCompletedTodoistTasks.mockImplementation((tasks, completedIds) => (
-      (tasks || []).filter((task) => !completedIds?.has(task.id) && !completedIds?.has(String(task.id)))
-    ));
     testState.hydrateRecurringTombstones.mockResolvedValue([
       { id: "done-1", status: "complete", due_date: "2026-05-04" },
     ]);
@@ -64,7 +56,6 @@ describe("deadline read module", () => {
 
     expect(testState.fetchTodoistTasks).toHaveBeenCalledWith("u1", { refresh: true });
     expect(testState.fetchTodoistDueTaskIdSet).toHaveBeenCalledWith("u1", { refresh: true });
-    expect(testState.loadCompletedTaskIds).toHaveBeenCalledWith("u1", [{ id: "todo-1" }]);
     expect(testState.hydrateRecurringTombstones).toHaveBeenCalledWith(
       "u1",
       new Set(["todo-1", "done-1"]),
@@ -91,6 +82,21 @@ describe("deadline read module", () => {
       ],
       stats: { total: 2 },
     });
+  });
+
+  it("surfaces every live Todoist mirror row without a separate completed-id reconciliation pass", async () => {
+    // Post-migration-014 suppression lives in the mirror (checked=0) and the
+    // tombstone path, not in a deadlines-read filter. The read must pass mirror
+    // rows straight through even when an id collides with a dated tombstone.
+    testState.fetchTodoistTasks.mockResolvedValue([
+      { id: "todo-live", due_date: "2026-05-09" },
+    ]);
+    testState.fetchTodoistDueTaskIdSet.mockResolvedValue(new Set(["todo-live"]));
+    testState.hydrateRecurringTombstones.mockResolvedValue([]);
+
+    const payload = await readCurrentDeadlines("u1");
+
+    expect(payload.upcoming.map((item) => item.id)).toEqual(["todo-live"]);
   });
 
   it("skips completed tombstones already present in the current Todoist mirror rows", async () => {

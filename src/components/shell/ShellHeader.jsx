@@ -9,6 +9,7 @@ import {
 } from "./ShellHeaderChrome";
 import { SystemStatusButton } from "./SystemStatusButton.jsx";
 import { isDemoMode } from "../../demo/config.js";
+import { resolveShellTabHotkey } from "../dashboard/dashboardShellModel.js";
 
 /**
  * ShellHeader — top chrome for the dashboard/inbox shell.
@@ -19,6 +20,7 @@ export default function ShellHeader({
   isMobile = false,
   tab,
   onTab,
+  anyBlockingOverlayOpen = false,
   analyticsOpen = false,
   onOpenAnalytics,
   onPrepareAnalytics,
@@ -45,20 +47,26 @@ export default function ShellHeader({
 
   useEffect(() => {
     function onKey(event) {
-      if (
-        event.target.tagName === "INPUT"
-        || event.target.tagName === "TEXTAREA"
-        || event.target.isContentEditable
-      ) {
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === "1") onTab("dashboard");
-      if (event.key === "2") onTab("inbox");
+      // P3-27: route 1/2 tab hotkeys through the shared resolver so they are
+      // suppressed while a blocking overlay (Customize / Analytics / History) is
+      // open — otherwise the underlying tab switches behind the visible panel.
+      const nextTab = resolveShellTabHotkey({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        editableTarget: (
+          event.target.tagName === "INPUT"
+          || event.target.tagName === "TEXTAREA"
+          || event.target.isContentEditable
+        ),
+        anyBlockingOverlayOpen,
+      });
+      if (nextTab) onTab(nextTab);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onTab]);
+  }, [onTab, anyBlockingOverlayOpen]);
 
   return (
     <div

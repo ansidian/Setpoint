@@ -20,7 +20,9 @@ export async function validateBearer(raw) {
   });
   const row = result.rows[0];
   if (!row) return null;
-  if (row.expires_at && Date.now() > row.expires_at) return null;
+  // Fail closed: a NULL/0 expires_at (legacy rows predating API_TOKEN_TTL) is
+  // treated as expired so it cannot outlive token rotation. expires_at is ms.
+  if (!row.expires_at || Date.now() > row.expires_at) return null;
   // Fire-and-forget last_used update; don't block request on it
   db.execute({
     sql: "UPDATE ea_api_tokens SET last_used_at = ? WHERE id = ?",

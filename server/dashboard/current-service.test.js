@@ -96,6 +96,7 @@ const EMPTY_DEADLINES_FOR_TEST = {
 const {
   __resetCurrentDashboardRefreshStateForTests,
   __waitForCurrentDashboardRefreshesForTests,
+  __currentDashboardInternalsForTests,
   applyDeadlineCurrentStatus,
   getCurrentDashboard,
   getDashboardSystemHealth,
@@ -1276,5 +1277,70 @@ describe("POST /api/dashboard/current/sync", () => {
       state: "stale",
       reason: "timeout",
     });
+  });
+});
+
+describe("markRowsRefreshing -> markCacheRowRefreshFailed failureCount carry (P3-42)", () => {
+  const { markRowsRefreshing, markCacheRowRefreshFailed } = __currentDashboardInternalsForTests;
+
+  beforeEach(async () => {
+    testState.db.current = await createMigratedDb();
+  });
+
+  afterEach(async () => {
+    await testState.db.current?.close?.();
+    testState.db.current = null;
+  });
+
+  it("escalates the returned failureCount instead of resetting to 1 across the refreshing transition", async () => {
+    const failedAt = "2026-05-04T11:40:00.000Z";
+    // Prior degraded row that has already failed twice.
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_current_data_cache
+              (user_id, cache_key, payload_json, fetched_at, expires_at, status,
+               last_refresh_failed_at, last_refresh_error, refresh_failure_count, updated_at)
+            VALUES (?, 'weather_current', ?, ?, ?, 'degraded', ?, ?, 2, ?)`,
+      args: [
+        "u1",
+        JSON.stringify({ temp: 64, location: "El Monte, CA" }),
+        failedAt,
+        "2026-05-04T12:40:00.000Z",
+        failedAt,
+        "weather down",
+        failedAt,
+      ],
+    });
+
+    const loaded = await testState.db.current.execute({
+      sql: `SELECT user_id, cache_key, payload_json, fetched_at, expires_at, status, error_message,
+                   refresh_started_at, last_refresh_failed_at, last_refresh_error, refresh_failure_count
+            FROM ea_current_data_cache WHERE user_id = 'u1' AND cache_key = 'weather_current'`,
+    });
+    const rows = { weather_current: loaded.rows[0] };
+
+    const now = new Date("2026-05-04T12:00:00.000Z");
+    // Transition the row to "refreshing" (this is what the hot path hands to the
+    // background refresh as existingRow).
+    const refreshingRows = await markRowsRefreshing("u1", rows, ["weather_current"], {
+      dbClient: testState.db.current,
+      now,
+    });
+
+    // The in-memory refreshing row must still carry the prior failure count, so a
+    // subsequent failure escalates rather than resetting to 1.
+    const failed = await markCacheRowRefreshFailed("u1", "weather_current", new Error("weather down again"), {
+      dbClient: testState.db.current,
+      now,
+      existingRow: refreshingRows.weather_current,
+    });
+
+    expect(failed.refresh_failure_count).toBe(3);
+
+    // Persistence must agree with the returned object.
+    const persisted = await testState.db.current.execute({
+      sql: `SELECT refresh_failure_count FROM ea_current_data_cache
+            WHERE user_id = 'u1' AND cache_key = 'weather_current'`,
+    });
+    expect(Number(persisted.rows[0].refresh_failure_count)).toBe(3);
   });
 });

@@ -209,6 +209,127 @@ describe("processNextBackfillWindow", () => {
     });
     expect(result).toMatchObject({ processed: true, status: "retry" });
   });
+
+  it("marks the row terminal and does not re-select it when the account is gone (P3-47)", async () => {
+    // No account seeded: loadAccount returns null (account deleted).
+    await seedBackfillState();
+
+    const result = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+
+    expect(result).toMatchObject({ processed: true, status: "failed" });
+    const state = await readBackfillState();
+    expect(state).toMatchObject({
+      status: "failed",
+      last_error: "Email account not found: gmail-work",
+      attempts: 1,
+    });
+    expect(gmailApi.fetchEmailsInRange).not.toHaveBeenCalled();
+
+    // A 'failed' row is terminal: a second drain pass must not pick it back up.
+    const second = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+    expect(second).toEqual({ processed: false });
+  });
+
+  it("stops retrying non-auth failures once attempts hit the ceiling (P3-47)", async () => {
+    await seedEmailAccount(testState.db.current, { id: "gmail-work", type: "gmail" });
+    // attempts: 4 -> incremented to 5 (MAX_BACKFILL_ATTEMPTS) this pass.
+    await seedBackfillState({ attempts: 4 });
+    gmailApi.fetchEmailsInRange.mockRejectedValueOnce(new Error("Gmail range list failed: 503"));
+
+    const result = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+
+    expect(result).toMatchObject({ processed: true, status: "failed" });
+    const state = await readBackfillState();
+    expect(state).toMatchObject({
+      status: "failed",
+      last_error: "Gmail range list failed: 503",
+      attempts: 5,
+    });
+    // Terminal row is not re-selected on the next pass.
+    const second = await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+    expect(second).toEqual({ processed: false });
+  });
+
+  it("bounds the iCloud window fetch with a limit and continues via the returned cursor (P3-46)", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "icloud-main",
+      user_id: "user-1",
+      type: "icloud",
+      email: "me@icloud.com",
+      label: "Personal",
+      credentials_encrypted: "cipher",
+    });
+    await seedBackfillState({ account_id: "icloud-main" });
+    icloudApi.fetchEmailsInRange.mockResolvedValueOnce({
+      emails: [
+        {
+          uid: "icloud-1",
+          account_id: "icloud-main",
+          account_label: "Personal",
+          account_email: "me@icloud.com",
+          from: "Sender <sender@example.com>",
+          subject: "Backfill",
+          body_preview: "preview",
+          body_text: "body",
+          date: "2026-04-28T12:00:00.000Z",
+          read: false,
+        },
+      ],
+      cursor: "uid:42",
+    });
+
+    const result = await worker.processNextBackfillWindow({
+      now: new Date("2026-05-02T12:00:00Z"),
+      windowDays: 7,
+    });
+
+    // The per-window fetch is capped (limit passed) rather than unbounded.
+    const [, , options] = icloudApi.fetchEmailsInRange.mock.calls[0];
+    expect(options).toMatchObject({
+      start: "2026-04-25T12:00:00.000Z",
+      end: "2026-05-02T12:00:00.000Z",
+    });
+    expect(typeof options.limit).toBe("number");
+    expect(options.limit).toBeGreaterThan(0);
+
+    // A returned cursor keeps the same window and stores the continuation token
+    // so un-returned messages get backfilled on the next pass.
+    expect(result).toMatchObject({ processed: true, status: "queued" });
+    const state = await readBackfillState("icloud-main");
+    const cursor = JSON.parse(state.cursor_json);
+    expect(cursor).toMatchObject({
+      nextWindowEnd: "2026-05-02T12:00:00.000Z",
+      providerCursor: "uid:42",
+      currentWindow: {
+        start: "2026-04-25T12:00:00.000Z",
+        end: "2026-05-02T12:00:00.000Z",
+      },
+    });
+  });
+
+  it("hands a stored iCloud cursor back to the provider on the next pass (P3-46)", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "icloud-main",
+      user_id: "user-1",
+      type: "icloud",
+      email: "me@icloud.com",
+      label: "Personal",
+      credentials_encrypted: "cipher",
+    });
+    await seedBackfillState({
+      account_id: "icloud-main",
+      cursor_json: JSON.stringify({
+        nextWindowEnd: "2026-05-02T12:00:00.000Z",
+        providerCursor: "uid:42",
+      }),
+    });
+    icloudApi.fetchEmailsInRange.mockResolvedValueOnce({ emails: [], cursor: null });
+
+    await worker.processNextBackfillWindow({ now: new Date("2026-05-02T12:00:00Z") });
+
+    const [, , options] = icloudApi.fetchEmailsInRange.mock.calls[0];
+    expect(options.cursor).toBe("uid:42");
+  });
 });
 
 describe("resumeInterruptedBackfills", () => {

@@ -1,5 +1,6 @@
 import { formatRecurrenceSummary } from "../../calendar/events/calendarEditorUtils";
 import { parseCalendarTitle } from "../../calendar/events/parseCalendarTitle";
+import { laComponents } from "../../inbox/helpers";
 
 const PRIORITY_RE = /(?:^|\s)(!([1-4])?)(?:\s|$)/;
 const PROJECT_RE = /#(\w+)/g;
@@ -73,6 +74,18 @@ function dateFromYmd(value) {
   const day = Number(match[3]);
   const date = new Date(year, month - 1, day);
   return ymdFromDate(date) === value ? date : null;
+}
+
+// P3-31: Anchor "today" to the dashboard's Pacific timezone (DASHBOARD_TZ) instead
+// of the browser's local time. We read the Pacific calendar Y/M/D via laComponents
+// (mirroring parseCalendarTitle's currentPacificDate / epochFromLa anchoring) and
+// rebuild a local-time Date carrying those components, so the downstream local-getter
+// pipeline (getDay/getDate/ymdFromDate) reflects the Pacific day. Without this, near
+// midnight or in a non-Pacific environment relative-date deadlines land a day off and
+// the panel preview can disagree with the submitted due string.
+function pacificToday(nowMs = Date.now()) {
+  const la = laComponents(nowMs);
+  return new Date(la.year, la.month, la.day);
 }
 
 function formatTodoistResolvedDueString(resolved) {
@@ -167,8 +180,9 @@ function getNextDayOfWeek(dayName, fromDate) {
 }
 
 function resolveDate(input, { seededDueDate = null } = {}) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // P3-31: today/now derive from Pacific (DASHBOARD_TZ), not browser-local time.
+  const today = pacificToday();
+  const now = today;
   const seededDate = dateFromYmd(seededDueDate);
 
   for (const { re, type } of DATE_TIME_PATTERNS) {
@@ -242,7 +256,15 @@ function resolveDate(input, { seededDueDate = null } = {}) {
           date = new Date(today);
           if (unit === "day") date.setDate(date.getDate() + count);
           else if (unit === "week") date.setDate(date.getDate() + count * 7);
-          else if (unit === "month") date.setMonth(date.getMonth() + count);
+          else if (unit === "month") {
+            // P3-32: clamp day-of-month so "in N months" never overflows into the next
+            // month (e.g. Jan 31 + 1 month -> Mar 3). Capture the original day, advance
+            // the month, and if the day rolled over (getDate differs) snap back to the
+            // last day of the intended month via setDate(0). Standard add-months semantics.
+            const originalDay = date.getDate();
+            date.setMonth(date.getMonth() + count);
+            if (date.getDate() !== originalDay) date.setDate(0);
+          }
         }
         break;
       }
@@ -284,8 +306,9 @@ function resolveDate(input, { seededDueDate = null } = {}) {
 export function formatResolvedDate(resolved) {
   if (!resolved) return null;
   const { date, time } = resolved;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // P3-31: anchor Today/Tomorrow labels to Pacific (DASHBOARD_TZ), matching resolveDate.
+  const today = pacificToday();
+  const now = today;
   const tomorrow = new Date(today.getTime() + 86400000);
 
   let prefix;

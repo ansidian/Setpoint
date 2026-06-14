@@ -56,6 +56,9 @@ export default function NoteItem({ note, accent, onUpdate, onDelete, compactPrev
   }, [editing]);
 
   const handleKeyDown = (e) => {
+    // Ignore Enter while an IME composition is in flight: pressing Enter to
+    // accept a candidate must not commit the edit with a partial buffer.
+    if (e.nativeEvent?.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       commitEdit();

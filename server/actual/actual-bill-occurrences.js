@@ -1,12 +1,11 @@
-function amountConditionCents(condition) {
-  const rawAmt = condition?.value;
-  return typeof rawAmt === "object" && rawAmt !== null
-    ? (rawAmt.num1 ?? 0)
-    : (rawAmt ?? 0);
+import { amountConditionBounds, amountConditionCents } from "./actual-amount-condition.js";
+
+function scheduleAmountCondition(schedule) {
+  return schedule.conditions?.find((condition) => condition.field === "amount");
 }
 
 function scheduleAmountCents(schedule) {
-  return amountConditionCents(schedule.conditions?.find((condition) => condition.field === "amount"));
+  return amountConditionCents(scheduleAmountCondition(schedule));
 }
 
 function schedulePayeeName(schedule, payeeMap = {}) {
@@ -26,12 +25,18 @@ function daysBetweenYmd(a, b) {
 export function isSchedulePaid(schedule, recentTransactions = []) {
   if (!schedule.next_date) return false;
   const payeeId = schedulePayeeId(schedule);
-  const amount = Math.abs(scheduleAmountCents(schedule)) / 100;
+  const bounds = amountConditionBounds(scheduleAmountCondition(schedule));
+  // Match anywhere in the [num1, num2] band for range schedules; a fixed
+  // amount collapses to lo === hi, preserving the original +/-$0.01 behaviour.
+  const lo = Math.abs(bounds.lo) / 100;
+  const hi = Math.abs(bounds.hi) / 100;
+  const bandLo = Math.min(lo, hi) - 0.01;
+  const bandHi = Math.max(lo, hi) + 0.01;
   return recentTransactions.some((transaction) => {
     const dayDiff = Math.abs(daysBetweenYmd(transaction.date, schedule.next_date));
     if (transaction.scheduleId && transaction.scheduleId === schedule.id) return dayDiff <= 14;
     if (!payeeId || transaction.payeeId !== payeeId) return false;
-    if (Math.abs(transaction.amount - amount) > 0.01) return false;
+    if (transaction.amount < bandLo || transaction.amount > bandHi) return false;
     return dayDiff <= 3;
   });
 }

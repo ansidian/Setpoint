@@ -1,3 +1,8 @@
+// laComponents/epochFromLa/DASHBOARD_TZ moved to lib/dashboard-helpers (P3's pure
+// Pacific date-math consolidation). Import them so defaultSnoozeTs (P2) can use
+// them locally; they are re-exported below for backward-compatible importers.
+import { DASHBOARD_TZ, laComponents, epochFromLa } from "../../lib/dashboard-helpers";
+
 export {
   collectActiveSnapshotEmails,
   collectLiveEmails,
@@ -43,11 +48,14 @@ export function timeClock(iso) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+// 9:00 AM the next day in DASHBOARD_TZ (Pacific), not the host's local time.
+// The snooze picker anchors all its previews to DASHBOARD_TZ, so the default
+// must too — otherwise a non-Pacific session snoozes to 9am wall-clock in the
+// wrong zone. laComponents/epochFromLa are defined below; day+1 overflow is
+// normalized by Date.UTC inside epochFromLa.
 export function defaultSnoozeTs() {
-  const t = new Date();
-  t.setDate(t.getDate() + 1);
-  t.setHours(9, 0, 0, 0);
-  return t.getTime();
+  const c = laComponents(Date.now());
+  return epochFromLa(c.year, c.month, c.day + 1, 9, 0);
 }
 
 // Build snooze presets from a caller-provided nowMs. The caller (SnoozePicker)
@@ -64,7 +72,7 @@ export function buildSnoozePresets(nowMs) {
 // DASHBOARD_TZ / laComponents / epochFromLa now live in src/lib/dashboard-helpers.js
 // (pure Pacific date math belongs in lib, not a component helper). Re-exported
 // here for backward compatibility with existing inbox/calendar/todoist importers.
-export { DASHBOARD_TZ, laComponents, epochFromLa } from "../../lib/dashboard-helpers";
+export { DASHBOARD_TZ, laComponents, epochFromLa };
 
 // Place `panelW × panelH` relative to `anchorRect` with two-axis flip fallback.
 // Vertical prefers below-anchor, flips to above if it'd overflow, clamps if

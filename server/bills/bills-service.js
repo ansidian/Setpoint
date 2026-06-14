@@ -82,22 +82,54 @@ function invalidateActualMetadataInBackground(userId) {
   });
 }
 
-export async function sendBill(userId, billData) {
-  const result = await actualSendBill(billData, userId);
-  invalidateActualMetadataInBackground(userId);
-  await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 }).catch((err) => {
+async function scheduleBillsMirrorRefreshInBackground(userId, delayMs) {
+  return scheduleBillsMirrorRefresh(userId, { delayMs }).catch((err) => {
     console.error("[EA] Bills mirror delayed refresh scheduling failed:", err.message);
+    return null;
   });
-  return result;
+}
+
+// A lightweight write that was applied to the local budget copy but failed
+// while pushing to the Actual server throws with err.localWriteApplied === true
+// (set in actual-lightweight-writes.js; never retried — see actual.js). The
+// write IS durable locally and re-syncs on the next successful push, so the
+// downstream invalidation fan-out must still run: without it the metadata
+// mirror and bills mirror keep serving pre-write data with no scheduled
+// reconciliation. We also convert the hard failure into a partial-success
+// return so the route answers 200 and the UI does not prompt a duplicate-
+// inducing retry. Any other error (no local write applied) re-throws unchanged.
+async function withLocalWriteReconciliation(userId, run, { delayMs }) {
+  try {
+    return await run();
+  } catch (err) {
+    if (err?.localWriteApplied !== true) throw err;
+    invalidateActualMetadataInBackground(userId);
+    await scheduleBillsMirrorRefreshInBackground(userId, delayMs);
+    return {
+      syncPending: true,
+      localWriteApplied: true,
+      message: err.message,
+      code: err.code || "ACTUAL_LIGHTWEIGHT_SYNC_FAILED",
+    };
+  }
+}
+
+export async function sendBill(userId, billData) {
+  return withLocalWriteReconciliation(userId, async () => {
+    const result = await actualSendBill(billData, userId);
+    invalidateActualMetadataInBackground(userId);
+    await scheduleBillsMirrorRefreshInBackground(userId, 60_000);
+    return result;
+  }, { delayMs: 60_000 });
 }
 
 export async function markBillPaid(userId, billId) {
-  const result = await actualMarkBillPaid(billId, userId);
-  invalidateActualMetadataInBackground(userId);
-  await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 }).catch((err) => {
-    console.error("[EA] Bills mirror delayed refresh scheduling failed:", err.message);
-  });
-  return result;
+  return withLocalWriteReconciliation(userId, async () => {
+    const result = await actualMarkBillPaid(billId, userId);
+    invalidateActualMetadataInBackground(userId);
+    await scheduleBillsMirrorRefreshInBackground(userId, 60_000);
+    return result;
+  }, { delayMs: 60_000 });
 }
 
 export async function listAccounts(userId) {
@@ -120,12 +152,12 @@ export async function testConnection(userId, overrides) {
 }
 
 export async function createQuickTxn(userId, payload) {
-  const result = await actualCreateQuickTxn(userId, payload);
-  invalidateActualMetadataInBackground(userId);
-  await scheduleBillsMirrorRefresh(userId, { delayMs: 60_000 }).catch((err) => {
-    console.error("[EA] Bills mirror delayed refresh scheduling failed:", err.message);
-  });
-  return result;
+  return withLocalWriteReconciliation(userId, async () => {
+    const result = await actualCreateQuickTxn(userId, payload);
+    invalidateActualMetadataInBackground(userId);
+    await scheduleBillsMirrorRefreshInBackground(userId, 60_000);
+    return result;
+  }, { delayMs: 60_000 });
 }
 
 export async function hydrateActualCache(userId, {

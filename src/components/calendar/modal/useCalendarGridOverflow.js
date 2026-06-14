@@ -7,6 +7,10 @@ import {
   resolveOverflowPresentation,
   sameOverflowDate,
 } from "./calendarGridUtils.js";
+import {
+  OVERFLOW_INTERACTION_IGNORE_MS,
+  markOverflowScrollIgnoreWindow,
+} from "../../../hooks/calendar/calendarScrollModel.js";
 
 function overflowItemMatchesId(item, itemId) {
   if (itemId == null) return false;
@@ -127,7 +131,12 @@ export default function useCalendarGridOverflow({
   }, [gridSelectedItemId]);
 
   const markOverflowInteraction = useCallback(() => {
-    ignoreOverflowScrollUntilRef.current = performance.now() + 220;
+    const now = performance.now();
+    ignoreOverflowScrollUntilRef.current = now + OVERFLOW_INTERACTION_IGNORE_MS;
+    // P3-11: also open the module-shared ignore window so the parent
+    // CalendarScrollContainer's overflow-close dispatcher skips the programmatic
+    // alignment scroll this interaction provokes.
+    markOverflowScrollIgnoreWindow(now);
   }, []);
 
   const handleOpenOverflow = useCallback(({

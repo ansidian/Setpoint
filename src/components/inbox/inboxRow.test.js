@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInboxRow, mergeReadState } from "./inboxRow.js";
+import { buildInboxRow, composeReadOverrides, mergeReadState } from "./inboxRow.js";
 
 const account = { id: "acc-1", name: "Work", email: "work@example.com" };
 
@@ -79,5 +79,29 @@ describe("mergeReadState", () => {
     expect(mergeReadState(true, "u", { u: false })).toBe(false);
     expect(mergeReadState(true, "u", {})).toBe(true);
     expect(mergeReadState(false, null, { u: true })).toBe(false);
+  });
+});
+
+describe("composeReadOverrides", () => {
+  it("lets later sources win over earlier ones", () => {
+    const merged = composeReadOverrides({ a: false, b: true }, new Map([["a", true]]));
+    expect(merged).toEqual({ a: true, b: true });
+  });
+
+  it("ignores null/undefined sources and null override entries", () => {
+    const merged = composeReadOverrides(
+      null,
+      { a: true },
+      undefined,
+      new Map([["a", null], ["b", false]]),
+    );
+    // a stays true because the later null entry is "no opinion", not a downgrade.
+    expect(merged).toEqual({ a: true, b: false });
+  });
+
+  it("produces a lookup mergeReadState consumes, with local search overrides winning", () => {
+    // Server says read=true; a local mark-unused toggle (later source) wins.
+    const merged = composeReadOverrides({ u: true }, new Map([["u", false]]));
+    expect(mergeReadState(true, "u", merged)).toBe(false);
   });
 });

@@ -50,6 +50,9 @@ export default function NotesRail({ accent, isMobile = false }) {
 
   const handleCreate = useCallback(
     async (e) => {
+      // Ignore Enter while an IME composition is in flight: pressing Enter to
+      // accept a candidate must not commit the note with a partial buffer.
+      if (e.nativeEvent?.isComposing || e.keyCode === 229) return;
       if (e.key !== "Enter" || e.shiftKey) return;
       e.preventDefault();
       const content = input.trim();

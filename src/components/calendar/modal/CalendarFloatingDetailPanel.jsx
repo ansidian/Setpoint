@@ -305,6 +305,13 @@ export default function CalendarFloatingDetailPanel({
     (clientX, clientY) => {
       const session = dragSessionRef.current;
       if (!session || session.placementKey !== placementKey) return;
+      // Clamp against the calendar's LIVE rect, not the one captured at pointer-down.
+      // If the viewport resizes or the layout shifts mid-drag, the pointer-down rect
+      // is stale and would clamp to the wrong bounds. Re-reading is one
+      // getBoundingClientRect per rAF-throttled move — negligible. Fall back to the
+      // cached session rect only when the element is gone (disconnected/unmounted).
+      const liveCalendarRect =
+        rectFromElement(calendarPanelRef?.current) || session.calendarRect;
       const next = clampFloatingPosition(
         {
           left: clientX - session.offsetX,
@@ -315,7 +322,7 @@ export default function CalendarFloatingDetailPanel({
           height: session.panelHeight || measuredSize.height || 300,
           maxHeight: session.maxHeight || measuredSize.maxHeight,
         },
-        session.calendarRect,
+        liveCalendarRect,
       );
       setManualPosition((current) =>
         current &&
@@ -327,6 +334,7 @@ export default function CalendarFloatingDetailPanel({
       );
     },
     [
+      calendarPanelRef,
       measuredSize.height,
       measuredSize.maxHeight,
       measuredSize.width,

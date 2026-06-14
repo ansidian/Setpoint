@@ -59,7 +59,10 @@ vi.mock("../calendar/calendar-search.js", () => ({
   normalizeLimit: vi.fn(() => 20),
   rankCalendarSearchCandidates: vi.fn(() => ({ results: [], totalMatches: 0, truncated: false })),
 }));
-vi.mock("../calendar/calendar-search-mirror.js", () => ({
+vi.mock("../calendar/calendar-search-mirror.js", async (importActual) => ({
+  // Keep the real pure helpers (addMonthsIso powers the route's range helpers);
+  // only the DB-touching functions are stubbed below.
+  ...(await importActual()),
   deleteCalendarSearchMirrorOccurrence: vi.fn(),
   getCalendarSearchMirrorHealth: vi.fn(),
   listCalendarSearchMirrorOccurrences: vi.fn(),

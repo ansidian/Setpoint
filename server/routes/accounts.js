@@ -106,8 +106,12 @@ router.get("/accounts/gmail/callback", async (req, res) => {
     const baseUrl = process.env.NODE_ENV === "production" ? "" : "http://localhost:5173";
     res.redirect(`${baseUrl}/settings?account_connected=${result.email}`);
   } catch (err) {
+    // MERGE-NOTE[P3-53] (P3 worktree): stop reflecting the internal error message into
+    // the HTTP response on this unauthenticated callback; log full error server-side, send
+    // a generic client message. Shares this file's OAuth callback with a P2 error-handling
+    // fix on another worktree. On conflict: keep BOTH unless they touch this same line.
     console.error("Gmail OAuth callback error:", err);
-    res.status(500).send(`OAuth failed: ${err.message}`);
+    res.status(500).send("OAuth failed. Please try connecting the account again.");
   }
 });
 

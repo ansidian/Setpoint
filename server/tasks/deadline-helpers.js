@@ -1,35 +1,3 @@
-import db from "../db/connection.js";
-
-export async function loadCompletedTaskIds(userId, todoistTasks) {
-  const result = await db.execute({
-    sql: "SELECT todoist_id FROM ea_completed_tasks WHERE user_id = ? AND due_date IS NULL",
-    args: [userId],
-  });
-  const completedIds = new Set(result.rows.map((row) => row.todoist_id));
-
-  if (todoistTasks?.length && completedIds.size) {
-    const reopened = todoistTasks.filter((task) => completedIds.has(task.id)).map((task) => task.id);
-    if (reopened.length) {
-      console.log(`[Briefing] Reconciling ${reopened.length} un-completed Todoist task(s)`);
-      await db.execute({
-        sql: `DELETE FROM ea_completed_tasks WHERE user_id = ? AND due_date IS NULL AND todoist_id IN (${reopened.map(() => "?").join(",")})`,
-        args: [userId, ...reopened],
-      });
-      for (const id of reopened) completedIds.delete(id);
-    }
-  }
-
-  return completedIds;
-}
-
-export function filterCompletedTodoistTasks(todoistTasks, completedIds) {
-  let todoist = todoistTasks || [];
-  if (completedIds?.size) {
-    todoist = todoist.filter((task) => !completedIds.has(task.id) && !completedIds.has(String(task.id)));
-  }
-  return todoist;
-}
-
 export function carryForwardCompletedTodoist(newList, prevList, boundary) {
   if (!prevList?.length) return newList;
   const keyOf = (task) => `${task.id}:${task.due_date}`;

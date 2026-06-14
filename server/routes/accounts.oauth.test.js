@@ -159,6 +159,26 @@ describe("accounts Gmail OAuth binding", () => {
     expect(emailBackfillApi.wakeEmailBackfillWorker).toHaveBeenCalledWith();
     expect(res.headers["set-cookie"][0]).toContain("ea_oauth_bind=;");
   });
+
+  it("returns a generic message on callback failure without leaking the internal error", async () => {
+    gmailApi.handleCallback.mockRejectedValueOnce(
+      new Error("invalid_grant: token exchange failed at https://oauth.internal/secret"),
+    );
+    await seedCsrfToken({
+      token: "state-1",
+      browserBind: "bind-cookie",
+      label: "Work",
+    });
+
+    const res = await request(makeApp())
+      .get("/api/ea/accounts/gmail/callback?code=auth-code&state=state-1")
+      .set("Cookie", ["ea_oauth_bind=bind-cookie"]);
+
+    expect(res.status).toBe(500);
+    expect(res.text).toBe("OAuth failed. Please try connecting the account again.");
+    expect(res.text).not.toMatch(/invalid_grant/);
+    expect(res.text).not.toMatch(/oauth\.internal/);
+  });
 });
 
 async function seedCsrfToken({ token, browserBind, label }) {

@@ -465,6 +465,132 @@ describe("Gmail Pub/Sub sync ingestion", () => {
     expect(result.indexed).toBe(2);
   });
 
+  it("does not persist the stale cursor on 404 recovery; falls back to the profile historyId when no target is given", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "stale-history"],
+    });
+    const expired = new Error("Gmail history.list failed for work@example.com: 404");
+    expired.status = 404;
+    const fetchHistoryPage = vi.fn(async () => {
+      throw expired;
+    });
+    const fetchEmailsFn = vi.fn(async () => []);
+    const fetchProfileHistoryIdFn = vi.fn(async () => "999000");
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsFn,
+      fetchProfileHistoryIdFn,
+      targetHistoryId: null,
+      now: new Date("2026-05-03T16:00:00.000Z"),
+    });
+
+    expect(fetchProfileHistoryIdFn).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "gmail-work" }),
+    );
+    expect(result).toMatchObject({
+      last_history_id: "999000",
+      history_recovered: true,
+    });
+    const watchState = await testState.db.current.execute({
+      sql: `SELECT last_history_id FROM ea_gmail_watch_state WHERE account_id = ?`,
+      args: ["gmail-work"],
+    });
+    expect(watchState.rows[0].last_history_id).toBe("999000");
+    expect(watchState.rows[0].last_history_id).not.toBe("stale-history");
+  });
+
+  it("leaves the stored Gmail cursor untouched on 404 recovery when no target and the profile fetch fails", async () => {
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_gmail_watch_state
+              (user_id, account_id, email_address, last_history_id, watch_status)
+            VALUES (?, ?, ?, ?, 'active')`,
+      args: ["user-1", "gmail-work", "work@example.com", "stale-history"],
+    });
+    const expired = new Error("Gmail history.list failed for work@example.com: 404");
+    expired.status = 404;
+    const fetchHistoryPage = vi.fn(async () => {
+      throw expired;
+    });
+    const fetchEmailsFn = vi.fn(async () => []);
+    const fetchProfileHistoryIdFn = vi.fn(async () => {
+      throw new Error("profile unavailable");
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await gmailSync.syncGmailHistoryForAccount({
+      id: "gmail-work",
+      user_id: "user-1",
+      email: "work@example.com",
+    }, {
+      dbClient: testState.db.current,
+      fetchHistoryPage,
+      fetchEmailsFn,
+      fetchProfileHistoryIdFn,
+      targetHistoryId: null,
+      now: new Date("2026-05-03T16:30:00.000Z"),
+    });
+
+    expect(result.history_recovered).toBe(true);
+    const watchState = await testState.db.current.execute({
+      sql: `SELECT last_history_id, last_sync_at FROM ea_gmail_watch_state WHERE account_id = ?`,
+      args: ["gmail-work"],
+    });
+    // Cursor is NOT advanced to a fresh id, but it is NOT overwritten with the stale 404'd id either.
+    expect(watchState.rows[0].last_history_id).toBe("stale-history");
+    expect(watchState.rows[0].last_sync_at).toBe("2026-05-03T16:30:00.000Z");
+    warnSpy.mockRestore();
+  });
+
+  it("skips a gmail_history_sync job whose payload lacks a historyId instead of running a backfill", async () => {
+    await seedEmailAccount(testState.db.current, {
+      id: "gmail-work",
+      user_id: "user-1",
+      type: "gmail",
+      email: "work@example.com",
+      label: "Work",
+    });
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_triage_jobs
+              (user_id, account_id, email_id, job_type, idempotency_key,
+               priority, payload_json, status)
+            VALUES (?, ?, NULL, 'gmail_history_sync', ?, 1, ?, 'queued')`,
+      args: [
+        "user-1",
+        "gmail-work",
+        "gmail_history_sync:user-1:gmail-work:no-history",
+        JSON.stringify({ emailAddress: "work@example.com" }),
+      ],
+    });
+
+    const result = await gmailSync.processNextGmailHistorySyncJob({
+      dbClient: testState.db.current,
+      now: new Date("2026-05-03T17:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({ processed: true, skipped: true });
+    const jobs = await testState.db.current.execute({
+      sql: `SELECT status, last_error FROM ea_triage_jobs WHERE job_type = 'gmail_history_sync'`,
+      args: [],
+    });
+    expect(jobs.rows[0].status).toBe("complete");
+    expect(jobs.rows[0].last_error).toBe("missing historyId in payload");
+    // No backfill side effects: nothing indexed.
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT COUNT(*) AS count FROM ea_email_index",
+      args: [],
+    });
+    expect(indexed.rows[0].count).toBe(0);
+  });
+
   it("syncs Gmail history into indexed mail and idempotent message triage jobs", async () => {
     await testState.db.current.execute({
       sql: `INSERT INTO ea_gmail_watch_state

@@ -15,6 +15,12 @@ export function createTriageDecision(overrides = {}) {
     triage_source: "unknown",
     rule_id: null,
     model_usage: {},
+    // DEAD COLUMN (P3-69): no producer ever computes a real per-email cost, so this
+    // stays permanently null. Kept here only so updateTriageRow's UPDATE binds a valid
+    // SQL NULL (libsql rejects undefined bind args) and so every decision path keeps a
+    // single shape. Readers (triage-cache-stats) recompute spend from token usage and
+    // ignore this column. The ea_email_triage.estimated_cost_usd column can be dropped
+    // in a future migration; do not start reading it as if it held real cost.
     estimated_cost_usd: null,
     latency_ms: null,
     cheap_model_result: null,
@@ -71,9 +77,9 @@ export function normalizeModelDecision(result, tier) {
       : null,
     triage_source: tier === "cheap" ? "cheap_model" : "strong_model",
     model_usage: modelUsageFromResult(result, tier),
-    estimated_cost_usd: Number.isFinite(Number(result?.estimated_cost_usd))
-      ? Number(result.estimated_cost_usd)
-      : null,
+    // estimated_cost_usd intentionally not derived from the model result: the model
+    // client never returns a cost, so this only ever produced null while looking like
+    // a real money value. Left at the createTriageDecision default (null). See P3-69.
     latency_ms: Number.isFinite(Number(result?.latency_ms)) ? Number(result.latency_ms) : null,
     cheap_model_result: tier === "cheap" ? result : null,
     strong_model_result: tier === "strong" ? result : null,

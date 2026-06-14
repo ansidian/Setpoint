@@ -11,6 +11,9 @@ import {
   prefetchRange,
   mountedWindow,
   deriveScrollDirection,
+  OVERFLOW_INTERACTION_IGNORE_MS,
+  markOverflowScrollIgnoreWindow,
+  shouldDispatchOverflowCloseOnScroll,
 } from "./calendarScrollModel.js";
 
 describe("calendarScrollModel", () => {
@@ -341,6 +344,34 @@ describe("calendarScrollModel", () => {
     it("works with negative indices", () => {
       expect(deriveScrollDirection(-2, -1)).toBe("forward");
       expect(deriveScrollDirection(-1, -3)).toBe("backward");
+    });
+  });
+
+  // P3-11: a keep-overflow-open chip interaction triggers a programmatic
+  // alignment scroll; the scroll-driven overflow-close dispatch must skip that
+  // scroll (within the ignore window) so the overflow the user acted in is not
+  // dismissed. Escape closes via a different dispatch site and never routes
+  // through this predicate.
+  describe("overflow keep-open ignore window", () => {
+    it("dispatches close on a scroll with no prior interaction", () => {
+      // Window starts in the distant past (default 0); a fresh scroll closes.
+      expect(shouldDispatchOverflowCloseOnScroll(1_000_000)).toBe(true);
+    });
+
+    it("suppresses close for a scroll within the ignore window", () => {
+      const t = 1_000_000;
+      markOverflowScrollIgnoreWindow(t);
+      // Same tick and anywhere inside the 220ms window: no close.
+      expect(shouldDispatchOverflowCloseOnScroll(t)).toBe(false);
+      expect(shouldDispatchOverflowCloseOnScroll(t + OVERFLOW_INTERACTION_IGNORE_MS - 1)).toBe(false);
+    });
+
+    it("dispatches close once the ignore window has elapsed", () => {
+      const t = 2_000_000;
+      markOverflowScrollIgnoreWindow(t);
+      // At the window boundary the guard has expired (>= comparison).
+      expect(shouldDispatchOverflowCloseOnScroll(t + OVERFLOW_INTERACTION_IGNORE_MS)).toBe(true);
+      expect(shouldDispatchOverflowCloseOnScroll(t + OVERFLOW_INTERACTION_IGNORE_MS + 50)).toBe(true);
     });
   });
 });

@@ -3,6 +3,12 @@ export const TRIAGE_SOUND_GAIN_MULTIPLIER = 3;
 export const TRIAGE_SOUND_FADE_OUT_SECONDS = 0.04;
 const TRIAGE_SOUND_FADE_OUT_HEADSTART_SECONDS = 0.005;
 const TRIAGE_SOUND_CONTEXT_CLOSE_DELAY_MS = 50;
+// Extra time past the expected clip duration before the safety timeout force-closes
+// the context. Covers slow `play()` start, autoplay resume, and missing `ended` events.
+const TRIAGE_SOUND_MAX_DURATION_MARGIN_SECONDS = 1;
+// Fallback ceiling when the clip duration is unknown (NaN/Infinity), so a context that
+// never reports metadata or fires `ended` still gets closed instead of leaking.
+const TRIAGE_SOUND_MAX_DURATION_FALLBACK_SECONDS = 30;
 
 export function markTriageSoundAudioUnlocked() {
   try {
@@ -22,6 +28,10 @@ export function isTriageSoundAudioUnlocked() {
 
 export async function playTriageNotificationSound(sound, { markUnlocked = false, volume = 1 } = {}) {
   if (!sound?.path || typeof globalThis.Audio === "undefined") return false;
+  // Hoisted above the try so the outer catch can close a context that was created
+  // before `audio.play()` rejected — otherwise that context would leak past the
+  // browser AudioContext cap (~6 in Chromium) and break future playback.
+  let closeContextRef = null;
   try {
     const audio = new globalThis.Audio(sound.path);
     const normalizedVolume = Number(volume);
@@ -40,6 +50,7 @@ export async function playTriageNotificationSound(sound, { markUnlocked = false,
         source.connect(gain);
         gain.connect(context.destination);
         let fadeTimer = null;
+        let safetyTimer = null;
         let didRampDown = false;
         let didQueueClose = false;
         const rampDown = () => {
@@ -72,13 +83,45 @@ export async function playTriageNotificationSound(sound, { markUnlocked = false,
             globalThis.clearTimeout(fadeTimer);
             fadeTimer = null;
           }
+          if (safetyTimer !== null) {
+            globalThis.clearTimeout(safetyTimer);
+            safetyTimer = null;
+          }
           rampDown();
           globalThis.setTimeout(() => context.close?.(), TRIAGE_SOUND_CONTEXT_CLOSE_DELAY_MS);
         };
+        closeContextRef = closeContext;
+        // Safety net: if no terminal event ever fires (clip never reaches `ended`,
+        // metadata never loads, autoplay stays suspended), force the context closed
+        // after the clip's expected lifetime plus a margin so it cannot leak. Starts
+        // with a conservative fallback, then tightens to the real duration once
+        // `loadedmetadata` reports it.
+        const scheduleSafetyClose = () => {
+          if (didQueueClose) return;
+          if (safetyTimer !== null) {
+            globalThis.clearTimeout(safetyTimer);
+            safetyTimer = null;
+          }
+          const duration = Number(audio.duration);
+          const lifetimeSeconds = Number.isFinite(duration) && duration > 0
+            ? duration + TRIAGE_SOUND_MAX_DURATION_MARGIN_SECONDS
+            : TRIAGE_SOUND_MAX_DURATION_FALLBACK_SECONDS;
+          safetyTimer = globalThis.setTimeout(closeContext, lifetimeSeconds * 1000);
+        };
+        const onLoadedMetadata = () => {
+          scheduleRampDown();
+          scheduleSafetyClose();
+        };
         if (context.state === "suspended") await context.resume?.();
-        audio.addEventListener?.("loadedmetadata", scheduleRampDown, { once: true });
+        audio.addEventListener?.("loadedmetadata", onLoadedMetadata, { once: true });
         scheduleRampDown();
+        scheduleSafetyClose();
         audio.addEventListener?.("ended", closeContext, { once: true });
+        // Terminal conditions beyond `ended` that also leave the context idle.
+        // closeContext is idempotent via didQueueClose, so duplicate firings are safe.
+        audio.addEventListener?.("error", closeContext, { once: true });
+        audio.addEventListener?.("pause", closeContext, { once: true });
+        audio.addEventListener?.("emptied", closeContext, { once: true });
       } catch {
         // Fall back to native audio volume when Web Audio setup is unavailable.
       }
@@ -87,6 +130,9 @@ export async function playTriageNotificationSound(sound, { markUnlocked = false,
     if (markUnlocked) markTriageSoundAudioUnlocked();
     return true;
   } catch {
+    // If a context was created before play() rejected, close it so it does not
+    // leak past the browser AudioContext cap.
+    closeContextRef?.();
     return false;
   }
 }

@@ -314,10 +314,13 @@ function parseWeekdayBatchIntent(title, context) {
     defaultStartTime: context.defaultStartTime,
     defaultEndTime: context.defaultEndTime,
   });
-  const dates = scan.entries
-    .map((entry) => resolveWeekdayOccurrence(anchorBaseDate, entry.code, entry.qualifier))
-    .filter(Boolean)
-    .sort(compareYmd);
+  const dates = [
+    ...new Set(
+      scan.entries
+        .map((entry) => resolveWeekdayOccurrence(anchorBaseDate, entry.code, entry.qualifier))
+        .filter(Boolean),
+    ),
+  ].sort(compareYmd);
   const batchDrafts = dates
     .map((date) => buildBatchDraft(baseDraft, date))
     .filter(Boolean);
@@ -364,10 +367,13 @@ function parseExplicitDateBatchIntent(title, context) {
     defaultEndTime: context.defaultEndTime,
   });
 
-  const dates = matches
-    .map((match) => parseExplicitDate(match[0], context.baseDate || currentPacificDate(context.now)))
-    .filter(Boolean)
-    .sort(compareYmd);
+  const dates = [
+    ...new Set(
+      matches
+        .map((match) => parseExplicitDate(match[0], context.baseDate || currentPacificDate(context.now)))
+        .filter(Boolean),
+    ),
+  ].sort(compareYmd);
   if (dates.length < 2) return null;
 
   const batchDrafts = dates

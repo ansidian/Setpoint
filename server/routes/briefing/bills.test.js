@@ -27,7 +27,9 @@ vi.mock("../../bills/bills-service.js", () => mockBillsService);
 
 process.env.EA_USER_ID = "user-1";
 
-const billsRouter = (await import("./bills.js")).default;
+const billsModule = await import("./bills.js");
+const billsRouter = billsModule.default;
+const quickTxnRouter = billsModule.quickTxnRouter;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 
 function makeApp() {
@@ -35,6 +37,16 @@ function makeApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/briefing", requireCookieSession, billsRouter);
+  return app;
+}
+
+function makeQuickTxnApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+  // quickTxnRouter carries its own requireCookieSessionOrApiTokenScope("actual:write");
+  // with no bearer token it falls back to cookie-session validation (mockDb session mock).
+  app.use("/api/briefing", quickTxnRouter);
   return app;
 }
 
@@ -47,6 +59,30 @@ beforeEach(() => {
         : { rows: [] };
     }
     return { rows: [] };
+  });
+});
+
+describe("quick-txn amount validation", () => {
+  it("rejects a zero amount with 400 and does not write a transaction", async () => {
+    const res = await request(makeQuickTxnApp())
+      .post("/api/briefing/actual/quick-txn")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ account: "Checking", amount: 0, payee: "Power" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "amount must be greater than 0" });
+    expect(mockBillsService.createQuickTxn).not.toHaveBeenCalled();
+  });
+
+  it("rejects a negative amount with 400 and does not write a transaction", async () => {
+    const res = await request(makeQuickTxnApp())
+      .post("/api/briefing/actual/quick-txn")
+      .set("Cookie", ["ea_session=cookie-session"])
+      .send({ account: "Checking", amount: -25, payee: "Power" });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "amount must be greater than 0" });
+    expect(mockBillsService.createQuickTxn).not.toHaveBeenCalled();
   });
 });
 

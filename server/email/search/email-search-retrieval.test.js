@@ -297,6 +297,49 @@ describe("retrieveInboxAiSearch", () => {
     expect(result.candidates.map((candidate) => candidate.uid)).toEqual(["same-evening-result"]);
   });
 
+  it("includes undated rows in a windowed query while excluding dated rows outside the window", async () => {
+    db = await createRetrievalTestDb();
+    // Undated: an unparseable header normalizes to "" (empty email_date_utc). The column
+    // is NOT NULL DEFAULT '', so "" is the only undated state the index can hold. Before
+    // the P3-51 fix this row was silently dropped from any date-windowed query.
+    const undated = await seedIndexedEmail(db, {
+      uid: "undated-amazon-return",
+      subject: "Amazon return drop off label",
+      body_text: "Your return label is attached but the header date is missing.",
+      email_date: "not-a-real-date",
+    });
+    // Same subject phrase, but dated OUTSIDE the window -> must still be excluded. Sharing
+    // the lexical phrase means the only thing separating the two rows is the window filter.
+    const outOfWindow = await seedIndexedEmail(db, {
+      uid: "dated-out-of-window",
+      subject: "Amazon return drop off label",
+      body_text: "Your return label from long before the window.",
+      email_date: "2025-01-01T12:00:00Z",
+    });
+    await upsertEmbedding(db, undated, [1, 0, 0]);
+    await upsertEmbedding(db, outOfWindow, [1, 0, 0]);
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "amazon return drop off label",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      plan: {
+        semantic_query: "amazon return drop off label",
+        lexical_queries: ["amazon return drop off label"],
+        date_window: {
+          after: "2026-05-08T00:00:00.000Z",
+          before: "2026-05-15T00:00:00.000Z",
+        },
+      },
+      limit: 5,
+    });
+
+    const uids = result.candidates.map((candidate) => candidate.uid);
+    expect(uids).toContain("undated-amazon-return");
+    expect(uids).not.toContain("dated-out-of-window");
+  });
+
   it("honors planner date windows and drops weak body-only lexical evidence", async () => {
     db = await createRetrievalTestDb();
     const oldApplication = await seedIndexedEmail(db, {

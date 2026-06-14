@@ -15,6 +15,19 @@ const SCOPES = [
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ];
 
+// Google's OAuth token responses normally carry expires_in (seconds), but a
+// malformed/partial response can omit it. Defaulting to this TTL keeps
+// expires_at finite so the refresh guard stays deterministic instead of
+// computing NaN (NaN < anything is false, which would silently wedge refresh).
+const DEFAULT_TOKEN_TTL_SECONDS = 3600;
+
+// Compute an absolute expiry (ms epoch) from a token response's expires_in,
+// falling back to DEFAULT_TOKEN_TTL_SECONDS when it is missing or non-finite.
+function computeExpiresAt(expiresIn, now = Date.now()) {
+  const ttl = Number.isFinite(expiresIn) ? expiresIn : DEFAULT_TOKEN_TTL_SECONDS;
+  return now + ttl * 1000;
+}
+
 // --- OAuth flow ---
 
 export function getAuthUrl(state) {
@@ -52,7 +65,7 @@ export async function handleCallback(code, _accountId, userId) {
   const credentials = {
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
-    expires_at: Date.now() + tokens.expires_in * 1000,
+    expires_at: computeExpiresAt(tokens.expires_in),
     scopes: tokens.scope ? tokens.scope.split(" ").filter(Boolean) : SCOPES,
   };
 
@@ -104,8 +117,13 @@ async function getValidToken(account) {
   const credentials = JSON.parse(decrypt(account.credentials_encrypted));
   const canonicalAccountId = account.canonical_id || account.id;
 
-  // Refresh if token expires within 5 minutes
-  if (credentials.expires_at < Date.now() + 5 * 60 * 1000) {
+  // Refresh if the token expires within 5 minutes. Treat a non-finite/null
+  // expires_at as already-expired so a malformed stored credential forces a
+  // refresh rather than passing the guard (NaN < anything is false, which
+  // would otherwise wedge refresh and 401 forever).
+  const expiresAt = credentials.expires_at;
+  const isExpiring = !Number.isFinite(expiresAt) || expiresAt < Date.now() + 5 * 60 * 1000;
+  if (isExpiring) {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -124,7 +142,7 @@ async function getValidToken(account) {
 
     const data = await res.json();
     credentials.access_token = data.access_token;
-    credentials.expires_at = Date.now() + data.expires_in * 1000;
+    credentials.expires_at = computeExpiresAt(data.expires_in);
     // refresh_token is not always returned on refresh
     if (data.refresh_token) credentials.refresh_token = data.refresh_token;
     if (data.scope) credentials.scopes = data.scope.split(" ").filter(Boolean);

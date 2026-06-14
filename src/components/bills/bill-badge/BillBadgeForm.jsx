@@ -312,6 +312,7 @@ function FeeAndSendRow({
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
                   value={customFee}
                   onChange={(event) => setCustomFee(event.target.value)}
                   onClick={(event) => event.stopPropagation()}
@@ -377,6 +378,7 @@ function FeeAndSendRow({
             <input
               type="number"
               step="0.01"
+              min="0"
               value={customFee}
               onChange={(event) => setCustomFee(event.target.value)}
               onClick={(event) => event.stopPropagation()}

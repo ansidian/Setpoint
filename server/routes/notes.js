@@ -26,16 +26,21 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ message: "Content is required" });
   }
   try {
-    await db.execute({
-      sql: "UPDATE ea_notes SET sort_order = sort_order + 1 WHERE user_id = ?",
-      args: [userId()],
-    });
-    const result = await db.execute({
-      sql: "INSERT INTO ea_notes (user_id, content, sort_order) VALUES (?, ?, 0)",
-      args: [userId(), content.trim()],
-    });
+    // Shift-then-insert must be atomic: a crash between the two statements would
+    // permanently bump every note's sort_order with no row left at slot 0.
+    // libsql batch is transactional, so the freed slot is always filled.
+    const [, insert] = await db.batch([
+      {
+        sql: "UPDATE ea_notes SET sort_order = sort_order + 1 WHERE user_id = ?",
+        args: [userId()],
+      },
+      {
+        sql: "INSERT INTO ea_notes (user_id, content, sort_order) VALUES (?, ?, 0)",
+        args: [userId(), content.trim()],
+      },
+    ]);
     res.status(201).json({
-      id: Number(result.lastInsertRowid),
+      id: Number(insert.lastInsertRowid),
       user_id: userId(),
       content: content.trim(),
       sort_order: 0,

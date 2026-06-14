@@ -1,5 +1,6 @@
 import AdmZip from "adm-zip";
 import { createClient } from "@libsql/client";
+import { amountConditionCents } from "./actual-amount-condition.js";
 import {
   MessageSchema,
   SyncRequestSchema,
@@ -61,13 +62,6 @@ function normalizeRuleConditions(value) {
         : condition?.field;
     return { ...condition, field };
   });
-}
-
-function amountConditionCents(condition) {
-  const rawAmt = condition?.value;
-  return typeof rawAmt === "object" && rawAmt !== null
-    ? (rawAmt.num1 ?? 0)
-    : (rawAmt ?? 0);
 }
 
 function classifySchedules(schedules, rawPayees) {

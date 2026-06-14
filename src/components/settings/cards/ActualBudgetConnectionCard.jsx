@@ -162,15 +162,20 @@ export default function ActualBudgetConnectionCard({ settings }) {
   }
 
   async function handleHydrateActualCache() {
-    cacheStatusRequestRef.current += 1;
+    // Mirror the auto-effect's request-id guard so a late hydrate resolution can't
+    // clobber a newer cache-status check (or hydrate) and flash an incorrect pill.
+    const requestId = cacheStatusRequestRef.current + 1;
+    cacheStatusRequestRef.current = requestId;
     setHydrateStatus("hydrating");
     setHydrateMsg(null);
     setHydrateResult(null);
     try {
       const result = await hydrateActualBudgetCache();
+      if (cacheStatusRequestRef.current !== requestId) return;
       setHydrateStatus("ok");
       setHydrateResult(result);
     } catch (error) {
+      if (cacheStatusRequestRef.current !== requestId) return;
       setHydrateStatus("fail");
       setHydrateMsg(error.message || "Cache hydration failed");
     }

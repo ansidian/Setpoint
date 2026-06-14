@@ -11,6 +11,7 @@ import {
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
+  composeReadOverrides,
 } from "./inboxWorkItems.js";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
 import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
@@ -69,6 +70,12 @@ export default function useInboxController({
     error: null,
   });
   const searchRequestRef = useRef(0);
+  // Local read-toggles applied to indexed-search hits that are not live/snapshot
+  // emails. These live only in indexedSearch.emails, not in liveReadOverrides,
+  // so a fresh search response would otherwise rebuild rows from server read +
+  // liveReadOverrides and drop a just-applied toggle. Carry them forward here so
+  // re-merges reconcile against the latest local search read state.
+  const searchReadOverridesRef = useRef(new Map());
   const {
     undo,
     undoSlotRef,
@@ -241,7 +248,14 @@ export default function useInboxController({
       searchEmails(term)
         .then((data) => {
           if (searchRequestRef.current !== requestId) return;
-          setIndexedSearch(normalizeIndexedSearchResults(data, liveReadOverrides));
+          // Reconcile fresh results against the latest read state: session-wide
+          // liveReadOverrides first, then local indexed-search toggles (which win)
+          // so a read/unread applied just before this search does not go stale.
+          const readOverrides = composeReadOverrides(
+            liveReadOverrides,
+            searchReadOverridesRef.current,
+          );
+          setIndexedSearch(normalizeIndexedSearchResults(data, readOverrides));
         })
         .catch((err) => {
           if (searchRequestRef.current !== requestId) return;
@@ -348,6 +362,7 @@ export default function useInboxController({
   }, [selectedId]);
 
   const updateIndexedSearchRead = useCallback((uid, read) => {
+    if (uid) searchReadOverridesRef.current.set(uid, !!read);
     setIndexedSearch((prev) => ({
       ...prev,
       emails: prev.emails.map((email) => (
@@ -373,6 +388,7 @@ export default function useInboxController({
 
     const allUids = unread.map((email) => email.uid).filter(Boolean);
     if (allUids.length) {
+      for (const uid of allUids) searchReadOverridesRef.current.set(uid, true);
       setIndexedSearch((prev) => ({
         ...prev,
         emails: prev.emails.map((email) => (

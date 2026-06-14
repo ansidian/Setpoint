@@ -25,8 +25,11 @@ export function makeHttpError(message, status) {
   return err;
 }
 
-export async function insertFeedback(dbClient, item, feedbackType, fromValue, toValue) {
-  await dbClient.execute({
+// Builds the feedback INSERT as a libsql {sql, args} statement so it can be
+// either executed standalone or grouped into a db.batch([...]) with the paired
+// snapshot-item / triage writes (see moveSnapshotItemLane et al. below).
+function feedbackInsertQuery(item, feedbackType, fromValue, toValue) {
+  return {
     sql: `INSERT INTO ea_triage_feedback
             (user_id, triage_id, snapshot_item_id, account_id, email_id,
              feedback_type, from_value, to_value)
@@ -41,7 +44,11 @@ export async function insertFeedback(dbClient, item, feedbackType, fromValue, to
       fromValue,
       toValue,
     ],
-  });
+  };
+}
+
+export async function insertFeedback(dbClient, item, feedbackType, fromValue, toValue) {
+  await dbClient.execute(feedbackInsertQuery(item, feedbackType, fromValue, toValue));
 }
 
 async function loadActiveSnapshotItem(dbClient, userId, itemId) {
@@ -189,22 +196,26 @@ export async function moveSnapshotItemLane(userId, itemId, lane, {
     return normalizeSnapshotItem(item);
   }
 
-  await dbClient.execute({
-    sql: `UPDATE ea_briefing_snapshot_items
-          SET lane_at_snapshot = ?,
-              is_carryover = 0,
-              updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-    args: [lane, itemId, userId],
-  });
-  await dbClient.execute({
-    sql: `UPDATE ea_email_triage
-          SET lane = ?,
-              updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-    args: [lane, item.triage_id, userId],
-  });
-  await insertFeedback(dbClient, item, "lane_move", item.lane_at_snapshot, lane);
+  // Paired writes commit atomically: a mid-write failure must not diverge the
+  // snapshot item's lane from the canonical triage lane (P3-44).
+  await dbClient.batch([
+    {
+      sql: `UPDATE ea_briefing_snapshot_items
+            SET lane_at_snapshot = ?,
+                is_carryover = 0,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [lane, itemId, userId],
+    },
+    {
+      sql: `UPDATE ea_email_triage
+            SET lane = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [lane, item.triage_id, userId],
+    },
+    feedbackInsertQuery(item, "lane_move", item.lane_at_snapshot, lane),
+  ]);
 
   const updated = await loadActiveSnapshotItem(dbClient, userId, itemId);
   return normalizeSnapshotItem(updated);
@@ -289,21 +300,25 @@ export async function markSnapshotItemHandled(userId, itemId, {
   }
 
   const handledAt = now.toISOString();
-  await dbClient.execute({
-    sql: `UPDATE ea_briefing_snapshot_items
-          SET handled_at = ?,
-              updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-    args: [handledAt, itemId, userId],
-  });
-  await dbClient.execute({
-    sql: `UPDATE ea_email_triage
-          SET handled_at = ?,
-              updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-    args: [handledAt, item.triage_id, userId],
-  });
-  await insertFeedback(dbClient, item, "mark_handled", "unhandled", "handled");
+  // Paired writes commit atomically so handled state cannot diverge between the
+  // snapshot item and the canonical triage row on a mid-write failure (P3-44).
+  await dbClient.batch([
+    {
+      sql: `UPDATE ea_briefing_snapshot_items
+            SET handled_at = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [handledAt, itemId, userId],
+    },
+    {
+      sql: `UPDATE ea_email_triage
+            SET handled_at = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [handledAt, item.triage_id, userId],
+    },
+    feedbackInsertQuery(item, "mark_handled", "unhandled", "handled"),
+  ]);
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
   return normalizeSnapshotItem(updated);
@@ -318,24 +333,28 @@ export async function reopenSnapshotItem(userId, itemId, {
   }
   const restoredLane = getSnapshotReopenLane(item.lane_at_snapshot);
 
-  await dbClient.execute({
-    sql: `UPDATE ea_briefing_snapshot_items
-          SET handled_at = NULL,
-              lane_at_snapshot = ?,
-              is_carryover = 0,
-              updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-    args: [restoredLane, itemId, userId],
-  });
-  await dbClient.execute({
-    sql: `UPDATE ea_email_triage
-          SET handled_at = NULL,
-              lane = ?,
-              updated_at = datetime('now')
-          WHERE id = ? AND user_id = ?`,
-    args: [restoredLane, item.triage_id, userId],
-  });
-  await insertFeedback(dbClient, item, "reopen", "handled", restoredLane);
+  // Paired writes commit atomically so reopen cannot leave the snapshot item
+  // and canonical triage row in conflicting handled/lane states (P3-44).
+  await dbClient.batch([
+    {
+      sql: `UPDATE ea_briefing_snapshot_items
+            SET handled_at = NULL,
+                lane_at_snapshot = ?,
+                is_carryover = 0,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [restoredLane, itemId, userId],
+    },
+    {
+      sql: `UPDATE ea_email_triage
+            SET handled_at = NULL,
+                lane = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND user_id = ?`,
+      args: [restoredLane, item.triage_id, userId],
+    },
+    feedbackInsertQuery(item, "reopen", "handled", restoredLane),
+  ]);
 
   const updated = await loadSnapshotItemById(dbClient, userId, itemId);
   return normalizeSnapshotItem(updated);

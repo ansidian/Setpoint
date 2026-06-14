@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Router } from "express";
 import { enqueueHistorySyncFromPubSub } from "../email/gmail-sync.js";
 
@@ -11,10 +12,21 @@ function bearerToken(req) {
   return "";
 }
 
+// Constant-time token compare. Hash both sides first so the timingSafeEqual
+// buffers are always equal length (sha256 digests are fixed 32 bytes),
+// avoiding both the length leak and the throw on mismatched lengths.
+// Mirrors the safeEqual pattern in server/tasks/todoist-webhook.js.
+function safeEqualToken(candidate, expected) {
+  if (!candidate || !expected) return false;
+  const left = crypto.createHash("sha256").update(String(candidate)).digest();
+  const right = crypto.createHash("sha256").update(String(expected)).digest();
+  return crypto.timingSafeEqual(left, right);
+}
+
 function verifyPushToken(req) {
   const expected = process.env.GMAIL_PUBSUB_PUSH_TOKEN;
   if (!expected) return process.env.NODE_ENV !== "production";
-  return bearerToken(req) === expected;
+  return safeEqualToken(bearerToken(req), expected);
 }
 
 router.post("/push", async (req, res) => {

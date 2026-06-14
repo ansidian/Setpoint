@@ -23,13 +23,16 @@ import {
   SETTINGS_SECONDARY_BUTTON_CLASS,
   SURFACE_ROW_CLASS,
 } from "@/components/settings/settings-core";
+import { isDemoMode } from "@/demo/config";
 import { cn } from "@/lib/utils";
 
 const AccountsList = lazy(() => import("@/components/settings/AccountsList"));
 
 export default function AccountsSettingsSection({ accounts, setAccounts, settings, patch }) {
+  const demoMode = isDemoMode();
   const [icloudForm, setIcloudForm] = useState({ email: "", password: "", show: false });
   const [icloudError, setIcloudError] = useState(null);
+  const [gmailError, setGmailError] = useState(null);
   const [todoistToken, setTodoistToken] = useState("");
   const [todoistConfigured, setTodoistConfigured] = useState(false);
   const [todoistDirty, setTodoistDirty] = useState(false);
@@ -79,8 +82,13 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
   }, [settings?.discord_user_id, settings?.discord_webhook_configured]);
 
   async function handleAddGmail() {
-    const { url } = await getGmailAuthUrl();
-    window.location.href = url;
+    setGmailError(null);
+    try {
+      const { url } = await getGmailAuthUrl();
+      window.location.href = url;
+    } catch (error) {
+      setGmailError(error?.message || "Failed to start Gmail authorization");
+    }
   }
 
   async function handleAddICloud() {
@@ -218,8 +226,12 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleAddGmail} className={SETTINGS_PRIMARY_BUTTON_CLASS}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={handleAddGmail}
+              className={SETTINGS_PRIMARY_BUTTON_CLASS}
+              disabled={demoMode}
+            >
               Add Gmail
             </Button>
             <Button
@@ -232,10 +244,14 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
                 setIcloudForm((current) => ({ ...current, show: !current.show }));
                 setIcloudError(null);
               }}
+              disabled={demoMode}
             >
               {icloudForm.show ? "Cancel" : "Add iCloud"}
             </Button>
+            {demoMode ? <StatusPill tone="neutral">Not available in demo</StatusPill> : null}
           </div>
+
+          {gmailError ? <FieldHint className="text-danger">{gmailError}</FieldHint> : null}
 
           {icloudForm.show ? (
             <div className="border-t border-white/[0.05] pt-4">
@@ -409,7 +425,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
               variant="outline"
               onClick={handleTestDiscordWebhook}
               className={SETTINGS_SECONDARY_BUTTON_CLASS}
-              disabled={!discordForm.configured || discordForm.dirty || discordForm.testing}
+              disabled={demoMode || !discordForm.configured || discordForm.dirty || discordForm.testing}
               size="sm"
             >
               <Send size={13} />
@@ -431,6 +447,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
             {discordForm.testStatus === "sent" ? <StatusPill tone="success">Test sent</StatusPill> : null}
             {discordForm.testStatus === "failed" ? <StatusPill tone="danger">Test failed</StatusPill> : null}
             {discordForm.testStatus === "save-failed" ? <StatusPill tone="danger">Save failed</StatusPill> : null}
+            {demoMode ? <StatusPill tone="neutral">Test not available in demo</StatusPill> : null}
           </div>
         </div>
       </SettingsCard>
@@ -458,11 +475,14 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
                 variant="secondary"
                 className={cn(SETTINGS_SECONDARY_BUTTON_CLASS, "whitespace-nowrap")}
                 onClick={handleGeocode}
-                disabled={weatherForm.geocoding || !weatherForm.location}
+                disabled={demoMode || weatherForm.geocoding || !weatherForm.location}
               >
                 {weatherForm.geocoding ? "Looking up…" : "Look up"}
               </Button>
             </div>
+            {demoMode ? (
+              <FieldHint className="mt-1">Location lookup is not available in demo.</FieldHint>
+            ) : null}
           </div>
           {weatherForm.results ? (
             <div className="flex flex-col gap-2">

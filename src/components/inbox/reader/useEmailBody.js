@@ -37,7 +37,10 @@ export default function useEmailBody(email) {
       })
       .catch((err) => {
         if (cancelled) return;
-        if (err.status === 404 && fallbackBody) {
+        // Prefer any available fallback (row preview / cached body) over a hard error for
+        // ANY rejection -- not just 404. Transient 5xx / network failures should still show
+        // the preview text we already have in hand. 'error' is reserved for the no-fallback case.
+        if (fallbackBody) {
           setBodyState({ loading: false, body: fallbackBody, error: null, source: "fallback" });
           return;
         }

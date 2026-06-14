@@ -5,6 +5,7 @@ import {
   dashboardDeadlineCalendarRequest,
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
+  resolveShellTabHotkey,
 } from "./dashboardShellModel.js";
 
 describe("dashboard shell model", () => {
@@ -139,6 +140,70 @@ describe("dashboard shell model", () => {
 
   it("forwards the cache stamp so modal memos invalidate when event content changes", () => {
     expect(buildDashboardEventsData({ cacheStamp: 7 }).cacheStamp).toBe(7);
+  });
+
+  describe("blocking-overlay gating (P3-26 / P3-27)", () => {
+    it("suppresses single-key shell commands behind a blocking overlay that isn't their target (e.g. Customize)", () => {
+      // analyticsOpen/historyOpen are false here, modelling a Customize panel open:
+      // every single-key command would open a surface *behind* it, so all are ignored.
+      for (const key of ["a", "c", "y", "g"]) {
+        expect(resolveDashboardShellHotkey({ key, anyBlockingOverlayOpen: true }))
+          .toEqual({ action: "ignore" });
+      }
+    });
+
+    it("still allows the toggle that CLOSES the foreground overlay (a→Analytics, y→History)", () => {
+      // The `a`/`y` toggles only ever dismiss the overlay that's already open, like
+      // Escape, so they must keep working even while that overlay blocks the shell.
+      expect(resolveDashboardShellHotkey({
+        key: "a", anyBlockingOverlayOpen: true, analyticsOpen: true,
+      })).toEqual({ action: "toggle-analytics" });
+      expect(resolveDashboardShellHotkey({
+        key: "y", anyBlockingOverlayOpen: true, historyOpen: true,
+      })).toEqual({ action: "toggle-history" });
+      // But a command targeting a DIFFERENT surface stays suppressed: `c` must not
+      // open the calendar behind the open Analytics modal.
+      expect(resolveDashboardShellHotkey({
+        key: "c", anyBlockingOverlayOpen: true, analyticsOpen: true,
+      })).toEqual({ action: "ignore" });
+      // And `a` must not open Analytics behind a non-Analytics overlay (History open).
+      expect(resolveDashboardShellHotkey({
+        key: "a", anyBlockingOverlayOpen: true, historyOpen: true,
+      })).toEqual({ action: "ignore" });
+    });
+
+    it("clears an in-flight g-chord instead of firing it while an overlay is open", () => {
+      expect(resolveDashboardShellHotkey({
+        key: "t",
+        actionChord: "g",
+        anyBlockingOverlayOpen: true,
+      })).toEqual({ action: "clear-chord" });
+    });
+
+    it("keeps ⌘K and Alfred ⌘\\ working over a blocking overlay (Escape is never a command)", () => {
+      expect(resolveDashboardShellHotkey({ key: "k", metaKey: true, anyBlockingOverlayOpen: true }))
+        .toEqual({ action: "open-palette" });
+      expect(resolveDashboardShellHotkey({
+        key: "\\", code: "Backslash", metaKey: true, anyBlockingOverlayOpen: true,
+      })).toEqual({ action: "toggle-alfred" });
+      expect(resolveDashboardShellHotkey({
+        key: "|", code: "Backslash", metaKey: true, shiftKey: true, anyBlockingOverlayOpen: true,
+      })).toEqual({ action: "alfred-new-chat" });
+      // Escape carries no command here, so it falls through and the overlay's own
+      // handler can still close it.
+      expect(resolveDashboardShellHotkey({ key: "Escape", anyBlockingOverlayOpen: true }))
+        .toEqual({ action: "ignore" });
+    });
+
+    it("resolves 1/2 tab switches only when no blocking overlay is open", () => {
+      expect(resolveShellTabHotkey({ key: "1" })).toBe("dashboard");
+      expect(resolveShellTabHotkey({ key: "2" })).toBe("inbox");
+      expect(resolveShellTabHotkey({ key: "1", anyBlockingOverlayOpen: true })).toBeNull();
+      expect(resolveShellTabHotkey({ key: "2", anyBlockingOverlayOpen: true })).toBeNull();
+      expect(resolveShellTabHotkey({ key: "1", editableTarget: true })).toBeNull();
+      expect(resolveShellTabHotkey({ key: "1", metaKey: true })).toBeNull();
+      expect(resolveShellTabHotkey({ key: "3" })).toBeNull();
+    });
   });
 
   describe("alfred hotkeys", () => {

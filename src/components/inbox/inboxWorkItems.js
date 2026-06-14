@@ -1,7 +1,7 @@
 import { snapshotInboxLaneForItem } from "./activeSnapshotWorkflowModel.js";
 import { buildInboxRow } from "./inboxRow.js";
 
-export { mergeReadState, readOverrideForUid } from "./inboxRow.js";
+export { mergeReadState, readOverrideForUid, composeReadOverrides } from "./inboxRow.js";
 
 // Build a `synthAccount(source)` function bound to the inbox account list.
 // Matches a live/resurfaced/pin-snapshot entry's account_label to an existing

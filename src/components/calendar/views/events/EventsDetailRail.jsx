@@ -128,9 +128,14 @@ function calendarActionUrl(ev) {
   return ev?.openUrl || ev?.htmlLink || null;
 }
 
-function orderDetailEvents(items = []) {
+export function orderDetailEvents(items = []) {
+  // When any deadline planning item is present, defer the whole list to
+  // orderPlanningItems once: calling it per-pair inside .sort() is non-antisymmetric
+  // and non-transitive (it re-buckets a 2-item slice), which can disagree with the
+  // agenda/cell ordering on full ties. orderPlanningItems already buckets
+  // deadline-vs-event, sorts by time, and breaks full ties stably by title.
+  if (items.some(isDeadlinePlanningItem)) return orderPlanningItems([...items]);
   return [...items].sort((a, b) => {
-    if (isDeadlinePlanningItem(a) || isDeadlinePlanningItem(b)) return orderPlanningItems([a, b])[0] === a ? -1 : 1;
     if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
     return (a.startMs || 0) - (b.startMs || 0);
   });

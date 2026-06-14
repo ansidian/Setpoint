@@ -515,7 +515,12 @@ function labelStatement(userId, label, timestamp) {
   };
 }
 
-function stateSuccessStatement(userId, response, timestamp, isFullSync) {
+function stateSuccessStatement(userId, response, timestamp, isFullSync, syncStartedAt) {
+  // P3-66: only clear sync_requested_at/sync_request_reason when the pending
+  // request predates this sync's start. A webhook that lands mid-sync records a
+  // newer sync_requested_at; nulling it unconditionally would transiently mask
+  // that work until the next trigger. Compare against the start timestamp so a
+  // request newer than the sync survives the success write.
   return {
     sql: `INSERT INTO ea_todoist_sync_state
             (user_id, sync_token, status, last_sync_at, last_success_at,
@@ -532,8 +537,18 @@ function stateSuccessStatement(userId, response, timestamp, isFullSync) {
             last_incremental_sync_at = COALESCE(excluded.last_incremental_sync_at, ea_todoist_sync_state.last_incremental_sync_at),
             last_error = NULL,
             sync_started_at = NULL,
-            sync_requested_at = NULL,
-            sync_request_reason = NULL,
+            sync_requested_at = CASE
+              WHEN ea_todoist_sync_state.sync_requested_at IS NULL
+                OR ea_todoist_sync_state.sync_requested_at <= ?
+              THEN NULL
+              ELSE ea_todoist_sync_state.sync_requested_at
+            END,
+            sync_request_reason = CASE
+              WHEN ea_todoist_sync_state.sync_requested_at IS NULL
+                OR ea_todoist_sync_state.sync_requested_at <= ?
+              THEN NULL
+              ELSE ea_todoist_sync_state.sync_request_reason
+            END,
             last_check_failed_at = NULL,
             failed_check_count = 0,
             updated_at = excluded.updated_at`,
@@ -545,6 +560,8 @@ function stateSuccessStatement(userId, response, timestamp, isFullSync) {
       isFullSync ? timestamp : null,
       isFullSync ? null : timestamp,
       timestamp,
+      syncStartedAt,
+      syncStartedAt,
     ],
   };
 }
@@ -569,6 +586,7 @@ async function applySyncResponse(userId, response, {
   dbClient,
   timestamp,
   isFullSync,
+  syncStartedAt,
 }) {
   const previousRows = await loadExistingReminderRows(userId, response.items || [], dbClient);
   const statements = [];
@@ -576,12 +594,34 @@ async function applySyncResponse(userId, response, {
   statements.push(...(response.items || []).map((item) => itemStatement(userId, item, timestamp)));
   statements.push(...(response.projects || []).map((project) => projectStatement(userId, project, timestamp)));
   statements.push(...(response.labels || []).map((label) => labelStatement(userId, label, timestamp)));
-  statements.push(stateSuccessStatement(userId, response, timestamp, isFullSync));
+  statements.push(stateSuccessStatement(userId, response, timestamp, isFullSync, syncStartedAt));
   await dbClient.batch(statements);
   await reconcileTodoistReminderRows(userId, response.items || [], previousRows, dbClient);
 }
 
-export async function syncTodoistMirror(userId, {
+// P3-63: three independent trigger paths (background read sync, refresh-blocking
+// read sync, webhook/backstop requested sync) all funnel through this function.
+// Without coordination a stale incremental could land after a newer full sync and
+// regress sync_token. Keep at most one sync in flight per user; concurrent callers
+// (including forceFull) coalesce onto the running promise.
+const inFlightSyncs = new Map();
+
+export function syncTodoistMirror(userId, options = {}) {
+  if (!userId) return runTodoistMirrorSync(userId, options);
+
+  const existing = inFlightSyncs.get(userId);
+  if (existing) return existing;
+
+  const running = runTodoistMirrorSync(userId, options).finally(() => {
+    if (inFlightSyncs.get(userId) === running) {
+      inFlightSyncs.delete(userId);
+    }
+  });
+  inFlightSyncs.set(userId, running);
+  return running;
+}
+
+async function runTodoistMirrorSync(userId, {
   dbClient = db,
   syncApiClient = fetchTodoistSyncResources,
   now = new Date(),
@@ -597,45 +637,54 @@ export async function syncTodoistMirror(userId, {
   const syncToken = forceFull || !state?.sync_token ? "*" : state.sync_token;
   await markSyncing(userId, dbClient, timestamp);
 
-  let response;
-  let appliedSyncToken = syncToken;
+  // P3-62: wrap the whole fetch-and-apply body so any failure after markSyncing
+  // (the '*' full retry, or a DB write error in applySyncResponse) resets status
+  // to 'idle', records last_error, and increments failed_check_count — otherwise
+  // the mirror is stuck in status='syncing' forever and startup resync is skipped.
   try {
-    response = await syncApiClient({
-      token,
-      syncToken,
-      resourceTypes: TODOIST_MIRROR_RESOURCE_TYPES,
-    });
-  } catch (err) {
-    if (syncToken !== "*" && isInvalidSyncTokenError(err)) {
-      appliedSyncToken = "*";
+    let response;
+    let appliedSyncToken = syncToken;
+    try {
       response = await syncApiClient({
         token,
-        syncToken: "*",
+        syncToken,
         resourceTypes: TODOIST_MIRROR_RESOURCE_TYPES,
       });
-    } else {
-      await markSyncFailed(userId, dbClient, timestamp, err);
-      throw err;
+    } catch (err) {
+      if (syncToken !== "*" && isInvalidSyncTokenError(err)) {
+        appliedSyncToken = "*";
+        response = await syncApiClient({
+          token,
+          syncToken: "*",
+          resourceTypes: TODOIST_MIRROR_RESOURCE_TYPES,
+        });
+      } else {
+        throw err;
+      }
     }
+    const isFullSync = appliedSyncToken === "*" || !!response.full_sync;
+
+    await applySyncResponse(userId, response, {
+      dbClient,
+      timestamp,
+      isFullSync,
+      syncStartedAt: timestamp,
+    });
+
+    return {
+      status: "current",
+      syncToken: response.sync_token,
+      fullSync: isFullSync,
+      counts: {
+        items: response.items?.length || 0,
+        projects: response.projects?.length || 0,
+        labels: response.labels?.length || 0,
+      },
+    };
+  } catch (err) {
+    await markSyncFailed(userId, dbClient, timestamp, err);
+    throw err;
   }
-  const isFullSync = appliedSyncToken === "*" || !!response.full_sync;
-
-  await applySyncResponse(userId, response, {
-    dbClient,
-    timestamp,
-    isFullSync,
-  });
-
-  return {
-    status: "current",
-    syncToken: response.sync_token,
-    fullSync: isFullSync,
-    counts: {
-      items: response.items?.length || 0,
-      projects: response.projects?.length || 0,
-      labels: response.labels?.length || 0,
-    },
-  };
 }
 
 export async function getTodoistMirrorHealth(userId, {

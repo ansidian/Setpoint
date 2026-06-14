@@ -1,5 +1,6 @@
 import actualApi from "@actual-app/api";
 import { decrypt } from "../platform/encryption.js";
+import { amountConditionCents } from "./actual-amount-condition.js";
 import {
   buildBillOccurrencesFromSchedules,
   filterBillSchedulesForRange,
@@ -131,13 +132,6 @@ let metadataCache = { data: null, ts: 0 };
 
 export function clearMetadataCache() {
   metadataCache = { data: null, ts: 0 };
-}
-
-function amountConditionCents(condition) {
-  const rawAmt = condition?.value;
-  return typeof rawAmt === "object" && rawAmt !== null
-    ? (rawAmt.num1 ?? 0)
-    : (rawAmt ?? 0);
 }
 
 function classifySchedules(schedules, rawPayees) {
@@ -554,8 +548,7 @@ export async function getUpcomingBills(userId) {
     .map(s => {
       const amtCond = s.conditions.find(c => c.field === "amount");
       const payeeCond = s.conditions.find(c => c.field === "payee");
-      const rawAmt = amtCond?.value;
-      const amountCents = typeof rawAmt === "object" && rawAmt !== null ? (rawAmt.num1 ?? 0) : (rawAmt ?? 0);
+      const amountCents = amountConditionCents(amtCond);
       const payeeName = payeeCond ? payeeMap[payeeCond.value] : s.name;
 
       return {

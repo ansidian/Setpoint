@@ -65,6 +65,24 @@ describe("schedules_json schema", () => {
       message: "Invalid schedules_json entry: skipped_until must be a date string",
     });
   });
+
+  it("rejects duplicate (time,label) pairs so the cron skip-check identity stays unique (P3-57)", () => {
+    expect(validateSchedules([
+      { label: "Morning", time: "08:00", enabled: true },
+      { label: "Morning", time: "08:00", enabled: false },
+    ])).toEqual({
+      valid: false,
+      message: "Invalid schedules_json: duplicate schedule (same time and label)",
+    });
+    // Same time but distinct labels (or same label at distinct times) stays valid —
+    // only the full (time,label) identity must be unique.
+    const distinct = [
+      { label: "Morning", time: "08:00", enabled: true },
+      { label: "Standup", time: "08:00", enabled: true },
+      { label: "Morning", time: "20:00", enabled: true },
+    ];
+    expect(validateSchedules(distinct)).toEqual({ valid: true, value: distinct });
+  });
 });
 
 describe("email_interests_json schema", () => {

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUp, RotateCcw, X } from "lucide-react";
 import useAlfredChat from "./useAlfredChat.js";
-import { alfredModelByKey } from "./alfredPanelModel.js";
+import { alfredModelByKey, alfredScrollKey, isNearBottom } from "./alfredPanelModel.js";
 import {
   ErrorLine,
   ModelToggle,
@@ -38,6 +38,11 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
   const [previewItem, setPreviewItem] = useState(null);
   const scrollerRef = useRef(null);
   const inputRef = useRef(null);
+  // P3-4: only follow the tail when the user is parked near the bottom. Starts
+  // true so the first answer scrolls into view; flipped by onScroll as the user
+  // scrolls up to read earlier messages while composing. A ref (not state) so
+  // scroll events don't trigger re-renders.
+  const stickToBottomRef = useRef(true);
 
   // Closing the panel also closes the email preview. React's documented
   // "adjust state when a prop changes" render-phase pattern (store previous
@@ -51,11 +56,28 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
     if (!open && previewItem !== null) setPreviewItem(null);
   }
 
-  // keep scrolled to the newest message (handoff: scrollTop, not scrollIntoView)
+  // MERGE-NOTE[P3-4] (P3 worktree): auto-scroll now keys on the message list and
+  // only follows the tail when the user is near the bottom (was: every render →
+  // every keystroke snapped to bottom). Shares this file with the Alfred panel P2
+  // fix on another worktree. On conflict: keep BOTH unless they touch these exact
+  // lines (P2 targets a different region). Remove this note after merge.
+  //
+  // keep scrolled to the newest message (handoff: scrollTop, not scrollIntoView),
+  // but only on new/changed messages and only when the user hasn't scrolled up.
+  const scrollKey = alfredScrollKey(messages);
   useEffect(() => {
+    if (!stickToBottomRef.current) return;
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  });
+  }, [scrollKey]);
+
+  // Track whether the thread is parked near the bottom (P3-4). Updated on every
+  // scroll; gates the auto-scroll effect above so reading earlier messages
+  // mid-stream isn't yanked back down.
+  function onThreadScroll(e) {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    stickToBottomRef.current = isNearBottom(scrollTop, clientHeight, scrollHeight);
+  }
 
   // focus composer after the open transition
   useEffect(() => {
@@ -169,7 +191,7 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
       </div>
 
       {/* thread */}
-      <div ref={scrollerRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 14px 6px" }}>
+      <div ref={scrollerRef} onScroll={onThreadScroll} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 14px 6px" }}>
         {empty ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 26 }}>
             <div>

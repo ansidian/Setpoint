@@ -228,7 +228,7 @@ export default function BriefingHistoryPanel({
     }
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  });
+  }, [pos, isMobile, history]);
 
   useEffect(() => {
     getSnapshotHistory()
