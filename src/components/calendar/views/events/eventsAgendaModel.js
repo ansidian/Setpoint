@@ -311,4 +311,15 @@ export function reuseMultiMonthAgendaGroups({
   return { list, cache };
 }
 
+// True when the currently-selected agenda item is an all-day chip that the rail
+// truncates out of view (beyond `visibleCount`). Lets the rail auto-expand the
+// day so a selected hidden chip still renders, registers its row ref, and can be
+// highlighted/scrolled to (instead of staying invisible under the "+N" button).
+export function agendaHasSelectedHiddenAllDay(group, visibleCount, selectedItemId, selectedDateKey) {
+  if (!group || selectedDateKey !== group.dateKey) return false;
+  const selected = String(selectedItemId || "");
+  if (!selected) return false;
+  return (group.allDay || []).slice(visibleCount).some((event) => String(event?.agendaItemId || "") === selected);
+}
+
 export { formatAgendaHeaderLabel, monthBounds };

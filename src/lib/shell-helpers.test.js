@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { phaseIndex, briefingPhaseLabel, greetingFor } from "./shell-helpers";
+import { phaseIndex, briefingPhaseLabel, greetingFor, dueDateToMs, buildTimeline, deriveLane } from "./shell-helpers";
 import { greetingPools } from "./dashboard-helpers";
+
+const iso = (ms) => new Date(ms).toISOString();
 
 // Helper: construct a Pacific-time Date at a given hour on a fixed day.
 function atHourPacific(hour) {
@@ -86,5 +88,63 @@ describe("greetingFor — personable pools", () => {
     const a = greetingFor(atHourPacific(8), "");
     const b = greetingFor(atHourPacific(8), "Andy");
     expect(a.text).toBe(b.text);
+  });
+});
+
+// dueDateToMs returns an absolute UTC instant, so these assertions are
+// independent of the host's local timezone — the PST cases pin the real Pacific
+// wall-clock instant the buggy fixed-7h-offset code computed one hour early.
+describe("dueDateToMs (Pacific DST-correct)", () => {
+  it("anchors an 11:59pm deadline to true Pacific time during PST (winter)", () => {
+    // 2026-01-15 is PST (UTC-8): 11:59pm PT == 2026-01-16T07:59:00Z.
+    expect(iso(dueDateToMs("2026-01-15", "11:59pm"))).toBe("2026-01-16T07:59:00.000Z");
+  });
+
+  it("buckets a small-hours deadline onto the correct Pacific day during PST", () => {
+    // 12:30am PST == 2026-01-15T08:30:00Z (same calendar day in PT).
+    expect(iso(dueDateToMs("2026-01-15", "12:30am"))).toBe("2026-01-15T08:30:00.000Z");
+  });
+
+  it("uses the 11:59pm Pacific fallback when due_time is missing or unparseable", () => {
+    expect(iso(dueDateToMs("2026-01-15", ""))).toBe("2026-01-16T07:59:00.000Z");
+    expect(iso(dueDateToMs("2026-01-15", "nonsense"))).toBe("2026-01-16T07:59:00.000Z");
+  });
+
+  it("stays exact during PDT (summer, UTC-7)", () => {
+    // 11:59pm PDT == 2026-07-16T06:59:00Z.
+    expect(iso(dueDateToMs("2026-07-15", "11:59pm"))).toBe("2026-07-16T06:59:00.000Z");
+  });
+
+  it("returns null for an empty date", () => {
+    expect(dueDateToMs("", "5pm")).toBeNull();
+  });
+});
+
+describe("buildTimeline bill anchor (Pacific DST-correct)", () => {
+  it("anchors a bill to ~3pm Pacific during PST", () => {
+    // 3pm PST == 2026-01-15T23:00:00Z; the buggy fixed 22:00Z was 2pm PST (1h early).
+    const items = buildTimeline({ bills: [{ id: "b1", next_date: "2026-01-15", amount: 10 }] });
+    const bill = items.find((i) => i.kind === "bill");
+    expect(iso(bill.dueAtMs)).toBe("2026-01-15T23:00:00.000Z");
+  });
+});
+
+// deriveLane must understand the coarse `triage` field that DashboardBody's
+// snapshot emails carry ("action"/"fyi") — without it, every dashboard inbox-peek
+// email collapsed to "fyi" and the "needs you" badge stayed 0.
+describe("deriveLane (snapshot triage signal)", () => {
+  it("classifies a snapshot email's triage='action' as needs_attention", () => {
+    expect(deriveLane({ triage: "action" })).toBe("needs_attention");
+  });
+  it("classifies triage='fyi' as fyi", () => {
+    expect(deriveLane({ triage: "fyi" })).toBe("fyi");
+  });
+  it("lets an explicit lane/urgency signal win over triage", () => {
+    expect(deriveLane({ lane: "noise", triage: "action" })).toBe("noise");
+    expect(deriveLane({ urgency: "high", triage: "fyi" })).toBe("needs_attention");
+  });
+  it("falls back to fyi when nothing is set", () => {
+    expect(deriveLane({})).toBe("fyi");
+    expect(deriveLane(null)).toBe("fyi");
   });
 });

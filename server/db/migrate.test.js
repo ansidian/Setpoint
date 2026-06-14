@@ -1,20 +1,28 @@
 import { createClient } from "@libsql/client";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { afterEach, describe, expect, it } from "vitest";
-import { runMigration } from "./migrate.js";
+import { mkdtemp, rm } from "fs/promises";
+import os from "os";
+import path from "path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Guards the boot-loop bug (P1-8): runMigration must apply a migration's body
-// and its ledger row atomically. A migration that fails partway must leave NO
-// schema change and NO ledger row, so the next boot can cleanly re-run it
-// instead of hitting "duplicate column" / "no such table" forever.
+// MERGE-NOTE (P1-8 ⇄ P2-21/P2-22): the P1 ("runner transactional") and P2
+// ("each migration in one transaction") worktrees both added a migrate.test.js
+// guarding the same boot-loop bug — runMigration must apply a migration's body
+// and its ledger row atomically, so a partial failure leaves NO schema change
+// and NO ledger row and the next boot can cleanly re-run it. Both suites are
+// kept here on the single reconciled API: __testing__.runMigration(name, sql,
+// { dbClient }).
 //
-// Uses a temp file-backed libSQL DB (not `file::memory:`): an in-memory DB does
-// not share state between the client's default connection and an interactive
-// transaction's connection, so a file DB is required to exercise commit/rollback
-// visibility the way production (a real file / Turso) does.
-describe("runMigration atomicity", () => {
+// The runner imports the db singleton; stub it so importing migrate.js doesn't
+// open a real connection. Every test passes its own dbClient explicitly. A real
+// file-backed libSQL DB (not :memory:) is required so the runner's transaction
+// connection shares the same database — :memory: gives each connection a
+// distinct database and would not exercise commit/rollback visibility.
+vi.mock("./connection.js", () => ({ default: {} }));
+
+const { __testing__ } = await import("./migrate.js");
+const { runMigration } = __testing__;
+
+describe("runMigration atomicity (P1-8)", () => {
   let db = null;
   let dir = null;
 
@@ -22,14 +30,14 @@ describe("runMigration atomicity", () => {
     await db?.close?.();
     db = null;
     if (dir) {
-      rmSync(dir, { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true });
       dir = null;
     }
   });
 
-  function freshClient() {
-    dir = mkdtempSync(join(tmpdir(), "setpoint-migrate-"));
-    return createClient({ url: `file:${join(dir, "test.db")}` });
+  async function freshClient() {
+    dir = await mkdtemp(path.join(os.tmpdir(), "setpoint-migrate-"));
+    return createClient({ url: `file:${path.join(dir, "test.db")}` });
   }
 
   async function ensureLedger(client) {
@@ -43,16 +51,16 @@ describe("runMigration atomicity", () => {
   }
 
   it("rolls back a partially-failing migration and records no ledger row", async () => {
-    db = freshClient();
+    db = await freshClient();
     await ensureLedger(db);
 
     // First statement is valid (creates table t), second is invalid (unknown
     // function) — mirrors a multi-statement migration that dies partway.
     await expect(
       runMigration(
-        db,
         "bad_migration.sql",
         "CREATE TABLE t (id INTEGER);\nSELECT no_such_fn();",
+        { dbClient: db },
       ),
     ).rejects.toThrow();
 
@@ -66,13 +74,13 @@ describe("runMigration atomicity", () => {
   });
 
   it("commits both the schema and the ledger row on success", async () => {
-    db = freshClient();
+    db = await freshClient();
     await ensureLedger(db);
 
     await runMigration(
-      db,
       "good_migration.sql",
       "CREATE TABLE t (id INTEGER NOT NULL);",
+      { dbClient: db },
     );
 
     const table = await db.execute(
@@ -82,5 +90,49 @@ describe("runMigration atomicity", () => {
 
     const ledger = await db.execute("SELECT name FROM migrations");
     expect(ledger.rows.map((row) => row.name)).toEqual(["good_migration.sql"]);
+  });
+});
+
+describe("runMigration ALTER replay (P2-21/22)", () => {
+  let tempDir = null;
+
+  async function seedDb() {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), "ea-migrate-"));
+    const db = createClient({ url: `file:${path.join(tempDir, "test.db")}` });
+    await db.executeMultiple(`
+      CREATE TABLE migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, executed_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE widget (id INTEGER);
+    `);
+    return db;
+  }
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    tempDir = null;
+  });
+
+  it("rolls back the schema change AND the ledger when a later statement fails", async () => {
+    const db = await seedDb();
+    // Adds a column, then a statement that fails — the whole migration must roll back.
+    const sql = "ALTER TABLE widget ADD COLUMN extra TEXT;\nINSERT INTO missing_table VALUES (1);";
+
+    await expect(runMigration("099_bad.sql", sql, { dbClient: db })).rejects.toThrow();
+
+    const cols = await db.execute("PRAGMA table_info(widget)");
+    expect(cols.rows.some((r) => r.name === "extra")).toBe(false); // schema rolled back
+    const recorded = await db.execute("SELECT name FROM migrations");
+    expect(recorded.rows.length).toBe(0); // not recorded, so the next boot retries cleanly
+    await db.close();
+  });
+
+  it("applies and records a migration on success", async () => {
+    const db = await seedDb();
+    await runMigration("100_good.sql", "ALTER TABLE widget ADD COLUMN extra TEXT;", { dbClient: db });
+
+    const cols = await db.execute("PRAGMA table_info(widget)");
+    expect(cols.rows.some((r) => r.name === "extra")).toBe(true);
+    const recorded = await db.execute("SELECT name FROM migrations");
+    expect(recorded.rows.map((r) => r.name)).toEqual(["100_good.sql"]);
+    await db.close();
   });
 });

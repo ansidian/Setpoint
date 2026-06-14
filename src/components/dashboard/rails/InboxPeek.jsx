@@ -24,7 +24,7 @@ export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJu
       .slice(0, MAX_VISIBLE_EMAILS);
   }, [emailAccounts]);
 
-  const needsYou = flat.filter((e) => e._lane === "action" && !e.read).length;
+  const needsYou = flat.filter((e) => e._lane === "needs_attention" && !e.read).length;
 
   return (
     <div data-sect="inbox-peek">
@@ -76,7 +76,7 @@ export default function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJu
               style={{
                 width: 6, height: 6, borderRadius: 99,
                 background:
-                  e._lane === "action" ? "#f38ba8"
+                  e._lane === "needs_attention" ? "#f38ba8"
                   : e._lane === "fyi" ? "#89dceb"
                   : "rgba(205,214,244,0.25)",
                 margin: "0 auto",

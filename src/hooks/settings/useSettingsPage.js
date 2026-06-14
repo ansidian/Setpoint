@@ -37,13 +37,13 @@ function useSettingsAutoSave() {
         );
       }
     } catch {
-      // MERGE-NOTE (P1-3 ↔ P2-10): re-queue the failed payload instead of
-      // discarding it. Previously pendingRef was cleared at the top (line ~17)
-      // before the await, so any 400 silently dropped EVERY co-batched setting.
-      // P2-10 in the parallel audit is the same root defect (debounced auto-save
-      // discards unrelated pending edits on one rejected field) — this fix
-      // covers it. If the P2-10 worktree also touches flushPending, keep this
-      // re-queue; reconcile rather than reverting to the discard-on-failure form.
+      // MERGE-NOTE (P1-3 ⇄ P2-10): RESOLVED. Both worktrees fixed the same defect
+      // — a rejected debounced PUT cleared pendingRef at the top before the await,
+      // silently dropping every co-batched setting when one field was bad (e.g. a
+      // blank schedule label). Re-queue the failed payload; edits made DURING the
+      // in-flight request (already in pendingRef) win over the stale re-queued
+      // values. P1 extracted mergeFailedPayload (exported + unit-tested); P2
+      // inlined the equivalent spread. Keeping the named helper as the single copy.
       pendingRef.current = mergeFailedPayload(pendingRef.current, payload);
       if (updateUi) setStatus("error");
     }

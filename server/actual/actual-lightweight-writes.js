@@ -41,7 +41,13 @@ function unsupported(message) {
 }
 
 function actualDateInt(value) {
-  return Number(String(value || "").replace(/-/g, ""));
+  const n = Number(String(value || "").replace(/-/g, ""));
+  // A valid Actual date is a YYYYMMDD integer. Throw on NaN/implausible input so a
+  // bad date can never be serialized (as N:NaN) into a local row or CRDT message.
+  if (!Number.isFinite(n) || n < 10000101 || n > 99991231) {
+    throw Object.assign(new Error(`Invalid Actual date: ${JSON.stringify(value)}`), { status: 400 });
+  }
+  return n;
 }
 
 function todayYmd(now = new Date()) {
@@ -429,6 +435,16 @@ function normalizeSupportedBillType(billData, options = {}) {
   return resolveWriteMode(billData, options).type;
 }
 
+function computeSyncSince(metadata) {
+  // Push everything not known-synced. Falling back to epoch 0 (not a 5-minute
+  // wall-clock window) guarantees no locally-applied-but-unsynced message is
+  // skipped when lastSyncedTimestamp is absent (a freshly-hydrated budget) —
+  // lastPushedTimestamp bounds the window after the first successful push.
+  return metadata.lastSyncedTimestamp
+    || metadata.lastPushedTimestamp
+    || new Timestamp(0, 0, "0").toString();
+}
+
 async function readMessagesSince(client, since) {
   const result = await client.execute({
     sql: `SELECT timestamp, dataset, row, column, value
@@ -530,7 +546,16 @@ function findExistingSchedule(schedules, payeeId, accountId, amountCents, name) 
     }
   }
   if (name) {
-    return schedules.find((schedule) => schedule.name === name) || null;
+    const byName = schedules.find((schedule) => schedule.name === name);
+    if (!byName) return null;
+    // Guard against cross-type reuse (bill <-> transfer): the amount-condition sign
+    // distinguishes a payment (negative) from a transfer/income (positive). Refuse a
+    // bare-name match whose sign differs, so a transfer can't clobber a same-named bill.
+    const existingAmount = conditionForFields(byName.conditions, ["amount"], ["is", "isapprox", "isbetween"])?.value;
+    if (typeof existingAmount === "number" && existingAmount !== 0 && Math.sign(existingAmount) !== Math.sign(amountCents)) {
+      return null;
+    }
+    return byName;
   }
   return null;
 }
@@ -834,11 +859,17 @@ async function sendBillLightweightInner(userId, billData, { now = new Date(), db
     // lastSyncedTimestamp is only advanced after the push — but the write must
     // NOT be retried (locally or via the SDK fallback) or it would duplicate.
     try {
-      const since = metadata.lastSyncedTimestamp
-        || new Timestamp(Date.now() - 5 * 60 * 1000, 0, "0").toString();
+      const since = computeSyncSince(metadata);
       const messages = await readMessagesSince(client, since);
       const token = await loginActual(config);
       const syncResult = await postActualSync(config, token, { metadata, messages });
+      // Record how far we've pushed so the next write's `since` window starts here.
+      // Mutate the in-memory metadata first so maybeUpdateLastSyncedTimestamp's
+      // spread of `...metadata` preserves it rather than clobbering it.
+      metadata.lastPushedTimestamp = getClock().timestamp.toString();
+      await saveBudgetMetadata(local.budgetDir, metadata).catch((err) => {
+        console.warn("[EA] Actual lightweight lastPushedTimestamp persist failed:", err.message);
+      });
       await maybeUpdateLastSyncedTimestamp(local.budgetDir, metadata, syncResult).catch((err) => {
         console.warn("[EA] Actual lightweight sync timestamp update failed:", err.message);
       });
@@ -873,7 +904,10 @@ export function sendBillLightweight(userId, billData, options = {}) {
 }
 
 export const __testing__ = {
+  actualDateInt,
+  computeSyncSince,
   encodeSyncRequest,
+  findExistingSchedule,
   normalizeSupportedBillType,
   serializeValue,
   verifyEncodedSyncRequest,

@@ -27,7 +27,7 @@ function withCacheBreakpoint(messages) {
   return [...messages.slice(0, -1), { ...last, content: blocks }];
 }
 
-export async function runAlfred({
+async function runAlfredInner({
   userId,
   conversation,
   message,
@@ -39,6 +39,7 @@ export async function runAlfred({
   deps,
   recordUsage = recordAlfredUsage,
   now = () => new Date(),
+  transcriptCheckpoint = 0,
 }) {
   conversation.messages.push({ role: "user", content: String(message) });
   const system = buildAlfredSystemPrompt({ now: now() });
@@ -134,8 +135,23 @@ export async function runAlfred({
     conversation.messages.push({ role: "user", content: toolResults });
   }
 
+  // Tool-call limit reached: revert so the conversation doesn't end on a dangling
+  // tool_result user turn (which would 400 on the next reuse).
+  conversation.messages.length = transcriptCheckpoint;
   emit({
     type: "run_error",
     message: "Alfred hit the tool-call limit before finishing. Try a narrower question.",
   });
+}
+
+export async function runAlfred(opts) {
+  const transcriptCheckpoint = opts.conversation.messages.length;
+  try {
+    return await runAlfredInner({ ...opts, transcriptCheckpoint });
+  } catch (err) {
+    // A mid-run failure (overload/network/abort) leaves the transcript ending on
+    // a user turn; revert to the pre-run boundary so the conversation stays usable.
+    opts.conversation.messages.length = transcriptCheckpoint;
+    throw err;
+  }
 }

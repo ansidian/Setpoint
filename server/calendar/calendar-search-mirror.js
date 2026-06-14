@@ -219,6 +219,10 @@ async function markSyncFailed(userId, accountId, calendarId, dbClient, timestamp
 
 function stateSuccessStatement(userId, account, calendar, response, timestamp, isFullSync) {
   return {
+    // dirty_since / sync_requested_at are only cleared if they predate this sync's
+    // start (`timestamp`). A write that marks the row dirty DURING the fetch sets a
+    // newer value, which must survive so a follow-up sync is still scheduled
+    // (otherwise the mirror serves stale occurrences — a lost-update race).
     sql: `UPDATE ea_calendar_search_mirror_state
           SET sync_token = ?,
               status = 'idle',
@@ -228,10 +232,10 @@ function stateSuccessStatement(userId, account, calendar, response, timestamp, i
               last_incremental_sync_at = COALESCE(?, last_incremental_sync_at),
               last_error = NULL,
               sync_started_at = NULL,
-              sync_requested_at = NULL,
-              sync_request_reason = NULL,
-              dirty_since = NULL,
-              dirty_reason = NULL,
+              sync_requested_at = CASE WHEN sync_requested_at IS NOT NULL AND sync_requested_at > ? THEN sync_requested_at ELSE NULL END,
+              sync_request_reason = CASE WHEN sync_requested_at IS NOT NULL AND sync_requested_at > ? THEN sync_request_reason ELSE NULL END,
+              dirty_since = CASE WHEN dirty_since IS NOT NULL AND dirty_since > ? THEN dirty_since ELSE NULL END,
+              dirty_reason = CASE WHEN dirty_since IS NOT NULL AND dirty_since > ? THEN dirty_reason ELSE NULL END,
               last_check_failed_at = NULL,
               failed_check_count = 0,
               updated_at = ?
@@ -242,6 +246,10 @@ function stateSuccessStatement(userId, account, calendar, response, timestamp, i
       timestamp,
       isFullSync ? timestamp : null,
       isFullSync ? null : timestamp,
+      timestamp,
+      timestamp,
+      timestamp,
+      timestamp,
       timestamp,
       userId,
       account.id,

@@ -8,6 +8,7 @@ import EventsAgendaDeadlineRow from "./EventsAgendaDeadlineRow.jsx";
 import { AllDayChip, TimedRow } from "./EventsAgendaEventRows.jsx";
 import { AgendaSkeleton, WeatherHeader } from "./EventsAgendaRailParts.jsx";
 import {
+  agendaHasSelectedHiddenAllDay,
   buildEventsAgendaGroups,
   buildEventsMiniCalendarActivityItems,
   reuseMultiMonthAgendaGroups,
@@ -196,7 +197,10 @@ const MonthAgendaSection = memo(function MonthAgendaSection({
         />
       )}
       renderGroup={({ group: g, registerRow: regRow, registerContent: regContent }) => {
-        const expanded = expandedDays.has(g.dateKey);
+        // Auto-expand (without persisting) when the selected item is a hidden
+        // all-day chip, so it renders and registers its row ref for highlight/scroll.
+        const expanded = expandedDays.has(g.dateKey)
+          || agendaHasSelectedHiddenAllDay(g, 2, selectedItemId, selectedDateKey);
         const visibleAllDay = expanded ? g.allDay : g.allDay.slice(0, 2);
         const hiddenAllDayCount = g.allDay.length - visibleAllDay.length;
         const showNoEvents = !g.hasEvents && (g.isFallback || selectedDateKey === g.dateKey || todayKey === g.dateKey);

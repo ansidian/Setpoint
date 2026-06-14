@@ -1,8 +1,27 @@
+/* global process */
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { deriveFocusWindows, focusPressureDate, focusPressureTarget } from "./focus-windows";
+import { deriveFocusWindows, focusPressureDate, focusPressureTarget, endOfPacificDayMs } from "./focus-windows";
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+// endOfPacificDayMs must anchor to the true Pacific midnight-minus-one-minute
+// instant regardless of the host's local timezone. Force a UTC host so the old
+// offsetless `T23:59:59.999` (parsed local) diverges from the Pacific anchor.
+describe("endOfPacificDayMs", () => {
+  const realTz = process.env.TZ;
+  afterEach(() => {
+    if (realTz === undefined) delete process.env.TZ;
+    else process.env.TZ = realTz;
+  });
+
+  it("anchors end-of-day to true Pacific 23:59 even on a non-Pacific client", () => {
+    process.env.TZ = "UTC";
+    // now = noon Pacific on 2026-01-15 (PST). End of that Pacific day == 2026-01-16T07:59Z.
+    const now = Date.parse("2026-01-15T20:00:00Z");
+    expect(new Date(endOfPacificDayMs(now)).toISOString()).toBe("2026-01-16T07:59:00.000Z");
+  });
 });
 
 function eventAt(now, startOffsetMin, endOffsetMin, title) {

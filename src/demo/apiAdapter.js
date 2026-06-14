@@ -58,6 +58,18 @@ function mutateSnapshotRows(snapshot, uid, updater) {
   }
 }
 
+function findSnapshotRow(snapshot, uid) {
+  return allSnapshotRows(snapshot).find((row) => String(row.uid || row.email_id) === String(uid)) || null;
+}
+
+function findSnapshotRowLane(snapshot, uid) {
+  for (const [lane, rows] of Object.entries(snapshot.lanes || {})) {
+    if (rows.some((row) => String(row.uid || row.email_id) === String(uid))) return lane;
+  }
+  if ((snapshot.carryover || []).some((row) => String(row.uid || row.email_id) === String(uid))) return "carryover";
+  return null;
+}
+
 function removeSnapshotRow(snapshot, uid) {
   for (const [lane, rows] of Object.entries(snapshot.lanes || {})) {
     snapshot.lanes[lane] = rows.filter((row) => String(row.uid || row.email_id) !== String(uid));
@@ -101,22 +113,33 @@ function mutateTask(seed, taskId, updater) {
   }
 }
 
+const DEMO_CALENDARS = {
+  "demo-work": { name: "Demo Work", color: "#89b4fa" },
+  "demo-personal": { name: "Demo Personal", color: "#cba6f7" },
+  "demo-career": { name: "Demo Career", color: "#f5c2e7" },
+};
+
 function makeCalendarEvent(data, id = `demo-event-${Date.now()}`) {
   const start = data.start || data.startIso || data.startDateTime || new Date().toISOString();
   const end = data.end || data.endIso || data.endDateTime || new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString();
   const startMs = new Date(start).getTime();
   const endMs = new Date(end).getTime();
+  // Resolve the calendar's name/color FROM its id so the calendarId/calendarName/
+  // color triple stays mutually consistent — editing a Personal/Career event no
+  // longer silently recolors it to Demo Work blue.
+  const calendarId = data.calendarId || "demo-work";
+  const calendar = DEMO_CALENDARS[calendarId] || DEMO_CALENDARS["demo-work"];
   return {
     id,
     title: data.title || "Untitled demo event",
-    calendarId: data.calendarId || "demo-work",
-    calendarName: "Demo Work",
+    calendarId,
+    calendarName: calendar.name,
     accountId: "demo-gmail",
     accountLabel: "Demo Gmail",
-    source: "Demo Work",
-    sourceLabel: "Demo Work",
-    sourceColor: "#89b4fa",
-    color: "#89b4fa",
+    source: calendar.name,
+    sourceLabel: calendar.name,
+    sourceColor: calendar.color,
+    color: calendar.color,
     start,
     end,
     startMs,
@@ -255,6 +278,34 @@ export async function handleDemoApiRequest(path, options = {}) {
   if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/trash$/) && method === "POST") {
     const uid = decodeURIComponent(pathname.split("/").at(-2));
     removeSnapshotRow(seed.activeSnapshot, uid);
+    return { ok: true };
+  }
+
+  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/snooze$/) && method === "POST") {
+    const uid = decodeURIComponent(pathname.split("/").at(-2));
+    const row = findSnapshotRow(seed.activeSnapshot, uid);
+    if (row) {
+      // Stash the row + its lane so unsnooze (undo) can restore it truthfully.
+      seed.snoozedEmails = seed.snoozedEmails || {};
+      seed.snoozedEmails[uid] = { row: clone(row), lane: findSnapshotRowLane(seed.activeSnapshot, uid) };
+      removeSnapshotRow(seed.activeSnapshot, uid);
+    }
+    return { ok: true };
+  }
+
+  if (pathname.match(/^\/api\/briefing\/email\/[^/]+\/snooze$/) && method === "DELETE") {
+    const uid = decodeURIComponent(pathname.split("/").at(-2));
+    const stashed = seed.snoozedEmails?.[uid];
+    if (stashed) {
+      if (stashed.lane === "carryover") {
+        seed.activeSnapshot.carryover = [...(seed.activeSnapshot.carryover || []), stashed.row];
+      } else {
+        const lane = stashed.lane && seed.activeSnapshot.lanes[stashed.lane] ? stashed.lane : "needs_attention";
+        seed.activeSnapshot.lanes[lane] = [...(seed.activeSnapshot.lanes[lane] || []), stashed.row];
+      }
+      refreshLaneCounts(seed.activeSnapshot);
+      delete seed.snoozedEmails[uid];
+    }
     return { ok: true };
   }
 

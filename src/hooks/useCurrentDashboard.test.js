@@ -576,6 +576,53 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
+  it("ignores a slower older request so it cannot clobber a newer one (request sequencing)", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    let resolveOlder;
+    let resolveNewer;
+    const olderFetch = new Promise((resolve) => { resolveOlder = resolve; });
+    const newerFetch = new Promise((resolve) => { resolveNewer = resolve; });
+    getCurrentDashboard
+      .mockResolvedValueOnce(currentPayload) // initial mount load
+      .mockReturnValueOnce(olderFetch) // SSE-driven runEventRefetch (issued first)
+      .mockReturnValueOnce(newerFetch); // refreshNow loadCurrent (issued second)
+
+    const { result, unmount } = renderHook(() => useCurrentDashboard());
+    await act(async () => {});
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(1);
+
+    // Older request starts via SSE, then a newer request starts concurrently
+    // via an explicit refresh (loadCurrent has no in-flight guard).
+    await act(async () => {
+      FakeEventSource.instances[0].emit("dashboard-current-changed", { source: "calendar" });
+    });
+    let refreshPromise;
+    await act(async () => {
+      refreshPromise = result.current.liveData.refreshNow();
+    });
+    expect(getCurrentDashboard).toHaveBeenCalledTimes(3);
+
+    const fresh = { ...currentPayload, weather: { temp: 80, icon: "Sun" }, fetchedAt: "2026-05-05T01:00:00.000Z" };
+    const stale = { ...currentPayload, weather: { temp: 60, icon: "Cloud" }, fetchedAt: "2026-05-05T00:00:00.000Z" };
+
+    // Newer request resolves first with fresh data.
+    await act(async () => {
+      resolveNewer(fresh);
+      await refreshPromise;
+    });
+    expect(result.current.liveData.liveWeather).toEqual({ temp: 80, icon: "Sun" });
+
+    // Older request resolves last with stale data — it must NOT overwrite the fresh data.
+    await act(async () => {
+      resolveOlder(stale);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.liveData.liveWeather).toEqual({ temp: 80, icon: "Sun" });
+
+    unmount();
+  });
+
   it("polls silently after an SSE refetch schedules current-data refresh work", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("EventSource", FakeEventSource);

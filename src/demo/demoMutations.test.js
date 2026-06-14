@@ -115,4 +115,44 @@ describe("demo mode in-memory mutations", () => {
     await expect(api.testActualBudget()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
     await expect(api.testDiscordReminderWebhook()).rejects.toMatchObject({ code: "DEMO_API_UNHANDLED" });
   });
+
+  it("preserves a non-Work demo calendar's identity when editing (P2-8)", async () => {
+    const api = await importDemoApi();
+    const created = await api.createCalendarEvent({
+      title: "Personal dentist",
+      start: "2026-05-12T20:00:00.000Z",
+      end: "2026-05-12T20:30:00.000Z",
+      calendarId: "demo-personal",
+    });
+    expect(created).toMatchObject({
+      calendarId: "demo-personal",
+      calendarName: "Demo Personal",
+      color: "#cba6f7",
+      sourceColor: "#cba6f7",
+    });
+
+    // Editing must NOT flip a Personal/Career event to Demo Work blue.
+    const edited = await api.updateCalendarEvent(created.id, { title: "Personal dentist moved" });
+    expect(edited).toMatchObject({
+      calendarId: "demo-personal",
+      calendarName: "Demo Personal",
+      color: "#cba6f7",
+      title: "Personal dentist moved",
+    });
+  });
+
+  it("snoozes and restores an email in memory without throwing (P2-9)", async () => {
+    const api = await importDemoApi();
+    expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-budget")).toBe(true);
+
+    // Snooze removes the row from the active snapshot (no DEMO_API_UNHANDLED throw).
+    await api.snoozeEmail("demo-email-budget", new Date("2026-05-12T18:00:00.000Z").getTime());
+    expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-budget")).toBe(false);
+
+    // Undo (unsnooze) restores it to its lane, so the undo toast is truthful.
+    await api.unsnoozeEmail("demo-email-budget");
+    expect(snapshotRows(await api.getActiveSnapshot()).some((row) => row.uid === "demo-email-budget")).toBe(true);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

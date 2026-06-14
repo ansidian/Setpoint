@@ -131,7 +131,8 @@ server/
 ├── platform/
 ├── reminders/
 ├── routes/
-│   └── briefing/
+│   ├── briefing/
+│   └── dashboard/
 ├── scripts/
 ├── snapshots/
 ├── tasks/

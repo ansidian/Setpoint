@@ -31,13 +31,20 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
   const [loaded, setLoaded] = useState(false);
   const mountedRef = useRef(true);
   const currentRequestInFlightRef = useRef(false);
+  // Monotonic request id: every fetch captures one, and only the latest-issued
+  // request is allowed to commit its response (older slow responses are dropped).
+  const requestSeqRef = useRef(0);
+  const inFlightOwnerRef = useRef(0);
   const queuedEventRefetchRef = useRef(false);
   const hiddenEventRefetchRef = useRef(false);
   const runEventRefetchRef = useRef(null);
   const onDashboardEventRef = useRef(onDashboardEvent);
 
-  const applyCurrent = useCallback((data) => {
+  const applyCurrent = useCallback((data, seq) => {
     if (!mountedRef.current) return data;
+    // Ignore a response whose request has been superseded by a newer one, so a
+    // slow older fetch can't clobber fresher data (last-issued request wins).
+    if (seq != null && seq !== requestSeqRef.current) return data;
     setCurrent(data);
     setSelectedBriefing(null);
     setError(null);
@@ -45,25 +52,29 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     return data;
   }, []);
 
-  const pollWhileRefreshActive = useCallback(async (initialData) => {
+  const pollWhileRefreshActive = useCallback(async (initialData, seq) => {
     if (!initialData?.refresh || initialData.refresh.scheduled?.length === 0) return initialData;
     let latest = initialData;
     const startedAt = Date.now();
     while (
       mountedRef.current
       && !document.hidden
+      && (seq == null || seq === requestSeqRef.current)
       && hasActiveRefreshWork(latest)
       && Date.now() - startedAt < POST_CLICK_POLL_MAX_MS
     ) {
       await sleep(POST_CLICK_POLL_MS);
-      if (!mountedRef.current || document.hidden) break;
+      if (!mountedRef.current || document.hidden || (seq != null && seq !== requestSeqRef.current)) break;
       latest = await getCurrentDashboard();
-      applyCurrent(latest);
+      applyCurrent(latest, seq);
     }
     return latest;
   }, [applyCurrent]);
 
-  const completeCurrentRequest = useCallback(() => {
+  const completeCurrentRequest = useCallback((seq) => {
+    // Only the request that currently owns the in-flight flag may clear it, so a
+    // faster older request can't release the flag out from under a newer one.
+    if (seq != null && inFlightOwnerRef.current !== seq) return;
     currentRequestInFlightRef.current = false;
     if (queuedEventRefetchRef.current && !document.hidden) {
       queuedEventRefetchRef.current = false;
@@ -83,11 +94,13 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       return null;
     }
     currentRequestInFlightRef.current = true;
+    const seq = ++requestSeqRef.current;
+    inFlightOwnerRef.current = seq;
     try {
       let data = await getCurrentDashboard();
-      applyCurrent(data);
+      applyCurrent(data, seq);
       if (!document.hidden) {
-        data = await pollWhileRefreshActive(data);
+        data = await pollWhileRefreshActive(data, seq);
       }
       return data;
     } catch {
@@ -95,8 +108,8 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       return null;
     } finally {
       if (mountedRef.current) {
-        completeCurrentRequest();
-      } else {
+        completeCurrentRequest(seq);
+      } else if (inFlightOwnerRef.current === seq) {
         currentRequestInFlightRef.current = false;
       }
     }
@@ -120,15 +133,18 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     if (mode !== "load") setRefreshing(true);
     else setLoading(true);
     currentRequestInFlightRef.current = true;
+    const seq = ++requestSeqRef.current;
+    inFlightOwnerRef.current = seq;
     try {
       let data = await fetcher();
-      applyCurrent(data);
+      applyCurrent(data, seq);
       if (mode === "background") {
-        data = await pollWhileRefreshActive(data);
+        data = await pollWhileRefreshActive(data, seq);
       }
       return data;
     } catch (err) {
-      if (mountedRef.current) {
+      // Don't let a stale request's error clobber a newer request's success.
+      if (mountedRef.current && seq === requestSeqRef.current) {
         setError(err.message || "Failed to load current dashboard data.");
         setLoaded(false);
       }
@@ -137,8 +153,8 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
       if (mountedRef.current) {
         setLoading(false);
         setRefreshing(false);
-        completeCurrentRequest();
-      } else {
+        completeCurrentRequest(seq);
+      } else if (inFlightOwnerRef.current === seq) {
         currentRequestInFlightRef.current = false;
       }
     }

@@ -40,4 +40,16 @@ describe("deadline add-task submit payload", () => {
       title: "Plan sprint",
     });
   });
+
+  it("falls back to the raw input when the stripped title is empty (tokens-only)", () => {
+    // "#Shopping" strips to an empty title; `??` would keep "" and blank the task,
+    // so the payload must fall back to the raw input via `||`.
+    expect(buildDeadlineMutationPayload({
+      parsed: { stripped: "" },
+      input: "#Shopping",
+      resolvedLabels: [],
+    })).toEqual({
+      title: "#Shopping",
+    });
+  });
 });

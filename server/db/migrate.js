@@ -23,27 +23,29 @@ async function getExecutedMigrations() {
   return new Set(result.rows.map((row) => row.name));
 }
 
-export async function runMigration(client, name, sql) {
+async function runMigration(name, sql, { dbClient = db } = {}) {
   console.log(`Running migration: ${name}`);
-  // Apply the migration body and record its ledger row as ONE atomic unit.
-  // The top-level executeMultiple is explicitly non-transactional, so a
-  // statement failure (or process kill) partway would otherwise leave the
-  // schema half-applied with no ledger row — and the next boot would re-run
-  // the file against an already-mutated schema, hit "duplicate column" /
-  // "no such table" on ALTER/DROP/RENAME migrations, and exit(1) every boot.
+  // Apply the migration body AND its ledger row as ONE atomic write transaction.
+  // The top-level executeMultiple is explicitly non-transactional, so a statement
+  // failure (or process kill) partway would otherwise leave the schema
+  // half-applied with no ledger row — the next boot would re-run the file against
+  // an already-mutated schema, hit "duplicate column" / "no such table" on
+  // ALTER/DROP/RENAME migrations, and exit(1) on every boot.
   //
-  // MERGE-NOTE (P1-8 ↔ P2-21, P2-22): this per-file transaction makes every
-  // migration body atomic, which already covers the "014 DROP+RENAME is not
-  // transactional" (P2-21) and "bare non-idempotent ALTER ADD COLUMN replay is
-  // fatal" (P2-22) concerns at the runner level. If a P2 worktree also hardens
-  // the individual .sql files (e.g. splitting 014 or guarding ALTERs), prefer
-  // keeping THIS transaction and treat the .sql changes as defense-in-depth —
-  // do not remove the transaction wrapper when reconciling.
-  const tx = await client.transaction("write");
+  // MERGE-NOTE (P1-8 ⇄ P2-21/P2-22): the P1 worktree ("make the runner
+  // transactional") and the P2 worktree ("run each migration in one transaction")
+  // independently landed the SAME fix; this is the single reconciled copy, on P2's
+  // signature (optional dbClient so the migrate() caller stays untouched). The
+  // per-file transaction makes every migration body atomic, covering the "014
+  // DROP+RENAME is not transactional" (P2-21) and "bare non-idempotent ALTER ADD
+  // COLUMN replay is fatal" (P2-22) concerns at the runner level. If the
+  // individual .sql files are also hardened (splitting 014, guarding ALTERs),
+  // treat those as defense-in-depth — do NOT remove this transaction wrapper.
+  const tx = await dbClient.transaction("write");
   try {
     // Transaction-level executeMultiple runs inside the open transaction and
-    // delegates statement splitting to libsql (comments, string literals,
-    // trigger bodies) — unlike a naive sql.split(";").
+    // delegates statement splitting to libsql (comments, string literals, trigger
+    // bodies) — unlike a naive sql.split(";").
     await tx.executeMultiple(sql);
     await tx.execute({
       sql: "INSERT INTO migrations (name) VALUES (?)",
@@ -51,11 +53,13 @@ export async function runMigration(client, name, sql) {
     });
     await tx.commit();
   } catch (err) {
-    await tx.rollback();
+    await tx.rollback().catch(() => {});
     throw err;
   }
   console.log(`Completed migration: ${name}`);
 }
+
+export const __testing__ = { runMigration, ensureMigrationsTable };
 
 export async function migrate() {
   console.log("Starting EA database migrations...");
@@ -79,7 +83,7 @@ export async function migrate() {
   for (const file of migrationFiles) {
     if (!executed.has(file)) {
       const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf-8");
-      await runMigration(db, file, sql);
+      await runMigration(file, sql);
       ranCount++;
     }
   }

@@ -48,6 +48,35 @@ beforeEach(() => {
   triageWorkerApi.recoverStaleRunningTriageJobs.mockResolvedValue({ recovered: 0 });
 });
 
+describe("initScheduler concurrency (P2-28)", () => {
+  it("does not double-register cron jobs when called concurrently", async () => {
+    const created = [];
+    cronApi.schedule.mockImplementation(() => {
+      const job = { stop: vi.fn() };
+      created.push(job);
+      return job;
+    });
+    mockDb.execute.mockResolvedValue({
+      rows: [{
+        user_id: "u1",
+        schedules_json: JSON.stringify([
+          { enabled: true, time: "09:00", label: "Morning", tz: "America/Los_Angeles" },
+        ]),
+      }],
+    });
+
+    // Two concurrent init calls (startup + un-awaited settings-PUT re-init).
+    const p1 = initScheduler();
+    const p2 = initScheduler();
+    await Promise.all([p1, p2]);
+
+    // Exactly one schedule must end up live; any earlier-created job is stopped,
+    // so there are no duplicate cron tasks firing the boundary multiple times.
+    const liveJobs = created.filter((job) => job.stop.mock.calls.length === 0);
+    expect(liveJobs).toHaveLength(1);
+  });
+});
+
 describe("reminder scheduler worker", () => {
   it("runs through the shared scheduler module and logs aggregate reminder counts", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

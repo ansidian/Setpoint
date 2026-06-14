@@ -520,11 +520,16 @@ export async function syncGmailHistoryForAccount(account, {
       pageToken = page.nextPageToken || null;
       pages++;
       if (pages >= MAX_HISTORY_PAGES && pageToken) {
-        throw new Error(`Gmail history sync hit page cap for ${account.email}`);
+        // Too many history pages between syncs: recover via the lookback re-fetch
+        // (same as the 404 path) instead of throwing away all collected progress
+        // and leaving the cursor stuck so new mail never indexes.
+        const capError = new Error(`Gmail history sync hit page cap for ${account.email}`);
+        capError.recoverViaLookback = true;
+        throw capError;
       }
     } while (pageToken);
   } catch (err) {
-    if (err.status !== 404) throw err;
+    if (err.status !== 404 && !err.recoverViaLookback) throw err;
     const emails = await fetchEmailsFn(account, GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS);
     if (emails.length) await indexEmailsFn(account.user_id, emails);
     const statements = emails.flatMap((email) =>
@@ -552,7 +557,15 @@ export async function syncGmailHistoryForAccount(account, {
     };
   }
 
-  const emails = await fetchEmailsByIdsFn(account, [...messageIds]);
+  const requestedIds = [...messageIds];
+  let emails = await fetchEmailsByIdsFn(account, requestedIds);
+  if (requestedIds.length && emails.length < requestedIds.length) {
+    // One bounded retry: a transient per-message fetch failure (429/5xx) would
+    // otherwise be skipped permanently once the history cursor advances past it.
+    const merged = new Map(emails.map((email) => [email.uid, email]));
+    for (const email of await fetchEmailsByIdsFn(account, requestedIds)) merged.set(email.uid, email);
+    emails = [...merged.values()];
+  }
   if (emails.length) await indexEmailsFn(account.user_id, emails);
   let readStateReconciled = 0;
   try {

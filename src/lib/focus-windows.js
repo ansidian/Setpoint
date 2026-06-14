@@ -1,4 +1,5 @@
 import { dayBucket, dueDateToMs, formatDuration } from "./shell-helpers";
+import { epochFromLa } from "./dashboard-helpers";
 
 const BUFFER_MS = 5 * 60 * 1000;
 const MIN_PROTECTED_MS = 25 * 60 * 1000;
@@ -14,8 +15,11 @@ function pacificDateKey(ms) {
   }).format(new Date(ms));
 }
 
-function endOfPacificDayMs(now) {
-  return new Date(`${pacificDateKey(now)}T23:59:59.999`).getTime();
+export function endOfPacificDayMs(now) {
+  // Anchor the Pacific end-of-day instant in UTC (the old offsetless string was
+  // parsed in the host's local zone, drifting end-of-day on non-Pacific hosts).
+  const [y, m, d] = pacificDateKey(now).split("-").map(Number);
+  return epochFromLa(y, m - 1, d, 23, 59);
 }
 
 function formatClock(ms) {

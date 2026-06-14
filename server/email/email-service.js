@@ -365,7 +365,10 @@ export async function markAllRead(userId, uids) {
     });
     const accountIdByUid = new Map(indexed.rows.map((row) => [row.uid, row.account_id]));
     const groupedIcloud = new Map();
-    const fallbackIcloud = accounts.rows.find((a) => a.type === "icloud");
+    // Only fall back to a single unambiguous iCloud account; with multiple accounts
+    // the bare UID can't identify the mailbox, so don't guess (avoids wrong-mailbox writes).
+    const icloudAccounts = accounts.rows.filter((a) => a.type === "icloud");
+    const fallbackIcloud = icloudAccounts.length === 1 ? icloudAccounts[0] : null;
 
     for (const uid of icloudUids) {
       const accountId = accountIdByUid.get(uid) || fallbackIcloud?.id;

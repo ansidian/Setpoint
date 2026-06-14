@@ -53,6 +53,33 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("Any bills?")).toBeTruthy();
   });
 
+  it("retries a handoff that arrived during an in-flight run instead of dropping it (P2-3)", async () => {
+    let resolveFirst;
+    api.runAlfredStream
+      .mockImplementationOnce(async ({ onEvent }) => {
+        onEvent({ type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" });
+        await new Promise((r) => { resolveFirst = r; });
+        onEvent({ type: "run_end", stop_reason: "end_turn" });
+      })
+      .mockImplementation(async ({ onEvent }) => {
+        onEvent({ type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" });
+        onEvent({ type: "run_end", stop_reason: "end_turn" });
+      });
+
+    const { rerender } = render(<AlfredPanel {...baseProps} handoff={null} />);
+    rerender(<AlfredPanel {...baseProps} handoff={{ id: "h1", query: "first handoff" }} />);
+    await waitFor(() => expect(api.runAlfredStream).toHaveBeenCalledTimes(1));
+
+    // A second handoff arrives while the first run is still streaming (busy).
+    rerender(<AlfredPanel {...baseProps} handoff={{ id: "h2", query: "second handoff" }} />);
+    expect(api.runAlfredStream).toHaveBeenCalledTimes(1);
+
+    // When the first run finishes, the dropped handoff must fire — not vanish.
+    resolveFirst();
+    await waitFor(() => expect(api.runAlfredStream).toHaveBeenCalledTimes(2));
+    expect(api.runAlfredStream.mock.calls[1][0].message).toBe("second handoff");
+  });
+
   it("closes on Escape in the composer", () => {
     const onClose = vi.fn();
     render(<AlfredPanel {...baseProps} onClose={onClose} />);

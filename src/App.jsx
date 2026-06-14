@@ -5,6 +5,7 @@ import { isDemoMode } from "./demo/config.js";
 import { resolveRouterBasename } from "./routerBase.js";
 import MouseSpotlightCanvas from "./components/layout/MouseSpotlightCanvas";
 import ChunkLoadBoundary from "./components/layout/ChunkLoadBoundary";
+import RecoverableErrorBoundary from "./components/layout/RecoverableErrorBoundary";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Login = lazy(() => import("./pages/Login"));
 const SettingsRoute = lazy(() => import("./pages/SettingsRoute"));
@@ -69,9 +70,11 @@ export default function App() {
           } />
           <Route path="/" element={
             authenticated ? (
-              <Suspense fallback={<AuthSpinner />}>
-                <Dashboard />
-              </Suspense>
+              <RecoverableErrorBoundary>
+                <Suspense fallback={<AuthSpinner />}>
+                  <Dashboard />
+                </Suspense>
+              </RecoverableErrorBoundary>
             ) : <Navigate to="/login" replace />
           } />
           <Route path="/settings" element={

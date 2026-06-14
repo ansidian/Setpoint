@@ -238,4 +238,30 @@ describe("reminder scheduler", () => {
     // and is not head-of-line-blocked by the failing status write.
     expect(result).toEqual({ processed: 2, sent: 0, missed: 0, failed: 2 });
   });
+
+  it("sets a backoff retry_after even when the failure is not rate-limited (P2-27)", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-1",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T16:00:00.000Z",
+      offsetMinutes: -1,
+      payloadSnapshot: { title: "Task" },
+    }, { dbClient: db, idFactory: () => "task-reminder" });
+
+    const result = await processDueReminderBatch({
+      now: "2026-05-10T16:00:00.000Z",
+      dbClient: db,
+      decryptFn: () => "https://discord.example/webhook",
+      // 404 (deleted webhook): not rate-limited, no Retry-After header.
+      sendFn: vi.fn(async () => ({ ok: false, status: 404, rateLimited: false, retryAfterMs: null, error: "Discord 404" })),
+    });
+
+    expect(result).toMatchObject({ failed: 1 });
+    const rows = await db.execute("SELECT retry_count, retry_after, status FROM ea_reminders");
+    // Backoff must be set (1 min from now), not NULL — otherwise it re-fires every 10s.
+    expect(rows.rows[0].retry_after).toBe("2026-05-10T16:01:00.000Z");
+    expect(rows.rows[0].status).toBe("pending");
+  });
 });

@@ -4,6 +4,7 @@ import { daysUntil, formatAmount } from "../../../lib/bill-utils";
 import { formatFullDate } from "../../../lib/dashboard-helpers";
 import { Skeleton } from "@/components/ui/skeleton";
 import Tooltip from "../../shared/Tooltip";
+import { sumBillsDueWithin } from "./railModel.js";
 import {
   EmptyRow,
   SectionHeader,
@@ -81,9 +82,9 @@ export default function BillsRail({ accent, bills = [], onJump, isMobile = false
       .slice(0, MAX_VISIBLE_BILLS);
   }, [bills]);
 
-  const nextWeekTotal = upcoming
-    .filter((x) => x.days != null && x.days <= 7 && !x.b.paid)
-    .reduce((s, x) => s + (x.b.amount || 0), 0);
+  // Sum over the full bills list, not the sliced 4-row preview, so the headline
+  // "Next 7d" figure doesn't undercount when more than 4 bills are due.
+  const nextWeekTotal = useMemo(() => sumBillsDueWithin(bills, 7), [bills]);
   const showLoadingPlaceholder = loadingState === "empty_loading";
   const loadingListMinHeight = (isMobile ? BILL_ROW_MIN_HEIGHT_MOBILE : BILL_ROW_MIN_HEIGHT) * MAX_VISIBLE_BILLS;
 
