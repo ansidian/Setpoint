@@ -11,7 +11,7 @@ import {
   RailReminderIndicator,
 } from "../../DetailRailPrimitives.jsx";
 import { useDetailRailMotion } from "../../detailRailMotion.js";
-import { formatEventDuration, getEventSelectionId } from "../../../../lib/redesign-helpers";
+import { formatEventDuration, getEventSelectionId } from "../../../../lib/shell-helpers";
 import { extractNonZoomEventUrl, extractZoomMeetingUrl, getLocationDisplayLabel } from "../../../../lib/calendar-links";
 import { formatReminderSummary } from "../../reminderDisplay.js";
 import { parseYmd } from "../../calendarDateUtils.js";

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle, CalendarPlus } from "lucide-react";
-import { greetingFor } from "../../lib/redesign-helpers";
+import { greetingFor } from "../../lib/shell-helpers";
 import { deriveFocusWindows } from "../../lib/focus-windows";
 import { deriveOpenDaySummary } from "../../lib/open-day-summary";
 import HeroCalloutCard from "./hero/HeroCalloutCard";

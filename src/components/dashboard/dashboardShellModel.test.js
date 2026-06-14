@@ -8,7 +8,7 @@ import {
 } from "./dashboardShellModel.js";
 
 describe("dashboard shell model", () => {
-  it("normalizes calendar open requests without rendering RedesignShell", () => {
+  it("normalizes calendar open requests without rendering DashboardShell", () => {
     expect(resolveCalendarOpenState({
       isMobile: true,
       viewKey: "events",

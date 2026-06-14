@@ -4,9 +4,9 @@
 // Usage: node server/scripts/reindex-emails.js [hoursBack]
 // Default hoursBack = 720 (30 days).
 import "dotenv/config";
-import { loadUserConfig } from "../briefing/config-service.js";
-import { fetchAllEmails } from "../briefing/email-fetch.js";
-import { indexEmails } from "../briefing/email-index.js";
+import { loadUserConfig } from "../platform/config-service.js";
+import { fetchAllEmails } from "../email/email-fetch.js";
+import { indexEmails } from "../email/email-index.js";
 
 const userId = process.env.EA_USER_ID;
 if (!userId) {

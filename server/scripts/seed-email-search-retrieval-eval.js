@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";
 import db from "../db/connection.js";
 
-const outputPath = process.argv[2] || "server/briefing/evals/local/email-search-retrieval.suggestions.json";
+const outputPath = process.argv[2] || "server/email/search/evals/local/email-search-retrieval.suggestions.json";
 const userId = process.argv[3] || process.env.EA_USER_ID;
 
 const FAMILIES = [

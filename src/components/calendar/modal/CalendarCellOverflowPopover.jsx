@@ -409,7 +409,6 @@ export default function CalendarCellOverflowPopover({
                     event.currentTarget.focus({ preventScroll: true });
                     if (isEventSelectionModifier(event)) {
                       event.preventDefault();
-                      if (specialDate) return;
                       quickActions?.toggleEventSelection?.({
                         event: item.sourceEvent || item.sourceItem,
                         dateKey: popover.dateKey || null,

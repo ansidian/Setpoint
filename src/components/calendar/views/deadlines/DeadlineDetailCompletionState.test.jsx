@@ -21,31 +21,28 @@ afterEach(() => {
 });
 
 function DeferredCompleteHarness() {
-  const [briefing, setBriefing] = useState({
-    emails: { accounts: [] },
-    deadlines: {
-      upcoming: [
-        {
-          id: "todo-1",
-          title: "Ship report",
-          due_date: "2026-04-19",
-          due_time: "9:00 AM",
-          source: "todoist",
-          class_name: "Inbox",
-          status: "open",
-        },
-      ],
-      stats: { incomplete: 1, dueToday: 1, dueThisWeek: 1, totalPoints: 0 },
-    },
+  const [deadlines, setDeadlines] = useState({
+    upcoming: [
+      {
+        id: "todo-1",
+        title: "Ship report",
+        due_date: "2026-04-19",
+        due_time: "9:00 AM",
+        source: "todoist",
+        class_name: "Inbox",
+        status: "open",
+      },
+    ],
+    stats: { incomplete: 1, dueToday: 1, dueThisWeek: 1, totalPoints: 0 },
   });
 
   return (
-    <DashboardProvider briefing={briefing} setBriefing={setBriefing} setCalendarDeadlines={() => {}}>
+    <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setDeadlines}>
       {renderDeadlinesDetail({
         selectedDay: 19,
         viewYear: 2026,
         viewMonth: 3,
-        items: briefing.deadlines.upcoming,
+        items: deadlines.upcoming,
         selectedItemId: "todo-1",
         onSelectItem: () => {},
       })}

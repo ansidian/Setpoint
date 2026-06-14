@@ -1,4 +1,4 @@
-import { hydrateActualCache } from "../briefing/bills-service.js";
+import { hydrateActualCache } from "../bills/bills-service.js";
 
 const userId = process.argv[2] || process.env.EA_USER_ID;
 

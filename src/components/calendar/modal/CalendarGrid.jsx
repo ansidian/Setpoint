@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { buildCalendarEventSpanLayout } from "./calendarEventSpanLayout.js";
-import { getEventSelectionId } from "../../../lib/redesign-helpers";
+import { getEventSelectionId } from "../../../lib/shell-helpers";
 import CalendarGridCells from "./CalendarGridCells.jsx";
 import CalendarGridLayers from "./CalendarGridLayers.jsx";
 import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";

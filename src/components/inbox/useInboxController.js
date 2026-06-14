@@ -1,45 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useInboxSelectionHistory from "../../hooks/email/useInboxSelectionHistory";
-import { useDashboard } from "../../context/DashboardContext";
 import useInboxUndoSlot from "./useInboxUndoSlot";
 import {
   markEmailAsRead,
-  markEmailAsUnread,
-  trashEmail,
-  trashEmailOnExit,
-  snoozeEmail,
-  unsnoozeEmail,
   markAllEmailsAsRead,
   searchEmails,
   askInboxAiSearch,
-  moveSnapshotItemLane,
-  dismissSnapshotItemForToday,
-  restoreSnapshotItemForToday,
-  markSnapshotItemHandled,
-  reopenSnapshotItem,
 } from "../../api";
-import { getGmailUrl } from "../../lib/email-links";
-import {
-  defaultSnoozeTs,
-  isCatchUpEmail,
-} from "./helpers";
 import {
   makeSynthAccount,
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
 } from "./inboxWorkItems.js";
-import { resolveInboxHotkeyAction, shouldSuspendInboxHotkeys } from "./inboxHotkeys";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
-import {
-  applyLiveTrashOptimistic,
-  applySnapshotTrashOptimistic,
-  buildTrashCommand,
-  shouldHandleInboxUndoHotkey,
-} from "./inboxCommandModel.js";
 import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
 import {
-  EMPTY_INBOX_AI_SEARCH,
   clearInboxAiSearch,
   completeInboxAiRequest,
   failInboxAiRequest,
@@ -47,12 +23,11 @@ import {
   requestInboxAiConfirmation,
   startInboxAiRequest,
 } from "./inboxAiSearchModel.js";
-import {
-  SNAPSHOT_LANE_ORDER,
-  getSnapshotReopenLane,
-  isSnapshotDismissibleLane,
-  isSnapshotWorkflowLane,
-} from "./activeSnapshotWorkflowModel.js";
+import { SNAPSHOT_LANE_ORDER } from "./activeSnapshotWorkflowModel.js";
+import useInboxActionDispatch from "./useInboxActionDispatch";
+import useInboxKeyboardCommands from "./useInboxKeyboardCommands";
+import useInboxSessionState from "./useInboxSessionState";
+import useSnapshotOptimisticOverlay from "./useSnapshotOptimisticOverlay";
 
 export default function useInboxController({
   emailAccounts = [],
@@ -70,13 +45,21 @@ export default function useInboxController({
   onActiveSnapshotRefresh = () => {},
   readOnly = false,
 }) {
-  const accountId = sessionState?.accountId || "__all";
-  const lane = sessionState?.lane || "__all";
-  const search = sessionState?.search || "";
+  const {
+    accountId,
+    lane,
+    search,
+    selectedId,
+    inboxAiSearch,
+    setAccountId,
+    setLane,
+    setSearch,
+    setSelectedId,
+    setInboxAiSearch,
+  } = useInboxSessionState({ sessionState, onSessionStateChange });
   const searchRef = useRef(null);
   const mobileFilterTriggerRef = useRef(null);
   const mobileFilterPanelRef = useRef(null);
-  const selectedId = sessionState?.selectedId || null;
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [snoozedMap, setSnoozedMap] = useState(
     () => new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])),
@@ -95,7 +78,6 @@ export default function useInboxController({
     loading: false,
     error: null,
   });
-  const inboxAiSearch = sessionState?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH;
   const searchRequestRef = useRef(0);
   const inboxAiRequestRef = useRef(0);
   const liveReadOverridesRef = useRef(liveReadOverrides);
@@ -114,50 +96,10 @@ export default function useInboxController({
     finalizeUndoSlot();
   }, [commitPendingUndoSignal, finalizeUndoSlot]);
 
-  const setSessionField = useCallback((field, value) => {
-    onSessionStateChange((prev) => ({
-      accountId: prev?.accountId || "__all",
-      lane: prev?.lane || "__all",
-      search: prev?.search || "",
-      selectedId: prev?.selectedId || null,
-      inboxAiSearch: prev?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH,
-      ...prev,
-      [field]: typeof value === "function" ? value(prev?.[field] ?? null) : value,
-    }));
-  }, [onSessionStateChange]);
-
-  const setInboxAiSearch = useCallback((value) => {
-    setSessionField("inboxAiSearch", (prev) => (
-      typeof value === "function"
-        ? value(prev || EMPTY_INBOX_AI_SEARCH)
-        : value
-    ));
-  }, [setSessionField]);
-
-  const setAccountId = useCallback((value) => {
-    setSessionField("accountId", value);
-  }, [setSessionField]);
-
-  const setLane = useCallback((value) => {
-    setSessionField("lane", value);
-  }, [setSessionField]);
-
-  const setSearch = useCallback((value) => {
-    setInboxAiSearch((prev) => (
-      prev.status === "idle" ? prev : clearInboxAiSearch(prev)
-    ));
-    setSessionField("search", value);
-  }, [setInboxAiSearch, setSessionField]);
-
   useEffect(() => {
     liveReadOverridesRef.current = liveReadOverrides;
   }, [liveReadOverrides]);
 
-  const setSelectedId = useCallback((value) => {
-    setSessionField("selectedId", value);
-  }, [setSessionField]);
-
-  const { markEmailRead, markEmailUnread, handleDismiss } = useDashboard();
   const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId });
 
   useEffect(() => {
@@ -189,86 +131,16 @@ export default function useInboxController({
     setCategoryFilter("__all");
   }, [activeSnapshotMode]);
 
-  const [snapshotOptimistic, setSnapshotOptimistic] = useState(() => new Map());
-  const snapshotPendingRef = useRef(new Set());
-  const snapshotRequestRef = useRef(0);
-
   const rawActiveSnapshotEmails = useMemo(() => (
     activeSnapshotMode ? collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides) : []
   ), [activeSnapshot, activeSnapshotMode, liveReadOverrides]);
 
-  useEffect(() => {
-    if (!activeSnapshotMode) {
-      snapshotPendingRef.current.clear();
-      setSnapshotOptimistic((prev) => (prev.size > 0 ? new Map() : prev));
-      return;
-    }
-
-    const rowsByItemId = new Map(rawActiveSnapshotEmails.map((email) => [
-      String(email.snapshot_item_id),
-      email,
-    ]));
-
-    setSnapshotOptimistic((prev) => {
-      let changed = false;
-      const next = new Map();
-
-      for (const [itemId, overlay] of prev.entries()) {
-        const row = rowsByItemId.get(itemId);
-        if (!row) {
-          snapshotPendingRef.current.delete(itemId);
-          changed = true;
-          continue;
-        }
-        if (overlay.pending) {
-          next.set(itemId, overlay);
-          continue;
-        }
-        if (overlay.failed) {
-          snapshotPendingRef.current.delete(itemId);
-          changed = true;
-          continue;
-        }
-        if (overlay.laneOverride && row._lane === overlay.laneOverride) {
-          snapshotPendingRef.current.delete(itemId);
-          changed = true;
-          continue;
-        }
-        if (overlay.hidden || overlay.statusOverride) {
-          next.set(itemId, overlay);
-          continue;
-        }
-        next.set(itemId, overlay);
-      }
-
-      return changed ? next : prev;
-    });
-  }, [activeSnapshotMode, rawActiveSnapshotEmails]);
-
-  const optimisticActiveSnapshotEmails = useMemo(() => {
-    if (!activeSnapshotMode || snapshotOptimistic.size === 0) return rawActiveSnapshotEmails;
-    const out = [];
-
-    for (const email of rawActiveSnapshotEmails) {
-      const itemId = String(email.snapshot_item_id);
-      const overlay = snapshotOptimistic.get(itemId);
-      if (!overlay) {
-        out.push(email);
-        continue;
-      }
-      if (overlay.hidden) continue;
-      out.push({
-        ...email,
-        lane: overlay.laneOverride || email.lane,
-        _lane: overlay.laneOverride || email._lane,
-        handled_at: overlay.handledAt || email.handled_at,
-        _optimisticSnapshotAction: overlay.pendingAction,
-        _optimisticSnapshotPending: overlay.pending,
-      });
-    }
-
-    return out;
-  }, [activeSnapshotMode, rawActiveSnapshotEmails, snapshotOptimistic]);
+  const {
+    optimisticActiveSnapshotEmails,
+    setSnapshotOptimistic,
+    snapshotPendingRef,
+    snapshotRequestRef,
+  } = useSnapshotOptimisticOverlay({ activeSnapshotMode, rawActiveSnapshotEmails });
 
   const flatEmails = useMemo(() => {
     const synthAccount = makeSynthAccount(emailAccounts);
@@ -518,11 +390,6 @@ export default function useInboxController({
     setBillOpen(false);
   }, [selectedId]);
 
-  const markEmailReadRef = useRef(markEmailRead);
-  useEffect(() => {
-    markEmailReadRef.current = markEmailRead;
-  }, [markEmailRead]);
-
   const updateIndexedSearchRead = useCallback((uid, read) => {
     setIndexedSearch((prev) => ({
       ...prev,
@@ -540,11 +407,7 @@ export default function useInboxController({
     const liveUids = [];
     for (const email of unread) {
       if (email._live && email.uid) liveUids.push(email.uid);
-      else if (email._activeSnapshot && email.uid) {
-        onLiveReadOverrideChange(email.uid, true);
-        markEmailRead(email.id || email.uid);
-      }
-      else markEmailRead(email.id || email.uid);
+      else if (email._activeSnapshot && email.uid) onLiveReadOverrideChange(email.uid, true);
     }
 
     if (liveUids.length) {
@@ -561,7 +424,7 @@ export default function useInboxController({
       }));
       markAllEmailsAsRead(allUids).catch(() => {});
     }
-  }, [readOnly, visibleEmails, markEmailRead, onLiveReadOverrideChange]);
+  }, [readOnly, visibleEmails, onLiveReadOverrideChange]);
 
   const moveBy = useCallback((direction) => {
     const index = visibleEmails.findIndex((email) => email.id === selectedId || email.uid === selectedId);
@@ -570,466 +433,22 @@ export default function useInboxController({
     if (next) setSelectedId(next.id || next.uid);
   }, [visibleEmails, selectedId, setSelectedId]);
 
-  const buildEmailSnapshot = useCallback((email) => {
-    if (!email) return null;
-    const account = email._account;
-    return {
-      uid: email.uid || email.id,
-      id: email.id || email.uid,
-      subject: email.subject,
-      from: email.from,
-      fromEmail: email.fromEmail || email.from_email,
-      from_email: email.from_email || email.fromEmail,
-      preview: email.preview || email.body_preview || "",
-      body_preview: email.body_preview || email.preview || "",
-      date: email.date,
-      read: !!email.read,
-      account_id: email.account_id || account?.account_id || account?.id,
-      account_email: email.account_email || account?.email,
-      account_label: email.account_label || account?.name,
-      account_color: email.account_color || account?.color,
-      account_icon: email.account_icon || account?.icon,
-      urgency: email.urgency,
-      hasBill: email.hasBill,
-      extractedBill: email.extractedBill,
-      claude: email.claude,
-      aiSummary: email.aiSummary,
-    };
-  }, []);
-
-  const onAction = useCallback((kind, payload) => {
-    if (!selectedEmail) return;
-
-    const id = selectedEmail.id;
-    const uid = selectedEmail.uid || id;
-    const catchUpSelected = isCatchUpEmail(selectedEmail);
-    if (kind === "next") {
-      moveBy(1);
-      return;
-    }
-
-    if (kind === "prev") {
-      moveBy(-1);
-      return;
-    }
-
-    if (kind === "trash") {
-      const command = buildTrashCommand(selectedEmail, { readOnly });
-      if (!command.allowed) return;
-      if (command.scope === "live") {
-        setLiveTrashedUids((prev) => applyLiveTrashOptimistic(prev, command.uid, true));
-        replaceUndoSlot({
-          type: "trash",
-          message: "Email moved to trash",
-          commit: async () => {
-            await trashEmail(command.uid);
-            await onActiveSnapshotRefresh();
-          },
-          commitOnExit: () => trashEmailOnExit(command.uid),
-          undo: async () => {
-            setLiveTrashedUids((prev) => applyLiveTrashOptimistic(prev, command.uid, false));
-            setSelectedId(command.restoreSelectedId);
-          },
-        });
-      } else if (command.scope === "activeSnapshot") {
-        if (command.itemId) setSnapshotOptimistic((prev) => applySnapshotTrashOptimistic(prev, command.itemId, true));
-        replaceUndoSlot({
-          type: "trash",
-          message: "Email moved to trash",
-          commit: async () => {
-            await trashEmail(command.uid);
-            await onActiveSnapshotRefresh();
-          },
-          commitOnExit: () => trashEmailOnExit(command.uid),
-          undo: async () => {
-            if (command.itemId) setSnapshotOptimistic((prev) => applySnapshotTrashOptimistic(prev, command.itemId, false));
-            setSelectedId(command.restoreSelectedId);
-          },
-        });
-      } else {
-        handleDismiss(command.id);
-        replaceUndoSlot({
-          type: "trash",
-          message: "Email moved to trash",
-          commit: async () => {
-            await trashEmail(command.uid);
-          },
-          commitOnExit: () => trashEmailOnExit(command.uid),
-          undo: async () => {
-            setSelectedId(command.restoreSelectedId);
-          },
-        });
-      }
-
-      setSnoozedMap((prev) => {
-        if (!prev.has(uid)) return prev;
-        const next = new Map(prev);
-        next.delete(uid);
-        return next;
-      });
-
-      moveBy(1);
-      return;
-    }
-
-    if (kind === "snapshot-move-lane") {
-      if (catchUpSelected) return;
-      if (readOnly) return;
-      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
-      if (!isSnapshotWorkflowLane(selectedEmail) || selectedEmail._lane === "handled") return;
-      const itemId = String(selectedEmail.snapshot_item_id);
-      if (snapshotPendingRef.current.has(itemId)) return;
-      const previousLane = selectedEmail._lane === "carryover"
-        ? "needs_attention"
-        : selectedEmail._lane;
-      const restoreSelectedId = id || uid;
-      const requestToken = ++snapshotRequestRef.current;
-      snapshotPendingRef.current.add(itemId);
-      setSnapshotOptimistic((prev) => {
-        const next = new Map(prev);
-        next.set(itemId, {
-          ...(prev.get(itemId) || {}),
-          laneOverride: payload,
-          hidden: false,
-          pendingAction: "move-lane",
-          pending: true,
-          requestToken,
-        });
-        return next;
-      });
-      moveSnapshotItemLane(selectedEmail.snapshot_item_id, payload)
-        .then(() => onActiveSnapshotRefresh())
-        .then(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.set(itemId, { ...current, pending: false });
-            return next;
-          });
-        })
-        .catch(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.delete(itemId);
-            return next;
-          });
-          onActiveSnapshotRefresh();
-        });
-      replaceUndoSlot({
-        type: "snapshot-move-lane",
-        message: `Moved to ${formatLaneLabel(payload)}`,
-        undo: async () => {
-          if (!previousLane || previousLane === payload) return;
-          await moveSnapshotItemLane(selectedEmail.snapshot_item_id, previousLane);
-          setSnapshotOptimistic((prev) => {
-            const next = new Map(prev);
-            next.set(itemId, {
-              ...(prev.get(itemId) || {}),
-              laneOverride: previousLane,
-              hidden: false,
-              pendingAction: "undo-move-lane",
-              pending: false,
-            });
-            return next;
-          });
-          setSelectedId(restoreSelectedId);
-          await onActiveSnapshotRefresh();
-        },
-      });
-      return;
-    }
-
-    if (kind === "snapshot-dismiss") {
-      if (catchUpSelected) return;
-      if (readOnly) return;
-      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
-      if (!isSnapshotDismissibleLane(selectedEmail)) return;
-      const itemId = String(selectedEmail.snapshot_item_id);
-      if (snapshotPendingRef.current.has(itemId)) return;
-      const restoreSelectedId = id || uid;
-      const requestToken = ++snapshotRequestRef.current;
-      snapshotPendingRef.current.add(itemId);
-      setSnapshotOptimistic((prev) => {
-        const next = new Map(prev);
-        next.set(itemId, {
-          ...(prev.get(itemId) || {}),
-          hidden: true,
-          pendingAction: "dismiss",
-          pending: true,
-          requestToken,
-        });
-        return next;
-      });
-      dismissSnapshotItemForToday(selectedEmail.snapshot_item_id)
-        .then(() => onActiveSnapshotRefresh())
-        .then(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.set(itemId, { ...current, pending: false });
-            return next;
-          });
-        })
-        .catch(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.delete(itemId);
-            return next;
-          });
-          onActiveSnapshotRefresh();
-        });
-      replaceUndoSlot({
-        type: "snapshot-dismiss",
-        message: "Email dismissed",
-        undo: async () => {
-          await restoreSnapshotItemForToday(selectedEmail.snapshot_item_id);
-          setSnapshotOptimistic((prev) => {
-            const next = new Map(prev);
-            next.delete(itemId);
-            return next;
-          });
-          setSelectedId(restoreSelectedId);
-          await onActiveSnapshotRefresh();
-        },
-      });
-      moveBy(1);
-      return;
-    }
-
-    if (kind === "snapshot-handled") {
-      if (catchUpSelected) return;
-      if (readOnly) return;
-      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
-      if (!isSnapshotWorkflowLane(selectedEmail) || selectedEmail._lane === "handled") return;
-      const itemId = String(selectedEmail.snapshot_item_id);
-      if (snapshotPendingRef.current.has(itemId)) return;
-      const restoreSelectedId = id || uid;
-      const restoreLane = getSnapshotReopenLane(selectedEmail);
-      const requestToken = ++snapshotRequestRef.current;
-      snapshotPendingRef.current.add(itemId);
-      setSnapshotOptimistic((prev) => {
-        const next = new Map(prev);
-        next.set(itemId, {
-          ...(prev.get(itemId) || {}),
-          hidden: false,
-          laneOverride: "handled",
-          handledAt: new Date().toISOString(),
-          statusOverride: "handled",
-          pendingAction: "handled",
-          pending: true,
-          requestToken,
-        });
-        return next;
-      });
-      markSnapshotItemHandled(selectedEmail.snapshot_item_id)
-        .then(() => onActiveSnapshotRefresh())
-        .then(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.set(itemId, { ...current, pending: false });
-            return next;
-          });
-        })
-        .catch(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.delete(itemId);
-            return next;
-          });
-          onActiveSnapshotRefresh();
-        });
-      replaceUndoSlot({
-        type: "snapshot-handled",
-        message: "Marked handled",
-        undo: async () => {
-          await reopenSnapshotItem(selectedEmail.snapshot_item_id);
-          setSnapshotOptimistic((prev) => {
-            const next = new Map(prev);
-            next.set(itemId, {
-              ...(prev.get(itemId) || {}),
-              hidden: false,
-              laneOverride: restoreLane,
-              handledAt: null,
-              statusOverride: null,
-              pendingAction: "undo-handled",
-              pending: false,
-            });
-            return next;
-          });
-          setSelectedId(restoreSelectedId);
-          await onActiveSnapshotRefresh();
-        },
-      });
-      moveBy(1);
-      return;
-    }
-
-    if (kind === "snapshot-reopen") {
-      if (catchUpSelected) return;
-      if (readOnly) return;
-      if (!selectedEmail._activeSnapshot || !selectedEmail.snapshot_item_id) return;
-      const itemId = String(selectedEmail.snapshot_item_id);
-      if (snapshotPendingRef.current.has(itemId)) return;
-      const restoreSelectedId = id || uid;
-      const restoreLane = getSnapshotReopenLane(selectedEmail);
-      const requestToken = ++snapshotRequestRef.current;
-      snapshotPendingRef.current.add(itemId);
-      setSnapshotOptimistic((prev) => {
-        const next = new Map(prev);
-        next.set(itemId, {
-          ...(prev.get(itemId) || {}),
-          hidden: false,
-          laneOverride: restoreLane,
-          handledAt: null,
-          statusOverride: null,
-          pendingAction: "reopen",
-          pending: true,
-          requestToken,
-        });
-        return next;
-      });
-      reopenSnapshotItem(selectedEmail.snapshot_item_id)
-        .then(() => onActiveSnapshotRefresh())
-        .then(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.set(itemId, { ...current, pending: false });
-            return next;
-          });
-        })
-        .catch(() => {
-          snapshotPendingRef.current.delete(itemId);
-          setSnapshotOptimistic((prev) => {
-            const current = prev.get(itemId);
-            if (!current || current.requestToken !== requestToken) return prev;
-            const next = new Map(prev);
-            next.delete(itemId);
-            return next;
-          });
-          onActiveSnapshotRefresh();
-        });
-      replaceUndoSlot({
-        type: "snapshot-reopen",
-        message: "Email reopened",
-        undo: async () => {
-          await markSnapshotItemHandled(selectedEmail.snapshot_item_id);
-          setSnapshotOptimistic((prev) => {
-            const next = new Map(prev);
-            next.set(itemId, {
-              ...(prev.get(itemId) || {}),
-              hidden: false,
-              laneOverride: "handled",
-              handledAt: selectedEmail.handled_at || new Date().toISOString(),
-              statusOverride: "handled",
-              pendingAction: "undo-reopen",
-              pending: false,
-            });
-            return next;
-          });
-          setSelectedId(restoreSelectedId);
-          await onActiveSnapshotRefresh();
-        },
-      });
-      return;
-    }
-
-    if (kind === "snooze") {
-      if (catchUpSelected) return;
-      if (readOnly) return;
-      const untilTs = Number(payload);
-      if (!Number.isFinite(untilTs) || untilTs <= Date.now()) return;
-      setSnoozedMap((prev) => {
-        const next = new Map(prev);
-        next.set(uid, untilTs);
-        return next;
-      });
-      const snapshot = buildEmailSnapshot(selectedEmail);
-      const restoreSelectedId = id || uid;
-      const snoozePromise = snoozeEmail(uid, untilTs, snapshot).catch((err) => {
-        setSnoozedMap((prev) => {
-          const next = new Map(prev);
-          next.delete(uid);
-          return next;
-        });
-        throw err;
-      });
-      snoozePromise.catch(() => {});
-      replaceUndoSlot({
-        type: "snooze",
-        message: "Email snoozed",
-        undo: async () => {
-          await snoozePromise.catch(() => {});
-          await unsnoozeEmail(uid);
-          setSnoozedMap((prev) => {
-            const next = new Map(prev);
-            next.delete(uid);
-            return next;
-          });
-          setSelectedId(restoreSelectedId);
-          await onActiveSnapshotRefresh();
-        },
-      });
-      moveBy(1);
-      return;
-    }
-
-    if (kind === "toggle-read") {
-      if (readOnly) return;
-      const markingUnread = !!selectedEmail.read;
-      if (selectedEmail._live) {
-        onLiveReadOverrideChange(uid, !markingUnread);
-        const call = markingUnread ? markEmailAsUnread : markEmailAsRead;
-        call(uid).catch(() => {});
-      } else if (selectedEmail._activeSnapshot) {
-        onLiveReadOverrideChange(uid, !markingUnread);
-        const call = markingUnread ? markEmailAsUnread : markEmailAsRead;
-        call(uid).catch(() => {});
-      } else if (markingUnread) {
-        markEmailUnread(id);
-        markEmailAsUnread(uid).catch(() => {});
-      } else {
-        markEmailRead(id);
-        markEmailAsRead(uid).catch(() => {});
-      }
-      updateIndexedSearchRead(uid, !markingUnread);
-      if (markingUnread) closeSelectedEmail();
-      return;
-    }
-
-  }, [
+  const onAction = useInboxActionDispatch({
     selectedEmail,
     readOnly,
     moveBy,
-    handleDismiss,
-    buildEmailSnapshot,
-    markEmailRead,
-    markEmailUnread,
     onLiveReadOverrideChange,
     closeSelectedEmail,
     updateIndexedSearchRead,
     onActiveSnapshotRefresh,
     replaceUndoSlot,
     setSelectedId,
-  ]);
+    setLiveTrashedUids,
+    setSnapshotOptimistic,
+    setSnoozedMap,
+    snapshotPendingRef,
+    snapshotRequestRef,
+  });
 
   useEffect(() => {
     if (!selectedId) return undefined;
@@ -1050,7 +469,6 @@ export default function useInboxController({
         return;
       }
 
-      markEmailReadRef.current(selectedId);
       updateIndexedSearchRead(email.uid || selectedId, true);
       if (email.uid) markEmailAsRead(email.uid).catch(() => {});
     }, 500);
@@ -1058,65 +476,15 @@ export default function useInboxController({
     return () => clearTimeout(timeout);
   }, [readOnly, selectedId, selectedEmail, onLiveReadOverrideChange, updateIndexedSearchRead]);
 
-  useEffect(() => {
-    function onKey(event) {
-      if (shouldHandleInboxUndoHotkey({
-        key: event.key,
-        metaKey: event.metaKey,
-        ctrlKey: event.ctrlKey,
-        hasUndoSlot: !!undoSlotRef.current,
-        editableTarget: isEditableKeyTarget(event.target),
-      })) {
-        event.preventDefault();
-        event.stopPropagation();
-        onUndo();
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        event.stopPropagation();
-        searchRef.current?.focus();
-        searchRef.current?.select?.();
-        return;
-      }
-
-      if (
-        shouldSuspendInboxHotkeys(event.target)
-      ) {
-        return;
-      }
-
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const key = event.key.toLowerCase();
-      if (key === "j" || event.key === "ArrowDown") {
-        event.preventDefault();
-        moveBy(1);
-      } else if (key === "k" || event.key === "ArrowUp") {
-        event.preventDefault();
-        moveBy(-1);
-      } else if (key === "o") {
-        event.preventDefault();
-        if (!selectedEmail) return;
-        const url = getGmailUrl(selectedEmail);
-        if (url) window.open(url, "_blank", "noopener,noreferrer");
-      } else {
-        const action = resolveInboxHotkeyAction(key, selectedEmail, readOnly);
-        if (!action) return;
-        event.preventDefault();
-        if (action.kind === "snooze-default") {
-          onAction("snooze", defaultSnoozeTs());
-        } else if (action.kind === "snapshot-move-lane") {
-          onAction(action.kind, action.lane);
-        } else {
-          onAction(action.kind);
-        }
-      }
-    }
-
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [moveBy, onAction, onUndo, readOnly, selectedEmail, undoSlotRef]);
+  useInboxKeyboardCommands({
+    undoSlotRef,
+    onUndo,
+    searchRef,
+    moveBy,
+    selectedEmail,
+    readOnly,
+    onAction,
+  });
 
   const selectedAccount = selectedEmail
     ? accountsById[selectedEmail._accountKey] || selectedEmail._account
@@ -1184,19 +552,3 @@ export default function useInboxController({
   };
 }
 
-function formatLaneLabel(lane) {
-  if (lane === "needs_attention") return "Needs Attention";
-  if (lane === "fyi") return "FYI";
-  if (lane === "noise") return "Noise";
-  if (lane === "handled") return "Handled";
-  return "lane";
-}
-
-function isEditableKeyTarget(target) {
-  if (!target) return false;
-  const tagName = target.tagName;
-  return tagName === "INPUT"
-    || tagName === "TEXTAREA"
-    || tagName === "SELECT"
-    || target.isContentEditable;
-}

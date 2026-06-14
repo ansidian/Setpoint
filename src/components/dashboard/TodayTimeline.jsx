@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion as Motion } from "motion/react";
-import { buildTimeline } from "../../lib/redesign-helpers";
+import { buildTimeline } from "../../lib/shell-helpers";
 import TimelineDayGroup from "./timeline/TimelineDayGroup";
 import TimelineHeader from "./timeline/TimelineHeader";
 import {

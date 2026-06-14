@@ -20,8 +20,7 @@ function renderPopover(task) {
   document.body.appendChild(anchor);
   render(
     <DashboardProvider
-      briefing={{ emails: { accounts: [] }, deadlines: { upcoming: [task], stats: null } }}
-      setBriefing={() => {}}
+      deadlines={{ upcoming: [task], stats: null }}
       setCalendarDeadlines={() => {}}
     >
       <DeadlineDetailPopover

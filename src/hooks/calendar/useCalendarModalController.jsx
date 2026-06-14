@@ -29,7 +29,11 @@ import {
   ymdFromParts,
 } from "../../components/calendar/calendarDateUtils.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
-import useCalendarModalEditorRouting from "./useCalendarModalEditorRouting.js";
+import useDashboardFocusRetry from "./useDashboardFocusRetry.js";
+import useDeadlineOverlayState from "./useDeadlineOverlayState.js";
+import useFloatingEditorRouting from "./useFloatingEditorRouting.js";
+import usePlanningReadinessState from "./usePlanningReadinessState.js";
+import useAgendaSyncPolicy from "./useAgendaSyncPolicy.js";
 import useCalendarModalHotkeys from "./useCalendarModalHotkeys.js";
 import useCalendarModalOutsideDismiss from "./useCalendarModalOutsideDismiss.js";
 import useCalendarModalSearch from "./useCalendarModalSearch.js";
@@ -38,36 +42,17 @@ import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
 import useCalendarModalWheelContainment from "./useCalendarModalWheelContainment.js";
 import useViewportWidth from "./useViewportWidth.js";
 import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
-import { floatingDetailOwnsGridSelection } from "./calendarFloatingDetailModel.js";
 import { isGoogleSpecialDateEvent } from "../../components/calendar/googleSpecialDateModel.js";
 import {
-  COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY,
-  DEADLINE_OVERLAY_STORAGE_KEY,
   dashboardDetailFocusRequest,
   floatingWorkspaceNavigationEffect,
-  initialDeadlineEditorState,
   normalizeCalendarWorkspaceView,
-  readStoredBoolean,
-  shouldForceDeadlineOverlay,
-  writeStoredBoolean,
 } from "./calendarModalInteractionModel.js";
-import {
-  planningDeadlinesReadyState,
-  planningDeadlineTimedOutState,
-  planningEventsReadyState,
-  planningIdleState,
-  planningInitialState,
-  planningLateDeadlinesReadyState,
-  planningSettledState,
-  planningSlowState,
-} from "./calendarPlanningSessionModel.js";
 
 const VIEWS = {
   events: eventsView,
   bills: billsView,
 };
-const DASHBOARD_DETAIL_FOCUS_RETRY_MS = 250;
-const DASHBOARD_DETAIL_FOCUS_MAX_ATTEMPTS = 120;
 function addMonthOffset(year, month, offset) {
   const date = new Date(year, month + offset, 1);
   return { year: date.getFullYear(), month: date.getMonth() };
@@ -311,26 +296,23 @@ export default function useCalendarModalController({
     openRequestId,
   });
   const todayDateKey = ymdFromParts(currentYear, currentMonth, todayDate);
-  const [deadlineEditor, setDeadlineEditor] = useState(() => initialDeadlineEditorState({
+  const viewportWidth = useViewportWidth();
+  const {
+    eventOverlayVisible,
+    deadlineOverlayVisible,
+    completedDeadlineOverlayVisible,
+    toggleEventOverlay,
+    toggleDeadlineOverlay,
+    toggleCompletedDeadlineOverlay,
+    setDeadlineOverlayVisible: setDeadlineOverlayVisiblePersisted,
+  } = useDeadlineOverlayState({
     open,
     view,
-    focusItemId,
-    focusDate,
+    forceEventOverlay,
     forceDeadlineOverlay,
-    todayDateKey,
-  }));
-  const viewportWidth = useViewportWidth();
-  const [deadlineDraftPreview, setDeadlineDraftPreview] = useState(null);
-  const [eventOverlayVisible, setEventOverlayVisible] = useState(true);
-  const [deadlineOverlayVisible, setDeadlineOverlayVisible] = useState(() => (
-    readStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, true)
-  ));
-  const [completedDeadlineOverlayVisible, setCompletedDeadlineOverlayVisible] = useState(() => (
-    readStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, true)
-  ));
-  const [committedDeadlineOverlayData, setCommittedDeadlineOverlayData] = useState(null);
-  const [lateDeadlineOverlayData, setLateDeadlineOverlayData] = useState(null);
-  const [planningReadiness, setPlanningReadiness] = useState(planningIdleState);
+    forceCompletedDeadlineOverlay,
+    openRequestId,
+  });
   const [manualMonthBrowseKey, setManualMonthBrowseKey] = useState(0);
   const [workspaceTransientCloseToken, setWorkspaceTransientCloseToken] = useState(0);
   const [suppressFocusRing, setSuppressFocusRing] = useState(false);
@@ -341,11 +323,9 @@ export default function useCalendarModalController({
   const scrollRef = useRef(null);
   const agendaRailRef = useRef(null);
   const contextRailRef = useRef(null);
-  const agendaPassiveSyncSuppressedUntilRef = useRef(0);
   const handledInitialDeadlineCreateRef = useRef(null);
   const handledDashboardDetailFocusRef = useRef(null);
-  const forcedVisibilityRef = useRef(null);
-  const overlayVisibilityRef = useRef(null);
+  const dashboardDetailFocusRafRef = useRef(0);
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const agendaSelectionAnchorRef = useRef(null);
@@ -402,6 +382,106 @@ export default function useCalendarModalController({
       calendarEventSelectionSize(current) > 0 ? clearCalendarEventSelection() : current
     ));
   }, []);
+
+  function focusEditorDate(ymd) {
+    focusDateKey(ymd);
+  }
+
+  const { suppressAgendaPassiveSync, shouldIgnorePassiveAgendaSync } = useAgendaSyncPolicy();
+
+  const {
+    deadlineEditor,
+    deadlineDraftPreview,
+    setDeadlineEditor,
+    setDeadlineDraftPreview,
+    cancelFloatingEditor,
+    handleEventEditorDeleted,
+    handleEventEditorSaved,
+    handleFloatingDeadlineDeleted,
+    handleFloatingDeadlineSaved,
+    openFloatingDeadlineCreate,
+    openFloatingDeadlineEdit,
+    openFloatingEventCreate,
+    openFloatingEventEdit,
+  } = useFloatingEditorRouting({
+    activeSelectedDateKey,
+    activeView,
+    eventEditorRef,
+    findDateCell,
+    floatingDetailRef,
+    focusDate,
+    focusItemId,
+    forceDeadlineOverlay,
+    open,
+    openFloatingDetail,
+    selectedDay,
+    selectedItemId,
+    setFloatingDetail,
+    setSelectedDateKey,
+    setSelectedDay,
+    setSelectedItemId,
+    suppressAgendaPassiveSync,
+    todayDateKey,
+    view,
+    viewMonth,
+    viewYear,
+  });
+
+  const eventEditor = useCalendarEventEditor({
+    open,
+    view,
+    editable: eventsEditable,
+    selectedDay: activeSelectedDay,
+    selectedDate: view === "events" ? activeSelectedDateKey : null,
+    viewYear,
+    viewMonth,
+    refreshRange: eventsRefreshRange,
+    upsertEvents: eventsUpsertEvents,
+    removeEvent: eventsRemoveEvent,
+    onFocusDate: focusEditorDate,
+    onSaved: handleEventEditorSaved,
+    onDeleted: handleEventEditorDeleted,
+  });
+
+  const openEventCreate = eventEditor.openCreate;
+  const prefetchEventSources = eventEditor.prefetchSources;
+
+  useLayoutEffect(() => {
+    eventEditorRef.current = eventEditor;
+  }, [eventEditor]);
+
+  useEffect(() => {
+    if (!eventEditor.editable || typeof window === "undefined") return undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(() => prefetchEventSources(), { timeout: 2000 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(() => prefetchEventSources(), 400);
+    return () => window.clearTimeout(id);
+  }, [open, view, eventEditor.editable, prefetchEventSources]);
+
+  const closeEventEditor = eventEditor.closeEditor;
+  const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
+
+  const {
+    planningReadiness,
+    setPlanningReadiness,
+    committedDeadlineOverlayData,
+    setCommittedDeadlineOverlayData,
+    lateDeadlineOverlayData,
+    setLateDeadlineOverlayData,
+  } = usePlanningReadinessState({
+    open,
+    view,
+    viewYear,
+    viewMonth,
+    eventsEnsureRange,
+    eventsRevision,
+    eventEditorIsEditorOpen: eventEditor.isEditorOpen,
+    onEventsVisibleRangeChange,
+    deadlineOverlayVisible,
+    deadlinesEnsureRange,
+  });
 
   const viewData = useMemo(() => {
     if (view === "events") {
@@ -517,6 +597,9 @@ export default function useCalendarModalController({
     billsRangeData?.error,
     billsRangeData?.ensureRange,
     billsRangeData?.revision,
+    setCommittedDeadlineOverlayData,
+    setLateDeadlineOverlayData,
+    setPlanningReadiness,
   ]);
 
   useEffect(() => {
@@ -532,104 +615,9 @@ export default function useCalendarModalController({
     deadlinesRangeData?.data,
     deadlinesRangeData?.dataRange,
     deadlinesRangeData?.revision,
+    setCommittedDeadlineOverlayData,
   ]);
 
-  function focusEditorDate(ymd) {
-    focusDateKey(ymd);
-  }
-
-  const suppressAgendaPassiveSync = useCallback((durationMs = 900) => {
-    agendaPassiveSyncSuppressedUntilRef.current = Math.max(
-      agendaPassiveSyncSuppressedUntilRef.current,
-      performance.now() + durationMs,
-    );
-  }, []);
-
-  const {
-    cancelFloatingEditor,
-    handleEventEditorDeleted,
-    handleEventEditorSaved,
-    handleFloatingDeadlineDeleted,
-    handleFloatingDeadlineSaved,
-    openFloatingDeadlineCreate,
-    openFloatingDeadlineEdit,
-    openFloatingEventCreate,
-    openFloatingEventEdit,
-  } = useCalendarModalEditorRouting({
-    activeSelectedDateKey,
-    activeView,
-    eventEditorRef,
-    findDateCell,
-    floatingDetailRef,
-    openFloatingDetail,
-    selectedDay,
-    selectedItemId,
-    setDeadlineDraftPreview,
-    setDeadlineEditor,
-    setFloatingDetail,
-    setSelectedDateKey,
-    setSelectedDay,
-    setSelectedItemId,
-    suppressAgendaPassiveSync,
-    viewMonth,
-    viewYear,
-  });
-
-  const eventEditor = useCalendarEventEditor({
-    open,
-    view,
-    editable: eventsEditable,
-    selectedDay: activeSelectedDay,
-    selectedDate: view === "events" ? activeSelectedDateKey : null,
-    viewYear,
-    viewMonth,
-    refreshRange: eventsRefreshRange,
-    upsertEvents: eventsUpsertEvents,
-    removeEvent: eventsRemoveEvent,
-    onFocusDate: focusEditorDate,
-    onSaved: handleEventEditorSaved,
-    onDeleted: handleEventEditorDeleted,
-  });
-
-  const openEventCreate = eventEditor.openCreate;
-  const prefetchEventSources = eventEditor.prefetchSources;
-
-  useLayoutEffect(() => {
-    eventEditorRef.current = eventEditor;
-  }, [eventEditor]);
-
-  const toggleDeadlineOverlay = useCallback(() => {
-    setDeadlineOverlayVisible((current) => {
-      const next = !current;
-      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, next);
-      return next;
-    });
-  }, []);
-
-  const toggleEventOverlay = useCallback(() => {
-    setEventOverlayVisible((current) => !current);
-  }, []);
-
-  const toggleCompletedDeadlineOverlay = useCallback(() => {
-    setCompletedDeadlineOverlayVisible((current) => {
-      const next = !current;
-      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, next);
-      return next;
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!eventEditor.editable || typeof window === "undefined") return undefined;
-    if (typeof window.requestIdleCallback === "function") {
-      const id = window.requestIdleCallback(() => prefetchEventSources(), { timeout: 2000 });
-      return () => window.cancelIdleCallback?.(id);
-    }
-    const id = window.setTimeout(() => prefetchEventSources(), 400);
-    return () => window.clearTimeout(id);
-  }, [open, view, eventEditor.editable, prefetchEventSources]);
-
-  const closeEventEditor = eventEditor.closeEditor;
-  const deadlinesEnsureRange = deadlinesRangeData?.ensureRange;
   const searchTargetVisibleInCurrentGrid = useCallback((dateKey) => {
     const range = getVisibleGridRange(viewYear, viewMonth);
     return !!dateKey && dateKey >= range.start && dateKey <= range.end;
@@ -745,14 +733,6 @@ export default function useCalendarModalController({
     onActivateResult: activateCalendarSearchResult,
   });
 
-  useEffect(() => {
-    overlayVisibilityRef.current = {
-      eventOverlayVisible,
-      deadlineOverlayVisible,
-      completedDeadlineOverlayVisible,
-    };
-  }, [completedDeadlineOverlayVisible, deadlineOverlayVisible, eventOverlayVisible]);
-
   useLayoutEffect(() => {
     if (
       !open
@@ -806,10 +786,13 @@ export default function useCalendarModalController({
     return copyCalendarEvent(resolveSelectedCalendarEvent());
   }, [copyCalendarEvent, resolveSelectedCalendarEvent, setFloatingDetail]);
 
+  // Returns true only when a selection set was actually begun; ineligible
+  // events (special dates, read-only sources) return false so the bare
+  // cmd/ctrl hotkey falls through to dismissing the floating detail.
   const addSelectedCalendarEventToSelectionSet = useCallback(() => {
     const selectedEvent = resolveSelectedCalendarEvent();
     if (!calendarEventSelectionIdentity(selectedEvent)) {
-      return isGoogleSpecialDateEvent(selectedEvent) ? "ignored" : false;
+      return false;
     }
     closeEventEditor();
     setFloatingDetail(null);
@@ -822,68 +805,6 @@ export default function useCalendarModalController({
     setFloatingDetail,
     setSelectedItemId,
   ]);
-
-  useEffect(() => {
-    if (!shouldForceDeadlineOverlay({ open, view, forceDeadlineOverlay })) return;
-    setDeadlineOverlayVisible(true);
-  }, [forceDeadlineOverlay, open, openRequestId, view]);
-
-  useEffect(() => {
-    if (!open || view !== "events") return;
-    if (!forceEventOverlay && !forceDeadlineOverlay && !forceCompletedDeadlineOverlay) return;
-    const requestKey = [
-      openRequestId,
-      view,
-      forceEventOverlay ? "events" : "",
-      forceDeadlineOverlay ? "deadlines" : "",
-      forceCompletedDeadlineOverlay ? "completed" : "",
-    ].join(":");
-    if (forcedVisibilityRef.current?.requestKey === requestKey) return;
-    if (forcedVisibilityRef.current) {
-      forcedVisibilityRef.current.requestKey = requestKey;
-      if (forceEventOverlay) setEventOverlayVisible(true);
-      if (forceDeadlineOverlay) setDeadlineOverlayVisible(true);
-      if (forceCompletedDeadlineOverlay) setCompletedDeadlineOverlayVisible(true);
-      return;
-    }
-    const current = overlayVisibilityRef.current || {
-      eventOverlayVisible,
-      deadlineOverlayVisible,
-      completedDeadlineOverlayVisible,
-    };
-    forcedVisibilityRef.current = {
-      requestKey,
-      previous: {
-        ...current,
-        storedDeadlineOverlayVisible: readStoredBoolean(
-          typeof window === "undefined" ? null : window.localStorage,
-          DEADLINE_OVERLAY_STORAGE_KEY,
-          current.deadlineOverlayVisible,
-        ),
-        storedCompletedDeadlineOverlayVisible: readStoredBoolean(
-          typeof window === "undefined" ? null : window.localStorage,
-          COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY,
-          current.completedDeadlineOverlayVisible,
-        ),
-      },
-    };
-    if (forceEventOverlay) setEventOverlayVisible(true);
-    if (forceDeadlineOverlay) setDeadlineOverlayVisible(true);
-    if (forceCompletedDeadlineOverlay) setCompletedDeadlineOverlayVisible(true);
-  // Capture the prior visibility exactly once for each dashboard-originated open request.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [forceCompletedDeadlineOverlay, forceDeadlineOverlay, forceEventOverlay, open, openRequestId, view]);
-
-  useEffect(() => {
-    if (open || !forcedVisibilityRef.current) return;
-    const previous = forcedVisibilityRef.current.previous;
-    forcedVisibilityRef.current = null;
-    setEventOverlayVisible(previous.eventOverlayVisible);
-    setDeadlineOverlayVisible(previous.deadlineOverlayVisible);
-    setCompletedDeadlineOverlayVisible(previous.completedDeadlineOverlayVisible);
-    writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, previous.storedDeadlineOverlayVisible);
-    writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, previous.storedCompletedDeadlineOverlayVisible);
-  }, [open]);
 
   const resolveContextEventActionScope = useCallback((event) => (
     resolveCalendarEventActionScope(calendarEventSelectionSet, event)
@@ -923,7 +844,11 @@ export default function useCalendarModalController({
   const toggleCalendarEventSelectionSet = useCallback(({ event } = {}) => {
     if (view !== "events") return false;
     const eventIdentity = calendarEventSelectionIdentity(event);
-    if (!eventIdentity) return false;
+    // Special dates (birthdays) can never join the selection set, but a
+    // modifier-click on them still follows the same dismiss path as any
+    // other chip so the floating detail closes consistently.
+    const dismissOnly = !eventIdentity && isGoogleSpecialDateEvent(event);
+    if (!eventIdentity && !dismissOnly) return false;
     const selectedEvent = resolveSelectedCalendarEvent();
     const selectedIdentity = calendarEventSelectionIdentity(selectedEvent);
     const current = floatingDetailRef.current;
@@ -934,6 +859,7 @@ export default function useCalendarModalController({
     closeEventEditor();
     setFloatingDetail(null);
     setSelectedItemId(null);
+    if (dismissOnly) return true;
     setCalendarEventSelectionSet((selection) => {
       const seededSelection = calendarEventSelectionSize(selection) === 0
         && selectedIdentity
@@ -1079,12 +1005,16 @@ export default function useCalendarModalController({
     setDeadlineDraftPreview(null);
   }
 
-  function selectAgendaDate(dateKey, { passive = false } = {}) {
-    if (passive && performance.now() < agendaPassiveSyncSuppressedUntilRef.current) return;
+  // Active selection (explicit user action: click, mini-calendar, etc.) always wins.
+  // Passive sync (agenda hover) is gated by the agenda sync policy (D-CAL-11): it is
+  // skipped while the suppression window is open or a grid-anchored detail owns the
+  // selection. Both entry points (onAgendaSelectDate / onAgendaHoverDate) below share
+  // this implementation.
+  function applyAgendaDateSelection(dateKey, { passive = false } = {}) {
     const parsed = parseYmd(dateKey);
     if (!parsed) return;
     const current = floatingDetailRef.current;
-    if (passive && floatingDetailOwnsGridSelection(current)) return;
+    if (passive && shouldIgnorePassiveAgendaSync(current)) return;
     if (current?.open && (current.mode === "edit" || current.mode === "create")) {
       if (passive) return;
       if (current.dirty) {
@@ -1109,6 +1039,11 @@ export default function useCalendarModalController({
       clearCalendarEventSelectionSet();
     }
   }
+
+  // Explicit agenda date action (click / keyboard / mini-calendar).
+  const onAgendaSelectDate = (dateKey) => applyAgendaDateSelection(dateKey);
+  // Passive agenda hover follow.
+  const onAgendaHoverDate = (dateKey) => applyAgendaDateSelection(dateKey, { passive: true });
 
   function selectAgendaEvent({ event, item, dateKey, anchorElement, sourceCellElement, anchorKind, detailKind, preserveEventSelection = false }) {
     const selectedItem = item || event;
@@ -1207,7 +1142,7 @@ export default function useCalendarModalController({
     if (parsed.year !== viewYear || parsed.month !== viewMonth) {
       setViewDate({ year: parsed.year, month: parsed.month });
     }
-    selectAgendaDate(dateKey);
+    onAgendaSelectDate(dateKey);
     scrollAgendaToDate(dateKey);
     return true;
   }
@@ -1534,68 +1469,48 @@ export default function useCalendarModalController({
     });
   }, [activeSelectedDateKey, focusDate, focusItemId, focusOpenDetail, forceDeadlineOverlay, open, openRequestId, usesFloatingEditor, view]);
 
-  useEffect(() => {
-    if (!pendingItemDetailFocus || !open || !usesFloatingEditor) return undefined;
-    if (pendingItemDetailFocus.view !== view) return undefined;
-
-    const current = floatingDetailRef.current;
-    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
+  // One attach attempt for a pending dashboard-detail focus request. Returns a
+  // status the retry scheduler understands: "done" (attached), "abort" (no
+  // longer applicable), or "retry" (target not in the DOM yet). The scheduler
+  // (useDashboardFocusRetry) owns the 250 ms cadence and give-up counting, so
+  // this reads the latest controller state on every poll without re-rendering.
+  const attemptDashboardDetailFocus = (request) => {
+    const currentDetail = floatingDetailRef.current;
+    if (
+      currentDetail?.open
+      && (currentDetail.mode === "edit" || currentDetail.mode === "create")
+      && currentDetail.dirty
+    ) {
       shakeFloatingEditor();
       setPendingItemDetailFocus(null);
-      return undefined;
+      return "abort";
     }
 
     const resolvedItem = resolvePendingFocusItem({
       activeView,
       computed,
-      dateKey: pendingItemDetailFocus.dateKey,
-      itemId: pendingItemDetailFocus.itemId,
+      dateKey: request.dateKey,
+      itemId: request.itemId,
     });
     const item = resolvedItem || (
-      pendingItemDetailFocus.anchorKind === "search-result-row"
-        ? itemFromCalendarSearchResult(pendingItemDetailFocus.searchResult)
+      request.anchorKind === "search-result-row"
+        ? itemFromCalendarSearchResult(request.searchResult)
         : null
     );
-    const resolvedDateKey = itemDueDate(item) || pendingItemDetailFocus.dateKey;
-    const resolvedItemId = item
-      ? String(activeView.getItemId ? activeView.getItemId(item) : item.id)
-      : pendingItemDetailFocus.itemId;
+    if (!item) return "retry";
 
-    let retryTimeout = 0;
-    const retryOrDegrade = () => {
-      setPendingItemDetailFocus((latest) => {
-        if (
-          !latest
-          || latest.openRequestId !== pendingItemDetailFocus.openRequestId
-          || latest.view !== pendingItemDetailFocus.view
-          || latest.detailKind !== pendingItemDetailFocus.detailKind
-          || latest.dateKey !== pendingItemDetailFocus.dateKey
-          || latest.itemId !== pendingItemDetailFocus.itemId
-        ) {
-          return latest;
-        }
-        if ((latest.attempts || 0) >= DASHBOARD_DETAIL_FOCUS_MAX_ATTEMPTS) {
-          return null;
-        }
-        return { ...latest, attempts: (latest.attempts || 0) + 1 };
-      });
-    };
+    const resolvedDateKey = itemDueDate(item) || request.dateKey;
+    const resolvedItemId = String(
+      activeView.getItemId ? activeView.getItemId(item) : item.id,
+    );
 
-    if (!item) {
-      retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
-      return () => window.clearTimeout(retryTimeout);
-    }
-
-    if (pendingItemDetailFocus.anchorKind === "grid-chip") {
+    if (request.anchorKind === "grid-chip") {
       const anchorElement = findGridChipAnchor(panelRef.current, resolvedItemId, resolvedDateKey);
-      if (!anchorElement) {
-        retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
-        return () => window.clearTimeout(retryTimeout);
-      }
+      if (!anchorElement) return "retry";
       const parsed = parseYmd(resolvedDateKey);
       if (!parsed) {
         setPendingItemDetailFocus(null);
-        return undefined;
+        return "abort";
       }
       suppressAgendaPassiveSync();
       setSelectedDay(parsed.day);
@@ -1603,8 +1518,8 @@ export default function useCalendarModalController({
       setSelectedItemId(resolvedItemId != null ? String(resolvedItemId) : null);
       openFloatingDetail({
         mode: "detail",
-        view: pendingItemDetailFocus.view,
-        detailKind: pendingItemDetailFocus.detailKind || null,
+        view: request.view,
+        detailKind: request.detailKind || null,
         itemId: resolvedItemId,
         dateKey: resolvedDateKey,
         day: parsed.day,
@@ -1613,23 +1528,20 @@ export default function useCalendarModalController({
         anchorKind: "chip",
         itemsSnapshot: [item],
       });
-      handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
+      handledDashboardDetailFocusRef.current = request.requestKey;
       setPendingItemDetailFocus(null);
-      return undefined;
+      return "done";
     }
 
-    if (pendingItemDetailFocus.anchorKind === "search-result-row") {
-      const anchorElement = pendingItemDetailFocus.anchorElement?.isConnected
-        ? pendingItemDetailFocus.anchorElement
+    if (request.anchorKind === "search-result-row") {
+      const anchorElement = request.anchorElement?.isConnected
+        ? request.anchorElement
         : null;
-      if (!anchorElement) {
-        retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
-        return () => window.clearTimeout(retryTimeout);
-      }
+      if (!anchorElement) return "retry";
       const parsed = parseYmd(resolvedDateKey);
       if (!parsed) {
         setPendingItemDetailFocus(null);
-        return undefined;
+        return "abort";
       }
       suppressAgendaPassiveSync();
       setSelectedDay(parsed.day);
@@ -1637,55 +1549,64 @@ export default function useCalendarModalController({
       setSelectedItemId(resolvedItemId != null ? String(resolvedItemId) : null);
       openFloatingDetail({
         mode: "detail",
-        view: pendingItemDetailFocus.view,
-        detailKind: pendingItemDetailFocus.detailKind || null,
+        view: request.view,
+        detailKind: request.detailKind || null,
         itemId: resolvedItemId,
         dateKey: resolvedDateKey,
         day: parsed.day,
         anchorElement,
-        sourceCellElement: pendingItemDetailFocus.sourceCellElement?.isConnected
-          ? pendingItemDetailFocus.sourceCellElement
+        sourceCellElement: request.sourceCellElement?.isConnected
+          ? request.sourceCellElement
           : anchorElement,
         anchorKind: "search-result-row",
         itemsSnapshot: [item],
       });
-      handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
+      handledDashboardDetailFocusRef.current = request.requestKey;
       setPendingItemDetailFocus(null);
-      return undefined;
+      return "done";
     }
 
-    const firstRaf = window.requestAnimationFrame(() => {
+    // Defer agenda activation by one frame so the rail can lay out before we
+    // activate it (prevents a scroll jump). The synchronous call reports
+    // "retry" so the scheduler keeps polling until the deferred activation
+    // succeeds (which clears the pending request) or the loop gives up.
+    window.cancelAnimationFrame(dashboardDetailFocusRafRef.current);
+    dashboardDetailFocusRafRef.current = window.requestAnimationFrame(() => {
       suppressAgendaPassiveSync();
       const activated = agendaRailRef.current?.activateItem?.(
         resolvedItemId,
         resolvedDateKey,
       );
-      if (!activated) {
-        retryTimeout = window.setTimeout(retryOrDegrade, DASHBOARD_DETAIL_FOCUS_RETRY_MS);
-        return;
-      }
-      handledDashboardDetailFocusRef.current = pendingItemDetailFocus.requestKey;
+      if (!activated) return;
+      handledDashboardDetailFocusRef.current = request.requestKey;
       setPendingItemDetailFocus(null);
     });
+    return "retry";
+  };
 
+  const {
+    retryFocus: retryDashboardDetailFocus,
+    cancelFocus: cancelDashboardDetailFocus,
+  } = useDashboardFocusRetry({
+    attempt: attemptDashboardDetailFocus,
+    onGiveUp: () => setPendingItemDetailFocus(null),
+  });
+
+  useEffect(() => {
+    if (!pendingItemDetailFocus || !open || !usesFloatingEditor) return undefined;
+    if (pendingItemDetailFocus.view !== view) return undefined;
+    retryDashboardDetailFocus(pendingItemDetailFocus);
     return () => {
-      window.cancelAnimationFrame(firstRaf);
-      window.clearTimeout(retryTimeout);
+      cancelDashboardDetailFocus();
+      window.cancelAnimationFrame(dashboardDetailFocusRafRef.current);
     };
   }, [
-    activeView,
-    computed,
-    floatingDetailRef,
-    openFloatingDetail,
-    open,
     pendingItemDetailFocus,
-    shakeFloatingEditor,
-    setSelectedDateKey,
-    setSelectedDay,
-    setSelectedItemId,
-    suppressAgendaPassiveSync,
+    open,
     usesFloatingEditor,
     view,
+    retryDashboardDetailFocus,
+    cancelDashboardDetailFocus,
   ]);
 
   useCalendarModalHotkeys({
@@ -1732,10 +1653,7 @@ export default function useCalendarModalController({
     deadlineOverlayVisible,
     toggleDeadlineOverlay,
     toggleCompletedDeadlineOverlay,
-    setDeadlineOverlayVisible: (value) => {
-      setDeadlineOverlayVisible(value);
-      writeStoredBoolean(typeof window === "undefined" ? null : window.localStorage, DEADLINE_OVERLAY_STORAGE_KEY, value);
-    },
+    setDeadlineOverlayVisible: setDeadlineOverlayVisiblePersisted,
     navigateMonthRef,
     onCopySelectedEvent: copySelectedCalendarEvent,
     onPasteCopiedEvent: pasteCopiedCalendarEvent,
@@ -1744,125 +1662,6 @@ export default function useCalendarModalController({
     openCalendarSearch: calendarSearch.openSearch,
     cancelCalendarSearch: calendarSearch.cancelSearch,
   });
-
-  useEffect(() => {
-    if (!open || view !== "events" || !eventsEnsureRange) return;
-    const { start, end } = getVisibleGridRange(viewYear, viewMonth);
-    onEventsVisibleRangeChange?.({ start, end });
-    const runEnsure = () => {
-      let canceled = false;
-      let eventsDone = false;
-      let deadlinesDone = !deadlineOverlayVisible || !deadlinesEnsureRange;
-      let deadlinesTimedOut = false;
-      const startedAt = performance.now();
-      setPlanningReadiness(planningInitialState({
-        deadlineOverlayVisible,
-        deadlinesDone,
-        startedAt,
-      }));
-      setLateDeadlineOverlayData(null);
-
-      const softTimer = window.setTimeout(() => {
-        if (canceled || !deadlineOverlayVisible) return;
-        setPlanningReadiness((current) => planningSlowState(current, {
-          eventsDone,
-          deadlinesDone,
-        }));
-      }, 2000);
-      const hardTimer = window.setTimeout(() => {
-        if (canceled || !deadlineOverlayVisible || deadlinesDone || !eventsDone) return;
-        deadlinesTimedOut = true;
-        setCommittedDeadlineOverlayData(null);
-        setPlanningReadiness((current) => planningDeadlineTimedOutState(current));
-      }, 3000);
-
-      const eventsPromise = eventsEnsureRange(start, end)
-        .then(() => {
-          eventsDone = true;
-          if (canceled) return;
-          setPlanningReadiness((current) => planningEventsReadyState(current, {
-            now: performance.now(),
-          }));
-        });
-      const deadlinesPromise = deadlineOverlayVisible && deadlinesEnsureRange
-        ? deadlinesEnsureRange(start, end)
-          .then((data) => {
-            deadlinesDone = true;
-            if (canceled) return;
-            if (deadlinesTimedOut) {
-              setLateDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-              setPlanningReadiness((current) => planningDeadlinesReadyState(current, {
-                now: performance.now(),
-                eventsDone,
-                deadlinesTimedOut: true,
-              }));
-              return;
-            }
-            if (eventsDone) {
-              setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-              setLateDeadlineOverlayData(null);
-              setPlanningReadiness((current) => planningDeadlinesReadyState(current, {
-                now: performance.now(),
-                eventsDone,
-              }));
-            } else {
-              setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-              setPlanningReadiness((current) => planningDeadlinesReadyState(current, {
-                now: performance.now(),
-                eventsDone,
-              }));
-            }
-          })
-        : Promise.resolve(null);
-
-      Promise.allSettled([eventsPromise, deadlinesPromise]).then((results) => {
-        if (canceled) return;
-        const failed = results.find((result) => result.status === "rejected");
-        if (failed) {
-          setPlanningReadiness((current) => planningSettledState(current, {
-            failed: true,
-          }));
-          return;
-        }
-        if (!deadlineOverlayVisible) return;
-        if (deadlinesDone && eventsDone) {
-          setPlanningReadiness((current) => planningSettledState(current, {
-            failed: false,
-            deadlineOverlayVisible,
-            deadlinesDone,
-            eventsDone,
-          }));
-        }
-      });
-
-      deadlinesPromise.then((data) => {
-        if (canceled || !deadlineOverlayVisible || !data) return;
-        setPlanningReadiness((current) => {
-          if (!current.deadlinesDelayed) return current;
-          setLateDeadlineOverlayData(makeDeadlineOverlayRecord(data, { start, end }));
-          return planningLateDeadlinesReadyState(current);
-        });
-      }).catch(() => {});
-
-      return () => {
-        canceled = true;
-        window.clearTimeout(softTimer);
-        window.clearTimeout(hardTimer);
-      };
-    };
-
-    if (eventEditor.isEditorOpen) {
-      let cleanup = null;
-      const id = window.setTimeout(() => {
-        cleanup = runEnsure();
-      }, 260);
-      return () => {
-        window.clearTimeout(id);
-        cleanup?.();
-      };
-    }
-    return runEnsure();
-  }, [open, view, viewYear, viewMonth, eventsEnsureRange, eventsRevision, eventEditor.isEditorOpen, onEventsVisibleRangeChange, deadlineOverlayVisible, deadlinesEnsureRange]);
 
   const domainEnsureRange = viewData?.ensureRange;
   const domainRevision = viewData?.revision;
@@ -1949,8 +1748,8 @@ export default function useCalendarModalController({
     agenda: {
       agendaScrollCommand,
       agendaEntryTargetDateKey: effectiveAgendaEntryTargetDateKey,
-      onAgendaPassiveDateChange: (dateKey) => selectAgendaDate(dateKey, { passive: true }),
-      onAgendaDateAction: (dateKey) => selectAgendaDate(dateKey),
+      onAgendaPassiveDateChange: onAgendaHoverDate,
+      onAgendaDateAction: onAgendaSelectDate,
       onMiniCalendarDateAction: activateMiniCalendarDate,
       onMiniCalendarDateCreate: createMiniCalendarEvent,
       onAgendaEventAction: selectAgendaEvent,

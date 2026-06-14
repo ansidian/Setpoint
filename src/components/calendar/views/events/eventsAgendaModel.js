@@ -1,4 +1,4 @@
-import { getEventSelectionId } from "../../../../lib/redesign-helpers";
+import { getEventSelectionId } from "../../../../lib/shell-helpers";
 import {
   addDaysYmd,
   pacificYMD,

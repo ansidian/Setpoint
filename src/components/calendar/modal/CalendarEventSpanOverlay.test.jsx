@@ -198,7 +198,7 @@ describe("CalendarEventSpanOverlay", () => {
     expect(onSelectSegment).not.toHaveBeenCalled();
   });
 
-  it("keeps special-date span modifier-clicks out of selection and selection changes", () => {
+  it("forwards special-date span modifier-clicks for dismiss handling without marking selection", () => {
     const birthday = {
       id: "birthday-1",
       title: "Maya's birthday",
@@ -245,7 +245,11 @@ describe("CalendarEventSpanOverlay", () => {
 
     fireEvent.click(segment, { ctrlKey: true, clientX: 4 });
 
-    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: birthday,
+      dateKey: "2026-04-20",
+      anchorKind: "span",
+    }));
     expect(onSelectSegment).not.toHaveBeenCalled();
   });
 });

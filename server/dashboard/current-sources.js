@@ -1,78 +1,14 @@
-export const EMPTY_DEADLINES = {
-  upcoming: [],
-  stats: null,
-};
+// Row-level helpers for ea_current_data_cache, derived from the provider
+// registry in current-providers/. Payload shapes, TTLs, and fallbacks live on
+// the providers; this module owns the generic row/health semantics.
+import { CURRENT_DATA_PROVIDERS, providerFor } from "./current-providers/index.js";
+
+export { EMPTY_DEADLINES } from "./current-providers/deadlines-provider.js";
 
 const REFRESH_TIMEOUT_MS = 2 * 60 * 1000;
 const REFRESH_FAILURE_GRACE_MS = 15 * 60 * 1000;
 
-const EMPTY_BILLS_CURRENT = {
-  bills: [],
-  allSchedules: [],
-  payeeMap: {},
-  actualConfigured: false,
-  actualBudgetUrl: null,
-};
-
-function clone(value) {
-  if (value == null) return value;
-  return JSON.parse(JSON.stringify(value));
-}
-
-function billsHealthProjection(health = null) {
-  return {
-    state: health?.state || null,
-    configured: health?.configured ?? null,
-    lastError: health?.lastError || null,
-    pendingRefreshAt: health?.pendingRefreshAt || null,
-    refreshStartedAt: health?.refreshStartedAt || null,
-  };
-}
-
-function billsVisibleProjection(payload = null) {
-  return {
-    bills: payload?.bills || [],
-    allSchedules: payload?.allSchedules || [],
-    payeeMap: payload?.payeeMap || {},
-    actualConfigured: !!payload?.actualConfigured,
-    actualBudgetUrl: payload?.actualBudgetUrl || null,
-    billsSyncHealth: billsHealthProjection(payload?.billsSyncHealth || payload?.syncHealth || null),
-  };
-}
-
-const CURRENT_SOURCE_DEFINITIONS = {
-  weather_current: {
-    ttlMs: 30 * 60 * 1000,
-    fallback: () => null,
-    hasUsablePayload: (payload) => Boolean(payload?.temp != null || payload?.summary),
-  },
-  calendar_current: {
-    ttlMs: 5 * 60 * 1000,
-    fallback: () => [],
-    hasUsablePayload: (payload) => Array.isArray(payload),
-  },
-  deadlines_current: {
-    ttlMs: 15 * 60 * 1000,
-    fallback: () => clone(EMPTY_DEADLINES),
-    hasUsablePayload: (payload) => Array.isArray(payload?.upcoming),
-  },
-  bills_current: {
-    ttlMs: 60 * 60 * 1000,
-    fallback: () => clone(EMPTY_BILLS_CURRENT),
-    hasUsablePayload: (payload) => Boolean(
-      Array.isArray(payload?.bills)
-        && Array.isArray(payload?.allSchedules)
-        && payload?.payeeMap,
-    ),
-    visibleProjection: billsVisibleProjection,
-  },
-};
-
-export const CURRENT_CACHE_KEYS = Object.keys(CURRENT_SOURCE_DEFINITIONS);
-
-function sourceDefinitionFor(key) {
-  return CURRENT_SOURCE_DEFINITIONS[key] || null;
-}
+export const CURRENT_CACHE_KEYS = CURRENT_DATA_PROVIDERS.map((provider) => provider.key);
 
 export function parsePayload(row, fallback) {
   if (!row?.payload_json) return fallback;
@@ -84,11 +20,11 @@ export function parsePayload(row, fallback) {
 }
 
 export function fallbackPayloadForKey(key) {
-  return sourceDefinitionFor(key)?.fallback() ?? null;
+  return providerFor(key)?.fallbackPayload() ?? null;
 }
 
 export function expiresAtFor(cacheKey, now) {
-  const ttlMs = sourceDefinitionFor(cacheKey)?.ttlMs || 5 * 60 * 1000;
+  const ttlMs = providerFor(cacheKey)?.cacheTtlMs || 5 * 60 * 1000;
   return new Date(now.getTime() + ttlMs).toISOString();
 }
 
@@ -100,8 +36,8 @@ export function isRefreshTimedOut(row, now) {
 export function hasUsablePayload(key, row) {
   const payload = parsePayload(row, undefined);
   if (payload == null) return false;
-  const definition = sourceDefinitionFor(key);
-  return definition ? definition.hasUsablePayload(payload) : true;
+  const provider = providerFor(key);
+  return provider ? provider.hasUsablePayload(payload) : true;
 }
 
 function refreshFailureAgeMs(row, now) {
@@ -173,9 +109,9 @@ export function summarizeCurrentDataHealth(rows, now) {
 }
 
 export function shouldPublishBillsCurrentChange(previousRow, nextPayload) {
-  const previousPayload = parsePayload(previousRow, null);
-  if (!previousPayload) return true;
-  if (previousRow?.status && previousRow.status !== "current") return true;
-  if (Number(previousRow?.refresh_failure_count || 0) > 0) return true;
-  return JSON.stringify(billsVisibleProjection(previousPayload)) !== JSON.stringify(billsVisibleProjection(nextPayload));
+  return providerFor("bills_current").shouldPublishChange(
+    previousRow,
+    parsePayload(previousRow, null),
+    nextPayload,
+  );
 }

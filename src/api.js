@@ -290,7 +290,6 @@ export const geocodeLocation = (q) => apiFetch(`/api/ea/geocode?q=${encodeURICom
 export const skipSchedule = (index, skip = true) => apiFetch("/api/ea/schedules/skip", { method: "POST", body: JSON.stringify({ index, skip }) });
 export const getModels = () => apiFetch("/api/ea/models");
 export const getBillExtractModels = () => apiFetch("/api/ea/bill-extract-models");
-export const suspendService = () => apiFetch("/api/ea/suspend", { method: "POST" });
 
 export const searchEmails = (query, limit) => {
   const params = new URLSearchParams({ q: query });

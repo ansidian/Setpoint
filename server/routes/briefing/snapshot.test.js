@@ -7,7 +7,7 @@ import request from "supertest";
 const mockDb = { execute: vi.fn() };
 
 vi.mock("../../db/connection.js", () => ({ default: mockDb }));
-vi.mock("../../briefing/snapshot-service.js", () => ({
+vi.mock("../../snapshots/snapshot-service.js", () => ({
   getSnapshotHistory: vi.fn(async () => ({
     snapshots: [{ id: 1, status: "active", readOnly: false }],
   })),
@@ -53,7 +53,7 @@ vi.mock("../../briefing/snapshot-service.js", () => ({
 
 process.env.EA_USER_ID = "user-1";
 
-const snapshotService = await import("../../briefing/snapshot-service.js");
+const snapshotService = await import("../../snapshots/snapshot-service.js");
 const briefingRoutes = (await import("./index.js")).default;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;
 

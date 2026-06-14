@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { dayBucketLabel } from "../../../lib/redesign-helpers";
+import { dayBucketLabel } from "../../../lib/shell-helpers";
 import Tooltip from "../../shared/Tooltip";
 import TimelineNowMarker from "./TimelineNowMarker";
 import TimelineRow from "./TimelineRow";

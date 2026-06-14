@@ -22,7 +22,7 @@ import {
   getEventSelectionId,
   overdueLabel,
   urgencyForDays,
-} from "../../../lib/redesign-helpers";
+} from "../../../lib/shell-helpers";
 import { daysUntil } from "../../../lib/bill-utils";
 import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 import {

@@ -320,4 +320,19 @@ describe("database migrations", () => {
       expect.objectContaining({ todoist_id: "dated", due_date: "2026-05-12" }),
     ]);
   });
+
+  it("adds the triage last_decision_reason observability column", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMigrations(db, [
+      "001_ea_tables.sql",
+      "015_triage_last_decision_reason.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_email_triage')");
+    const column = columns.rows.find((row) => row.name === "last_decision_reason");
+
+    expect(column).toBeDefined();
+    expect(column.type).toBe("TEXT");
+    expect(column.notnull).toBe(0);
+  });
 });

@@ -11,7 +11,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["server/**/*.test.js", "src/**/*.test.js", "src/**/*.test.jsx"],
+    include: [
+      "server/**/*.test.js",
+      "src/**/*.test.js",
+      "src/**/*.test.jsx",
+      "scripts/**/*.test.mjs",
+    ],
     environment: "jsdom",
     testTimeout: 10000,
   },

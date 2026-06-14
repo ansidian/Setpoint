@@ -10,7 +10,7 @@ const gmailSyncApi = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("../briefing/gmail-sync.js", () => ({
+vi.mock("../email/gmail-sync.js", () => ({
   enqueueHistorySyncFromPubSub: gmailSyncApi.enqueueHistorySyncFromPubSub,
 }));
 

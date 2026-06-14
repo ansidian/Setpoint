@@ -680,7 +680,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 19,
           viewYear: 2026,
@@ -743,7 +743,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
@@ -781,7 +781,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
@@ -820,7 +820,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderFloatingDetail({
           items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
@@ -851,7 +851,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderFloatingDetail({
           items: briefing.deadlines.upcoming,
           selectedItemId: "deadline:todo-1:2026-04-22",
@@ -883,7 +883,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderFloatingDetail({
           items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
@@ -919,7 +919,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderFloatingDetail({
           items: briefing.deadlines.upcoming,
           selectedItemId: "todo-1",
@@ -949,7 +949,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 19,
           viewYear: 2026,
@@ -994,7 +994,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
@@ -1077,7 +1077,7 @@ describe("calendar detail timeline", () => {
       },
     };
     const renderDetail = (selectedItemId) => (
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 22,
           viewYear: 2026,
@@ -1120,7 +1120,7 @@ describe("calendar detail timeline", () => {
     };
 
     render(
-      <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+      <DashboardProvider deadlines={briefing.deadlines} setCalendarDeadlines={() => {}}>
         {deadlinesDetail.renderDetail({
           selectedDay: 23,
           viewYear: 2026,

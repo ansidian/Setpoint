@@ -1,5 +1,5 @@
 import { parseDueDate } from "../../../../lib/dashboard-helpers";
-import { dueDateToMs } from "../../../../lib/redesign-helpers";
+import { dueDateToMs } from "../../../../lib/shell-helpers";
 import { isDemoMode } from "../../../../demo/config.js";
 import { parseYmd } from "../../calendarDateUtils.js";
 import { TODOIST_DEADLINE_COLOR } from "../../../../../shared/deadline-source-colors.js";

@@ -38,8 +38,7 @@ beforeEach(() => {
 function renderDeadlineModal({ deadlines = [], deadlineActions = {} } = {}) {
   return render(
     <DashboardProvider
-      briefing={{ emails: { accounts: [] }, deadlines: { upcoming: deadlines, stats: null } }}
-      setBriefing={() => {}}
+      deadlines={{ upcoming: deadlines, stats: null }}
       setCalendarDeadlines={() => {}}
     >
       <CalendarModal

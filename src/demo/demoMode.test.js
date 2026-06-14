@@ -27,9 +27,6 @@ describe("demo mode API network guard", () => {
     await expect(api.settleArrivalGrace()).rejects.toMatchObject({
       code: "DEMO_API_UNHANDLED",
     });
-    await expect(api.suspendService()).rejects.toMatchObject({
-      code: "DEMO_API_UNHANDLED",
-    });
 
     api.settleArrivalGraceOnExit();
 

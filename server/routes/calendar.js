@@ -5,7 +5,7 @@ import {
   isBillsMirrorMaintenanceDue,
   readBillsMirrorRange,
   scheduleBillsMirrorRefresh,
-} from "../briefing/bills-service.js";
+} from "../bills/bills-service.js";
 import {
   applyDeadlineCurrentStatus,
   requestBillsCurrentMaintenanceRefresh,
@@ -13,9 +13,9 @@ import {
 import {
   readCalendarDeadlines,
   readCalendarDeadlineRange,
-} from "../briefing/deadlines-read.js";
-import * as tasksService from "../briefing/tasks-service.js";
-import { loadUserConfig } from "../briefing/config-service.js";
+} from "../tasks/deadlines-read.js";
+import * as tasksService from "../tasks/tasks-service.js";
+import { loadUserConfig } from "../platform/config-service.js";
 import {
   fetchCalendar,
   pacificDayBoundaries,
@@ -24,26 +24,26 @@ import {
   updateCalendarEvent,
   deleteCalendarEvent,
   formatCalendarRouteError,
-} from "../briefing/calendar.js";
+} from "../calendar/calendar.js";
 import {
   getGooglePlaceDetails,
   suggestGooglePlaces,
-} from "../briefing/google-places.js";
+} from "../platform/google-places.js";
 import {
   deleteSourceReminders,
   recomputeUnsentRemindersForSource,
-} from "../briefing/reminder-service.js";
+} from "../reminders/reminder-service.js";
 import {
   calendarEventAnchorAt,
   hydrateCalendarEventsWithReminderState,
-} from "../briefing/reminder-hydration.js";
+} from "../reminders/reminder-hydration.js";
 import {
   deadlineSearchCandidates,
   normalizeBillSearchCandidate,
   normalizeEventSearchCandidate,
   normalizeLimit,
   rankCalendarSearchCandidates,
-} from "../briefing/calendar-search.js";
+} from "../calendar/calendar-search.js";
 import {
   deleteCalendarSearchMirrorOccurrence,
   getCalendarSearchMirrorHealth,
@@ -51,7 +51,7 @@ import {
   markCalendarSearchMirrorDirty,
   requestCalendarSearchMirrorSync,
   upsertCalendarSearchMirrorOccurrence,
-} from "../briefing/calendar-search-mirror.js";
+} from "../calendar/calendar-search-mirror.js";
 
 const router = Router();
 router.use(requireCookieSession);

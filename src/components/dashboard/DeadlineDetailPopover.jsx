@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useDashboard } from "../../context/DashboardContext";
 import { daysUntil } from "../../lib/bill-utils";
-import { daysLabel, urgencyForDays } from "../../lib/redesign-helpers";
+import { daysLabel, urgencyForDays } from "../../lib/shell-helpers";
 import AddTaskPanel from "../todoist/AddTaskPanel";
 import { TODOIST_DEADLINE_COLOR } from "../../../shared/deadline-source-colors.js";
 

@@ -124,7 +124,7 @@ describe("EventsAgendaRail", () => {
     expect(onEventAction).not.toHaveBeenCalled();
   });
 
-  it("renders birthday all-day agenda items as special-date markers outside batch selection", () => {
+  it("renders birthday all-day agenda items as special-date markers that forward modifier-clicks unselected", () => {
     const onEventAction = vi.fn();
     const toggleEventSelection = vi.fn(() => true);
     renderRail({
@@ -158,7 +158,11 @@ describe("EventsAgendaRail", () => {
 
     fireEvent.click(chip, { metaKey: true });
 
-    expect(toggleEventSelection).not.toHaveBeenCalled();
+    expect(toggleEventSelection).toHaveBeenCalledWith(expect.objectContaining({
+      event: expect.objectContaining({ id: "birthday-event" }),
+      dateKey: "2026-05-05",
+      anchorKind: "agenda-chip",
+    }));
     expect(onEventAction).not.toHaveBeenCalled();
 
     fireEvent.click(chip);

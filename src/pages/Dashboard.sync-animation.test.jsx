@@ -15,7 +15,7 @@ vi.mock("../api", () => ({
   getSettings: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("../hooks/useCalendarRange", () => ({
+vi.mock("../hooks/calendar/useCalendarRange", () => ({
   default: () => ({
     ensureRange: vi.fn().mockResolvedValue([]),
     markStale: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("../hooks/useCalendarRange", () => ({
   }),
 }));
 
-vi.mock("../hooks/useCalendarDomainRange", () => ({
+vi.mock("../hooks/calendar/useCalendarDomainRange", () => ({
   default: () => ({
     data: null,
     ensureRange: vi.fn(),
@@ -68,8 +68,8 @@ vi.mock("../hooks/useCurrentDashboard", () => ({
 
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
 vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
-vi.mock("../components/dashboard/RedesignShell", () => ({
-  RedesignShell: ({ bd, onQuickRefresh }) => (
+vi.mock("../components/dashboard/DashboardShell", () => ({
+  DashboardShell: ({ bd, onQuickRefresh }) => (
     <div>
       <div data-testid="sync-state">{bd.refreshing ? "syncing" : "idle"}</div>
       <button type="button" onClick={onQuickRefresh}>Sync now</button>

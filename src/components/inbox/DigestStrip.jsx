@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import { LANE } from "../../lib/redesign-helpers";
+import { LANE } from "../../lib/shell-helpers";
 import { buildActiveSnapshotSummary } from "./snapshotSummary";
 
 function pluralize(count, singular, plural = `${singular}s`) {

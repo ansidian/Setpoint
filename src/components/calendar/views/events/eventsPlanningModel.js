@@ -7,7 +7,7 @@ import {
   statusLabel,
   compute as computeDeadlines,
 } from "../deadlines/deadlinesModel.js";
-import { dueDateToMs, getEventSelectionId } from "../../../../lib/redesign-helpers";
+import { dueDateToMs, getEventSelectionId } from "../../../../lib/shell-helpers";
 
 export function isDeadlinePlanningItem(item) {
   return item?.calendarItemKind === "deadline" || (!!item?.due_date && !item?.startMs);

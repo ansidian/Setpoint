@@ -1,4 +1,4 @@
-import { pacificClock, pacificDate } from "../../../lib/redesign-helpers";
+import { pacificClock, pacificDate } from "../../../lib/shell-helpers";
 
 export default function HeroMessageBlock({
   accent,

@@ -1,7 +1,6 @@
 import { readFile } from "fs/promises";
 import { resolve } from "path";
-import { evaluateTriagePreflight } from "../briefing/triage-preflight.js";
-import { DEFAULT_PREFLIGHT_RULES } from "../briefing/triage-preflight-profiles.js";
+import { evaluateTriagePreflight, DEFAULT_PREFLIGHT_RULES } from "../triage/triage-preflight.js";
 
 const DEFAULT_FIXTURE = "docs/triage-redesign/prod-triage-seed-candidates.json";
 const DEFAULT_BASELINE_DISABLED_PROFILE_GROUPS = [

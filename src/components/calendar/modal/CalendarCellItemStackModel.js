@@ -32,11 +32,13 @@ export function getCellItemStackHeight({ visibleCount, hasOverflow, metrics }) {
     + ((childCount - 1) * gap);
 }
 
+// Includes a trailing gap after the last lane so the first stacked chip keeps
+// the same rhythm against pinned span lanes as chips keep between themselves.
 export function getReservedCellItemLaneHeight(count, metrics) {
   if (count <= 0) return 0;
   const itemHeight = metrics?.spanLaneHeight ?? metrics?.itemHeight ?? 28;
   const gap = metrics?.spanLaneGap ?? metrics?.gap ?? 4;
-  return (count * itemHeight) + ((count - 1) * gap);
+  return count * (itemHeight + gap);
 }
 
 export function getMeasuredVisibleCellItemCount(items, availableHeight, metrics) {

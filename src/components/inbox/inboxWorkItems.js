@@ -1,4 +1,7 @@
 import { snapshotInboxLaneForItem } from "./activeSnapshotWorkflowModel.js";
+import { buildInboxRow } from "./inboxRow.js";
+
+export { mergeReadState, readOverrideForUid } from "./inboxRow.js";
 
 // Build a `synthAccount(source)` function bound to the inbox account list.
 // Matches a live/resurfaced/pin-snapshot entry's account_label to an existing
@@ -14,21 +17,6 @@ export function makeSynthAccount(emailAccounts) {
     important: [],
     noise: [],
   };
-}
-
-export function readOverrideForUid(readOverrides, uid) {
-  if (!uid || !readOverrides) return null;
-  if (readOverrides instanceof Map) {
-    return readOverrides.has(uid) ? readOverrides.get(uid) : null;
-  }
-  return Object.prototype.hasOwnProperty.call(readOverrides, uid)
-    ? readOverrides[uid]
-    : null;
-}
-
-export function mergeReadState(read, uid, readOverrides) {
-  const override = readOverrideForUid(readOverrides, uid);
-  return override == null ? !!read : !!override;
 }
 
 export function isCatchUpEmail(email) {
@@ -94,48 +82,41 @@ export function collectActiveSnapshotEmails(activeSnapshot, liveReadOverrides = 
       noise: [],
     };
     const lane = snapshotInboxLaneForItem(item);
-    return {
-      ...item,
-      snapshot_item_id: item.snapshot_item_id || item.id,
-      id: String(uid),
+    return buildInboxRow(item, {
       uid: String(uid),
-      subject: item.subject || "",
-      from: item.from || item.from_name || item.from_address || "Unknown",
-      fromEmail: item.fromEmail || item.from_email || item.from_address || "",
-      from_email: item.from_email || item.fromEmail || item.from_address || "",
-      preview: item.preview || item.summary || "",
-      body_preview: item.body_preview || item.preview || item.summary || "",
-      date: item.date || item.email_date,
-      read: untriagedRead ? true : mergeReadState(item.read, uid, liveReadOverrides),
-      account_id: item.account_id,
-      account_label: account.name,
-      account_email: account.email,
-      account_color: account.color,
-      account_icon: account.icon,
-      _accountKey: account.id || account.name,
-      _account: account,
+      id: String(uid),
+      account,
+      read: item.read,
+      readOverrides: liveReadOverrides,
+      forceRead: untriagedRead,
       lane: catchUp ? "catch_up" : item.lane,
-      _lane: lane,
-      _untriaged: resurfaced || pendingSecurityGrace,
-      _live: false,
-      _activeSnapshot: true,
-      _carryover: lane === "carryover",
-      _catchUp: lane === "catch_up",
-      _arrivalGraceQueued: arrivalGraceQueued,
-      _untriagedRead: untriagedRead,
-      _resurfaced: resurfaced,
-      _resurfacedAt: resurfacedAt,
-      _pendingSecurityGrace: pendingSecurityGrace,
-      _pendingSecurityGraceAt: pendingSecurityGraceAt,
-      _pendingSecurityGraceLabel: pendingSecurityGrace
-        ? pendingSecurityGraceLabel(pendingSecurityGraceAt, nowMs)
-        : null,
-      urgentFlag: item.escalation_badge
-        ? { label: item.escalation_badge }
-        : item.urgency === "high"
-          ? { label: "High" }
-          : item.urgentFlag,
-    };
+      displayLane: lane,
+      activeSnapshot: true,
+      untriaged: resurfaced || pendingSecurityGrace,
+      resurfaced,
+      resurfacedAt,
+      extras: {
+        snapshot_item_id: item.snapshot_item_id || item.id,
+        account_label: account.name,
+        account_email: account.email,
+        account_color: account.color,
+        account_icon: account.icon,
+        _carryover: lane === "carryover",
+        _catchUp: lane === "catch_up",
+        _arrivalGraceQueued: arrivalGraceQueued,
+        _untriagedRead: untriagedRead,
+        _pendingSecurityGrace: pendingSecurityGrace,
+        _pendingSecurityGraceAt: pendingSecurityGraceAt,
+        _pendingSecurityGraceLabel: pendingSecurityGrace
+          ? pendingSecurityGraceLabel(pendingSecurityGraceAt, nowMs)
+          : null,
+        urgentFlag: item.escalation_badge
+          ? { label: item.escalation_badge }
+          : item.urgency === "high"
+            ? { label: "High" }
+            : item.urgentFlag,
+      },
+    });
   });
 }
 
@@ -150,19 +131,17 @@ export function collectLiveEmails(liveEmails, synthAccount, liveTrashedUids, liv
     if (liveTrashedUids.has(e.uid)) continue;
     const acc = synthAccount(e);
     const resurfacedHit = resurfacedMap.get(e.uid);
-    out.push({
-      ...e,
+    out.push(buildInboxRow(e, {
+      uid: e.uid,
       id: e.id || e.uid,
-      preview: e.preview || e.body_preview || "",
-      fromEmail: e.fromEmail || e.from_email,
-      read: mergeReadState(e.read, e.uid, liveReadOverrides),
-      _accountKey: acc.id || acc.name,
-      _account: acc,
-      _lane: null,
-      _untriaged: true,
-      _live: true,
-      ...(resurfacedHit ? { _resurfaced: true, _resurfacedAt: resurfacedHit.resurfaced_at } : null),
-    });
+      account: acc,
+      read: e.read,
+      readOverrides: liveReadOverrides,
+      live: true,
+      untriaged: true,
+      resurfaced: !!resurfacedHit,
+      resurfacedAt: resurfacedHit ? resurfacedHit.resurfaced_at : null,
+    }));
   }
   return out;
 }
@@ -179,23 +158,20 @@ export function collectResurfaced(resurfacedMap, synthAccount, liveReadOverrides
     if (!key) continue;
     if (liveTrashedUids.has(key)) continue;
     const acc = synthAccount(snap);
-    out.push({
-      ...snap,
+    out.push(buildInboxRow(snap, {
+      uid: key,
       id: snap.id || snap.uid,
-      preview: snap.preview || snap.body_preview || "",
-      fromEmail: snap.fromEmail || snap.from_email,
+      account: acc,
       // entry.read is Gmail's current UNREAD state as of this poll (server-side
       // probe). A session override wins in both directions so mark-unread and
       // re-read actions stay visible before the next live poll lands.
-      read: mergeReadState(entry.read, key, liveReadOverrides),
-      _accountKey: acc.id || acc.name,
-      _account: acc,
-      _lane: null,
-      _untriaged: true,
-      _live: true,
-      _resurfaced: true,
-      _resurfacedAt: entry.resurfaced_at,
-    });
+      read: entry.read,
+      readOverrides: liveReadOverrides,
+      live: true,
+      untriaged: true,
+      resurfaced: true,
+      resurfacedAt: entry.resurfaced_at,
+    }));
   }
   return out;
 }

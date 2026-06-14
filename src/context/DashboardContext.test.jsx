@@ -4,12 +4,11 @@ import { DashboardProvider, useDashboard } from "./DashboardContext.jsx";
 import { completeDeadlineOccurrence } from "../api";
 
 vi.mock("../api", () => ({
-  dismissEmail: vi.fn(),
   completeDeadlineOccurrence: vi.fn(),
 }));
 
 function Probe({ task }) {
-  const { handleAddTask, handleCompleteTask, handleUpdateTaskStatus } = useDashboard();
+  const { handleAddTask, handleCompleteTask, handleUpdateTask, handleDeleteTask } = useDashboard();
   return (
     <>
       <button type="button" onClick={() => handleAddTask(task)}>
@@ -18,12 +17,17 @@ function Probe({ task }) {
       <button type="button" onClick={() => handleCompleteTask(task.id, task)}>
         Complete
       </button>
-      <output data-testid="status-handler">{String(typeof handleUpdateTaskStatus)}</output>
+      <button type="button" onClick={() => handleUpdateTask({ ...task, title: "Updated title" })}>
+        Update
+      </button>
+      <button type="button" onClick={() => handleDeleteTask(task.id)}>
+        Delete
+      </button>
     </>
   );
 }
 
-describe("DashboardContext deadline local state", () => {
+describe("DashboardContext deadline single-owner state", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     completeDeadlineOccurrence.mockResolvedValue({});
@@ -43,18 +47,11 @@ describe("DashboardContext deadline local state", () => {
       due_date: "2026-04-21",
       status: "incomplete",
     };
-    const setBriefing = vi.fn((updater) => updater({
-      emails: { accounts: [] },
-      deadlines: { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
-    }));
-    const setCalendarDeadlines = vi.fn((updater) => updater(null));
+    const deadlines = { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
 
     render(
-      <DashboardProvider
-        briefing={{ emails: { accounts: [] }, deadlines: { upcoming: [] } }}
-        setBriefing={setBriefing}
-        setCalendarDeadlines={setCalendarDeadlines}
-      >
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
         <Probe task={task} />
       </DashboardProvider>,
     );
@@ -67,30 +64,24 @@ describe("DashboardContext deadline local state", () => {
     expect(nextDeadlines.stats.incomplete).toBe(1);
   });
 
-  it("optimistically completes deadline occurrences that are present only in calendar deadlines", async () => {
+  it("optimistically completes deadline occurrences through the single deadlines store", async () => {
     const task = {
       id: "todo-range-only",
       title: "Range-only task",
       due_date: "2026-04-21",
       status: "incomplete",
     };
-    const briefing = {
-      emails: { accounts: [] },
-      deadlines: { upcoming: [], stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 } },
-    };
     const deadlines = {
       upcoming: [task],
       stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
     };
-    const setBriefing = vi.fn((updater) => updater(briefing));
     const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
     const onTaskCompleted = vi.fn();
     const onTaskCompletionIntent = vi.fn();
 
     render(
       <DashboardProvider
-        briefing={briefing}
-        setBriefing={setBriefing}
+        deadlines={deadlines}
         setCalendarDeadlines={setCalendarDeadlines}
         onTaskCompleted={onTaskCompleted}
         onTaskCompletionIntent={onTaskCompletionIntent}
@@ -98,8 +89,6 @@ describe("DashboardContext deadline local state", () => {
         <Probe task={task} />
       </DashboardProvider>,
     );
-
-    expect(screen.getByTestId("status-handler").textContent).toBe("undefined");
 
     await act(async () => {
       fireEvent.click(screen.getByText("Complete"));
@@ -125,5 +114,64 @@ describe("DashboardContext deadline local state", () => {
       status: "complete",
     });
     expect(completedDeadlines.upcoming[0]._completing).toBeUndefined();
+  });
+
+  it("routes update and delete through the same deadlines store", () => {
+    const task = {
+      id: "todo-edit",
+      title: "Original title",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+
+    render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    fireEvent.click(screen.getByText("Update"));
+    const updatedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
+    expect(updatedDeadlines.upcoming[0].title).toBe("Updated title");
+
+    fireEvent.click(screen.getByText("Delete"));
+    const remainingDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
+    expect(remainingDeadlines.upcoming).toEqual([]);
+  });
+
+  it("seeds the empty store from the current deadlines view so optimistic flags are kept", async () => {
+    const task = {
+      id: "todo-fallback",
+      title: "Fallback task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    // The cache has not loaded yet: its updater receives undefined.
+    const setCalendarDeadlines = vi.fn((updater) => updater(undefined));
+
+    render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+    });
+
+    const seededDeadlines = setCalendarDeadlines.mock.results[0].value;
+    expect(seededDeadlines.upcoming[0]).toMatchObject({
+      id: "todo-fallback",
+      _completing: true,
+    });
   });
 });

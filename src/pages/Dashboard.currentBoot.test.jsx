@@ -34,7 +34,7 @@ vi.mock("../api", () => ({
   getCalendarBillsRange: vi.fn(),
 }));
 
-vi.mock("../hooks/useCalendarRange", () => ({
+vi.mock("../hooks/calendar/useCalendarRange", () => ({
   default: () => ({
     ensureRange: mocks.calendarRangeEnsureRange,
     markStale: mocks.calendarRangeMarkStale,
@@ -42,7 +42,7 @@ vi.mock("../hooks/useCalendarRange", () => ({
   }),
 }));
 
-vi.mock("../hooks/useCalendarDomainRange", () => ({
+vi.mock("../hooks/calendar/useCalendarDomainRange", () => ({
   default: (options = {}) => {
     const isDeadlineRange = options.cacheMode === "month";
     return {
@@ -60,8 +60,8 @@ vi.mock("../hooks/useCalendarDomainRange", () => ({
 vi.mock("../hooks/useAutoRefresh", () => ({ default: () => {} }));
 vi.mock("../hooks/useNotifications", () => ({ default: () => {} }));
 
-vi.mock("../components/dashboard/RedesignShell", () => ({
-  RedesignShell: ({ bd, liveData, activeSnapshot }) => (
+vi.mock("../components/dashboard/DashboardShell", () => ({
+  DashboardShell: ({ bd, liveData, activeSnapshot }) => (
     <div data-testid="dashboard-shell">
       <span data-testid="weather-temp">{liveData.liveWeather?.temp}</span>
       <span data-testid="event-count">{bd.briefing?.calendar?.length ?? 0}</span>

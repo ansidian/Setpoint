@@ -9,6 +9,7 @@ import {
   makeInboxAccounts,
   makeLiveInboxEmail,
 } from "./test-utils/inboxFixtures.js";
+import { resetInboxSession } from "./useInboxSessionState.js";
 
 const activeSnapshotMock = vi.hoisted(() => ({
   state: {
@@ -56,6 +57,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  resetInboxSession();
   window.history.replaceState(null, "", "/");
   activeSnapshotMock.state = {
     snapshot: null,

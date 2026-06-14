@@ -1,5 +1,13 @@
 import { parseYmd } from "../../components/calendar/calendarDateUtils.js";
 
+// Anchor contract with CalendarCell: the cell root renders role="gridcell"
+// plus data-date-key (CalendarCell.jsx), and the floating-detail hook resolves
+// editor anchors through this selector. Covered by
+// useCalendarFloatingDetail.anchor.test.jsx — change both sides together.
+export function dateCellSelector(dateKey) {
+  return `[role='gridcell'][data-date-key='${dateKey}']`;
+}
+
 export function isFloatingDetailTriggerTarget(target) {
   return target instanceof HTMLElement
     && !!target.closest("[data-testid='calendar-cell-item-chip'], [data-testid='calendar-cell-overflow-item'], [data-testid='calendar-event-span-segment'], [data-testid='calendar-agenda-event-row'], [data-testid='calendar-agenda-event-chip'], [data-testid='calendar-agenda-bill-row'], [data-testid='calendar-agenda-deadline-row'], [data-calendar-overflow-trigger='true']");

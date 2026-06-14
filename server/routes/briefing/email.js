@@ -1,6 +1,6 @@
 import { Router } from "express";
-import * as emailService from "../../briefing/email-service.js";
-import { answerInboxAiSearch } from "../../briefing/email-search-answer.js";
+import * as emailService from "../../email/email-service.js";
+import { answerInboxAiSearch } from "../../email/search/email-search-answer.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;

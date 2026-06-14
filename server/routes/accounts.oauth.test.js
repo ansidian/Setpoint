@@ -25,28 +25,28 @@ vi.mock("../db/connection.js", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../briefing/gmail.js", () => ({
+vi.mock("../email/gmail.js", () => ({
   getAuthUrl: gmailApi.getAuthUrl,
   handleCallback: gmailApi.handleCallback,
   testConnection: vi.fn(),
 }));
-vi.mock("../briefing/icloud.js", () => ({ testConnection: vi.fn() }));
-vi.mock("../briefing/encryption.js", () => ({
+vi.mock("../email/icloud.js", () => ({ testConnection: vi.fn() }));
+vi.mock("../platform/encryption.js", () => ({
   encrypt: vi.fn((value) => value),
   decrypt: vi.fn((value) => value),
 }));
-vi.mock("../briefing/weather.js", () => ({ geocodeLocation: vi.fn(async () => []) }));
-vi.mock("../briefing/scheduler.js", () => ({ initScheduler: vi.fn() }));
-vi.mock("../briefing/email-index.js", () => ({
+vi.mock("../platform/weather.js", () => ({ geocodeLocation: vi.fn(async () => []) }));
+vi.mock("../scheduler.js", () => ({ initScheduler: vi.fn() }));
+vi.mock("../email/email-index.js", () => ({
   queueEmailIndexBackfill: emailIndexApi.queueEmailIndexBackfill,
 }));
-vi.mock("../briefing/email-backfill-worker.js", () => ({
+vi.mock("../email/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: emailBackfillApi.wakeEmailBackfillWorker,
 }));
-vi.mock("../briefing/account-canonical.js", () => ({
+vi.mock("../platform/account-canonical.js", () => ({
   canonicalizeConfiguredAccounts: vi.fn((rows) => rows),
 }));
-vi.mock("../briefing/bill-extractors/catalog.js", () => ({
+vi.mock("../bills/bill-extractors/catalog.js", () => ({
   billExtractAvailability: vi.fn(() => []),
   isAllowedBillExtractModel: vi.fn(() => true),
   DEFAULT_BILL_EXTRACT_PROVIDER: "anthropic",

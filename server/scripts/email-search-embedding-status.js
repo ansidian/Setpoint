@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { detectEmailSearchVectorCapability } from "../briefing/email-search-embedding-store.js";
-import { getEmailSearchEmbeddingCoverageStatus } from "../briefing/email-search-embedding-worker.js";
+import { detectEmailSearchVectorCapability } from "../email/search/email-search-embedding-store.js";
+import { getEmailSearchEmbeddingCoverageStatus } from "../email/search/email-search-embedding-worker.js";
 import {
   createEmailSearchHarnessDb,
   parseEmailSearchHarnessArgs,
   requireHarnessUserId,
-} from "../briefing/email-search-dev-harness.js";
+} from "../email/search/email-search-dev-harness.js";
 
 async function main() {
   const options = parseEmailSearchHarnessArgs(process.argv.slice(2), { command: "status" });

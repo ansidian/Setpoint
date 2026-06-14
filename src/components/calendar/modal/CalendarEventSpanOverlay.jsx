@@ -2,15 +2,15 @@ import { Repeat } from "lucide-react";
 import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
-import { spanSegmentDisplay } from "./calendarEventSpanLayout.js";
+import { SPAN_LANE_GAP, SPAN_LANE_HEIGHT, spanSegmentDisplay } from "./calendarEventSpanLayout.js";
 
 const GRID_ROWS = 6;
 
 function spanLaneMetrics(layout) {
   return {
     rowTop: layout?.tier === "uhd" || layout?.tier === "xl" ? 32 : 30,
-    height: 36,
-    gap: 4,
+    height: SPAN_LANE_HEIGHT,
+    gap: SPAN_LANE_GAP,
   };
 }
 
@@ -275,7 +275,6 @@ export default function CalendarEventSpanOverlay({
               event.stopPropagation();
               if (isEventSelectionModifier(event)) {
                 event.preventDefault();
-                if (display.specialDate) return;
                 quickActions?.toggleEventSelection?.({
                   event: segment.item,
                   dateKey: clickedSegmentDate(segment, event),

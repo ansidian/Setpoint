@@ -7,18 +7,18 @@ import request from "supertest";
 const mockDb = { execute: vi.fn() };
 
 vi.mock("../../db/connection.js", () => ({ default: mockDb }));
-vi.mock("../../briefing/email-index.js", () => ({
+vi.mock("../../email/email-index.js", () => ({
   getEmailIndexHealth: vi.fn(async () => ({ accounts: [{ account_id: "gmail-work" }] })),
   queueEmailIndexBackfill: vi.fn(async () => ({ queued: true, accounts: [{ account_id: "gmail-work" }] })),
 }));
-vi.mock("../../briefing/email-backfill-worker.js", () => ({
+vi.mock("../../email/email-backfill-worker.js", () => ({
   wakeEmailBackfillWorker: vi.fn(),
 }));
 
 process.env.EA_USER_ID = "user-1";
 
-const emailIndexService = await import("../../briefing/email-index.js");
-const emailBackfillWorker = await import("../../briefing/email-backfill-worker.js");
+const emailIndexService = await import("../../email/email-index.js");
+const emailBackfillWorker = await import("../../email/email-backfill-worker.js");
 const briefingRoutes = (await import("./index.js")).default;
 const originalNodeEnv = process.env.NODE_ENV;
 const cookieSessionHash = `sha256:${crypto.createHash("sha256").update("cookie-session").digest("hex")}`;

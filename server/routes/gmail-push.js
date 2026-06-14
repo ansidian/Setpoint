@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { enqueueHistorySyncFromPubSub } from "../briefing/gmail-sync.js";
+import { enqueueHistorySyncFromPubSub } from "../email/gmail-sync.js";
 
 const router = Router();
 

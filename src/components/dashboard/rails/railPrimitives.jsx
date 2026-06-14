@@ -6,7 +6,7 @@ import {
   CircleDashed,
   Flag,
 } from "lucide-react";
-import { daysLabel, urgencyForDays } from "../../../lib/redesign-helpers";
+import { daysLabel, urgencyForDays } from "../../../lib/shell-helpers";
 import { PRIORITY_COLOR } from "./railModel.js";
 
 export function SectionHeader({ title, subtitle, right, isMobile = false }) {

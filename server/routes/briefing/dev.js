@@ -1,5 +1,5 @@
 import { Router } from "express";
-import * as devService from "../../briefing/dev-service.js";
+import * as devService from "../../email/dev-service.js";
 
 const router = Router();
 const EA_USER_ID = process.env.EA_USER_ID;

@@ -27,7 +27,7 @@ vi.mock("../db/connection.js", () => ({
     batch: (...args) => testState.db.current.batch(...args),
   },
 }));
-vi.mock("../briefing/config-service.js", () => ({
+vi.mock("../platform/config-service.js", () => ({
   loadUserConfig: vi.fn(async () => ({
     accounts: [
       { id: "gmail-a", type: "gmail", calendar_enabled: true, label: "Work" },
@@ -40,28 +40,28 @@ vi.mock("../briefing/config-service.js", () => ({
     },
   })),
 }));
-vi.mock("../briefing/deadline-helpers.js", () => ({
+vi.mock("../tasks/deadline-helpers.js", () => ({
   loadCompletedTaskIds: vi.fn(async () => new Set()),
   filterCompletedTodoistTasks: (...args) => testState.filterCompletedTodoistTasks(...args),
   computeDeadlineStats: vi.fn((items) => ({ total: items.length })),
 }));
-vi.mock("../briefing/weather.js", () => ({
+vi.mock("../platform/weather.js", () => ({
   fetchWeather: (...args) => testState.fetchWeather(...args),
 }));
-vi.mock("../briefing/calendar.js", () => ({
+vi.mock("../calendar/calendar.js", () => ({
   fetchCalendar: (...args) => testState.fetchCalendar(...args),
 }));
-vi.mock("../briefing/todoist.js", () => ({
+vi.mock("../tasks/todoist.js", () => ({
   fetchTodoistDueTaskIdSet: (...args) => testState.fetchTodoistDueTaskIdSet(...args),
   fetchTodoistTasks: (...args) => testState.fetchTodoistTasks(...args),
   fetchTodoistTasksAll: (...args) => testState.fetchTodoistTasks(...args),
   fetchTodoistTasksRange: (...args) => testState.fetchTodoistTasks(...args),
   getTodoistSyncHealth: (...args) => testState.getTodoistSyncHealth(...args),
 }));
-vi.mock("../briefing/tombstones.js", () => ({
+vi.mock("../tasks/tombstones.js", () => ({
   hydrateRecurringTombstones: (...args) => testState.hydrateRecurringTombstones(...args),
 }));
-vi.mock("../briefing/bills-service.js", () => ({
+vi.mock("../bills/bills-service.js", () => ({
   readBillsMirrorCurrent: (...args) => testState.readBillsMirrorCurrent(...args),
   refreshBillsMirror: (...args) => testState.refreshBillsMirror(...args),
   getBillsMirrorState: (...args) => testState.getBillsMirrorState(...args),
@@ -76,7 +76,7 @@ vi.mock("../briefing/bills-service.js", () => ({
   clearPendingBillsMirrorRefresh: (...args) => testState.clearPendingBillsMirrorRefresh(...args),
   scheduleBillsMirrorRefresh: (...args) => testState.scheduleBillsMirrorRefresh(...args),
 }));
-vi.mock("../briefing/snapshot-service.js", () => ({
+vi.mock("../snapshots/snapshot-service.js", () => ({
   getActiveSnapshotView: (...args) => testState.getActiveSnapshotView(...args),
   syncActiveSnapshot: (...args) => testState.syncActiveSnapshot(...args),
 }));

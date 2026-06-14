@@ -1,12 +1,10 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
 const root = process.cwd()
-const componentSizeBaseline = {
-  threshold: 600,
-  files: {},
-}
+const componentSizeBaselinePath = 'docs/quality/component-size-baseline.json'
 
 const failures = []
 const warnings = []
@@ -85,8 +83,75 @@ async function checkHistoricalDocsCleanup() {
   }
 }
 
+async function checkAreaMaps() {
+  const { checkMaps, uncoveredThresholdViolations } = await import("./lib/map-coverage.mjs")
+  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
+    cwd: root,
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean)
+  const mapDirs = files
+    .filter((f) => f.endsWith("/CLAUDE.md") && (f.startsWith("src/") || f.startsWith("server/")))
+    .map((f) => f.slice(0, -"/CLAUDE.md".length))
+  const maps = await Promise.all(
+    mapDirs.map(async (dir) => ({ dir, text: await readText(`${dir}/CLAUDE.md`) })),
+  )
+  const result = checkMaps({ files, maps })
+  failures.push(...result.failures)
+  warnings.push(...result.warnings)
+  failures.push(...uncoveredThresholdViolations({ files, mapDirs }))
+
+  const flows = await readText("FLOWS.md").catch(() => "")
+  if (flows) {
+    const { missingDocPaths } = await import("./lib/map-coverage.mjs")
+    for (const p of missingDocPaths(flows, files)) {
+      failures.push(`FLOWS.md names missing file ${p}`)
+    }
+  }
+}
+
+async function checkImportBoundariesAcrossDomains() {
+  const { collectCrossDomainEdges, checkImportBoundaries } = await import("./lib/import-boundaries.mjs")
+  const config = JSON.parse(await readText("scripts/lib/import-boundaries-baseline.json"))
+  const jsFiles = await collectFiles("server", (relativePath) => relativePath.endsWith(".js"))
+  const files = await Promise.all(
+    jsFiles.map(async (relativePath) => ({ path: relativePath, source: await readText(relativePath) })),
+  )
+  const edges = collectCrossDomainEdges({ files, domains: Object.keys(config.entries) })
+  const result = checkImportBoundaries({ edges, entries: config.entries, baseline: config.edges })
+  failures.push(...result.failures)
+  warnings.push(...result.warnings)
+}
+
+async function readComponentSizeBaseline() {
+  let raw
+  try {
+    raw = await readText(componentSizeBaselinePath)
+  } catch {
+    failures.push(`${componentSizeBaselinePath} is missing; regenerate it with { "threshold": 600, "files": {} } plus any grandfathered files`)
+    return null
+  }
+
+  let baseline
+  try {
+    baseline = JSON.parse(raw)
+  } catch {
+    failures.push(`${componentSizeBaselinePath} is not valid JSON`)
+    return null
+  }
+
+  if (typeof baseline.threshold !== 'number' || typeof baseline.files !== 'object' || baseline.files === null) {
+    failures.push(`${componentSizeBaselinePath} must have a numeric "threshold" and a "files" object`)
+    return null
+  }
+
+  return baseline
+}
+
 async function checkComponentSizes() {
-  const baseline = componentSizeBaseline
+  const baseline = await readComponentSizeBaseline()
+  if (!baseline) return
   const threshold = baseline.threshold
   const componentFiles = await collectFiles('src', (relativePath) => {
     if (!/\.(jsx|tsx)$/.test(relativePath)) return false
@@ -128,6 +193,8 @@ async function checkComponentSizes() {
 await checkIgnoredKnowledge()
 await checkAgentsMap()
 await checkHistoricalDocsCleanup()
+await checkAreaMaps()
+await checkImportBoundariesAcrossDomains()
 await checkComponentSizes()
 
 for (const warning of warnings) {

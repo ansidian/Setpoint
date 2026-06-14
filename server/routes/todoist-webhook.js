@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { handleTodoistWebhookDelivery } from "../briefing/todoist-webhook.js";
+import { handleTodoistWebhookDelivery } from "../tasks/todoist-webhook.js";
 
 const router = Router();
 

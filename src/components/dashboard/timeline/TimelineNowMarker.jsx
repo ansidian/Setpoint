@@ -1,4 +1,4 @@
-import { pacificClock } from "../../../lib/redesign-helpers";
+import { pacificClock } from "../../../lib/shell-helpers";
 
 export default function TimelineNowMarker({
   accent,

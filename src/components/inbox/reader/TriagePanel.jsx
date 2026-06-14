@@ -1,5 +1,5 @@
 import { Sparkles, AlertCircle } from "lucide-react";
-import { LANE } from "../../../lib/redesign-helpers";
+import { LANE } from "../../../lib/shell-helpers";
 
 export default function TriagePanel({ email, accent }) {
   if (!email?.claude && !email?.aiSummary) return null;

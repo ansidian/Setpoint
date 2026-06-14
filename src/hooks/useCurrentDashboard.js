@@ -5,6 +5,7 @@ import {
   syncCurrentDashboard,
 } from "../api";
 import { isDemoMode } from "../demo/config.js";
+import { invalidateActualMetadata } from "../lib/actualMetadata.js";
 import {
   currentToBriefing,
   currentToLiveData,
@@ -168,12 +169,15 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     if (disabled || isDemoMode() || typeof EventSource === "undefined") return undefined;
     const source = new EventSource("/api/dashboard/current/events");
     const handleChanged = (event) => {
+      let payload = null;
+      try {
+        payload = JSON.parse(event?.data || "{}");
+      } catch {
+        payload = null;
+      }
+      if (payload?.source === "bills") invalidateActualMetadata();
       if (typeof onDashboardEventRef.current === "function") {
-        try {
-          onDashboardEventRef.current(JSON.parse(event?.data || "{}"));
-        } catch {
-          onDashboardEventRef.current(null);
-        }
+        onDashboardEventRef.current(payload);
       }
       runEventRefetch({ allowHidden: true });
     };

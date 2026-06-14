@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   resolveDashboardSoundForTrigger,
   resolveTriageSoundForEvent,
-  shouldAcceptTriageSoundEvent,
-  TRIAGE_SOUND_COALESCE_MS,
 } from "./triageSoundRouter.js";
 import { DEFAULT_TRIAGE_NOTIFICATION_SOUNDS } from "./triageSoundSettings.js";
 
@@ -75,33 +73,5 @@ describe("triage sound router", () => {
       { ...settings, laneScope: "needs_attention_only" },
       registry,
     )).toBeNull();
-  });
-
-  it("dedupes event keys and coalesces the same trigger type", () => {
-    const gate = { dedupeKeys: new Set(), lastTriggerAt: {} };
-    const first = { eventKey: "email-1", triggerType: "needs_attention_finalized" };
-    const duplicate = { eventKey: "email-1", triggerType: "needs_attention_finalized" };
-    const coalesced = { eventKey: "email-2", triggerType: "needs_attention_finalized" };
-    const later = { eventKey: "email-3", triggerType: "needs_attention_finalized" };
-
-    expect(shouldAcceptTriageSoundEvent(first, gate, 10_000)).toBe(true);
-    expect(shouldAcceptTriageSoundEvent(duplicate, gate, 10_100)).toBe(false);
-    expect(shouldAcceptTriageSoundEvent(coalesced, gate, 10_500)).toBe(false);
-    expect(shouldAcceptTriageSoundEvent(later, gate, 10_000 + TRIAGE_SOUND_COALESCE_MS + 1)).toBe(true);
-  });
-
-  it("allows different trigger types through the coalescing gate", () => {
-    const gate = { dedupeKeys: new Set(), lastTriggerAt: {} };
-
-    expect(shouldAcceptTriageSoundEvent(
-      { eventKey: "email-1", triggerType: "needs_attention_finalized" },
-      gate,
-      10_000,
-    )).toBe(true);
-    expect(shouldAcceptTriageSoundEvent(
-      { eventKey: "email-2", triggerType: "weak_security_grace" },
-      gate,
-      10_500,
-    )).toBe(true);
   });
 });

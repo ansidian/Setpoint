@@ -17,6 +17,7 @@ import {
   unsnoozeEmail,
 } from "../../api";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
+import { resetInboxSession } from "./useInboxSessionState.js";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual("../../api");
@@ -58,6 +59,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  resetInboxSession();
 });
 
 function makeSessionSnapshot(includeAction = true) {
