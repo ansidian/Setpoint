@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import CalendarCellOverflowPopover from "./CalendarCellOverflowPopover.jsx";
 import { parseYmd } from "../calendarDateUtils.js";
 import {
@@ -119,6 +119,25 @@ export default memo(function CalendarGrid({
     viewYear,
   });
   const floatingEditorOpen = floatingDetailMode === "edit" || floatingDetailMode === "create";
+
+  // The cell slots bail out via sameCalendarGridCellSlotProps, which compares
+  // only data props — handlers passed through them can execute closures from
+  // an older render. Volatile interaction state must be read through this ref
+  // (synced every render), never captured, or a bailed-out cell acts on stale
+  // editor/selection/overflow state.
+  const interactionStateRef = useRef(null);
+  useEffect(() => {
+    interactionStateRef.current = {
+      floatingEditorOpen,
+      floatingDetailMode,
+      floatingDetailDateKey,
+      floatingEditorDirty,
+      selectedItemId,
+      resolvedOverflow,
+      suppressedSelectedHiddenAutoOpenKey,
+    };
+  });
+
   const eventCellCount = weekRows * 7;
   const monthCells = useMemo(
     () => buildCalendarMonthCells({
@@ -177,28 +196,29 @@ export default memo(function CalendarGrid({
     dateKey = null,
     { clearItemSelection = false, directDateAction = true } = {},
   ) {
+    const interaction = interactionStateRef.current;
     if (
-      floatingEditorOpen
-      && floatingDetailDateKey
-      && dateKey === floatingDetailDateKey
-      && selectedItemId == null
+      interaction.floatingEditorOpen
+      && interaction.floatingDetailDateKey
+      && dateKey === interaction.floatingDetailDateKey
+      && interaction.selectedItemId == null
     ) {
       return;
     }
-    if (floatingEditorDirty) {
+    if (interaction.floatingEditorDirty) {
       onShakeFloatingEditor?.();
       return;
     }
     const isOverflowSourceDay = sameOverflowDate(
-      resolvedOverflow,
+      interaction.resolvedOverflow,
       dateKey,
       day,
     );
     if (!isOverflowSourceDay) setOverflowState(null);
-    if (isSelected && (!clearItemSelection || selectedItemId == null)) return;
+    if (isSelected && (!clearItemSelection || interaction.selectedItemId == null)) return;
 
     closeEventEditor();
-    if (floatingEditorOpen && floatingDetailMode === "create" && onCancelFloatingEditor) {
+    if (interaction.floatingEditorOpen && interaction.floatingDetailMode === "create" && onCancelFloatingEditor) {
       onCancelFloatingEditor();
     } else if (onCloseFloatingDetail?.() === false) {
       return;
@@ -217,15 +237,16 @@ export default memo(function CalendarGrid({
     dateKey = null,
     { keepOverflowOpen = false, anchorMeta = null } = {},
   ) {
+    const interaction = interactionStateRef.current;
     if (
-      floatingEditorOpen
-      && selectedItemId != null
-      && String(itemId) === String(selectedItemId)
-      && (!floatingDetailDateKey || !dateKey || dateKey === floatingDetailDateKey)
+      interaction.floatingEditorOpen
+      && interaction.selectedItemId != null
+      && String(itemId) === String(interaction.selectedItemId)
+      && (!interaction.floatingDetailDateKey || !dateKey || dateKey === interaction.floatingDetailDateKey)
     ) {
       return;
     }
-    if (floatingEditorDirty) {
+    if (interaction.floatingEditorDirty) {
       onShakeFloatingEditor?.();
       return;
     }
@@ -235,7 +256,7 @@ export default memo(function CalendarGrid({
     if (dateKey) setSelectedDateKey?.(dateKey);
     setSelectedItemId(itemId != null ? String(itemId) : null);
     const nextSelectionKey = dateKey && itemId != null ? `${dateKey}:${itemId}` : null;
-    if (nextSelectionKey !== suppressedSelectedHiddenAutoOpenKey) {
+    if (nextSelectionKey !== interaction.suppressedSelectedHiddenAutoOpenKey) {
       clearSuppressedSelectedHiddenAutoOpenKey();
     }
     if (keepOverflowOpen) {

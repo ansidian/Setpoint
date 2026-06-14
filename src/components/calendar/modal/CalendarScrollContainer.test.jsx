@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarScrollContainer from "./CalendarScrollContainer.jsx";
 import { monthBlockHeight, monthIndexToDate } from "../../../hooks/calendar/calendarScrollModel.js";
@@ -74,8 +74,11 @@ function monthHeight(targetIndex) {
 // The mount centering write is marked programmatic and clears on the settle
 // timer; tests dispatching user scrolls must first wait out that window, the
 // same way a real browser's mount echo settles before the user can scroll.
-function awaitMountSettle() {
-  return new Promise((r) => setTimeout(r, 250));
+// Polls the onFetchSettle spy (the settle's observable) instead of sleeping a
+// fixed interval, so starved timers under suite load cannot flake the wait.
+async function awaitMountSettle(onFetchSettle) {
+  await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
+  onFetchSettle.mockClear();
 }
 
 describe("CalendarScrollContainer", () => {
@@ -200,14 +203,16 @@ describe("CalendarScrollContainer", () => {
 
   it("cancels a clean floating editor on user scroll", async () => {
     const onCancelFloatingEditor = vi.fn();
+    const onFetchSettle = vi.fn();
     const { container } = renderContainer({
       floatingDetailOpen: true,
       floatingDetailMode: "create",
       floatingEditorDirty: false,
       onCancelFloatingEditor,
+      onFetchSettle,
     });
     const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-    await awaitMountSettle();
+    await awaitMountSettle(onFetchSettle);
 
     scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
 
@@ -217,15 +222,17 @@ describe("CalendarScrollContainer", () => {
   it("keeps a dirty floating editor open on user scroll", async () => {
     const onCancelFloatingEditor = vi.fn();
     const onShakeFloatingEditor = vi.fn();
+    const onFetchSettle = vi.fn();
     const { container } = renderContainer({
       floatingDetailOpen: true,
       floatingDetailMode: "edit",
       floatingEditorDirty: true,
       onCancelFloatingEditor,
       onShakeFloatingEditor,
+      onFetchSettle,
     });
     const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-    await awaitMountSettle();
+    await awaitMountSettle(onFetchSettle);
 
     scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
 
@@ -235,14 +242,16 @@ describe("CalendarScrollContainer", () => {
 
   it("does not cancel a clean floating editor on programmatic-navigation scroll events", async () => {
     const onCancelFloatingEditor = vi.fn();
+    const onFetchSettle = vi.fn();
     const { container } = renderContainer({
       floatingDetailOpen: true,
       floatingDetailMode: "create",
       floatingEditorDirty: false,
       onCancelFloatingEditor,
+      onFetchSettle,
     });
     const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-    await awaitMountSettle();
+    await awaitMountSettle(onFetchSettle);
 
     // Programmatic navigation marks the nav active before scrolling; in a
     // real browser the smooth scroll then streams scroll events.
@@ -252,7 +261,7 @@ describe("CalendarScrollContainer", () => {
     expect(onCancelFloatingEditor).not.toHaveBeenCalled();
 
     // Once the navigation settles, owner scrolling cancels as before.
-    await awaitMountSettle();
+    await awaitMountSettle(onFetchSettle);
     scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
     expect(onCancelFloatingEditor).toHaveBeenCalledTimes(1);
   });
@@ -282,12 +291,12 @@ describe("CalendarScrollContainer", () => {
     };
     const { container, rerender } = render(<CalendarScrollContainer {...props} />);
     const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-    await awaitMountSettle();
+    await awaitMountSettle(props.onFetchSettle);
 
     // User scroll crosses into the next month; the parent does not consume it.
     scrollEl.scrollTop = monthOffset(1) + 10;
     scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => expect(props.onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
 
     // Programmatic navigation three months out must still move the grid.
     rerender(<CalendarScrollContainer {...props} viewMonth={CURRENT_MONTH + 3} />);
@@ -386,11 +395,12 @@ describe("CalendarScrollContainer", () => {
       // jsdom fires no scroll event for scrollTop writes; emulate the echo a
       // real browser produces for the mount centering write.
       scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      await awaitMountSettle();
-      expect(onDisplayMonthChange).not.toHaveBeenCalled();
       // The echo settle must not read as user intent or it re-targets the
       // agenda rail to first-of-month, stomping more specific focus commands.
-      expect(onFetchSettle).toHaveBeenCalledWith(expect.objectContaining({ scrollDriven: false }));
+      await waitFor(() => {
+        expect(onFetchSettle).toHaveBeenCalledWith(expect.objectContaining({ scrollDriven: false }));
+      }, { timeout: 5000 });
+      expect(onDisplayMonthChange).not.toHaveBeenCalled();
     });
   });
 
@@ -428,19 +438,19 @@ describe("CalendarScrollContainer", () => {
       const onFetchSettle = vi.fn();
       const { container } = render(<ControlledContainer onFetchSettle={onFetchSettle} />);
       const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-      await awaitMountSettle();
-      onFetchSettle.mockClear();
+      await awaitMountSettle(onFetchSettle);
 
       // Final event of a gesture lands inside the next month: the crossing
       // updates the display month, which re-renders with a new activeIndex.
       scrollEl.scrollTop = monthOffset(1) + 10;
       scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      await new Promise((r) => setTimeout(r, 400));
 
       const next = monthIndexToDate(1, CURRENT_YEAR, CURRENT_MONTH);
-      expect(onFetchSettle).toHaveBeenCalledWith(
-        expect.objectContaining({ year: next.year, month: next.month, scrollDriven: true }),
-      );
+      await waitFor(() => {
+        expect(onFetchSettle).toHaveBeenCalledWith(
+          expect.objectContaining({ year: next.year, month: next.month, scrollDriven: true }),
+        );
+      }, { timeout: 5000 });
     });
   });
 
@@ -453,16 +463,14 @@ describe("CalendarScrollContainer", () => {
       const onFetchSettle = vi.fn();
       const { container } = renderContainer({ onFetchSettle });
       const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
-      await awaitMountSettle();
-      onFetchSettle.mockClear();
+      await awaitMountSettle(onFetchSettle);
       const offset0 = monthOffset(0);
       if (programmatic) {
         document.dispatchEvent(new CustomEvent("calendar-grid-scroll-reset"));
       }
       scrollEl.scrollTop = offset0;
       scrollEl.dispatchEvent(new Event("scroll", { bubbles: false }));
-      await new Promise((r) => setTimeout(r, 50));
-      await new Promise((r) => setTimeout(r, 250));
+      await waitFor(() => expect(onFetchSettle).toHaveBeenCalled(), { timeout: 5000 });
       return onFetchSettle;
     }
 

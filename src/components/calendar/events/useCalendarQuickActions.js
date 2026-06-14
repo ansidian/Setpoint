@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent, updateCalendarEvent } from "@/api";
 import { googleEventColorForId } from "../../../../shared/calendar-event-colors.js";
 import {
@@ -217,9 +217,28 @@ export default function useCalendarQuickActions({
   const optimisticCloneRequestsRef = useRef(new Map());
   const dragEnabled = editable && nativeDragSupported(layout);
 
+  // Callers pass these handlers as inline closures; reading them through a
+  // ref keeps every action identity (and the returned object) stable across
+  // parent re-renders, so memoized month grids holding these actions do not
+  // re-render whenever the controller does.
+  const externalHandlersRef = useRef(null);
+  useEffect(() => {
+    externalHandlersRef.current = {
+      upsertEvents,
+      removeEvent,
+      refreshRange,
+      onSelectEvent,
+      onEventDeleted,
+      onBatchDeleted,
+      onCopyEvent,
+      resolveEventActionScope,
+    };
+  });
+
   const clearStatus = useCallback(() => setStatus(null), []);
 
   const runReschedule = useCallback(async ({ event, targetDate, scope }) => {
+    const { upsertEvents, refreshRange, onSelectEvent } = externalHandlersRef.current;
     const sourceDate = pacificYMD(event.startMs);
     const deltaDays = daysBetweenYmd(sourceDate, targetDate);
     if (!deltaDays) return;
@@ -245,9 +264,10 @@ export default function useCalendarQuickActions({
       setStatus({ tone: "error", message: err.message || "Failed to move event." });
       throw err;
     }
-  }, [onSelectEvent, refreshRange, upsertEvents]);
+  }, []);
 
   const runDelete = useCallback(async ({ event, scope }) => {
+    const { upsertEvents, removeEvent, refreshRange, onEventDeleted } = externalHandlersRef.current;
     if (isOptimisticCloneEvent(event)) {
       const optimisticId = String(event.id);
       const cloneRequest = optimisticCloneRequestsRef.current.get(optimisticId);
@@ -296,7 +316,7 @@ export default function useCalendarQuickActions({
       setStatus({ tone: "error", message: err.message || "Failed to delete event." });
       throw err;
     }
-  }, [onEventDeleted, refreshRange, removeEvent, upsertEvents]);
+  }, []);
 
   const runBatchDelete = useCallback(async ({ events }) => {
     const scopedEvents = Array.isArray(events) ? events : [];
@@ -310,6 +330,7 @@ export default function useCalendarQuickActions({
   }, [runDelete]);
 
   const runClone = useCallback(async ({ event, targetDate = null }) => {
+    const { upsertEvents, removeEvent, onSelectEvent } = externalHandlersRef.current;
     if (!editable || !event?.writable) return;
     const optimisticEvent = buildOptimisticCloneEvent(event, targetDate);
     const optimisticId = String(optimisticEvent.id);
@@ -363,9 +384,10 @@ export default function useCalendarQuickActions({
       }
       // Silent by design for this hidden power flow.
     }
-  }, [editable, onSelectEvent, removeEvent, upsertEvents]);
+  }, [editable]);
 
   const runClipboardPaste = useCallback(async ({ clipboard, targetDate = null }) => {
+    const { upsertEvents, removeEvent, onSelectEvent } = externalHandlersRef.current;
     if (!editable || !targetDate) return false;
     const plan = planCalendarEventClipboardPaste(clipboard, targetDate);
     if (!plan?.items?.length) return false;
@@ -427,9 +449,10 @@ export default function useCalendarQuickActions({
       }
     }
     return true;
-  }, [editable, onSelectEvent, removeEvent, upsertEvents]);
+  }, [editable]);
 
   const runColorUpdate = useCallback(async ({ event, colorId, scope }) => {
+    const { upsertEvents, refreshRange } = externalHandlersRef.current;
     if (!editable || !event?.writable || !colorId) return;
     const color = googleEventColorForId(colorId)?.hex || event.color;
     const optimisticEvent = { ...event, colorId, color };
@@ -444,7 +467,7 @@ export default function useCalendarQuickActions({
     } catch {
       upsertEvents?.(event);
     }
-  }, [editable, refreshRange, upsertEvents]);
+  }, [editable]);
 
   const runScopedColorUpdate = useCallback(async ({ events, colorId }) => {
     const scopedEvents = Array.isArray(events) ? events : [];
@@ -504,7 +527,7 @@ export default function useCalendarQuickActions({
   const openContextMenu = useCallback(({ event, item, x, y }) => {
     const sourceEvent = event || item?.sourceEvent || (item?.sourceItem?.startMs ? item.sourceItem : null);
     if (!editable || !sourceEvent?.writable) return false;
-    const resolvedScope = resolveEventActionScope?.(sourceEvent);
+    const resolvedScope = externalHandlersRef.current.resolveEventActionScope?.(sourceEvent);
     const actionScope = resolvedScope?.events?.length
       ? resolvedScope
       : { kind: "single", events: [sourceEvent], identities: [] };
@@ -521,7 +544,7 @@ export default function useCalendarQuickActions({
       pendingColorId: null,
     });
     return true;
-  }, [editable, resolveEventActionScope]);
+  }, [editable]);
 
   const openDeleteMenu = useCallback(({ event, x, y }) => {
     if (!editable || !event?.writable) return;
@@ -560,6 +583,7 @@ export default function useCalendarQuickActions({
   }, [editable]);
 
   const copyContextEvent = useCallback(() => {
+    const { onCopyEvent } = externalHandlersRef.current;
     const event = contextMenu?.event;
     const scopedEvents = contextMenu?.actionScope?.kind === "selection"
       ? contextMenu.actionScope.events
@@ -570,7 +594,7 @@ export default function useCalendarQuickActions({
       onCopyEvent?.(event);
     }
     setContextMenu(null);
-  }, [contextMenu?.actionScope, contextMenu?.event, onCopyEvent]);
+  }, [contextMenu?.actionScope, contextMenu?.event]);
 
   const duplicateContextEvent = useCallback(() => {
     const event = contextMenu?.event;
@@ -609,7 +633,7 @@ export default function useCalendarQuickActions({
     try {
       if (scopedEvents?.length) {
         await runBatchDelete({ events: scopedEvents });
-        onBatchDeleted?.(scopedEvents);
+        externalHandlersRef.current.onBatchDeleted?.(scopedEvents);
       } else {
         await runDelete({ event });
       }
@@ -621,7 +645,7 @@ export default function useCalendarQuickActions({
         error: err.message || "Failed to delete event.",
       } : current));
     }
-  }, [contextMenu?.actionScope, contextMenu?.event, onBatchDeleted, runBatchDelete, runDelete]);
+  }, [contextMenu?.actionScope, contextMenu?.event, runBatchDelete, runDelete]);
 
   const chooseEventColor = useCallback((colorId) => {
     const event = contextMenu?.event;
@@ -686,6 +710,7 @@ export default function useCalendarQuickActions({
 
   const cancelPrompt = useCallback(() => setPrompt(null), []);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const copyEvent = useCallback((...args) => externalHandlersRef.current.onCopyEvent?.(...args), []);
 
   return useMemo(() => ({
     dragEnabled,
@@ -702,7 +727,7 @@ export default function useCalendarQuickActions({
     dropEvent,
     openContextMenu,
     openDeleteMenu,
-    copyEvent: onCopyEvent,
+    copyEvent,
     copyContextEvent,
     duplicateContextEvent,
     pasteEvent: (event, targetDate) => (
@@ -735,9 +760,9 @@ export default function useCalendarQuickActions({
     leaveDropTarget,
     openContextMenu,
     openDeleteMenu,
+    copyEvent,
     copyContextEvent,
     duplicateContextEvent,
-    onCopyEvent,
     prompt,
     requestBatchDelete,
     requestDelete,

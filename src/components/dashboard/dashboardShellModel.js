@@ -115,6 +115,7 @@ export function buildDashboardEventsData(calendarRange = {}) {
     staleRefreshPending: calendarRange.staleRefreshPending,
     error: calendarRange.error,
     revision: calendarRange.revision,
+    cacheStamp: calendarRange.cacheStamp,
     editable: true,
   };
 }

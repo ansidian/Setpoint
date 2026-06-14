@@ -2,9 +2,42 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, it, vi } from "vitest";
 import "./CalendarModal.test-setup.js";
 import CalendarModal from "./CalendarModal.jsx";
-import { getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
+import { flushAnimationFrame, getLatestRailContent, wrapWithDashboard } from "./CalendarModal.test-utils.jsx";
 
 describe("CalendarModal Todoist editor behavior", () => {
+  it("switches from an event create to the Todoist create workspace without ghosts or losing the panel", async () => {
+    window.innerWidth = 1900;
+
+    render(wrapWithDashboard(
+      <CalendarModal
+        open
+        onClose={() => {}}
+        view="events"
+        forceDeadlineOverlay
+        onViewChange={() => {}}
+        focusDate="2026-04-20"
+        eventsData={{ editable: true, getEvents: () => [] }}
+        billsData={{}}
+        deadlinesData={{ upcoming: [] }}
+      />,
+    ));
+
+    fireEvent.keyDown(document, { key: "c" });
+    const eventGhost = await screen.findByTestId("calendar-ghost-chip");
+    expect(eventGhost.getAttribute("data-ghost-kind")).toBe("event");
+
+    fireEvent.keyDown(document, { key: "C", shiftKey: true });
+    expect(await screen.findByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(document.querySelector('[data-ghost-kind="event"]')).toBeNull();
+
+    // The event-editor dismissal effect runs on an animation frame; the
+    // deadline workspace must survive it.
+    await flushAnimationFrame();
+    await flushAnimationFrame();
+    expect(screen.getByTestId("todoist-inline-editor")).toBeTruthy();
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("create");
+  });
+
   it("opens a blank floating Todoist editor from the Events deadline shortcut", async () => {
     window.innerWidth = 1900;
 

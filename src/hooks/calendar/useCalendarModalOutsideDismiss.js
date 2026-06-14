@@ -26,6 +26,17 @@ export default function useCalendarModalOutsideDismiss({
   useEffect(() => {
     if (!open) return undefined;
     const id = window.requestAnimationFrame(() => {
+      // Entry focus must not steal from focus that already moved into the
+      // panel or into a portaled modal layer (context menu, floating detail)
+      // before this frame fired — same layer carve-out as outside-click.
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement
+        && (panelRef.current?.contains(active)
+          || active.closest('[role="menu"], [role="dialog"], [role="listbox"]'))
+      ) {
+        return;
+      }
       panelRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(id);

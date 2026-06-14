@@ -134,6 +134,13 @@ export default function useCalendarDomainRange({
   const inFlightRef = useRef(new Map());
   const activeKeyRef = useRef(null);
   const activeRangeRef = useRef(null);
+  // Stamp of cache *content* (not staleness): bumped on every write that can
+  // change a combined result. Lets month-mode ensures skip re-publishing an
+  // identical combine, keeping data identity stable for downstream memos.
+  const cacheStampRef = useRef(0);
+  // Last published month-mode combine, keyed by range + content stamp. Only
+  // set alongside setData so a key hit means state already holds this value.
+  const lastMonthCombineRef = useRef(null);
   const [data, setData] = useState(emptyData);
   const [dataRange, setDataRange] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -160,11 +167,17 @@ export default function useCalendarDomainRange({
             fetchedAt,
           });
         }
+        cacheStampRef.current += 1;
         const active = activeRangeRef.current;
         const updatesActiveRange = active?.keys?.some((key) => targetKeySet.has(key));
         const activeRangeReady = active?.keys?.every((key) => cacheRef.current.has(key));
         if (updatesActiveRange && activeRangeReady) {
-          setData(combineDataForRange(cacheRef.current, active.keys, active.start, active.end, emptyData));
+          const combined = combineDataForRange(cacheRef.current, active.keys, active.start, active.end, emptyData);
+          lastMonthCombineRef.current = {
+            key: `${active.start}|${active.end}|${cacheStampRef.current}`,
+            data: combined,
+          };
+          setData(combined);
           setDataRange({ start: active.start, end: active.end, keys: active.keys });
         }
         setRevision((current) => current + 1);
@@ -238,10 +251,19 @@ export default function useCalendarDomainRange({
       }
     }
 
-    const next = combineDataForRange(cacheRef.current, visibleKeys, start, end, emptyData);
     const active = activeRangeRef.current;
     const isActiveRange = active?.start === start && active?.end === end;
+    const combineKey = `${start}|${end}|${cacheStampRef.current}`;
+    const published = lastMonthCombineRef.current;
+    if (published?.key === combineKey) {
+      // State already holds this exact combine; re-publishing would hand
+      // consumers a deep-equal clone with a fresh identity on every settle.
+      if (isActiveRange) prefetchMonths(visibleKeys);
+      return published.data;
+    }
+    const next = combineDataForRange(cacheRef.current, visibleKeys, start, end, emptyData);
     if (isActiveRange) {
+      lastMonthCombineRef.current = { key: combineKey, data: next };
       setData(next);
       setDataRange({ start, end, keys: visibleKeys });
       prefetchMonths(visibleKeys);
@@ -280,6 +302,7 @@ export default function useCalendarDomainRange({
     const promise = fetchRange(start, end)
       .then((value) => {
         cacheRef.current.set(key, { data: value, fetchedAt: Date.now() });
+        cacheStampRef.current += 1;
         if (activeKeyRef.current === key) {
           setData(value);
           setDataRange({ start, end, key });
@@ -308,6 +331,8 @@ export default function useCalendarDomainRange({
   const invalidate = useCallback(() => {
     cacheRef.current.clear();
     inFlightRef.current.clear();
+    cacheStampRef.current += 1;
+    lastMonthCombineRef.current = null;
     setDataRange(null);
     setRevision((current) => current + 1);
   }, []);
@@ -321,6 +346,8 @@ export default function useCalendarDomainRange({
 
   const updateData = useCallback((updater) => {
     if (disabled) return;
+    cacheStampRef.current += 1;
+    lastMonthCombineRef.current = null;
     if (cacheMode === "month") {
       const active = activeRangeRef.current;
       setData((current) => {
@@ -361,6 +388,8 @@ export default function useCalendarDomainRange({
 
   const seedData = useCallback((data, { stale = true } = {}) => {
     if (disabled || data == null) return;
+    cacheStampRef.current += 1;
+    lastMonthCombineRef.current = null;
     const fetchedAt = stale ? 0 : Date.now();
     if (cacheMode === "month") {
       const keys = monthKeysFromData(data);

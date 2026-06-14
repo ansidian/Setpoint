@@ -62,6 +62,28 @@ describe("useFloatingEditorRouting deadline editor state ownership", () => {
     expect(result.current.deadlineDraftPreview).toBeNull();
   });
 
+  it("closes an open event editor when switching to deadline create, so no event ghost lingers", () => {
+    const closeEditor = vi.fn();
+    const eventEditorRef = { current: { closeEditor } };
+    const { result } = renderHook(() => useFloatingEditorRouting(routingProps({ eventEditorRef })));
+
+    act(() => result.current.openFloatingDeadlineCreate("2026-05-01"));
+    expect(closeEditor).toHaveBeenCalled();
+  });
+
+  it("clears leftover deadline editor state when switching to event create", () => {
+    const { result } = renderHook(() => useFloatingEditorRouting(routingProps()));
+
+    act(() => {
+      result.current.setDeadlineEditor({ mode: "create", seedDate: "2026-05-01" });
+      result.current.setDeadlineDraftPreview({ title: "draft" });
+    });
+    act(() => result.current.openFloatingEventCreate("2026-05-01"));
+
+    expect(result.current.deadlineEditor).toBeNull();
+    expect(result.current.deadlineDraftPreview).toBeNull();
+  });
+
   it("clears the deadline editor after a successful save→detail transition", () => {
     const floatingDetailRef = {
       current: { open: true, detailKind: "deadline", mode: "edit", itemId: "t1", dateKey: "2026-04-20", day: 20 },
