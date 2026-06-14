@@ -46,6 +46,11 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
         boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
         transition: "background 120ms, box-shadow 120ms",
         opacity: dimmed && !hover ? 0.82 : 1,
+        // Skip layout+paint for offscreen rows (the dominant cost at large N);
+        // reserve a representative row height so the scrollbar does not jump
+        // before the row is first rendered. Pure CSS containment.
+        contentVisibility: "auto",
+        containIntrinsicSize: "auto 52px",
       }}
     >
       <div
