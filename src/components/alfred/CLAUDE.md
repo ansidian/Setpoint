@@ -9,9 +9,10 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 - `alfredPanelModel.js` — pure SSE-event → message-list reducer, model catalog, formatters, suggestions
 - `AlfredMessages.jsx` — UserLine, ToolRows, SayBlock (serif lead), ErrorLine, SuggestionList, ModelToggle (message leaves are React.memo'd: untouched messages stay referentially stable so token streaming only re-renders the active say block)
 - `AlfredComposer.jsx` — input + send button + shortcut/model footer; owns the draft in LOCAL state so a keystroke re-renders only the composer, not the thread (lifts to the chat hook only on submit; clears on the panel's new-chat signal)
-- `AlfredRows.jsx` — verbatim domain rows: bill/event/deadline/email (cite-by-reference; never reshape values)
+- `AlfredRows.jsx` — verbatim domain rows: bill/event/deadline/email/transaction (cite-by-reference; never reshape values)
 - `AlfredEmailPreview.jsx` — read-only email preview overlay opened from an email chip (Esc/outside-click close it, never the panel)
 - `alfredChipActionModel.js` — pure chip-click → navigation action resolver (email preview vs calendar request via the dashboard's request builders)
+- `alfredRowOrdering.js` — pure sort/section logic for surfaced rows: ordering rules and kind-based sectioning for the Alfred panel result list
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

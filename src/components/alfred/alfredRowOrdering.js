@@ -160,6 +160,32 @@ function groupBills(list) {
   ]);
 }
 
+function monthLabel(ymd) {
+  const parts = parseYmd(ymd);
+  if (!parts) return ymd || "";
+  return new Date(parts.year, parts.month, 1)
+    .toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function groupTransactions(list) {
+  const sorted = list.slice().sort((a, b) => {
+    const da = ymdOf(a.date);
+    const db = ymdOf(b.date);
+    if (da === db) return 0;
+    return da < db ? 1 : -1; // date DESC
+  });
+  const byMonth = new Map();
+  for (const item of sorted) {
+    const ymd = ymdOf(item.date);
+    const key = ymd.slice(0, 7); // YYYY-MM
+    if (!byMonth.has(key)) {
+      byMonth.set(key, { section: { label: monthLabel(ymd), tone: "time" }, items: [] });
+    }
+    byMonth.get(key).items.push(item);
+  }
+  return finalize([...byMonth.values()]);
+}
+
 // Sum of what's still owed — the "Total due" footer. Unpaid only.
 export function billsTotalDue(items) {
   return (items || []).reduce(
@@ -203,6 +229,7 @@ export function groupAlfredRows(kind, items, now) {
     case "event": return groupEvents(list, nowMs);
     case "deadline": return groupDeadlines(list, nowMs);
     case "bill": return groupBills(list);
+    case "transaction": return groupTransactions(list);
     default: return [{ section: null, items: list }];
   }
 }

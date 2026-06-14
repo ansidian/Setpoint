@@ -6,7 +6,9 @@ const MAX_QUERY_RANGE_DAYS = 366;
 const MAX_SEARCH_LIMIT = 20;
 const DEFAULT_SEARCH_LIMIT = 12;
 const BODY_CHAR_LIMIT = 6000;
-const SHOW_KINDS = new Set(["email", "event", "deadline", "bill"]);
+const MAX_TXN_LIMIT = 50;
+const DEFAULT_TXN_LIMIT = 25;
+const SHOW_KINDS = new Set(["email", "event", "deadline", "bill", "transaction"]);
 
 export const ALFRED_TOOL_DEFINITIONS = [
   {
@@ -75,13 +77,47 @@ export const ALFRED_TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "search_transactions",
+    description: "List the owner's past spending — individual expense transactions in a date range, with amounts, payee, category, and account. This is money already spent, NOT upcoming obligations; use get_upcoming_bills for bills and card payments coming due. Income and transfers are excluded. Optional filters: payee, category, account, min_amount, max_amount. Returns compact rows; call show_items to display them.",
+    input_schema: {
+      type: "object",
+      properties: {
+        start: { type: "string", description: "Range start (YYYY-MM-DD)" },
+        end: { type: "string", description: "Range end (YYYY-MM-DD)" },
+        payee: { type: "string", description: "Optional payee/merchant name (case-insensitive exact match)" },
+        category: { type: "string", description: "Optional budget category name" },
+        account: { type: "string", description: "Optional account name" },
+        min_amount: { type: "number", description: "Optional minimum amount in dollars (absolute value)" },
+        max_amount: { type: "number", description: "Optional maximum amount in dollars (absolute value)" },
+        limit: { type: "integer", description: "Max results (default 25, max 50)" },
+      },
+      required: ["start", "end"],
+    },
+  },
+  {
+    name: "summarize_spending",
+    description: "Total the owner's spending over a date range, grouped by category, payee, or month — for 'how much did I spend on X' questions. Income and transfers are excluded; this is money spent, not upcoming bills. Returns aggregate buckets to report in prose (do not call show_items for these).",
+    input_schema: {
+      type: "object",
+      properties: {
+        start: { type: "string", description: "Range start (YYYY-MM-DD)" },
+        end: { type: "string", description: "Range end (YYYY-MM-DD)" },
+        group_by: { type: "string", enum: ["category", "payee", "month"], description: "How to group totals (default category)" },
+        payee: { type: "string", description: "Optional payee/merchant name" },
+        category: { type: "string", description: "Optional budget category name" },
+        account: { type: "string", description: "Optional account name" },
+      },
+      required: ["start", "end"],
+    },
+  },
+  {
     name: "show_items",
     description: "Display retrieved items to the owner as native data rows. Call this before your final reply whenever that reply names items returned by earlier tool calls in this conversation, even a single item. Pass their ids, then keep prose brief instead of restating row details.",
     input_schema: {
       type: "object",
       properties: {
-        kind: { type: "string", enum: ["email", "event", "deadline", "bill"] },
-        ids: { type: "array", items: { type: "string" }, description: "Item ids (email uid, event id, deadline id, or bill id)" },
+        kind: { type: "string", enum: ["email", "event", "deadline", "bill", "transaction"] },
+        ids: { type: "array", items: { type: "string" }, description: "Item ids (email uid, event id, deadline id, bill id, or transaction id)" },
       },
       required: ["kind", "ids"],
     },
@@ -131,6 +167,30 @@ function parseDateRange(input = {}) {
     };
   }
   return { start, end, startIso, endIso };
+}
+
+// Transactions are full-history (no range cap), so they can't reuse parseDateRange
+// (which enforces MAX_RANGE_DAYS). Validate format + order only.
+function parseTransactionDateRange(input = {}) {
+  const startIso = String(input.start || "");
+  const endIso = String(input.end || "");
+  if (!DATE_RE.test(startIso) || !DATE_RE.test(endIso)) {
+    return { error: "start and end must be YYYY-MM-DD dates" };
+  }
+  if (endIso < startIso) {
+    return { error: "invalid date range: end must be on or after start" };
+  }
+  return { startIso, endIso };
+}
+
+function transactionFilters(input) {
+  const out = {};
+  if (input.payee) out.payee = String(input.payee);
+  if (input.category) out.category = String(input.category);
+  if (input.account) out.account = String(input.account);
+  if (Number.isFinite(Number(input.min_amount))) out.min_amount = Number(input.min_amount);
+  if (Number.isFinite(Number(input.max_amount))) out.max_amount = Number(input.max_amount);
+  return out;
 }
 
 async function runSearchEmail(input, { userId, conversation, deps }) {
@@ -279,10 +339,60 @@ async function runGetUpcomingBills(input, { userId, conversation, deps }) {
   };
 }
 
+async function runSearchTransactions(input, { userId, conversation, deps }) {
+  const range = parseTransactionDateRange(input);
+  if (range.error) return { error: range.error };
+  const limit = Math.max(1, Math.min(MAX_TXN_LIMIT, Number(input.limit) || DEFAULT_TXN_LIMIT));
+  const data = await deps.queryTransactions(userId, {
+    start: range.startIso,
+    end: range.endIso,
+    ...transactionFilters(input),
+    limit,
+  });
+  if (data?.error) return { error: data.error };
+  if (data?.unknown_filter) return { total: 0, unknown_filter: data.unknown_filter };
+  const transactions = data?.transactions || [];
+  cacheAlfredItems(conversation, "transaction", transactions, "id");
+  return {
+    total: data?.total ?? transactions.length,
+    truncated: !!data?.truncated,
+    ...(data?.sync_state ? { sync_state: data.sync_state } : {}),
+    transactions: transactions.map((txn) => ({
+      id: txn.id,
+      date: txn.date,
+      payee: txn.payee,
+      amount: txn.amount,
+      category: txn.category,
+      account: txn.account,
+    })),
+  };
+}
+
+async function runSummarizeSpending(input, { userId, deps }) {
+  const range = parseTransactionDateRange(input);
+  if (range.error) return { error: range.error };
+  const groupBy = ["category", "payee", "month"].includes(input.group_by) ? input.group_by : "category";
+  const data = await deps.summarizeSpending(userId, {
+    start: range.startIso,
+    end: range.endIso,
+    group_by: groupBy,
+    ...transactionFilters(input),
+  });
+  if (data?.error) return { error: data.error };
+  if (data?.unknown_filter) return { total: 0, unknown_filter: data.unknown_filter };
+  return {
+    total: data?.total ?? 0,
+    period: data?.period || { start: range.startIso, end: range.endIso },
+    group_by: groupBy,
+    ...(data?.sync_state ? { sync_state: data.sync_state } : {}),
+    buckets: data?.buckets || [],
+  };
+}
+
 function runShowItems(input, { conversation, emit }) {
   const kind = String(input.kind || "");
   if (!SHOW_KINDS.has(kind)) {
-    return { error: `Unknown kind "${kind}". Use one of: email, event, deadline, bill.` };
+    return { error: `Unknown kind "${kind}". Use one of: ${[...SHOW_KINDS].join(", ")}.` };
   }
   const ids = Array.isArray(input.ids) ? input.ids.map(String).filter(Boolean) : [];
   if (!ids.length) return { error: "ids is required" };
@@ -302,6 +412,8 @@ export async function executeAlfredTool(name, input, ctx) {
     case "get_calendar_events": return runGetCalendarEvents(args, ctx);
     case "get_deadlines": return runGetDeadlines(args, ctx);
     case "get_upcoming_bills": return runGetUpcomingBills(args, ctx);
+    case "search_transactions": return runSearchTransactions(args, ctx);
+    case "summarize_spending": return runSummarizeSpending(args, ctx);
     case "show_items": return runShowItems(args, ctx);
     default: return { error: `Unknown tool "${name}"` };
   }
@@ -315,6 +427,8 @@ export function alfredToolSummary(name, result = {}) {
       get_calendar_events: "Calendar",
       get_deadlines: "Deadlines",
       get_upcoming_bills: "Bills",
+      search_transactions: "Transactions",
+      summarize_spending: "Spending",
       show_items: "Display",
     }[name] || "Tool";
     return `${source} · failed`;
@@ -325,6 +439,8 @@ export function alfredToolSummary(name, result = {}) {
     case "get_calendar_events": return `Calendar · ${result.total ?? 0} events`;
     case "get_deadlines": return `Deadlines · ${result.open ?? result.total ?? 0} open`;
     case "get_upcoming_bills": return `Bills · ${result.total ?? 0} upcoming`;
+    case "search_transactions": return `Transactions · ${result.total ?? 0} found`;
+    case "summarize_spending": return `Spending · ${result.buckets?.length ?? 0} groups`;
     case "show_items": return `Showing ${result.shown ?? 0} items`;
     default: return name;
   }

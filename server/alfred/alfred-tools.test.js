@@ -25,14 +25,16 @@ beforeEach(() => {
 });
 
 describe("tool definitions", () => {
-  it("exposes exactly the six read-only tools", () => {
+  it("exposes exactly the eight read-only tools", () => {
     expect(ALFRED_TOOL_DEFINITIONS.map((tool) => tool.name).sort()).toEqual([
       "get_calendar_events",
       "get_deadlines",
       "get_email_body",
       "get_upcoming_bills",
       "search_email",
+      "search_transactions",
       "show_items",
+      "summarize_spending",
     ]);
     for (const tool of ALFRED_TOOL_DEFINITIONS) {
       expect(tool.input_schema?.type).toBe("object");
@@ -395,7 +397,7 @@ describe("show_items", () => {
 
   it("rejects unknown kinds and emits nothing", async () => {
     const ctx = ctxWith({});
-    const result = await executeAlfredTool("show_items", { kind: "transaction", ids: ["x"] }, ctx);
+    const result = await executeAlfredTool("show_items", { kind: "banana", ids: ["x"] }, ctx);
     expect(result.error).toBeTruthy();
     expect(ctx.emit).not.toHaveBeenCalled();
   });
@@ -417,5 +419,53 @@ describe("unknown tool", () => {
   it("returns an error result", async () => {
     const result = await executeAlfredTool("write_email", {}, ctxWith({}));
     expect(result.error).toContain("Unknown tool");
+  });
+});
+
+describe("transaction tools", () => {
+  it("search_transactions caches rows and returns a list", async () => {
+    const deps = {
+      queryTransactions: vi.fn(async () => ({
+        total: 2,
+        truncated: false,
+        transactions: [
+          { id: "t1", date: "2026-05-05", amount: 42.1, payee: "Trader Joes", category: "Groceries", account: "Checking" },
+          { id: "t2", date: "2026-05-18", amount: 39.9, payee: "Trader Joes", category: "Groceries", account: "Checking" },
+        ],
+      })),
+    };
+    const ctx = ctxWith(deps);
+    const result = await executeAlfredTool("search_transactions", { start: "2026-05-01", end: "2026-05-31" }, ctx);
+    expect(result.total).toBe(2);
+    expect(deps.queryTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({
+      start: "2026-05-01", end: "2026-05-31", limit: 25,
+    }));
+    // cached → show_items can resolve them
+    const shown = await executeAlfredTool("show_items", { kind: "transaction", ids: ["t1", "t2"] }, ctx);
+    expect(shown.shown).toBe(2);
+    expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({ type: "rows", kind: "transaction" }));
+  });
+
+  it("search_transactions rejects a bad date range", async () => {
+    const result = await executeAlfredTool("search_transactions", { start: "nope", end: "2026-05-31" }, ctxWith({}));
+    expect(result.error).toMatch(/YYYY-MM-DD/);
+  });
+
+  it("search_transactions passes an unknown filter through", async () => {
+    const deps = { queryTransactions: vi.fn(async () => ({ total: 0, unknown_filter: "category 'X' not found" })) };
+    const result = await executeAlfredTool("search_transactions", { start: "2026-05-01", end: "2026-05-31", category: "X" }, ctxWith(deps));
+    expect(result).toEqual({ total: 0, unknown_filter: "category 'X' not found" });
+  });
+
+  it("summarize_spending returns buckets and defaults group_by to category", async () => {
+    const deps = {
+      summarizeSpending: vi.fn(async () => ({
+        total: 142, period: { start: "2026-04-01", end: "2026-05-31" }, group_by: "category",
+        buckets: [{ label: "Groceries", amount: 82, count: 2 }, { label: "Gas", amount: 60, count: 1 }],
+      })),
+    };
+    const result = await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctxWith(deps));
+    expect(result.buckets).toHaveLength(2);
+    expect(deps.summarizeSpending).toHaveBeenCalledWith("user-1", expect.objectContaining({ group_by: "category" }));
   });
 });

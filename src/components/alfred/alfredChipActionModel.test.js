@@ -68,4 +68,8 @@ describe("resolveAlfredChipAction", () => {
     expect(resolveAlfredChipAction("bill", {})).toBeNull();
     expect(resolveAlfredChipAction("transaction", { id: "x" })).toBeNull();
   });
+
+  it("transactions are non-interactive (no chip action)", () => {
+    expect(resolveAlfredChipAction("transaction", { id: "t1", payee: "Trader Joes", amount: 42.1 })).toBeNull();
+  });
 });

@@ -159,6 +159,30 @@ describe("groupAlfredRows — bill", () => {
   });
 });
 
+describe("groupAlfredRows transaction", () => {
+  it("orders newest-first and sections by month when spanning months", () => {
+    const items = [
+      { id: "a", date: "2026-05-05", amount: 1 },
+      { id: "b", date: "2026-04-20", amount: 2 },
+      { id: "c", date: "2026-05-18", amount: 3 },
+    ];
+    const groups = groupAlfredRows("transaction", items, new Date("2026-06-01T12:00:00-07:00"));
+    expect(groups.map((g) => g.section.label)).toEqual(["May 2026", "April 2026"]);
+    expect(groups[0].items.map((i) => i.id)).toEqual(["c", "a"]); // newest first within month
+  });
+
+  it("drops the section header for a single month", () => {
+    const items = [
+      { id: "a", date: "2026-05-05", amount: 1 },
+      { id: "b", date: "2026-05-18", amount: 2 },
+    ];
+    const groups = groupAlfredRows("transaction", items, new Date("2026-06-01T12:00:00-07:00"));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].section).toBeNull();
+    expect(groups[0].items.map((i) => i.id)).toEqual(["b", "a"]);
+  });
+});
+
 describe("row-level helpers", () => {
   const NOW = new Date("2026-06-14T18:00:00.000Z");
 

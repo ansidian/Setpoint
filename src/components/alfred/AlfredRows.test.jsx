@@ -47,8 +47,22 @@ describe("RowsBlock", () => {
   });
 
   it("renders nothing for an unknown kind", () => {
-    const { container } = render(<RowsBlock accent="#cba6da" kind="transaction" items={[{ id: "x" }]} />);
+    const { container } = render(<RowsBlock accent="#cba6da" kind="unknown_kind" items={[{ id: "x" }]} />);
     expect(container.textContent).toBe("");
+  });
+
+  it("renders a transaction row with payee, amount, and category", () => {
+    render(
+      <RowsBlock
+        kind="transaction"
+        items={[{ id: "t1", date: "2026-05-05", amount: 42.1, payee: "Trader Joes", category: "Groceries", account: "Checking" }]}
+        accent="#cba6f7"
+        now={new Date("2026-06-14T12:00:00-07:00")}
+      />,
+    );
+    expect(screen.getByText("Trader Joes")).toBeTruthy();
+    expect(screen.getByText("$42.10")).toBeTruthy();
+    expect(screen.getByText("Groceries")).toBeTruthy();
   });
 
   it("activates a chip on click and Enter with the resolved action", () => {

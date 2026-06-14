@@ -264,6 +264,68 @@ describe("runAlfred", () => {
     expect(events.at(-1).type).toBe("run_end");
   });
 
+  it("nudge text includes 'transactions' when a small search_transactions result is returned without show_items", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("search_transactions", { start: "2026-05-01", end: "2026-05-31" }),
+      textTurn("You spent $42.10 at Trader Joes."),
+    ]);
+    const queryTransactions = vi.fn().mockResolvedValue({
+      total: 1,
+      truncated: false,
+      transactions: [{ id: "t1", date: "2026-05-05", amount: 42.1, payee: "Trader Joes", category: "Groceries", account: "Checking" }],
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "what did I spend at trader joes?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { queryTransactions },
+      recordUsage,
+    });
+
+    const nudge = conversation.messages.find(
+      (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("show_items"),
+    );
+    expect(nudge).toBeDefined();
+    expect(nudge.content).toContain("<system-reminder>");
+    expect(nudge.content).toContain("transactions");
+  });
+
+  it("does not nudge when summarize_spending returns a low dollar total (its total is a dollar sum, not a row count)", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("summarize_spending", { start: "2026-05-01", end: "2026-05-31" }),
+      textTurn("You spent $5.00 on coffee in May."),
+    ]);
+    const summarizeSpending = vi.fn().mockResolvedValue({
+      total: 5,
+      period: { start: "2026-05-01", end: "2026-05-31" },
+      group_by: "category",
+      buckets: [{ label: "Coffee", amount: 5, count: 1 }],
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "how much did I spend on coffee?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { summarizeSpending },
+      recordUsage,
+    });
+
+    expect(conversation.messages.find(
+      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("show_items"),
+    )).toBeUndefined();
+    expect(events.at(-1).type).toBe("run_end");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("stops with run_error at the iteration cap", async () => {
     const fetchImpl = fetchScript([
       toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-06-13" }),

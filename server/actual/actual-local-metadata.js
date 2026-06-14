@@ -33,14 +33,14 @@ export function actualDataDir(env = process.env) {
   return env.ACTUAL_DATA_DIR || process.cwd();
 }
 
-function ymdFromActualDate(value) {
+export function ymdFromActualDate(value) {
   const raw = String(value || "");
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
   return raw || null;
 }
 
-function actualDateInt(value) {
+export function actualDateInt(value) {
   return Number(String(value || "").replace(/-/g, ""));
 }
 
@@ -679,6 +679,19 @@ export async function hydrateLocalActualCache(userId, options = {}) {
   };
 }
 
+// Direct read access to the on-disk budget copy without booting the SDK — the
+// same path readLocalActualMetadata uses, exposed so other readers (e.g.
+// transactions) can run their own queries against db.sqlite. localOnly defaults
+// to true: a missing copy throws 503 rather than triggering a download.
+export async function openLocalBudgetClient(userId, options = {}) {
+  const config = await getActualConfig(userId, options);
+  const local = await ensureLocalBudget(config, {
+    ...options,
+    localOnly: options.localOnly !== false,
+  });
+  return createClient({ url: `file:${path.join(local.budgetDir, "db.sqlite")}` });
+}
+
 export async function readLocalActualMetadata(userId, options = {}) {
   const config = await getActualConfig(userId, options);
   const local = await ensureLocalBudget(config, options);
@@ -761,7 +774,6 @@ export async function readLocalActualMetadata(userId, options = {}) {
 }
 
 export const __testing__ = {
-  ymdFromActualDate,
   normalizeRuleConditions,
   findLocalBudgetDir,
   syncDownloadedBudget,

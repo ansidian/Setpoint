@@ -5,7 +5,7 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 ## Files
 
 - `alfred-run.js` — streaming Anthropic tool-use loop; emits the SSE run-event contract
-- `alfred-tools.js` — read-only tool definitions/executors over email, calendar, deadlines, bills; `show_items` emits cached rows by reference
+- `alfred-tools.js` — read-only tool definitions/executors over email, calendar, deadlines, bills, transactions/spending; `show_items` emits cached rows by reference
 - `alfred-conversations.js` — in-memory conversation store (TTL) and per-conversation item cache
 - `anthropic-stream.js` — Anthropic Messages SSE stream parser
 - `alfred-prompt.js` — system prompt: Pacific date anchor, coverage, trust rules

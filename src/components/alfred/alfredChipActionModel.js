@@ -39,5 +39,10 @@ export function resolveAlfredChipAction(kind, item) {
     if (!item.id || item.openActionDisabled) return null;
     return { type: "calendar", request: dashboardBillCalendarRequest(item.next_date, item.id) };
   }
+  if (kind === "transaction") {
+    // Read-only: no per-transaction navigation target. Non-interactive until the
+    // future edit/confirm flow lands (see the transaction-access design spec).
+    return null;
+  }
   return null;
 }

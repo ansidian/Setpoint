@@ -15,6 +15,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual-bill-occurrences.js` — expands Actual schedules into dated bill occurrences with paid status
 - `actual-amount-condition.js` — single source of truth for interpreting an Actual `amount` schedule condition (scalar cents vs `isbetween` range)
 - `actual-connection-test.js` — HTTP-level reachability test for the Actual server
+- `actual-transactions-read.js` — low-level on-disk transaction reader: queries `db.sqlite` directly via `@libsql/client` without booting the SDK
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
