@@ -8,12 +8,13 @@ import {
   dateToMonthIndex,
   midpointActiveMonthIndex,
   mountedWindow,
+  nearestWeekRowOffset,
   LABEL_MONTH_THRESHOLD,
   NAVIGABLE_MONTH_RADIUS,
+  SCROLL_SETTLE_MS,
 } from "../../../hooks/calendar/calendarScrollModel.js";
 
 const SCROLL_RANGE = NAVIGABLE_MONTH_RADIUS;
-const SCROLL_SETTLE_MS = 150;
 
 export default function CalendarScrollContainer({
   view,
@@ -90,6 +91,11 @@ export default function CalendarScrollContainer({
   const labelIndexRef = useRef(activeIndex);
   const scrollSettleTimerRef = useRef(null);
   const programmaticNavActiveRef = useRef(false);
+  // The data index the scroll handler last observed. scrollMountIndexRef only
+  // catches up at commit; comparing the two tells the settle whether a
+  // crossing's commit is still in flight.
+  const scrollDataIdxRef = useRef(activeIndex);
+  const alignToWeekRowRef = useRef(null);
 
   useEffect(() => {
     scrollMountIndexRef.current = scrollMountIndex;
@@ -138,6 +144,18 @@ export default function CalendarScrollContainer({
     }
     scrollSettleTimerRef.current = setTimeout(() => {
       scrollSettleTimerRef.current = null;
+      // A crossing's display-month change commits in a separate scheduler
+      // task, and expired timers run ahead of it when the event loop is
+      // starved — so this timer can beat the commit it must settle after.
+      // Every decision below consumes flags the commit's effects produce;
+      // firing early read a stale mounted index (announcing the origin month)
+      // and left no pending timer for the re-arm effect, killing the real
+      // settle. Defer instead — bounded, because setScrollMountIndex always
+      // commits, after which the re-arm effect schedules the genuine settle.
+      if (scrollDataIdxRef.current !== scrollMountIndexRef.current) {
+        scheduleSettle();
+        return;
+      }
       const wasSuppressed = programmaticNavActiveRef.current;
       programmaticNavActiveRef.current = false;
       // A crossing whose display-month change the controller ignored leaves
@@ -160,8 +178,45 @@ export default function CalendarScrollContainer({
       // A settle that merely echoes a programmatic navigation is not user
       // intent; consumers must not re-target the agenda rail off it.
       onFetchSettleRef.current?.({ year, month, scrollDriven: !wasSuppressed || settledAway });
+      // Resting alignment replaces native CSS snap, which fought Windows
+      // notch scrolling (Chromium drops wheel events mid-snap-animation).
+      // Suppressed settles skip it: programmatic navigations land where they
+      // intend, and the alignment's own echo settle must not re-align.
+      if (!wasSuppressed) alignToWeekRowRef.current?.();
     }, SCROLL_SETTLE_MS);
   }, [refYear, refMonth]);
+
+  useEffect(() => {
+    alignToWeekRowRef.current = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      const target = nearestWeekRowOffset({
+        scrollOffset: container.scrollTop,
+        cellHeight: layout.cellHeight,
+        gridGap: layout.gridGap,
+        getMonthOffset: (i) => offsets.get(i) ?? 0,
+        getMonthHeight: getHeight,
+        searchFirst: -SCROLL_RANGE,
+        searchLast: SCROLL_RANGE,
+      });
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      const clamped = maxScroll > 0 ? Math.min(target, maxScroll) : target;
+      if (Math.abs(clamped - container.scrollTop) <= 1) return;
+      // The write echoes scroll events in real browsers; mark it programmatic
+      // so it cannot read as user intent, and re-arm the settle that clears
+      // the mark (jsdom fires no echo at all).
+      programmaticNavActiveRef.current = true;
+      if (container.scrollTo) {
+        const reduceMotion =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        container.scrollTo({ top: clamped, behavior: reduceMotion ? "instant" : "smooth" });
+      } else {
+        container.scrollTop = clamped;
+      }
+      scheduleSettle();
+    };
+  }, [offsets, getHeight, layout.cellHeight, layout.gridGap, scheduleSettle]);
 
   useEffect(() => {
     if (scrollSettleTimerRef.current == null) return;
@@ -206,10 +261,12 @@ export default function CalendarScrollContainer({
       const targetIdx = dateToMonthIndex(viewYear, viewMonth, refYear, refMonth);
       const targetOffset = offsets.get(targetIdx);
       if (targetOffset == null) return;
-      // The label index normally tracks scroll events; a programmatic snap
-      // lands on the target without any (jsdom fires none at all), and a
-      // late settle would otherwise replay a stale label month.
+      // The label and data indices normally track scroll events; a
+      // programmatic snap lands on the target without any (jsdom fires none
+      // at all), and a late settle would otherwise replay a stale label
+      // month or defer against a stale data index.
       labelIndexRef.current = targetIdx;
+      scrollDataIdxRef.current = targetIdx;
       if (container.scrollTo) {
         container.scrollTo({ top: targetOffset, behavior: "instant" });
       } else {
@@ -253,6 +310,10 @@ export default function CalendarScrollContainer({
         const dataIdx = midpointActiveMonthIndex(scrollArgs);
         const labelIdx = midpointActiveMonthIndex({ ...scrollArgs, threshold: LABEL_MONTH_THRESHOLD });
 
+        // Sync unconditionally (not just on crossings) so a prop-driven
+        // navigation that moved the mounted index without scroll events
+        // cannot leave a stale mismatch deferring future settles.
+        scrollDataIdxRef.current = dataIdx;
         if (dataIdx !== scrollMountIndexRef.current) {
           setScrollMountIndex(dataIdx);
           if (!programmaticNavActiveRef.current) {
@@ -301,11 +362,13 @@ export default function CalendarScrollContainer({
     const targetIdx = dateToMonthIndex(viewYear, viewMonth, refYear, refMonth);
     const targetOffset = offsets.get(targetIdx);
     if (targetOffset == null) return;
-    // The label index normally tracks scroll events; programmatic scrolls
-    // settle on the target (jsdom fires no events at all), and a starved
-    // settle timer firing after the suppression window would otherwise
-    // replay a stale label month over the navigation's own label.
+    // The label and data indices normally track scroll events; programmatic
+    // scrolls settle on the target (jsdom fires no events at all), and a
+    // starved settle timer firing after the suppression window would
+    // otherwise replay a stale label month or defer against a stale data
+    // index.
     labelIndexRef.current = targetIdx;
+    scrollDataIdxRef.current = targetIdx;
 
     const prev = prevViewRef.current;
     const prevIdx = prev
@@ -486,7 +549,6 @@ export default function CalendarScrollContainer({
         overflowY: "auto",
         overscrollBehavior: "contain",
         position: "relative",
-        scrollSnapType: "y proximity",
       }}
     >
       {blocks}

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import CalendarFloatingDetailCaret from "./CalendarFloatingDetailCaret.jsx";
 import CalendarFloatingDetailCloseButton from "./CalendarFloatingDetailCloseButton.jsx";
 import {
   clampFloatingPosition,
@@ -38,6 +39,20 @@ function samePlacement(a, b) {
 
 function rectFromElement(element) {
   return element?.isConnected ? element.getBoundingClientRect() : null;
+}
+
+// On Windows at a fractional devicePixelRatio (e.g. 1.25), a GPU-composited layer
+// (this panel uses willChange: transform) positioned at a fractional CSS-pixel
+// translate lands between physical pixels. Each repaint — including the ones a
+// keystroke triggers when the title/draft-preview text inside the panel changes —
+// re-rasterizes the layer against the device grid and snaps text/edges ~1px
+// differently, producing a per-keystroke shimmer with no layout/transform change.
+// Snapping the translate to the physical-pixel grid keeps every repaint identical.
+// Integer DPR (Mac Retina 2.0, or 1.0) already lands on the grid, so this is a no-op there.
+function snapToDevicePixel(value) {
+  if (typeof window === "undefined" || !Number.isFinite(value)) return value;
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(value * dpr) / dpr;
 }
 
 export default function CalendarFloatingDetailPanel({
@@ -460,14 +475,19 @@ export default function CalendarFloatingDetailPanel({
           background: "transparent",
           isolation: "isolate",
           overflow: "visible",
-          willChange: reducedMotion ? "auto" : "transform, opacity",
+          // Intentionally no hardcoded `will-change`. Forcing "transform, opacity"
+          // kept the panel permanently on its own GPU layer; on Windows at fractional
+          // DPR (1.25) that idle layer re-rasterizes text ~1px on every keystroke-driven
+          // repaint (sub-pixel shimmer with no layout/transform change). Motion manages
+          // will-change around its own animations, so letting the panel de-promote once
+          // the open spring settles renders text on the main compositor where it's stable.
         }}
         initial={reducedMotion ? false : { opacity: 0, scale: 0.985 }}
         animate={{
           opacity: awaitingMeasuredPlacement ? 0 : 1,
           scale: awaitingMeasuredPlacement ? 0.985 : 1,
-          x: resolvedPlacement.left,
-          y: resolvedPlacement.top,
+          x: snapToDevicePixel(resolvedPlacement.left),
+          y: snapToDevicePixel(resolvedPlacement.top),
         }}
         exit={reducedMotion ? undefined : { opacity: 0, scale: 0.985 }}
         transition={{
@@ -477,39 +497,10 @@ export default function CalendarFloatingDetailPanel({
           scale: contentTransition(reducedMotion),
         }}
       >
-        {!manualPlacementActive &&
-        resolvedPlacement.caretSide ? (
-          <span
-            aria-hidden="true"
-            data-testid="calendar-floating-detail-caret"
-            style={{
-              position: "absolute",
-              top: resolvedPlacement.caretTop,
-              [resolvedPlacement.caretSide]: -6,
-              width: 12,
-              height: 12,
-              transform: "rotate(45deg)",
-              background: "#1b1b27",
-              borderLeft:
-                resolvedPlacement.caretSide === "left"
-                  ? "1px solid rgba(203,166,218,0.22)"
-                  : 0,
-              borderBottom:
-                resolvedPlacement.caretSide === "left"
-                  ? "1px solid rgba(203,166,218,0.22)"
-                  : 0,
-              borderRight:
-                resolvedPlacement.caretSide === "right"
-                  ? "1px solid rgba(203,166,218,0.22)"
-                  : 0,
-              borderTop:
-                resolvedPlacement.caretSide === "right"
-                  ? "1px solid rgba(203,166,218,0.22)"
-                  : 0,
-              boxShadow: "0 0 10px rgba(203,166,218,0.10)",
-              zIndex: 0,
-              pointerEvents: "none",
-            }}
+        {!manualPlacementActive ? (
+          <CalendarFloatingDetailCaret
+            caretSide={resolvedPlacement.caretSide}
+            caretTop={resolvedPlacement.caretTop}
           />
         ) : null}
         <div

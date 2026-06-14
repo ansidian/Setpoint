@@ -8,6 +8,7 @@ import {
   _clearAlfredConversationsForTest,
   createAlfredConversation,
 } from "./alfred-conversations.js";
+import { htmlToPlainText } from "../email/html-to-text.js";
 
 function ctxWith(deps, overrides = {}) {
   return {
@@ -111,7 +112,7 @@ describe("get_email_body", () => {
       from: "A <a@b.com>",
       date: "2026-06-10T12:00:00.000Z",
     });
-    const result = await executeAlfredTool("get_email_body", { uid: "em-1" }, ctxWith({ getEmailBody }));
+    const result = await executeAlfredTool("get_email_body", { uid: "em-1" }, ctxWith({ getEmailBody, htmlToPlainText }));
     expect(getEmailBody).toHaveBeenCalledWith("user-1", "em-1");
     expect(result.body).toContain("<email_content uid=\"em-1\">");
     expect(result.body).toContain("Hello");

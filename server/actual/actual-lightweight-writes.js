@@ -1,14 +1,20 @@
 import { createClient } from "@libsql/client";
 import {
-  SyncProtoBuf,
+  MessageEnvelopeSchema,
+  MessageSchema,
+  SyncRequestSchema,
+  SyncResponseSchema,
   Timestamp,
+  create,
   deserializeClock,
+  fromBinary,
   makeClientId,
   makeClock,
   merkle,
   serializeClock,
   setClock,
   getClock,
+  toBinary,
 } from "@actual-app/crdt";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
@@ -55,25 +61,22 @@ function serializeValue(value) {
 }
 
 function encodeSyncRequest({ groupId, cloudFileId, since, messages }) {
-  const requestPb = new SyncProtoBuf.SyncRequest();
-  for (const message of messages) {
-    const envelopePb = new SyncProtoBuf.MessageEnvelope();
-    envelopePb.setTimestamp(String(message.timestamp));
-
-    const messagePb = new SyncProtoBuf.Message();
-    messagePb.setDataset(message.dataset);
-    messagePb.setRow(message.row);
-    messagePb.setColumn(message.column);
-    messagePb.setValue(message.value);
-
-    envelopePb.setContent(messagePb.serializeBinary());
-    envelopePb.setIsencrypted(false);
-    requestPb.addMessages(envelopePb);
-  }
-  requestPb.setGroupid(groupId);
-  requestPb.setFileid(cloudFileId);
-  requestPb.setSince(String(since));
-  return requestPb.serializeBinary();
+  const requestPb = create(SyncRequestSchema, {
+    messages: messages.map((message) => create(MessageEnvelopeSchema, {
+      timestamp: String(message.timestamp),
+      isEncrypted: false,
+      content: toBinary(MessageSchema, create(MessageSchema, {
+        dataset: message.dataset,
+        row: message.row,
+        column: message.column,
+        value: message.value,
+      })),
+    })),
+    groupId,
+    fileId: cloudFileId,
+    since: String(since),
+  });
+  return toBinary(SyncRequestSchema, requestPb);
 }
 
 function syncPayloadSummary(messages) {
@@ -89,24 +92,24 @@ function syncPayloadSummary(messages) {
 // request and compare it field-by-field against the input so drift fails loudly
 // before anything is sent.
 function verifyEncodedSyncRequest(buffer, { groupId, cloudFileId, since, messages }) {
-  const decoded = SyncProtoBuf.SyncRequest.deserializeBinary(buffer);
+  const decoded = fromBinary(SyncRequestSchema, buffer);
   const problems = [];
-  if (decoded.getGroupid() !== groupId) problems.push("groupId");
-  if (decoded.getFileid() !== cloudFileId) problems.push("fileId");
-  if (decoded.getSince() !== String(since)) problems.push("since");
-  const envelopes = decoded.getMessagesList();
+  if (decoded.groupId !== groupId) problems.push("groupId");
+  if (decoded.fileId !== cloudFileId) problems.push("fileId");
+  if (decoded.since !== String(since)) problems.push("since");
+  const envelopes = decoded.messages;
   if (envelopes.length !== messages.length) {
     problems.push(`messageCount (${envelopes.length} != ${messages.length})`);
   } else {
     envelopes.forEach((envelope, index) => {
       const expected = messages[index];
-      const content = SyncProtoBuf.Message.deserializeBinary(envelope.getContent_asU8());
+      const content = fromBinary(MessageSchema, envelope.content);
       if (
-        envelope.getTimestamp() !== String(expected.timestamp)
-        || content.getDataset() !== expected.dataset
-        || content.getRow() !== expected.row
-        || content.getColumn() !== expected.column
-        || content.getValue() !== expected.value
+        envelope.timestamp !== String(expected.timestamp)
+        || content.dataset !== expected.dataset
+        || content.row !== expected.row
+        || content.column !== expected.column
+        || content.value !== expected.value
       ) {
         problems.push(`message[${index}] (${expected.dataset}.${expected.column})`);
       }
@@ -195,10 +198,10 @@ async function postActualSync(config, token, { metadata, messages }) {
       });
     }
     const responseBuffer = await response.arrayBuffer();
-    const responsePb = SyncProtoBuf.SyncResponse.deserializeBinary(new Uint8Array(responseBuffer));
-    const merkleText = responsePb.getMerkle();
+    const responsePb = fromBinary(SyncResponseSchema, new Uint8Array(responseBuffer));
+    const merkleText = responsePb.merkle;
     return {
-      messageCount: responsePb.getMessagesList().length,
+      messageCount: responsePb.messages.length,
       merkle: merkleText ? JSON.parse(merkleText) : null,
     };
   } catch (err) {

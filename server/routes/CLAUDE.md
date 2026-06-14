@@ -18,6 +18,7 @@ The HTTP surface: Express routers that validate input, apply auth, and delegate 
 - `briefing/dev.js` — dev-only email re-indexing endpoint
 
 ### Domains + integrations
+- `alfred.js` — Alfred assistant run stream (SSE `POST /run`), conversation reset; wires the read-only tool deps
 - `calendar.js` — calendar CRUD, deadline reads, event search, reminder hydration
 - `dashboard.js` — dashboard state, current-data SSE stream, health checks
 - `notes.js` — notes CRUD and reordering

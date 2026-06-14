@@ -51,7 +51,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT =
+  process.env.NODE_ENV === "production"
+    ? process.env.PORT || 3001
+    : process.env.EA_SERVER_PORT || 3001;
 const bootStartedAt = performance.now();
 
 app.set("trust proxy", getTrustProxySetting());

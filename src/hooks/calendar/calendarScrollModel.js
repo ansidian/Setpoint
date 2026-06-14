@@ -64,6 +64,10 @@ export function activeMonthIndex({ visibleIndices, scrollOffset, getMonthOffset 
 
 export const LABEL_MONTH_THRESHOLD = 1 / 3;
 
+// Quiet window after the last scroll event before the grid announces where it
+// settled (fetch anchor + trailing agenda sync + week-row alignment).
+export const SCROLL_SETTLE_MS = 150;
+
 export function midpointActiveMonthIndex({ scrollOffset, containerHeight, getMonthOffset, searchFirst, searchLast, threshold = 0.5 }) {
   const point = scrollOffset + containerHeight * threshold;
   let active = searchFirst;
@@ -72,6 +76,32 @@ export function midpointActiveMonthIndex({ scrollOffset, containerHeight, getMon
     else break;
   }
   return active;
+}
+
+// Settle-time replacement for native CSS scroll snap. Native `y proximity`
+// snapping fought Windows notch scrolling: Chromium filters wheel events that
+// arrive while a snap animation is in flight, and the mounted-window swaps
+// re-snap mid-gesture, so discrete-wheel scrolling kept dying until the
+// animation landed. Aligning to the nearest week row only after the scroll
+// settles keeps the EAD-276 resting alignment without ever competing with
+// live input.
+export function nearestWeekRowOffset({ scrollOffset, cellHeight, gridGap, getMonthOffset, getMonthHeight, searchFirst, searchLast }) {
+  let containing = searchFirst;
+  for (let i = searchFirst; i <= searchLast; i++) {
+    if (getMonthOffset(i) <= scrollOffset) containing = i;
+    else break;
+  }
+  const base = getMonthOffset(containing);
+  const pitch = cellHeight + gridGap;
+  // The block has no trailing gap, so its last row starts cellHeight (not a
+  // full pitch) above the next month's start.
+  const lastRowStart = base + getMonthHeight(containing) - cellHeight;
+  const row = Math.max(0, Math.round((scrollOffset - base) / pitch));
+  const withinMonth = Math.min(base + row * pitch, lastRowStart);
+  const nextMonthStart = base + getMonthHeight(containing);
+  return Math.abs(nextMonthStart - scrollOffset) < Math.abs(withinMonth - scrollOffset)
+    ? nextMonthStart
+    : withinMonth;
 }
 
 export function prefetchRange({ visibleFirst, visibleLast, scrollDirection }) {
