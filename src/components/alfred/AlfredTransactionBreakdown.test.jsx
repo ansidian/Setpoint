@@ -1,10 +1,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import AlfredSpendingBreakdown from "./AlfredSpendingBreakdown.jsx";
+import AlfredTransactionBreakdown from "./AlfredTransactionBreakdown.jsx";
 
 afterEach(cleanup);
 
-describe("AlfredSpendingBreakdown", () => {
+describe("AlfredTransactionBreakdown", () => {
   const buckets = [
     { label: "Groceries", amount: 82, count: 2 },
     { label: "Other", amount: 18, count: 5 },
@@ -12,7 +12,7 @@ describe("AlfredSpendingBreakdown", () => {
 
   it("renders category labels", () => {
     render(
-      <AlfredSpendingBreakdown
+      <AlfredTransactionBreakdown
         buckets={buckets}
         period={{ start: "2026-06-01", end: "2026-06-30" }}
         group_by="category"
@@ -25,7 +25,7 @@ describe("AlfredSpendingBreakdown", () => {
 
   it("renders formatted amounts", () => {
     render(
-      <AlfredSpendingBreakdown
+      <AlfredTransactionBreakdown
         buckets={buckets}
         period={{ start: "2026-06-01", end: "2026-06-30" }}
         group_by="category"
@@ -38,7 +38,7 @@ describe("AlfredSpendingBreakdown", () => {
 
   it("renders the group label header", () => {
     render(
-      <AlfredSpendingBreakdown
+      <AlfredTransactionBreakdown
         buckets={buckets}
         period={{ start: "2026-06-01", end: "2026-06-30" }}
         group_by="category"
@@ -50,7 +50,7 @@ describe("AlfredSpendingBreakdown", () => {
 
   it("renders the period label", () => {
     render(
-      <AlfredSpendingBreakdown
+      <AlfredTransactionBreakdown
         buckets={buckets}
         period={{ start: "2026-06-01", end: "2026-06-30" }}
         group_by="category"
@@ -62,7 +62,7 @@ describe("AlfredSpendingBreakdown", () => {
 
   it("renders a multi-month period as a range", () => {
     render(
-      <AlfredSpendingBreakdown
+      <AlfredTransactionBreakdown
         buckets={buckets}
         period={{ start: "2026-01-01", end: "2026-06-30" }}
         group_by="category"
@@ -74,7 +74,7 @@ describe("AlfredSpendingBreakdown", () => {
 
   it("renders nothing for empty buckets", () => {
     const { container } = render(
-      <AlfredSpendingBreakdown
+      <AlfredTransactionBreakdown
         buckets={[]}
         period={{}}
         group_by="category"

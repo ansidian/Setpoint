@@ -27,7 +27,7 @@ const TOOL_RUNNING_LABELS = {
   get_upcoming_bills: "Checking bills…",
   show_items: "Gathering rows…",
   search_transactions: "Searching transactions…",
-  summarize_spending: "Tallying spending…",
+  summarize_transactions: "Tallying transactions…",
 };
 
 export function alfredToolRunningLabel(name) {

@@ -126,7 +126,7 @@ describe("helpers", () => {
 
   it("labels the transaction tools while running", () => {
     expect(alfredToolRunningLabel("search_transactions")).toBe("Searching transactions…");
-    expect(alfredToolRunningLabel("summarize_spending")).toBe("Tallying spending…");
+    expect(alfredToolRunningLabel("summarize_transactions")).toBe("Tallying transactions…");
   });
 
   it("formats dates and priorities", () => {

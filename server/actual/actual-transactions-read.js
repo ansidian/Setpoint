@@ -22,11 +22,12 @@ function resolveName(value, rows) {
   return match ? { ok: true, id: match.id } : { ok: false };
 }
 
-// Reads expense transactions from the on-disk budget copy (no SDK). "Spending" =
-// outflows (amount < 0) that are not transfers; income (amount > 0) is excluded
-// by the sign filter. Names are resolved from the same connection. Returns
-// { unknownFilter } when a provided filter name does not exist, else
-// { transactions, truncated }. Throws { status: 503 } when the copy is missing.
+// Reads transactions from the on-disk budget copy (no SDK). direction "expense"
+// (default) = outflows (amount < 0); direction "income" = inflows (amount > 0).
+// Transfers are excluded in both directions. Names are resolved from the same
+// connection. Returns { unknownFilter } when a provided filter name does not
+// exist, else { transactions, truncated }. Throws { status: 503 } when the copy
+// is missing.
 export async function readTransactionsRange(userId, filters = {}, options = {}) {
   const start = filters.start;
   const end = filters.end;
@@ -34,6 +35,7 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
   const minAmount = filters.minAmount ?? filters.min_amount;
   const maxAmount = filters.maxAmount ?? filters.max_amount;
   const notes = filters.notes;
+  const direction = filters.direction === "income" ? "income" : "expense";
 
   const client = await openLocalBudgetClient(userId, options);
   try {
@@ -58,11 +60,11 @@ export async function readTransactionsRange(userId, filters = {}, options = {}) 
 
     const clauses = [
       "COALESCE(t.tombstone,0)=0",
-      "t.amount < 0",
       "t.date >= ?",
       "t.date <= ?",
       "t.payee NOT IN (SELECT id FROM payees WHERE transfer_acct IS NOT NULL AND COALESCE(tombstone,0)=0)",
     ];
+    clauses.push(direction === "income" ? "t.amount > 0" : "t.amount < 0");
     const args = [actualDateInt(start), actualDateInt(end)];
     if (payeeF) { clauses.push("t.payee = ?"); args.push(payeeF); }
     if (categoryF) { clauses.push("t.category = ?"); args.push(categoryF); }

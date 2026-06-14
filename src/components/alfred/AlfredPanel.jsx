@@ -18,7 +18,7 @@ import {
 import { RowsBlock } from "./AlfredRows.jsx";
 import AlfredComposer from "./AlfredComposer.jsx";
 import AlfredEmailPreview from "./AlfredEmailPreview.jsx";
-import AlfredSpendingBreakdown from "./AlfredSpendingBreakdown.jsx";
+import AlfredTransactionBreakdown from "./AlfredTransactionBreakdown.jsx";
 
 const dim = "rgba(205,214,244,0.55)";
 const text = "#cdd6f4";
@@ -208,7 +208,7 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
               if (m.type === "tools") return <ToolRows key={m.id} tools={m.tools} accent={accent} />;
               if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} />;
               if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items} accent={accent} onActivateItem={onActivateChip} />;
-              if (m.type === "summary") return <AlfredSpendingBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;
+              if (m.type === "summary") return <AlfredTransactionBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;
               if (m.type === "error") return <ErrorLine key={m.id} text={m.text} />;
               return null;
             })}

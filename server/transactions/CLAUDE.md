@@ -6,15 +6,15 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 
 ## Files
 
-- `transactions-service.js` — public API: `queryTransactions` (filtered expense list)
-  and `summarizeSpending` (aggregate by category/payee/month). Filter policy, JS
+- `transactions-service.js` — public API: `queryTransactions` (filtered transaction list)
+  and `summarizeTransactions` (aggregate by category/payee/month). Filter policy, JS
   aggregation (top-15 + Other), `sync_state`, graceful errors. Injectable deps.
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
 ## Local patterns
 
-- Spending = expenses only (outflows); income and transfers are excluded.
+- direction "expense" (default) = outflows (amount < 0); direction "income" = inflows (amount > 0). Transfers are excluded in both directions.
 - Reads go through `server/actual/actual-transactions-read.js` → on-disk `db.sqlite`
   via `@libsql/client`. No SDK, no budget-in-heap (Render 512MB firewall).
 - `sync_state` freshness is best-effort, sourced from `getBillsMirrorState`.
@@ -22,5 +22,5 @@ Actual SDK (see `docs/exec-plans/active/2026-06-14-alfred-transaction-access-des
 ## Related
 
 - `server/actual/actual-transactions-read.js` — the low-level reader.
-- `server/alfred/alfred-tools.js` — `search_transactions` / `summarize_spending`.
+- `server/alfred/alfred-tools.js` — `search_transactions` / `summarize_transactions`.
 - `docs/adr/0006-alfred-trust-architecture.md` — read-only trust posture.

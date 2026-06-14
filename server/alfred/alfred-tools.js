@@ -78,7 +78,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
   {
     name: "search_transactions",
-    description: "List the owner's past spending — individual expense transactions in a date range, with amounts, payee, category, account, and notes. This is money already spent, NOT upcoming obligations; use get_upcoming_bills for bills and card payments coming due. Income and transfers are excluded. Optional filters: payee, category, account, min_amount, max_amount, notes. Returns compact rows; call show_items to display them.",
+    description: "List the owner's past transactions in a date range, with amounts, payee, category, account, and notes. This is money already moved, NOT upcoming obligations; use get_upcoming_bills for bills and card payments coming due. Transfers are always excluded. By default returns expenses (money spent); set direction to income for money received. Optional filters: payee, category, account, min_amount, max_amount, notes. Returns compact rows; call show_items to display them.",
     input_schema: {
       type: "object",
       properties: {
@@ -91,13 +91,14 @@ export const ALFRED_TOOL_DEFINITIONS = [
         max_amount: { type: "number", description: "Optional maximum amount in dollars (absolute value)" },
         notes: { type: "string", description: "Optional substring to match against the transaction's note/memo (case-insensitive)" },
         limit: { type: "integer", description: "Max results (default 25, max 50)" },
+        direction: { type: "string", enum: ["expense", "income"], description: "Which transactions to include: expense (default, money spent) or income (money received). Transfers are always excluded." },
       },
       required: ["start", "end"],
     },
   },
   {
-    name: "summarize_spending",
-    description: "Total the owner's spending over a date range, grouped by category, payee, or month — for 'how much did I spend on X' questions. Income and transfers are excluded; this is money spent, not upcoming bills. Returns aggregate buckets to report in prose (do not call show_items for these).",
+    name: "summarize_transactions",
+    description: "Total the owner's transactions over a date range, grouped by category, payee, or month — for 'how much did I spend/earn on X' questions. Transfers are always excluded. By default totals expenses; set direction to income for received money. Returns aggregate buckets to report in prose (do not call show_items for these).",
     input_schema: {
       type: "object",
       properties: {
@@ -108,6 +109,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
         category: { type: "string", description: "Optional budget category name" },
         account: { type: "string", description: "Optional account name" },
         notes: { type: "string", description: "Optional substring to match against the transaction's note/memo (case-insensitive)" },
+        direction: { type: "string", enum: ["expense", "income"], description: "Which transactions to include: expense (default, money spent) or income (money received). Transfers are always excluded." },
       },
       required: ["start", "end"],
     },
@@ -193,6 +195,7 @@ function transactionFilters(input) {
   if (Number.isFinite(Number(input.min_amount))) out.min_amount = Number(input.min_amount);
   if (Number.isFinite(Number(input.max_amount))) out.max_amount = Number(input.max_amount);
   if (input.notes) out.notes = String(input.notes);
+  out.direction = input.direction === "income" ? "income" : "expense";
   return out;
 }
 
@@ -372,15 +375,16 @@ async function runSearchTransactions(input, { userId, conversation, deps }) {
   };
 }
 
-async function runSummarizeSpending(input, { userId, deps, emit }) {
+async function runSummarizeTransactions(input, { userId, deps, emit }) {
   const range = parseTransactionDateRange(input);
   if (range.error) return { error: range.error };
   const groupBy = ["category", "payee", "month"].includes(input.group_by) ? input.group_by : "category";
-  const data = await deps.summarizeSpending(userId, {
+  const filters = transactionFilters(input);
+  const data = await deps.summarizeTransactions(userId, {
     start: range.startIso,
     end: range.endIso,
     group_by: groupBy,
-    ...transactionFilters(input),
+    ...filters,
   });
   if (data?.error) return { error: data.error };
   if (data?.unknown_filter) return { total: 0, unknown_filter: data.unknown_filter };
@@ -398,6 +402,7 @@ async function runSummarizeSpending(input, { userId, deps, emit }) {
     total: data?.total ?? 0,
     period: data?.period || { start: range.startIso, end: range.endIso },
     group_by: groupBy,
+    direction: filters.direction,
     ...(data?.sync_state ? { sync_state: data.sync_state } : {}),
     buckets,
   };
@@ -427,7 +432,7 @@ export async function executeAlfredTool(name, input, ctx) {
     case "get_deadlines": return runGetDeadlines(args, ctx);
     case "get_upcoming_bills": return runGetUpcomingBills(args, ctx);
     case "search_transactions": return runSearchTransactions(args, ctx);
-    case "summarize_spending": return runSummarizeSpending(args, ctx);
+    case "summarize_transactions": return runSummarizeTransactions(args, ctx);
     case "show_items": return runShowItems(args, ctx);
     default: return { error: `Unknown tool "${name}"` };
   }
@@ -442,7 +447,7 @@ export function alfredToolSummary(name, result = {}) {
       get_deadlines: "Deadlines",
       get_upcoming_bills: "Bills",
       search_transactions: "Transactions",
-      summarize_spending: "Spending",
+      summarize_transactions: "Transactions",
       show_items: "Display",
     }[name] || "Tool";
     return `${source} · failed`;
@@ -454,7 +459,7 @@ export function alfredToolSummary(name, result = {}) {
     case "get_deadlines": return `Deadlines · ${result.open ?? result.total ?? 0} open`;
     case "get_upcoming_bills": return `Bills · ${result.total ?? 0} upcoming`;
     case "search_transactions": return `Transactions · ${result.total ?? 0} found`;
-    case "summarize_spending": return `Spending · ${result.buckets?.length ?? 0} groups`;
+    case "summarize_transactions": return `${result.direction === "income" ? "Income" : "Spending"} · ${result.buckets?.length ?? 0} groups`;
     case "show_items": return `Showing ${result.shown ?? 0} items`;
     default: return name;
   }

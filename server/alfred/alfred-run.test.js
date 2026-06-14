@@ -295,12 +295,12 @@ describe("runAlfred", () => {
     expect(nudge.content).toContain("transactions");
   });
 
-  it("does not nudge when summarize_spending returns a low dollar total (its total is a dollar sum, not a row count)", async () => {
+  it("does not nudge when summarize_transactions returns a low dollar total (its total is a dollar sum, not a row count)", async () => {
     const fetchImpl = fetchScript([
-      toolUseTurn("summarize_spending", { start: "2026-05-01", end: "2026-05-31" }),
+      toolUseTurn("summarize_transactions", { start: "2026-05-01", end: "2026-05-31" }),
       textTurn("You spent $5.00 on coffee in May."),
     ]);
-    const summarizeSpending = vi.fn().mockResolvedValue({
+    const summarizeTransactions = vi.fn().mockResolvedValue({
       total: 5,
       period: { start: "2026-05-01", end: "2026-05-31" },
       group_by: "category",
@@ -315,7 +315,7 @@ describe("runAlfred", () => {
       emit,
       fetchImpl,
       apiKey: "key",
-      deps: { summarizeSpending },
+      deps: { summarizeTransactions },
       recordUsage,
     });
 

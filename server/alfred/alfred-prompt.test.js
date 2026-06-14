@@ -45,4 +45,10 @@ describe("buildAlfredSystemPrompt", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     expect(prompt).toMatch(/breakdown card/i);
   });
+
+  it("mentions income and the summarize_transactions tool name", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
+    expect(prompt).toMatch(/income/i);
+    expect(prompt).toContain("summarize_transactions");
+  });
 });

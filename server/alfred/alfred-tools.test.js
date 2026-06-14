@@ -34,7 +34,7 @@ describe("tool definitions", () => {
       "search_email",
       "search_transactions",
       "show_items",
-      "summarize_spending",
+      "summarize_transactions",
     ]);
     for (const tool of ALFRED_TOOL_DEFINITIONS) {
       expect(tool.input_schema?.type).toBe("object");
@@ -464,9 +464,9 @@ describe("transaction tools", () => {
     expect(result.transactions[0].notes).toBe("morning coffee");
   });
 
-  it("summarize_spending passes notes filter to deps.summarizeSpending", async () => {
+  it("summarize_transactions passes notes filter to deps.summarizeTransactions", async () => {
     const deps = {
-      summarizeSpending: vi.fn(async () => ({
+      summarizeTransactions: vi.fn(async () => ({
         total: 5.5,
         period: { start: "2026-05-01", end: "2026-05-31" },
         group_by: "category",
@@ -474,10 +474,41 @@ describe("transaction tools", () => {
       })),
     };
     const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_spending", {
+    await executeAlfredTool("summarize_transactions", {
       start: "2026-05-01", end: "2026-05-31", notes: "coffee",
     }, ctx);
-    expect(deps.summarizeSpending).toHaveBeenCalledWith("user-1", expect.objectContaining({ notes: "coffee" }));
+    expect(deps.summarizeTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ notes: "coffee" }));
+  });
+
+  it("search_transactions forwards direction:'income' to deps.queryTransactions", async () => {
+    const deps = {
+      queryTransactions: vi.fn(async () => ({
+        total: 1,
+        truncated: false,
+        transactions: [{ id: "t-paycheck", date: "2026-05-15", amount: 5000, payee: "Employer", category: "Uncategorized", account: "Checking", notes: "" }],
+      })),
+    };
+    const ctx = ctxWith(deps);
+    await executeAlfredTool("search_transactions", {
+      start: "2026-05-01", end: "2026-05-31", direction: "income",
+    }, ctx);
+    expect(deps.queryTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ direction: "income" }));
+  });
+
+  it("summarize_transactions forwards direction:'income' to deps.summarizeTransactions", async () => {
+    const deps = {
+      summarizeTransactions: vi.fn(async () => ({
+        total: 5000,
+        period: { start: "2026-05-01", end: "2026-05-31" },
+        group_by: "category",
+        buckets: [{ label: "Uncategorized", amount: 5000, count: 1 }],
+      })),
+    };
+    const ctx = ctxWith(deps);
+    await executeAlfredTool("summarize_transactions", {
+      start: "2026-05-01", end: "2026-05-31", direction: "income",
+    }, ctx);
+    expect(deps.summarizeTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ direction: "income" }));
   });
 
   it("search_transactions rejects a bad date range", async () => {
@@ -491,28 +522,28 @@ describe("transaction tools", () => {
     expect(result).toEqual({ total: 0, unknown_filter: "category 'X' not found" });
   });
 
-  it("summarize_spending returns buckets and defaults group_by to category", async () => {
+  it("summarize_transactions returns buckets and defaults group_by to category", async () => {
     const deps = {
-      summarizeSpending: vi.fn(async () => ({
+      summarizeTransactions: vi.fn(async () => ({
         total: 142, period: { start: "2026-04-01", end: "2026-05-31" }, group_by: "category",
         buckets: [{ label: "Groceries", amount: 82, count: 2 }, { label: "Gas", amount: 60, count: 1 }],
       })),
     };
-    const result = await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctxWith(deps));
+    const result = await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctxWith(deps));
     expect(result.buckets).toHaveLength(2);
-    expect(deps.summarizeSpending).toHaveBeenCalledWith("user-1", expect.objectContaining({ group_by: "category" }));
+    expect(deps.summarizeTransactions).toHaveBeenCalledWith("user-1", expect.objectContaining({ group_by: "category" }));
   });
 
-  it("summarize_spending emits a summary event with buckets", async () => {
+  it("summarize_transactions emits a summary event with buckets", async () => {
     const buckets = [{ label: "Groceries", amount: 82, count: 2 }, { label: "Gas", amount: 60, count: 1 }];
     const period = { start: "2026-04-01", end: "2026-05-31" };
     const deps = {
-      summarizeSpending: vi.fn(async () => ({
+      summarizeTransactions: vi.fn(async () => ({
         total: 142, period, group_by: "category", buckets,
       })),
     };
     const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctx);
+    await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
     expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({
       type: "summary",
       total: 142,
@@ -522,24 +553,24 @@ describe("transaction tools", () => {
     }));
   });
 
-  it("summarize_spending does NOT emit on error", async () => {
+  it("summarize_transactions does NOT emit on error", async () => {
     const deps = {
-      summarizeSpending: vi.fn(async () => ({ error: "ynab unavailable" })),
+      summarizeTransactions: vi.fn(async () => ({ error: "ynab unavailable" })),
     };
     const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctx);
+    await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
     const summaryCalls = ctx.emit.mock.calls.filter(([e]) => e?.type === "summary");
     expect(summaryCalls).toHaveLength(0);
   });
 
-  it("summarize_spending does NOT emit when buckets are empty", async () => {
+  it("summarize_transactions does NOT emit when buckets are empty", async () => {
     const deps = {
-      summarizeSpending: vi.fn(async () => ({
+      summarizeTransactions: vi.fn(async () => ({
         total: 0, period: { start: "2026-04-01", end: "2026-05-31" }, group_by: "category", buckets: [],
       })),
     };
     const ctx = ctxWith(deps);
-    await executeAlfredTool("summarize_spending", { start: "2026-04-01", end: "2026-05-31" }, ctx);
+    await executeAlfredTool("summarize_transactions", { start: "2026-04-01", end: "2026-05-31" }, ctx);
     const summaryCalls = ctx.emit.mock.calls.filter(([e]) => e?.type === "summary");
     expect(summaryCalls).toHaveLength(0);
   });
