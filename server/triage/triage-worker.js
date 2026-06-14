@@ -11,10 +11,10 @@ import {
 import {
   createTriageDecision,
   fallbackDecision,
-  noModelDecision,
   normalizeModelDecision,
   triageDecisionFromPreflight,
 } from "./triage-decision-normalize.js";
+import { heuristicNoModelDecision } from "./triage-heuristic-scorer.js";
 import { createTriageModelClient, loadTriageModelConfig } from "./triage-model-client.js";
 import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
 import { cheapEscalationReason } from "./triage-escalation-policy.js";
@@ -823,7 +823,10 @@ export async function processNextEmailTriageJob({
       decision = weakSecurityReadDecision();
       modelCalls = [];
     } else if (mode.effective_email_triage_mode === "no_model") {
-      decision = noModelDecision(email);
+      // Dev-only heuristic classifier (sender/subject/body bands -> lane). Replaces
+      // the constant-needs_attention noModelDecision, which remains in
+      // triage-decision-normalize.js as a labeled legacy fallback (no longer the default path).
+      decision = heuristicNoModelDecision(email);
       modelCalls = [];
     } else {
       const routed = await routeEmailForTriage(email, { dbClient, modelClient, batch });

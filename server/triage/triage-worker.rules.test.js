@@ -4,7 +4,7 @@ import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.js";
 import { processNextEmailTriageJob } from "./triage-worker.js";
 
 describe("email triage worker rule finalization", () => {
-  it("finalizes queued mail with no-model local rules without model calls or bill candidates", async () => {
+  it("finalizes queued mail with the no-model heuristic scorer without model calls or bill candidates", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
       subject: "Payment due tomorrow",
@@ -29,7 +29,7 @@ describe("email triage worker rule finalization", () => {
       processed: true,
       email_id: "msg-1",
       lane: "needs_attention",
-      source: "no_model_fallback",
+      source: "no_model_heuristic",
       model_calls: [],
     });
     expect(modelClient.classify).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe("email triage worker rule finalization", () => {
       urgency: "normal",
       escalation_badge: "Needs Review",
       triage_status: "complete",
-      triage_source: "no_model_fallback",
+      triage_source: "no_model_heuristic",
       summary: "Your utility payment of $120 is due tomorrow.",
       action: "Review",
       model_usage_json: "{}",

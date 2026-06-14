@@ -7,6 +7,7 @@ AI email classification: the batch worker, model client, preflight rules, escala
 - `triage-worker.js` — batch triage of snapshot items, applies escalation policy
 - `triage-model-client.js` — LLM triage call and decision parsing
 - `triage-decision-normalize.js` — normalizes decisions: action, rationale, confidence
+- `triage-heuristic-scorer.js` — dev-only no-LLM classifier: sender/subject/body bands → lane (the `no_model` path)
 - `triage-escalation-policy.js` — routes actions to destinations (snooze/archive/bill/…)
 - `triage-mode.js` — triage mode config: auto/real/no-model/paused
 - `triage-preflight.js` — pre-triage checks: item availability, model readiness
