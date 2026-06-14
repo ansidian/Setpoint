@@ -155,8 +155,8 @@ describe("mobile dashboard layout", () => {
 
     fireEvent.mouseEnter(openButton);
 
-    expect(openButton.style.background).toBe("rgba(203, 166, 218, 0.08)");
-    expect(openButton.style.color).toBe("rgb(203, 166, 218)");
+    expect(openButton.style.background).toBe("#cba6da14");
+    expect(openButton.style.color).toBe("#cba6da");
   });
 });
 

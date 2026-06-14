@@ -196,9 +196,9 @@ describe("MiniCalendar", () => {
 
     expect(screen.getByTestId("calendar-mini-calendar-month-label").textContent).toBe("May");
     // These exact title colors are a documented mini-calendar contract in DESIGN.md.
-    expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("rgb(248, 250, 255)");
+    expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("#f8faff");
     expect(screen.getByTestId("calendar-mini-calendar-year-label").textContent).toBe("2026");
-    expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("rgb(255, 69, 58)");
+    expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("#ff453a");
   });
 
   it("exposes compact month controls through provided callbacks only", () => {

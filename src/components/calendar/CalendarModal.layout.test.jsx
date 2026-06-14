@@ -72,11 +72,11 @@ describe("CalendarModal shell and search layout", () => {
 
     expect(monthGrid).toBeTruthy();
     expect(skeletons.length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByTestId("calendar-month-title-month").style.color).toBe("rgb(248, 250, 255)");
-    expect(screen.getByTestId("calendar-month-title-year").style.color).toBe("rgb(255, 69, 58)");
+    expect(screen.getByTestId("calendar-month-title-month").style.color).toBe("#f8faff");
+    expect(screen.getByTestId("calendar-month-title-year").style.color).toBe("#ff453a");
     expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
-    expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("rgb(248, 250, 255)");
-    expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("rgb(255, 69, 58)");
+    expect(screen.getByTestId("calendar-mini-calendar-month-label").style.color).toBe("#f8faff");
+    expect(screen.getByTestId("calendar-mini-calendar-year-label").style.color).toBe("#ff453a");
     expect(screen.getAllByTestId("calendar-mini-calendar-date")).toHaveLength(42);
     expect(screen.getByTestId("calendar-events-rail-skeleton")).toBeTruthy();
   });

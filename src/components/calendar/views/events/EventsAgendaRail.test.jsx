@@ -578,8 +578,8 @@ describe("EventsAgendaRail", () => {
 
     const chips = screen.getAllByTestId("calendar-agenda-event-chip");
     expect(chips).toHaveLength(2);
-    expect(chips[0].style.border).toBe("1px solid rgb(137, 180, 250)");
-    expect(chips[1].style.border).not.toBe("1px solid rgb(137, 180, 250)");
+    expect(chips[0].style.border).toBe("1px solid rgba(137, 180, 250, 1)");
+    expect(chips[1].style.border).not.toBe("1px solid rgba(137, 180, 250, 1)");
   });
 
   it("does not insert a selected-only dot into solid all-day chips", () => {

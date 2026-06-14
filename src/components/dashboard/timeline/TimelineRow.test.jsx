@@ -95,7 +95,7 @@ describe("TimelineRow", () => {
 
     render(<TimelineRow accent="#cba6da" item={deadline} now={now} />);
 
-    expect(screen.getByTestId("timeline-row-dot").firstElementChild?.style.background).toBe("rgb(228, 67, 50)");
+    expect(screen.getByTestId("timeline-row-dot").firstElementChild?.style.background).toBe("#e44332");
   });
 
   it("renders all-day events as all-day rather than timed live blocks", () => {

@@ -17,7 +17,7 @@ export default defineConfig({
       "src/**/*.test.jsx",
       "scripts/**/*.test.mjs",
     ],
-    environment: "jsdom",
+    environment: "happy-dom",
     testTimeout: 10000,
   },
 });
