@@ -5,7 +5,7 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 ## Files
 
 - `AlfredPanel.jsx` — panel chrome: header/thread/composer, empty state, handoff + new-chat effects
-- `useAlfredChat.js` — run lifecycle: streaming submit, abort, new chat, conversation id
+- `useAlfredChat.js` — run lifecycle: streaming submit, abort, new chat (clears messages + composer draft), conversation id
 - `alfredPanelModel.js` — pure SSE-event → message-list reducer, model catalog, formatters, suggestions
 - `AlfredMessages.jsx` — UserLine, ToolRows, SayBlock (serif lead), ErrorLine, SuggestionList, ModelToggle
 - `AlfredRows.jsx` — verbatim domain rows: bill/event/deadline/email (cite-by-reference; never reshape values)

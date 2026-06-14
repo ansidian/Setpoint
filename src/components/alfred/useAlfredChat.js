@@ -7,10 +7,30 @@ import {
   makeUserMessage,
 } from "./alfredPanelModel.js";
 
+const MODEL_STORAGE_KEY = "alfred:model";
+
+// alfredModelByKey resolves unknown/missing keys to the default entry, so a
+// stale or hand-edited stored value can never select a model the catalog
+// (and the server allowlist) doesn't know.
+function loadStoredModelKey() {
+  try {
+    return alfredModelByKey(localStorage.getItem(MODEL_STORAGE_KEY)).key;
+  } catch {
+    return DEFAULT_ALFRED_MODEL_KEY;
+  }
+}
+
 export default function useAlfredChat() {
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [modelKey, setModelKey] = useState(DEFAULT_ALFRED_MODEL_KEY);
+  const [modelKey, setModelKeyState] = useState(loadStoredModelKey);
+  const [draft, setDraft] = useState("");
+
+  const setModelKey = useCallback((key) => {
+    const valid = alfredModelByKey(key).key;
+    setModelKeyState(valid);
+    try { localStorage.setItem(MODEL_STORAGE_KEY, valid); } catch { /* ignore */ }
+  }, []);
 
   const modelKeyRef = useRef(modelKey);
   modelKeyRef.current = modelKey;
@@ -59,6 +79,9 @@ export default function useAlfredChat() {
     }
   }, []);
 
+  // Clearing the composer draft is part of the new-chat action itself (not a
+  // concern of whichever surface triggered it): the panel's header button and
+  // the ⌘⇧\ tick both reset the full chat surface through this one path.
   const newChat = useCallback(() => {
     runSeqRef.current += 1;
     abortRef.current?.abort();
@@ -66,9 +89,10 @@ export default function useAlfredChat() {
     conversationRef.current = null;
     if (id) deleteAlfredConversation(id).catch(() => {});
     setMessages([]);
+    setDraft("");
     busyRef.current = false;
     setBusy(false);
   }, []);
 
-  return { messages, busy, modelKey, setModelKey, submit, newChat };
+  return { messages, busy, modelKey, setModelKey, draft, setDraft, submit, newChat };
 }

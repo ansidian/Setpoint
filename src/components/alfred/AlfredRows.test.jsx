@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RowsBlock } from "./AlfredRows.jsx";
 
 afterEach(cleanup);
@@ -47,5 +47,45 @@ describe("RowsBlock", () => {
   it("renders nothing for an unknown kind", () => {
     const { container } = render(<RowsBlock accent="#cba6da" kind="transaction" items={[{ id: "x" }]} />);
     expect(container.textContent).toBe("");
+  });
+
+  it("activates a chip on click and Enter with the resolved action", () => {
+    const onActivateItem = vi.fn();
+    render(<RowsBlock accent="#cba6da" kind="bill" onActivateItem={onActivateItem} items={[
+      { id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false },
+    ]} />);
+    const chip = screen.getByRole("button");
+    fireEvent.click(chip);
+    fireEvent.keyDown(chip, { key: "Enter" });
+    expect(onActivateItem).toHaveBeenCalledTimes(2);
+    expect(onActivateItem.mock.calls[0][0].type).toBe("calendar");
+    expect(onActivateItem.mock.calls[0][0].request.focusItemId).toBe("b1");
+  });
+
+  it("emits an email action for email chips", () => {
+    const onActivateItem = vi.fn();
+    render(<RowsBlock accent="#cba6da" kind="email" onActivateItem={onActivateItem} items={[
+      { uid: "m1", subject: "Verify enrollment", from: { name: "Financial Aid" }, email_date: "2026-06-12T17:30:00.000Z" },
+    ]} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(onActivateItem.mock.calls[0][0]).toEqual({
+      type: "email",
+      item: expect.objectContaining({ uid: "m1" }),
+    });
+  });
+
+  it("renders rows non-interactive without an onActivateItem handler", () => {
+    render(<RowsBlock accent="#cba6da" kind="bill" items={[
+      { id: "b1", name: "Rent", payee: "Oakwood", amount: 1850, next_date: "2026-06-14", paid: false },
+    ]} />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("renders a chip non-interactive when no action resolves", () => {
+    const onActivateItem = vi.fn();
+    render(<RowsBlock accent="#cba6da" kind="email" onActivateItem={onActivateItem} items={[
+      { subject: "No uid", from: { name: "X" }, email_date: "2026-06-12T17:30:00.000Z" },
+    ]} />);
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

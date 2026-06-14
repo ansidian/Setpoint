@@ -18,6 +18,15 @@ function isSuspendedHotkeyTarget(target) {
     && !!target.closest("[data-suspend-calendar-hotkeys='true']");
 }
 
+// "all" fully detaches a container from calendar hotkeys — for overlays that
+// stack ABOVE the modal (the Alfred panel and its email preview). Unlike
+// "true" (checked mid-handler so detail/search Escape branches still apply),
+// this is checked before ANY branch runs.
+function isFullySuspendedHotkeyTarget(target) {
+  return target instanceof HTMLElement
+    && !!target.closest("[data-suspend-calendar-hotkeys='all']");
+}
+
 function visibleOverflowPopoverOwnsEscape() {
   return typeof document !== "undefined"
     && !!document.querySelector("[data-testid='calendar-cell-overflow-popover']")
@@ -93,6 +102,7 @@ export default function useCalendarModalHotkeys({
     if (!open) return undefined;
 
     function handleKey(event) {
+      if (isFullySuspendedHotkeyTarget(event.target)) return;
       if (event.key === "Tab") {
         setSuppressFocusRing(false);
         return;

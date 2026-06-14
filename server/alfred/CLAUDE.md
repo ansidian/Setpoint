@@ -16,6 +16,8 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 
 ## Local patterns
 
+- Cite-by-reference backstop: if a run retrieved a small item set and tries to finish without `show_items`, `alfred-run.js` injects a one-time `<system-reminder>` user turn instead of ending — prompt rules alone proved unreliable on Haiku.
+
 - Tools receive injectable `deps`; the route (`server/routes/alfred.js`) provides real services, tests provide fakes.
 - Email content in tool results is wrapped in `<email_content>` tags; the prompt declares it untrusted data.
 - Conversations are ephemeral by design (CONTEXT.md: **Alfred Conversation**); do not add durable history without revisiting that decision.

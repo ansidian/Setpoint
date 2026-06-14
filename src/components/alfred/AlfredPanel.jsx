@@ -3,6 +3,7 @@
 // while closed so the Alfred Conversation survives close/reopen; cleared only
 // by new chat (Cmd/Ctrl+Shift+\ → newChatTick).
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowUp, RotateCcw, X } from "lucide-react";
 import useAlfredChat from "./useAlfredChat.js";
 import { alfredModelByKey } from "./alfredPanelModel.js";
@@ -15,6 +16,7 @@ import {
   UserLine,
 } from "./AlfredMessages.jsx";
 import { RowsBlock } from "./AlfredRows.jsx";
+import AlfredEmailPreview from "./AlfredEmailPreview.jsx";
 
 const dim = "rgba(205,214,244,0.55)";
 const text = "#cdd6f4";
@@ -31,11 +33,23 @@ function Kbd({ children }) {
   );
 }
 
-export default function AlfredPanel({ open, onClose, accent, handoff, newChatTick }) {
-  const { messages, busy, modelKey, setModelKey, submit, newChat } = useAlfredChat();
-  const [draft, setDraft] = useState("");
+export default function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalendarItem }) {
+  const { messages, busy, modelKey, setModelKey, draft, setDraft, submit, newChat } = useAlfredChat();
+  const [previewItem, setPreviewItem] = useState(null);
   const scrollerRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Closing the panel also closes the email preview. React's documented
+  // "adjust state when a prop changes" render-phase pattern (store previous
+  // open in state + compare) rather than an effect: the preview is a fixed,
+  // body-portaled overlay, so a stale previewItem would linger on screen after
+  // close. This commits in the same render pass — no extra paint, and it avoids
+  // the setState-in-effect cascade lint flags on effect-based resets.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (!open && previewItem !== null) setPreviewItem(null);
+  }
 
   // keep scrolled to the newest message (handoff: scrollTop, not scrollIntoView)
   useEffect(() => {
@@ -50,13 +64,13 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
     return () => clearTimeout(t);
   }, [open]);
 
-  // ⌘⇧\ new chat
+  // ⌘⇧\ new chat. newChat() owns the full reset (messages, draft, abort,
+  // server delete) — external work that must stay in an effect, not render.
   const newChatSeen = useRef(newChatTick);
   useEffect(() => {
     if (newChatSeen.current !== newChatTick) {
       newChatSeen.current = newChatTick;
       newChat();
-      setDraft("");
     }
   }, [newChatTick, newChat]);
 
@@ -69,23 +83,46 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
     }
   }, [handoff, submit]);
 
+  // The panel owns Esc ordering for its overlay stack: preview first, panel
+  // second. Document capture + consume, so the calendar's own capture-phase
+  // hotkeys (and anything beneath) never see an Esc that Alfred handled.
+  useEffect(() => {
+    if (!open) return undefined;
+    function onKey(e) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (previewItem) setPreviewItem(null);
+      else onClose();
+    }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, previewItem, onClose]);
+
   function onComposerKey(e) {
     if (e.key === "Enter" && draft.trim()) {
       e.preventDefault();
       submit(draft.trim());
       setDraft("");
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onClose();
+    }
+  }
+
+  function onActivateChip(action) {
+    if (action.type === "email") {
+      setPreviewItem(action.item);
+    } else if (action.type === "calendar") {
+      setPreviewItem(null);
+      onOpenCalendarItem?.(action.request);
     }
   }
 
   const empty = messages.length === 0;
 
-  return (
+  return createPortal(
     <aside
       aria-hidden={!open}
       aria-label="Alfred panel"
+      data-suspend-calendar-hotkeys="all"
       style={{
         position: "fixed", top: 0, right: 0, bottom: 0,
         width: "min(420px, calc(100vw - 24px))",
@@ -118,7 +155,7 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
         </span>
         <span style={{ flex: 1 }} />
         <ModelToggle modelKey={modelKey} onChange={setModelKey} accent={accent} />
-        <button type="button" title="New chat (⌘⇧\)" onClick={() => { newChat(); setDraft(""); }}
+        <button type="button" title="New chat (⌘⇧\)" onClick={newChat}
           style={{ display: "inline-flex", padding: "4px 7px", background: "transparent", border: "none", cursor: "pointer", color: dim, borderRadius: 6 }}>
           <RotateCcw size={11} />
         </button>
@@ -151,7 +188,7 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
               if (m.type === "user") return <UserLine key={m.id} text={m.text} accent={accent} />;
               if (m.type === "tools") return <ToolRows key={m.id} tools={m.tools} accent={accent} />;
               if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} />;
-              if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items} accent={accent} />;
+              if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items} accent={accent} onActivateItem={onActivateChip} />;
               if (m.type === "error") return <ErrorLine key={m.id} text={m.text} />;
               return null;
             })}
@@ -203,6 +240,11 @@ export default function AlfredPanel({ open, onClose, accent, handoff, newChatTic
           <span style={{ whiteSpace: "nowrap" }}>{alfredModelByKey(modelKey).hint}</span>
         </div>
       </div>
-    </aside>
+
+      {previewItem ? (
+        <AlfredEmailPreview item={previewItem} onClose={() => setPreviewItem(null)} />
+      ) : null}
+    </aside>,
+    document.body,
   );
 }

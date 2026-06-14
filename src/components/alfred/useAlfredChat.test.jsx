@@ -17,6 +17,25 @@ function scriptedRun(events) {
 
 afterEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+});
+
+describe("model persistence", () => {
+  it("restores the saved model and persists changes", () => {
+    localStorage.setItem("alfred:model", "haiku");
+    const { result } = renderHook(() => useAlfredChat());
+    expect(result.current.modelKey).toBe("haiku");
+
+    act(() => result.current.setModelKey("sonnet"));
+    expect(result.current.modelKey).toBe("sonnet");
+    expect(localStorage.getItem("alfred:model")).toBe("sonnet");
+  });
+
+  it("falls back to the default for unknown saved keys", () => {
+    localStorage.setItem("alfred:model", "gpt-9");
+    const { result } = renderHook(() => useAlfredChat());
+    expect(result.current.modelKey).toBe("sonnet");
+  });
 });
 
 describe("useAlfredChat", () => {
@@ -80,5 +99,15 @@ describe("useAlfredChat", () => {
     expect(result.current.messages).toEqual([]);
     expect(result.current.busy).toBe(false);
     expect(api.deleteAlfredConversation).toHaveBeenCalledWith("c9");
+  });
+
+  it("new chat clears the composer draft", () => {
+    const { result } = renderHook(() => useAlfredChat());
+    act(() => result.current.setDraft("half-typed question"));
+    expect(result.current.draft).toBe("half-typed question");
+
+    act(() => result.current.newChat());
+
+    expect(result.current.draft).toBe("");
   });
 });

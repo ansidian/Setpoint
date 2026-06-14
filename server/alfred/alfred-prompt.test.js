@@ -9,6 +9,25 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toContain("Pacific");
   });
 
+  it("is byte-identical across times within the same Pacific day, so the prompt cache survives", () => {
+    const a = buildAlfredSystemPrompt({ now: new Date("2026-06-12T18:00:00.000Z") });
+    const b = buildAlfredSystemPrompt({ now: new Date("2026-06-12T18:01:00.000Z") });
+    expect(a).toBe(b);
+  });
+
+  it("tells the model to search before disclaiming and never ask permission for read-only lookups", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-12T18:00:00.000Z") });
+    expect(prompt.toLowerCase()).toContain("search before");
+    expect(prompt.toLowerCase()).toContain("birthday");
+    expect(prompt.toLowerCase()).toContain("ask permission");
+  });
+
+  it("makes show_items a pre-reply step that covers single items", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-12T18:00:00.000Z") });
+    expect(prompt).toContain("even a single one");
+    expect(prompt.toLowerCase()).toContain("before writing");
+  });
+
   it("states coverage, cite-by-reference, and untrusted-content rules", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-12T18:00:00.000Z") });
     expect(prompt).toContain("cannot modify anything");

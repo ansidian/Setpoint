@@ -1,16 +1,16 @@
-import { render, act } from "@testing-library/react";
+import { render, act, cleanup, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRef } from "react";
 import useCalendarModalOutsideDismiss from "./useCalendarModalOutsideDismiss.js";
 
-function Host({ open }) {
+function Host({ open, closeCalendarModal = () => {} }) {
   const panelRef = useRef(null);
   useCalendarModalOutsideDismiss({
     open,
     panelRef,
     floatingDetail: null,
     setFloatingDetail: () => {},
-    closeCalendarModal: () => {},
+    closeCalendarModal,
     shakeFloatingEditor: () => {},
   });
   return (
@@ -54,5 +54,35 @@ describe("useCalendarModalOutsideDismiss entry focus", () => {
     });
 
     expect(document.activeElement).toBe(menuButton);
+  });
+});
+
+describe("useCalendarModalOutsideDismiss overlay carve-out", () => {
+  afterEach(() => {
+    cleanup();
+    document.body.replaceChildren();
+  });
+
+  it("does not close the calendar for pointerdown inside a data-suspend-calendar-hotkeys='all' overlay", () => {
+    const closeCalendarModal = vi.fn();
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-suspend-calendar-hotkeys", "all");
+    const inner = document.createElement("button");
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+
+    render(<Host open closeCalendarModal={closeCalendarModal} />);
+    fireEvent.pointerDown(inner);
+    expect(closeCalendarModal).not.toHaveBeenCalled();
+  });
+
+  it("still closes the calendar for pointerdown on a genuinely outside target", () => {
+    const closeCalendarModal = vi.fn();
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+
+    render(<Host open closeCalendarModal={closeCalendarModal} />);
+    fireEvent.pointerDown(outside);
+    expect(closeCalendarModal).toHaveBeenCalledTimes(1);
   });
 });

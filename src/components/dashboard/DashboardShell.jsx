@@ -516,6 +516,10 @@ export function DashboardShell({
             accent={accent}
             handoff={alfredHandoff}
             newChatTick={alfredNewChatTick}
+            onOpenCalendarItem={(request) => {
+              setAlfredOpen(false);
+              openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+            }}
           />
         </Suspense>
       )}
