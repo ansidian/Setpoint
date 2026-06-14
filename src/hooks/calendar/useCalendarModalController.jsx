@@ -164,6 +164,8 @@ function makeDeadlineOverlayRecord(data, range) {
   return data && range ? { data, range } : null;
 }
 
+const EMPTY_CALENDAR_EVENTS = [];
+
 function deadlineOverlayRecordData(record, visibleRange) {
   if (!record) return null;
   if (record.range && !rangeMatches(record.range, visibleRange)) return null;
@@ -439,6 +441,7 @@ export default function useCalendarModalController({
   const eventsLoading = !!eventsData?.loading;
   const eventsStaleRefreshPending = !!eventsData?.staleRefreshPending;
   const eventsRevision = eventsData?.revision;
+  const eventsCacheStamp = eventsData?.cacheStamp ?? 0;
   const [calendarEventClipboard, setCalendarEventClipboard] = useState(null);
   const [calendarEventSelectionSet, setCalendarEventSelectionSet] = useState(() => createCalendarEventSelectionSet());
   const calendarEventSelectionRef = useRef(calendarEventSelectionSet);
@@ -555,6 +558,90 @@ export default function useCalendarModalController({
     deadlinesEnsureRange,
   });
 
+  // The three-month event window and the deadline overlay used to be built
+  // inline inside the viewData memo, so every status churn (loading toggles,
+  // readiness transitions, per-settle commits) handed grids, previews, and
+  // the agenda rail fresh identities for unchanged data. They are memoized
+  // separately so viewData rebuilds cannot invalidate downstream memos unless
+  // the underlying data actually changed.
+  const visibleCalendarEvents = useMemo(() => {
+    if (view !== "events" || !eventOverlayVisible || !eventsGetEvents) return EMPTY_CALENDAR_EVENTS;
+    const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
+    const nextMonth = addMonthOffset(viewYear, viewMonth, 1);
+    return dedupeEvents([
+      ...(eventsGetEvents(prevMonth.year, prevMonth.month) || []),
+      ...(eventsGetEvents(viewYear, viewMonth) || []),
+      ...(eventsGetEvents(nextMonth.year, nextMonth.month) || []),
+    ]);
+    // eventsCacheStamp invalidates the ref-backed eventsGetEvents reads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, eventOverlayVisible, eventsGetEvents, viewYear, viewMonth, eventsCacheStamp]);
+
+  const lateDeadlineRecord = useMemo(() => {
+    if (view !== "events") return null;
+    const visibleRange = getVisibleGridRange(viewYear, viewMonth);
+    return deadlineOverlayRecordData(lateDeadlineOverlayData, visibleRange) ? lateDeadlineOverlayData : null;
+  }, [view, viewYear, viewMonth, lateDeadlineOverlayData]);
+
+  const applyLateDeadlines = useCallback(() => {
+    if (!lateDeadlineRecord) return;
+    setCommittedDeadlineOverlayData(lateDeadlineRecord);
+    setLateDeadlineOverlayData(null);
+    setPlanningReadiness((current) => ({
+      ...current,
+      state: "ready",
+      deadlinesDelayed: false,
+      lateDeadlinesReady: false,
+    }));
+  }, [lateDeadlineRecord, setCommittedDeadlineOverlayData, setLateDeadlineOverlayData, setPlanningReadiness]);
+
+  const deadlinesDelayed = !!planningReadiness.deadlinesDelayed;
+  const deadlineOverlayCandidate = useMemo(() => {
+    if (view !== "events") return null;
+    const visibleRange = getVisibleGridRange(viewYear, viewMonth);
+    const committedOverlayData = deadlineOverlayRecordData(committedDeadlineOverlayData, visibleRange);
+    const seededOverlayData = !deadlinesDelayed
+      && (!deadlinesRangeData?.dataRange || rangeMatches(deadlinesRangeData.dataRange, visibleRange))
+      ? deadlinesRangeData?.data
+      : null;
+    const currentOverlayData = !deadlinesDelayed ? deadlinesData : null;
+    const overlayData = committedOverlayData || seededOverlayData || currentOverlayData;
+    return {
+      enabled: deadlineOverlayVisible,
+      showCompleted: completedDeadlineOverlayVisible,
+      data: deadlineOverlayVisible ? overlayData : null,
+      onApplyLateDeadlines: lateDeadlineRecord ? applyLateDeadlines : null,
+    };
+  }, [
+    view,
+    viewYear,
+    viewMonth,
+    committedDeadlineOverlayData,
+    deadlinesDelayed,
+    deadlinesRangeData?.dataRange,
+    deadlinesRangeData?.data,
+    deadlinesData,
+    deadlineOverlayVisible,
+    completedDeadlineOverlayVisible,
+    lateDeadlineRecord,
+    applyLateDeadlines,
+  ]);
+
+  // Month crossings recompute the candidate (the committed record is gated on
+  // the visible range), usually to field-identical output. Reuse the previous
+  // object so downstream memos keyed on overlay identity stay warm.
+  const deadlineOverlayRef = useRef(null);
+  const prevDeadlineOverlay = deadlineOverlayRef.current;
+  const deadlineOverlay = prevDeadlineOverlay
+    && deadlineOverlayCandidate
+    && prevDeadlineOverlay.enabled === deadlineOverlayCandidate.enabled
+    && prevDeadlineOverlay.showCompleted === deadlineOverlayCandidate.showCompleted
+    && prevDeadlineOverlay.data === deadlineOverlayCandidate.data
+    && prevDeadlineOverlay.onApplyLateDeadlines === deadlineOverlayCandidate.onApplyLateDeadlines
+    ? prevDeadlineOverlay
+    : deadlineOverlayCandidate;
+  deadlineOverlayRef.current = deadlineOverlay;
+
   const viewData = useMemo(() => {
     if (view === "events") {
       const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
@@ -585,38 +672,10 @@ export default function useCalendarModalController({
         || !!planningReadiness.deadlinesReadyAt
         || !!planningReadiness.deadlinesDelayed;
       const agendaEntryReady = eventsEntryReady && deadlinesEntryReady && !awaitingDeadlineOverlay;
-      const overlayData = committedOverlayData
-        || seededOverlayData
-        || currentOverlayData;
-      const lateRecord = deadlineOverlayRecordData(lateDeadlineOverlayData, visibleRange)
-        ? lateDeadlineOverlayData
-        : null;
       return {
-        events: !eventOverlayVisible
-          ? []
-          : dedupeEvents([
-              ...(eventsGetEvents?.(prevMonth.year, prevMonth.month) || []),
-              ...(eventsGetEvents?.(viewYear, viewMonth) || []),
-              ...(eventsGetEvents?.(nextMonth.year, nextMonth.month) || []),
-            ]),
-        deadlineOverlay: {
-          enabled: deadlineOverlayVisible,
-          showCompleted: completedDeadlineOverlayVisible,
-          data: deadlineOverlayVisible ? overlayData : null,
-          readiness: planningReadiness,
-          onApplyLateDeadlines: lateRecord
-            ? () => {
-                setCommittedDeadlineOverlayData(lateRecord);
-                setLateDeadlineOverlayData(null);
-                setPlanningReadiness((current) => ({
-                  ...current,
-                  state: "ready",
-                  deadlinesDelayed: false,
-                  lateDeadlinesReady: false,
-                }));
-              }
-            : null,
-        },
+        events: visibleCalendarEvents,
+        deadlineOverlay,
+        planningReadiness,
         isLoading: eventsRangeLoading,
         agendaEntryReady,
         pendingUpdate: eventsStaleRefreshPending,
@@ -643,7 +702,6 @@ export default function useCalendarModalController({
   }, [
     view,
     eventsEnsureRange,
-    eventsGetEvents,
     eventsHasMonth,
     eventsIsMonthLoading,
     eventsLoading,
@@ -651,32 +709,36 @@ export default function useCalendarModalController({
     eventsRevision,
     viewYear,
     viewMonth,
-    eventOverlayVisible,
     deadlineOverlayVisible,
-    completedDeadlineOverlayVisible,
     committedDeadlineOverlayData,
     deadlinesRangeData?.ensureRange,
     deadlinesRangeData?.data,
     deadlinesRangeData?.dataRange,
     planningReadiness,
-    lateDeadlineOverlayData,
     deadlinesData,
+    visibleCalendarEvents,
+    deadlineOverlay,
     billsData,
     billsRangeData?.data,
     billsRangeData?.loading,
     billsRangeData?.error,
     billsRangeData?.ensureRange,
     billsRangeData?.revision,
-    setCommittedDeadlineOverlayData,
-    setLateDeadlineOverlayData,
-    setPlanningReadiness,
   ]);
 
   useEffect(() => {
     if (view !== "events" || !deadlineOverlayVisible || !deadlinesRangeData?.data) return;
     const visibleRange = getVisibleGridRange(viewYear, viewMonth);
     if (!rangeMatches(deadlinesRangeData?.dataRange, visibleRange)) return;
-    setCommittedDeadlineOverlayData(makeDeadlineOverlayRecord(deadlinesRangeData.data, deadlinesRangeData.dataRange));
+    // Re-committing an identical record per settle would churn the overlay
+    // identity (and everything memoized on it) without changing content.
+    setCommittedDeadlineOverlayData((current) => (
+      current
+        && current.data === deadlinesRangeData.data
+        && rangeMatches(current.range, deadlinesRangeData.dataRange)
+        ? current
+        : makeDeadlineOverlayRecord(deadlinesRangeData.data, deadlinesRangeData.dataRange)
+    ));
   }, [
     view,
     viewYear,
@@ -835,16 +897,24 @@ export default function useCalendarModalController({
     view,
   ]);
 
+  // Mirror the inputs of selected-event resolution so the resolver (and the
+  // selection handlers built on it) keep one identity across month crossings;
+  // a fresh resolver per crossing would re-render every mounted month grid
+  // through the quick-actions chain.
+  const selectionResolutionRef = useRef({ events: EMPTY_CALENDAR_EVENTS, itemId: null });
+  useEffect(() => {
+    selectionResolutionRef.current = { events: visibleCalendarEvents, itemId: activeSelectedItemId };
+  });
   const resolveSelectedCalendarEvent = useCallback(() => {
-    if (view !== "events" || activeSelectedItemId == null) return null;
-    const events = viewData?.events || [];
+    const { events, itemId: selectionItemId } = selectionResolutionRef.current;
+    if (view !== "events" || selectionItemId == null) return null;
     const selected = events.find((event) => {
       const itemId = activeView.getItemId ? activeView.getItemId(event) : event.id;
-      return String(itemId) === String(activeSelectedItemId);
+      return String(itemId) === String(selectionItemId);
     });
     if (!selected?.startMs || !selected?.calendarId || !selected?.accountId) return null;
     return selected;
-  }, [activeSelectedItemId, activeView, view, viewData?.events]);
+  }, [activeView, view]);
 
   const copyCalendarEvent = useCallback((event) => {
     const clipboard = createCalendarEventClipboard(event);
@@ -957,19 +1027,32 @@ export default function useCalendarModalController({
     view,
   ]);
 
+  // The toggle handler's identity follows editor/floating-detail callbacks;
+  // routing it through a ref keeps eventQuickActions (a prop of every mounted
+  // month grid) stable across controller re-renders that don't change the
+  // selection itself.
+  const toggleCalendarEventSelectionSetRef = useRef(null);
+  useEffect(() => {
+    toggleCalendarEventSelectionSetRef.current = toggleCalendarEventSelectionSet;
+  });
+  const stableToggleEventSelection = useCallback(
+    (...args) => toggleCalendarEventSelectionSetRef.current?.(...args),
+    [],
+  );
+
   const eventQuickActions = useMemo(() => ({
     ...baseEventQuickActions,
     eventSelectionActive: calendarEventSelectionCount > 0,
     eventSelectionCount: calendarEventSelectionCount,
     clearEventSelection: clearCalendarEventSelectionSet,
     isEventSelectionSelected: (event) => isCalendarEventSelected(calendarEventSelectionSet, event),
-    toggleEventSelection: toggleCalendarEventSelectionSet,
+    toggleEventSelection: stableToggleEventSelection,
   }), [
     baseEventQuickActions,
     calendarEventSelectionCount,
     calendarEventSelectionSet,
     clearCalendarEventSelectionSet,
-    toggleCalendarEventSelectionSet,
+    stableToggleEventSelection,
   ]);
 
   const requestSelectedCalendarEventDelete = useCallback(() => {
@@ -1734,11 +1817,14 @@ export default function useCalendarModalController({
 
   useEffect(() => {
     const current = floatingDetailRef.current;
-    if (!current?.open || current.view !== "events" || (current.mode !== "edit" && current.mode !== "create")) return;
+    // Deadline-kind panels host the Todoist editor and follow the deadline
+    // editor lifecycle, not the event editor's — switching workspaces closes
+    // the event editor while the deadline panel must stay up.
+    if (!current?.open || current.view !== "events" || current.detailKind === "deadline" || (current.mode !== "edit" && current.mode !== "create")) return;
     if (eventEditor.isEditorOpen) return;
     const id = window.requestAnimationFrame(() => {
       setFloatingDetail((latest) => {
-        if (!latest?.open || latest.view !== "events" || (latest.mode !== "edit" && latest.mode !== "create")) return latest;
+        if (!latest?.open || latest.view !== "events" || latest.detailKind === "deadline" || (latest.mode !== "edit" && latest.mode !== "create")) return latest;
         return latest.mode === "create"
           ? null
           : {
@@ -1775,7 +1861,7 @@ export default function useCalendarModalController({
   const shellProps = buildCalendarModalShellProps({
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
     viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, suppressFocusRing },
-    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: eventsGetEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsRevision },
+    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: eventsGetEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId, setViewDate },
     editors: {

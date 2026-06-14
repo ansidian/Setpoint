@@ -8,7 +8,7 @@ vi.mock("@/api", () => ({
   updateCalendarEvent: vi.fn(),
 }));
 
-const { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent } = await import("@/api");
+const { createCalendarEvent, createCalendarEventsBatch, deleteCalendarEvent, updateCalendarEvent } = await import("@/api");
 const {
   default: useCalendarQuickActions,
   buildCloneEventPayload,
@@ -408,5 +408,60 @@ describe("useCalendarQuickActions clone races", () => {
     expect(onEventDeleted).toHaveBeenCalledWith("google-created-copy-late-delete", expect.objectContaining({
       id: "google-created-copy-late-delete",
     }));
+  });
+});
+
+describe("useCalendarQuickActions identity stability", () => {
+  function makeProps() {
+    return {
+      editable: true,
+      layout: { stacked: false },
+      upsertEvents: vi.fn(),
+      removeEvent: vi.fn(),
+      refreshRange: vi.fn(),
+      onSelectEvent: vi.fn(),
+      onEventDeleted: vi.fn(),
+      onBatchDeleted: vi.fn(),
+      onCopyEvent: vi.fn(),
+      resolveEventActionScope: vi.fn(),
+    };
+  }
+
+  it("returns the same actions object when the parent re-renders with fresh callback props", () => {
+    const { result, rerender } = renderHook((props) => useCalendarQuickActions(props), {
+      initialProps: makeProps(),
+    });
+    const first = result.current;
+
+    rerender(makeProps());
+
+    expect(result.current).toBe(first);
+  });
+
+  it("invokes the latest onSelectEvent rather than the mount-time one", async () => {
+    const mountProps = makeProps();
+    const { result, rerender } = renderHook((props) => useCalendarQuickActions(props), {
+      initialProps: mountProps,
+    });
+    const nextProps = makeProps();
+    rerender(nextProps);
+
+    updateCalendarEvent.mockResolvedValue({ event: null });
+    await act(async () => {
+      await result.current.dropEvent({
+        event: {
+          id: "event-latest-1",
+          writable: true,
+          isRecurring: false,
+          allDay: false,
+          startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+          endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+        },
+        targetDate: "2026-04-21",
+      });
+    });
+
+    expect(nextProps.onSelectEvent).toHaveBeenCalledWith("event-latest-1", "2026-04-21");
+    expect(mountProps.onSelectEvent).not.toHaveBeenCalled();
   });
 });

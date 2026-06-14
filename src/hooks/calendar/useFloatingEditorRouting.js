@@ -124,6 +124,10 @@ export default function useFloatingEditorRouting({
     }
     const dateCell = findDateCell(dateKey);
     setSelectedItemId(null);
+    // Switching create workspaces must reset the other domain's editor, or its
+    // ghost preview lingers on the grid behind the new editor.
+    setDeadlineEditor(null);
+    setDeadlineDraftPreview(null);
     eventEditorRef.current?.openCreate?.();
     openFloatingDetail({
       mode: "create",
@@ -134,7 +138,7 @@ export default function useFloatingEditorRouting({
       sourceCellElement: dateCell,
       anchorKind: "day-cell",
     });
-  }, [activeSelectedDateKey, eventEditorRef, findDateCell, openFloatingDetail, selectedDay, setSelectedDateKey, setSelectedDay, setSelectedItemId, suppressAgendaPassiveSync, viewMonth, viewYear]);
+  }, [activeSelectedDateKey, eventEditorRef, findDateCell, openFloatingDetail, selectedDay, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId, suppressAgendaPassiveSync, viewMonth, viewYear]);
 
   const openFloatingEventEdit = useCallback((item, options = {}) => {
     if (!item?.writable) return;
@@ -179,6 +183,9 @@ export default function useFloatingEditorRouting({
     }
     const dateCell = findDateCell(dateKey);
     setSelectedItemId(null);
+    // Switching create workspaces must reset the other domain's editor, or its
+    // ghost preview lingers on the grid behind the new editor.
+    eventEditorRef.current?.closeEditor?.();
     setDeadlineEditor({ mode: "create", seedDate: dateKey || null });
     setDeadlineDraftPreview(null);
     openFloatingDetail({
@@ -191,7 +198,7 @@ export default function useFloatingEditorRouting({
       sourceCellElement: dateCell,
       anchorKind: "day-cell",
     });
-  }, [activeSelectedDateKey, findDateCell, openFloatingDetail, selectedDay, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId, viewMonth, viewYear]);
+  }, [activeSelectedDateKey, eventEditorRef, findDateCell, openFloatingDetail, selectedDay, setDeadlineDraftPreview, setDeadlineEditor, setSelectedDateKey, setSelectedDay, setSelectedItemId, viewMonth, viewYear]);
 
   const openFloatingDeadlineEdit = useCallback((task, options = {}) => {
     if (!task?.id) return;

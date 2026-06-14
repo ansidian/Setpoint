@@ -435,6 +435,42 @@ describe("useCalendarDomainRange", () => {
     ]);
   });
 
+  it("keeps deadline data identity stable when re-ensuring an unchanged cached range", async () => {
+    const fetchRange = vi.fn().mockResolvedValue({
+      upcoming: [
+        { id: "todo-may", title: "May task", due_date: "2026-05-12", source: "todoist" },
+      ],
+    });
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders += 1;
+      return useCalendarDomainRange({
+        fetchRange,
+        emptyData: null,
+        cacheMode: "month",
+        prefetchMonthRadius: 0,
+      });
+    });
+
+    await act(async () => {
+      await result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+    const firstData = result.current.data;
+    const firstRange = result.current.dataRange;
+    const rendersAfterFirst = renders;
+
+    let ensured;
+    await act(async () => {
+      ensured = await result.current.ensureRange("2026-05-01", "2026-05-31");
+    });
+
+    expect(fetchRange).toHaveBeenCalledTimes(1);
+    expect(ensured).toBe(firstData);
+    expect(result.current.data).toBe(firstData);
+    expect(result.current.dataRange).toBe(firstRange);
+    expect(renders).toBe(rendersAfterFirst);
+  });
+
   it("does not publish a stale month-range response after a newer active range wins", async () => {
     let resolveApril;
     let resolveMay;

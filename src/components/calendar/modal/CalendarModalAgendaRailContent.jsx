@@ -43,6 +43,7 @@ const CalendarModalAgendaRailContent = forwardRef(function CalendarModalAgendaRa
         viewMonth={viewMonth}
         events={viewData?.events || []}
         deadlineOverlay={viewData?.deadlineOverlay || null}
+        planningReadinessState={viewData?.planningReadiness?.state}
         weatherData={weatherData}
         isLoading={!!viewData?.isLoading}
         entryScrollReady={viewData?.agendaEntryReady ?? !viewData?.isLoading}

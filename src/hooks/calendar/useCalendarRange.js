@@ -50,6 +50,10 @@ export default function useCalendarRange({ disabled = false } = {}) {
   const inFlightRef = useRef(new Map()); // monthKey -> foreground Promise<boolean>
   const backgroundInFlightRef = useRef(new Map()); // monthKey -> stale refresh Promise<boolean>
   const cacheGenerationRef = useRef(0);
+  // Bumped on every write that changes cached event content (not staleness
+  // marks). Consumers key memos on it so re-renders without content change
+  // keep derived identities stable.
+  const cacheStampRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [staleRefreshPending, setStaleRefreshPending] = useState(false);
   const [error, setError] = useState(null);
@@ -109,6 +113,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
         for (const key of targetKeys) {
           cacheRef.current.set(key, makeCacheEntry(buckets.get(key) || [], fetchedAt));
         }
+        cacheStampRef.current += 1;
         return true;
       } finally {
         for (const key of targetKeys) {
@@ -272,6 +277,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
     if (disabled) return [];
     const keys = expandMonthKeys(monthsInRange(start, end), PREFETCH_MONTH_RADIUS);
     cacheGenerationRef.current += 1;
+    cacheStampRef.current += 1;
     for (const key of keys) {
       cacheRef.current.delete(key);
       inFlightRef.current.delete(key);
@@ -284,6 +290,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
 
   const invalidate = useCallback(() => {
     cacheGenerationRef.current += 1;
+    cacheStampRef.current += 1;
     cacheRef.current.clear();
     inFlightRef.current.clear();
     backgroundInFlightRef.current.clear();
@@ -337,6 +344,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
     }
 
     cacheGenerationRef.current += 1;
+    cacheStampRef.current += 1;
     setRevision((value) => value + 1);
     forceUpdate((n) => n + 1);
   }, [disabled]);
@@ -355,6 +363,7 @@ export default function useCalendarRange({ disabled = false } = {}) {
     }
     if (!changed) return;
     cacheGenerationRef.current += 1;
+    cacheStampRef.current += 1;
     setRevision((value) => value + 1);
     forceUpdate((n) => n + 1);
   }, [disabled]);
@@ -374,5 +383,6 @@ export default function useCalendarRange({ disabled = false } = {}) {
     staleRefreshPending,
     error,
     revision,
+    cacheStamp: cacheStampRef.current,
   };
 }

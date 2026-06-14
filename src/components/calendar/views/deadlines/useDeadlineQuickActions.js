@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteDeadline } from "@/api";
 import {
   normalizeStatus,
@@ -53,6 +53,17 @@ export default function useDeadlineQuickActions({
   const [contextMenu, setContextMenu] = useState(null);
   const [status, setStatus] = useState(null);
 
+  // Callers pass these handlers as inline closures; reading them through a
+  // ref keeps the returned actions identity stable across parent re-renders,
+  // so memoized month grids holding these actions do not re-render whenever
+  // the controller does.
+  const externalHandlersRef = useRef(null);
+  const contextMenuRef = useRef(null);
+  useEffect(() => {
+    externalHandlersRef.current = { actions, onEditTask, onDeleted };
+    contextMenuRef.current = contextMenu;
+  });
+
   const clearStatus = useCallback(() => setStatus(null), []);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -89,8 +100,8 @@ export default function useDeadlineQuickActions({
 
     try {
       await deleteDeadline(task.id);
-      actions.onDeleteTask?.(task.id);
-      onDeleted?.(task.id, task);
+      externalHandlersRef.current.actions?.onDeleteTask?.(task.id);
+      externalHandlersRef.current.onDeleted?.(task.id, task);
       setContextMenu(null);
       setStatus({ tone: "success", message: "Deadline deleted." });
       window.setTimeout(() => setStatus(null), 1800);
@@ -103,18 +114,33 @@ export default function useDeadlineQuickActions({
         error: message,
       } : current));
     }
-  }, [actions, contextMenu?.task, onDeleted]);
+  }, [contextMenu?.task]);
+
+  const editContextTask = useCallback(() => {
+    const menu = contextMenuRef.current;
+    if (!menu?.task) return;
+    externalHandlersRef.current.onEditTask?.(menu.task, menu);
+  }, []);
+
+  const completeContextTask = useCallback(() => {
+    const task = contextMenuRef.current?.task;
+    if (!task) return;
+    externalHandlersRef.current.actions?.onCompleteTask?.(task.id, task);
+  }, []);
 
   const menuItems = useMemo(() => {
     const task = contextMenu?.task;
     if (!task) return [];
 
+    // The handlers read refs only when a menu row is clicked, never during
+    // render; the rule cannot see past the render-time array construction.
+    // eslint-disable-next-line react-hooks/refs
     return deadlineActionItems(task, {
-      onEdit: () => onEditTask?.(task, contextMenu),
-      onComplete: () => actions.onCompleteTask?.(task.id, task),
+      onEdit: editContextTask,
+      onComplete: completeContextTask,
       onRequestDelete: requestDelete,
     });
-  }, [actions, contextMenu, onEditTask, requestDelete]);
+  }, [completeContextTask, contextMenu, editContextTask, requestDelete]);
 
   return useMemo(() => ({
     kind: "deadline",

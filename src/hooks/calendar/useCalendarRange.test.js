@@ -67,6 +67,36 @@ describe("useCalendarRange", () => {
     expect(result.current.loading).toBe(false);
   });
 
+  it("bumps cacheStamp when cache content changes and holds it stable otherwise", async () => {
+    getCalendarRange.mockResolvedValue({ events: [] });
+    const { result, rerender } = renderHook(() => useCalendarRange({ disabled: false }));
+    const initialStamp = result.current.cacheStamp;
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-18", "2026-04-25");
+    });
+    const afterFetch = result.current.cacheStamp;
+    expect(afterFetch).not.toBe(initialStamp);
+
+    rerender();
+    expect(result.current.cacheStamp).toBe(afterFetch);
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-18", "2026-04-25");
+    });
+    expect(result.current.cacheStamp).toBe(afterFetch);
+
+    act(() => {
+      result.current.upsertEvents({
+        id: "stamp-event",
+        startMs: new Date("2026-04-20T18:00:00Z").getTime(),
+        endMs: new Date("2026-04-20T19:00:00Z").getTime(),
+        title: "Stamp",
+      });
+    });
+    expect(result.current.cacheStamp).not.toBe(afterFetch);
+  });
+
   it("fetches a month range with a three-month warm buffer and caches by YYYY-MM", async () => {
     getCalendarRange.mockResolvedValue({
       events: [{ startMs: new Date("2026-04-20T18:00:00Z").getTime(), title: "E1", source: "s", color: "#1" }],

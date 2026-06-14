@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarGrid from "./CalendarGrid.jsx";
 import { getMonthData } from "../calendarDateUtils.js";
+import { buildMonthPreviewEntries } from "./calendarMonthPreviewModel.js";
 import {
   monthBlockHeight,
   monthIndexToDate,
@@ -348,25 +349,24 @@ export default function CalendarScrollContainer({
 
   const previewDeadlineOverlay = viewData?.deadlineOverlay ?? null;
 
-  // Preview data for mounted non-active months, keyed by month index. Built
-  // once per (window, data revision) instead of on every render: CalendarGrid
-  // is memoized, and rebuilding these arrays inline handed every preview month
-  // a fresh identity on each scroll-driven render, forcing all mounted grids
-  // to re-render mid-scroll.
+  // Preview data for mounted non-active months, keyed by month index.
+  // CalendarGrid is memoized, so entry *field* identity is load-bearing:
+  // buildMonthPreviewEntries reuses a month's entry whenever its underlying
+  // inputs are unchanged, keeping window shifts and unrelated data revisions
+  // from re-rendering every mounted grid mid-scroll.
+  const previewCacheRef = useRef(null);
   const previewByIndex = useMemo(() => {
-    const map = new Map();
-    for (let i = wFirst; i <= wLast; i++) {
-      const { year, month } = monthIndexToDate(i, refYear, refMonth);
-      const { firstDay } = getMonthData(year, month);
-      map.set(i, {
-        events: getMonthEvents
-          ? mergeAdjacentEvents(getMonthEvents, year, month, firstDay)
-          : null,
-        deadlineOverlay: getMonthDeadlines && previewDeadlineOverlay?.enabled
-          ? buildMonthDeadlineOverlay(previewDeadlineOverlay, getMonthDeadlines, year, month)
-          : previewDeadlineOverlay,
-      });
-    }
+    const map = buildMonthPreviewEntries({
+      previous: previewCacheRef.current,
+      first: wFirst,
+      last: wLast,
+      refYear,
+      refMonth,
+      getMonthEvents,
+      getMonthDeadlines,
+      activeDeadlineOverlay: previewDeadlineOverlay,
+    });
+    previewCacheRef.current = map;
     return map;
     // dataRevision invalidates the ref-backed getMonthEvents/getMonthDeadlines caches
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -495,29 +495,3 @@ export default function CalendarScrollContainer({
 }
 
 const emptyObj = {};
-
-function buildMonthDeadlineOverlay(activeOverlay, getMonthDeadlines, year, month) {
-  const data = getMonthDeadlines(year, month);
-  if (!data) return null;
-  return {
-    enabled: activeOverlay.enabled,
-    showCompleted: activeOverlay.showCompleted,
-    data,
-  };
-}
-
-function mergeAdjacentEvents(getMonthEvents, year, month, firstDay) {
-  const current = getMonthEvents(year, month) || [];
-  if (firstDay === 0) return current.length ? current : null;
-  const prevMonth = month === 0 ? 11 : month - 1;
-  const prevYear = month === 0 ? year - 1 : year;
-  const prev = getMonthEvents(prevYear, prevMonth) || [];
-  if (!prev.length) return current.length ? current : null;
-  if (!current.length) return prev;
-  const seen = new Set(current.map((e) => e.id));
-  const merged = [...current];
-  for (const e of prev) {
-    if (!seen.has(e.id)) merged.push(e);
-  }
-  return merged;
-}

@@ -1,4 +1,5 @@
 const VECTOR_SEMANTIC_EVIDENCE_FLOOR = 0.32;
+const LEXICAL_EVIDENCE_FLOOR = 0.3;
 
 const STOPWORDS = new Set([
   "about",
@@ -88,6 +89,8 @@ export function filterEmailSearchCandidatesForEvidence(candidates, { q, plan } =
 
   return list.filter((candidate) => {
     if (Number(candidate?.scores?.vector || 0) >= VECTOR_SEMANTIC_EVIDENCE_FLOOR) return true;
+    if (candidate?.provenance?.lexical
+      && Number(candidate?.scores?.lexical || 0) >= LEXICAL_EVIDENCE_FLOOR) return true;
     if (hasPlannedPhraseEvidence(candidate, phrases)) return true;
     return hasSubjectOrSenderEvidence(candidate, terms);
   });

@@ -136,4 +136,8 @@ describe("dashboard shell model", () => {
       editable: true,
     });
   });
+
+  it("forwards the cache stamp so modal memos invalidate when event content changes", () => {
+    expect(buildDashboardEventsData({ cacheStamp: 7 }).cacheStamp).toBe(7);
+  });
 });

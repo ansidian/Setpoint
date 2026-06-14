@@ -5,6 +5,7 @@ import {
   ymdFromParts,
 } from "../../calendarDateUtils.js";
 import { visualEventDateRange } from "../../modal/calendarEventSpanLayout.js";
+import { sameEventList } from "../../modal/calendarMonthPreviewModel.js";
 import {
   buildDisplayedMonthGroups,
   clampRangeToMonth,
@@ -254,6 +255,60 @@ export function buildMultiMonthAgendaGroups({
       ...result,
     };
   });
+}
+
+// Per-month variant of buildMultiMonthAgendaGroups: each month's groups are
+// built from that month's cache bucket (getMonthEvents) and the previous
+// value is reused by identity when the month's inputs are unchanged, so a
+// batch landing mid-scroll rebuilds only the months it actually touched.
+// Returns { list, cache }; callers thread `cache` back in as `previous`.
+export function reuseMultiMonthAgendaGroups({
+  previous = null,
+  months = [],
+  getMonthEvents,
+  deadlineOverlay = null,
+  weatherData = null,
+  todayKey = pacificYMD(Date.now()),
+  forceVisibleDateKey = null,
+} = {}) {
+  const cache = new Map();
+  const list = months.map(({ year, month }) => {
+    const mk = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const monthEvents = getMonthEvents ? getMonthEvents(year, month) || [] : [];
+    const forceKey = forceVisibleDateKey?.startsWith(mk) ? forceVisibleDateKey : null;
+    const prior = previous?.get(mk);
+    if (
+      prior
+      && sameEventList(prior.inputs.monthEvents, monthEvents)
+      && prior.inputs.deadlineOverlay === deadlineOverlay
+      && prior.inputs.weatherData === weatherData
+      && prior.inputs.todayKey === todayKey
+      && prior.inputs.forceKey === forceKey
+    ) {
+      cache.set(mk, prior);
+      return prior.value;
+    }
+    const value = {
+      monthKey: mk,
+      year,
+      month,
+      ...buildEventsAgendaGroups({
+        events: monthEvents,
+        deadlineOverlay,
+        viewYear: year,
+        viewMonth: month,
+        weatherData,
+        todayKey,
+        forceVisibleDateKey: forceKey,
+      }),
+    };
+    cache.set(mk, {
+      inputs: { monthEvents, deadlineOverlay, weatherData, todayKey, forceKey },
+      value,
+    });
+    return value;
+  });
+  return { list, cache };
 }
 
 export { formatAgendaHeaderLabel, monthBounds };
