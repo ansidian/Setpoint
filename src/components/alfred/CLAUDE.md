@@ -14,6 +14,7 @@ The Alfred Panel (CONTEXT.md): right-docked dashboard chat over `POST /api/alfre
 - `alfredChipActionModel.js` — pure chip-click → navigation action resolver (email preview vs calendar request via the dashboard's request builders)
 - `alfredRowOrdering.js` — pure sort/section logic for surfaced rows: ordering rules and kind-based sectioning for the Alfred panel result list
 - `AlfredTransactionBreakdown.jsx` — auto-rendered breakdown card for the summarize_transactions tool result (spending or income): accent-driven proportional bars, period/group-by header, "Other" greyed, reduced-motion-safe bar-grow animation
+- `AlfredBreakdown.jsx` — auto-rendered grouped-count card for the group_items tool result: count bars + adaptive drill-down (buckets ≤5 inline, >5 collapse) reusing the per-kind leaf row components exported from `AlfredRows.jsx`; cite-by-reference (ADR 0006)
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
