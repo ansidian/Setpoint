@@ -2,6 +2,7 @@ import { Router } from "express";
 import crypto from "crypto";
 import db from "../db/connection.js";
 import { hashToken, requireCookieSession } from "../middleware/auth.js";
+import { wrapRouterAsync } from "../middleware/async-handler.js";
 import { encrypt, decrypt } from "../platform/encryption.js";
 import { getAuthUrl, handleCallback, testConnection as testGmail } from "../email/gmail.js";
 import { testConnection as testIcloud } from "../email/icloud.js";
@@ -12,6 +13,17 @@ import settingsRoutes from "./settings.js";
 import remindersRoutes from "./reminders.js";
 
 const router = Router();
+// P1-12: forward async-handler rejections to the terminal errorHandler so a
+// transient failure (e.g. the GET /accounts/gmail/auth CSRF-token INSERT)
+// returns a 500 instead of hanging the request. Must run before route
+// registration.
+//
+// MERGE-NOTE (P1-12 ↔ P2-40): P2-40 is reflected XSS in the GET
+// /accounts/gmail/callback error path (it reflects internal error text into the
+// HTML response, ~line 44). That is a DIFFERENT handler and an in-handler
+// response concern — this wrap only changes what happens on an unhandled
+// rejection, so the two fixes are orthogonal; keep both.
+wrapRouterAsync(router);
 const GMAIL_OAUTH_BIND_COOKIE = "ea_oauth_bind";
 const GMAIL_OAUTH_BIND_COOKIE_PATH = "/api/ea/accounts/gmail/callback";
 

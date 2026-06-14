@@ -140,4 +140,102 @@ describe("reminder scheduler", () => {
       last_error: "Discord 429",
     });
   });
+
+  it("isolates a thrown delivery error so the rest of the batch still fires (P1-10)", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-fail",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T16:00:00.000Z",
+      offsetMinutes: -10,
+      payloadSnapshot: { title: "Fails to send" },
+    }, { dbClient: db, idFactory: () => "r-fail" });
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-ok",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T16:01:00.000Z",
+      offsetMinutes: -10,
+      payloadSnapshot: { title: "Should still fire" },
+    }, { dbClient: db, idFactory: () => "r-ok" });
+
+    // The first reminder processed throws (e.g. network reject or corrupt
+    // webhook decrypt); the second must still be delivered.
+    let calls = 0;
+    const send = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("network down");
+      return { ok: true, status: 204 };
+    });
+
+    const result = await processDueReminderBatch({
+      now: "2026-05-10T16:00:00.000Z",
+      dbClient: db,
+      decryptFn: () => "https://discord.example/webhook",
+      sendFn: send,
+    });
+
+    expect(result).toEqual({ processed: 2, sent: 1, missed: 0, failed: 1 });
+
+    const rows = await db.execute(
+      "SELECT id, status, retry_count, retry_after, last_error FROM ea_reminders ORDER BY id",
+    );
+    expect(rows.rows.map((row) => row.status).sort()).toEqual(["pending", "sent"]);
+
+    const failed = rows.rows.find((row) => row.status === "pending");
+    expect(failed.retry_count).toBe(1);
+    // Non-null FUTURE retry_after is load-bearing: without it, listDueReminders
+    // re-selects the same head-of-line reminder every 10s and blocks all others.
+    expect(failed.retry_after).toBeTruthy();
+    expect(new Date(failed.retry_after).getTime()).toBeGreaterThan(
+      new Date("2026-05-10T16:00:00.000Z").getTime(),
+    );
+    expect(failed.last_error).toContain("network down");
+  });
+
+  it("does not abort the batch when recording a delivery failure itself throws (P1-10)", async () => {
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-a",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T16:00:00.000Z",
+      offsetMinutes: -10,
+      payloadSnapshot: { title: "A" },
+    }, { dbClient: db, idFactory: () => "r-a" });
+    await createReminder({
+      userId: "u1",
+      sourceType: "todoist_task",
+      sourceItemId: "task-b",
+      anchorKind: "todoist_due_datetime",
+      anchorAt: "2026-05-10T16:01:00.000Z",
+      offsetMinutes: -10,
+      payloadSnapshot: { title: "B" },
+    }, { dbClient: db, idFactory: () => "r-b" });
+
+    // Simulate the DB being the failing component: the per-reminder failure
+    // write (UPDATE ea_reminders) throws, while reads still work. Without a guard
+    // around the catch-block write, this re-aborts the whole batch.
+    const realExecute = db.execute.bind(db);
+    db.execute = vi.fn((arg) => {
+      const sql = typeof arg === "string" ? arg : arg.sql;
+      if (/UPDATE\s+ea_reminders/i.test(sql)) throw new Error("db write down");
+      return realExecute(arg);
+    });
+
+    const result = await processDueReminderBatch({
+      now: "2026-05-10T16:00:00.000Z",
+      dbClient: db,
+      decryptFn: () => {
+        throw new Error("bad key");
+      },
+      sendFn: vi.fn(),
+    });
+
+    // Both reminders are processed (counted failed); the batch does not reject
+    // and is not head-of-line-blocked by the failing status write.
+    expect(result).toEqual({ processed: 2, sent: 0, missed: 0, failed: 2 });
+  });
 });

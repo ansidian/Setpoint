@@ -28,6 +28,10 @@ import {
 
 const PASSIVE_FAILURE_BACKOFF_MS = [2 * 60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000];
 const SNAPSHOT_SYNC_TIMEOUT_MS = 2_500;
+// Per-provider deadline for a single fetchFresh on the cold-cache / force path,
+// so /current can never block indefinitely on the slowest external call (P1-6).
+// Comfortably above p99 healthy fetch latency; env-overridable for tests/ops.
+const PROVIDER_FETCH_TIMEOUT_MS = 4_000;
 const BACKGROUND_REFRESH_IN_FLIGHT = new Map();
 
 export function __resetCurrentDashboardRefreshStateForTests() {
@@ -217,6 +221,34 @@ function snapshotSyncTimeoutMs() {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : SNAPSHOT_SYNC_TIMEOUT_MS;
 }
 
+function providerFetchTimeoutMs() {
+  const parsed = Number.parseInt(process.env.EA_DASHBOARD_PROVIDER_FETCH_TIMEOUT_MS || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : PROVIDER_FETCH_TIMEOUT_MS;
+}
+
+// Race a provider fetch against a deadline (P1-6). On timeout this rejects, so
+// the existing refreshRows catch routes the key through markCacheRowRefreshFailed
+// (a usable existing row degrades; a cold/missing row seeds the fallback). The
+// abandoned fetch keeps running but its result is discarded; .catch keeps a late
+// rejection from surfacing as an unhandled rejection.
+function withProviderFetchTimeout(promise, key) {
+  promise.catch(() => {});
+  let timer = null;
+  const timeoutMs = providerFetchTimeoutMs();
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(Object.assign(
+        new Error(`Provider ${key} fetch timed out after ${timeoutMs}ms`),
+        { code: "PROVIDER_FETCH_TIMEOUT" },
+      ));
+    }, timeoutMs);
+    timer.unref?.();
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 async function saveCacheRow(userId, cacheKey, payload, {
   dbClient = db,
   now = new Date(),
@@ -322,7 +354,14 @@ async function refreshRows(userId, rows, refreshKeys, {
   await Promise.all(refreshKeys.map(async (key) => {
     const provider = providerFor(key);
     try {
-      const payload = await provider.fetchFresh(userId, config, { dbClient, now, force });
+      // P1-6: bound each provider fetch so the awaited cold-cache/force refresh
+      // can never hang /current on a slow or stuck external call (e.g. the Actual
+      // worker). On timeout this throws into the catch below, which seeds a
+      // degraded/fallback row and lets the background refresh complete it later.
+      const payload = await withProviderFetchTimeout(
+        provider.fetchFresh(userId, config, { dbClient, now, force }),
+        key,
+      );
       await saveCacheRow(userId, key, payload, { dbClient, now });
       refreshedRows[key] = {
         user_id: userId,
@@ -609,8 +648,14 @@ async function composeCurrentDashboardResponse(userId, rows, {
 }
 
 async function loadRefreshContext(userId, { dbClient = db } = {}) {
-  const todoistHealth = await getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err));
-  const billsMirror = await getBillsMirrorState(userId, { dbClient }).catch(() => null);
+  // P1-7: these two health reads are independent (todoist mirror vs bills mirror
+  // tables, no write ordering) — run them concurrently instead of serially. Keep
+  // the per-call .catch INSIDE Promise.all so one failing read still degrades
+  // gracefully rather than rejecting both.
+  const [todoistHealth, billsMirror] = await Promise.all([
+    getTodoistSyncHealth(userId).catch((err) => unavailableTodoistHealth(err)),
+    getBillsMirrorState(userId, { dbClient }).catch(() => null),
+  ]);
   return { todoistHealth, billsMirror };
 }
 
@@ -632,9 +677,18 @@ export async function getCurrentDashboard(userId, {
   const responseRows = await markRowsRefreshing(userId, rows, scheduledKeys, { dbClient, now });
   const refreshReasons = Object.fromEntries(refreshPlan.scheduled.map((entry) => [entry.key, entry.reason]));
   scheduleBackgroundCurrentRefresh(userId, responseRows, scheduledKeys, { dbClient, now, forceKeys, refreshReasons });
+  // P1-7: getActiveSnapshotView and loadProviderHealth read disjoint table sets
+  // and share no write (markRowsRefreshing already completed above), so resolve
+  // them concurrently instead of as serial awaits in the object literal.
+  // loadProviderHealth MUST keep receiving context.todoistHealth so it reuses
+  // the already-loaded health and does not re-issue its own getTodoistSyncHealth.
+  const [activeSnapshot, providerHealth] = await Promise.all([
+    getActiveSnapshotView(userId),
+    loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+  ]);
   return composeCurrentDashboardResponse(userId, rows, {
-    activeSnapshot: await getActiveSnapshotView(userId),
-    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+    activeSnapshot,
+    providerHealth,
     refresh: { mode: "passive", ...refreshPlan },
     dbClient,
     now,
@@ -646,7 +700,13 @@ export async function syncCurrentDashboard(userId, {
   now = new Date(),
 } = {}) {
   const refreshPlan = planCurrentDataRefresh({}, { mode: "force", now, force: true });
-  const rows = await refreshRows(userId, {}, CURRENT_CACHE_KEYS, { dbClient, now, force: true });
+  // Load existing rows so a provider that times out during a force sync (P1-6)
+  // degrades its existing payload via markCacheRowRefreshFailed instead of
+  // clobbering a good cached row to "unavailable". force:true still re-fetches
+  // every key; the existing rows only feed the failure-fallback and change
+  // detection.
+  const existingRows = await loadCacheRows(userId, { dbClient });
+  const rows = await refreshRows(userId, existingRows, CURRENT_CACHE_KEYS, { dbClient, now, force: true });
   let timer = null;
   const timeoutMs = snapshotSyncTimeoutMs();
   const snapshotResult = await Promise.race([

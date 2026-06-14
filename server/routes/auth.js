@@ -9,6 +9,7 @@ import {
   requireCookieSession,
 } from "../middleware/auth.js";
 import db from "../db/connection.js";
+import { wrapRouterAsync } from "../middleware/async-handler.js";
 import { timeRoute } from "../timing.js";
 import {
   PENDING_AUTH_COOKIE_NAME,
@@ -43,6 +44,10 @@ import { resolveWebAuthnConfig } from "../auth/webauthn-config.js";
 import { rotateSessionsForCurrentBrowser } from "../auth/session-rotation.js";
 
 const router = Router();
+// P1-12: forward async-handler rejections to the terminal errorHandler so a
+// transient DB/crypto failure returns a 500 instead of hanging the request
+// (notably the CSRF-exempt /login). Must run before any route is registered.
+wrapRouterAsync(router);
 const EA_PASSWORD_HASH = process.env.EA_PASSWORD_HASH;
 const EA_USER_ID = process.env.EA_USER_ID;
 const API_TOKEN_TTL_DAYS = Number.parseInt(process.env.EA_API_TOKEN_TTL_DAYS || "90", 10) || 90;

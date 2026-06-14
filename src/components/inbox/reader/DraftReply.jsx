@@ -1,10 +1,26 @@
 import { useState } from "react";
-import { Sparkles, X, Send } from "lucide-react";
-import { Kbd, QuickAction } from "../primitives";
+import { Sparkles, X, Copy } from "lucide-react";
+import { QuickAction } from "../primitives";
 
-export default function DraftReply({ email, accent, onSend, onDiscard }) {
+export default function DraftReply({ email, accent, onDiscard }) {
   // Parent keys this on email.id so the initializer runs fresh per email.
   const [text, setText] = useState(email.claude?.draftReply || "");
+
+  // Reply-send is intentionally NOT wired — there is no send-reply endpoint in
+  // the app (see audit P1-2). The old "Send" button trashed the email and
+  // discarded the typed reply, sending nothing. The primary action now copies
+  // the edited draft to the clipboard so it can be pasted into Gmail, and never
+  // mutates the email. A future real send would add an onSend prop + endpoint
+  // and a separate Send control alongside this Copy action.
+  async function handleCopyDraft() {
+    try {
+      await navigator?.clipboard?.writeText?.(text);
+    } catch {
+      // Clipboard may be unavailable or permission-denied; dismissing the panel
+      // is still non-destructive, so fall through to close either way.
+    }
+    onDiscard?.();
+  }
   return (
     <div
       style={{
@@ -66,10 +82,7 @@ export default function DraftReply({ email, accent, onSend, onDiscard }) {
         }}
       >
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 10, color: "rgba(205,214,244,0.4)" }}>
-          <Kbd>⌘</Kbd> <Kbd>↵</Kbd>
-        </span>
-        <QuickAction icon={Send} label="Send" primary onClick={onSend} accent={accent} />
+        <QuickAction icon={Copy} label="Copy draft" primary onClick={handleCopyDraft} accent={accent} />
       </div>
     </div>
   );

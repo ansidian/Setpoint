@@ -19,6 +19,9 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
   const schedRectsRef = useRef({});
   const prevSortOrderRef = useRef(null);
   const shouldAnimateRef = useRef(false);
+  // Label value captured when a label input gains focus, so a blank-on-blur can
+  // be restored to the prior non-blank label rather than persisted (P1-3).
+  const labelDraftRef = useRef("");
 
   function captureRects() {
     if (!schedContainerRef.current) return;
@@ -93,7 +96,26 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
                     updated[originalIndex] = { ...updated[originalIndex], label: event.target.value };
                     setSettings((current) => ({ ...(current || {}), schedules: updated }));
                   }}
-                  onBlur={() => patch({ schedules_json: settings.schedules })}
+                  onFocus={() => {
+                    labelDraftRef.current = settings.schedules?.[originalIndex]?.label || "";
+                  }}
+                  onBlur={() => {
+                    const current = settings.schedules?.[originalIndex]?.label || "";
+                    if (current.trim()) {
+                      patch({ schedules_json: settings.schedules });
+                      return;
+                    }
+                    // Never persist a blank label: the server validator rejects
+                    // the whole PUT with a 400, which also drops every other
+                    // setting co-batched in the same debounce window (P1-3).
+                    // Restore the prior non-blank label, or fall back to the
+                    // add-boundary default.
+                    const fallback = labelDraftRef.current.trim() || "New Boundary";
+                    const restored = [...settings.schedules];
+                    restored[originalIndex] = { ...restored[originalIndex], label: fallback };
+                    setSettings((cur) => ({ ...(cur || {}), schedules: restored }));
+                    patch({ schedules_json: restored });
+                  }}
                   className="min-w-0 flex-1 bg-transparent p-0 text-[13px] font-medium text-foreground outline-none"
                 />
                 <button
@@ -121,7 +143,20 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
                   }}
                   onBlur={() => {
                     captureRects();
-                    patch({ schedules_json: settings.schedules });
+                    const current = settings.schedules?.[originalIndex]?.time || "";
+                    if (current.trim()) {
+                      patch({ schedules_json: settings.schedules });
+                    } else {
+                      // Never persist a blank time: the server validator rejects
+                      // the whole PUT with a 400, dropping every co-batched
+                      // setting — and the autosave re-queue would then re-send
+                      // the invalid payload on every flush (P1-3). Restore the
+                      // default, matching the value fallback above.
+                      const restored = [...settings.schedules];
+                      restored[originalIndex] = { ...restored[originalIndex], time: "08:00" };
+                      setSettings((cur) => ({ ...(cur || {}), schedules: restored }));
+                      patch({ schedules_json: restored });
+                    }
                     setEditingTimeIdx(null);
                     setFrozenOrder(null);
                   }}

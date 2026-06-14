@@ -7,6 +7,7 @@ Actual Budget engine integration: write paths, the forked SDK worker, and the lo
 - `actual.js` — facade routing writes to lightweight/worker/SDK path by mode
 - `actual-core.js` — in-process Actual SDK ops: metadata, bills, transactions, session lifecycle
 - `actual-lightweight-writes.js` — fast CRDT-message writes without booting the SDK
+- `actual-clock-lock.js` — shared mutex serializing the @actual-app/crdt process-global clock across the write and metadata-refresh paths
 - `actual-worker.js` — forked worker process management: spawn, queue, health, timeouts
 - `actual-worker-child.js` — worker-child entry serializing ops onto the SDK singleton
 - `actual-local-metadata.js` — local budget cache: download, sync, prune, inspect

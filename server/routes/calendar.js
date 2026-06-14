@@ -5,6 +5,7 @@ import {
   isBillsMirrorMaintenanceDue,
   readBillsMirrorRange,
   scheduleBillsMirrorRefresh,
+  shouldScheduleImmediateBillsRefresh,
 } from "../bills/bills-service.js";
 import {
   applyDeadlineCurrentStatus,
@@ -304,9 +305,13 @@ router.get("/search", async (req, res) => {
     const range = billMirrorRefreshRange({ now: new Date() });
     const data = await readBillsMirrorRange(userId, range);
     if (data.syncHealth?.state === "needs_sync") {
-      scheduleBillsMirrorRefresh(userId).catch((err) => {
-        console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
-      });
+      // Skip the reschedule when a future settle window is already armed, or the
+      // 2s poll collapses the 60s post-write settle to now (P1-5).
+      if (shouldScheduleImmediateBillsRefresh(data.syncHealth)) {
+        scheduleBillsMirrorRefresh(userId).catch((err) => {
+          console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
+        });
+      }
     } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
       requestBillsCurrentMaintenanceRefresh(userId, { now: new Date() }).catch((err) => {
         console.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err.message);
@@ -502,9 +507,13 @@ router.get("/bills/range", async (req, res) => {
     const errors = [];
     const data = await readBillsMirrorRange(userId, { start: range.start, end: range.end });
     if (data.syncHealth?.state === "needs_sync") {
-      scheduleBillsMirrorRefresh(userId).catch((err) => {
-        console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
-      });
+      // Skip the reschedule when a future settle window is already armed, or the
+      // 2s poll collapses the 60s post-write settle to now (P1-5).
+      if (shouldScheduleImmediateBillsRefresh(data.syncHealth)) {
+        scheduleBillsMirrorRefresh(userId).catch((err) => {
+          console.error("[Calendar] bills mirror refresh scheduling failed:", err.message);
+        });
+      }
     } else if (isBillsMirrorMaintenanceDue(data.syncHealth)) {
       requestBillsCurrentMaintenanceRefresh(userId, { now: new Date() }).catch((err) => {
         console.error("[Calendar] bills mirror maintenance refresh scheduling failed:", err.message);

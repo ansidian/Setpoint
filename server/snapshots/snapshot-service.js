@@ -203,6 +203,16 @@ export async function advanceSnapshotBoundary(userId, {
     timezone: timeZone,
   };
 
+  // Freeze BOTH the window currently containing `now` (start_at < now < end_at)
+  // AND any already-expired active window (end_at <= now). Without freezing the
+  // expired case, a daily window that rolled past its local-midnight end with no
+  // intervening read stays 'active' while this advance inserts another active
+  // row — leaving two concurrent 'active' snapshots that direct active-targeting
+  // queries (deferPendingTriageForSnooze, markProviderRemovedFromActiveSnapshots,
+  // settleReadArrivalGraceRows) mutate across both (P1-11). freezeExpired-
+  // ActiveSnapshots preserves the expired row's real end_at, so it is used here
+  // instead of widening freezeActiveSnapshotsAtBoundary (which rewrites end_at).
+  await freezeExpiredActiveSnapshots(dbClient, userId, { start_at: nowIso }, now);
   await freezeActiveSnapshotsAtBoundary(dbClient, userId, now);
 
   const existing = await findActiveSnapshot(dbClient, userId, window);
@@ -680,11 +690,17 @@ export async function getActiveSnapshotView(userId, {
   now = new Date(),
   timeZone = DEFAULT_TIMEZONE,
 } = {}) {
+  // getOrCreateActiveSnapshot must stay first — it may INSERT the snapshot and
+  // copy carryover items, and the readers below consume its id. Once it
+  // resolves, the four reads are mutually independent pure SELECTs, so run them
+  // concurrently instead of as five serial Turso round-trips (P1-7).
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
-  const items = snapshot ? await loadSnapshotItems(dbClient, snapshot.id) : [];
-  const catchUpItems = snapshot ? await loadActiveCatchUpItems(dbClient, userId, snapshot) : [];
-  const accountOrder = await loadAccountFilterOrder(dbClient, userId);
-  const processing = await loadProcessingState(dbClient, userId);
+  const [items, catchUpItems, accountOrder, processing] = await Promise.all([
+    snapshot ? loadSnapshotItems(dbClient, snapshot.id) : [],
+    snapshot ? loadActiveCatchUpItems(dbClient, userId, snapshot) : [],
+    loadAccountFilterOrder(dbClient, userId),
+    loadProcessingState(dbClient, userId),
+  ]);
   return buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder);
 }
 

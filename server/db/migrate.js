@@ -23,16 +23,37 @@ async function getExecutedMigrations() {
   return new Set(result.rows.map((row) => row.name));
 }
 
-async function runMigration(name, sql) {
+export async function runMigration(client, name, sql) {
   console.log(`Running migration: ${name}`);
-  // Delegate statement splitting to libsql. Handles comments, string literals,
-  // and trigger bodies correctly — unlike a naive sql.split(";").
-  await db.executeMultiple(sql);
-
-  await db.execute({
-    sql: "INSERT INTO migrations (name) VALUES (?)",
-    args: [name],
-  });
+  // Apply the migration body and record its ledger row as ONE atomic unit.
+  // The top-level executeMultiple is explicitly non-transactional, so a
+  // statement failure (or process kill) partway would otherwise leave the
+  // schema half-applied with no ledger row — and the next boot would re-run
+  // the file against an already-mutated schema, hit "duplicate column" /
+  // "no such table" on ALTER/DROP/RENAME migrations, and exit(1) every boot.
+  //
+  // MERGE-NOTE (P1-8 ↔ P2-21, P2-22): this per-file transaction makes every
+  // migration body atomic, which already covers the "014 DROP+RENAME is not
+  // transactional" (P2-21) and "bare non-idempotent ALTER ADD COLUMN replay is
+  // fatal" (P2-22) concerns at the runner level. If a P2 worktree also hardens
+  // the individual .sql files (e.g. splitting 014 or guarding ALTERs), prefer
+  // keeping THIS transaction and treat the .sql changes as defense-in-depth —
+  // do not remove the transaction wrapper when reconciling.
+  const tx = await client.transaction("write");
+  try {
+    // Transaction-level executeMultiple runs inside the open transaction and
+    // delegates statement splitting to libsql (comments, string literals,
+    // trigger bodies) — unlike a naive sql.split(";").
+    await tx.executeMultiple(sql);
+    await tx.execute({
+      sql: "INSERT INTO migrations (name) VALUES (?)",
+      args: [name],
+    });
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
   console.log(`Completed migration: ${name}`);
 }
 
@@ -58,7 +79,7 @@ export async function migrate() {
   for (const file of migrationFiles) {
     if (!executed.has(file)) {
       const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf-8");
-      await runMigration(file, sql);
+      await runMigration(db, file, sql);
       ranCount++;
     }
   }

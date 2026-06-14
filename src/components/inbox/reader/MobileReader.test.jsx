@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MobileReader from "./MobileReader.jsx";
 
@@ -18,6 +18,7 @@ afterEach(() => {
 
 function renderMobileReader(overrides = {}) {
   const onAction = vi.fn();
+  const setDrafting = overrides.setDrafting || vi.fn();
   render(
     <MobileReader
       email={{
@@ -46,11 +47,11 @@ function renderMobileReader(overrides = {}) {
         error: null,
         body: "<html><body>Full mobile provider bill with amount $88.20.</body></html>",
       }}
-      drafting={false}
-      setDrafting={() => {}}
+      drafting={overrides.drafting || false}
+      setDrafting={setDrafting}
     />,
   );
-  return { onAction };
+  return { onAction, setDrafting };
 }
 
 describe("MobileReader bill extraction", () => {
@@ -190,5 +191,27 @@ describe("MobileReader bill extraction", () => {
     expect(screen.queryByText("Dismiss")).toBeNull();
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Handled")).toBeNull();
+  });
+});
+
+describe("MobileReader draft reply (P1-2)", () => {
+  it("copies the AI draft to the clipboard without trashing the email", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    const { onAction, setDrafting } = renderMobileReader({
+      drafting: true,
+      email: { hasBill: false, claude: { draftReply: "Sounds good." } },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /copy draft/i }));
+
+    await waitFor(() => expect(setDrafting).toHaveBeenCalledWith(false));
+    expect(writeText).toHaveBeenCalledWith("Sounds good.");
+    expect(onAction).not.toHaveBeenCalledWith("trash");
+    expect(screen.queryByRole("button", { name: /^send$/i })).toBeNull();
   });
 });

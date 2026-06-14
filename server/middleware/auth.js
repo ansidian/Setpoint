@@ -89,50 +89,66 @@ function getBearerToken(req) {
 }
 
 export async function requireCookieSession(req, res, next) {
-  if (await validateSession(req.cookies?.ea_session)) {
-    return next();
+  try {
+    if (await validateSession(req.cookies?.ea_session)) {
+      return next();
+    }
+    return res.status(401).json({ message: "Not authenticated" });
+  } catch (err) {
+    // This guard runs as non-final middleware and does an unguarded DB read; a
+    // transient failure must forward to the terminal errorHandler (a 500) rather
+    // than reject and hang the request. wrapRouterAsync only wraps the FINAL
+    // handler, so async middleware must guard itself (P1-12).
+    return next(err);
   }
-  return res.status(401).json({ message: "Not authenticated" });
 }
 
 export function requireApiTokenScope(requiredScope) {
   return async function requireScopedApiToken(req, res, next) {
-    const raw = getBearerToken(req);
-    if (!raw) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
+    try {
+      const raw = getBearerToken(req);
+      if (!raw) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
 
-    const ctx = await validateBearer(raw);
-    if (!ctx) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    if (!ctx.scopes.includes(requiredScope)) {
-      return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
-    }
+      const ctx = await validateBearer(raw);
+      if (!ctx) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      if (!ctx.scopes.includes(requiredScope)) {
+        return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
+      }
 
-    req.apiToken = ctx;
-    return next();
+      req.apiToken = ctx;
+      return next();
+    } catch (err) {
+      return next(err); // forward DB faults instead of hanging (P1-12)
+    }
   };
 }
 
 export function requireCookieSessionOrApiTokenScope(requiredScope) {
   return async function requireCookieOrScopedToken(req, res, next) {
-    const raw = getBearerToken(req);
-    if (raw) {
-      const ctx = await validateBearer(raw);
-      if (ctx?.scopes.includes(requiredScope)) {
-        req.apiToken = ctx;
-        return next();
+    try {
+      const raw = getBearerToken(req);
+      if (raw) {
+        const ctx = await validateBearer(raw);
+        if (ctx?.scopes.includes(requiredScope)) {
+          req.apiToken = ctx;
+          return next();
+        }
+        if (await validateSession(req.cookies?.ea_session)) {
+          return next();
+        }
+        if (ctx) {
+          return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
+        }
+        return res.status(401).json({ message: "Not authenticated" });
       }
-      if (await validateSession(req.cookies?.ea_session)) {
-        return next();
-      }
-      if (ctx) {
-        return res.status(403).json({ message: `Token lacks ${requiredScope} scope` });
-      }
-      return res.status(401).json({ message: "Not authenticated" });
-    }
 
-    return requireCookieSession(req, res, next);
+      return requireCookieSession(req, res, next);
+    } catch (err) {
+      return next(err); // forward DB faults instead of hanging (P1-12)
+    }
   };
 }

@@ -491,10 +491,6 @@ export default function DesktopReader({
               key={email.id}
               email={email}
               accent={accent}
-              onSend={() => {
-                setDrafting(false);
-                onAction("trash");
-              }}
               onDiscard={() => setDrafting(false)}
             />
           </div>

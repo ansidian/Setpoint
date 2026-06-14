@@ -117,6 +117,42 @@ describe("active briefing snapshots", () => {
     expect(current.id).toBe(result.snapshot.id);
   });
 
+  it("freezes an already-expired active snapshot when advancing past its window (P1-11)", async () => {
+    const dbClient = await createMigratedDb();
+    const initial = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T07:30:00.000Z"),
+    });
+
+    // Advance AFTER the initial window's end_at (2026-05-04T07:00Z) with NO
+    // intervening read to lazily freeze it. The scheduled-advance path must
+    // freeze the now-expired window itself, or two 'active' rows coexist and
+    // direct active-targeting queries mutate items across both.
+    const result = await advanceSnapshotBoundary("user-1", {
+      dbClient,
+      now: new Date("2026-05-04T08:00:00.000Z"),
+      timeZone: "America/Los_Angeles",
+      scheduleLabel: "Morning",
+    });
+
+    const active = await dbClient.execute({
+      sql: "SELECT COUNT(*) AS n FROM ea_briefing_snapshots WHERE user_id = ? AND status = 'active'",
+      args: ["user-1"],
+    });
+    expect(Number(active.rows[0].n)).toBe(1);
+    expect(result.snapshot.status).toBe("active");
+
+    // The expired row must be frozen with its REAL end_at preserved (not
+    // rewritten to now) — this is why freezeExpiredActiveSnapshots is used
+    // rather than widening freezeActiveSnapshotsAtBoundary's predicate.
+    const prior = await dbClient.execute({
+      sql: "SELECT status, end_at FROM ea_briefing_snapshots WHERE id = ?",
+      args: [initial.id],
+    });
+    expect(prior.rows[0].status).toBe("frozen");
+    expect(prior.rows[0].end_at).toBe("2026-05-04T07:00:00.000Z");
+  });
+
   it("persists schedule labels and lists active before frozen snapshot history", async () => {
     const dbClient = await createMigratedDb();
     const initial = await getOrCreateActiveSnapshot("user-1", {
