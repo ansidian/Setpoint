@@ -72,14 +72,21 @@ export function dashboardBillCalendarRequest(date, itemId) {
 
 export function resolveDashboardShellHotkey({
   key,
+  code = "",
   metaKey = false,
   ctrlKey = false,
   altKey = false,
+  shiftKey = false,
   repeat = false,
   editableTarget = false,
   actionChord = null,
   calendarOpen = false,
 } = {}) {
+  // Alfred hotkeys fire everywhere, including editable targets, so the panel
+  // can be toggled from its own composer (CONTEXT.md: ⌘\ toggle, ⌘⇧\ new chat).
+  if ((metaKey || ctrlKey) && code === "Backslash") {
+    return { action: shiftKey ? "alfred-new-chat" : "toggle-alfred" };
+  }
   if (editableTarget) return { action: "clear-chord" };
   const normalized = String(key || "").toLowerCase();
 

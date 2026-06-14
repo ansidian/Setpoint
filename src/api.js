@@ -298,16 +298,6 @@ export const searchEmails = (query, limit) => {
   return apiFetch(`/api/briefing/email-search?${params}`);
 };
 
-export const askInboxAiSearch = (query, limit) => (
-  apiFetch("/api/briefing/email-search/ask-ai", {
-    method: "POST",
-    body: JSON.stringify({
-      q: query,
-      ...(limit ? { limit } : {}),
-    }),
-  })
-);
-
 // Alfred — streaming run + conversation reset. Not apiFetch: the response is
 // an SSE stream, not JSON.
 export async function runAlfredStream({ message, conversationId, model, signal, onEvent }) {

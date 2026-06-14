@@ -4,7 +4,6 @@ import useInboxController from "./useInboxController";
 import { useEffect, useMemo, useRef } from "react";
 import useActiveSnapshot from "../../hooks/useActiveSnapshot";
 import { settleArrivalGrace, settleArrivalGraceOnExit } from "../../api";
-import { EMPTY_INBOX_AI_SEARCH } from "./inboxAiSearchModel";
 import { useInboxSessionStore } from "./useInboxSessionState";
 import { getInboxTriageActivity } from "./inboxProcessingModel";
 
@@ -37,6 +36,7 @@ export default function InboxView({
   onSessionStateChange,
   commitPendingUndoSignal,
   isMobile = false,
+  onAskAlfred,
 }) {
   const [storeSessionState, setStoreSessionState] = useInboxSessionStore();
   const resolvedSessionState = sessionState || storeSessionState;
@@ -58,7 +58,6 @@ export default function InboxView({
     lane: resolvedSessionState?.lane || "__all",
     search: resolvedSessionState?.search || "",
     selectedId: resolvedSessionState?.selectedId || null,
-    inboxAiSearch: resolvedSessionState?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH,
   }), [resolvedSessionState]);
 
   const localActiveSnapshot = useActiveSnapshot({ disabled: !!controlledActiveSnapshot });
@@ -134,6 +133,7 @@ export default function InboxView({
     commitPendingUndoSignal,
     onActiveSnapshotRefresh: activeSnapshot.refresh,
     readOnly,
+    onAskAlfred,
   });
 
   const sharedProps = {

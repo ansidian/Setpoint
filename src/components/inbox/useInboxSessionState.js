@@ -1,16 +1,14 @@
 import { useCallback, useSyncExternalStore } from "react";
-import { EMPTY_INBOX_AI_SEARCH, clearInboxAiSearch } from "./inboxAiSearchModel.js";
 
 export const DEFAULT_INBOX_SESSION = Object.freeze({
   accountId: "__all",
   lane: "__all",
   search: "",
   selectedId: null,
-  inboxAiSearch: EMPTY_INBOX_AI_SEARCH,
 });
 
 // Module-scoped store so the inbox session (account / lane / search /
-// selection / AI search) survives InboxView unmounting on tab switches
+// selection) survives InboxView unmounting on tab switches
 // without the dashboard shell owning inbox state (EAD-328). Resets on page
 // refresh by construction. DashboardShell mutates it imperatively
 // (open-email-in-inbox, snapshot selection); InboxView reads it through
@@ -49,8 +47,7 @@ export function useInboxSessionStore() {
 }
 
 // Field-level accessors over a controlled session pair. Owns the
-// normalization defaults and the search/AI-search coupling that previously
-// lived inline in useInboxController.
+// normalization defaults that previously lived inline in useInboxController.
 export default function useInboxSessionState({
   sessionState,
   onSessionStateChange,
@@ -59,7 +56,6 @@ export default function useInboxSessionState({
   const lane = sessionState?.lane || "__all";
   const search = sessionState?.search || "";
   const selectedId = sessionState?.selectedId || null;
-  const inboxAiSearch = sessionState?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH;
 
   const setSessionField = useCallback((field, value) => {
     onSessionStateChange((prev) => ({
@@ -67,19 +63,10 @@ export default function useInboxSessionState({
       lane: prev?.lane || "__all",
       search: prev?.search || "",
       selectedId: prev?.selectedId || null,
-      inboxAiSearch: prev?.inboxAiSearch || EMPTY_INBOX_AI_SEARCH,
       ...prev,
       [field]: typeof value === "function" ? value(prev?.[field] ?? null) : value,
     }));
   }, [onSessionStateChange]);
-
-  const setInboxAiSearch = useCallback((value) => {
-    setSessionField("inboxAiSearch", (prev) => (
-      typeof value === "function"
-        ? value(prev || EMPTY_INBOX_AI_SEARCH)
-        : value
-    ));
-  }, [setSessionField]);
 
   const setAccountId = useCallback((value) => {
     setSessionField("accountId", value);
@@ -90,11 +77,8 @@ export default function useInboxSessionState({
   }, [setSessionField]);
 
   const setSearch = useCallback((value) => {
-    setInboxAiSearch((prev) => (
-      prev.status === "idle" ? prev : clearInboxAiSearch(prev)
-    ));
     setSessionField("search", value);
-  }, [setInboxAiSearch, setSessionField]);
+  }, [setSessionField]);
 
   const setSelectedId = useCallback((value) => {
     setSessionField("selectedId", value);
@@ -105,12 +89,10 @@ export default function useInboxSessionState({
     lane,
     search,
     selectedId,
-    inboxAiSearch,
     setAccountId,
     setLane,
     setSearch,
     setSelectedId,
-    setInboxAiSearch,
     setSessionField,
   };
 }

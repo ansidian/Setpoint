@@ -5,7 +5,6 @@ import {
   markEmailAsRead,
   markAllEmailsAsRead,
   searchEmails,
-  askInboxAiSearch,
 } from "../../api";
 import {
   makeSynthAccount,
@@ -15,14 +14,6 @@ import {
 } from "./inboxWorkItems.js";
 import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
 import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
-import {
-  clearInboxAiSearch,
-  completeInboxAiRequest,
-  failInboxAiRequest,
-  isInboxAiResultMode,
-  requestInboxAiConfirmation,
-  startInboxAiRequest,
-} from "./inboxAiSearchModel.js";
 import { SNAPSHOT_LANE_ORDER } from "./activeSnapshotWorkflowModel.js";
 import useInboxActionDispatch from "./useInboxActionDispatch";
 import useInboxKeyboardCommands from "./useInboxKeyboardCommands";
@@ -44,18 +35,17 @@ export default function useInboxController({
   commitPendingUndoSignal,
   onActiveSnapshotRefresh = () => {},
   readOnly = false,
+  onAskAlfred = () => {},
 }) {
   const {
     accountId,
     lane,
     search,
     selectedId,
-    inboxAiSearch,
     setAccountId,
     setLane,
     setSearch,
     setSelectedId,
-    setInboxAiSearch,
   } = useInboxSessionState({ sessionState, onSessionStateChange });
   const searchRef = useRef(null);
   const mobileFilterTriggerRef = useRef(null);
@@ -79,8 +69,6 @@ export default function useInboxController({
     error: null,
   });
   const searchRequestRef = useRef(0);
-  const inboxAiRequestRef = useRef(0);
-  const liveReadOverridesRef = useRef(liveReadOverrides);
   const {
     undo,
     undoSlotRef,
@@ -95,10 +83,6 @@ export default function useInboxController({
     commitPendingUndoSignalRef.current = commitPendingUndoSignal;
     finalizeUndoSlot();
   }, [commitPendingUndoSignal, finalizeUndoSlot]);
-
-  useEffect(() => {
-    liveReadOverridesRef.current = liveReadOverrides;
-  }, [liveReadOverrides]);
 
   const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId });
 
@@ -197,10 +181,8 @@ export default function useInboxController({
   ]);
 
   const indexedSearchActive = search.trim().length >= 2;
-  const inboxAiResultMode = isInboxAiResultMode(inboxAiSearch);
 
   const visibleEmails = useMemo(() => {
-    if (inboxAiResultMode) return inboxAiSearch.emails;
     if (indexedSearchActive) return indexedSearch.emails;
     return flatEmails.filter((email) => {
       const uid = email.uid || email.id;
@@ -230,8 +212,6 @@ export default function useInboxController({
     nowTick,
     indexedSearch.emails,
     indexedSearchActive,
-    inboxAiResultMode,
-    inboxAiSearch.emails,
   ]);
 
   useEffect(() => {
@@ -344,41 +324,18 @@ export default function useInboxController({
 
   const selectedEmail = useMemo(() => {
     if (!selectedId) return null;
-    const aiHit = inboxAiSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
-    if (aiHit) return aiHit;
     const searchHit = indexedSearch.emails.find((email) => email.id === selectedId || email.uid === selectedId);
     if (searchHit) return searchHit;
     return flatEmails.find((email) => email.id === selectedId || email.uid === selectedId) || null;
-  }, [selectedId, flatEmails, indexedSearch.emails, inboxAiSearch.emails]);
+  }, [selectedId, flatEmails, indexedSearch.emails]);
 
-  const requestInboxAiSearch = useCallback((query = search) => {
-    setInboxAiSearch((prev) => requestInboxAiConfirmation(prev, query));
-  }, [search, setInboxAiSearch]);
-
-  const cancelInboxAiSearch = useCallback(() => {
-    setInboxAiSearch((prev) => clearInboxAiSearch(prev));
-  }, [setInboxAiSearch]);
-
-  const confirmInboxAiSearch = useCallback(() => {
-    const query = inboxAiSearch.status === "confirming" ? inboxAiSearch.query : search.trim();
-    if (query.length < 2) return;
-
-    inboxAiRequestRef.current += 1;
-    const requestId = inboxAiRequestRef.current;
-    setInboxAiSearch((prev) => startInboxAiRequest(prev, query, requestId));
-
-    askInboxAiSearch(query)
-      .then((data) => {
-        setInboxAiSearch((prev) => completeInboxAiRequest(prev, {
-          requestId,
-          response: data,
-          readOverrides: liveReadOverridesRef.current,
-        }));
-      })
-      .catch((err) => {
-        setInboxAiSearch((prev) => failInboxAiRequest(prev, { requestId, error: err }));
-      });
-  }, [inboxAiSearch.query, inboxAiSearch.status, search, setInboxAiSearch]);
+  // CONTEXT.md: the inbox AI entry points (Sparkles, Cmd/Ctrl+Enter) hand off
+  // to Alfred — the panel opens and runs the query immediately.
+  const askAlfred = useCallback((query = search) => {
+    const q = String(query || "").trim();
+    if (!q) return;
+    onAskAlfred(q);
+  }, [search, onAskAlfred]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -518,12 +475,7 @@ export default function useInboxController({
     indexedSearchActive,
     indexedSearchLoading: indexedSearch.loading,
     indexedSearchError: indexedSearch.error,
-    inboxAiSearchAccountsById: inboxAiSearch.accountsById,
-    inboxAiSearch,
-    inboxAiSearchActive: inboxAiResultMode,
-    onInboxAiIntent: requestInboxAiSearch,
-    onInboxAiConfirm: confirmInboxAiSearch,
-    onInboxAiCancel: cancelInboxAiSearch,
+    onAskAlfred: askAlfred,
     visibleEmails,
     laneCounts,
     liveCount,
@@ -548,7 +500,7 @@ export default function useInboxController({
     snapshotCategories,
     categoryFilter,
     setCategoryFilter,
-    scopedAccount: indexedSearchActive || inboxAiResultMode ? null : scopedAccount,
+    scopedAccount: indexedSearchActive ? null : scopedAccount,
   };
 }
 

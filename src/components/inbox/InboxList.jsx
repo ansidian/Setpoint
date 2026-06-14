@@ -10,7 +10,6 @@ import EmptyStateSplash from "../shared/EmptyStateSplash";
 import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "./InboxSearchFlagChips";
 import InboxCategoryFilterChips from "./InboxCategoryFilterChips";
-import { InboxAiStatusBlock, InboxAskAiConfirmation } from "./InboxAskAiSearch.jsx";
 
 /* ======================================================================
  * LIST (swimlane or flat)
@@ -80,11 +79,7 @@ export default function InboxList({
   indexedSearchActive = false,
   indexedSearchLoading = false,
   indexedSearchError = null,
-  inboxAiSearch = null,
-  inboxAiSearchActive = false,
-  onInboxAiIntent = () => {},
-  onInboxAiConfirm = () => {},
-  onInboxAiCancel = () => {},
+  onAskAlfred = () => {},
   activeSnapshotMode = false,
   processingCount = 0,
   activeSnapshotError = null,
@@ -97,9 +92,7 @@ export default function InboxList({
   const effectiveCollapsed = activeSnapshotMode ? { handled: true, untriaged_read: true, noise: true, ...collapsed } : collapsed;
   const toggleLane = (k) => setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   const showSkeletonRows = !activeSnapshotMode && liveEmailsLoading && emails.length === 0;
-  const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading && !inboxAiSearchActive;
-  const showAiConfirmation = inboxAiSearch?.status === "confirming";
-  const showAiStatus = inboxAiSearch?.status && !["idle", "confirming"].includes(inboxAiSearch.status);
+  const showSearchSkeletonRows = indexedSearchActive && indexedSearchLoading;
 
   const grouped = useMemo(() => {
     const g = { live: [], queued: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [] };
@@ -167,17 +160,13 @@ export default function InboxList({
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                onInboxAiIntent(searchQuery);
-              } else if (e.key === "Enter" && showAiConfirmation) {
-                e.preventDefault();
-                onInboxAiConfirm();
+                onAskAlfred(searchQuery);
               } else if (e.key === "Enter") {
                 e.preventDefault();
                 e.currentTarget.blur();
               } else if (e.key === "Escape") {
                 e.preventDefault();
-                if (showAiConfirmation || inboxAiSearchActive) onInboxAiCancel();
-                else if (searchQuery) onSearchChange("");
+                if (searchQuery) onSearchChange("");
                 e.currentTarget.blur();
               }
             }}
@@ -237,14 +226,6 @@ export default function InboxList({
         {!readOnly && <IconBtn onClick={onRefresh} title="Sync now"><RefreshCw size={11} /></IconBtn>}
       </div>
 
-      {showAiConfirmation && (
-        <InboxAskAiConfirmation
-          query={inboxAiSearch.query}
-          accent={accent}
-          onConfirm={onInboxAiConfirm}
-          onCancel={onInboxAiCancel}
-        />
-      )}
 
       <div
         style={{
@@ -264,9 +245,7 @@ export default function InboxList({
           <span style={{ color: "rgba(205,214,244,0.4)" }}>unread · </span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{totalCount}</span>
           <span style={{ color: "rgba(205,214,244,0.4)" }}>
-            {inboxAiSearchActive
-              ? ` AI source${totalCount === 1 ? "" : "s"}`
-              : indexedSearchActive
+            {indexedSearchActive
               ? ` indexed result${totalCount === 1 ? "" : "s"}`
               : " total"}
           </span>
@@ -283,7 +262,7 @@ export default function InboxList({
             onChange={onCategoryFilterChange}
           />
         )}
-        {indexedSearchError && !inboxAiSearchActive && (
+        {indexedSearchError && (
           <div
             style={{
               padding: "10px 14px",
@@ -296,8 +275,7 @@ export default function InboxList({
             {indexedSearchError}
           </div>
         )}
-        {showAiStatus && <InboxAiStatusBlock aiSearch={inboxAiSearch} accent={accent} />}
-        {activeSnapshotError && !indexedSearchActive && !inboxAiSearchActive && (
+        {activeSnapshotError && !indexedSearchActive && (
           <div
             style={{
               padding: "10px 14px",
@@ -342,7 +320,7 @@ export default function InboxList({
           <InboxSearchSkeletonRows />
         ) : showSkeletonRows ? (
           <InboxLiveLoadingBlock />
-        ) : inboxAiSearch?.status === "loading" ? null : layout === "swimlanes" ? (
+        ) : layout === "swimlanes" ? (
           <>
             {grouped.live.length > 0 && (
               <div>
@@ -495,7 +473,7 @@ export default function InboxList({
             {renderRows(emails)}
           </div>
         )}
-        {emails.length === 0 && !showSkeletonRows && !showSearchSkeletonRows && !showAiStatus && (
+        {emails.length === 0 && !showSkeletonRows && !showSearchSkeletonRows && (
           <div
             style={{
               padding: "20px 20px 0",

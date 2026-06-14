@@ -15,6 +15,8 @@ export default function useDashboardShellHotkeys({
   openDeadlineCreate,
   openCalendar,
   setHistoryOpen,
+  toggleAlfred,
+  alfredNewChat,
 }) {
   const actionChordRef = useRef(null);
   const actionChordTimerRef = useRef(null);
@@ -42,9 +44,11 @@ export default function useDashboardShellHotkeys({
       );
       const command = resolveDashboardShellHotkey({
         key: e.key,
+        code: e.code,
         metaKey: e.metaKey,
         ctrlKey: e.ctrlKey,
         altKey: e.altKey,
+        shiftKey: e.shiftKey,
         repeat: e.repeat,
         editableTarget,
         actionChord: actionChordRef.current,
@@ -58,6 +62,16 @@ export default function useDashboardShellHotkeys({
       if (command.action === "open-palette") {
         e.preventDefault();
         openPalette();
+        return;
+      }
+      if (command.action === "toggle-alfred") {
+        e.preventDefault();
+        toggleAlfred();
+        return;
+      }
+      if (command.action === "alfred-new-chat") {
+        e.preventDefault();
+        alfredNewChat();
         return;
       }
       if (command.clearChord) {
@@ -91,5 +105,5 @@ export default function useDashboardShellHotkeys({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyticsOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate]);
+  }, [analyticsOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
 }

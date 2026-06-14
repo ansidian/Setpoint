@@ -1,20 +1,20 @@
 # Inbox Map
 
-The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), AI search, snooze/undo, and the reader pane. Entry points are `InboxView.jsx` (orchestrator) and `useInboxController.js` (central state machine); `reader/Reader.jsx` routes the detail pane.
+The email triage and reading surface, desktop and mobile: live-polled email, active snapshots (triage windows), indexed search, snooze/undo, and the reader pane. Entry points are `InboxView.jsx` (orchestrator) and `useInboxController.js` (central state machine); `reader/Reader.jsx` routes the detail pane. AI questions about mail hand off to Alfred (⌘Enter / Sparkles open the Alfred Panel with the query — no in-inbox AI answer surface).
 
 ## Files
 
 ### Views + orchestration
 - `InboxView.jsx` — composes live/snapshot modes, session state, undo coordination
 - `InboxDesktopPane.jsx` — desktop layout: digest, sidebar, list, reader, undo toast
-- `useInboxController.js` — central state machine: selection, filters, search, undo, AI search
+- `useInboxController.js` — central state machine: selection, filters, search, undo, Alfred handoff
 - `useInboxActionDispatch.js` — action handlers: trash, snooze, lane move, mark read, draft reply
 - `useInboxSessionState.js` — external session store surviving unmount/tab switches
 - `useSnapshotOptimisticOverlay.js` — reconciles optimistic overlays against snapshot refreshes
 - `useInboxUndoSlot.js` — undo slot lifecycle: timer, pending, commit/settle
 
 ### List + rows
-- `InboxList.jsx` — list container: skeletons, AI search UI, filter chips
+- `InboxList.jsx` — list container: skeletons, search, filter chips, Alfred handoff (⌘Enter)
 - `EmailRow.jsx` — single email row: avatar, preview, urgency/lane bar
 - `DigestStrip.jsx` — header strip: live/snapshot status, lane counts, processing activity
 - `Sidebar.jsx` — account and lane navigation
@@ -31,8 +31,6 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `InboxCategoryFilterChipsModel.js` — category ordering: critical > commitment > passive
 - `InboxSearchFlagChips.jsx` — is:unread toggle chip
 - `InboxSearchFlagChipsModel.js` — parses/toggles is:read|is:unread flags in queries
-- `InboxAskAiSearch.jsx` — AI search UI: skeleton, confirmation, answer blocks
-- `inboxAiSearchModel.js` — AI search request/response lifecycle state machine
 - `indexedSearchModel.js` — normalizes indexed search results, merges read state
 
 ### Reader
@@ -76,3 +74,4 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 
 - `server/routes/briefing/` — email/snapshot endpoints this UI calls
 - `src/lib/triageSoundGate.js` — sound dedup gate for triage events
+- `src/components/alfred/` — Alfred Panel; receives the inbox ⌘Enter / Sparkles handoff
