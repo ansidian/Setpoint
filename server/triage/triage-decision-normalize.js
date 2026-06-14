@@ -103,6 +103,9 @@ export function fallbackDecision(email, err) {
 }
 
 export function noModelDecision(email) {
+  // LEGACY fallback only. The dev no_model path now routes through
+  // heuristicNoModelDecision (triage-heuristic-scorer.js); this constant-lane
+  // decision is retained for explicit fallback use and is no longer the default.
   return createTriageDecision({
     lane: "needs_attention",
     category: "uncategorized",
@@ -111,7 +114,7 @@ export function noModelDecision(email) {
     summary: email.body_snippet || email.subject || "Review provider message.",
     action: "Review",
     triage_source: "no_model_fallback",
-    last_decision_reason: "no_model_mode",
+    last_decision_reason: "no_model_legacy_fallback",
   });
 }
 

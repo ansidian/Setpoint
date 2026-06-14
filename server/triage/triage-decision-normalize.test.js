@@ -127,7 +127,7 @@ describe("triage decision normalization", () => {
     });
   });
 
-  it("marks no-model decisions for review with their own reason", () => {
+  it("keeps noModelDecision as a labeled legacy fallback distinct from the heuristic path", () => {
     const decision = noModelDecision(email);
 
     expect(decision).toMatchObject({
@@ -135,9 +135,12 @@ describe("triage decision normalization", () => {
       urgency: "normal",
       escalation_badge: "Needs Review",
       triage_source: "no_model_fallback",
-      last_decision_reason: "no_model_mode",
+      last_decision_reason: "no_model_legacy_fallback",
       confidence: null,
     });
+    // Legacy fallback must never share the heuristic scorer's source label, or
+    // the two no_model paths would be indistinguishable in stored decisions.
+    expect(decision.triage_source).not.toBe("no_model_heuristic");
   });
 
   it("converts finalizing preflight results and rejects routing results", () => {
