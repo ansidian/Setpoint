@@ -141,7 +141,7 @@ describe("CalendarInlineOverflowLayer", () => {
 
     expect(boundary).toBeTruthy();
     expect(boundary.style.bottom).toBe("0px");
-    expect(boundary.style.background).toBe("rgb(0, 149, 255)");
+    expect(boundary.style.background).toBe("#0095FF");
     expect(
       screen.getByTestId("calendar-cell-inline-overflow")
         .querySelector("[data-calendar-inline-overflow-boundary='cross-month']"),
@@ -169,6 +169,6 @@ describe("CalendarInlineOverflowLayer", () => {
 
     expect(boundary).toBeTruthy();
     expect(boundary.style.bottom).toBe("0px");
-    expect(boundary.style.background).toBe("rgb(0, 149, 255)");
+    expect(boundary.style.background).toBe("#0095FF");
   });
 });

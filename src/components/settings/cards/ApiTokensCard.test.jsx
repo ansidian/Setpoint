@@ -37,10 +37,12 @@ beforeEach(() => {
     expires_at: Date.UTC(2026, 6, 18),
   });
   mockApi.revokeApiToken.mockResolvedValue({});
-  Object.assign(navigator, {
-    clipboard: {
-      writeText: vi.fn(),
-    },
+  // happy-dom defines navigator.clipboard as a getter-only property, so it can't
+  // be reassigned via Object.assign; defineProperty overrides it in both engines.
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: vi.fn() },
+    configurable: true,
+    writable: true,
   });
 });
 

@@ -153,7 +153,11 @@ describe("CalendarFloatingDetailPanel", () => {
     expect(panel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
     expect(Number(panel.getAttribute("data-motion-animate-y"))).toBe(detail.initialPlacement.top);
 
-    await act(async () => {
+    // Synchronous act: flush the resize-driven reveal + snap state, but leave the
+    // snap-clearing requestAnimationFrame pending. happy-dom drains rAF callbacks
+    // inside act(async () => ...) (jsdom does not), which would prematurely clear the
+    // snap before this assertion. The explicit nextFrame() below clears it on schedule.
+    act(() => {
       resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
     });
 
@@ -516,7 +520,10 @@ describe("CalendarFloatingDetailPanel", () => {
     expect(coldFlippedPanel.getAttribute("data-motion-transition-x-duration")).toBe("0.01");
     expect(coldFlippedPanel.getAttribute("data-motion-transition-y-duration")).toBe("0.01");
 
-    await act(async () => {
+    // Synchronous act keeps the snap-clearing rAF pending (see note in the first
+    // measured-placement test) so the cold-flip snap is still observable here; happy-dom
+    // would otherwise drain that rAF inside act(async) and clear the snap early.
+    act(() => {
       resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
     });
 
@@ -599,7 +606,10 @@ describe("CalendarFloatingDetailPanel", () => {
       </CalendarFloatingDetailPanel>,
     );
 
-    await act(async () => {
+    // Synchronous act keeps the snap-clearing rAF pending (see note in the first
+    // measured-placement test) so the first-reveal snap is observable; happy-dom would
+    // otherwise drain that rAF inside act(async) and clear the snap before this assertion.
+    act(() => {
       resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
     });
 
