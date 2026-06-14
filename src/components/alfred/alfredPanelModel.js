@@ -199,6 +199,23 @@ export function spendingBreakdownRows(buckets = []) {
   });
 }
 
+// Count-based twin of spendingBreakdownRows for the group_items breakdown card.
+// Buckets arrive server-ordered (count desc, "Other" last); preserve that order
+// and only compute the bar percentage + the Other-greying flag.
+export function countBreakdownRows(buckets = []) {
+  const max = buckets.reduce((m, b) => Math.max(m, Number(b.count) || 0), 0);
+  return buckets.map((b) => {
+    const count = Number(b.count) || 0;
+    const pct = max > 0 ? (count / max) * 100 : 0;
+    return {
+      label: b.label,
+      count,
+      pct: Math.round(pct * 10) / 10,
+      isOther: b.label === "Other",
+    };
+  });
+}
+
 // Render key for the auto-scroll effect (P3-4): bumps when a new message is
 // added OR the last (streaming) say message grows. Keying the effect on this
 // instead of running it every render stops keystrokes/unrelated re-renders from

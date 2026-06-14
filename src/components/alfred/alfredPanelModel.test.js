@@ -6,6 +6,7 @@ import {
   alfredScrollKey,
   alfredToolRunningLabel,
   applyAlfredEvent,
+  countBreakdownRows,
   formatAlfredAbsolute,
   formatAlfredAgo,
   formatAlfredDate,
@@ -235,5 +236,24 @@ describe("applyAlfredEvent summary case", () => {
     expect(result[1].group_by).toBe("category");
     expect(result[1].buckets[0].label).toBe("Groceries");
     expect(result[1].period).toEqual({ start: "2026-06-01", end: "2026-06-30" });
+  });
+});
+
+describe("countBreakdownRows", () => {
+  it("computes pct from the max count and flags Other", () => {
+    const rows = countBreakdownRows([
+      { label: "Ghosted", count: 16 },
+      { label: "Rejected", count: 4 },
+      { label: "Other", count: 2 },
+    ]);
+    expect(rows[0]).toEqual({ label: "Ghosted", count: 16, pct: 100, isOther: false });
+    expect(rows[1].pct).toBe(25);
+    expect(rows[2].isOther).toBe(true);
+  });
+
+  it("preserves incoming order and returns [] for empty", () => {
+    expect(countBreakdownRows([])).toEqual([]);
+    const rows = countBreakdownRows([{ label: "B", count: 1 }, { label: "A", count: 9 }]);
+    expect(rows.map((r) => r.label)).toEqual(["B", "A"]);
   });
 });
