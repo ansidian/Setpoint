@@ -51,4 +51,12 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toMatch(/income/i);
     expect(prompt).toContain("summarize_transactions");
   });
+
+  it("instructs the model to use group_items for grouping/distribution questions, keyed on shape not vocabulary", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
+    expect(prompt).toContain("group_items");
+    expect(prompt.toLowerCase()).toMatch(/how many|break these down|distribution/);
+    // Generality guard: the trigger must not be phrased around a single domain.
+    expect(prompt.toLowerCase()).not.toContain("job application");
+  });
 });
