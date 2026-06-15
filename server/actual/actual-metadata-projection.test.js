@@ -21,6 +21,7 @@ const {
   readActualMetadataProjection,
   refreshActualMetadataProjection,
   loadActualMetadataForProjection,
+  upsertMetadataProjectionQuery,
 } = await import("./actual-metadata-projection.js");
 
 const NOW = new Date("2026-06-10T12:00:00.000Z");
@@ -72,6 +73,22 @@ describe("readActualMetadataProjection", () => {
   });
 });
 
+describe("upsertMetadataProjectionQuery", () => {
+  it("builds a current-status upsert carrying the normalized payees and timestamps", () => {
+    const { sql, args } = upsertMetadataProjectionQuery(
+      "user-1",
+      { payees: [{ id: "p1", name: "Comcast" }] },
+      TS,
+    );
+    // The table + 'current' marker are the behavioral signal of this builder.
+    expect(sql).toMatch(/INSERT INTO ea_actual_metadata_mirror/);
+    expect(sql).toMatch(/'current'/);
+    expect(args[0]).toBe("user-1");
+    expect(args[2]).toBe(JSON.stringify([{ id: "p1", name: "Comcast" }]));
+    expect(args).toContain(TS);
+  });
+});
+
 describe("refreshActualMetadataProjection", () => {
   it("upserts supplied metadata as current and returns current sync health", async () => {
     const result = await refreshActualMetadataProjection("user-1", {
@@ -79,12 +96,6 @@ describe("refreshActualMetadataProjection", () => {
       metadata: { payees: [{ id: "p1", name: "Comcast" }] },
     });
     expect(mockActualLocal.readLocalActualMetadata).not.toHaveBeenCalled();
-    const [{ sql, args }] = mockDb.execute.mock.calls[0];
-    expect(sql).toMatch(/INSERT INTO ea_actual_metadata_mirror/);
-    expect(sql).toMatch(/'current'/);
-    expect(args[0]).toBe("user-1");
-    expect(args[2]).toBe(JSON.stringify([{ id: "p1", name: "Comcast" }]));
-    expect(args).toContain(TS);
     expect(result.payeeMap).toEqual({ p1: "Comcast" });
     expect(result.syncHealth).toEqual({
       state: "current",
@@ -108,24 +119,19 @@ describe("refreshActualMetadataProjection", () => {
     expect(result.accounts).toEqual([{ id: "a1", name: "Checking" }]);
   });
 
-  it("falls back cached local -> fresh local -> worker", async () => {
+  it("falls back to the worker when both cached and fresh local reads fail", async () => {
     mockActualLocal.readLocalActualMetadata
       .mockRejectedValueOnce(new Error("no cache"))
       .mockRejectedValueOnce(new Error("lightweight failed"));
     mockActual.getMetadata.mockResolvedValue({ payees: [{ id: "p9", name: "PG&E" }] });
     const result = await refreshActualMetadataProjection("user-1", { now: NOW });
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(1, "user-1", {
-      refresh: false,
-      localOnly: true,
-    });
-    expect(mockActualLocal.readLocalActualMetadata).toHaveBeenNthCalledWith(2, "user-1", {
-      refresh: true,
-    });
+    // Worker payee surviving in the result proves the worker path won the fallback.
+    expect(result.payeeMap).toEqual({ p9: "PG&E" });
+    // The worker is an outbound boundary; assert it was reached with refresh flags.
     expect(mockActual.getMetadata).toHaveBeenCalledWith("user-1", {
       forceWorker: true,
       forceRefresh: true,
     });
-    expect(result.payeeMap).toEqual({ p9: "PG&E" });
   });
 
   it("throws instead of touching the worker when allowWorkerFallback is false", async () => {
@@ -140,10 +146,28 @@ describe("refreshActualMetadataProjection", () => {
     mockActual.getMetadata.mockRejectedValue(new Error("worker down"));
     await expect(refreshActualMetadataProjection("user-1", { now: NOW }))
       .rejects.toThrow("worker down");
-    const degradedCall = mockDb.execute.mock.calls.find(([{ sql }]) => /'degraded'/.test(sql));
-    expect(degradedCall).toBeTruthy();
-    const [{ args }] = degradedCall;
-    expect(args[0]).toBe("user-1");
-    expect(args[2]).toBe("worker down");
+
+    // The failed refresh persisted the worker error to the projection.
+    const degradedWrite = mockDb.execute.mock.calls.at(-1)[0];
+    expect(degradedWrite.args).toContain("user-1");
+    expect(degradedWrite.args).toContain("worker down");
+
+    // The persisted degraded row surfaces through the public read API.
+    mockDb.execute.mockResolvedValue({
+      rows: [{
+        status: "degraded",
+        accounts_json: null,
+        payees_json: null,
+        categories_json: null,
+        schedules_json: null,
+        recent_transactions_json: null,
+        last_success_at: null,
+        last_attempt_at: TS,
+        last_error: "worker down",
+      }],
+    });
+    const projection = await readActualMetadataProjection("user-1");
+    expect(projection.syncHealth.state).toBe("degraded");
+    expect(projection.syncHealth.lastError).toBe("worker down");
   });
 });

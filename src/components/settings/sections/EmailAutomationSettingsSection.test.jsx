@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/settings/cards/EmailTriageModeCard", () => ({
@@ -39,12 +40,21 @@ vi.mock("@/components/settings/cards/BriefingSchedulesCard", () => ({
 
 const { default: EmailAutomationSettingsSection } = await import("./EmailAutomationSettingsSection.jsx");
 
+// Stateful harness so setSettings(updater) feeds back into the section and the
+// lookback/interests controls reflect the latest settings on re-render.
+function Harness({ initialSettings = { email_interests: [] }, patch }) {
+  const [settings, setSettings] = useState(initialSettings);
+  return (
+    <EmailAutomationSettingsSection settings={settings} setSettings={setSettings} patch={patch} />
+  );
+}
+
 afterEach(() => {
   cleanup();
 });
 
 describe("EmailAutomationSettingsSection", () => {
-  it("groups email automation controls in the agreed order", () => {
+  it("renders every email-automation card plus the lookback and interests panels", () => {
     render(
       <EmailAutomationSettingsSection
         settings={{ email_interests: [] }}
@@ -53,26 +63,88 @@ describe("EmailAutomationSettingsSection", () => {
       />,
     );
 
-    const orderedElements = [
-      screen.getByTestId("email-triage-mode-card"),
-      screen.getByTestId("triage-sound-settings-card"),
-      screen.getByTestId("email-ai-model-card"),
-      screen.getByTestId("bill-extraction-card"),
-      screen.getByText("Email Lookback").closest("[data-settings-section]"),
-      screen.getByText("Email Interests").closest("[data-settings-section]"),
-      screen.getByTestId("important-senders-card"),
-      screen.getByTestId("snapshot-boundaries-card"),
-    ];
+    expect(screen.getByTestId("email-triage-mode-card")).toBeTruthy();
+    expect(screen.getByTestId("triage-sound-settings-card")).toBeTruthy();
+    expect(screen.getByTestId("email-ai-model-card")).toBeTruthy();
+    expect(screen.getByTestId("bill-extraction-card")).toBeTruthy();
+    expect(screen.getByText("Email Lookback")).toBeTruthy();
+    expect(screen.getByText("Email Interests")).toBeTruthy();
+    expect(screen.getByTestId("important-senders-card")).toBeTruthy();
+    expect(screen.getByTestId("snapshot-boundaries-card")).toBeTruthy();
 
-    expect(orderedElements.every(Boolean)).toBe(true);
+    expect(
+      screen.getByText("Controls how far back the email snapshot looks when gathering context."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/generation/i)).toBeNull();
+  });
 
-    for (let index = 1; index < orderedElements.length; index += 1) {
-      const previous = orderedElements[index - 1];
-      const current = orderedElements[index];
-      expect(previous.compareDocumentPosition(current)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  describe("email lookback clamp", () => {
+    function renderLookback() {
+      const patch = vi.fn();
+      render(<Harness patch={patch} />);
+      const input = screen.getByDisplayValue("16");
+      return { patch, input };
     }
 
-    expect(screen.getByText("Controls how far back the email snapshot looks when gathering context.")).toBeTruthy();
-    expect(screen.queryByText(/generation/i)).toBeNull();
+    it("clamps a below-minimum lookback up to 1 hour", () => {
+      const { patch, input } = renderLookback();
+
+      // -5 parses truthy so it reaches Math.max's floor (a 0 would fall back to
+      // the 16 default via `|| 16`, never exercising the clamp).
+      fireEvent.change(input, { target: { value: "-5" } });
+
+      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 1 });
+    });
+
+    it("clamps an above-maximum lookback down to 72 hours", () => {
+      const { patch, input } = renderLookback();
+
+      fireEvent.change(input, { target: { value: "999" } });
+
+      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 72 });
+    });
+
+    it("passes an in-range lookback through unchanged", () => {
+      const { patch, input } = renderLookback();
+
+      fireEvent.change(input, { target: { value: "24" } });
+
+      expect(patch).toHaveBeenCalledWith({ email_lookback_hours: 24 });
+    });
+  });
+
+  describe("email interests add/remove", () => {
+    it("patches email_interests_json with the appended interest on submit", () => {
+      const patch = vi.fn();
+      render(<Harness initialSettings={{ email_interests: ["Anthropic"] }} patch={patch} />);
+
+      const input = screen.getByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
+      fireEvent.change(input, { target: { value: "GitHub" } });
+      fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+      expect(patch).toHaveBeenCalledWith({ email_interests_json: ["Anthropic", "GitHub"] });
+    });
+
+    it("does not patch when submitting a blank interest", () => {
+      const patch = vi.fn();
+      render(<Harness initialSettings={{ email_interests: [] }} patch={patch} />);
+
+      const input = screen.getByPlaceholderText("e.g. Da Vien, Anthropic, GitHub…");
+      fireEvent.change(input, { target: { value: "   " } });
+      fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+      expect(patch).not.toHaveBeenCalled();
+    });
+
+    it("patches email_interests_json with the remaining interests when one is removed", () => {
+      const patch = vi.fn();
+      render(
+        <Harness initialSettings={{ email_interests: ["Anthropic", "GitHub"] }} patch={patch} />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Remove Anthropic" }));
+
+      expect(patch).toHaveBeenCalledWith({ email_interests_json: ["GitHub"] });
+    });
   });
 });

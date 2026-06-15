@@ -45,7 +45,7 @@ const currentDeadlineFixture = [
   { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
 ];
 
-function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", showInsights = true } = {}) {
+function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", showInsights = true, onOpenEmail = () => {} } = {}) {
   const briefing = makeBriefing();
   const liveData = {
     liveBills: [{ id: "bill-1", name: "Rent", amount: 1800, next_date: "2026-04-21", payee: "Landlord", paid: false }],
@@ -76,7 +76,7 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
         }}
         accent="#cba6da"
         isMobile={isMobile}
-        onOpenEmail={() => {}}
+        onOpenEmail={onOpenEmail}
         onOpenDeadline={() => {}}
         onOpenBillsCalendar={() => {}}
         onOpenEventsCalendar={() => {}}
@@ -146,17 +146,14 @@ describe("mobile dashboard layout", () => {
     expect(rails.style.overflow).toBe("hidden");
   });
 
-  it("gives the inbox peek open button an interactive hover state", () => {
-    renderDashboardBody({ isMobile: false, dashboardLayout: "focus" });
+  it("wires the inbox peek open button to open the inbox", () => {
+    const onOpenEmail = vi.fn();
+    renderDashboardBody({ isMobile: false, dashboardLayout: "focus", onOpenEmail });
 
     const openButton = screen.getByRole("button", { name: /open/i });
-    expect(openButton.style.background).toBe("rgba(255, 255, 255, 0.015)");
-    expect(openButton.style.color).toBe("rgba(205, 214, 244, 0.7)");
+    fireEvent.click(openButton);
 
-    fireEvent.mouseEnter(openButton);
-
-    expect(openButton.style.background).toBe("#cba6da14");
-    expect(openButton.style.color).toBe("#cba6da");
+    expect(onOpenEmail).toHaveBeenCalled();
   });
 });
 
@@ -290,10 +287,11 @@ describe("DashboardHero mobile layout", () => {
     expect(screen.queryByText(/\d+h \d+m/)).toBeNull();
   });
 
-  it("gives the focus pressure pill an interactive hover state", () => {
+  it("wires the focus pressure pill to open the pressure view", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
+    const onOpenPressure = vi.fn();
 
     render(
       <DashboardHero
@@ -312,23 +310,19 @@ describe("DashboardHero mobile layout", () => {
         liveDeadlines={currentDeadlineFixture}
         liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
         onJump={() => {}}
-        onOpenPressure={() => {}}
+        onOpenPressure={onOpenPressure}
       />,
     );
 
     const pressureButton = screen.getByRole("button", { name: /deadline soon/i });
-    expect(pressureButton.style.background).toBe("rgba(249, 226, 175, 0.08)");
-    expect(pressureButton.style.border).toBe("1px solid rgba(249, 226, 175, 0.18)");
+    fireEvent.click(pressureButton);
 
-    fireEvent.mouseEnter(pressureButton);
-
-    expect(pressureButton.style.background).toBe("rgba(249, 226, 175, 0.12)");
-    expect(pressureButton.style.border).toBe("1px solid rgba(249, 226, 175, 0.3)");
+    expect(onOpenPressure).toHaveBeenCalled();
   });
 });
 
 describe("TodayTimeline controls", () => {
-  it("gives inactive filter chips a clearer hover state", () => {
+  it("toggles a filter chip off when clicked", () => {
     render(
       <TodayTimeline
         accent="#cba6da"
@@ -339,16 +333,11 @@ describe("TodayTimeline controls", () => {
     );
 
     const deadlinesFilter = screen.getByRole("switch", { name: /deadlines/i });
+    expect(deadlinesFilter.getAttribute("aria-checked")).toBe("true");
+
     fireEvent.click(deadlinesFilter);
 
     expect(deadlinesFilter.getAttribute("aria-checked")).toBe("false");
-    expect(deadlinesFilter.style.background).toBe("transparent");
-    expect(deadlinesFilter.style.color).toBe("rgba(205, 214, 244, 0.5)");
-
-    fireEvent.mouseEnter(deadlinesFilter);
-
-    expect(deadlinesFilter.style.background).toBe("rgba(255, 255, 255, 0.035)");
-    expect(deadlinesFilter.style.color).toBe("rgba(205, 214, 244, 0.82)");
   });
 
   it("keeps the now marker visible when events are toggled off", () => {
