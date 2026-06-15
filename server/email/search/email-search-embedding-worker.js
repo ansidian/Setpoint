@@ -265,6 +265,15 @@ async function loadCoverageCounts(dbClient, userId) {
   };
 }
 
+// Query-time coverage signal for retrieval fusion: fresh embeddings / total indexed,
+// via the same single SQL aggregate the cron uses (no body scan, no vector capability
+// needed). Returns null when nothing is indexed so callers default to full trust.
+export async function getEmailSearchEmbeddingCoverageRatio(userId, { dbClient = db } = {}) {
+  const counts = await loadCoverageCounts(dbClient, userId);
+  if (!counts.total_indexed) return null;
+  return counts.coverage_ratio;
+}
+
 async function getCoverageStatusFast(userId, { dbClient = db, capability = null } = {}) {
   const [counts, state] = await Promise.all([
     loadCoverageCounts(dbClient, userId),

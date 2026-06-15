@@ -5,11 +5,14 @@ import {
   createEmailSearchEmbeddingStore,
   detectEmailSearchVectorCapability,
 } from "./email-search-embedding-store.js";
+import { getEmailSearchEmbeddingCoverageRatio } from "./email-search-embedding-worker.js";
 import { filterEmailSearchCandidatesForEvidence } from "./email-search-evidence.js";
 import { parseEmailSearchQuery, sanitizeFtsQuery } from "./email-search-query.js";
 import { rankEmailSearchRows } from "./email-search-ranking.js";
 
 const DEFAULT_LIMIT = 12;
+const LEXICAL_FUSION_WEIGHT = 0.45;
+const VECTOR_FUSION_WEIGHT = 0.55;
 
 const SNAPSHOT_JOIN = `
               LEFT JOIN ea_email_triage triage
@@ -59,6 +62,14 @@ function clampLimit(value) {
 
 function bounded(value, min = 0, max = 1) {
   return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+// The lexical/quality component for fusion: scoreEmailSearchRow's output (a points total
+// that can go negative under noise/provider_removed penalties) normalized into the fusion
+// band [-1, 1]. Lexical and vector-only rows are both pre-scored, so both derive it the
+// same way — keep this single source of truth so the two fusion branches can't drift.
+function lexicalScoreFromRow(row) {
+  return bounded(Number(row.search_score || 0) / 100, -1, 1);
 }
 
 function readFilterFromPlan(plan) {
@@ -198,12 +209,21 @@ async function loadRowsByUid(dbClient, userId, uids, { readFilter, plan }) {
   return result.rows;
 }
 
-function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit }) {
+// Fusion is coverage-aware: the vector coefficient is scaled by how much of the
+// corpus is actually embedded. At full coverage (factor 1) this is byte-for-byte
+// the prior formula, so healthy-corpus ranking is unchanged and the vector signal
+// is not flattened. As coverage drops (recent mail unembedded in dev; backfill/
+// outage lag in prod) the vector term shrinks toward lexical, so a fresh
+// strong-lexical email is no longer structurally displaced by a stale embedded
+// one. Lexical coefficients are deliberately untouched.
+export function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit, coverageRatio = 1 }) {
+  const coverageFactor = bounded(coverageRatio, 0, 1);
+  const effectiveVectorWeight = VECTOR_FUSION_WEIGHT * coverageFactor;
   const byUid = new Map();
   const vectorScoreByUid = new Map(vectorMatches.map((match) => [match.uid, bounded(match.similarity)]));
 
   for (const row of lexicalRows) {
-    const lexicalScore = bounded(Number(row.search_score || 0) / 100, -1, 1);
+    const lexicalScore = lexicalScoreFromRow(row);
     byUid.set(row.uid, {
       ...candidateFromRow(row),
       provenance: { lexical: true, vector: false },
@@ -221,16 +241,23 @@ function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit }) {
     if (existing) {
       existing.provenance.vector = true;
       existing.scores.vector = vectorScore;
-      existing.scores.combined = bounded((existing.scores.lexical * 0.45) + (vectorScore * 0.55), -1, 1);
+      existing.scores.combined = bounded((existing.scores.lexical * LEXICAL_FUSION_WEIGHT) + (vectorScore * effectiveVectorWeight), -1, 1);
       continue;
     }
+    // Vector-only rows are pre-scored through scoreEmailSearchRow (via rankEmailSearchRows
+    // in the retrieval layer), so their search_score carries the same quality/recency
+    // penalties as lexical rows — noise lane, provider_removed, dismissed, stale recency.
+    // Fuse that quality component with the vector term so a high-similarity noise/removed
+    // email can no longer surface as a top vector-only candidate unpenalized. provenance
+    // stays vector-only (it did not match FTS); only the ranking score changes.
+    const lexicalScore = lexicalScoreFromRow(row);
     byUid.set(row.uid, {
       ...candidateFromRow(row),
       provenance: { lexical: false, vector: true },
       scores: {
-        lexical: 0,
+        lexical: lexicalScore,
         vector: vectorScore,
-        combined: bounded(vectorScore * 0.55, -1, 1),
+        combined: bounded((lexicalScore * LEXICAL_FUSION_WEIGHT) + (vectorScore * effectiveVectorWeight), -1, 1),
       },
     });
   }
@@ -243,12 +270,25 @@ function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit }) {
     .slice(0, limit);
 }
 
+// Resolve the embedding coverage factor for fusion. Any failure or "nothing indexed"
+// defaults to full trust (1) so the coverage-aware down-weighting only ever activates
+// when coverage is positively measured low — the default path stays today's behavior.
+async function resolveEmbeddingCoverage(userId, dbClient) {
+  try {
+    const ratio = await getEmailSearchEmbeddingCoverageRatio(userId, { dbClient });
+    return ratio == null ? 1 : bounded(ratio, 0, 1);
+  } catch {
+    return 1;
+  }
+}
+
 export async function retrieveInboxAiSearch(userId, {
   q,
   limit = DEFAULT_LIMIT,
   dbClient = db,
   embeddingClient = createEmailSearchEmbeddingClient(),
   capability = null,
+  coverageRatio = null,
   plan = null,
   now = Date.now(),
 } = {}) {
@@ -298,11 +338,26 @@ export async function retrieveInboxAiSearch(userId, {
 
   const [lexicalRows, vector] = await Promise.all([lexicalPromise, vectorPromise]);
   const vectorRows = await loadRowsByUid(dbClient, userId, vector.matches.map((match) => match.uid), { readFilter, plan: effectivePlan });
+  const resolvedCoverage = coverageRatio != null
+    ? bounded(coverageRatio, 0, 1)
+    : await resolveEmbeddingCoverage(userId, dbClient);
+  // Pre-score the vector rows through the SAME ranking pass as the lexical rows so the
+  // lexical/quality component (noise/provider_removed penalties, recency) is computed
+  // uniformly for every candidate. mergeCandidates then fuses search_score with the
+  // vector term for vector-only rows instead of treating them as quality-neutral. limit
+  // is the row count so ranking only scores+attaches; the merged pool does the ordering.
+  const scoredVectorRows = rankEmailSearchRows(vectorRows, {
+    query: textQuery,
+    limit: vectorRows.length,
+    now,
+    debug: true,
+  });
   const candidatePool = mergeCandidates({
     lexicalRows,
     vectorMatches: vector.matches,
-    vectorRows,
+    vectorRows: scoredVectorRows,
     limit: candidatePoolLimit,
+    coverageRatio: resolvedCoverage,
   });
   const candidates = filterEmailSearchCandidatesForEvidence(candidatePool, { q, plan: effectivePlan }).slice(0, maxResults);
 
