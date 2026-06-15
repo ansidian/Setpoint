@@ -104,66 +104,24 @@ describe("EmailTriageModeCard", () => {
     expect(screen.getByText("Effective: No model")).toBeTruthy();
   });
 
-  it("shows recent OpenAI triage cache savings", async () => {
+  it("shows the triage call count without a cache hit or savings line", async () => {
     getTriageCacheStats.mockResolvedValueOnce({
       windowDays: 7,
-      openaiCalls: 2,
-      inputTokens: 3000,
-      cachedInputTokens: 1600,
-      outputTokens: 300,
-      estimatedCostUsd: 0.005967,
-      estimatedSavingsUsd: 0.002358,
+      openaiCalls: 3,
       hitRate: 0.5333,
-      lastTriagedAt: "2026-05-04T12:05:00.000Z",
-      models: ["gpt-5.4", "gpt-5.4-nano"],
-      comparisonWindows: {
-        monthToDate: { windowDays: null, windowLabel: "month_to_date", openaiCalls: 2, estimatedCostUsd: 0.005967, estimatedSavingsUsd: 0.002358 },
-      },
-      byTier: {
-        cheap: { calls: 1, inputTokens: 1000, cachedInputTokens: 600, outputTokens: 100, estimatedCostUsd: 0.000217, estimatedSavingsUsd: 0.000108 },
-        strong: { calls: 1, inputTokens: 2000, cachedInputTokens: 1000, outputTokens: 200, estimatedCostUsd: 0.00575, estimatedSavingsUsd: 0.00225 },
-      },
+      estimatedSavingsUsd: 0.002358,
     });
 
     renderCard();
 
     await waitFor(() => {
-      expect(screen.getByText("Cache: 53.3% hit")).toBeTruthy();
+      expect(screen.getByText("3 OpenAI calls in 7 days")).toBeTruthy();
     });
-    expect(screen.queryByText("Cost")).toBeNull();
-    expect(screen.queryByText("1.6k")).toBeNull();
-    expect(screen.getByText((content) => content.includes("$0.0024"))).toBeTruthy();
-    expect(screen.getByText("Cache: 53.3% hit")).toBeTruthy();
-    expect(screen.getByText("2 OpenAI calls in 7 days")).toBeTruthy();
-    expect(screen.queryByText("MTD cost: $0.0060")).toBeNull();
-    expect(screen.queryByText(/Last: May 4/)).toBeNull();
-  });
-
-  it("does not round tiny nonzero cache savings down to zero", async () => {
-    getTriageCacheStats.mockResolvedValueOnce({
-      windowDays: 7,
-      openaiCalls: 1,
-      inputTokens: 1100,
-      cachedInputTokens: 100,
-      outputTokens: 20,
-      estimatedCostUsd: 0.000227,
-      estimatedSavingsUsd: 0.000018,
-      hitRate: 0.0909,
-      lastTriagedAt: null,
-      models: ["gpt-5.4-nano"],
-      comparisonWindows: {
-        monthToDate: { windowDays: null, windowLabel: "month_to_date", openaiCalls: 1, estimatedCostUsd: 0.000227, estimatedSavingsUsd: 0.000018 },
-      },
-      byTier: {
-        cheap: { calls: 1, inputTokens: 1100, cachedInputTokens: 100, outputTokens: 20, estimatedCostUsd: 0.000227, estimatedSavingsUsd: 0.000018 },
-        strong: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedCostUsd: 0, estimatedSavingsUsd: 0 },
-      },
-    });
-
-    renderCard();
-
-    await waitFor(() => {
-      expect(screen.getByText((content) => content.includes("<$0.0001"))).toBeTruthy();
-    });
+    // Cache framing is gone: no "Cache: X% hit" line and no "Saved $…" fragment,
+    // even though the stats payload still carries hitRate/savings.
+    expect(screen.queryByText(/Cache:/i)).toBeNull();
+    expect(screen.queryByText(/Saved \$/i)).toBeNull();
+    // The OpenAI-only provenance pill remains.
+    expect(screen.getByText("OpenAI only")).toBeTruthy();
   });
 });

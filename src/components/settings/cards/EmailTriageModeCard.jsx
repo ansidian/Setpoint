@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bot, Gauge, PauseCircle, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Bot, PauseCircle, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { getTriageCacheStats } from "@/api";
 import { FieldHint, SettingsCard, StatusPill } from "@/components/settings/settings-ui";
 import { cn } from "@/lib/utils";
@@ -48,21 +48,6 @@ function effectiveModeForStoredMode(storedMode) {
   return storedMode;
 }
 
-function formatPercent(value) {
-  return `${(Number(value || 0) * 100).toFixed(1)}%`;
-}
-
-function formatUsdEstimate(value) {
-  const number = Number(value || 0);
-  if (number > 0 && number < 0.0001) return "<$0.0001";
-  if (number > 0 && number < 0.01) return `$${number.toFixed(4)}`;
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(number);
-}
-
 function TriageCacheGlance({ stats, loading, error }) {
   const calls = Number(stats?.openaiCalls || 0);
   const windowDays = Number(stats?.windowDays || 7);
@@ -77,15 +62,6 @@ function TriageCacheGlance({ stats, loading, error }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-        <div className="flex items-center gap-2 text-[12px] font-medium text-foreground">
-          <Gauge size={13} className="text-primary/75" />
-          {loading || error ? "Cache: ..." : `Cache: ${formatPercent(stats?.hitRate)} hit`}
-        </div>
-        {!loading && !error && Number(stats?.estimatedSavingsUsd || 0) > 0 ? (
-          <div className="text-[11px] font-medium text-muted-foreground/70">
-            Saved {formatUsdEstimate(stats?.estimatedSavingsUsd)}
-          </div>
-        ) : null}
         <div className="text-[11px] text-muted-foreground/60">
           {detail}
         </div>
