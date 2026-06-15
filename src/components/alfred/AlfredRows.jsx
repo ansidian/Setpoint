@@ -206,6 +206,9 @@ function SectionHeader({ label, tone }) {
 // per-render chip-action resolution + fresh per-row closures (now useMemo'd by
 // items). Items are verbatim and referentially stable once a rows event lands.
 export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActivateItem, now }) {
+  // Kept in sync with ROW_COMPONENTS in AlfredBreakdown.jsx (a non-component
+  // const export here would trip react-refresh/only-export-components). Drift is
+  // caught by AlfredBreakdown's per-kind render test.
   const Row = { bill: BillRow, event: EventRow, deadline: DeadlineRow, email: EmailRow, transaction: TransactionRow }[kind];
   // One `now` per block mount: a surfaced block is historical, so its time buckets
   // shouldn't drift as the session ticks on (tests inject a fixed `now`).
