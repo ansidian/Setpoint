@@ -7,17 +7,13 @@ import {
 
 export const EMAIL_SEARCH_COST_WINDOW_DAYS = 7;
 export const EMAIL_SEARCH_EMBEDDING_PRICE_PER_MILLION = 0.02;
-export const INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION = {
-  "gpt-5.4-mini": { input: 0.75, cachedInput: 0.075, output: 4.50 },
-};
-const INBOX_AI_SEARCH_PRICE_MODEL_KEYS = Object.keys(INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION)
-  .sort((a, b) => b.length - a.length);
-const ASK_AI_EVENT_TYPES = ["planner", "query_embedding"];
+// Alfred is the planner now (the standalone inbox ask-ai planner/answer-compiler
+// was retired), so the only live per-query model cost in the search path is the
+// query embedding. No gpt-5.4-mini planner pricing, no synthetic planner tokens.
+const QUERY_SEARCH_EVENT_TYPES = ["query_embedding"];
 const CORPUS_EMBEDDING_EVENT_TYPES = ["corpus_embedding"];
 
 const ESTIMATED_QUERY_CHARS = 120;
-const ESTIMATED_PLANNER_INPUT_TOKENS = 500;
-const ESTIMATED_PLANNER_OUTPUT_TOKENS = 350;
 
 function semanticStatus({ total, stale, missing, stateStatus, mode }) {
   if (stateStatus === "unavailable") return "unavailable";
@@ -62,11 +58,7 @@ function priceForModel(model) {
   if (modelId === EMAIL_SEARCH_EMBEDDING_MODEL) {
     return { input: EMAIL_SEARCH_EMBEDDING_PRICE_PER_MILLION, cachedInput: 0, output: 0 };
   }
-  const exact = INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION[modelId];
-  if (exact) return exact;
-  const baseModel = INBOX_AI_SEARCH_PRICE_MODEL_KEYS
-    .find((key) => modelId.startsWith(`${key}-`));
-  return baseModel ? INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION[baseModel] : null;
+  return null;
 }
 
 function estimateCost({ model, inputTokens = 0, cachedInputTokens: cached = 0, outputTokens = 0 }) {
@@ -159,31 +151,13 @@ function finalizeUsageSummary(summary) {
   return summary;
 }
 
-function perAskEstimate() {
+function perQueryEstimate() {
   const queryEmbeddingTokens = estimateTokensFromChars(ESTIMATED_QUERY_CHARS);
-  const planner = {
-    model: "gpt-5.4-mini",
-    inputTokens: ESTIMATED_PLANNER_INPUT_TOKENS,
-    outputTokens: ESTIMATED_PLANNER_OUTPUT_TOKENS,
-  };
-  const queryEmbedding = {
+  return {
+    note: "Estimated cost of embedding one search query (Alfred is the planner; no separate planner call).",
     model: EMAIL_SEARCH_EMBEDDING_MODEL,
     inputTokens: queryEmbeddingTokens,
-  };
-  const queryEmbeddingCost = estimateCost({ model: queryEmbedding.model, inputTokens: queryEmbedding.inputTokens });
-  const plannerCost = estimateCost(planner);
-
-  return {
-    note: "Successful Ask AI estimate: planner + query embedding only. Result status text is deterministic local formatting over retrieved source rows.",
-    queryEmbedding: {
-      ...queryEmbedding,
-      estimatedCostUsd: queryEmbeddingCost,
-    },
-    planner: {
-      ...planner,
-      estimatedCostUsd: plannerCost,
-    },
-    estimatedCostUsd: roundMoney(queryEmbeddingCost + plannerCost),
+    estimatedCostUsd: estimateCost({ model: EMAIL_SEARCH_EMBEDDING_MODEL, inputTokens: queryEmbeddingTokens }),
   };
 }
 
@@ -436,13 +410,12 @@ export async function getEmailSearchCostStats(userId, {
   now = new Date(),
 } = {}) {
   const cutoff = new Date(now.getTime() - (windowDays * 24 * 60 * 60 * 1000));
-  const [coverage, corpusEmbeddings, actualUsage, corpusEmbeddingUsage] = await Promise.all([
+  const [coverage, corpusEmbeddings, queryUsage, corpusEmbeddingUsage] = await Promise.all([
     loadCoverage(userId, { dbClient }),
     loadCorpusEmbeddingEstimate(userId, { dbClient }),
-    loadUsageSummary(userId, { dbClient, cutoff, eventTypes: ASK_AI_EVENT_TYPES }),
+    loadUsageSummary(userId, { dbClient, cutoff, eventTypes: QUERY_SEARCH_EVENT_TYPES }),
     loadCorpusEmbeddingUsage(userId, { dbClient, cutoff }),
   ]);
-  const estimate = perAskEstimate();
 
   return {
     windowDays,
@@ -455,23 +428,13 @@ export async function getEmailSearchCostStats(userId, {
           input: EMAIL_SEARCH_EMBEDDING_PRICE_PER_MILLION,
           unit: "USD per 1M input tokens",
         },
-        "gpt-5.4-mini": {
-          ...INBOX_AI_SEARCH_MODEL_PRICE_PER_MILLION["gpt-5.4-mini"],
-          unit: "USD per 1M tokens",
-        },
       },
     },
     coverage,
-    corpusEmbeddings: {
-      ...corpusEmbeddings,
-      actualUsage: corpusEmbeddingUsage,
-    },
-    askAi: {
-      actualUsage,
-      perSuccessfulAskEstimate: estimate,
-      estimatedSearchesUntilCorpusCost: estimate.estimatedCostUsd
-        ? Math.round(corpusEmbeddings.estimatedCostUsd / estimate.estimatedCostUsd)
-        : 0,
+    corpusEmbeddings: { ...corpusEmbeddings, actualUsage: corpusEmbeddingUsage },
+    querySearch: {
+      actualUsage: queryUsage,
+      perQueryEstimate: perQueryEstimate(),
     },
   };
 }
