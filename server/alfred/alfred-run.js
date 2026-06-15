@@ -15,6 +15,25 @@ const MAX_TOKENS = 2000;
 const MAX_NUDGE_ITEMS = 8;
 const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, bills, or transactions, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
 
+// Second backstop (ADR 0006, alfred-prompt.js group_items rule): a question that
+// asks for a SPLIT across 2+ categories should land as a group_items breakdown
+// card, not a prose enumeration. Smaller models (Haiku) skip the tool and narrate
+// every item instead — worst when a bucket is defined by absence (e.g. "ghosts" =
+// applications with no follow-up). When such a question is about to end in prose
+// with no card and no spending summary, remind once.
+const GROUP_ITEMS_NUDGE = "<system-reminder>This question asks for a split across categories, but you are about to answer in prose without a breakdown card. Sort the relevant item ids into labeled buckets (choose the labels from the question) and call group_items now, then give a one-line takeaway with the headline numbers. A bucket may be defined by the absence of something (for example, items with no follow-up) — include the ids that qualify.</system-reminder>";
+
+// True when the question asks for a split into 2+ named categories (a "how many X
+// … how many Y", or an explicit break-down / group-by / distribution), as opposed
+// to a single count ("how many deadlines") or a magnitude ("how much did I spend"),
+// which read fine as one line and must NOT trip the card backstop.
+const GROUPING_VERB = /\bbreak(?:\s|-)?(?:it|these|them|this|down)\b|\bbreakdown\b|\bgroup(?:ed|ing)?\b|\bsplit\b|\bdistribution\b|\bcategor(?:y|ies|ize|ised|ized)\b|\bby (?:status|sender|month|category|label|merchant|type|priority|day|week|account)\b|\b(?:vs\.?|versus)\b/i;
+export function looksLikeGroupingQuestion(text) {
+  const s = String(text || "");
+  const howMany = (s.match(/how many\b/gi) || []).length;
+  return howMany >= 2 || GROUPING_VERB.test(s);
+}
+
 // The cite-by-reference backstop counts items the model can actually name this run.
 // Each row-bearing tool returns exactly one array of rows; gate on that length, not
 // a tool's `total` — `total` can be a full match count (search_email when paged,
@@ -58,7 +77,10 @@ async function runAlfredInner({
 
   let retrievedCount = 0;
   let showItemsCalled = false;
+  let summarizeCalled = false;
   let nudged = false;
+  let nudgedGroup = false;
+  const groupIntent = looksLikeGroupingQuestion(message);
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
     const res = await fetchImpl(ANTHROPIC_URL, {
@@ -102,6 +124,14 @@ async function runAlfredInner({
 
     const toolUses = turn.content.filter((block) => block.type === "tool_use");
     if (turn.stopReason !== "tool_use" || !toolUses.length) {
+      // A split/categorize question answered as prose with no card → nudge toward
+      // group_items first (the right surface for a multi-bucket answer), ahead of
+      // the show_items backstop. No item cap: the card earns its keep on large sets.
+      if (!nudgedGroup && groupIntent && !showItemsCalled && !summarizeCalled && retrievedCount > 0) {
+        nudgedGroup = true;
+        conversation.messages.push({ role: "user", content: GROUP_ITEMS_NUDGE });
+        continue;
+      }
       if (!nudged && !showItemsCalled && retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS) {
         nudged = true;
         conversation.messages.push({ role: "user", content: SHOW_ITEMS_NUDGE });
@@ -141,6 +171,8 @@ async function runAlfredInner({
       });
       if (toolUse.name === "show_items" || toolUse.name === "group_items") {
         showItemsCalled = true;
+      } else if (toolUse.name === "summarize_transactions") {
+        summarizeCalled = true;
       } else if (!result?.error) {
         retrievedCount += citableRowCount(result);
       }
