@@ -10,6 +10,7 @@ import {
 import { createEmailSearchEmbeddingStore } from "./email-search-embedding-store.js";
 import { seedIndexedEmail } from "../test-utils/email-index-db.js";
 import {
+  getEmailSearchEmbeddingCoverageRatio,
   getEmailSearchEmbeddingCoverageStatus,
   processEmailSearchEmbeddingBatchesForAllUsers,
   processEmailSearchEmbeddingBatch,
@@ -56,6 +57,23 @@ describe("email search embedding worker", () => {
   afterEach(async () => {
     await db?.close?.();
     db = null;
+  });
+
+  it("reports coverage as fresh embeddings over total indexed", async () => {
+    db = await createWorkerTestDb();
+    await seedIndexedEmail(db, { uid: "embedded", subject: "Embedded bill", email_date: "2026-05-03T12:00:00Z" });
+    const bare = await seedIndexedEmail(db, { uid: "bare", subject: "Bare bill", email_date: "2026-05-02T12:00:00Z" });
+    void bare;
+    await upsertFreshEmbedding(db, { uid: "embedded", user_id: "user-1", account_id: "gmail-work" });
+
+    const ratio = await getEmailSearchEmbeddingCoverageRatio("user-1", { dbClient: db });
+    expect(ratio).toBeCloseTo(0.5, 6);
+  });
+
+  it("returns null coverage when nothing is indexed", async () => {
+    db = await createWorkerTestDb();
+    const ratio = await getEmailSearchEmbeddingCoverageRatio("nobody", { dbClient: db });
+    expect(ratio).toBeNull();
   });
 
   it("embeds a bounded batch and resumes by skipping fresh rows", async () => {

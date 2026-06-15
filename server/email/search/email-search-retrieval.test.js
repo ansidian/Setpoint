@@ -9,7 +9,7 @@ import {
 } from "./email-search-embeddings.js";
 import { createEmailSearchEmbeddingStore } from "./email-search-embedding-store.js";
 import { seedIndexedEmail } from "../test-utils/email-index-db.js";
-import { retrieveInboxAiSearch } from "./email-search-retrieval.js";
+import { mergeCandidates, retrieveInboxAiSearch } from "./email-search-retrieval.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../db/migrations");
@@ -385,5 +385,215 @@ describe("retrieveInboxAiSearch", () => {
     });
 
     expect(result.candidates.map((candidate) => candidate.uid)).toEqual(["recent-stubhub"]);
+  });
+
+  it("down-weights vector under partial coverage so a fresh unembedded lexical match wins", async () => {
+    db = await createRetrievalTestDb();
+    // Fresh, body-only keyword match (modest lexical score), NO embedding.
+    await seedIndexedEmail(db, {
+      uid: "fresh-statement",
+      subject: "Monthly update",
+      body_text: "Your bank statement is enclosed for review.",
+      email_date: "2026-06-13T12:00:00Z",
+    });
+    // Stale, no lexical match, but a strong embedding match. Coverage = 1/2 = 0.5.
+    const stale = await seedIndexedEmail(db, {
+      uid: "stale-vector",
+      subject: "Weekly newsletter",
+      body_text: "A general roundup unrelated to the query keywords.",
+      email_date: "2026-01-01T12:00:00Z",
+    });
+    await upsertEmbedding(db, stale, [1, 0, 0]);
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "bank statement",
+      now: "2026-06-14T00:00:00Z",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      limit: 5,
+    });
+
+    expect(result.candidates[0].uid).toBe("fresh-statement");
+  });
+
+  it("accepts an injected coverageRatio override (full trust keeps the strong vector match on top)", async () => {
+    db = await createRetrievalTestDb();
+    await seedIndexedEmail(db, {
+      uid: "fresh-statement",
+      subject: "Monthly update",
+      body_text: "Your bank statement is enclosed for review.",
+      email_date: "2026-06-13T12:00:00Z",
+    });
+    const stale = await seedIndexedEmail(db, {
+      uid: "stale-vector",
+      subject: "Weekly newsletter",
+      body_text: "A general roundup unrelated to the query keywords.",
+      email_date: "2026-01-01T12:00:00Z",
+    });
+    await upsertEmbedding(db, stale, [1, 0, 0]);
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "bank statement",
+      now: "2026-06-14T00:00:00Z",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      coverageRatio: 1,
+      limit: 5,
+    });
+
+    expect(result.candidates[0].uid).toBe("stale-vector");
+  });
+
+  it("does not surface a provider-removed email with high vector similarity above a legitimate match", async () => {
+    db = await createRetrievalTestDb();
+    // Legitimate, recent, body-only lexical match. No embedding -> lexical-only. Its
+    // combined score is modest (recency-driven), deliberately below a raw vector-only 0.55.
+    await seedIndexedEmail(db, {
+      uid: "legit-statement",
+      subject: "Monthly account update",
+      body_text: "Your bank statement is enclosed for review.",
+      email_date: "2026-06-13T12:00:00Z",
+    });
+    // Stale, no lexical overlap, but a perfect embedding match — and provider-removed.
+    // Without uniform scoring this surfaces on top (vector-only 1.0 * 0.55 = 0.55).
+    const removed = await seedIndexedEmail(db, {
+      uid: "removed-vector",
+      subject: "Weekly newsletter",
+      body_text: "A general roundup unrelated to the query keywords.",
+      email_date: "2026-05-20T12:00:00Z",
+    });
+    await upsertEmbedding(db, removed, [1, 0, 0]);
+    await db.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, provider_state, triage_status)
+            VALUES (?, ?, ?, 'fyi', 'uncategorized', 'normal', 'removed', 'complete')`,
+      args: ["user-1", removed.account_id, "removed-vector"],
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "bank statement",
+      now: "2026-06-14T00:00:00Z",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      coverageRatio: 1,
+      limit: 5,
+    });
+
+    expect(result.candidates[0].uid).toBe("legit-statement");
+    expect(result.candidates[0].uid).not.toBe("removed-vector");
+  });
+
+  it("does not surface a noise-lane email with high vector similarity above a legitimate match", async () => {
+    db = await createRetrievalTestDb();
+    await seedIndexedEmail(db, {
+      uid: "legit-statement",
+      subject: "Monthly account update",
+      body_text: "Your bank statement is enclosed for review.",
+      email_date: "2026-06-13T12:00:00Z",
+    });
+    const noise = await seedIndexedEmail(db, {
+      uid: "noise-vector",
+      subject: "Weekly newsletter",
+      body_text: "A general roundup unrelated to the query keywords.",
+      email_date: "2026-04-01T12:00:00Z",
+    });
+    await upsertEmbedding(db, noise, [1, 0, 0]);
+    await db.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, triage_status)
+            VALUES (?, ?, ?, 'noise', 'promotions', 'low', 'complete')`,
+      args: ["user-1", noise.account_id, "noise-vector"],
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "bank statement",
+      now: "2026-06-14T00:00:00Z",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      coverageRatio: 1,
+      limit: 5,
+    });
+
+    expect(result.candidates[0].uid).toBe("legit-statement");
+    expect(result.candidates[0].uid).not.toBe("noise-vector");
+  });
+});
+
+describe("mergeCandidates coverage-aware fusion", () => {
+  const lex = (uid, search_score, extra = {}) => ({
+    uid,
+    search_score,
+    subject: uid,
+    email_date: "2026-06-13T12:00:00Z",
+    ...extra,
+  });
+  const vrow = (uid, extra = {}) => ({
+    uid,
+    subject: uid,
+    email_date: "2026-01-01T12:00:00Z",
+    ...extra,
+  });
+
+  it("partial coverage: a fresh strong-lexical unembedded email is not displaced by a stale strong-vector one", () => {
+    const merged = mergeCandidates({
+      lexicalRows: [lex("fresh", 34)],
+      vectorMatches: [{ uid: "stale", similarity: 0.75 }],
+      vectorRows: [vrow("stale")],
+      limit: 10,
+      coverageRatio: 0.42,
+    });
+    // fresh = 0.34 (lexical-only); stale = 0.75 * 0.55 * 0.42 ≈ 0.173 (vector-only)
+    expect(merged.map((candidate) => candidate.uid)).toEqual(["fresh", "stale"]);
+  });
+
+  it("full coverage: a strong-semantic embedded match still ranks above a weak lexical one (vector not flattened)", () => {
+    const merged = mergeCandidates({
+      lexicalRows: [lex("weak", 30)],
+      vectorMatches: [{ uid: "semantic", similarity: 0.9 }],
+      vectorRows: [vrow("semantic")],
+      limit: 10,
+      coverageRatio: 1,
+    });
+    // semantic = 0.9 * 0.55 * 1 = 0.495 (vector-only); weak = 0.30 (lexical-only)
+    expect(merged.map((candidate) => candidate.uid)).toEqual(["semantic", "weak"]);
+  });
+
+  it("at full coverage the hybrid fusion equals the pre-change 0.45/0.55 formula", () => {
+    const [hybrid] = mergeCandidates({
+      lexicalRows: [lex("h", 50)],
+      vectorMatches: [{ uid: "h", similarity: 0.6 }],
+      vectorRows: [vrow("h")],
+      limit: 10,
+      coverageRatio: 1,
+    });
+    // 0.5 * 0.45 + 0.6 * 0.55 = 0.555
+    expect(hybrid.scores.combined).toBeCloseTo(0.555, 6);
+  });
+
+  it("fuses a vector-only row's lexical/quality score so a penalized row sinks below a clean one", () => {
+    // Both are vector-only (no lexical provenance), but the pre-scored rows carry a
+    // search_score: `clean` is benign (+20), `penalized` mirrors a provider-removed /
+    // noise-lane row (-100). Despite a much higher embedding similarity, the penalty
+    // must pull `penalized` below `clean` in the fused ranking.
+    const merged = mergeCandidates({
+      lexicalRows: [],
+      vectorMatches: [
+        { uid: "clean", similarity: 0.6 },
+        { uid: "penalized", similarity: 0.95 },
+      ],
+      vectorRows: [vrow("clean", { search_score: 20 }), vrow("penalized", { search_score: -100 })],
+      limit: 10,
+      coverageRatio: 1,
+    });
+    // clean:     0.20 * 0.45 + 0.6  * 0.55 = 0.420
+    // penalized: -1   * 0.45 + 0.95 * 0.55 = 0.0725  (search_score -100 clamps lexical to -1)
+    expect(merged.map((candidate) => candidate.uid)).toEqual(["clean", "penalized"]);
+    const penalized = merged.find((candidate) => candidate.uid === "penalized");
+    expect(penalized.scores.lexical).toBe(-1);
+    expect(penalized.scores.combined).toBeCloseTo(0.0725, 6);
   });
 });
