@@ -12,7 +12,7 @@ import {
   ModelToggle,
   SayBlock,
   SuggestionList,
-  ToolRows,
+  ToolSteps,
   UserLine,
 } from "./AlfredMessages.jsx";
 import { RowsBlock } from "./AlfredRows.jsx";
@@ -206,7 +206,7 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {messages.map((m) => {
               if (m.type === "user") return <UserLine key={m.id} text={m.text} accent={accent} />;
-              if (m.type === "tools") return <ToolRows key={m.id} tools={m.tools} accent={accent} />;
+              if (m.type === "tools") return <ToolSteps key={m.id} tools={m.tools} done={m.done} accent={accent} />;
               if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} />;
               if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items} accent={accent} onActivateItem={onActivateChip} />;
               if (m.type === "summary") return <AlfredTransactionBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;

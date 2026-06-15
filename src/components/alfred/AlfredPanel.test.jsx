@@ -48,6 +48,10 @@ describe("AlfredPanel", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(screen.getByText("One bill is due.")).toBeTruthy());
+    // The tool chip is now tucked behind a "steps" disclosure, collapsed by default.
+    expect(screen.queryByText("Bills · 1 upcoming")).toBeNull();
+    const steps = screen.getByRole("button", { name: /1 step\b/ });
+    fireEvent.click(steps);
     expect(screen.getByText("Bills · 1 upcoming")).toBeTruthy();
     expect(screen.getByText("Rent")).toBeTruthy();
     expect(screen.getByText("Any bills?")).toBeTruthy();

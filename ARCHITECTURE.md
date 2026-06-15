@@ -583,7 +583,7 @@ erDiagram
 |-------|------------|
 | `ea_accounts` | `001_ea_tables.sql` |
 | `ea_actual_metadata_mirror` | `009_actual_metadata_mirror.sql` |
-| `ea_alfred_usage` | `016_alfred_usage.sql` |
+| `ea_alfred_usage` | `016_alfred_usage.sql`, `019_alfred_usage_cache_creation.sql` |
 | `ea_api_tokens` | `001_ea_tables.sql` |
 | `ea_bill_occurrence_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
 | `ea_bill_schedule_mirror` | `001_ea_tables.sql`, `002_bills_mirror.sql` |
