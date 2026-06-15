@@ -7,6 +7,7 @@ import {
   getAlfredConversation,
 } from "../alfred/alfred-conversations.js";
 import { runAlfred } from "../alfred/alfred-run.js";
+import { getAlfredUsageStats } from "../alfred/alfred-usage-stats.js";
 import { getEmailBody } from "../email/email-service.js";
 import { retrieveInboxAiSearch } from "../email/search/email-search-retrieval.js";
 import { htmlToPlainText } from "../email/html-to-text.js";
@@ -82,6 +83,15 @@ export function createAlfredRouter({ deps = ALFRED_DEPS, run = runAlfred } = {})
       res.end();
     }
     return undefined;
+  });
+
+  router.get("/usage", async (req, res) => {
+    try {
+      res.json(await getAlfredUsageStats(process.env.EA_USER_ID));
+    } catch (err) {
+      console.error("Error fetching Alfred usage stats:", err.message);
+      res.status(500).json({ message: "Failed to fetch Alfred usage stats" });
+    }
   });
 
   router.delete("/conversations/:id", (req, res) => {

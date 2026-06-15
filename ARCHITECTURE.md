@@ -676,6 +676,7 @@ The structural route table below is regenerated from `server/index.js` and `serv
 |--------|------|------|
 | DELETE | `/api/alfred/conversations/:id` | `server/routes/alfred.js` |
 | POST | `/api/alfred/run` | `server/routes/alfred.js` |
+| GET | `/api/alfred/usage` | `server/routes/alfred.js` |
 | GET | `/api/auth/api-tokens` | `server/routes/auth.js` |
 | POST | `/api/auth/api-tokens` | `server/routes/auth.js` |
 | DELETE | `/api/auth/api-tokens/:id` | `server/routes/auth.js` |
