@@ -53,6 +53,29 @@ function closeOpenSay(messages) {
   return messages;
 }
 
+// A say closed by a tool_start is a between-tool preamble, not the answer —
+// drop it entirely instead of keeping it as a serif block. Only the say still
+// open at run_end (the final answer) survives. This is what turns the old
+// "stack of ~10 pseudo-headers" into a single live status line + one title line.
+function dropOpenSay(messages) {
+  const last = messages[messages.length - 1];
+  if (last?.type === "say" && !last.done) return messages.slice(0, -1);
+  return messages;
+}
+
+// Mark the current run's tools block done so it renders as a collapsed "N steps"
+// disclosure instead of a live status line. Scans from the end and stops at the
+// most recent tools block; a block already done belongs to a prior run, so leave
+// it (and everything before it) untouched.
+function finishTools(messages) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].type !== "tools") continue;
+    if (messages[i].done) break;
+    return messages.map((m, idx) => (idx === i ? { ...m, done: true } : m));
+  }
+  return messages;
+}
+
 export function makeUserMessage(text) {
   return { id: nextId(), type: "user", text };
 }
@@ -67,13 +90,15 @@ export function applyAlfredEvent(messages, event) {
       return [...messages, { id: nextId(), type: "say", text: event.text, done: false }];
     }
     case "tool_start": {
-      const closed = closeOpenSay(messages);
+      const trimmed = dropOpenSay(messages);
       const entry = { toolId: event.tool_id, name: event.name, state: "running", summary: null };
-      const last = closed[closed.length - 1];
-      if (last?.type === "tools") {
-        return [...closed.slice(0, -1), { ...last, tools: [...last.tools, entry] }];
+      const last = trimmed[trimmed.length - 1];
+      // Merge into the active (not-done) tools block so a whole run's steps
+      // coalesce into one disclosure; a done block is a prior run's — start fresh.
+      if (last?.type === "tools" && !last.done) {
+        return [...trimmed.slice(0, -1), { ...last, tools: [...last.tools, entry] }];
       }
-      return [...closed, { id: nextId(), type: "tools", tools: [entry] }];
+      return [...trimmed, { id: nextId(), type: "tools", done: false, tools: [entry] }];
     }
     case "tool_result": {
       return messages.map((m) => {
@@ -113,9 +138,9 @@ export function applyAlfredEvent(messages, event) {
       }];
     }
     case "run_end":
-      return closeOpenSay(messages);
+      return finishTools(closeOpenSay(messages));
     case "run_error":
-      return [...closeOpenSay(messages), {
+      return [...finishTools(closeOpenSay(messages)), {
         id: nextId(), type: "error", text: event.message || "Alfred could not complete this run.",
       }];
     default:

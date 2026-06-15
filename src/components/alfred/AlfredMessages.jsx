@@ -12,6 +12,8 @@ import {
   ArrowRight,
   Calendar,
   Check,
+  ChevronDown,
+  ChevronRight,
   CreditCard,
   Flag,
   Inbox,
@@ -72,13 +74,26 @@ export const ToolRows = memo(function ToolRows({ tools, accent }) {
   );
 });
 
-export const SayBlock = memo(function SayBlock({ text: body }) {
+export const SayBlock = memo(function SayBlock({ text: body, done }) {
   // useMemo the lead/body split (perf audit fe-alfred::
   // splitsaytext-rerun-per-delta-quadratic): with the memo wrap above, DONE say
   // blocks never recompute; for the active streaming block this skips the split
   // on render causes unrelated to body. The split itself stays O(n) per delta —
   // inherent to splitting a growing string — but no longer reruns on keystrokes.
+  // Hooks run unconditionally (before the streaming branch) so order stays stable
+  // when `done` flips false→true on the same block.
   const { lead, body: rest } = useMemo(() => splitSayText(body), [body]);
+
+  // While streaming, render quietly as one block — don't promote the first
+  // sentence to the serif lead. A say that's still open is either a between-tool
+  // preamble (which the reducer drops on the next tool_start) or the answer
+  // mid-stream; either way it shouldn't flash as a header. Only the finished
+  // answer (done) resolves into the serif title line.
+  if (!done) {
+    return (
+      <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.6)" }}>{body}</div>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div className="ea-display" style={{
@@ -88,6 +103,55 @@ export const SayBlock = memo(function SayBlock({ text: body }) {
       {rest ? (
         <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.72)" }}>{rest}</div>
       ) : null}
+    </div>
+  );
+});
+
+// One run's tool calls, rendered two ways from the same `tools` array:
+//  • live (done=false): a single status line showing the latest step's activity,
+//    so the thread reads as "Searching mail… / Reading message…" not a wall.
+//  • settled (done=true): a collapsed "N steps" disclosure that expands to the
+//    full chip trail on demand — the provenance ADR 0006 leans on stays one
+//    click away instead of dominating the answer.
+export const ToolSteps = memo(function ToolSteps({ tools, done, accent }) {
+  const [open, setOpen] = useState(false);
+  if (!done) {
+    const latest = tools[tools.length - 1];
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 7, minHeight: 20,
+        fontFamily: mono, fontSize: 10, color: dim,
+      }}>
+        <span style={{ display: "inline-flex", width: 12, justifyContent: "center" }}>
+          <RefreshCw size={10} color={accent} style={{ animation: "alfred-spin 1s linear infinite" }} />
+        </span>
+        <span style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {alfredToolRunningLabel(latest?.name)}
+        </span>
+      </div>
+    );
+  }
+  const n = tools.length;
+  const Chevron = open ? ChevronDown : ChevronRight;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start",
+          padding: "2px 4px", background: "transparent", border: "none", cursor: "pointer",
+          fontFamily: mono, fontSize: 10, color: dimmer, borderRadius: 5,
+          transition: "color 150ms ease-out",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = dim; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = dimmer; }}
+      >
+        <Chevron size={11} />
+        <span>{n} step{n === 1 ? "" : "s"}</span>
+      </button>
+      {open ? <ToolRows tools={tools} accent={accent} /> : null}
     </div>
   );
 });

@@ -29,30 +29,55 @@ describe("applyAlfredEvent", () => {
     expect(ms[0]).toMatchObject({ type: "say", text: "Two things need you.", done: false });
   });
 
-  it("groups consecutive tool calls into one tools block and closes the open say", () => {
+  it("drops the between-tool preamble and coalesces tool calls into one live tools block", () => {
     const ms = play([
       { type: "text_delta", text: "Checking." },
       { type: "tool_start", tool_id: "t1", name: "get_upcoming_bills" },
       { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 6 upcoming" },
       { type: "tool_start", tool_id: "t2", name: "show_items" },
     ]);
-    expect(ms.map((m) => m.type)).toEqual(["say", "tools"]);
-    expect(ms[0].done).toBe(true);
-    expect(ms[1].tools).toEqual([
+    // The "Checking." preamble is dropped, not kept as a serif say block.
+    expect(ms.map((m) => m.type)).toEqual(["tools"]);
+    expect(ms[0].done).toBe(false); // live while the run is in flight
+    expect(ms[0].tools).toEqual([
       { toolId: "t1", name: "get_upcoming_bills", state: "done", summary: "Bills · 6 upcoming" },
       { toolId: "t2", name: "show_items", state: "running", summary: null },
     ]);
   });
 
-  it("text after tools starts a new say block", () => {
+  it("drops the preamble before tools but keeps the answer text after them", () => {
     const ms = play([
       { type: "text_delta", text: "One sec." },
       { type: "tool_start", tool_id: "t1", name: "search_email" },
       { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 4 matches" },
       { type: "text_delta", text: "Found it." },
     ]);
-    expect(ms.map((m) => m.type)).toEqual(["say", "tools", "say"]);
-    expect(ms[2].text).toBe("Found it.");
+    expect(ms.map((m) => m.type)).toEqual(["tools", "say"]);
+    expect(ms[1].text).toBe("Found it.");
+  });
+
+  it("marks the active tools block done on run_end so it collapses to a steps disclosure", () => {
+    const ms = play([
+      { type: "text_delta", text: "Let me look." },
+      { type: "tool_start", tool_id: "t1", name: "search_email" },
+      { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 4 matches" },
+      { type: "text_delta", text: "Here is the split." },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    expect(ms.map((m) => m.type)).toEqual(["tools", "say"]);
+    expect(ms[0].done).toBe(true); // collapsed once the run ends
+    expect(ms[1]).toMatchObject({ type: "say", text: "Here is the split.", done: true });
+  });
+
+  it("run_error also closes the active tools block and appends the error line", () => {
+    const ms = play([
+      { type: "tool_start", tool_id: "t1", name: "search_email" },
+      { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 4 matches" },
+      { type: "run_error", message: "Alfred hit the tool-call limit." },
+    ]);
+    expect(ms.map((m) => m.type)).toEqual(["tools", "error"]);
+    expect(ms[0].done).toBe(true);
+    expect(ms[1].text).toBe("Alfred hit the tool-call limit.");
   });
 
   it("marks a failed tool as error without halting", () => {
