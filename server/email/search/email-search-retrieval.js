@@ -13,6 +13,10 @@ import { rankEmailSearchRows } from "./email-search-ranking.js";
 const DEFAULT_LIMIT = 12;
 const LEXICAL_FUSION_WEIGHT = 0.45;
 const VECTOR_FUSION_WEIGHT = 0.55;
+// Hard ceiling on the rankable pool the model can page through before it must
+// narrow the query. Bounds tool-result/context cost while comfortably covering
+// realistic "exhaust this set" cases (e.g. ~89 matches).
+const MAX_RETRIEVAL_POOL = 200;
 
 const SNAPSHOT_JOIN = `
               LEFT JOIN ea_email_triage triage
@@ -58,6 +62,12 @@ function clampLimit(value) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_LIMIT;
   return Math.min(parsed, 50);
+}
+
+function clampOffset(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.min(parsed, MAX_RETRIEVAL_POOL - 1);
 }
 
 function bounded(value, min = 0, max = 1) {
@@ -139,7 +149,7 @@ function candidateFromRow(row) {
   };
 }
 
-async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, limit }) {
+async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, limit, now = Date.now() }) {
   const fetchLimit = Math.min(Math.max(limit * 8, 100), 500);
   const filters = buildPlanFilters(plan, readFilter);
   if (textQuery.trim()) {
@@ -162,6 +172,7 @@ async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, 
     return rankEmailSearchRows(result.rows, {
       query: textQuery,
       limit: fetchLimit,
+      now,
       debug: true,
     });
   }
@@ -184,6 +195,7 @@ async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, 
   return rankEmailSearchRows(result.rows, {
     query: textQuery,
     limit: fetchLimit,
+    now,
     debug: true,
   });
 }
@@ -209,13 +221,14 @@ async function loadRowsByUid(dbClient, userId, uids, { readFilter, plan }) {
   return result.rows;
 }
 
-// Fusion is coverage-aware: the vector coefficient is scaled by how much of the
-// corpus is actually embedded. At full coverage (factor 1) this is byte-for-byte
-// the prior formula, so healthy-corpus ranking is unchanged and the vector signal
-// is not flattened. As coverage drops (recent mail unembedded in dev; backfill/
-// outage lag in prod) the vector term shrinks toward lexical, so a fresh
-// strong-lexical email is no longer structurally displaced by a stale embedded
-// one. Lexical coefficients are deliberately untouched.
+// Fusion is coverage-aware: the vector coefficient is scaled by the fraction of the
+// corpus that is actually embedded. At coverage 1.0 this is exactly the prior formula
+// (so the vector signal is not flattened on a fully-embedded corpus). The scaling is
+// continuous and linear, so a near-complete inbox (a few in-flight embeds) is
+// down-weighted only negligibly, while genuinely partial coverage (dev freeze, prod
+// backfill/outage lag) shrinks the vector term toward lexical so a fresh strong-lexical
+// email is no longer structurally displaced by a stale embedded one. Lexical
+// coefficients are deliberately untouched.
 export function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit, coverageRatio = 1 }) {
   const coverageFactor = bounded(coverageRatio, 0, 1);
   const effectiveVectorWeight = VECTOR_FUSION_WEIGHT * coverageFactor;
@@ -285,6 +298,7 @@ async function resolveEmbeddingCoverage(userId, dbClient) {
 export async function retrieveInboxAiSearch(userId, {
   q,
   limit = DEFAULT_LIMIT,
+  offset = 0,
   dbClient = db,
   embeddingClient = createEmailSearchEmbeddingClient(),
   capability = null,
@@ -293,6 +307,7 @@ export async function retrieveInboxAiSearch(userId, {
   now = Date.now(),
 } = {}) {
   const maxResults = clampLimit(limit);
+  const start = clampOffset(offset);
   const { textQuery: rawTextQuery, readFilter: explicitReadFilter } = parseEmailSearchQuery(q);
   const dateWindow = resolveEmailSearchDateWindow(q, plan?.date_window, { now });
   const effectivePlan = plan || dateWindow ? {
@@ -304,16 +319,23 @@ export async function retrieveInboxAiSearch(userId, {
   const textQuery = plan?.lexical_queries?.[0] || plan?.semantic_query || rawTextQuery;
   const vectorQuery = plan?.semantic_query || rawTextQuery;
   const resolvedCapability = capability || await detectEmailSearchVectorCapability(dbClient);
+  // Sizing is INDEPENDENT of offset so `total`/`has_more`/`capped` and the page
+  // ordering stay stable across paged calls of the same query. Fetch sizes match the
+  // pre-pagination defaults (a default offset-0 call returns the same top rows); only
+  // the merged-pool cap is widened to MAX_RETRIEVAL_POOL so the model can page through
+  // one ranked list instead of re-sampling the top.
+  const lexicalFetchLimit = Math.min(Math.max(maxResults * 8, 100), 500);
   const vectorLimit = effectivePlan?.date_window?.after || effectivePlan?.date_window?.before
     ? 100
     : Math.max(maxResults * 2, 20);
-  const candidatePoolLimit = Math.max(maxResults * 4, 50);
+  const candidatePoolLimit = MAX_RETRIEVAL_POOL;
 
   const lexicalPromise = loadLexicalRows(dbClient, userId, {
     textQuery,
     readFilter,
     plan: effectivePlan,
     limit: maxResults,
+    now,
   });
   const vectorPromise = (async () => {
     if (!vectorQuery.trim()) return { status: "skipped", matches: [] };
@@ -336,11 +358,13 @@ export async function retrieveInboxAiSearch(userId, {
     }
   })();
 
-  const [lexicalRows, vector] = await Promise.all([lexicalPromise, vectorPromise]);
+  // Coverage depends only on userId/dbClient, so resolve it alongside lexical/vector
+  // rather than as an extra serial round-trip on the hot path.
+  const coveragePromise = coverageRatio != null
+    ? Promise.resolve(bounded(coverageRatio, 0, 1))
+    : resolveEmbeddingCoverage(userId, dbClient);
+  const [lexicalRows, vector, resolvedCoverage] = await Promise.all([lexicalPromise, vectorPromise, coveragePromise]);
   const vectorRows = await loadRowsByUid(dbClient, userId, vector.matches.map((match) => match.uid), { readFilter, plan: effectivePlan });
-  const resolvedCoverage = coverageRatio != null
-    ? bounded(coverageRatio, 0, 1)
-    : await resolveEmbeddingCoverage(userId, dbClient);
   // Pre-score the vector rows through the SAME ranking pass as the lexical rows so the
   // lexical/quality component (noise/provider_removed penalties, recency) is computed
   // uniformly for every candidate. mergeCandidates then fuses search_score with the
@@ -359,7 +383,15 @@ export async function retrieveInboxAiSearch(userId, {
     limit: candidatePoolLimit,
     coverageRatio: resolvedCoverage,
   });
-  const candidates = filterEmailSearchCandidatesForEvidence(candidatePool, { q, plan: effectivePlan }).slice(0, maxResults);
+  const filtered = filterEmailSearchCandidatesForEvidence(candidatePool, { q, plan: effectivePlan });
+  // `total` is the retrievable count for this query within the rankable pool (stable
+  // across pages because sizing is offset-independent). `candidates` is the requested page.
+  const total = filtered.length;
+  const candidates = filtered.slice(start, start + maxResults);
+  // The result set exceeds what we ranked here (FTS keyword matches hit the fetch
+  // ceiling, or the merged pool filled MAX_RETRIEVAL_POOL): `total` is then a lower
+  // bound and the model should narrow rather than assume it has seen everything.
+  const capped = lexicalRows.length >= lexicalFetchLimit || candidatePool.length >= MAX_RETRIEVAL_POOL;
 
   return {
     mode: vector.status === "ok" && vector.matches.length ? "hybrid" : "lexical",
@@ -379,7 +411,10 @@ export async function retrieveInboxAiSearch(userId, {
       count: vector.matches.length,
       error_class: vector.error_class,
     },
-    total: candidates.length,
+    total,
+    offset: start,
+    has_more: start + maxResults < total,
+    capped,
     candidates,
   };
 }

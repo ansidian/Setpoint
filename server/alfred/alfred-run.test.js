@@ -328,6 +328,48 @@ describe("runAlfred", () => {
     expect(nudge.content).toContain("transactions");
   });
 
+  it("nudges on a small search_email page even when total (full match count) is large", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("search_email", { query: "amazon return" }),
+      textTurn("Your Amazon return is due Friday."),
+    ]);
+    // A paged search: one citable row on this page, but 50 total matches. The backstop
+    // must gate on rows the model saw (1), not the corpus-wide total (50 > MAX_NUDGE_ITEMS).
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "lexical",
+      total: 50,
+      has_more: true,
+      candidates: [{
+        uid: "em-1",
+        subject: "Amazon return drop off",
+        body_snippet: "Drop off by Friday",
+        email_date: "2026-06-13T12:00:00Z",
+        read: false,
+        from: { name: "Amazon", address: "returns@amazon.com" },
+        metadata: { lane: "needs_attention", urgency: "high" },
+        scores: {},
+      }],
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "when is my amazon return due?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { retrieve },
+      recordUsage,
+    });
+
+    const nudge = conversation.messages.find(
+      (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("show_items"),
+    );
+    expect(nudge).toBeDefined();
+    expect(nudge.content).toContain("<system-reminder>");
+  });
+
   it("does not nudge when summarize_transactions returns a low dollar total (its total is a dollar sum, not a row count)", async () => {
     const fetchImpl = fetchScript([
       toolUseTurn("summarize_transactions", { start: "2026-05-01", end: "2026-05-31" }),

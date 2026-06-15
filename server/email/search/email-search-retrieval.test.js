@@ -521,6 +521,40 @@ describe("retrieveInboxAiSearch", () => {
     expect(result.candidates[0].uid).toBe("legit-statement");
     expect(result.candidates[0].uid).not.toBe("noise-vector");
   });
+
+  it("pages through a large result set with a stable, offset-independent total", async () => {
+    db = await createRetrievalTestDb();
+    // 60 matches — larger than the pre-fix offset-0 pool (50), so an offset-dependent
+    // pool would understate `total` on page 1 and grow it on later pages.
+    for (let i = 0; i < 60; i += 1) {
+      await seedIndexedEmail(db, {
+        uid: `stmt-${String(i).padStart(2, "0")}`,
+        subject: `Bank statement ${i}`,
+        body_text: "Your bank statement is ready.",
+        email_date: `2026-06-14T${String(23 - (i % 24)).padStart(2, "0")}:00:00Z`,
+      });
+    }
+    const opts = {
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      coverageRatio: 1,
+    };
+    const pages = [];
+    const seen = new Set();
+    for (let offset = 0; offset < 60; offset += 20) {
+      const page = await retrieveInboxAiSearch("user-1", { q: "bank statement", limit: 20, offset, ...opts });
+      pages.push(page);
+      page.candidates.forEach((c) => seen.add(c.uid));
+    }
+
+    // total is identical on every page (no offset dependence) and reflects the full set.
+    expect(pages.map((p) => p.total)).toEqual([60, 60, 60]);
+    expect(pages[0].has_more).toBe(true);
+    expect(pages[2].has_more).toBe(false);
+    // Pages are disjoint and together cover the whole set.
+    expect(seen.size).toBe(60);
+  });
 });
 
 describe("mergeCandidates coverage-aware fusion", () => {
