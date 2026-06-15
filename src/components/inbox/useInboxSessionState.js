@@ -46,6 +46,13 @@ export function useInboxSessionStore() {
   return [session, setInboxSession];
 }
 
+// Field-selector subscription: re-renders only when the current selection id
+// changes, so the DashboardShell can own the mobile reader's history entry
+// without re-rendering on every lane/search/account change.
+export function useInboxSelectedId() {
+  return useSyncExternalStore(subscribe, () => getInboxSession().selectedId);
+}
+
 // Field-level accessors over a controlled session pair. Owns the
 // normalization defaults that previously lived inline in useInboxController.
 export default function useInboxSessionState({

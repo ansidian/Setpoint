@@ -16,12 +16,13 @@ function currentNavState() {
   return window.history.state?.[NAV_KEY] || null;
 }
 
-export default function useInboxSelectionHistory({ selectedId, setSelectedId }) {
+export default function useInboxSelectionHistory({ selectedId, setSelectedId, enabled = true }) {
   const [sessionId] = useState(() => `inbox-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const skipSyncRef = useRef(false);
   const prevSelectedRef = useRef(selectedId || null);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const nav = currentNavState();
     if (!nav || nav.sessionId !== sessionId) {
       window.history.replaceState(
@@ -42,9 +43,10 @@ export default function useInboxSelectionHistory({ selectedId, setSelectedId }) 
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [sessionId, setSelectedId]);
+  }, [sessionId, setSelectedId, enabled]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     if (skipSyncRef.current) {
       skipSyncRef.current = false;
       prevSelectedRef.current = selectedId || null;
@@ -86,9 +88,16 @@ export default function useInboxSelectionHistory({ selectedId, setSelectedId }) 
     }
 
     prevSelectedRef.current = selectedId;
-  }, [selectedId, sessionId]);
+  }, [selectedId, sessionId, enabled]);
 
   return useCallback(() => {
+    // On mobile the DashboardShell owns the reader's browser-history entry, so
+    // this hook is disabled there; closing the reader is a plain state clear and
+    // the shell's back-dismiss hook reconciles history.
+    if (!enabled) {
+      setSelectedId(null);
+      return;
+    }
     const nav = currentNavState();
     if (nav?.sessionId === sessionId && nav.selectedId) {
       setSelectedId(null);
@@ -96,5 +105,5 @@ export default function useInboxSelectionHistory({ selectedId, setSelectedId }) 
       return;
     }
     setSelectedId(null);
-  }, [sessionId, setSelectedId]);
+  }, [sessionId, setSelectedId, enabled]);
 }
