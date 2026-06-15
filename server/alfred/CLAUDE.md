@@ -10,7 +10,8 @@ Alfred: the read-only, tool-calling assistant run loop behind the Alfred Panel. 
 - `anthropic-stream.js` — Anthropic Messages SSE stream parser
 - `alfred-prompt.js` — system prompt: Pacific date anchor, coverage, trust rules
 - `alfred-models.js` — model allowlist (Sonnet default, Haiku toggle)
-- `alfred-usage.js` — usage rows into `ea_alfred_usage`
+- `alfred-usage.js` — usage rows into `ea_alfred_usage` (run turns + per-tool calls)
+- `alfred-usage-stats.js` — aggregates `ea_alfred_usage` into the Alfred analytics summary (queries, cache hit, savings, model split, per-tool latency/errors)
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
