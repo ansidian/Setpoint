@@ -9,7 +9,7 @@ import {
 import { Link } from "react-router-dom";
 import { Kbd } from "./Kbd.jsx";
 
-function MenuItem({ icon, label, kbd, onClick, onPrepare, danger }) {
+function MenuItem({ icon, label, kbd, onClick, onPrepare, danger, isMobile }) {
   const Icon = icon;
   const [hover, setHover] = useState(false);
 
@@ -31,12 +31,14 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger }) {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: "8px 10px",
+        padding: isMobile ? "12px 12px" : "8px 10px",
+        minHeight: isMobile ? 44 : undefined,
         borderRadius: 6,
         cursor: "pointer",
         fontSize: 12,
         color: danger ? "#f38ba8" : "#cdd6f4",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
+        touchAction: "manipulation",
         transition: "background 150ms",
       }}
     >
@@ -47,7 +49,7 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger }) {
   );
 }
 
-function MenuLink({ icon, label, to, onClick }) {
+function MenuLink({ icon, label, to, onClick, isMobile }) {
   const Icon = icon;
   const [hover, setHover] = useState(false);
 
@@ -61,12 +63,14 @@ function MenuLink({ icon, label, to, onClick }) {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: "8px 10px",
+        padding: isMobile ? "12px 12px" : "8px 10px",
+        minHeight: isMobile ? 44 : undefined,
         borderRadius: 6,
         textDecoration: "none",
         fontSize: 12,
         color: "#cdd6f4",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
+        touchAction: "manipulation",
         transition: "background 150ms",
       }}
     >
@@ -76,7 +80,7 @@ function MenuLink({ icon, label, to, onClick }) {
   );
 }
 
-function OverflowButton({ open, onClick }) {
+function OverflowButton({ open, onClick, isMobile }) {
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   const active = hover || open;
@@ -95,7 +99,9 @@ function OverflowButton({ open, onClick }) {
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
       style={{
-        padding: 6,
+        padding: isMobile ? 10 : 6,
+        minWidth: isMobile ? 40 : undefined,
+        minHeight: isMobile ? 40 : undefined,
         borderRadius: 8,
         border: `1px solid ${active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
         background: active ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
@@ -103,11 +109,12 @@ function OverflowButton({ open, onClick }) {
         cursor: "pointer",
         display: "grid",
         placeItems: "center",
+        touchAction: "manipulation",
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
       }}
     >
-      <MoreHorizontal size={14} />
+      <MoreHorizontal size={isMobile ? 18 : 14} />
     </button>
   );
 }
@@ -125,7 +132,7 @@ export function OverflowMenu({
 }) {
   return (
     <>
-      <OverflowButton open={menuOpen} onClick={onToggleMenu} />
+      <OverflowButton open={menuOpen} onClick={onToggleMenu} isMobile={isMobile} />
       {menuOpen && (
         <div
           style={{
@@ -145,6 +152,7 @@ export function OverflowMenu({
             icon={History}
             label="Snapshots"
             kbd={isMobile ? null : "Y"}
+            isMobile={isMobile}
             onClick={() => {
               onCloseMenu();
               onOpenHistory?.();
@@ -155,6 +163,7 @@ export function OverflowMenu({
               icon={LayoutList}
               label="Calendar"
               kbd="C"
+              isMobile={isMobile}
               onClick={() => {
                 onCloseMenu();
                 onOpenCalendar?.();
@@ -166,6 +175,7 @@ export function OverflowMenu({
               icon={BarChart3}
               label="Analytics"
               onPrepare={onPrepareAnalytics}
+              isMobile={isMobile}
               onClick={() => {
                 onCloseMenu();
                 onOpenAnalytics?.();
@@ -175,6 +185,7 @@ export function OverflowMenu({
           <MenuItem
             icon={SettingsIcon}
             label="Customize"
+            isMobile={isMobile}
             onClick={() => {
               onCloseMenu();
               onOpenCustomize?.();
@@ -184,6 +195,7 @@ export function OverflowMenu({
             icon={SettingsIcon}
             label="Settings"
             to="/settings"
+            isMobile={isMobile}
             onClick={onCloseMenu}
           />
         </div>

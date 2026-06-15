@@ -254,6 +254,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useMediaQuery` | `src/hooks/useMediaQuery.js` |
 | `useNotifications` | `src/hooks/useNotifications.js` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.js` |
+| `useWarmImport` | `src/hooks/useWarmImport.js` |
 <!-- END:hooks -->
 
 ### Calendar Code Map

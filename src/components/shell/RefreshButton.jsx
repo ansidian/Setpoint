@@ -34,7 +34,9 @@ export function RefreshButton({
       style={{
         position: "relative",
         overflow: "hidden",
-        padding: isMobile ? "7px 9px" : "5px 10px",
+        padding: isMobile ? "7px 10px" : "5px 10px",
+        minHeight: isMobile ? 40 : undefined,
+        touchAction: "manipulation",
         borderRadius: 8,
         border: `1px solid ${hover && !busy ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
         background: hover && !busy ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
