@@ -257,10 +257,10 @@ describe("snooze waker", () => {
         triage_status: "pending",
         triage_source: "arrival_grace",
         job_status: "queued",
-        scheduled_for: "2026-05-04T17:33:00.000Z",
+        scheduled_for: "2026-05-04T17:30:30.000Z", // now + 30s arrival grace
         lane_at_snapshot: "queued",
         source: "arrival_grace",
-        source_at: "2026-05-04T17:33:00.000Z",
+        source_at: "2026-05-04T17:30:30.000Z",
       },
     ]);
   });

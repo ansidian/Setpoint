@@ -42,7 +42,11 @@ const INDEXER_LOOKBACK_HOURS = 2;
 const INDEXER_CRON = "*/10 * * * *";
 const GMAIL_WATCH_RENEWAL_CRON = "17 3 * * *";
 const GMAIL_HISTORY_SYNC_CRON = "* * * * *";
-const EMAIL_TRIAGE_CRON = "* * * * *";
+// Every 30s (6-field) so triage fires near the 30s arrival-grace deadline rather
+// than waiting up to a full minute for the next tick. runEmailTriageWorker's
+// in-flight guard makes overlapping ticks no-ops, so a run longer than 30s just
+// skips the next tick.
+const EMAIL_TRIAGE_CRON = "*/30 * * * * *";
 const EMAIL_SEARCH_EMBEDDING_CRON = "*/5 * * * *";
 // P3-8: daily off-peak sweep of long-completed triage jobs (durable history lives
 // in ea_email_triage). Far below the stale-window / claim cadence, so it never
