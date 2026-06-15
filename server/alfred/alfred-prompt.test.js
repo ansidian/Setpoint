@@ -52,6 +52,15 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toContain("summarize_transactions");
   });
 
+  it("tells the model to work quietly between tool calls and lead with a single title-style line", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain("between tool calls");
+    expect(lower).toMatch(/do not narrate|progress indicator/);
+    expect(lower).toContain("title-style");
+    expect(lower).toMatch(/markdown header/);
+  });
+
   it("instructs the model to use group_items for grouping/distribution questions, keyed on shape not vocabulary", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     expect(prompt).toContain("group_items");
