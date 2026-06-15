@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
-import { loadTriageAnalyticsModal } from "../shell/triageAnalyticsModalLoader.js";
+import { loadAiAnalyticsModal } from "../shell/aiAnalyticsModalLoader.js";
 import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
@@ -146,7 +146,7 @@ export function DashboardShell({
     deactivateBackdropSnapshot,
   } = usePreparedBackdropSnapshot({
     sourceRef: analyticsBackdropSourceRef,
-    loadSurface: loadTriageAnalyticsModal,
+    loadSurface: loadAiAnalyticsModal,
     refreshing: bd.refreshing,
     // refreshKey is intentionally left coarse (tab-only). Keying it on
     // liveData.lastFetched — which the server restamps on every /current — made the

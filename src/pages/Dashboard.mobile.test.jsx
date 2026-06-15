@@ -66,15 +66,21 @@ vi.mock("../components/shell/CommandPalette", () => ({
   },
 }));
 
-vi.mock("../components/shell/TriageAnalyticsModal", () => ({
-  default: function TriageAnalyticsModalMock({ open, backdropSnapshot }) {
-    return open ? (
-      <div
-        data-testid="triage-analytics-modal"
-        data-backdrop-snapshot={backdropSnapshot?.dataUrl || ""}
-      />
-    ) : null;
-  },
+// Mock the loader (a static named import) rather than the modal module — vi.mock
+// does not reliably intercept the lazy `import("./AiAnalyticsModal")` that lives
+// inside the loader, so mocking the loader is what makes the lazy surface
+// deterministic here.
+vi.mock("../components/shell/aiAnalyticsModalLoader.js", () => ({
+  loadAiAnalyticsModal: () => Promise.resolve({
+    default: function AiAnalyticsModalMock({ open, backdropSnapshot }) {
+      return open ? (
+        <div
+          data-testid="ai-analytics-modal"
+          data-backdrop-snapshot={backdropSnapshot?.dataUrl || ""}
+        />
+      ) : null;
+    },
+  }),
 }));
 
 vi.mock("@/components/shell/analyticsBackdropSnapshot.js", () => ({
@@ -236,15 +242,15 @@ describe("DashboardShell mobile behavior", () => {
     document.body.appendChild(input);
     input.focus();
     fireEvent.keyDown(input, { key: "a" });
-    expect(screen.queryByTestId("triage-analytics-modal")).toBeNull();
+    expect(screen.queryByTestId("ai-analytics-modal")).toBeNull();
     input.remove();
 
     fireEvent.keyDown(window, { key: "A" });
-    expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
+    expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "a" });
     await waitFor(() => {
-      expect(screen.queryByTestId("triage-analytics-modal")).toBeNull();
+      expect(screen.queryByTestId("ai-analytics-modal")).toBeNull();
     });
   });
 
@@ -255,7 +261,7 @@ describe("DashboardShell mobile behavior", () => {
 
     fireEvent.keyDown(window, { key: "A" });
 
-    expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
+    expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
     expect(captureAnalyticsBackdropSnapshot).not.toHaveBeenCalled();
   });
 
@@ -266,7 +272,7 @@ describe("DashboardShell mobile behavior", () => {
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     fireEvent.click(await screen.findByTestId("command-palette-analytics-action"));
 
-    expect(await screen.findByTestId("triage-analytics-modal")).toBeTruthy();
+    expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
   });
 
   it("ignores a stale persisted calendar view", async () => {
