@@ -763,6 +763,7 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | PATCH | `/api/notes/reorder` | `server/routes/notes.js` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.js` |
 | GET | `/bill-extract-models` | `server/routes/settings.js` |
+| GET | `/email-search/usage` | `server/routes/settings.js` |
 | GET | `/geocode` | `server/routes/settings.js` |
 | GET | `/important-senders` | `server/routes/settings.js` |
 | PUT | `/important-senders` | `server/routes/settings.js` |
