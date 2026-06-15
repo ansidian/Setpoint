@@ -25,12 +25,13 @@ beforeEach(() => {
 });
 
 describe("tool definitions", () => {
-  it("exposes exactly the eight read-only tools", () => {
+  it("exposes exactly the nine read-only tools", () => {
     expect(ALFRED_TOOL_DEFINITIONS.map((tool) => tool.name).sort()).toEqual([
       "get_calendar_events",
       "get_deadlines",
       "get_email_body",
       "get_upcoming_bills",
+      "group_items",
       "search_email",
       "search_transactions",
       "show_items",
@@ -403,6 +404,116 @@ describe("show_items", () => {
   });
 });
 
+describe("group_items", () => {
+  it("emits a breakdown event with verbatim items, counts, and count-desc ordering", async () => {
+    const ctx = ctxWith({});
+    ctx.conversation.items.set("email:e1", { uid: "e1", subject: "Ghost 1" });
+    ctx.conversation.items.set("email:e2", { uid: "e2", subject: "Ghost 2" });
+    ctx.conversation.items.set("email:e3", { uid: "e3", subject: "Rejected 1" });
+
+    const result = await executeAlfredTool("group_items", {
+      kind: "email",
+      title: "By status",
+      caption: "last 3 months",
+      groups: [
+        { label: "Rejected", ids: ["e3"] },
+        { label: "Ghosted", ids: ["e1", "e2"] },
+      ],
+    }, ctx);
+
+    expect(ctx.emit).toHaveBeenCalledWith({
+      type: "breakdown",
+      kind: "email",
+      title: "By status",
+      caption: "last 3 months",
+      total: 3,
+      buckets: [
+        { label: "Ghosted", count: 2, items: [{ uid: "e1", subject: "Ghost 1" }, { uid: "e2", subject: "Ghost 2" }] },
+        { label: "Rejected", count: 1, items: [{ uid: "e3", subject: "Rejected 1" }] },
+      ],
+    });
+    expect(result).toEqual({ shown: 3 });
+  });
+
+  it("forces an 'Other' bucket last regardless of count", async () => {
+    const ctx = ctxWith({});
+    ctx.conversation.items.set("email:a", { uid: "a" });
+    ctx.conversation.items.set("email:b", { uid: "b" });
+    ctx.conversation.items.set("email:c", { uid: "c" });
+    ctx.conversation.items.set("email:d", { uid: "d" });
+    await executeAlfredTool("group_items", {
+      kind: "email", title: "By status",
+      groups: [
+        { label: "Other", ids: ["a", "b", "c"] },
+        { label: "Rejected", ids: ["d"] },
+      ],
+    }, ctx);
+    const [event] = ctx.emit.mock.calls[0];
+    expect(event.buckets.map((b) => b.label)).toEqual(["Rejected", "Other"]);
+  });
+
+  it("first-wins dedup: an id in two groups counts once, so total stays unique", async () => {
+    const ctx = ctxWith({});
+    ctx.conversation.items.set("email:e1", { uid: "e1" });
+    ctx.conversation.items.set("email:e2", { uid: "e2" });
+    ctx.conversation.items.set("email:e3", { uid: "e3" });
+    const result = await executeAlfredTool("group_items", {
+      kind: "email", title: "By status",
+      groups: [
+        { label: "A", ids: ["e1", "e2"] },
+        { label: "B", ids: ["e2", "e3"] },
+      ],
+    }, ctx);
+    const [event] = ctx.emit.mock.calls[0];
+    // e2 is claimed by A; B keeps only e3. Counts disjoint, total = 3 unique items.
+    expect(event.buckets).toEqual([
+      { label: "A", count: 2, items: [{ uid: "e1" }, { uid: "e2" }] },
+      { label: "B", count: 1, items: [{ uid: "e3" }] },
+    ]);
+    expect(event.total).toBe(3);
+    expect(result).toEqual({ shown: 3 });
+  });
+
+  it("reports unknown ids and drops empty buckets without emitting them", async () => {
+    const ctx = ctxWith({});
+    ctx.conversation.items.set("email:e1", { uid: "e1", subject: "Real" });
+    const result = await executeAlfredTool("group_items", {
+      kind: "email", title: "By status",
+      groups: [
+        { label: "Has one", ids: ["e1", "ghost"] },
+        { label: "Empty", ids: ["nope"] },
+      ],
+    }, ctx);
+    expect(result).toEqual({ shown: 1, unknown_ids: ["ghost", "nope"] });
+    const [event] = ctx.emit.mock.calls[0];
+    expect(event.buckets).toEqual([{ label: "Has one", count: 1, items: [{ uid: "e1", subject: "Real" }] }]);
+  });
+
+  it("does not emit when nothing resolves", async () => {
+    const ctx = ctxWith({});
+    const result = await executeAlfredTool("group_items", {
+      kind: "email", title: "By status", groups: [{ label: "X", ids: ["missing"] }],
+    }, ctx);
+    expect(result).toEqual({ shown: 0, unknown_ids: ["missing"] });
+    expect(ctx.emit).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown kinds and emits nothing", async () => {
+    const ctx = ctxWith({});
+    const result = await executeAlfredTool("group_items", { kind: "banana", title: "x", groups: [] }, ctx);
+    expect(result.error).toBeTruthy();
+    expect(ctx.emit).not.toHaveBeenCalled();
+  });
+
+  it("is domain-agnostic — no job/application vocabulary in the schema (acceptance criterion 2)", () => {
+    const tool = ALFRED_TOOL_DEFINITIONS.find((t) => t.name === "group_items");
+    const blob = JSON.stringify(tool).toLowerCase();
+    for (const word of ["rejection", "ghost", "application", "job"]) {
+      expect(blob).not.toContain(word);
+    }
+  });
+});
+
 describe("alfredToolSummary", () => {
   it("produces quiet one-line labels", () => {
     expect(alfredToolSummary("search_email", { total: 4 })).toBe("Mail · 4 matches");
@@ -411,6 +522,8 @@ describe("alfredToolSummary", () => {
     expect(alfredToolSummary("get_upcoming_bills", { total: 3 })).toBe("Bills · 3 upcoming");
     expect(alfredToolSummary("get_email_body", { subject: "Hi" })).toBe("Mail · opened message");
     expect(alfredToolSummary("show_items", { shown: 2 })).toBe("Showing 2 items");
+    expect(alfredToolSummary("group_items", { shown: 3 })).toBe("Grouped 3 items");
+    expect(alfredToolSummary("group_items", { error: "boom" })).toBe("Display · failed");
     expect(alfredToolSummary("search_email", { error: "boom" })).toBe("Mail · failed");
   });
 });

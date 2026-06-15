@@ -126,6 +126,31 @@ export const ALFRED_TOOL_DEFINITIONS = [
       required: ["kind", "ids"],
     },
   },
+  {
+    name: "group_items",
+    description: "Group already-retrieved items into labeled buckets and render a breakdown card with counts. Use for any counting/distribution question — 'how many X vs Y', 'break these down by ___', 'what's the split by sender/status/month/merchant' — instead of listing items in prose. You name the buckets from the question; there are no predefined categories. Pass each item's id (from earlier tool results) into the group it belongs to; the card shows each bucket's count and the items behind it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["email", "event", "deadline", "bill", "transaction"] },
+        title: { type: "string", description: "Short card heading, e.g. \"By status\"" },
+        caption: { type: "string", description: "Optional framing line, e.g. \"last 3 months\"" },
+        groups: {
+          type: "array",
+          description: "One entry per bucket; you choose the labels from the question",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Bucket label" },
+              ids: { type: "array", items: { type: "string" }, description: "Item ids from earlier tool results that belong in this bucket" },
+            },
+            required: ["label", "ids"],
+          },
+        },
+      },
+      required: ["kind", "title", "groups"],
+    },
+  },
 ];
 
 // Candidates carry `from` as a { name, address } object; get_email_body carries
@@ -423,6 +448,47 @@ function runShowItems(input, { conversation, emit }) {
   };
 }
 
+function runGroupItems(input, { conversation, emit }) {
+  const kind = String(input.kind || "");
+  if (!SHOW_KINDS.has(kind)) {
+    return { error: `Unknown kind "${kind}". Use one of: ${[...SHOW_KINDS].join(", ")}.` };
+  }
+  const title = String(input.title || "").trim();
+  const caption = String(input.caption || "").trim();
+  const groups = Array.isArray(input.groups) ? input.groups : [];
+  const missing = [];
+  const seen = new Set();
+  const buckets = [];
+  for (const group of groups) {
+    const label = String(group?.label || "").trim();
+    const rawIds = Array.isArray(group?.ids) ? group.ids.map(String).filter(Boolean) : [];
+    if (!label || !rawIds.length) continue;
+    // First-wins partition: an id already claimed by an earlier bucket is dropped
+    // so buckets stay disjoint and `total` reflects unique items, not double-counts.
+    const ids = rawIds.filter((id) => !seen.has(id));
+    ids.forEach((id) => seen.add(id));
+    if (!ids.length) continue;
+    const { found, missing: groupMissing } = readAlfredItems(conversation, kind, ids);
+    missing.push(...groupMissing);
+    if (found.length) buckets.push({ label, count: found.length, items: found });
+  }
+  // Order by count desc; an "Other" rollup bucket always sinks last (parity with
+  // the spending card's server-side ordering).
+  buckets.sort((a, b) => {
+    if (a.label === "Other") return 1;
+    if (b.label === "Other") return -1;
+    return b.count - a.count;
+  });
+  const total = buckets.reduce((sum, b) => sum + b.count, 0);
+  if (buckets.length && emit) {
+    emit({ type: "breakdown", kind, title, ...(caption ? { caption } : {}), total, buckets });
+  }
+  return {
+    shown: total,
+    ...(missing.length ? { unknown_ids: missing } : {}),
+  };
+}
+
 export async function executeAlfredTool(name, input, ctx) {
   const args = input || {};
   switch (name) {
@@ -434,6 +500,7 @@ export async function executeAlfredTool(name, input, ctx) {
     case "search_transactions": return runSearchTransactions(args, ctx);
     case "summarize_transactions": return runSummarizeTransactions(args, ctx);
     case "show_items": return runShowItems(args, ctx);
+    case "group_items": return runGroupItems(args, ctx);
     default: return { error: `Unknown tool "${name}"` };
   }
 }
@@ -449,6 +516,7 @@ export function alfredToolSummary(name, result = {}) {
       search_transactions: "Transactions",
       summarize_transactions: "Transactions",
       show_items: "Display",
+      group_items: "Display",
     }[name] || "Tool";
     return `${source} · failed`;
   }
@@ -461,6 +529,7 @@ export function alfredToolSummary(name, result = {}) {
     case "search_transactions": return `Transactions · ${result.total ?? 0} found`;
     case "summarize_transactions": return `${result.direction === "income" ? "Income" : "Spending"} · ${result.buckets?.length ?? 0} groups`;
     case "show_items": return `Showing ${result.shown ?? 0} items`;
+    case "group_items": return `Grouped ${result.shown ?? 0} items`;
     default: return name;
   }
 }
