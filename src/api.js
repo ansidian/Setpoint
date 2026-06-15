@@ -149,9 +149,11 @@ export const getCurrentDashboard = () => {
 export const getDashboardHealth = () => apiFetch("/api/dashboard/health");
 export const requestCurrentDashboardRefresh = () => apiFetch("/api/dashboard/current/refresh", { method: "POST" });
 export const syncCurrentDashboard = () => apiFetch("/api/dashboard/current/sync", { method: "POST" });
-export const getTriageCacheStats = (options = {}) => (
-  apiFetch(`/api/ea/triage/cache-stats${options.semantic ? "?semantic=1" : ""}`)
-);
+export const getTriageCacheStats = () => apiFetch("/api/ea/triage/cache-stats");
+
+export const getAlfredUsageStats = () => apiFetch("/api/alfred/usage");
+
+export const getEmailSearchStats = () => apiFetch("/api/ea/email-search/usage");
 // 5-minute in-memory TTL cache for email bodies. Bodies don't mutate
 // server-side once delivered; the cache eliminates the loading flicker on
 // re-selection and dedupes concurrent fetches for the same uid.
