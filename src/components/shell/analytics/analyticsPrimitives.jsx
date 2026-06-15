@@ -43,11 +43,9 @@ export function TierRow({ label, stats }) {
           {numberValue(stats?.calls)} calls
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 text-[11px]">
         <Stat label="Cost" value={formatUsdEstimate(stats?.estimatedCostUsd)} />
-        <Stat label="Saved" value={formatUsdEstimate(stats?.estimatedSavingsUsd)} />
         <Stat label="Input" value={formatCompactNumber(stats?.inputTokens)} />
-        <Stat label="Cached" value={formatCompactNumber(stats?.cachedInputTokens)} />
       </div>
     </div>
   );
