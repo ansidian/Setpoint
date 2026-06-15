@@ -72,6 +72,18 @@ describe("alfred routes", () => {
     expect(res.status).toBe(401);
   });
 
+  it("requires a session for usage stats", async () => {
+    const res = await request(buildApp()).get("/api/alfred/usage");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns Alfred usage stats for an authed session", async () => {
+    const res = await auth(request(buildApp()).get("/api/alfred/usage"));
+    expect(res.status).toBe(200);
+    // No ea_alfred_usage table in this in-memory db → empty summary, not an error.
+    expect(res.body).toMatchObject({ queries: 0, tools: { totalCalls: 0 } });
+  });
+
   it("rejects an empty message", async () => {
     const res = await auth(request(buildApp()).post("/api/alfred/run")).send({ message: "  " });
     expect(res.status).toBe(400);
