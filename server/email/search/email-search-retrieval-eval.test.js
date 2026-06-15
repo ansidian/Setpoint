@@ -1,8 +1,14 @@
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createSyntheticEvalRetriever,
   evaluateRetrievalCases,
   normalizeRetrievalEvalFixture,
 } from "./email-search-retrieval-eval.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("email search retrieval eval runner", () => {
   it("checks expected top-N hits and must-not-top decoys", async () => {
@@ -71,5 +77,20 @@ describe("email search retrieval eval runner", () => {
       must_not_top_clear: false,
       problems: ["expected_uid_not_in_top_n", "must_not_top_ranked_too_high"],
     });
+  });
+
+  it("runs the synthetic corpus fixture green at full embedding coverage", async () => {
+    const fixture = JSON.parse(
+      readFileSync(join(__dirname, "evals/email-search-retrieval.synthetic.json"), "utf8"),
+    );
+    const migrationsDir = join(__dirname, "../../db/migrations");
+    const { retrieve, cleanup } = await createSyntheticEvalRetriever(fixture, { migrationsDir });
+    try {
+      const report = await evaluateRetrievalCases(fixture, { retrieve });
+      expect(report.total).toBe(3);
+      expect(report.failed).toBe(0);
+    } finally {
+      await cleanup();
+    }
   });
 });

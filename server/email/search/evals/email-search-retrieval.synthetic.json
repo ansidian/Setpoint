@@ -1,10 +1,70 @@
 {
-  "version": 1,
-  "description": "Synthetic CI-safe retrieval cases. Do not add real personal email UIDs or snippets here.",
+  "version": 2,
+  "description": "Synthetic CI-safe retrieval corpus + cases. Seeded into an in-memory DB and run at full embedding coverage (healthy corpus) to guard against silent vector flattening. No real personal email UIDs or snippets here. Each case uses an orthogonal embedding dimension to avoid cross-case vector collisions.",
+  "now": "2026-06-14T00:00:00.000Z",
+  "corpus": [
+    {
+      "uid": "synthetic-active-return",
+      "subject": "Amazon return drop off deadline",
+      "body_text": "Drop off your Amazon return by the Friday deadline.",
+      "from_name": "Amazon Returns",
+      "from_address": "returns@amazon.com",
+      "email_date": "2026-05-30T12:00:00Z",
+      "triage": { "lane": "needs_attention", "category": "delivery", "urgency": "high" },
+      "embedding": [1, 0, 0, 0]
+    },
+    {
+      "uid": "synthetic-refund-decoy",
+      "subject": "Your refund was processed",
+      "body_text": "A refund note unrelated to any drop off.",
+      "from_name": "Store",
+      "from_address": "no-reply@store.com",
+      "email_date": "2026-04-10T12:00:00Z",
+      "embedding": [0.5, 0, 0, 0.8660254]
+    },
+    {
+      "uid": "synthetic-payment-due",
+      "subject": "Credit card payment due",
+      "body_text": "Your credit card payment is due soon.",
+      "from_name": "Chase",
+      "from_address": "billing@chase.com",
+      "email_date": "2026-06-01T12:00:00Z",
+      "triage": { "lane": "needs_attention", "category": "finance", "urgency": "high" },
+      "embedding": [0, 1, 0, 0]
+    },
+    {
+      "uid": "synthetic-payment-receipt",
+      "subject": "Payment received - thank you",
+      "body_text": "We received your payment, thank you.",
+      "from_name": "Chase",
+      "from_address": "billing@chase.com",
+      "email_date": "2026-06-02T12:00:00Z",
+      "embedding": [0, 0.9, 0, 0.1]
+    },
+    {
+      "uid": "synthetic-semantic-balance",
+      "subject": "Your monthly overview",
+      "body_text": "A periodic overview of your account activity.",
+      "from_name": "Bank",
+      "from_address": "noreply@bank.com",
+      "email_date": "2026-06-10T12:00:00Z",
+      "embedding": [0, 0, 1, 0]
+    },
+    {
+      "uid": "synthetic-lexical-decoy",
+      "subject": "Card statement balance update",
+      "body_text": "An update note for your records.",
+      "from_name": "Promo",
+      "from_address": "noreply@promo.com",
+      "email_date": "2026-06-11T12:00:00Z",
+      "embedding": [0, 0, 0.2, 0.97]
+    }
+  ],
   "cases": [
     {
       "id": "synthetic-amazon-return-active",
       "query": "amazon return drop off deadline",
+      "query_embedding": [1, 0, 0, 0],
       "expected_uids": ["synthetic-active-return"],
       "must_not_top": ["synthetic-refund-decoy"],
       "top_n": 3
@@ -12,8 +72,17 @@
     {
       "id": "synthetic-payment-due-vs-receipt",
       "query": "credit card payment due",
+      "query_embedding": [0, 1, 0, 0],
       "expected_uids": ["synthetic-payment-due"],
       "must_not_top": ["synthetic-payment-receipt"],
+      "top_n": 3
+    },
+    {
+      "id": "synthetic-semantic-not-flattened",
+      "query": "card statement balance",
+      "query_embedding": [0, 0, 1, 0],
+      "expected_uids": ["synthetic-semantic-balance"],
+      "must_not_top": ["synthetic-lexical-decoy"],
       "top_n": 3
     }
   ]
