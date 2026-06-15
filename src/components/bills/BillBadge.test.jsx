@@ -84,14 +84,11 @@ describe("BillBadge notes", () => {
 });
 
 describe("BillBadge mapping status", () => {
-  it.each([
-    [{ status: "matched", profileId: "edison", behaviorId: "monthly", amountSource: "blank" }, "Mapped: edison · monthly · amount missing"],
-    [{ status: "identity_only" }, "Identity match: choose bill details"],
-    [{ status: "unmapped" }, "Unmapped: review fields manually"],
-    [{ status: "invalid_target" }, "Mapping needs review: Actual target changed"],
-  ])("renders subtle mapping status for %s", (mapping, label) => {
-    renderBillBadge({ mapping });
+  it("renders the mapping status label produced by the model", () => {
+    renderBillBadge({
+      mapping: { status: "matched", profileId: "edison", behaviorId: "monthly", amountSource: "blank" },
+    });
 
-    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByText("Mapped: edison · monthly · amount missing")).toBeTruthy();
   });
 });

@@ -371,108 +371,39 @@ describe("auth boundaries", () => {
     expect(res.body.bill_pay_mappings).toEqual({ version: 1, profiles: [] });
   });
 
-  it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-05-07T12:00:00.000Z"));
+  it("serves triage cache stats over the authed diagnostic route", async () => {
+    // Thin wiring check: the route reaches getTriageCacheStats and returns its
+    // summary shape. The pricing/window/rounding math lives in
+    // server/triage/triage-cache-stats.test.js.
     await seedSession();
-    await testState.db.current.batch([
-      {
-        sql: `INSERT INTO ea_email_triage
-                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, cheap_model_result_json)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          "user-1",
-          "cheap-1",
-          "cheap_model",
-          "2026-05-04T12:00:00.000Z",
-          JSON.stringify({
-            cheap: {
-              input_tokens: 1000,
-              output_tokens: 100,
-              prompt_tokens_details: { cached_tokens: 600 },
-            },
-          }),
-          JSON.stringify({ provider: "openai", model: "gpt-5.4-nano-2026-05-04", tier: "cheap" }),
-        ],
-      },
-      {
-        sql: `INSERT INTO ea_email_triage
-                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, strong_model_result_json)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          "user-1",
-          "strong-1",
-          "strong_model",
-          "2026-05-04T12:05:00.000Z",
-          JSON.stringify({
-            strong: {
-              input_tokens: 2000,
-              output_tokens: 200,
-              input_tokens_details: { cached_tokens: 1000 },
-            },
-          }),
-          JSON.stringify({ provider: "openai", model: "gpt-5.4", tier: "strong" }),
-        ],
-      },
-      {
-        sql: `INSERT INTO ea_email_triage
-                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, cheap_model_result_json)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          "user-1",
-          "anthropic-1",
-          "cheap_model",
-          "2026-05-04T12:10:00.000Z",
-          JSON.stringify({ cheap: { input_tokens: 999, output_tokens: 99 } }),
-          JSON.stringify({ provider: "anthropic", model: "claude-haiku-4-5-20251001", tier: "cheap" }),
-        ],
-      },
-    ]);
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, email_id, triage_source, last_triaged_at, model_usage_json, strong_model_result_json)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [
+        "user-1",
+        "strong-1",
+        "strong_model",
+        new Date().toISOString(),
+        JSON.stringify({
+          strong: {
+            input_tokens: 2000,
+            output_tokens: 200,
+            input_tokens_details: { cached_tokens: 1000 },
+          },
+        }),
+        JSON.stringify({ provider: "openai", model: "gpt-5.4", tier: "strong" }),
+      ],
+    });
 
     const res = await request(makeApp())
       .get("/api/ea/triage/cache-stats")
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      windowDays: 7,
-      openaiCalls: 2,
-      inputTokens: 3000,
-      cachedInputTokens: 1600,
-      outputTokens: 300,
-      estimatedCostUsd: 0.005967,
-      hitRate: 0.5333,
-      lastTriagedAt: "2026-05-04T12:05:00.000Z",
-      comparisonWindows: {
-        monthToDate: {
-          windowDays: null,
-          windowLabel: "month_to_date",
-          openaiCalls: 2,
-          estimatedCostUsd: 0.005967,
-          estimatedSavingsUsd: 0.002358,
-        },
-      },
-      byTier: {
-        cheap: {
-          calls: 1,
-          inputTokens: 1000,
-          cachedInputTokens: 600,
-          outputTokens: 100,
-          estimatedCostUsd: 0.000217,
-        },
-        strong: {
-          calls: 1,
-          inputTokens: 2000,
-          cachedInputTokens: 1000,
-          outputTokens: 200,
-          estimatedCostUsd: 0.00575,
-        },
-      },
-    });
-    expect(res.body.estimatedSavingsUsd).toBeCloseTo(0.002358, 6);
-    // Triage cache stats no longer carry a semantic-search bolt-on; email-search
-    // usage is served by its own endpoint now.
-    expect(res.body.semanticSearch).toBeUndefined();
+    expect(res.body.windowDays).toBe(7);
+    expect(res.body.openaiCalls).toBe(1);
+    expect(res.body.comparisonWindows.monthToDate).toBeTruthy();
   });
 
   it("requires a session for GET /api/ea/email-search/usage", async () => {
@@ -513,7 +444,10 @@ describe("auth boundaries", () => {
     expect(await getSettingsRow()).toMatchObject({ email_triage_mode: "paused" });
   });
 
-  it("rejects invalid triage sound settings", async () => {
+  it("rejects invalid triage sound settings without touching the stored row", async () => {
+    // Wiring check: validateTriageSoundSettings gates the write (400) and the
+    // durable row is left unwritten. The per-branch validation messages are
+    // owned by server/triage/triage-sound-settings.test.js.
     await seedSession();
     const res = await request(makeApp())
       .put("/api/ea/settings")
@@ -528,22 +462,7 @@ describe("auth boundaries", () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid triage_sound_settings laneScope");
-
-    const soundRes = await request(makeApp())
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({
-        triage_sound_settings: {
-          laneScope: "needs_attention_and_fyi",
-          triggers: {
-            needs_attention_finalized: { enabled: true, soundId: "linear-upload-file" },
-          },
-        },
-      });
-
-    expect(soundRes.status).toBe(400);
-    expect(soundRes.body.message).toBe("Invalid triage_sound_settings soundId");
+    expect((await getSettingsRow()).triage_sound_settings_json).toBeNull();
   });
 
   it("updates valid triage sound settings writes", async () => {

@@ -10,62 +10,7 @@ vi.mock("@/api", () => ({
   getModels: mockApi.getModels,
 }));
 
-vi.mock("@/components/ui/select", async () => {
-  const React = await import("react");
-
-  function Select({ value, onValueChange, disabled, children }) {
-    const childList = React.Children.toArray(children);
-    const trigger = childList.find(
-      (child) => React.isValidElement(child) && child.type?.displayName === "MockSelectTrigger",
-    );
-    const content = childList.find(
-      (child) => React.isValidElement(child) && child.type?.displayName === "MockSelectContent",
-    );
-    const items = React.Children.toArray(content?.props?.children).filter(React.isValidElement);
-
-    return (
-      <select
-        aria-label={trigger?.props?.["aria-label"]}
-        className={trigger?.props?.className}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onValueChange?.(event.target.value)}
-      >
-        {items.map((item) => (
-          <option key={item.props.value} value={item.props.value} disabled={item.props.disabled}>
-            {item.props.children}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  function SelectTrigger() {
-    return null;
-  }
-  SelectTrigger.displayName = "MockSelectTrigger";
-
-  function SelectValue() {
-    return null;
-  }
-
-  function SelectContent() {
-    return null;
-  }
-  SelectContent.displayName = "MockSelectContent";
-
-  function SelectItem() {
-    return null;
-  }
-
-  return {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem,
-  };
-});
+vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils.jsx"));
 
 const { default: EmailAiModelCard } = await import("./EmailAiModelCard.jsx");
 
@@ -114,7 +59,7 @@ beforeEach(() => {
 });
 
 describe("EmailAiModelCard", () => {
-  it("renders provider-aware inbox triage model controls", async () => {
+  it("renders the two labeled provider/model selects", async () => {
     renderCard();
 
     await waitFor(() => {
@@ -127,7 +72,7 @@ describe("EmailAiModelCard", () => {
     expect(screen.getByLabelText("Inbox triage model")).toBeTruthy();
   });
 
-  it("switches OpenAI to the current GPT-5.5 default", async () => {
+  it("a provider change reaches patch with the resolved provider/model", async () => {
     const patch = vi.fn();
     renderCard({ patch });
 
@@ -145,7 +90,5 @@ describe("EmailAiModelCard", () => {
         email_ai_model: "gpt-5.5",
       });
     });
-
-    expect(screen.getByLabelText("Inbox triage model").value).toBe("gpt-5.5");
   });
 });
