@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockActual = {
   sendBill: vi.fn(),
@@ -36,6 +36,12 @@ const {
   isBillsMirrorMaintenanceDue,
   __resetBillsMirrorRefreshTimersForTests,
 } = await import("./bills-mirror-sync.js");
+
+// scheduleBillsMirrorRefresh arms a real setTimeout; clear it after every test so an
+// armed timer never leaks into a later test (previously only two cases reset inline).
+afterEach(() => {
+  __resetBillsMirrorRefreshTimersForTests();
+});
 
 function rowResult(rows = []) {
   return { rows };
