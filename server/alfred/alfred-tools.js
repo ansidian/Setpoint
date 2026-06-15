@@ -13,7 +13,7 @@ const SHOW_KINDS = new Set(["email", "event", "deadline", "bill", "transaction"]
 export const ALFRED_TOOL_DEFINITIONS = [
   {
     name: "search_email",
-    description: "Search the owner's indexed inbox mail (hybrid keyword + semantic). Returns compact matches with snippets; use get_email_body to read a full message. Reformulate and retry with different queries or date windows if results look weak.",
+    description: "Search the owner's indexed inbox mail (hybrid keyword + semantic). Returns compact matches with snippets, plus total (full match count) and has_more. To walk a large set, page with offset (e.g. offset 12 after a first page of 12) while has_more is true; if capped is returned, narrow instead with date windows or lexical_queries. Use get_email_body to read a full message.",
     input_schema: {
       type: "object",
       properties: {
@@ -23,6 +23,7 @@ export const ALFRED_TOOL_DEFINITIONS = [
         before: { type: "string", description: "Only emails on/before this ISO date (YYYY-MM-DD)" },
         read_filter: { type: "string", enum: ["read", "unread"], description: "Restrict by read state" },
         limit: { type: "integer", description: "Max results (default 12, max 20)" },
+        offset: { type: "integer", description: "Skip the first N matches to page through results; pair with has_more from a prior call (default 0)." },
       },
       required: ["query"],
     },
@@ -228,6 +229,7 @@ async function runSearchEmail(input, { userId, conversation, deps }) {
   const query = String(input.query || "").trim();
   if (!query) return { error: "query is required" };
   const limit = Math.max(1, Math.min(MAX_SEARCH_LIMIT, Number(input.limit) || DEFAULT_SEARCH_LIMIT));
+  const offset = Math.max(0, Number(input.offset) || 0);
   const lexical = Array.isArray(input.lexical_queries)
     ? input.lexical_queries.map((value) => String(value)).filter(Boolean)
     : [];
@@ -249,12 +251,16 @@ async function runSearchEmail(input, { userId, conversation, deps }) {
     confidence: 1,
   };
 
-  const result = await deps.retrieve(userId, { q: query, limit, plan });
+  const result = await deps.retrieve(userId, { q: query, limit, offset, plan });
   const candidates = result?.candidates || [];
+  // Map-merge cache: paged calls accumulate, so show_items resolves ids across pages.
   cacheAlfredItems(conversation, "email", candidates, "uid");
 
   return {
     total: result?.total ?? candidates.length,
+    offset: result?.offset ?? offset,
+    has_more: !!result?.has_more,
+    ...(result?.capped ? { capped: true } : {}),
     mode: result?.mode || "lexical",
     results: candidates.map((candidate) => ({
       uid: candidate.uid,

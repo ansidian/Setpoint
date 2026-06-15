@@ -15,6 +15,18 @@ const MAX_TOKENS = 2000;
 const MAX_NUDGE_ITEMS = 8;
 const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, bills, or transactions, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
 
+// The cite-by-reference backstop counts items the model can actually name this run.
+// Each row-bearing tool returns exactly one array of rows; gate on that length, not
+// a tool's `total` — `total` can be a full match count (search_email when paged,
+// where the page is small but total large) or a dollar sum (summarize_transactions).
+const CITABLE_ROW_KEYS = ["results", "events", "deadlines", "bills", "transactions"];
+function citableRowCount(result) {
+  for (const key of CITABLE_ROW_KEYS) {
+    if (Array.isArray(result?.[key])) return result[key].length;
+  }
+  return 0;
+}
+
 // Multi-turn prompt caching: mark the last block of the last message so the
 // cached prefix covers tools + system + the whole transcript. Only the outgoing
 // request copy is marked — the stored transcript keeps its plain shapes.
@@ -115,9 +127,8 @@ async function runAlfredInner({
       }
       if (toolUse.name === "show_items" || toolUse.name === "group_items") {
         showItemsCalled = true;
-      } else if (!result?.error && typeof result?.total === "number" && toolUse.name !== "summarize_transactions") {
-        // summarize_transactions.total is a dollar sum, not a row count — never contributes to retrievedCount.
-        retrievedCount += result.total;
+      } else if (!result?.error) {
+        retrievedCount += citableRowCount(result);
       }
       emit({
         type: "tool_result",

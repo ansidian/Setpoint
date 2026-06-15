@@ -184,6 +184,33 @@ describe("search_email", () => {
     expect(result.error).toBeTruthy();
     expect(ctx.deps.retrieve).not.toHaveBeenCalled();
   });
+
+  it("forwards offset and surfaces total/has_more/offset for paging", async () => {
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "lexical",
+      total: 30,
+      offset: 12,
+      has_more: true,
+      candidates: [{
+        uid: "em-2",
+        subject: "Statement",
+        body_snippet: "x",
+        email_date: "2026-06-13",
+        read: false,
+        from: { name: "Bank", address: "a@bank.com" },
+        metadata: { lane: "fyi", urgency: "normal" },
+        scores: {},
+      }],
+    });
+    const result = await executeAlfredTool(
+      "search_email",
+      { query: "statements", limit: 12, offset: 12 },
+      ctxWith({ retrieve }),
+    );
+
+    expect(retrieve).toHaveBeenCalledWith("user-1", expect.objectContaining({ offset: 12, limit: 12 }));
+    expect(result).toMatchObject({ total: 30, has_more: true, offset: 12 });
+  });
 });
 
 describe("get_email_body", () => {
