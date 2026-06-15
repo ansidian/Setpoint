@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { getAlfredUsageStats, getEmailSearchStats, getTriageCacheStats } from "@/api";
 import {
@@ -20,28 +20,71 @@ const TABS = [
 
 // Each section fetches independently the first time the hub opens, so a slow or
 // failing endpoint isolates to its own tab instead of blanking the whole modal.
+// `retry` re-runs one tab's fetch from the error state (a click handler, so its
+// synchronous setState is fine — unlike a synchronous reset inside the effect).
 function useSectionData(open) {
-  // No key present yet ⇒ that tab renders its loading state (see the `|| { loading }`
-  // fallback below), so the effect only needs to publish results, never a synchronous
-  // "everything is loading" reset. The mount unmounts this modal on close, so each
-  // open starts from a fresh empty map.
+  // No key present yet ⇒ that tab renders its loading skeleton (see the
+  // `|| { loading }` fallback in the component). The mount unmounts this modal on
+  // close, so each open starts from a fresh empty map.
   const [state, setState] = useState({}); // { [key]: { data } | { error } }
+  const aliveRef = useRef(false);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+  const runFetch = useCallback((tab) => {
+    tab.fetcher()
+      .then((data) => { if (aliveRef.current) setState((prev) => ({ ...prev, [tab.key]: { data } })); })
+      .catch(() => { if (aliveRef.current) setState((prev) => ({ ...prev, [tab.key]: { error: true } })); });
+  }, []);
+  const retry = useCallback((key) => {
+    const tab = TABS.find((t) => t.key === key);
+    if (!tab) return;
+    setState((prev) => ({ ...prev, [key]: { loading: true } }));
+    runFetch(tab);
+  }, [runFetch]);
   useEffect(() => {
     if (!open) return undefined;
-    let alive = true;
-    for (const tab of TABS) {
-      tab.fetcher()
-        .then((data) => { if (alive) setState((prev) => ({ ...prev, [tab.key]: { data } })); })
-        .catch(() => { if (alive) setState((prev) => ({ ...prev, [tab.key]: { error: true } })); });
-    }
-    return () => { alive = false; };
-  }, [open]);
-  return state;
+    for (const tab of TABS) runFetch(tab);
+    return undefined;
+  }, [open, runFetch]);
+  return [state, retry];
+}
+
+// Fixed-dimension skeleton (hero grid + two boxes) so the loading→ready swap does
+// not shift layout — the "dense, not stressful" rule from the design system.
+function SectionSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="h-[82px] animate-pulse rounded-lg bg-white/[0.04] motion-reduce:animate-none" />
+        ))}
+      </div>
+      <div className="h-16 animate-pulse rounded-lg bg-white/[0.03] motion-reduce:animate-none" />
+      <div className="h-24 animate-pulse rounded-lg bg-white/[0.025] motion-reduce:animate-none" />
+    </div>
+  );
+}
+
+function SectionError({ onRetry }) {
+  return (
+    <div className="rounded-lg border border-[#f38ba8]/20 bg-[#f38ba8]/[0.08] p-4">
+      <p className="text-[12px] leading-relaxed text-[#f38ba8]">Couldn’t load this section.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-2.5 rounded-md border border-[#f38ba8]/30 bg-[#f38ba8]/[0.10] px-2.5 py-1 text-[11px] font-medium text-[#f38ba8] transition-colors duration-150 hover:bg-[#f38ba8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f38ba8]/50"
+      >
+        Try again
+      </button>
+    </div>
+  );
 }
 
 export default function AiAnalyticsModal({ open, onClose, backdropSnapshot = null }) {
   const [active, setActive] = useState("alfred");
-  const sections = useSectionData(open);
+  const [sections, retry] = useSectionData(open);
   const current = TABS.find((tab) => tab.key === active);
   const slice = sections[active] || { loading: true };
   const Section = current.Section;
@@ -81,26 +124,31 @@ export default function AiAnalyticsModal({ open, onClose, backdropSnapshot = nul
           </div>
         </DialogHeader>
 
-        <div className="px-5 pt-4">
-          <div role="tablist" aria-label="AI analytics sections" className="flex gap-1">
-            {TABS.map((tab) => (
+        <div role="tablist" aria-label="AI analytics sections" className="flex gap-1 border-b border-white/[0.06] px-4">
+          {TABS.map((tab) => {
+            const selected = tab.key === active;
+            return (
               <button
                 key={tab.key}
                 role="tab"
                 type="button"
-                aria-selected={tab.key === active}
+                aria-selected={selected}
                 onClick={() => setActive(tab.key)}
-                className="rounded-md px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] focus-visible:bg-white/[0.06] focus-visible:outline-none aria-selected:bg-white/[0.10] aria-selected:text-foreground"
+                className={`-mb-px rounded-t-md border-b-2 px-3 py-2.5 text-[12px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                  selected
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                }`}
               >
                 {tab.label}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        <div className="p-5 pt-3">
-          {slice.loading ? <div className="text-[12px] text-muted-foreground/65">Loading…</div> : null}
-          {slice.error ? <div className="text-[12px] text-[#f38ba8]">Couldn’t load this section.</div> : null}
+        <div role="tabpanel" className="p-5">
+          {slice.loading ? <SectionSkeleton /> : null}
+          {slice.error ? <SectionError onRetry={() => retry(active)} /> : null}
           {slice.data ? <Section stats={slice.data} /> : null}
         </div>
       </DialogContent>

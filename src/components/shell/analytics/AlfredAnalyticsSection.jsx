@@ -1,7 +1,20 @@
 import { useMemo } from "react";
 import { Bot, Gauge, Coins, BarChart3, Layers3, Wrench } from "lucide-react";
-import { Metric, Stat } from "./analyticsPrimitives.jsx";
+import { Metric } from "./analyticsPrimitives.jsx";
 import { formatPercent, formatUsdEstimate, formatCompactNumber, numberValue } from "./analyticsFormat.js";
+
+// A small, on-brand rotation (lavender accent, info blue, income cyan, success
+// green) so each model is visually distinct in the split without inventing
+// decorative colors. Order is stable per render via the row index.
+const MODEL_ACCENTS = ["#cba6da", "#89b4fa", "#89dceb", "#a6e3a1"];
+
+// "claude-haiku-4-5-20251001" → "Haiku 4.5". Keeps the exact id in a title attr
+// for precision while the row stays scannable.
+function formatModelName(id) {
+  const match = String(id || "").match(/claude-(haiku|sonnet|opus)-(\d+)-(\d+)/);
+  if (match) return `${match[1][0].toUpperCase()}${match[1].slice(1)} ${match[2]}.${match[3]}`;
+  return String(id || "unknown");
+}
 
 export default function AlfredAnalyticsSection({ stats }) {
   const metrics = useMemo(() => ([
@@ -18,37 +31,77 @@ export default function AlfredAnalyticsSection({ stats }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {metrics.map((m) => <Metric key={m.label} {...m} />)}
+        {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
       </div>
 
       <div className="rounded-lg border border-primary/15 bg-primary/[0.08] p-3">
-        <div className="text-[11px] font-semibold tracking-[1.4px] text-primary uppercase">Cache read</div>
+        <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[1.4px] text-primary uppercase">
+          <Gauge size={13} />
+          Cache read
+        </div>
         <p className="mt-2 text-[12px] leading-relaxed text-foreground/85">
-          Saved {formatPercent(stats?.cacheHitRate)} of input tokens via the cached tool + transcript prefix.
+          Saved {formatPercent(stats?.cacheHitRate)} of input tokens via the cached tool and transcript prefix.
         </p>
       </div>
 
       <div className="rounded-lg border border-white/[0.06] bg-black/[0.10] p-3">
-        <div className="mb-3 text-[11px] font-semibold tracking-[1.4px] text-foreground uppercase">Tools used</div>
-        <div className="space-y-1.5">
-          {tools.length === 0 && <div className="text-[12px] text-muted-foreground/65">No tool calls in this window.</div>}
-          {tools.map((t) => (
-            <div key={t.name} className="grid grid-cols-4 gap-2 text-[11px] text-foreground/85">
-              <span className="col-span-1 font-medium">{t.name}</span>
-              <Stat label="calls" value={numberValue(t.calls)} />
-              <Stat label="err" value={formatPercent(t.errorRate)} />
-              <Stat label="avg ms" value={numberValue(t.avgDurationMs)} />
-            </div>
-          ))}
+        <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold tracking-[1.4px] text-foreground uppercase">
+          <Wrench size={13} className="text-[#89b4fa]" />
+          Tools used
         </div>
+        {tools.length === 0 ? (
+          <div className="text-[12px] text-muted-foreground/65">No tool calls in this window.</div>
+        ) : (
+          <div className="space-y-0.5">
+            <div className="grid grid-cols-[1fr_3.5rem_3rem_4rem] gap-x-3 px-1.5 pb-1 text-[9px] font-semibold tracking-[1.3px] text-muted-foreground/45 uppercase">
+              <span>Tool</span>
+              <span className="text-right">Calls</span>
+              <span className="text-right">Err</span>
+              <span className="text-right">Avg</span>
+            </div>
+            {tools.map((tool) => {
+              const hasErr = numberValue(tool.errors) > 0;
+              return (
+                <div key={tool.name} className="grid grid-cols-[1fr_3.5rem_3rem_4rem] items-center gap-x-3 rounded-md px-1.5 py-1 text-[11px] text-foreground/85 odd:bg-white/[0.015]">
+                  <span className="truncate font-medium">{tool.name}</span>
+                  <span className="text-right tabular-nums text-foreground">{numberValue(tool.calls)}</span>
+                  <span className={`text-right tabular-nums ${hasErr ? "text-[#f38ba8]" : "text-muted-foreground/50"}`}>
+                    {formatPercent(tool.errorRate)}
+                  </span>
+                  <span className="text-right tabular-nums text-muted-foreground/70">{numberValue(tool.avgDurationMs)}ms</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {models.length > 0 && (
         <div className="rounded-lg border border-white/[0.06] bg-black/[0.10] p-3">
-          <div className="mb-3 text-[11px] font-semibold tracking-[1.4px] text-foreground uppercase">Model split</div>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            {models.map(([id, m]) => (
-              <Stat key={id} label={id} value={`${numberValue(m.calls)} · ${formatUsdEstimate(m.estimatedCostUsd)}`} />
+          <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[1.4px] text-foreground uppercase">
+            <Layers3 size={13} className="text-primary/80" />
+            Model split
+          </div>
+          <p className="mt-1 mb-3 text-[10px] leading-relaxed text-muted-foreground/55">
+            Model API calls (turns) and estimated cost per model. One query can span several turns.
+          </p>
+          <div className="space-y-1.5">
+            {models.map(([id, model], index) => (
+              <div key={id} className="flex items-center justify-between gap-3 rounded-md border border-white/[0.04] bg-white/[0.02] px-2.5 py-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: MODEL_ACCENTS[index % MODEL_ACCENTS.length] }}
+                  />
+                  <span className="truncate text-[12px] font-medium text-foreground" title={id}>
+                    {formatModelName(id)}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-baseline gap-3 text-[11px]">
+                  <span className="tabular-nums text-muted-foreground/70">{numberValue(model.calls)} calls</span>
+                  <span className="tabular-nums font-semibold text-primary">{formatUsdEstimate(model.estimatedCostUsd)}</span>
+                </div>
+              </div>
             ))}
           </div>
         </div>
