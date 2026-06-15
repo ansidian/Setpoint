@@ -1,17 +1,5 @@
 import { ghostDisplayRange } from "../ghostPreview.js";
-import { formatDateLabel, formatRecurrenceSummary, formatTimeLabel } from "./calendarEditorUtils";
-
-function formatScheduleSummary(draft, fallback) {
-  if (!draft?.startDate) return fallback;
-  const dateLabel = draft.endDate && draft.endDate !== draft.startDate
-    ? `${formatDateLabel(draft.startDate)} to ${formatDateLabel(draft.endDate)}`
-    : formatDateLabel(draft.startDate);
-  if (draft.allDay) return `${dateLabel} · All day`;
-  if (draft.startTime && draft.endTime) {
-    return `${dateLabel} · ${formatTimeLabel(draft.startTime)} to ${formatTimeLabel(draft.endTime)}`;
-  }
-  return `${dateLabel} · ${formatTimeLabel(draft.startTime)}`;
-}
+import { formatRecurrenceSummary, formatScheduleSummary, previewSegmentStyle } from "./calendarEditorUtils";
 
 export default function CalendarDraftPreviewPanel({
   ghostPreview,
@@ -113,12 +101,8 @@ export default function CalendarDraftPreviewPanel({
             data-testid="calendar-draft-preview-segment"
             data-summary-kind={segment.kind}
             style={{
-              overflow: segment.kind === "schedule" ? "visible" : "hidden",
-              textOverflow: segment.kind === "schedule" ? "clip" : "ellipsis",
-              whiteSpace: segment.kind === "schedule" ? "normal" : "nowrap",
-              maxWidth: segment.kind === "schedule" ? "100%" : "min(190px, 100%)",
+              ...previewSegmentStyle(segment.kind),
               color: segment.color,
-              fontWeight: segment.kind === "schedule" || segment.kind === "conflict" ? 600 : 500,
             }}
           >
             {segment.value}

@@ -271,6 +271,11 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(screen.getAllByRole("button", { name: /^complete$/i }).length).toBeGreaterThan(0);
   });
 
+  // The stale-completed-vs-live-open occurrence resolution rule is owned by the
+  // model test in src/hooks/calendar/calendarControllerHelpers.test.js
+  // ("resolvePendingFocusItem activates the live recurring occurrence when
+  // focus targets a stale completed one"). This keeps only the DOM proof that
+  // the controller routes the resolved occurrence into the detail panel.
   it("activates the live recurring Todoist occurrence when dashboard focus has a stale due date", async () => {
     window.innerWidth = 1900;
 
@@ -297,7 +302,6 @@ describe("CalendarModal deadlines rail behavior", () => {
 
     const panel = await screen.findByTestId("calendar-floating-detail-panel");
 
-    expect(panel.getAttribute("data-anchor-kind")).toBe("agenda-deadline-row");
     expect(within(panel).getByTestId("calendar-selected-deadline-title").textContent).toContain("Current occurrence");
   });
 
@@ -402,7 +406,15 @@ describe("CalendarModal deadlines rail behavior", () => {
     expect(within(screen.getByTestId("calendar-cell-20")).getByText("Backfill notes")).toBeTruthy();
   });
 
-  it("does not render completed-only deadlines into the month cell preview", () => {
+  // Composite-id format (deadline:<id>:<dateKey>) and the showCompleted
+  // retention rule are owned by the model tests in
+  // src/components/calendar/views/events/eventsPlanningModel.test.js
+  // ("normalizes deadline range data into overlay items..." / "keys deadline
+  // planning ids by occurrence date") and deadlinesModel.test.js
+  // ("uses deadline occurrence identity for every deadline row"). This keeps
+  // only the DOM presence guard that a completed-only deadline still surfaces
+  // a chip in the month cell preview.
+  it("still renders a completed-only deadline chip in the month cell preview", () => {
     window.innerWidth = 1900;
 
     render(wrapWithDashboard(
@@ -423,9 +435,7 @@ describe("CalendarModal deadlines rail behavior", () => {
       />,
     ));
 
-    const quietChip = within(screen.getByTestId("calendar-cell-20")).getByText("Project due").closest("button");
-    expect(quietChip).toBeTruthy();
-    expect(quietChip?.getAttribute("data-item-id")).toBe("deadline:deadline-1:2026-04-20");
+    expect(within(screen.getByTestId("calendar-cell-20")).getByText("Project due")).toBeTruthy();
   });
 
   it("uses the event-style font treatment for the selected deadline title", async () => {

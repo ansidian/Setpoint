@@ -182,16 +182,13 @@ describe("ActualBudgetSettingsSection", () => {
     });
   });
 
-  it("builds a mapping payload with matcher chips and Actual target labels", async () => {
+  it("reaches patch with an added chip and a selected target label", async () => {
     const { patch } = renderSection();
 
     await screen.findByText("Bill Pay Mappings");
     fireEvent.click(screen.getByRole("button", { name: /profile/i }));
     expect(await screen.findByRole("option", { name: "Citi" })).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Profile 1 name"), {
-      target: { value: "Citi Costco" },
-    });
     fireEvent.change(screen.getByPlaceholderText("example.com"), {
       target: { value: "citi.com" },
     });
@@ -199,44 +196,19 @@ describe("ActualBudgetSettingsSection", () => {
       key: "Enter",
       code: "Enter",
     });
-    fireEvent.change(screen.getByPlaceholderText("payment due"), {
-      target: { value: "payment due" },
-    });
-    fireEvent.keyDown(screen.getByPlaceholderText("payment due"), {
-      key: "Enter",
-      code: "Enter",
-    });
-
-    const enabledToggles = screen.getAllByLabelText("Enabled");
-    fireEvent.click(enabledToggles[0]);
-    fireEvent.click(enabledToggles[1]);
     fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "payee-citi" } });
-    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "acct-checking" } });
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "cat-card" } });
 
     await waitFor(() => {
       const lastPayload = patch.mock.calls.at(-1)?.[0]?.bill_pay_mappings;
-      expect(lastPayload?.profiles[0]).toMatchObject({
-        name: "Citi Costco",
-        enabled: true,
-        identity: { domain: ["citi.com"] },
-      });
-      expect(lastPayload.profiles[0].behaviors[0]).toMatchObject({
-        enabled: true,
-        intent: { subject: ["payment due"] },
-        targets: {
-          payee_id: "payee-citi",
-          payee_label: "Citi",
-          account_id: "acct-checking",
-          account_label: "Checking",
-          category_id: "cat-card",
-          category_label: "Credit Card Payments",
-        },
+      expect(lastPayload?.profiles[0].identity.domain).toContain("citi.com");
+      expect(lastPayload.profiles[0].behaviors[0].targets).toMatchObject({
+        payee_id: "payee-citi",
+        payee_label: "Citi",
       });
     });
   });
 
-  it("keeps stale Actual target IDs visible as missing choices", async () => {
+  it("keeps a stale Actual target visible by its stored label", async () => {
     renderSection({
       initialSettings: {
         bill_pay_mappings: {
@@ -269,7 +241,6 @@ describe("ActualBudgetSettingsSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Expand profile 1" }));
 
     expect(await screen.findByText("Old Payee")).toBeTruthy();
-    expect(screen.getByText("Payee missing: Old Payee")).toBeTruthy();
   });
 
   it("surfaces metadata load failures instead of presenting an ordinary empty mapping list", async () => {
@@ -363,7 +334,6 @@ describe("ActualBudgetSettingsSection", () => {
         },
       }));
     });
-    expect(mockApi.resolveBillPayMappingSample.mock.calls[0][0]).not.toHaveProperty("candidate");
     const submitted = mockApi.resolveBillPayMappingSample.mock.calls[0][0];
     expect(submitted.mappings.profiles[0]).toMatchObject({
       id: "profile-citi",

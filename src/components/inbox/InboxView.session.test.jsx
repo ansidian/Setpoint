@@ -1384,13 +1384,12 @@ describe("InboxView session state", () => {
 
     render(<DesktopHotkeyHarness />);
 
-    const numberEvent = new KeyboardEvent("keydown", {
-      key: "1",
-      bubbles: true,
-      cancelable: true,
-    });
-    window.dispatchEvent(numberEvent);
-    expect(numberEvent.defaultPrevented).toBe(false);
+    // A shell number key is not an inbox action: it triggers no snapshot
+    // mutation and leaves the selection where it was (observable outcome rather
+    // than asserting the internal preventDefault decision).
+    fireEvent.keyDown(window, { key: "1" });
+    expect(markSnapshotItemHandled).not.toHaveBeenCalled();
+    expect(screen.getByTestId("selected-id").textContent).toBe("gmail-a-msg-1");
 
     fireEvent.keyDown(window, { key: "h" });
 

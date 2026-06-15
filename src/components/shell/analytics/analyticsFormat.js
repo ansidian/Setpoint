@@ -29,3 +29,11 @@ export function formatUsdEstimate(value) {
     maximumFractionDigits: 2,
   }).format(number);
 }
+
+// "claude-haiku-4-5-20251001" → "Haiku 4.5". Keeps the exact id in a title attr
+// for precision while the row stays scannable.
+export function formatModelName(id) {
+  const match = String(id || "").match(/claude-(haiku|sonnet|opus)-(\d+)-(\d+)/);
+  if (match) return `${match[1][0].toUpperCase()}${match[1].slice(1)} ${match[2]}.${match[3]}`;
+  return String(id || "unknown");
+}

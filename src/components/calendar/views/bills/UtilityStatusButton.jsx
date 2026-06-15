@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Droplet, Flame, Trash2, Wifi, Zap } from "lucide-react";
 import { formatAmount, daysUntil } from "../../../../lib/bill-utils";
 import Tooltip from "../../../shared/Tooltip";
-import { formatShortDate, relativeDateLabel, TRACKED_UTILITIES } from "./billsModel.js";
+import { relativeDateLabel } from "./billsModel.js";
+import { deriveUtilityDateText, deriveUtilityStatus } from "./utilityStatusModel.js";
 
 const ICONS = {
   sce: Zap,
@@ -13,32 +14,6 @@ const ICONS = {
   trash: Trash2,
 };
 
-function pickBestUtilityMatch(matches, today) {
-  if (!matches?.length) return null;
-  let bestUpcoming = null;
-  let bestRecentPaid = null;
-  let fallback = null;
-  for (const entry of matches) {
-    const nextDate = entry.next_date || null;
-    if (nextDate && nextDate >= today) {
-      if (!bestUpcoming || nextDate.localeCompare(bestUpcoming.next_date) < 0) {
-        bestUpcoming = entry;
-      }
-      continue;
-    }
-    if (entry.paid && nextDate) {
-      if (!bestRecentPaid || nextDate.localeCompare(bestRecentPaid.next_date) > 0) {
-        bestRecentPaid = entry;
-      }
-      continue;
-    }
-    if (!fallback || (nextDate && (!fallback.next_date || nextDate.localeCompare(fallback.next_date) > 0))) {
-      fallback = entry;
-    }
-  }
-  return bestUpcoming || bestRecentPaid || fallback || null;
-}
-
 export default function UtilityStatusButton({ data, suppressOutsideClick }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 0 });
@@ -46,39 +21,8 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
   const popoverRef = useRef(null);
 
   const utilityStatus = useMemo(() => {
-    const schedules = data?.allSchedules || data?.schedules || [];
-    const payeeMap = data?.payeeMap || {};
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-    const rows = TRACKED_UTILITIES.map((utility) => {
-      const matches = schedules.filter((entry) => {
-        const payeeCond = entry.conditions?.find((condition) => condition.field === "payee");
-        const payeeName = payeeCond ? payeeMap[payeeCond.value] : null;
-        const haystack = `${payeeName || ""} ${entry.payee || ""} ${entry.name || ""}`.toLowerCase();
-        return haystack.includes(utility.match);
-      });
-      const schedule = pickBestUtilityMatch(matches, today);
-      const nextDate = schedule?.next_date || null;
-      const amtCond = schedule?.conditions?.find((condition) => condition.field === "amount");
-      const amount = amtCond?.value ? Math.abs(amtCond.value) / 100 : schedule?.amount ?? null;
-      const paid = !!schedule?.paid;
-      const isPast = !!nextDate && nextDate < today;
-      return {
-        ...utility,
-        found: !!schedule,
-        next_date: nextDate,
-        amount,
-        paid,
-        isStale: !!schedule && isPast && !paid,
-        isHonored: !!schedule && paid,
-      };
-    });
-
-    return rows.sort((a, b) => {
-      if (!a.next_date && !b.next_date) return 0;
-      if (!a.next_date) return 1;
-      if (!b.next_date) return -1;
-      return a.next_date.localeCompare(b.next_date);
-    });
+    return deriveUtilityStatus(data, today);
   }, [data]);
 
   const anyStale = utilityStatus.some((utility) => utility.isStale && utility.found);
@@ -230,13 +174,7 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
               const days = utility.next_date ? daysUntil(utility.next_date) : null;
               const relative = relativeDateLabel(days);
               const isPastDate = !!utility.next_date && days != null && days < 0;
-              const dateText = !utility.found
-                ? "not found"
-                : utility.isHonored && isPastDate
-                  ? `paid ${formatShortDate(utility.next_date)}`
-                  : utility.isStale
-                    ? `last ${formatShortDate(utility.next_date)}`
-                    : `next ${formatShortDate(utility.next_date)}`;
+              const dateText = deriveUtilityDateText(utility);
               const dateColor = !utility.found
                 ? "rgba(255,255,255,0.4)"
                 : utility.isStale

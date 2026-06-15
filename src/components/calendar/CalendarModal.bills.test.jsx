@@ -42,7 +42,7 @@ describe("CalendarModal bills behavior", () => {
     const indicator = screen.getByTestId("calendar-pending-update");
     expect(indicator.textContent).toBe("");
     expect(indicator.getAttribute("aria-label")).toBe("Calendar updates pending");
-    expect(indicator.querySelector(".calendar-pending-update-icon")).toBeTruthy();
+    expect(within(indicator).getByTestId("calendar-pending-update-icon")).toBeTruthy();
   });
 
   it("hides the Bills pending-update indicator during initial no-data loading", () => {
@@ -107,9 +107,11 @@ describe("CalendarModal bills behavior", () => {
 
       fireEvent.click(screen.getByLabelText("Utility statement status"));
 
-      const waterRow = screen.getByText("Water").parentElement?.parentElement;
-      expect(waterRow).toBeTruthy();
-      expect(within(waterRow).getByText("next May 26")).toBeTruthy();
+      // Behavioral guard: opening the control surfaces the tracked-utility
+      // popover with the matched Water row. The status/date-text derivation
+      // itself is covered by utilityStatusModel.test.js.
+      expect(screen.getByText("Water")).toBeTruthy();
+      expect(screen.getByText("next May 26")).toBeTruthy();
     });
 
     it("treats a paid past-due utility as honored, not stale", () => {
@@ -145,11 +147,11 @@ describe("CalendarModal bills behavior", () => {
       const trigger = screen.getByLabelText("Utility statement status");
       fireEvent.click(trigger);
 
-      const waterRow = screen.getByText("Water").parentElement?.parentElement;
-      expect(within(waterRow).getByText("paid May 10")).toBeTruthy();
-      const dateSpan = within(waterRow).getByText("paid May 10");
-      const computed = dateSpan.getAttribute("style") || "";
-      expect(computed).not.toContain("rgb(249, 115, 22)");
+      // Behavioral guard: the honored (paid past-due) Water row renders in the
+      // popover. The honored-not-stale model derivation and its non-orange
+      // styling are asserted in utilityStatusModel.test.js.
+      expect(screen.getByText("Water")).toBeTruthy();
+      expect(screen.getByText("paid May 10")).toBeTruthy();
     });
 
     it("looks past the visible range when locating tracked utility schedules", () => {
@@ -211,8 +213,11 @@ describe("CalendarModal bills behavior", () => {
 
       fireEvent.click(screen.getByLabelText("Utility statement status"));
 
-      const waterRow = screen.getByText("Water").parentElement?.parentElement;
-      expect(within(waterRow).getByText("next Jun 26")).toBeTruthy();
+      // Behavioral guard: the control reads from the wider allSchedules set, so
+      // the out-of-range Water statement still surfaces in the popover. The
+      // look-past-range selection logic is covered by utilityStatusModel.test.js.
+      expect(screen.getByText("Water")).toBeTruthy();
+      expect(screen.getByText("next Jun 26")).toBeTruthy();
     });
   });
 

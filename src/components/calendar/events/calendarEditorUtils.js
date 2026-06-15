@@ -123,6 +123,28 @@ export function formatRecurrenceSummary(recurrenceDraft, startDate) {
   return "";
 }
 
+export function formatScheduleSummary(draft, fallback) {
+  if (!draft?.startDate) return fallback;
+  const dateLabel = draft.endDate && draft.endDate !== draft.startDate
+    ? `${formatDateLabel(draft.startDate)} to ${formatDateLabel(draft.endDate)}`
+    : formatDateLabel(draft.startDate);
+  if (draft.allDay) return `${dateLabel} · All day`;
+  if (draft.startTime && draft.endTime) {
+    return `${dateLabel} · ${formatTimeLabel(draft.startTime)} to ${formatTimeLabel(draft.endTime)}`;
+  }
+  return `${dateLabel} · ${formatTimeLabel(draft.startTime)}`;
+}
+
+export function previewSegmentStyle(kind) {
+  return {
+    overflow: kind === "schedule" ? "visible" : "hidden",
+    textOverflow: kind === "schedule" ? "clip" : "ellipsis",
+    whiteSpace: kind === "schedule" ? "normal" : "nowrap",
+    maxWidth: kind === "schedule" ? "100%" : "min(190px, 100%)",
+    fontWeight: kind === "schedule" || kind === "conflict" ? 600 : 500,
+  };
+}
+
 export function textFieldStyle({ invalid = false } = {}) {
   return {
     width: "100%",
