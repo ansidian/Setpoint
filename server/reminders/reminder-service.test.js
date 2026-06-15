@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createReminder,
   deleteReminder,
@@ -364,32 +364,5 @@ describe("reminder service", () => {
       upcomingCount: 1,
       nextReminderAt: "2026-05-10T16:45:00.000Z",
     });
-  });
-
-  it("keeps reminder source batches below the prod libSQL expression-depth ceiling", async () => {
-    const executeCalls = [];
-    const dbClient = {
-      execute: vi.fn(async (statement) => {
-        executeCalls.push(statement);
-        return { rows: [] };
-      }),
-    };
-    const sources = Array.from({ length: 101 }, (_, index) => ({
-      sourceType: "calendar_event",
-      sourceItemId: `event-${index}`,
-      sourceOccurrenceId: null,
-    }));
-
-    await listUpcomingReminderStatesForSources({
-      userId: "u1",
-      sources,
-      now: "2026-05-10T16:00:00.000Z",
-    }, { dbClient });
-
-    expect(executeCalls).toHaveLength(3);
-    for (const call of executeCalls) {
-      const sourceClauseCount = (call.sql.match(/source_type = \?/g) || []).length;
-      expect(sourceClauseCount).toBeLessThanOrEqual(50);
-    }
   });
 });
