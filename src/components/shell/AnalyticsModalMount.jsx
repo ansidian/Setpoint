@@ -1,14 +1,14 @@
 import { lazy, Suspense } from "react";
-import { loadTriageAnalyticsModal } from "./triageAnalyticsModalLoader.js";
+import { loadAiAnalyticsModal } from "./aiAnalyticsModalLoader.js";
 
-const TriageAnalyticsModal = lazy(loadTriageAnalyticsModal);
+const AiAnalyticsModal = lazy(loadAiAnalyticsModal);
 
 export function AnalyticsModalMount({ open, onClose, backdropSnapshot }) {
   if (!open) return null;
 
   return (
     <Suspense fallback={null}>
-      <TriageAnalyticsModal
+      <AiAnalyticsModal
         open={open}
         onClose={onClose}
         backdropSnapshot={backdropSnapshot}
