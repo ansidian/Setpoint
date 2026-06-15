@@ -22,11 +22,12 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
             type="button"
             onClick={() => onTab(tabKey)}
             style={{
-              padding: isMobile ? "7px 10px" : "5px 12px",
+              padding: isMobile ? "9px 12px" : "5px 12px",
+              minHeight: isMobile ? 40 : undefined,
               borderRadius: 7,
               border: "none",
               cursor: "pointer",
-              fontSize: isMobile ? 10.5 : 11.5,
+              fontSize: isMobile ? 11 : 11.5,
               fontWeight: 600,
               letterSpacing: 0.3,
               fontFamily: "inherit",
@@ -34,9 +35,11 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
               color: tab === tabKey ? "#cdd6f4" : "rgba(205,214,244,0.45)",
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: 6,
               transition: "background 150ms, color 150ms",
               minWidth: 0,
+              touchAction: "manipulation",
             }}
           >
             {tabKey === "dashboard"

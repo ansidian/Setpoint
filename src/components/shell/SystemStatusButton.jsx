@@ -338,9 +338,10 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={{
-          minWidth: isMobile ? 30 : 34,
-          height: isMobile ? 30 : 28,
-          padding: isMobile ? 6 : "5px 8px",
+          minWidth: isMobile ? 40 : 34,
+          height: isMobile ? 40 : 28,
+          padding: isMobile ? 8 : "5px 8px",
+          touchAction: "manipulation",
           borderRadius: 8,
           border: "none",
           background: attention

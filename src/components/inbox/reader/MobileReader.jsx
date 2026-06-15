@@ -107,20 +107,22 @@ export default function MobileReader({
           aria-label="Back to inbox"
           onClick={onClose}
           style={{
-            width: 34,
-            height: 34,
+            width: 44,
+            height: 44,
+            flexShrink: 0,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 10,
+            borderRadius: 12,
             border: "1px solid rgba(255,255,255,0.08)",
             background: "rgba(255,255,255,0.03)",
             color: "rgba(205,214,244,0.8)",
             cursor: "pointer",
             fontFamily: "inherit",
+            touchAction: "manipulation",
           }}
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={18} />
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div
