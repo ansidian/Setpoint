@@ -9,6 +9,8 @@ import { getEmailSearchEmbeddingCoverageRatio } from "./email-search-embedding-w
 import { filterEmailSearchCandidatesForEvidence } from "./email-search-evidence.js";
 import { parseEmailSearchQuery, sanitizeFtsQuery } from "./email-search-query.js";
 import { rankEmailSearchRows } from "./email-search-ranking.js";
+import { recordEmailSearchAiUsage, estimateTokensFromText } from "./email-search-cost-stats.js";
+import { EMAIL_SEARCH_EMBEDDING_MODEL } from "./email-search-embeddings.js";
 
 const DEFAULT_LIMIT = 12;
 const LEXICAL_FUSION_WEIGHT = 0.45;
@@ -301,6 +303,7 @@ export async function retrieveInboxAiSearch(userId, {
   offset = 0,
   dbClient = db,
   embeddingClient = createEmailSearchEmbeddingClient(),
+  recordUsage = recordEmailSearchAiUsage,
   capability = null,
   coverageRatio = null,
   plan = null,
@@ -341,6 +344,17 @@ export async function retrieveInboxAiSearch(userId, {
     if (!vectorQuery.trim()) return { status: "skipped", matches: [] };
     try {
       const [queryEmbedding] = await embeddingClient.embed([vectorQuery]);
+      // Cost visibility (email/search area rule): every embedding API call reports
+      // through email-search-cost-stats. Fire-and-forget — a recording failure must
+      // never break search. Alfred is the planner now, so this is the only live
+      // per-query model cost in the search path.
+      recordUsage(userId, {
+        dbClient,
+        eventType: "query_embedding",
+        model: EMAIL_SEARCH_EMBEDDING_MODEL,
+        usage: { input_tokens: estimateTokensFromText(vectorQuery) },
+        estimated: true,
+      }).catch(() => {});
       const store = createEmailSearchEmbeddingStore(dbClient, resolvedCapability);
       const matches = await store.querySimilarEmbeddings(userId, queryEmbedding, {
         limit: vectorLimit,

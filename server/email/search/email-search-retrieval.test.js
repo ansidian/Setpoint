@@ -112,6 +112,33 @@ describe("retrieveInboxAiSearch", () => {
     });
   });
 
+  it("records a query_embedding usage event on vector search", async () => {
+    db = await createRetrievalTestDb();
+    const row = await seedIndexedEmail(db, {
+      uid: "dentist-1",
+      subject: "Dentist appointment reminder",
+      body_text: "Your dentist appointment is on Friday",
+      email_date: "2026-06-01T12:00:00Z",
+    });
+    await upsertEmbedding(db, row, [1, 0, 0]);
+    const recordUsage = vi.fn(async () => {});
+
+    await retrieveInboxAiSearch("user-1", {
+      q: "dentist appointment",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      recordUsage,
+    });
+
+    const call = recordUsage.mock.calls
+      .map((c) => c[1])
+      .find((a) => a.eventType === "query_embedding");
+    expect(call).toBeTruthy();
+    expect(call.model).toBe("text-embedding-3-small");
+    expect(call.estimated).toBe(true);
+  });
+
   it("degrades to lexical-only retrieval when vector embedding fails", async () => {
     db = await createRetrievalTestDb();
     await seedIndexedEmail(db, {
