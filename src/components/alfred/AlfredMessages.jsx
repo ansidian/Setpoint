@@ -107,51 +107,45 @@ export const SayBlock = memo(function SayBlock({ text: body, done }) {
   );
 });
 
-// One run's tool calls, rendered two ways from the same `tools` array:
-//  • live (done=false): a single status line showing the latest step's activity,
-//    so the thread reads as "Searching mail… / Reading message…" not a wall.
-//  • settled (done=true): a collapsed "N steps" disclosure that expands to the
-//    full chip trail on demand — the provenance ADR 0006 leans on stays one
-//    click away instead of dominating the answer.
+// One run's tool calls, rendered from the same `tools` array as a single
+// disclosure with two live phases:
+//  • running (done=false): the trail is held open so each step accumulates with
+//    its real summary as it finishes (the in-flight one spins), under a live
+//    "N steps" count — you watch it build instead of one line flashing past.
+//  • settled (done=true): it collapses back to the "N steps" disclosure (unless
+//    the owner reopened it), so the provenance ADR 0006 leans on stays one click
+//    away instead of dominating the answer.
+// `expanded` unifies the two: forced open while running, owner-controlled (and
+// collapsed by default) once done.
 export const ToolSteps = memo(function ToolSteps({ tools, done, accent }) {
   const [open, setOpen] = useState(false);
-  if (!done) {
-    const latest = tools[tools.length - 1];
-    return (
-      <div style={{
-        display: "flex", alignItems: "center", gap: 7, minHeight: 20,
-        fontFamily: mono, fontSize: 10, color: dim,
-      }}>
-        <span style={{ display: "inline-flex", width: 12, justifyContent: "center" }}>
-          <RefreshCw size={10} color={accent} style={{ animation: "alfred-spin 1s linear infinite" }} />
-        </span>
-        <span style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {alfredToolRunningLabel(latest?.name)}
-        </span>
-      </div>
-    );
-  }
+  const expanded = done ? open : true;
   const n = tools.length;
-  const Chevron = open ? ChevronDown : ChevronRight;
+  const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
+        onClick={done ? () => setOpen((v) => !v) : undefined}
+        aria-expanded={expanded}
+        aria-disabled={!done}
         style={{
           display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start",
-          padding: "2px 4px", background: "transparent", border: "none", cursor: "pointer",
+          padding: "2px 4px", background: "transparent", border: "none",
+          cursor: done ? "pointer" : "default",
           fontFamily: mono, fontSize: 10, color: dimmer, borderRadius: 5,
           transition: "color 150ms ease-out",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = dim; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = dimmer; }}
+        onMouseEnter={done ? (e) => { e.currentTarget.style.color = dim; } : undefined}
+        onMouseLeave={done ? (e) => { e.currentTarget.style.color = dimmer; } : undefined}
       >
         <Chevron size={11} />
+        {done ? null : (
+          <RefreshCw size={10} color={accent} style={{ animation: "alfred-spin 1s linear infinite" }} />
+        )}
         <span>{n} step{n === 1 ? "" : "s"}</span>
       </button>
-      {open ? <ToolRows tools={tools} accent={accent} /> : null}
+      {expanded ? <ToolRows tools={tools} accent={accent} /> : null}
     </div>
   );
 });
