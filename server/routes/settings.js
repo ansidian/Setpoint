@@ -29,6 +29,7 @@ import {
   validateBillPayMappings,
 } from "../bills/bill-pay-mappings.js";
 import { getTriageCacheStats } from "../triage/triage-cache-stats.js";
+import { getEmailSearchCostStats } from "../email/search/email-search-cost-stats.js";
 import { storeTodoistOAuthTokenResponse } from "../tasks/todoist-token.js";
 import {
   validateEmailInterests,
@@ -119,12 +120,20 @@ router.get("/settings", async (req, res) => {
 router.get("/triage/cache-stats", async (req, res) => {
   const userId = process.env.EA_USER_ID;
   try {
-    res.json(await getTriageCacheStats(userId, {
-      includeSemanticSearch: req.query.semantic === "1",
-    }));
+    res.json(await getTriageCacheStats(userId));
   } catch (err) {
     console.error("Error fetching triage cache stats:", err.message);
     res.status(500).json({ message: "Failed to fetch triage cache stats" });
+  }
+});
+
+router.get("/email-search/usage", async (req, res) => {
+  const userId = process.env.EA_USER_ID;
+  try {
+    res.json(await getEmailSearchCostStats(userId));
+  } catch (err) {
+    console.error("Error fetching email search usage:", err.message);
+    res.status(500).json({ message: "Failed to fetch email search usage" });
   }
 });
 

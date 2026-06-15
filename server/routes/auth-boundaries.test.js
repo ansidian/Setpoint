@@ -470,18 +470,25 @@ describe("auth boundaries", () => {
       },
     });
     expect(res.body.estimatedSavingsUsd).toBeCloseTo(0.002358, 6);
+    // Triage cache stats no longer carry a semantic-search bolt-on; email-search
+    // usage is served by its own endpoint now.
     expect(res.body.semanticSearch).toBeUndefined();
+  });
 
-    const semanticRes = await request(makeApp())
-      .get("/api/ea/triage/cache-stats?semantic=1")
+  it("requires a session for GET /api/ea/email-search/usage", async () => {
+    const res = await request(makeApp()).get("/api/ea/email-search/usage");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns email-search usage for an authed session", async () => {
+    await seedSession();
+    const res = await request(makeApp())
+      .get("/api/ea/email-search/usage")
       .set("Cookie", ["ea_session=cookie-session"]);
-
-    expect(semanticRes.status).toBe(200);
-    expect(semanticRes.body.semanticSearch).toMatchObject({
-      coverage: {
-        semantic_status: "unavailable",
-      },
-    });
+    expect(res.status).toBe(200);
+    // Honest shape: querySearch present, no askAi/planner bolt-on.
+    expect(res.body.querySearch).toBeTruthy();
+    expect(res.body.askAi).toBeUndefined();
   });
 
   it("rejects invalid email triage mode writes", async () => {
