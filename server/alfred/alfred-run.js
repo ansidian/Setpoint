@@ -114,6 +114,7 @@ async function runAlfredInner({
     const toolResults = [];
     for (const toolUse of toolUses) {
       emit({ type: "tool_start", tool_id: toolUse.id, name: toolUse.name });
+      const toolStartedAt = now().getTime();
       let result;
       try {
         result = await executeAlfredTool(toolUse.name, toolUse.input, {
@@ -125,6 +126,19 @@ async function runAlfredInner({
       } catch (err) {
         result = { error: err?.message || "tool failed" };
       }
+      recordUsage(userId, {
+        eventType: "alfred_tool_call",
+        model: turn.model || model,
+        usage: {},
+        metadata: {
+          tool: toolUse.name,
+          ok: !result?.error,
+          duration_ms: Math.max(0, now().getTime() - toolStartedAt),
+          conversation_id: conversation.id,
+        },
+      }).catch((err) => {
+        console.error("[Alfred] tool usage recording failed:", err.message);
+      });
       if (toolUse.name === "show_items" || toolUse.name === "group_items") {
         showItemsCalled = true;
       } else if (!result?.error) {

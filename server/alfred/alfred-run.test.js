@@ -143,7 +143,40 @@ describe("runAlfred", () => {
       tool_use_id: "tu_1",
     }));
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(recordUsage).toHaveBeenCalledTimes(3);
+    // 3 model turns (alfred_run_turn) + 1 tool call (alfred_tool_call) = 4 records.
+    expect(recordUsage).toHaveBeenCalledTimes(4);
+  });
+
+  it("records an alfred_tool_call usage row per tool call (T1)", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
+      textTurn("One bill is due."),
+    ]);
+    const readBillsMirrorRange = vi.fn().mockResolvedValue({
+      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
+      syncHealth: { state: "current" },
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "Any bills coming up?",
+      model: "claude-sonnet-4-6",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readBillsMirrorRange },
+      recordUsage,
+    });
+
+    const toolRow = recordUsage.mock.calls
+      .map((call) => call[1])
+      .find((arg) => arg.eventType === "alfred_tool_call");
+    expect(toolRow).toBeTruthy();
+    expect(toolRow.metadata.tool).toBe("get_upcoming_bills");
+    expect(toolRow.metadata.ok).toBe(true);
+    expect(typeof toolRow.metadata.duration_ms).toBe("number");
+    expect(toolRow.metadata.conversation_id).toBe(conversation.id);
   });
 
   it("marks the last block of the last outgoing message as a cache breakpoint", async () => {
