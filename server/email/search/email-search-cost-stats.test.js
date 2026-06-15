@@ -18,7 +18,7 @@ describe("email search cost stats", () => {
     db = null;
   });
 
-  it("reports semantic search coverage, corpus embedding cost, and Ask AI usage without storing content", async () => {
+  it("reports querySearch usage and a per-query estimate, with no planner, without storing content", async () => {
     db = await createEmailIndexTestDb();
     const row = await seedIndexedEmail(db, {
       uid: "embedded-1",
@@ -42,6 +42,7 @@ describe("email search cost stats", () => {
       source_hash: computeEmailSearchEmbeddingSourceHash(document),
       embedding: [1, 0, 0],
     });
+    // A retired planner row may still exist in historical data; it must be ignored.
     await recordEmailSearchAiUsage("user-1", {
       dbClient: db,
       eventType: "planner",
@@ -85,29 +86,54 @@ describe("email search cost stats", () => {
         corpus_embedding: expect.objectContaining({ calls: 1 }),
       },
     });
-    expect(stats.askAi.actualUsage).toMatchObject({
-      calls: 2,
-      inputTokens: 120,
-      cachedInputTokens: 0,
-      outputTokens: 40,
+
+    // Honest shape: Alfred is the planner now, so there is no askAi block and the
+    // live per-query model cost is the query embedding only.
+    expect(stats.askAi).toBeUndefined();
+    expect(stats.querySearch.actualUsage).toMatchObject({
+      calls: 1,
+      inputTokens: 20,
       estimatedCalls: 1,
       byEvent: {
-        planner: expect.objectContaining({ calls: 1 }),
         query_embedding: expect.objectContaining({ calls: 1, estimatedCalls: 1 }),
       },
     });
-    expect(stats.askAi.actualUsage.byEvent.answer).toBeUndefined();
-    expect(stats.askAi.actualUsage.byEvent.corpus_embedding).toBeUndefined();
-    expect(stats.askAi.perSuccessfulAskEstimate.estimatedCostUsd).toBeGreaterThan(0);
-    expect(stats.askAi.perSuccessfulAskEstimate).not.toHaveProperty("answer");
+    expect(stats.querySearch.actualUsage.byEvent.planner).toBeUndefined();
+    expect(stats.querySearch.perQueryEstimate.model).toBe("text-embedding-3-small");
+    expect(stats.querySearch.perQueryEstimate).not.toHaveProperty("planner");
+    expect(stats.querySearch.perQueryEstimate.estimatedCostUsd).toBeGreaterThan(0);
+    expect(stats.pricing.models).not.toHaveProperty("gpt-5.4-mini");
+    expect(stats.pricing.models).toHaveProperty("text-embedding-3-small");
+    expect(stats.corpusEmbeddings).toBeTruthy();
 
     const columns = await db.execute("PRAGMA table_info('ea_email_search_ai_usage')");
     expect(columns.rows.map((column) => column.name)).not.toContain("query_text");
   });
 
-  it("prices dated OpenAI model ids and repairs zero-cost historical rollups", async () => {
+  it("reprices zero-cost query_embedding rollups and ignores retired planner rows", async () => {
     db = await createEmailIndexTestDb();
 
+    // A historical query_embedding row stored with zero cost must be repriced via
+    // the embedding price (the only live priced model now).
+    await db.execute({
+      sql: `INSERT INTO ea_email_search_ai_usage
+              (user_id, event_type, model, input_tokens, cached_input_tokens,
+               output_tokens, estimated, estimated_cost_usd, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        "user-1",
+        "query_embedding",
+        "text-embedding-3-small",
+        100000,
+        0,
+        0,
+        1,
+        0,
+        "{}",
+        "2026-05-08T11:00:00.000Z",
+      ],
+    });
+    // A retired planner row in the same window must not surface under querySearch.
     await db.execute({
       sql: `INSERT INTO ea_email_search_ai_usage
               (user_id, event_type, model, input_tokens, cached_input_tokens,
@@ -126,14 +152,15 @@ describe("email search cost stats", () => {
         "2026-05-08T11:00:00.000Z",
       ],
     });
+
     const stats = await getEmailSearchCostStats("user-1", {
       dbClient: db,
       now: new Date("2026-05-08T12:00:00.000Z"),
     });
 
-    expect(stats.askAi.actualUsage.calls).toBe(1);
-    expect(stats.askAi.actualUsage.estimatedCostUsd).toBeGreaterThan(0);
-    expect(stats.askAi.actualUsage.byEvent.planner.estimatedCostUsd).toBe(0.001065);
-    expect(stats.askAi.actualUsage.models).toEqual(["gpt-5.4-mini-2026-03-17"]);
+    expect(stats.querySearch.actualUsage.calls).toBe(1);
+    expect(stats.querySearch.actualUsage.byEvent.planner).toBeUndefined();
+    expect(stats.querySearch.actualUsage.estimatedCostUsd).toBeGreaterThan(0);
+    expect(stats.querySearch.actualUsage.models).toEqual(["text-embedding-3-small"]);
   });
 });
