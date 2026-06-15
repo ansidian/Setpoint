@@ -645,6 +645,8 @@ export async function handleDemoApiRequest(path, options = {}) {
   }
   if (pathname === "/api/ea/important-senders") return clone(seed.importantSenders);
   if (pathname === "/api/ea/triage/cache-stats") return { enabled: false, demo: true };
+  if (pathname === "/api/alfred/usage") return { enabled: false, demo: true };
+  if (pathname === "/api/ea/email-search/usage") return { enabled: false, demo: true };
   // GET reminders: the editor reads `result.reminders || []`. No demo reminders
   // exist, so return an empty list rather than DEMO_API_UNHANDLED. See P3-16.
   if (pathname === "/api/ea/reminders") return { reminders: [] };
