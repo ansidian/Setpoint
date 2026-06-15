@@ -92,7 +92,7 @@ export default function useInboxController({
     finalizeUndoSlot();
   }, [commitPendingUndoSignal, finalizeUndoSlot]);
 
-  const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId });
+  const closeSelectedEmail = useInboxSelectionHistory({ selectedId, setSelectedId, enabled: !isMobile });
 
   // nowTick scheduling lives below, after `flatEmails`, so it can also fire at
   // pending-security-grace label transitions (the grace rows live in flatEmails).

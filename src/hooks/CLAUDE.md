@@ -20,6 +20,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useIsMobile.js` — mobile viewport detection
 - `useMediaQuery.js` — reactive media query matching
 - `useKeyHold.js` — key hold duration/progress with completion callback
+- `useWarmImport.js` — warms a lazy dynamic import on idle after first paint
 
 ### Preferences + notifications
 - `useCustomize.js` — persists layout/accent/density to localStorage, injects CSS vars

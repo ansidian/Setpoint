@@ -13,6 +13,8 @@ import {
 } from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays.jsx";
+import InboxMountFallback from "./InboxMountFallback.jsx";
+import useWarmImport from "../../hooks/useWarmImport";
 import {
   buildDashboardEventsData,
   dashboardBillCalendarRequest,
@@ -21,9 +23,12 @@ import {
 } from "./dashboardShellModel.js";
 import useDashboardShellHotkeys from "./useDashboardShellHotkeys.js";
 import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
-import { resetInboxSession, setInboxSession } from "../inbox/useInboxSessionState";
+import { getInboxSession, resetInboxSession, setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
 export { DashboardBody };
-const InboxView = lazy(() => import("../inbox/InboxView"));
+// Single import factory so the inbox chunk can be both lazy-mounted and warmed
+// in the background after the dashboard paints; the bundler dedupes to one fetch.
+const importInboxView = () => import("../inbox/InboxView");
+const InboxView = lazy(importInboxView);
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
 export function DashboardShell({
@@ -50,10 +55,23 @@ export function DashboardShell({
   useEffect(() => {
     try { localStorage.setItem("ea:tab", tab); } catch { /* ignore */ }
   }, [tab]);
-  const dismissMobileInboxTab = useBrowserBackDismiss({
+  // Warm the lazy inbox chunk after first paint so the first dashboard->inbox
+  // switch is instant instead of staring at a blank fetch.
+  useWarmImport(importInboxView);
+  // Mobile shell history is owned here (the parent) so the tab entry and the
+  // reader entry are pushed in a deterministic order (tab, then reader) for both
+  // entry points: tapping a list row and opening an email from a dashboard rail.
+  // On mobile, useInboxSelectionHistory is disabled so this is the single owner.
+  const mobileSelectedId = useInboxSelectedId();
+  useBrowserBackDismiss({
     enabled: isMobile && tab === "inbox",
     historyKey: "eaDashboardMobileTab",
     onDismiss: () => setTab("dashboard"),
+  });
+  useBrowserBackDismiss({
+    enabled: isMobile && tab === "inbox" && !!mobileSelectedId,
+    historyKey: "eaMobileReader",
+    onDismiss: () => setInboxSession((prev) => (prev.selectedId ? { ...prev, selectedId: null } : prev)),
   });
   const setShellTab = useCallback((nextTab) => {
     if (nextTab !== "dashboard" && nextTab !== "inbox") return;
@@ -62,11 +80,15 @@ export function DashboardShell({
       return;
     }
     if (tab === "inbox" && nextTab === "dashboard") {
-      dismissMobileInboxTab();
+      // Explicit jump to dashboard: unwind the synthetic mobile entries (tab,
+      // plus reader if open) in one history traversal. The back-dismiss popstate
+      // handlers clear the selection and switch the tab; no extra taps.
+      const depth = 1 + (getInboxSession().selectedId ? 1 : 0);
+      window.history.go(-depth);
       return;
     }
     setTab(nextTab);
-  }, [dismissMobileInboxTab, isMobile, tab]);
+  }, [isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -432,6 +454,7 @@ export function DashboardShell({
         style={{
           flex: 1,
           overflow: tab === "dashboard" && !isMobile ? "hidden" : "auto",
+          overscrollBehavior: "contain",
           minHeight: 0,
           background:
             "linear-gradient(180deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0) 12%)",
@@ -479,7 +502,7 @@ export function DashboardShell({
             setAddTaskOpen={setAddTaskOpen}
           />
         ) : (
-          <Suspense fallback={null}>
+          <Suspense fallback={<InboxMountFallback />}>
             <InboxView
               accent={accent}
               customize={customize}
