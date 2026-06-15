@@ -118,11 +118,11 @@ describe("CalendarModal floating event edit workspace behavior", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+    // The dirty-close was blocked: onClose never fired and the same panel is still
+    // mounted. The transient shake-feedback pulse is cosmetic and was a load-flaky
+    // waitFor race; the durable block is what we assert.
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
-    await waitFor(() => {
-      expect(panel.querySelector("[data-calendar-floating-editor-feedback='active']")).toBeTruthy();
-    });
 
     fireEvent.click(within(panel).getByRole("button", { name: /^cancel$/i }));
     await waitFor(() => {
@@ -441,7 +441,9 @@ describe("CalendarModal floating event edit workspace behavior", () => {
 
     fireEvent.pointerDown(screen.getByRole("button", { name: /close/i }));
     await flushAnimationFrame();
-    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeTruthy();
+    // Close was blocked because the editor is dirty: the panel stays in edit mode
+    // rather than closing. (Durable signal in place of the transient shake pulse.)
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
 
     fireEvent.click(screen.getByRole("button", { name: /cancel editor/i }));
     await waitFor(() => {

@@ -1578,6 +1578,7 @@ describe("InboxView session state", () => {
   });
 
 	  it("suppresses read-only frozen snapshot mutations", async () => {
+    vi.useFakeTimers();
     const refreshSnapshot = vi.fn().mockResolvedValue({});
     const activeSnapshot = {
       snapshot: {
@@ -1657,14 +1658,21 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    await waitFor(() => {
-      expect(screen.getAllByText("Review the lease").length).toBeGreaterThan(0);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
     });
+    expect(screen.getAllByText("Review the lease").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
 
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    // Advance fake time across the read-only suppression window instead of a real
+    // 650ms wall-clock sleep, so this stays deterministic under full-suite fork load.
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+    });
 
     expect(markSnapshotItemHandled).not.toHaveBeenCalled();
     expect(trashEmail).not.toHaveBeenCalled();
