@@ -256,6 +256,17 @@ describe("countBreakdownRows", () => {
     const rows = countBreakdownRows([{ label: "B", count: 1 }, { label: "A", count: 9 }]);
     expect(rows.map((r) => r.label)).toEqual(["B", "A"]);
   });
+
+  it("rounds pct to one decimal and stays 0..100", () => {
+    const rows = countBreakdownRows([{ label: "Max", count: 3 }, { label: "Third", count: 1 }]);
+    expect(rows[0].pct).toBe(100);
+    expect(rows[1].pct).toBe(33.3); // 1/3 → 33.333 → rounded to 0.1
+  });
+
+  it("is zero-safe when every count is zero", () => {
+    const rows = countBreakdownRows([{ label: "A", count: 0 }, { label: "B", count: 0 }]);
+    expect(rows.map((r) => r.pct)).toEqual([0, 0]);
+  });
 });
 
 describe("applyAlfredEvent breakdown", () => {

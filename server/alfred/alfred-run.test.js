@@ -290,6 +290,7 @@ describe("runAlfred", () => {
     // group_items satisfies cite-by-reference → no nudge → 3 model calls, not 4.
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(events.some((e) => e.type === "breakdown")).toBe(true);
+    expect(events.at(-1).type).toBe("run_end");
     const nudge = conversation.messages.find(
       (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("<system-reminder>"),
     );
