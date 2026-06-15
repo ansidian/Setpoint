@@ -85,8 +85,10 @@ export function DashboardSectionBand({ children, isMobile = false, first = false
         borderTop: first ? "1px solid rgba(255,255,255,0.05)" : dashboardSurfaceBorder,
         background: "transparent",
         minWidth: 0,
-        contentVisibility: "auto",
-        containIntrinsicSize: "160px",
+        // content-visibility's fixed size estimate makes the single mobile scroll
+        // range collapse as bands resolve to real height (scroll feels "stuck").
+        // Only apply it on desktop, where the timeline owns a separate scroller.
+        ...(isMobile ? {} : { contentVisibility: "auto", containIntrinsicSize: "160px" }),
         ...style,
       }}
     >
