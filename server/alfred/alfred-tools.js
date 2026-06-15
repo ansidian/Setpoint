@@ -5,7 +5,13 @@ const MAX_RANGE_DAYS = 92;
 const MAX_QUERY_RANGE_DAYS = 366;
 const MAX_SEARCH_LIMIT = 20;
 const DEFAULT_SEARCH_LIMIT = 12;
-const BODY_CHAR_LIMIT = 6000;
+// Every full body the model reads is written into context once (cache write,
+// 1.25x) and re-read on each later turn (0.1x) — the one-time write dominates,
+// so shrinking what enters context is the biggest cost lever. The decision/answer
+// signal lives in the email lede; the tail is overwhelmingly boilerplate
+// (signatures, quoted threads, unsubscribe/legal footers). stripQuotedReply
+// removes quoted chains; this cap backstops the rest. Lowered from 6000.
+const BODY_CHAR_LIMIT = 3000;
 const MAX_TXN_LIMIT = 50;
 const DEFAULT_TXN_LIMIT = 25;
 const SHOW_KINDS = new Set(["email", "event", "deadline", "bill", "transaction"]);
@@ -173,6 +179,36 @@ function wrapEmailContent(uid, text) {
   return `<email_content uid="${uid}">${safe}</email_content>`;
 }
 
+// htmlToPlainText collapses newlines, so the body arrives as one line — quoted
+// reply chains can't be detected by a leading ">" or a "-- " signature line.
+// Match the chain header inline instead, and cut everything from the EARLIEST
+// high-confidence marker onward. Conservative by design: the "On … wrote:"
+// attribution requires an email address in the window (a bare "he wrote:" in
+// prose is not a quote boundary), so legitimate content is never dropped — at
+// worst a chain isn't stripped and the char cap still bounds it.
+const QUOTE_MARKERS = [
+  /-{2,}\s*Original Message\s*-{2,}/i, // Outlook reply divider
+  /-{2,}\s*Forwarded message\s*-{2,}/i, // Gmail/Outlook forward divider
+  /\bBegin forwarded message:/i, // Apple Mail forward
+  /\bFrom:\s.{1,120}?\bSent:\s.{1,120}?\bTo:\s/i, // Outlook header block
+];
+
+export function stripQuotedReply(text) {
+  const s = String(text || "");
+  let cut = -1;
+  for (const re of QUOTE_MARKERS) {
+    const m = s.match(re);
+    if (m && (cut === -1 || m.index < cut)) cut = m.index;
+  }
+  // Gmail/Apple "On <date>, <name> <addr> wrote:" — only treat it as a boundary
+  // when an email address sits inside the matched header.
+  const onWrote = s.match(/\bOn\b[\s\S]{5,240}?\bwrote:/i);
+  if (onWrote && /@/.test(onWrote[0]) && (cut === -1 || onWrote.index < cut)) {
+    cut = onWrote.index;
+  }
+  return (cut === -1 ? s : s.slice(0, cut)).trim();
+}
+
 function parseDateRange(input = {}) {
   const startIso = String(input.start || "");
   const endIso = String(input.end || "");
@@ -283,7 +319,9 @@ async function runGetEmailBody(input, { userId, deps }) {
   if (!uid) return { error: "uid is required" };
   const body = await deps.getEmailBody(userId, uid);
   if (!body) return { error: `No email found for uid ${uid}` };
-  const text = deps.htmlToPlainText(body.html_body || "").slice(0, BODY_CHAR_LIMIT);
+  // Strip quoted reply/forward chains before the cap so the cap bounds the
+  // owner's actual message, not thread history the model doesn't need re-fed.
+  const text = stripQuotedReply(deps.htmlToPlainText(body.html_body || "")).slice(0, BODY_CHAR_LIMIT);
   return {
     uid,
     subject: wrapEmailContent(uid, body.subject || ""),

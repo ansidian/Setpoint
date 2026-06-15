@@ -3,6 +3,7 @@ import {
   ALFRED_TOOL_DEFINITIONS,
   alfredToolSummary,
   executeAlfredTool,
+  stripQuotedReply,
 } from "./alfred-tools.js";
 import {
   _clearAlfredConversationsForTest,
@@ -213,6 +214,38 @@ describe("search_email", () => {
   });
 });
 
+describe("stripQuotedReply", () => {
+  it("cuts a Gmail-style quoted chain at the attribution line", () => {
+    const text = "Thanks, that works. Best, Jane On Mon, Jun 1, 2026 at 3:04 PM John Smith <john@acme.com> wrote: Hi Jane, are you free Tuesday?";
+    expect(stripQuotedReply(text)).toBe("Thanks, that works. Best, Jane");
+  });
+
+  it("cuts at an Outlook 'Original Message' divider", () => {
+    const text = "Approved, go ahead. -----Original Message----- From: bob@x.com Sent: yesterday To: me";
+    expect(stripQuotedReply(text)).toBe("Approved, go ahead.");
+  });
+
+  it("cuts an Outlook From/Sent/To header block", () => {
+    const text = "See below. From: Bob <bob@x.com> Sent: Monday To: Jane Subject: Re: Plan blah blah";
+    expect(stripQuotedReply(text)).toBe("See below.");
+  });
+
+  it("cuts at a forwarded-message marker", () => {
+    expect(stripQuotedReply("FYI ---------- Forwarded message --------- old stuff")).toBe("FYI");
+    expect(stripQuotedReply("FYI Begin forwarded message: old stuff")).toBe("FYI");
+  });
+
+  it("does not cut prose that merely contains 'wrote' without a quote attribution", () => {
+    const text = "On Tuesday I can meet. Here is what he wrote: the plan looks solid to me.";
+    expect(stripQuotedReply(text)).toBe(text);
+  });
+
+  it("leaves a body with no quote markers untouched", () => {
+    const text = "We regret to inform you that we will not be moving forward with your application.";
+    expect(stripQuotedReply(text)).toBe(text);
+  });
+});
+
 describe("get_email_body", () => {
   it("returns the body as wrapped plain text", async () => {
     const getEmailBody = vi.fn().mockResolvedValue({
@@ -226,6 +259,35 @@ describe("get_email_body", () => {
     expect(result.body).toContain("<email_content uid=\"em-1\">");
     expect(result.body).toContain("Hello");
     expect(result.body).not.toContain("<p>");
+  });
+
+  it("strips the quoted reply chain before returning the body", async () => {
+    const getEmailBody = vi.fn().mockResolvedValue({
+      // Real clients render the quoted address as visible text (mailto link or
+      // bare), not raw <angle> brackets — those get stripped as tags by htmlToPlainText.
+      html_body: "<p>Yes, Tuesday works.</p><blockquote>On Mon, Jun 1, 2026 john@acme.com wrote: are you free?</blockquote>",
+      subject: "Re: Meeting",
+      from: "Jane <jane@x.com>",
+      date: "2026-06-10T12:00:00.000Z",
+    });
+    const result = await executeAlfredTool("get_email_body", { uid: "em-2" }, ctxWith({ getEmailBody, htmlToPlainText }));
+    expect(result.body).toContain("Yes, Tuesday works.");
+    expect(result.body).not.toContain("are you free?");
+    expect(result.body).not.toContain("wrote:");
+  });
+
+  it("truncates an over-long body to the (lowered) char cap", async () => {
+    const head = "H".repeat(3500);
+    const getEmailBody = vi.fn().mockResolvedValue({
+      html_body: `${head} TAILMARKER`,
+      subject: "Long",
+      from: "A <a@b.com>",
+      date: "2026-06-10T12:00:00.000Z",
+    });
+    const result = await executeAlfredTool("get_email_body", { uid: "em-3" }, ctxWith({ getEmailBody, htmlToPlainText }));
+    // The 6000-char cap would have kept TAILMARKER; the lowered cap drops it.
+    expect(result.body).not.toContain("TAILMARKER");
+    expect(result.body).toContain("HHHH");
   });
 });
 
