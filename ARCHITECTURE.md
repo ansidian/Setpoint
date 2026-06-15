@@ -100,6 +100,7 @@ src/
 │   ├── shared/
 │   │   └── pickers/
 │   ├── shell/
+│   │   └── analytics/
 │   ├── todoist/
 │   │   └── add-task-panel/
 │   └── ui/
