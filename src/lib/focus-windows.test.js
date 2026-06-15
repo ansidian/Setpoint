@@ -106,6 +106,80 @@ describe("deriveFocusWindows", () => {
     expect(result.openWindowStatus?.kind).toBe("none");
   });
 
+  it("labels a long low-pressure open stretch as the most protected block", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    // One short morning event, then the rest of the day stays open: a >=90min,
+    // low-pressure stretch that reaches end of day. There is still a future
+    // event, so this is the "Most protected" label (not "Rest of day open").
+    const result = deriveFocusWindows({
+      now,
+      events: [
+        eventAt(now, 30, 60, "Standup"),
+      ],
+      deadlines: [],
+    });
+
+    expect(result.pressure.level).toBe("low");
+    expect(result.primaryWindow).toBeTruthy();
+    expect(result.primaryWindow.durationMin).toBeGreaterThanOrEqual(90);
+    expect(result.primaryWindow.quality).toBe("Most protected");
+    expect(result.primaryWindow.explanation).toBe(
+      "Long enough for deep work while the calendar stays open.",
+    );
+  });
+
+  it("labels a 45-59min gap before the next event as usable", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    // A single all-day-sized blocker starting 55min out leaves exactly one
+    // candidate gap: now -> (start - 5min buffer) = 50min. That lands in the
+    // 45-59min "Usable" band (>=45 but below the 60min "Cleanest" threshold).
+    const result = deriveFocusWindows({
+      now,
+      events: [
+        eventAt(now, 55, 900, "Workshop"),
+      ],
+      deadlines: [],
+    });
+
+    expect(result.primaryWindow).toBeTruthy();
+    expect(result.primaryWindow.durationMin).toBe(50);
+    expect(result.primaryWindow.quality).toBe("Usable");
+    expect(result.primaryWindow.explanation).toBe(
+      "Long enough for deep work before your next event.",
+    );
+  });
+
+  it("surfaces a 10-24min only gap as a short window with no protected block", () => {
+    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    // A blocker starting 20min out leaves only a now -> (20-5)=15min gap. That
+    // is below the 25min protected minimum but at/above the 10min short floor,
+    // so no primary/backup block exists, just a short-window status.
+    const result = deriveFocusWindows({
+      now,
+      events: [
+        eventAt(now, 20, 900, "Wall"),
+      ],
+      deadlines: [],
+    });
+
+    expect(result.primaryWindow).toBeNull();
+    expect(result.backupWindow).toBeNull();
+    expect(result.openWindowStatus).toMatchObject({
+      kind: "short-window",
+      durationLabel: "15 min",
+    });
+    expect(result.openWindowStatus.timeRangeLabel).toBeTruthy();
+  });
+
   it("uses deadline pressure in the explanation context", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();

@@ -65,3 +65,65 @@ it("returns an empty summary when the table is missing", async () => {
   expect(stats.queries).toBe(0);
   expect(stats.tools.totalCalls).toBe(0);
 });
+
+it("scopes a same-month row older than the rolling window to month-to-date only", async () => {
+  // NOW is 2026-06-14: rolling cutoff = 2026-06-07, month cutoff = 2026-06-01.
+  // A turn dated 2026-06-03 is inside the month but older than the 7-day window.
+  const inWindow = "2026-06-13T12:00:00Z"; // both windows
+  const earlyThisMonth = "2026-06-03T12:00:00Z"; // month-to-date only
+  const db = fakeDb([
+    turn({ conv: "recent", input: 1000, cached: 0, output: 10, at: inWindow }),
+    turn({ conv: "early", input: 4000, cached: 0, output: 90, at: earlyThisMonth }),
+  ]);
+
+  const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
+
+  // Rolling window excludes the early-month row.
+  expect(stats.windowLabel).toBe("rolling");
+  expect(stats.queries).toBe(1);
+  expect(stats.turns).toBe(1);
+  expect(stats.inputTokens).toBe(1000);
+
+  // Month-to-date includes both rows.
+  const mtd = stats.comparisonWindows.monthToDate;
+  expect(mtd.windowLabel).toBe("month_to_date");
+  expect(mtd.queries).toBe(2);
+  expect(mtd.turns).toBe(2);
+  expect(mtd.inputTokens).toBe(5000);
+});
+
+it("prices a dated Haiku model id via the prefix fallback", async () => {
+  const at = "2026-06-13T12:00:00Z";
+  // Real Haiku id carries a date suffix and is not an exact key in the price table;
+  // pricing must fall back on the "claude-haiku-4-5" prefix.
+  const db = fakeDb([
+    turn({ conv: "h", model: "claude-haiku-4-5-20251001", input: 1000, cached: 600, output: 100, at }),
+  ]);
+
+  const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
+
+  expect(stats.turns).toBe(1);
+  expect(stats.cacheHitRate).toBe(0.6);
+  // cached 600 tok * (input 1.00 - cachedInput 0.10) / 1e6 = 0.00054 -> non-zero proves the fallback hit.
+  expect(stats.estimatedSavingsUsd).toBe(0.00054);
+  expect(stats.byModel["claude-haiku-4-5-20251001"].calls).toBe(1);
+});
+
+it("populates the month-to-date comparison window", async () => {
+  const at = "2026-06-10T12:00:00Z";
+  const db = fakeDb([
+    turn({ conv: "a", input: 2000, cached: 1500, output: 60, at }),
+  ]);
+
+  const stats = await getAlfredUsageStats("u1", { dbClient: db, now: NOW });
+
+  expect(stats.comparisonWindows).toBeDefined();
+  const mtd = stats.comparisonWindows.monthToDate;
+  expect(mtd.windowLabel).toBe("month_to_date");
+  expect(mtd.windowDays).toBeNull();
+  expect(mtd.queries).toBe(1);
+  expect(mtd.turns).toBe(1);
+  expect(mtd.inputTokens).toBe(2000);
+  expect(mtd.cachedInputTokens).toBe(1500);
+  expect(mtd.cacheHitRate).toBeCloseTo(1500 / 2000, 4);
+});
