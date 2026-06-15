@@ -44,14 +44,30 @@ describe("alfred message primitives", () => {
     expect(screen.queryByText("The rest can wait.")).toBeNull(); // not split out yet
   });
 
-  it("ToolSteps shows a single live status line while the run is in flight", () => {
+  it("ToolSteps shows the full step trail and live count while the run is in flight", () => {
     render(<ToolSteps accent="#cba6da" done={false} tools={[
       { toolId: "t1", name: "search_email", state: "done", summary: "Mail · 4 matches" },
       { toolId: "t2", name: "get_email_body", state: "running", summary: null },
     ]} />);
-    // Status = the latest step's activity; earlier chips stay hidden.
+    // The trail accumulates live: completed steps keep their summaries and the
+    // in-flight step shows its activity — not just the latest line.
+    expect(screen.getByText("Mail · 4 matches")).toBeTruthy();
     expect(screen.getByText("Reading message…")).toBeTruthy();
+    // …under a live "N steps" count, the same disclosure idiom as the settled state.
+    expect(screen.getByText(/2 steps/)).toBeTruthy();
+  });
+
+  it("ToolSteps keeps the trail open while running, then collapses it on done", () => {
+    const tools = [
+      { toolId: "t1", name: "search_email", state: "done", summary: "Mail · 4 matches" },
+      { toolId: "t2", name: "get_email_body", state: "done", summary: "Mail · opened message" },
+    ];
+    const { rerender } = render(<ToolSteps accent="#cba6da" done={false} tools={tools} />);
+    expect(screen.getByText("Mail · 4 matches")).toBeTruthy(); // open while running
+    rerender(<ToolSteps accent="#cba6da" done tools={tools} />);
+    // Settling collapses the trail back to the disclosure (owner can reopen it).
     expect(screen.queryByText("Mail · 4 matches")).toBeNull();
+    expect(screen.getByRole("button", { name: /2 steps/ })).toBeTruthy();
   });
 
   it("ToolSteps collapses to a steps disclosure once done, expanding to the chips on click", () => {
