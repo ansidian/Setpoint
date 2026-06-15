@@ -15,6 +15,7 @@ describe("recordAlfredUsage", () => {
         model TEXT NOT NULL,
         input_tokens INTEGER NOT NULL DEFAULT 0,
         cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_creation_input_tokens INTEGER NOT NULL DEFAULT 0,
         output_tokens INTEGER NOT NULL DEFAULT 0,
         metadata_json TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -31,7 +32,12 @@ describe("recordAlfredUsage", () => {
       dbClient: db,
       eventType: "alfred_run_turn",
       model: "claude-sonnet-4-6",
-      usage: { input_tokens: 1200, output_tokens: 340, cache_read_input_tokens: 800 },
+      usage: {
+        input_tokens: 1200,
+        output_tokens: 340,
+        cache_read_input_tokens: 800,
+        cache_creation_input_tokens: 2048,
+      },
       metadata: { iteration: 0 },
       createdAt: new Date("2026-06-12T18:00:00.000Z"),
     });
@@ -43,6 +49,7 @@ describe("recordAlfredUsage", () => {
     expect(row.event_type).toBe("alfred_run_turn");
     expect(Number(row.input_tokens)).toBe(1200);
     expect(Number(row.cached_input_tokens)).toBe(800);
+    expect(Number(row.cache_creation_input_tokens)).toBe(2048);
     expect(Number(row.output_tokens)).toBe(340);
     expect(JSON.parse(row.metadata_json)).toEqual({ iteration: 0 });
   });
