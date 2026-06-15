@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { runAlfred } from "./alfred-run.js";
+import { looksLikeGroupingQuestion, runAlfred } from "./alfred-run.js";
 import {
   _clearAlfredConversationsForTest,
   createAlfredConversation,
@@ -43,6 +43,24 @@ function fetchScript(turns) {
   }));
   return fetchImpl;
 }
+
+describe("looksLikeGroupingQuestion", () => {
+  it("treats a split into 2+ categories as a grouping question", () => {
+    expect(looksLikeGroupingQuestion("how many were rejections, how many ghosts?")).toBe(true);
+    expect(looksLikeGroupingQuestion("break my spending down by category")).toBe(true);
+    expect(looksLikeGroupingQuestion("group my bills by status")).toBe(true);
+    expect(looksLikeGroupingQuestion("what's the distribution of my deadlines?")).toBe(true);
+    expect(looksLikeGroupingQuestion("rejections vs ghosts in the last 3 months")).toBe(true);
+  });
+
+  it("does not treat a single count or a magnitude as a grouping question", () => {
+    // A lone "how many" is one number, and "how much" is a sum — both read fine in
+    // one line; nudging them toward a breakdown card would force a 1-bucket card.
+    expect(looksLikeGroupingQuestion("how many deadlines do I have?")).toBe(false);
+    expect(looksLikeGroupingQuestion("how much did I spend on coffee?")).toBe(false);
+    expect(looksLikeGroupingQuestion("what's on my calendar tomorrow?")).toBe(false);
+  });
+});
 
 describe("runAlfred", () => {
   let conversation;
@@ -328,6 +346,47 @@ describe("runAlfred", () => {
       (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("<system-reminder>"),
     );
     expect(nudge).toBeUndefined();
+  });
+
+  it("nudges toward group_items when a split question is answered in prose without a card", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_deadlines", { start: "2026-06-01", end: "2026-09-01" }),
+      textTurn("3 are overdue and the rest are upcoming."),
+      toolUseTurn("group_items", {
+        kind: "deadline",
+        title: "By status",
+        groups: [{ label: "Overdue", ids: ["td-0"] }, { label: "Upcoming", ids: ["td-1"] }],
+      }, "tu_2"),
+      textTurn("3 overdue, 9 upcoming."),
+    ]);
+    // 12 rows > MAX_NUDGE_ITEMS, so the small-set show_items backstop can't fire —
+    // only the new split/categorize backstop can, which keeps this test unambiguous.
+    const upcoming = Array.from({ length: 12 }, (_, i) => ({
+      id: `td-${i}`, content: `Task ${i}`, due_date: "2026-07-01", status: "incomplete",
+    }));
+    const readCalendarDeadlineRange = vi.fn().mockResolvedValue({ payload: { upcoming }, errors: [] });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "how many of my deadlines are overdue, and how many are upcoming?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readCalendarDeadlineRange },
+      recordUsage,
+    });
+
+    const nudge = conversation.messages.find(
+      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("group_items"),
+    );
+    expect(nudge).toBeDefined();
+    expect(nudge.content).toContain("<system-reminder>");
+    // The nudge drove a real breakdown card, then the run ended cleanly.
+    expect(events.some((e) => e.type === "breakdown")).toBe(true);
+    expect(events.at(-1).type).toBe("run_end");
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
   it("nudge text includes 'transactions' when a small search_transactions result is returned without show_items", async () => {

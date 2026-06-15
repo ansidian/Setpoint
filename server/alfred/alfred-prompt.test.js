@@ -61,6 +61,16 @@ describe("buildAlfredSystemPrompt", () => {
     expect(lower).toMatch(/markdown header/);
   });
 
+  it("forbids permission-seeking sign-offs and hedged counts when an exact answer is obtainable", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
+    const lower = prompt.toLowerCase();
+    // No "would you like me to…" trailing offers when the question was already a direct ask.
+    expect(lower).toMatch(/do not end with|offer to do more/);
+    // Commit to an exact figure instead of "approximately"/"10+".
+    expect(lower).toMatch(/exact count|exact number/);
+    expect(lower).toContain("approximately");
+  });
+
   it("instructs the model to use group_items for grouping/distribution questions, keyed on shape not vocabulary", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     expect(prompt).toContain("group_items");
