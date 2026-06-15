@@ -183,12 +183,12 @@ describe("Gmail Pub/Sub sync ingestion", () => {
         triage_status: "pending",
         triage_source: "arrival_grace",
         job_status: "queued",
-        scheduled_for: "2026-05-03T12:03:00.000Z",
+        scheduled_for: "2026-05-03T12:00:30.000Z", // now + 30s arrival grace
         lane_at_snapshot: "queued",
         from_name_at_snapshot: "Fresh Sender",
         from_address_at_snapshot: "fresh@example.com",
         source: "arrival_grace",
-        source_at: "2026-05-03T12:03:00.000Z",
+        source_at: "2026-05-03T12:00:30.000Z",
       },
     ]);
     expect(events).toEqual([
@@ -732,14 +732,14 @@ describe("Gmail Pub/Sub sync ingestion", () => {
         subject: "One",
         arrivalGrace: true,
         queuedAt: "2026-05-03T12:15:00.000Z",
-        graceDeadline: "2026-05-03T12:18:00.000Z",
+        graceDeadline: "2026-05-03T12:15:30.000Z",
       },
       {
         uid: "gmail-gmail-work-msg-3",
         subject: "Three",
         arrivalGrace: true,
         queuedAt: "2026-05-03T12:15:00.000Z",
-        graceDeadline: "2026-05-03T12:18:00.000Z",
+        graceDeadline: "2026-05-03T12:15:30.000Z",
       },
     ]);
 
