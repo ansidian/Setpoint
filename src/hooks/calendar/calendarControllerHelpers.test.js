@@ -12,6 +12,8 @@ import {
   rangeMatches,
   resolvePendingFocusItem,
 } from "./calendarControllerHelpers.js";
+import calendarEventsView from "../../components/calendar/views/eventsView.jsx";
+import { getDeadlineOverlayComputed } from "../../components/calendar/views/events/eventsPlanningModel.js";
 
 const eventsView = {
   getItemId: (item) => item?.id,
@@ -94,6 +96,71 @@ describe("calendarControllerHelpers", () => {
     };
     expect(resolvePendingFocusItem({ activeView: eventsView, computed, dateKey: "2026-06-10", itemId: "x" }))
       .toEqual({ id: "x", status: "open" });
+  });
+
+  it("resolvePendingFocusItem prefers an open same-date match over a completed one", () => {
+    const computed = {
+      itemsByDate: {
+        "2026-06-10": [
+          { id: "x", status: "complete" },
+          { id: "x", status: "open" },
+        ],
+      },
+    };
+    expect(resolvePendingFocusItem({ activeView: eventsView, computed, dateKey: "2026-06-10", itemId: "x" }))
+      .toEqual({ id: "x", status: "open" });
+  });
+
+  it("resolvePendingFocusItem activates the live recurring occurrence when focus targets a stale completed one", () => {
+    // Mirrors the controller path: a recurring Todoist task whose dashboard
+    // focus id points at a completed occurrence (2026-04-21) while the live
+    // open occurrence sits on a later day (2026-04-23). The deadline-overlay
+    // computed is built exactly as eventsView does at runtime.
+    const computed = getDeadlineOverlayComputed({
+      deadlineData: {
+        upcoming: [
+          { id: "todo-rec", title: "Completed occurrence", due_date: "2026-04-21", status: "complete", is_recurring: true },
+          { id: "todo-rec", title: "Current occurrence", due_date: "2026-04-23", status: "open", is_recurring: true },
+        ],
+      },
+      viewYear: 2026,
+      viewMonth: 3,
+      showCompleted: true,
+    });
+
+    const resolved = resolvePendingFocusItem({
+      activeView: calendarEventsView,
+      computed,
+      dateKey: "2026-04-21",
+      itemId: "deadline:todo-rec:2026-04-21",
+    });
+
+    expect(resolved.title).toBe("Current occurrence");
+    expect(resolved.status).toBe("open");
+    expect(resolved.agendaDateKey).toBe("2026-04-23");
+  });
+
+  it("resolvePendingFocusItem keeps the completed occurrence when no live occurrence exists", () => {
+    const computed = getDeadlineOverlayComputed({
+      deadlineData: {
+        upcoming: [
+          { id: "todo-rec", title: "Completed occurrence", due_date: "2026-04-21", status: "complete", is_recurring: true },
+        ],
+      },
+      viewYear: 2026,
+      viewMonth: 3,
+      showCompleted: true,
+    });
+
+    const resolved = resolvePendingFocusItem({
+      activeView: calendarEventsView,
+      computed,
+      dateKey: "2026-04-21",
+      itemId: "deadline:todo-rec:2026-04-21",
+    });
+
+    expect(resolved.title).toBe("Completed occurrence");
+    expect(resolved.status).toBe("complete");
   });
 
   it("itemFromCalendarSearchResult maps event/deadline/bill shapes", () => {

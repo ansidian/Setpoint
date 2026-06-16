@@ -18,6 +18,7 @@ const {
   deleteCalendarEvent,
   extractStructuredRecurrence,
   fetchCalendarMirrorEvents,
+  invalidateCalendarListCache,
   listCalendarsForAccount,
   updateCalendarEvent,
 } = await import("./calendar.js");
@@ -113,6 +114,11 @@ function findFetchCall(method, eventId) {
 describe("calendar recurring mutations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The calendar-list memo is module-scoped and keyed by account.id; reset it
+    // between tests so each starts cold and re-fetches via its own fetch mock.
+    // vi.clearAllMocks() does not touch this source-module cache, so a sibling
+    // test that listed `school` as read-only would otherwise leak forward.
+    invalidateCalendarListCache();
   });
 
   it("omits CalendarList entries that are not selected in Google Calendar", async () => {

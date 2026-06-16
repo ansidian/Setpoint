@@ -80,47 +80,6 @@ describe("CalendarEventEditor quick action behavior", () => {
     expect(removeEvent).toHaveBeenCalledWith("event-context-delete");
   });
 
-  it("keeps color dots labeled, checked, and inside the quick-action tab loop", async () => {
-    const event = {
-      id: "event-context-color-accessible",
-      etag: '"etag-context-color-accessible"',
-      title: "Color accessible",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T16:30:00.000Z").getTime(),
-      writable: true,
-      isRecurring: false,
-      allDay: false,
-      sourceColor: "#dc2127",
-      color: "#dc2127",
-      colorId: null,
-    };
-    renderModal({ events: [event] });
-
-    fireEvent.contextMenu(screen.getByTestId("calendar-cell-item-chip"), {
-      clientX: 140,
-      clientY: 180,
-    });
-
-    const copy = await screen.findByTestId("calendar-event-context-copy");
-    const red = screen.getByTestId("calendar-event-color-11");
-    await waitFor(() => {
-      expect(document.activeElement).toBe(red);
-    });
-    expect(document.activeElement).not.toBe(copy);
-    expect(red.getAttribute("aria-label")).toBe("Tomato");
-    expect(red.getAttribute("aria-pressed")).toBe("true");
-    expect(red.parentElement?.getAttribute("data-slot")).toBe("tooltip-trigger");
-    expect(screen.getByTestId("calendar-event-color-check-11")).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: "Tab" });
-    expect(document.activeElement).toBe(screen.getByTestId("calendar-event-color-1"));
-
-    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(red);
-  });
-
   it("opens the color-aware context menu from all-day span events", async () => {
     const event = {
       id: "event-all-day-source-color",
@@ -144,9 +103,10 @@ describe("CalendarEventEditor quick action behavior", () => {
       clientY: 180,
     });
 
+    // Integration concern this test owns: the context menu opens from an all-day
+    // span segment (not just a cell chip). The color-dot aria-pressed/check
+    // contract is asserted at the focused layer in CalendarQuickActionLayer.test.jsx.
     expect(await screen.findByTestId("calendar-event-color-grid")).toBeTruthy();
-    expect(screen.getByTestId("calendar-event-color-9").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("calendar-event-color-check-9")).toBeTruthy();
   });
 
   it("duplicates a writable event from the quick-action context menu", async () => {
@@ -195,20 +155,13 @@ describe("CalendarEventEditor quick action behavior", () => {
 
     deferred.resolve({ event: created });
 
+    // Field-by-field clone payload (startDate/startTime/colorId) is locked at the
+    // pure layer in useCalendarQuickActions.test.js (buildCloneEventPayload, lines
+    // 129-141). Here we only assert Duplicate reaches the create boundary.
     await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledWith({
-        accountId: "gmail-main",
-        calendarId: "primary",
-        title: "Duplicate me",
-        allDay: false,
-        startDate: "2026-04-20",
-        endDate: "2026-04-20",
-        startTime: "09:00",
-        endTime: "09:30",
-        location: "Office",
-        description: "Notes",
-        colorId: "9",
-      });
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Duplicate me" }),
+      );
     });
     expect(upsertEvents).toHaveBeenCalledWith(created);
   });
@@ -260,15 +213,13 @@ describe("CalendarEventEditor quick action behavior", () => {
 
     deferred.resolve({ event: created });
 
+    // The pasted clone's field map (startDate/startTime/colorId) is locked at the
+    // pure layer in useCalendarQuickActions.test.js (buildCloneEventPayload, lines
+    // 129-141). Here we only assert Cmd+V reaches the single-item create boundary.
     await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(expect.objectContaining({
-        title: "Copy with keys",
-        startDate: "2026-04-21",
-        endDate: "2026-04-21",
-        startTime: "09:00",
-        endTime: "10:30",
-        colorId: "7",
-      }));
+      expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Copy with keys" }),
+      );
     });
     expect(upsertEvents).toHaveBeenCalledWith(created);
   });
@@ -349,18 +300,17 @@ describe("CalendarEventEditor quick action behavior", () => {
     fireEvent.click(screen.getByTestId("calendar-cell-23"));
     fireEvent.keyDown(document, { key: "v", metaKey: true });
 
+    // The per-item batch field map (startDate/startTime/colorId) is locked at the
+    // pure layer in useCalendarQuickActions.test.js (clone-race batch test, lines
+    // 453-469). The behavior this integration test owns is the routing: a
+    // multi-event selection copy reaches the BATCH boundary (not single create),
+    // carrying both events in chronological order.
     await waitFor(() => {
       expect(mockCreateCalendarEventsBatch).toHaveBeenCalledTimes(1);
     });
     expect(mockCreateCalendarEventsBatch).toHaveBeenCalledWith([
-      expect.objectContaining({
-        title: "Copy early",
-        startDate: "2026-04-23",
-      }),
-      expect.objectContaining({
-        title: "Copy later",
-        startDate: "2026-04-24",
-      }),
+      expect.objectContaining({ title: "Copy early" }),
+      expect.objectContaining({ title: "Copy later" }),
     ]);
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });

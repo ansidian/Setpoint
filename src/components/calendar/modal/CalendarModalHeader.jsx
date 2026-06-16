@@ -397,6 +397,7 @@ export default function CalendarModalHeader({
               >
                 <RefreshCw
                   className="calendar-pending-update-icon"
+                  data-testid="calendar-pending-update-icon"
                   size={13}
                   aria-hidden="true"
                   strokeWidth={1.8}

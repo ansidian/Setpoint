@@ -483,7 +483,7 @@ describe("DashboardShell mobile behavior", () => {
     renderShell();
 
     fireEvent.keyDown(window, { key: "c" });
-    expect(screen.getByTestId("calendar-modal").textContent).toBe("open");
+    expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
 
     await act(async () => {
       window.history.back();

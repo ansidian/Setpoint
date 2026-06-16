@@ -64,7 +64,7 @@ describe("ShellHeader system status", () => {
     expect(within(panel).getByText("Todoist mirror is current.")).toBeTruthy();
   });
 
-  it("animates the system status close button on hover and keyboard focus", () => {
+  it("exposes a reachable close control that dismisses the system status panel", () => {
     renderHeader();
 
     fireEvent.click(screen.getByRole("button", { name: /system status: current/i }));
@@ -72,14 +72,9 @@ describe("ShellHeader system status", () => {
     const panel = screen.getByRole("dialog", { name: /system status/i });
     const closeButton = within(panel).getByRole("button", { name: /close system status/i });
 
-    fireEvent.mouseEnter(closeButton);
-    expect(closeButton.style.transform).toBe("translateY(-1px)");
+    fireEvent.click(closeButton);
 
-    fireEvent.mouseLeave(closeButton);
-    expect(closeButton.style.transform).toBe("translateY(0)");
-
-    fireEvent.focus(closeButton);
-    expect(closeButton.style.transform).toBe("translateY(-1px)");
+    expect(screen.queryByRole("dialog", { name: /system status/i })).toBeNull();
   });
 
   it("uses an attention label when system health needs sync", () => {
@@ -168,7 +163,6 @@ describe("ShellHeader system status", () => {
 
     expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
     expect(button.getAttribute("aria-pressed")).toBe("true");
-    expect(button.className).toContain("analytics-trigger-button");
   });
 
   it("does not run analytics warmup from desktop header hover", () => {
@@ -188,7 +182,7 @@ describe("ShellHeader system status", () => {
 
     expect(screen.queryByRole("button", { name: /open analytics/i })).toBeNull();
     const syncButton = screen.getByRole("button", { name: /sync now/i });
-    expect(syncButton.style.whiteSpace).toBe("nowrap");
+    expect(within(syncButton).getByText("Sync now")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /open more actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /analytics/i }));

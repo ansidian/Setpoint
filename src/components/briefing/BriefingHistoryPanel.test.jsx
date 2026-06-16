@@ -50,6 +50,9 @@ function renderPanel(props = {}) {
 
 describe("BriefingHistoryPanel snapshots", () => {
   it("renders active and frozen snapshot history", async () => {
+    // Date bucketing, window labels, and item counts are covered in
+    // briefingHistoryModel.test.js. This guard checks the panel fetches history
+    // once and renders each row's boundary + read-only/active status.
     getSnapshotHistory.mockResolvedValue({
       snapshots: [
         {
@@ -59,7 +62,6 @@ describe("BriefingHistoryPanel snapshots", () => {
           schedule_label: "Current",
           start_at: "2026-05-05T14:00:00.000Z",
           end_at: "2026-05-06T07:00:00.000Z",
-          laneCounts: { needs_attention: 2, fyi: 1, noise: 0, carryover: 0 },
         },
         {
           id: 2,
@@ -68,7 +70,6 @@ describe("BriefingHistoryPanel snapshots", () => {
           schedule_label: "Morning",
           start_at: "2026-05-04T15:00:00.000Z",
           end_at: "2026-05-05T07:00:00.000Z",
-          laneCounts: { needs_attention: 0, fyi: 1, noise: 1, carryover: 1 },
         },
       ],
     });

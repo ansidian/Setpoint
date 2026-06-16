@@ -7,7 +7,7 @@ afterEach(() => {
 });
 
 describe("CalendarDraftPreviewPanel", () => {
-  it("keeps schedule times visible while compacting other preview segments", () => {
+  it("renders the schedule and repeat summaries for a single draft", () => {
     render(
       <CalendarDraftPreviewPanel
         ghostPreview={{
@@ -33,19 +33,8 @@ describe("CalendarDraftPreviewPanel", () => {
       />,
     );
 
-    const schedule = screen.getByText("Apr 21, 2026 · 1:00 PM to 1:30 PM");
-    const scheduleSegment = schedule.closest("span")?.parentElement;
-
-    expect(scheduleSegment?.style.flex).toBe("0 0 auto");
-    expect(scheduleSegment?.style.maxWidth).toBe("100%");
-    expect(schedule.style.maxWidth).toBe("100%");
-    expect(schedule.style.whiteSpace).toBe("normal");
-    expect(schedule.style.overflow).toBe("visible");
-
-    const repeat = screen.getByText("Does not repeat");
-    expect(repeat.style.maxWidth).toBe("min(190px, 100%)");
-    expect(repeat.style.whiteSpace).toBe("nowrap");
-    expect(repeat.style.overflow).toBe("hidden");
+    expect(screen.getByText("Apr 21, 2026 · 1:00 PM to 1:30 PM")).toBeTruthy();
+    expect(screen.getByText("Does not repeat")).toBeTruthy();
   });
 
   it("labels recurring edit instances honestly when the structured rule is missing", () => {

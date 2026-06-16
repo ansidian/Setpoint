@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { it, expect } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, it, expect } from "vitest";
 import AlfredAnalyticsSection from "./AlfredAnalyticsSection.jsx";
+
+afterEach(cleanup);
 
 it("renders Alfred hero metrics and per-tool breakdown", () => {
   render(<AlfredAnalyticsSection stats={{
@@ -13,11 +15,18 @@ it("renders Alfred hero metrics and per-tool breakdown", () => {
     ] },
     comparisonWindows: { monthToDate: {} },
   }} />);
-  expect(screen.getByText(/Queries/i)).toBeTruthy();
-  // "12" appears both as the Queries metric and as search_email's call count.
-  expect(screen.getAllByText("12").length).toBeGreaterThan(0);
-  expect(screen.getByText(/search_email/)).toBeTruthy();
-  expect(screen.getByText(/get_calendar_events/)).toBeTruthy();
+
+  // "12" is the value of two different fields (Queries metric and search_email's
+  // call count). Scope each so a field-swap that routes the call count into the
+  // Queries tile (or vice versa) is caught instead of passing on a stray match.
+  const queriesTile = screen.getByText(/Queries/i).closest("div").parentElement;
+  expect(within(queriesTile).getByText("12")).toBeTruthy();
+
+  const searchRow = screen.getByText("search_email").closest("div");
+  expect(within(searchRow).getByText("12")).toBeTruthy();
+
+  // Both tool rows render so the breakdown is present, not collapsed.
+  expect(screen.getByText("get_calendar_events")).toBeTruthy();
 });
 
 it("renders an empty state when no tool calls were made", () => {

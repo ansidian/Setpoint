@@ -1,9 +1,13 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { ensureChrono } from "./events/parseCalendarTitle.js";
 import { mockCreateCalendarEvent, mockCreateCalendarEventsBatch } from "./CalendarEventEditor.test-setup.js";
 import { renderModal, getActiveEventSaveButton, getActiveRepeatTrigger, setCompactSchedulePickerTime } from "./CalendarEventEditor.test-utils.jsx";
 
 describe("CalendarEventEditor batch and recurrence behavior", () => {
+  beforeAll(async () => {
+    await ensureChrono();
+  });
   it("uses repeat as a recurrence popover with real recurrence state", async () => {
     const { refreshRange, upsertEvents } = renderModal();
     mockCreateCalendarEvent.mockResolvedValue({

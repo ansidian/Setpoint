@@ -1,20 +1,12 @@
 import { useMemo } from "react";
 import { Bot, Gauge, Coins, BarChart3, Layers3, Wrench } from "lucide-react";
 import { Metric } from "./analyticsPrimitives.jsx";
-import { formatPercent, formatUsdEstimate, formatCompactNumber, numberValue } from "./analyticsFormat.js";
+import { formatPercent, formatUsdEstimate, formatCompactNumber, numberValue, formatModelName } from "./analyticsFormat.js";
 
 // A small, on-brand rotation (lavender accent, info blue, income cyan, success
 // green) so each model is visually distinct in the split without inventing
 // decorative colors. Order is stable per render via the row index.
 const MODEL_ACCENTS = ["#cba6da", "#89b4fa", "#89dceb", "#a6e3a1"];
-
-// "claude-haiku-4-5-20251001" → "Haiku 4.5". Keeps the exact id in a title attr
-// for precision while the row stays scannable.
-function formatModelName(id) {
-  const match = String(id || "").match(/claude-(haiku|sonnet|opus)-(\d+)-(\d+)/);
-  if (match) return `${match[1][0].toUpperCase()}${match[1].slice(1)} ${match[2]}.${match[3]}`;
-  return String(id || "unknown");
-}
 
 export default function AlfredAnalyticsSection({ stats }) {
   const metrics = useMemo(() => ([
