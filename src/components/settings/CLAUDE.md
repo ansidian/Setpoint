@@ -37,6 +37,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 
 ### Shared
 - `shared/ProviderModelSelect.jsx` — dual select for LLM provider + model
+- `shared/selectMock.test-utils.jsx` — native-`<select>` test double for the Radix Select, used in settings-card tests
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

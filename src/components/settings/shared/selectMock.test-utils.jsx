@@ -8,7 +8,7 @@
  * preserves the trigger's aria-label/className and each item's disabled flag.
  *
  * Usage inside a test file:
- *   vi.mock("@/components/ui/select", () => import("../shared/selectMock.jsx"));
+ *   vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils.jsx"));
  */
 import React from "react";
 

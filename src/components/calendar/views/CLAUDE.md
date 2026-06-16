@@ -36,6 +36,7 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `bills/UtilityStatusButton.jsx` — tracked utility status pill
 - `bills/billsAgendaModel.js` — bill → agenda conversion, due labels, urgency coloring
 - `bills/billsModel.js` — day state computation, payment tracking, urgency colors
+- `bills/utilityStatusModel.js` — tracked-utility status: best-match selection, paid/stale/honored flags, date labels
 
 ### deadlines
 - `deadlines/DeadlinesAgendaRail.jsx` — task timeline grouped by due date with status
