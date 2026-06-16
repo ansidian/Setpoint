@@ -313,8 +313,12 @@ export default function MobileInboxView({
               zIndex: 4,
               padding: "12px 16px 10px",
               marginTop: 14,
-              background: "linear-gradient(180deg, rgba(11,11,19,0.98), rgba(11,11,19,0.94))",
-              backdropFilter: "blur(14px)",
+              // Opaque sticky header (mirrors the desktop StickyHeader pattern). A
+              // backdrop-filter blur here forced a full-viewport GPU re-rasterization
+              // on every scroll frame — one of the most expensive mobile scroll costs.
+              // The background was already ~98% opaque, so dropping the blur is visually
+              // near-identical while removing the per-frame compositor work.
+              background: "linear-gradient(180deg, rgba(11,11,19,0.99), rgba(11,11,19,0.97))",
               borderTop: "1px solid rgba(255,255,255,0.04)",
               borderBottom: "1px solid rgba(255,255,255,0.04)",
             }}
