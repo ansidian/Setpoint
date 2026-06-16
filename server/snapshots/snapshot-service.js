@@ -381,15 +381,22 @@ async function loadActiveSnapshotItemsForEmail(dbClient, userId, accountId, emai
 }
 
 async function loadProcessingState(dbClient, userId) {
-  const result = await dbClient.execute({
-    sql: `SELECT job_type, status, COUNT(*) AS count
-          FROM ea_triage_jobs
-          WHERE user_id = ?
-            AND job_type IN ('email_triage', 'gmail_history_sync')
-            AND status IN ('queued', 'running')
-          GROUP BY job_type, status`,
-    args: [userId],
-  });
+  // The job-count GROUP BY (ea_triage_jobs) and the triage-mode read (ea_settings)
+  // hit disjoint tables with no ordering dependency, so resolve them concurrently
+  // instead of as two serial Turso round-trips on the every-/current snapshot-view
+  // critical path (P1-7 pattern).
+  const [result, mode] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT job_type, status, COUNT(*) AS count
+            FROM ea_triage_jobs
+            WHERE user_id = ?
+              AND job_type IN ('email_triage', 'gmail_history_sync')
+              AND status IN ('queued', 'running')
+            GROUP BY job_type, status`,
+      args: [userId],
+    }),
+    getEmailTriageModeForUser(userId, { dbClient }),
+  ]);
   const countsByType = {
     email_triage: { pending: 0, queued: 0, running: 0, total: 0, active: false },
     gmail_history_sync: { pending: 0, queued: 0, running: 0, total: 0, active: false },
@@ -407,7 +414,6 @@ async function loadProcessingState(dbClient, userId) {
     type.total = type.pending + type.running;
     type.active = type.total > 0;
   }
-  const mode = await getEmailTriageModeForUser(userId, { dbClient });
   const emailTriage = countsByType.email_triage;
   return {
     queued: emailTriage.queued,
