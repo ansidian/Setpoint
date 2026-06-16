@@ -366,6 +366,9 @@ describe("email triage worker grace flows", () => {
       body_text: "We noticed a sign-in from Chrome on macOS. If this was you, no action is needed.",
     });
     const modelClient = { classify: vi.fn() };
+    __resetCurrentDashboardEventsForTests();
+    const events = [];
+    const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => events.push(event));
 
     await processNextEmailTriageJob({
       dbClient,
@@ -378,6 +381,8 @@ describe("email triage worker grace flows", () => {
             WHERE email_id = ?`,
       args: ["msg-1"],
     });
+    // The first run delayed the grace (a legitimate publish); the skip below must add none.
+    const eventCountBeforeSkip = events.length;
 
     const result = await processNextEmailTriageJob({
       dbClient,
@@ -428,6 +433,10 @@ describe("email triage worker grace flows", () => {
         source_at: "2026-05-03T12:10:00.000Z",
       },
     ]);
+    // The weak-security skip leaves the snapshot lane unchanged, so it must not
+    // publish a dashboard-current event (would force a redundant /current re-render).
+    expect(events.length).toBe(eventCountBeforeSkip);
+    unsubscribe();
     await dbClient.close();
     });
 
