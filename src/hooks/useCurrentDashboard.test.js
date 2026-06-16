@@ -169,20 +169,35 @@ describe("useCurrentDashboard", () => {
     unmount();
   });
 
-  it("dedups a refetch that returns the same fetchedAt, keeping current + liveData references stable", async () => {
+  it("dedups a refetch that returns the same contentKey even when fetchedAt advances, keeping current + liveData references stable", async () => {
+    // Initial load carries a content fingerprint (the server attaches one per response).
+    getCurrentDashboard
+      .mockResolvedValueOnce({ ...currentPayload, contentKey: "ck-1" })
+      // A poll/refetch returns a brand-new object with identical contents and the
+      // same content key — but a FRESH wall-clock fetchedAt (the server restamps one
+      // per response). Dedup must key on contentKey, not fetchedAt, and keep the
+      // prior `current` reference so the dashboard tree does not re-render.
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        calendar: [{ id: "event-1", title: "Focus" }],
+        contentKey: "ck-1",
+        fetchedAt: "2026-05-04T12:00:30.000Z",
+      })
+      // A refetch with a different contentKey must adopt the fresh payload.
+      .mockResolvedValueOnce({
+        ...currentPayload,
+        weather: { temp: 99, icon: "Sun" },
+        contentKey: "ck-2",
+        fetchedAt: "2026-05-04T12:10:00.000Z",
+      });
+
     const { result, unmount } = renderHook(() => useCurrentDashboard());
     await act(async () => {});
 
     const firstCurrent = result.current.current;
     const firstCalendar = result.current.liveData.liveCalendar;
-    expect(firstCurrent.fetchedAt).toBe("2026-05-04T12:00:00.000Z");
+    expect(firstCurrent.contentKey).toBe("ck-1");
 
-    // A poll/refetch returns a brand-new object with identical contents and the
-    // same server freshness key — dedup must keep the prior `current` reference.
-    getCurrentDashboard.mockResolvedValueOnce({
-      ...currentPayload,
-      calendar: [{ id: "event-1", title: "Focus" }],
-    });
     await act(async () => {
       await result.current.refresh();
     });
@@ -190,12 +205,6 @@ describe("useCurrentDashboard", () => {
     expect(result.current.current).toBe(firstCurrent);
     expect(result.current.liveData.liveCalendar).toBe(firstCalendar);
 
-    // A refetch with a newer fetchedAt must adopt the fresh payload.
-    getCurrentDashboard.mockResolvedValueOnce({
-      ...currentPayload,
-      weather: { temp: 99, icon: "Sun" },
-      fetchedAt: "2026-05-04T12:10:00.000Z",
-    });
     await act(async () => {
       await result.current.refresh();
     });

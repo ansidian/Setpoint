@@ -2,12 +2,66 @@ import { describe, expect, it } from "vitest";
 
 import {
   CURRENT_CACHE_KEYS,
+  currentResponseContentKey,
   fallbackPayloadForKey,
   hasUsablePayload,
   parsePayload,
   shouldPublishBillsCurrentChange,
   summarizeCurrentDataHealth,
 } from "./current-sources.js";
+
+function baseResponse() {
+  return {
+    weather: { temp: 72 },
+    calendar: [{ id: "event-1", title: "Focus" }],
+    deadlines: { upcoming: [{ id: "deadline-1" }], stats: { total: 1 } },
+    bills: [{ id: "bill-1" }],
+    providerHealth: {
+      currentData: { state: "current" },
+      todoist: { state: "current", lastSuccessAt: "2026-05-07T11:55:00.000Z", ageMs: 300_000 },
+      bills: { state: "current" },
+    },
+    systemStatus: { state: "current", generatedAt: "2026-05-07T12:00:00.000Z" },
+    refresh: { mode: "passive", scheduled: [], skipped: [] },
+    fetchedAt: "2026-05-07T12:00:00.000Z",
+  };
+}
+
+describe("currentResponseContentKey", () => {
+  it("is stable when only the per-call wall-clock fields differ (fetchedAt, systemStatus.generatedAt, todoist.ageMs)", () => {
+    const earlier = baseResponse();
+    const later = {
+      ...baseResponse(),
+      fetchedAt: "2026-05-07T12:00:05.000Z",
+      systemStatus: { state: "current", generatedAt: "2026-05-07T12:00:05.000Z" },
+      providerHealth: {
+        ...baseResponse().providerHealth,
+        todoist: { state: "current", lastSuccessAt: "2026-05-07T11:55:00.000Z", ageMs: 305_000 },
+      },
+    };
+
+    expect(currentResponseContentKey(earlier)).toBeTruthy();
+    expect(currentResponseContentKey(later)).toBe(currentResponseContentKey(earlier));
+  });
+
+  it("changes when rendered data changes", () => {
+    const before = baseResponse();
+    const after = { ...baseResponse(), weather: { temp: 99 } };
+    expect(currentResponseContentKey(after)).not.toBe(currentResponseContentKey(before));
+  });
+
+  it("changes when a provider health state changes (only ageMs is neutralized, not the whole todoist health)", () => {
+    const before = baseResponse();
+    const after = {
+      ...baseResponse(),
+      providerHealth: {
+        ...baseResponse().providerHealth,
+        todoist: { state: "unavailable", lastSuccessAt: null, ageMs: null },
+      },
+    };
+    expect(currentResponseContentKey(after)).not.toBe(currentResponseContentKey(before));
+  });
+});
 
 describe("current dashboard source definitions", () => {
   it("exposes the current dashboard cache source order", () => {

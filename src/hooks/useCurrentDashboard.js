@@ -46,13 +46,19 @@ export default function useCurrentDashboard({ disabled = false, onDashboardEvent
     // Ignore a response whose request has been superseded by a newer one, so a
     // slow older fetch can't clobber fresher data (last-issued request wins).
     if (seq != null && seq !== requestSeqRef.current) return data;
-    // Dedup identical poll payloads on the server freshness key so a poll that
+    // Dedup identical poll payloads on the server content key so a poll that
     // returns the same snapshot doesn't re-derive liveData / re-render the tree.
-    // Same end state, fewer redundant dispatches (P3-27). Only dedup when both
-    // sides carry a truthy fetchedAt and they match — never skip a real change.
-    setCurrent((prev) => (
-      prev && prev.fetchedAt && data?.fetchedAt && prev.fetchedAt === data.fetchedAt ? prev : data
-    ));
+    // Same end state, fewer redundant dispatches (P3-27). contentKey is a content
+    // fingerprint that excludes the per-response wall clock, so it stays stable
+    // across a poll/SSE burst over unchanged data — unlike fetchedAt, which the
+    // server restamps every response (so keying on fetchedAt never deduped).
+    // Fall back to fetchedAt when contentKey is absent (e.g. demo mode), and only
+    // dedup when both sides carry a truthy key that matches — never skip a real change.
+    setCurrent((prev) => {
+      const prevKey = prev?.contentKey ?? prev?.fetchedAt;
+      const nextKey = data?.contentKey ?? data?.fetchedAt;
+      return prev && prevKey && nextKey && prevKey === nextKey ? prev : data;
+    });
     setSelectedBriefing((prev) => (prev === null ? prev : null));
     setError((prev) => (prev === null ? prev : null));
     setLoaded((prev) => (prev === true ? prev : true));

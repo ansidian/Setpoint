@@ -1,6 +1,7 @@
 // Row-level helpers for ea_current_data_cache, derived from the provider
 // registry in current-providers/. Payload shapes, TTLs, and fallbacks live on
 // the providers; this module owns the generic row/health semantics.
+import { createHash } from "crypto";
 import { CURRENT_DATA_PROVIDERS, providerFor } from "./current-providers/index.js";
 
 export { EMPTY_DEADLINES } from "./current-providers/deadlines-provider.js";
@@ -106,6 +107,34 @@ export function summarizeCurrentDataHealth(rows, now) {
     lastSuccessAt: maxIso(sourceRows.map((row) => row.fetched_at)),
     sources,
   };
+}
+
+// Content fingerprint of a /current response, used by the client to skip a
+// re-render when a poll/SSE refetch returns the same rendered data. The response
+// carries three fields that change on EVERY call regardless of whether anything
+// the user sees changed, so they are neutralized before hashing:
+//   - fetchedAt: wall-clock stamp set per response (current-service composes it)
+//   - systemStatus.generatedAt: set from fetchedAt
+//   - providerHealth.todoist.ageMs: now - lastSuccessAt (todoist-mirror health)
+// Everything else participates, so any real data/health-state change still
+// produces a new key (bias toward over-rendering, never suppress a real change).
+// If a future field leaks wall-clock noise into the response, the
+// "stable when only the per-call wall-clock fields differ" test will fail —
+// neutralize it here too.
+export function currentResponseContentKey(response) {
+  if (!response || typeof response !== "object") return null;
+  const canonical = { ...response, fetchedAt: null };
+  delete canonical.contentKey;
+  if (canonical.systemStatus) {
+    canonical.systemStatus = { ...canonical.systemStatus, generatedAt: null };
+  }
+  if (canonical.providerHealth?.todoist) {
+    canonical.providerHealth = {
+      ...canonical.providerHealth,
+      todoist: { ...canonical.providerHealth.todoist, ageMs: null },
+    };
+  }
+  return createHash("sha1").update(JSON.stringify(canonical)).digest("hex");
 }
 
 export function shouldPublishBillsCurrentChange(previousRow, nextPayload) {
