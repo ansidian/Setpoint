@@ -1,8 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedDb, queueEmail } from "./triage-worker.test-utils.js";
 import { processNextEmailTriageJob } from "./triage-worker.js";
+import { publishCurrentDashboardEvent } from "../dashboard/current-events.js";
+
+vi.mock("../dashboard/current-events.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, publishCurrentDashboardEvent: vi.fn() };
+});
 
 describe("email triage worker pending skips", () => {
+  beforeEach(() => {
+    publishCurrentDashboardEvent.mockClear();
+  });
+
   it("skips provider-unavailable pending rows without calling the model", async () => {
     const dbClient = await createMigratedDb();
     await queueEmail(dbClient, {
@@ -70,6 +80,9 @@ describe("email triage worker pending skips", () => {
       args: ["msg-1"],
     });
     expect(snapshots.rows).toHaveLength(0);
+    // This branch does not change the rendered snapshot, so it must not force a
+    // dashboard refetch/re-render (gate the triage SSE storm).
+    expect(publishCurrentDashboardEvent).not.toHaveBeenCalled();
     });
 
   it("skips user-dismissed pending rows without calling the model", async () => {
@@ -129,6 +142,9 @@ describe("email triage worker pending skips", () => {
       args: ["msg-1"],
     });
     expect(snapshots.rows).toHaveLength(0);
+    // This branch does not change the rendered snapshot, so it must not force a
+    // dashboard refetch/re-render (gate the triage SSE storm).
+    expect(publishCurrentDashboardEvent).not.toHaveBeenCalled();
     });
 
   it("defers snoozed pending rows without calling the model", async () => {
@@ -188,5 +204,8 @@ describe("email triage worker pending skips", () => {
       args: ["msg-1"],
     });
     expect(snapshots.rows).toHaveLength(0);
+    // This branch does not change the rendered snapshot, so it must not force a
+    // dashboard refetch/re-render (gate the triage SSE storm).
+    expect(publishCurrentDashboardEvent).not.toHaveBeenCalled();
     });
 });

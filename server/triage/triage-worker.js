@@ -733,12 +733,11 @@ export async function processNextEmailTriageJob({
   try {
     if (email.triage_source !== "weak_security_grace" && email.provider_state !== "available") {
       await completeJob(job, dbClient, now, `Skipped pending triage; provider state ${email.provider_state}`);
-      publishCurrentDashboardEvent(email.user_id, {
-        source: "email_triage",
-        reason: "provider_unavailable_skipped",
-        state: "current",
-        occurredAt: nowIso(now),
-      });
+      // No dashboard publish: this skip attaches nothing to the snapshot and leaves
+      // the email in its existing lane, so the rendered view is unchanged. Publishing
+      // would force a /current refetch + full re-render for no visible change; a
+      // backlog of these would storm the dashboard. The next real triage finalize or
+      // the periodic poll reconciles the processing count.
       return {
         processed: true,
         job_id: Number(job.id),
@@ -765,12 +764,9 @@ export async function processNextEmailTriageJob({
 
     if (email.dismissed_at) {
       await completeJob(job, dbClient, now, "Skipped pending triage; user dismissed row");
-      publishCurrentDashboardEvent(email.user_id, {
-        source: "email_triage",
-        reason: "user_dismissed_pending_skipped",
-        state: "current",
-        occurredAt: nowIso(now),
-      });
+      // No dashboard publish: the user already dismissed this row (the UI reflected it
+      // optimistically), and the skip attaches nothing to the snapshot — the rendered
+      // view is unchanged, so a forced re-render here is redundant cost.
       return {
         processed: true,
         job_id: Number(job.id),
@@ -785,12 +781,9 @@ export async function processNextEmailTriageJob({
     if (Number.isFinite(snoozedUntilTs) && snoozedUntilTs > now.getTime()) {
       const scheduledFor = new Date(snoozedUntilTs).toISOString();
       await deferJob(job, dbClient, scheduledFor, "Deferred pending triage while snoozed");
-      publishCurrentDashboardEvent(email.user_id, {
-        source: "email_triage",
-        reason: "snoozed_pending_deferred",
-        state: "current",
-        occurredAt: nowIso(now),
-      });
+      // No dashboard publish: the user already snoozed this row (the UI reflected it
+      // optimistically), and deferring its job attaches nothing to the snapshot — the
+      // rendered view is unchanged.
       return {
         processed: true,
         job_id: Number(job.id),
@@ -804,12 +797,9 @@ export async function processNextEmailTriageJob({
 
     if (email.triage_source === "weak_security_grace" && email.provider_state !== "available") {
       await completeJob(job, dbClient, now, `Skipped weak-security grace; provider state ${email.provider_state}`);
-      publishCurrentDashboardEvent(email.user_id, {
-        source: "email_triage",
-        reason: "weak_security_grace_skipped",
-        state: "current",
-        occurredAt: nowIso(now),
-      });
+      // No dashboard publish: provider unavailable during the weak-security grace,
+      // so nothing is attached to the snapshot and the email stays in its lane — the
+      // rendered view is unchanged.
       return {
         processed: true,
         job_id: Number(job.id),
