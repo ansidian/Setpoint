@@ -149,14 +149,11 @@ export function DashboardShell({
   } = usePreparedBackdropSnapshot({
     sourceRef: analyticsBackdropSourceRef,
     loadSurface: loadAiAnalyticsModal,
-    refreshing: bd.refreshing,
-    // refreshKey is intentionally left coarse (tab-only). Keying it on
-    // liveData.lastFetched — which the server restamps on every /current — made the
-    // SSE refetch and 5-min auto-refresh paths schedule a full-dashboard
-    // html-to-image rasterization on every data tick (the `refreshing` gate in the
-    // hook does not cover the SSE path). The backdrop re-prepares on
-    // refreshing-settle + tab change, and openAnalytics/openPalette capture on
-    // demand, so freshness is covered without per-tick rasterization.
+    // Keyed coarsely on `tab` only. The backdrop is captured on demand when
+    // Analytics/the palette opens (openAnalytics/openPalette pass captureIfMissing)
+    // and pre-warmed on hover/focus intent — never eagerly on tab change or data
+    // tick, which previously rasterized the full dashboard to an ~11MB image on
+    // every switch and froze the view. On-demand capture always sees fresh data.
     tab,
   });
   const closeAnalytics = useCallback(() => {
@@ -164,7 +161,9 @@ export function DashboardShell({
     deactivateBackdropSnapshot({ delay: 500 });
   }, [deactivateBackdropSnapshot]);
   const openAnalytics = useCallback(() => {
-    activateBackdropSnapshot({ captureIfStale: true });
+    // captureIfMissing: the backdrop is no longer pre-baked on tab change, so
+    // capture on open when nothing was pre-warmed (e.g. mobile tap, no hover).
+    activateBackdropSnapshot({ captureIfMissing: true, captureIfStale: true });
     setAnalyticsOpen(true);
   }, [activateBackdropSnapshot]);
   const closePalette = useCallback(() => {

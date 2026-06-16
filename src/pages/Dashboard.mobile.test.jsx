@@ -254,15 +254,18 @@ describe("DashboardShell mobile behavior", () => {
     });
   });
 
-  it("opens shell analytics without running backdrop capture on the click path", async () => {
+  it("opens shell analytics immediately while capturing the backdrop on demand (non-blocking)", async () => {
     mockIsMobile = false;
+    // A never-resolving capture proves the modal open does not wait on the backdrop.
     captureAnalyticsBackdropSnapshot.mockImplementationOnce(() => new Promise(() => {}));
     renderShell();
 
     fireEvent.keyDown(window, { key: "A" });
 
     expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
-    expect(captureAnalyticsBackdropSnapshot).not.toHaveBeenCalled();
+    // The backdrop is no longer pre-baked on tab change; it is captured on demand
+    // at open time, but off the critical path (the modal is already shown above).
+    expect(captureAnalyticsBackdropSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("opens shell analytics from the command palette action", async () => {

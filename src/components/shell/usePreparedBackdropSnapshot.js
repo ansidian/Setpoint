@@ -7,7 +7,6 @@ import {
 export function usePreparedBackdropSnapshot({
   sourceRef,
   loadSurface = () => {},
-  refreshing,
   refreshKey,
   tab,
 }) {
@@ -81,15 +80,14 @@ export function usePreparedBackdropSnapshot({
     }, delay);
   }, [backdropKey, clearPrepareSchedule, loadSurface, runBackdropCapture]);
 
-  useEffect(() => {
-    prepareBackdropSnapshot({ delay: 700 });
-    return clearPrepareSchedule;
-  }, [clearPrepareSchedule, prepareBackdropSnapshot]);
-
-  useEffect(() => {
-    if (refreshing || activeRef.current) return;
-    prepareBackdropSnapshot({ delay: 900 });
-  }, [prepareBackdropSnapshot, refreshKey, refreshing, tab]);
+  // Capture the backdrop on demand when a modal opens (or pre-warm on hover/focus
+  // intent via prepareBackdropSnapshot) — never eagerly on mount or tab change.
+  // An eager prep rasterized the whole dashboard to an ~11MB SVG image on every
+  // switch: a ~350ms main-thread serialize + GC stall (plus an off-thread decode)
+  // that froze the view on each Inbox<->Dashboard switch, confirmed on-device on
+  // both desktop and mobile. This effect only cancels a pending intent-scheduled
+  // capture on unmount.
+  useEffect(() => clearPrepareSchedule, [clearPrepareSchedule]);
 
   const activateBackdropSnapshot = useCallback(({
     captureIfMissing = false,
