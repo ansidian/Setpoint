@@ -1197,6 +1197,15 @@ describe("POST /api/dashboard/current/sync", () => {
     testState.fetchWeather.mockReset().mockResolvedValue({ temp: 80, summary: "Synced" });
     testState.fetchCalendar.mockReset().mockResolvedValue([{ id: "synced-event" }]);
     testState.fetchTodoistTasks.mockReset().mockResolvedValue([]);
+    testState.fetchTodoistDueTaskIdSet.mockReset().mockResolvedValue(new Set());
+    testState.getTodoistSyncHealth.mockReset().mockResolvedValue({
+      state: "current",
+      configured: true,
+      lastSuccessAt: "2026-05-04T12:00:00.000Z",
+      lastError: null,
+      syncStartedAt: null,
+      ageMs: 30_000,
+    });
     testState.hydrateRecurringTombstones.mockReset().mockResolvedValue([]);
     testState.refreshBillsMirror.mockReset().mockResolvedValue({
       bills: [{ id: "synced-bill" }],

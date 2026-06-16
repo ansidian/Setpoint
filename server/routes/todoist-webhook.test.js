@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import express from "express";
 import request from "supertest";
@@ -10,6 +10,19 @@ const webhookApi = vi.hoisted(() => ({
 vi.mock("../tasks/todoist-webhook.js", () => ({
   handleTodoistWebhookDelivery: webhookApi.handleTodoistWebhookDelivery,
 }));
+
+// Capture originals so this file restores these process-wide vars on teardown
+// instead of leaking its raw mutations to other files sharing the fork worker
+// (EA_USER_ID is read per-request by the route; an unrestored leak skews a later
+// file's userId-dependent assertions under shuffled order).
+const ORIGINAL_ENV = {
+  EA_USER_ID: process.env.EA_USER_ID,
+  TODOIST_CLIENT_SECRET: process.env.TODOIST_CLIENT_SECRET,
+};
+function restoreEnv(key, value) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
 
 process.env.EA_USER_ID = "user-1";
 process.env.TODOIST_CLIENT_SECRET = "client-secret";
@@ -29,6 +42,16 @@ function makeApp() {
 describe("Todoist webhook route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The route reads process.env.EA_USER_ID per request; re-pin it (and the
+    // signing secret) before each test so a sibling that mutated these
+    // process-wide vars cannot bleed into our assertions under shuffled order.
+    process.env.EA_USER_ID = "user-1";
+    process.env.TODOIST_CLIENT_SECRET = "client-secret";
+  });
+
+  afterAll(() => {
+    restoreEnv("EA_USER_ID", ORIGINAL_ENV.EA_USER_ID);
+    restoreEnv("TODOIST_CLIENT_SECRET", ORIGINAL_ENV.TODOIST_CLIENT_SECRET);
   });
 
   it("passes the exact raw request body to webhook handling", async () => {

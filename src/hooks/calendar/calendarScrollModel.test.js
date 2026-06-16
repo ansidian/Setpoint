@@ -354,7 +354,11 @@ describe("calendarScrollModel", () => {
   // through this predicate.
   describe("overflow keep-open ignore window", () => {
     it("dispatches close on a scroll with no prior interaction", () => {
-      // Window starts in the distant past (default 0); a fresh scroll closes.
+      // Establish the "no prior interaction" precondition explicitly: a sibling
+      // test may have opened the (module-level) ignore window, so push it far
+      // into the past instead of relying on a fresh module. A fresh scroll
+      // after that closes.
+      markOverflowScrollIgnoreWindow(-Number.MAX_SAFE_INTEGER);
       expect(shouldDispatchOverflowCloseOnScroll(1_000_000)).toBe(true);
     });
 

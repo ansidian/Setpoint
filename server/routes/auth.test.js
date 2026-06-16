@@ -12,21 +12,29 @@ import { errorHandler } from "../middleware/async-handler.js";
 const testState = vi.hoisted(() => ({
   db: { current: null },
 }));
+// Default impls kept as named factories so beforeEach can REINSTATE them after a
+// full reset. A sibling test in the same single-worker run can leave a leaked
+// mockResolvedValue/mockImplementation on @simplewebauthn/server (the module mock
+// object is per-file, but vitest mock STATE for shared fns is only fully wiped by
+// mockReset, not mockClear). Reinstating the defaults each test makes this file's
+// expectations independent of sibling-applied implementations.
+const defaultGenerateAuthenticationOptions = async (options) => ({
+  challenge: Buffer.from(options.challenge).toString("base64url"),
+  allowCredentials: options.allowCredentials,
+  userVerification: options.userVerification,
+  rpId: options.rpID,
+});
+const defaultGenerateRegistrationOptions = async (options) => ({
+  challenge: Buffer.from(options.challenge).toString("base64url"),
+  excludeCredentials: options.excludeCredentials,
+  authenticatorSelection: options.authenticatorSelection,
+  attestation: options.attestationType,
+  rp: { name: options.rpName, id: options.rpID },
+});
 const webAuthnMocks = vi.hoisted(() => ({
-  generateAuthenticationOptions: vi.fn(async (options) => ({
-    challenge: Buffer.from(options.challenge).toString("base64url"),
-    allowCredentials: options.allowCredentials,
-    userVerification: options.userVerification,
-    rpId: options.rpID,
-  })),
+  generateAuthenticationOptions: vi.fn(),
   verifyAuthenticationResponse: vi.fn(),
-  generateRegistrationOptions: vi.fn(async (options) => ({
-    challenge: Buffer.from(options.challenge).toString("base64url"),
-    excludeCredentials: options.excludeCredentials,
-    authenticatorSelection: options.authenticatorSelection,
-    attestation: options.attestationType,
-    rp: { name: options.rpName, id: options.rpID },
-  })),
+  generateRegistrationOptions: vi.fn(),
   verifyRegistrationResponse: vi.fn(),
 }));
 
@@ -38,8 +46,10 @@ vi.mock("../db/connection.js", () => ({
 }));
 vi.mock("@simplewebauthn/server", () => webAuthnMocks);
 
+const authPasswordHash = bcrypt.hashSync("correct-password", 4);
+process.env.NODE_ENV = "test";
 process.env.EA_USER_ID = "user-1";
-process.env.EA_PASSWORD_HASH = bcrypt.hashSync("correct-password", 4);
+process.env.EA_PASSWORD_HASH = authPasswordHash;
 const authRoutes = (await import("./auth.js")).default;
 const { requireCookieSession, __clearSessionValidationCache } = await import("../middleware/auth.js");
 
@@ -60,10 +70,24 @@ describe("auth routes", () => {
     // clear it between tests so each starts from a clean DB-backed state (otherwise
     // a prior test's cached "cookie-session" masks this test's DB-error path).
     __clearSessionValidationCache();
-    webAuthnMocks.generateAuthenticationOptions.mockClear();
+    // Full reset (not mockClear) so any sibling-leaked implementation/return on
+    // these shared webAuthn fns is wiped, then reinstate this file's defaults.
+    // mockClear only resets call history and would carry a leaked mockResolvedValue
+    // forward across the single-worker full-suite run.
+    webAuthnMocks.generateAuthenticationOptions.mockReset();
+    webAuthnMocks.generateAuthenticationOptions.mockImplementation(defaultGenerateAuthenticationOptions);
     webAuthnMocks.verifyAuthenticationResponse.mockReset();
-    webAuthnMocks.generateRegistrationOptions.mockClear();
+    webAuthnMocks.generateRegistrationOptions.mockReset();
+    webAuthnMocks.generateRegistrationOptions.mockImplementation(defaultGenerateRegistrationOptions);
     webAuthnMocks.verifyRegistrationResponse.mockReset();
+    // Pin the env this suite's auth router depends on. A sibling that sets
+    // NODE_ENV=production (several actual/* and route tests do) would flip the
+    // WebAuthn config into its production-required-env branch; pin it back so this
+    // file is order-independent. EA_USER_ID/EA_PASSWORD_HASH are re-asserted for
+    // the same reason (a sibling may have mutated process.env).
+    process.env.NODE_ENV = "test";
+    process.env.EA_USER_ID = "user-1";
+    process.env.EA_PASSWORD_HASH = authPasswordHash;
   });
 
   afterEach(async () => {

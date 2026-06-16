@@ -33,6 +33,7 @@ process.env.EA_USER_ID = "u1";
 
 const { default: router } = await import("./dashboard.js");
 const { __resetCurrentDashboardEventsForTests } = await import("../dashboard/current-events.js");
+const { __clearSessionValidationCache } = await import("../middleware/auth.js");
 
 function makeApp() {
   const app = express();
@@ -80,6 +81,13 @@ describe("dashboard routes", () => {
   beforeEach(async () => {
     testState.db.current = await createMigratedDb();
     __resetCurrentDashboardEventsForTests();
+    // auth.js keeps a module-level, 30s-TTL positive sessionValidationCache keyed
+    // by the hashed cookie token. A sibling test that authenticates "cookie-session"
+    // leaves a positive entry behind; without this reset a later test could be served
+    // a stale positive validation from cache instead of re-reading this test's DB,
+    // making an unauthenticated/revoked request wrongly pass. Clear it so every test
+    // re-validates against its own freshly migrated session table.
+    __clearSessionValidationCache();
     testState.getCurrentDashboard.mockReset().mockResolvedValue({ weather: { temp: 71 } });
     testState.getDashboardSystemHealth.mockReset().mockResolvedValue({ systemStatus: { state: "current" } });
     testState.requestCurrentDashboardRefresh.mockReset().mockResolvedValue({

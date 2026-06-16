@@ -1,11 +1,29 @@
 import { useState } from "react";
 import { cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarScrollContainer from "./CalendarScrollContainer.jsx";
 import { monthBlockHeight, monthIndexToDate, SCROLL_SETTLE_MS } from "../../../hooks/calendar/calendarScrollModel.js";
 import eventsView from "../views/eventsView.jsx";
 
-afterEach(cleanup);
+// Every test here drives the settle/alignment logic through real-time
+// waitFor polling: the settle is a setTimeout(SCROLL_SETTLE_MS) and the scroll
+// handler defers its work through requestAnimationFrame, so both the clock and
+// rAF must be the genuine implementations for waitFor to observe progress.
+// Without isolation a prior test (a sibling here, or in another file sharing
+// the worker) can leave fake timers installed or rAF stubbed/spied; inheriting
+// that state makes the settle's setTimeout never elapse, so the post-scroll
+// waitFor hangs until it times out instead of failing on a value. Re-establish
+// real timers before each test, and restore mocks/timers after each so this
+// file never exports that state to whatever runs next either.
+beforeEach(() => {
+  vi.useRealTimers();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 const CURRENT_YEAR = 2026;
 const CURRENT_MONTH = 4;
