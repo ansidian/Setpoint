@@ -797,9 +797,16 @@ export async function requestCurrentDashboardRefresh(userId, {
   // second post-sync rebuild is accepted rather than returning a lightweight inline
   // snapshot, which would blank the rendered briefing until the next poll and change the
   // /current/refresh contract.
+  // These two tail reads are independent (a snapshot-view build and a
+  // provider-health read), so overlap them instead of paying their Turso
+  // round-trips serially on every manual/return-to-dashboard refresh.
+  const [activeSnapshot, providerHealth] = await Promise.all([
+    getActiveSnapshotView(userId),
+    loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+  ]);
   return composeCurrentDashboardResponse(userId, rows, {
-    activeSnapshot: await getActiveSnapshotView(userId),
-    providerHealth: await loadProviderHealth(userId, responseRows, { now, todoistHealth: context.todoistHealth }),
+    activeSnapshot,
+    providerHealth,
     refresh,
     activeSnapshotHealth: {
       state: shouldSyncSnapshot ? "syncing" : "current",

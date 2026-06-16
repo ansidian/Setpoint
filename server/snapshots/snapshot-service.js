@@ -276,11 +276,11 @@ async function loadSnapshotItems(dbClient, snapshotId) {
   return result.rows.map(normalizeSnapshotItem);
 }
 
-async function loadActiveCatchUpItems(dbClient, userId, snapshot) {
+async function loadActiveCatchUpItems(dbClient, userId, snapshot, { previousFrozen } = {}) {
   if (!snapshot?.id || !snapshot.start_at) return [];
-  const previous = await loadPreviousFrozenSnapshot(dbClient, userId, {
-    start_at: snapshot.start_at,
-  });
+  const previous = previousFrozen !== undefined
+    ? await previousFrozen
+    : await loadPreviousFrozenSnapshot(dbClient, userId, { start_at: snapshot.start_at });
   if (!previous) return [];
 
   const result = await dbClient.execute({
@@ -323,11 +323,11 @@ async function loadActiveCatchUpItems(dbClient, userId, snapshot) {
   return result.rows.map(normalizeSnapshotItem);
 }
 
-async function loadCarryoverAgedOutCount(dbClient, userId, snapshot) {
+async function loadCarryoverAgedOutCount(dbClient, userId, snapshot, { previousFrozen } = {}) {
   if (!snapshot?.id || !snapshot.start_at) return 0;
-  const previous = await loadPreviousFrozenSnapshot(dbClient, userId, {
-    start_at: snapshot.start_at,
-  });
+  const previous = previousFrozen !== undefined
+    ? await previousFrozen
+    : await loadPreviousFrozenSnapshot(dbClient, userId, { start_at: snapshot.start_at });
   if (!previous) return 0;
 
   // Items eligible to carry on every condition EXCEPT the depth bound -- i.e. the
@@ -739,12 +739,19 @@ export async function getActiveSnapshotView(userId, {
   // resolves, the four reads are mutually independent pure SELECTs, so run them
   // concurrently instead of as five serial Turso round-trips (P1-7).
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
+  // The previous frozen snapshot is needed by BOTH the catch-up and aged-out
+  // reads. Resolve it once and share the single in-flight promise so the
+  // identical SELECT is not issued twice within one view build (it still runs
+  // concurrently with the other reads below, so this does not add latency).
+  const previousFrozen = snapshot?.start_at
+    ? loadPreviousFrozenSnapshot(dbClient, userId, { start_at: snapshot.start_at })
+    : Promise.resolve(null);
   const [items, catchUpItems, accountOrder, processing, carryoverAgedOut] = await Promise.all([
     snapshot ? loadSnapshotItems(dbClient, snapshot.id) : [],
-    snapshot ? loadActiveCatchUpItems(dbClient, userId, snapshot) : [],
+    snapshot ? loadActiveCatchUpItems(dbClient, userId, snapshot, { previousFrozen }) : [],
     loadAccountFilterOrder(dbClient, userId),
     loadProcessingState(dbClient, userId),
-    snapshot ? loadCarryoverAgedOutCount(dbClient, userId, snapshot) : 0,
+    snapshot ? loadCarryoverAgedOutCount(dbClient, userId, snapshot, { previousFrozen }) : 0,
   ]);
   return buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut);
 }
