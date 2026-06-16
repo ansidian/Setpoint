@@ -165,17 +165,6 @@ describe("ShellHeader system status", () => {
     expect(button.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("does not run analytics warmup from desktop header hover", () => {
-    const onPrepareAnalytics = vi.fn();
-    renderHeader({ onPrepareAnalytics });
-
-    const button = screen.getByRole("button", { name: /open analytics/i });
-
-    fireEvent.pointerEnter(button);
-    fireEvent.focus(button);
-    expect(onPrepareAnalytics).not.toHaveBeenCalled();
-  });
-
   it("moves analytics into the mobile overflow menu and keeps Sync now on one row", () => {
     const onOpenAnalytics = vi.fn();
     renderHeader({ isMobile: true, onOpenAnalytics });

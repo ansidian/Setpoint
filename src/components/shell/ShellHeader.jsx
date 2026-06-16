@@ -27,7 +27,6 @@ function ShellHeader({
   anyBlockingOverlayOpen = false,
   analyticsOpen = false,
   onOpenAnalytics,
-  onPrepareAnalytics,
   onOpenPalette,
   onOpenCustomize,
   onOpenHistory,
@@ -151,7 +150,6 @@ function ShellHeader({
           onOpenHistory={onOpenHistory}
           onOpenCalendar={onOpenCalendar}
           onOpenAnalytics={onOpenAnalytics}
-          onPrepareAnalytics={onPrepareAnalytics}
           onOpenCustomize={onOpenCustomize}
         />
       </div>

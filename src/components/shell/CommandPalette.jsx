@@ -17,7 +17,7 @@ export default function CommandPalette({ open, ...rest }) {
   return <CommandPaletteInner {...rest} />;
 }
 
-function CommandPaletteInner({ accent, backdropSnapshot = null, onClose, onAction }) {
+function CommandPaletteInner({ accent, onClose, onAction }) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef(null);
@@ -85,17 +85,20 @@ function CommandPaletteInner({ accent, backdropSnapshot = null, onClose, onActio
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.6)",
+        // Static CSS faux-frost — no live backdrop-filter (which would re-blur the
+        // whole viewport every frame the dashboard's now-marker / status dots
+        // animate behind it) and no per-open html-to-image snapshot. A top
+        // highlight + edge vignette over a light dim reads as frosted depth at
+        // zero runtime cost. Lighter dim than analytics: the palette is small and
+        // the frost is meant to be seen here.
+        backgroundColor: "rgba(8,8,14,0.50)",
+        backgroundImage: [
+          "radial-gradient(120% 90% at 50% -10%, rgba(120,130,170,0.12), transparent 60%)",
+          "radial-gradient(140% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.26))",
+          "linear-gradient(rgba(8,8,14,0.36), rgba(8,8,14,0.50))",
+        ].join(", "),
         backdropFilter: "none",
         WebkitBackdropFilter: "none",
-        ...(backdropSnapshot?.dataUrl
-          ? {
-              backgroundImage: `linear-gradient(rgba(0,0,0,0.34), rgba(0,0,0,0.44)), url("${backdropSnapshot.dataUrl}")`,
-              backgroundPosition: "center",
-              backgroundRepeat: "no-repeat",
-              backgroundSize: "cover",
-            }
-          : {}),
         display: "grid", placeItems: "start center",
         paddingTop: 120,
       }}

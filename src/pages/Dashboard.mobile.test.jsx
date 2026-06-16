@@ -72,22 +72,10 @@ vi.mock("../components/shell/CommandPalette", () => ({
 // deterministic here.
 vi.mock("../components/shell/aiAnalyticsModalLoader.js", () => ({
   loadAiAnalyticsModal: () => Promise.resolve({
-    default: function AiAnalyticsModalMock({ open, backdropSnapshot }) {
-      return open ? (
-        <div
-          data-testid="ai-analytics-modal"
-          data-backdrop-snapshot={backdropSnapshot?.dataUrl || ""}
-        />
-      ) : null;
+    default: function AiAnalyticsModalMock({ open }) {
+      return open ? <div data-testid="ai-analytics-modal" /> : null;
     },
   }),
-}));
-
-vi.mock("@/components/shell/analyticsBackdropSnapshot.js", () => ({
-  captureAnalyticsBackdropSnapshot: vi.fn(async () => ({
-    dataUrl: "data:image/jpeg;base64,test-dashboard-backdrop",
-  })),
-  prewarmAnalyticsBackdropCapture: vi.fn(),
 }));
 
 vi.mock("../components/shell/CustomizePanel", () => ({
@@ -110,7 +98,6 @@ vi.mock("../components/dashboard/DeadlineDetailPopover", () => ({
 }));
 
 const { DashboardShell } = await import("./Dashboard.jsx");
-const { captureAnalyticsBackdropSnapshot } = await import("@/components/shell/analyticsBackdropSnapshot.js");
 
 afterEach(() => {
   window.localStorage.removeItem("calendar:lastView");
@@ -254,18 +241,15 @@ describe("DashboardShell mobile behavior", () => {
     });
   });
 
-  it("opens shell analytics immediately while capturing the backdrop on demand (non-blocking)", async () => {
+  it("opens shell analytics immediately with no backdrop rasterization on the open path", async () => {
     mockIsMobile = false;
-    // A never-resolving capture proves the modal open does not wait on the backdrop.
-    captureAnalyticsBackdropSnapshot.mockImplementationOnce(() => new Promise(() => {}));
     renderShell();
 
     fireEvent.keyDown(window, { key: "A" });
 
+    // The backdrop is now a static CSS faux-frost in the overlay style — opening
+    // analytics is a pure state flip with no html-to-image capture to wait on.
     expect(await screen.findByTestId("ai-analytics-modal")).toBeTruthy();
-    // The backdrop is no longer pre-baked on tab change; it is captured on demand
-    // at open time, but off the critical path (the modal is already shown above).
-    expect(captureAnalyticsBackdropSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("opens shell analytics from the command palette action", async () => {

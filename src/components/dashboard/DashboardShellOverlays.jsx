@@ -18,7 +18,6 @@ export default function DashboardShellOverlays({
   handleAddTask,
   queueCalendarDeadlineRefresh,
   paletteOpen,
-  shellBackdropSnapshot,
   closePalette,
   handlePaletteAction,
   analyticsOpen,
@@ -67,18 +66,13 @@ export default function DashboardShellOverlays({
           <CommandPalette
             open={paletteOpen}
             accent={accent}
-            backdropSnapshot={shellBackdropSnapshot}
             onClose={closePalette}
             onAction={handlePaletteAction}
           />
         </Suspense>
       )}
 
-      <AnalyticsModalMount
-        open={analyticsOpen}
-        onClose={closeAnalytics}
-        backdropSnapshot={shellBackdropSnapshot}
-      />
+      <AnalyticsModalMount open={analyticsOpen} onClose={closeAnalytics} />
 
       {customizeOpen && (
         <Suspense fallback={null}>

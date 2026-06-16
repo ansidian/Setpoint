@@ -219,7 +219,6 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useInboxSessionStore` | `src/components/inbox/useInboxSessionState.js` |
 | `useInboxUndoSlot` | `src/components/inbox/useInboxUndoSlot.js` |
 | `useSnapshotOptimisticOverlay` | `src/components/inbox/useSnapshotOptimisticOverlay.js` |
-| `usePreparedBackdropSnapshot` | `src/components/shell/usePreparedBackdropSnapshot.js` |
 | `useAddTaskPanelController` | `src/components/todoist/add-task-panel/useAddTaskPanelController.js` |
 | `useAgendaFetch` | `src/hooks/calendar/useAgendaFetch.js` |
 | `useAgendaSyncPolicy` | `src/hooks/calendar/useAgendaSyncPolicy.js` |

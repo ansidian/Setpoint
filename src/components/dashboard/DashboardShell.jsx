@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
-import { loadAiAnalyticsModal } from "../shell/aiAnalyticsModalLoader.js";
 import { useDashboard } from "../../context/DashboardContext";
 import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import { usePreparedBackdropSnapshot } from "../shell/usePreparedBackdropSnapshot.js";
 import {
   collectActiveReadOverrideKeys,
   computeInboxUnreadSignalCount,
@@ -140,40 +138,21 @@ export function DashboardShell({
     alfredHandoffSeq.current += 1;
     setAlfredHandoff({ id: alfredHandoffSeq.current, query: q });
   }, []);
-  const analyticsBackdropSourceRef = useRef(null);
-  const {
-    backdropSnapshot: shellBackdropSnapshot,
-    prepareBackdropSnapshot,
-    activateBackdropSnapshot,
-    deactivateBackdropSnapshot,
-  } = usePreparedBackdropSnapshot({
-    sourceRef: analyticsBackdropSourceRef,
-    loadSurface: loadAiAnalyticsModal,
-    // Keyed coarsely on `tab` only. The backdrop is captured on demand when
-    // Analytics/the palette opens (openAnalytics/openPalette pass captureIfMissing)
-    // and pre-warmed on hover/focus intent — never eagerly on tab change or data
-    // tick, which previously rasterized the full dashboard to an ~11MB image on
-    // every switch and froze the view. On-demand capture always sees fresh data.
-    tab,
-  });
+  // The Analytics modal and Command Palette render a static CSS faux-frost
+  // backdrop (see their overlay styles) — no per-open html-to-image rasterization
+  // and no live backdrop-filter, so opening them is just a state flip.
   const closeAnalytics = useCallback(() => {
     setAnalyticsOpen(false);
-    deactivateBackdropSnapshot({ delay: 500 });
-  }, [deactivateBackdropSnapshot]);
+  }, []);
   const openAnalytics = useCallback(() => {
-    // captureIfMissing: the backdrop is no longer pre-baked on tab change, so
-    // capture on open when nothing was pre-warmed (e.g. mobile tap, no hover).
-    activateBackdropSnapshot({ captureIfMissing: true, captureIfStale: true });
     setAnalyticsOpen(true);
-  }, [activateBackdropSnapshot]);
+  }, []);
   const closePalette = useCallback(() => {
     setPaletteOpen(false);
-    deactivateBackdropSnapshot({ delay: 500 });
-  }, [deactivateBackdropSnapshot]);
+  }, []);
   const openPalette = useCallback(() => {
-    activateBackdropSnapshot({ captureIfMissing: true, captureIfStale: true });
     setPaletteOpen(true);
-  }, [activateBackdropSnapshot]);
+  }, []);
   const dismissCalendar = useBrowserBackDismiss({
     enabled: !isMobile && calendarOpen,
     historyKey: "eaDashboardCalendarModal",
@@ -221,7 +200,7 @@ export function DashboardShell({
 
   // Stable ShellHeader callbacks so the memoized header (+ its chrome children)
   // stop re-rendering on every dashboard SSE/refresh re-render of DashboardShell.
-  const handleHeaderOpenAnalytics = useCallback(() => { void openAnalytics(); }, [openAnalytics]);
+  // openAnalytics is already a stable useCallback, so it is wired directly.
   const handleHeaderToggleCustomize = useCallback(() => setCustomizeOpen((v) => !v), []);
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
   const handleHeaderOpenCalendar = useCallback(() => openCalendar(), [openCalendar]);
@@ -416,7 +395,6 @@ export function DashboardShell({
 
   return (
     <div
-      ref={analyticsBackdropSourceRef}
       style={{
         position: "fixed", inset: 0,
         display: "flex", flexDirection: "column",
@@ -434,8 +412,7 @@ export function DashboardShell({
         onTab={setShellTab}
         anyBlockingOverlayOpen={anyBlockingOverlayOpen}
         analyticsOpen={analyticsOpen}
-        onOpenAnalytics={handleHeaderOpenAnalytics}
-        onPrepareAnalytics={prepareBackdropSnapshot}
+        onOpenAnalytics={openAnalytics}
         onOpenPalette={openPalette}
         onOpenCustomize={handleHeaderToggleCustomize}
         onOpenHistory={handleHeaderToggleHistory}
@@ -542,7 +519,6 @@ export function DashboardShell({
         handleAddTask={handleAddTask}
         queueCalendarDeadlineRefresh={queueCalendarDeadlineRefresh}
         paletteOpen={paletteOpen}
-        shellBackdropSnapshot={shellBackdropSnapshot}
         closePalette={closePalette}
         handlePaletteAction={handlePaletteAction}
         analyticsOpen={analyticsOpen}
