@@ -253,6 +253,26 @@ describe("GET /api/dashboard/current", () => {
     testState.db.current = null;
   });
 
+  it("attaches a contentKey that stays stable across polls returning unchanged data", async () => {
+    const now = new Date("2026-05-07T12:00:00.000Z");
+    const expiresAt = new Date(now.getTime() + 300_000).toISOString();
+    await seedCache("weather_current", { temp: 72 }, { expiresAt });
+    await seedCache("calendar_current", [], { expiresAt });
+    await seedCache("deadlines_current", { upcoming: [], stats: { total: 0 } }, { expiresAt });
+    await seedCache("bills_current", {
+      bills: [], allSchedules: [], payeeMap: {}, actualConfigured: false, actualBudgetUrl: null,
+    }, { expiresAt });
+
+    const first = await getCurrentDashboard("u1", { dbClient: testState.db.current, now });
+    const second = await getCurrentDashboard("u1", { dbClient: testState.db.current, now });
+
+    // The content key is a real fingerprint, decoupled from the per-response wall clock.
+    expect(first.contentKey).toBeTruthy();
+    expect(first.contentKey).not.toBe(first.fetchedAt);
+    // Two polls over identical data must produce the same key so the client dedup fires.
+    expect(second.contentKey).toBe(first.contentKey);
+  });
+
   it("returns fresh cached current rows without fetching providers or briefing JSON", async () => {
     await seedCache("weather_current", { temp: 71, location: "El Monte, CA" });
     await seedCache("calendar_current", [{ id: "event-1", title: "Focus" }]);

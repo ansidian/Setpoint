@@ -16,6 +16,7 @@ import {
 import { CURRENT_DATA_PROVIDERS, providerFor } from "./current-providers/index.js";
 import {
   CURRENT_CACHE_KEYS,
+  currentResponseContentKey,
   EMPTY_DEADLINES,
   expiresAtFor,
   fallbackPayloadForKey,
@@ -646,7 +647,7 @@ async function composeCurrentDashboardResponse(userId, rows, {
     deadlines: usablePayloadForKey("deadlines_current", rows.deadlines_current, EMPTY_DEADLINES),
   }, { dbClient, now });
 
-  return {
+  const response = {
     weather: usablePayloadForKey("weather_current", rows.weather_current, null),
     calendar: reminderPayloads.calendar,
     deadlines: reminderPayloads.deadlines,
@@ -662,6 +663,10 @@ async function composeCurrentDashboardResponse(userId, rows, {
     refresh,
     fetchedAt,
   };
+  // Content fingerprint over everything except the per-response wall-clock fields,
+  // so a poll/SSE refetch that returns unchanged data carries an identical
+  // contentKey and the client (useCurrentDashboard) can skip re-rendering.
+  return { ...response, contentKey: currentResponseContentKey(response) };
 }
 
 async function loadRefreshContext(userId, { dbClient = db } = {}) {
