@@ -37,6 +37,34 @@ describe("usePreparedBackdropSnapshot", () => {
     expect(captureAnalyticsBackdropSnapshot).toHaveBeenCalledWith(source);
   });
 
+  it("does not rasterize a backdrop snapshot on mount or when the shell tab changes", async () => {
+    vi.useFakeTimers();
+    try {
+      const sourceRef = { current: document.createElement("div") };
+      const { rerender } = renderHook(
+        ({ tab }) => usePreparedBackdropSnapshot({
+          sourceRef,
+          refreshing: false,
+          refreshKey: "same-data",
+          tab,
+        }),
+        { initialProps: { tab: "dashboard" } },
+      );
+
+      await act(async () => {
+        rerender({ tab: "inbox" });
+        rerender({ tab: "dashboard" });
+        // Past every eager-prep delay (mount 700ms, tab change 900ms) plus the
+        // idle-callback timeout, so a lingering rasterization would have fired.
+        await vi.advanceTimersByTimeAsync(4000);
+      });
+
+      expect(captureAnalyticsBackdropSnapshot).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not publish a prepared snapshot from a previous shell tab", async () => {
     captureAnalyticsBackdropSnapshot
       .mockResolvedValueOnce({ dataUrl: "data:image/jpeg;base64,inbox-backdrop" })
