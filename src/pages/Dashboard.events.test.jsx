@@ -91,7 +91,7 @@ function renderDashboardBody({
 }
 
 describe("Dashboard event loading", () => {
-  it("holds the dashboard timeline while seeded events are refreshing", () => {
+  it("keeps seeded events on the timeline while a warm refresh is in flight", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -102,12 +102,14 @@ describe("Dashboard event loading", () => {
       ensureRange: vi.fn(() => new Promise(() => {})),
     });
 
-    expect(screen.getAllByText("Seeded focus block").length).toBe(1);
-    expect(within(screen.getByTestId("today-timeline")).queryByText("Seeded focus block")).toBeNull();
-    expect(screen.getByTestId("dashboard-event-skeletons")).toBeTruthy();
+    // Previously the timeline blanked to skeletons on every refresh (and on
+    // returning to the dashboard), which read as "the calendar stopped
+    // loading". With seeded events present we now keep showing them and drop
+    // the skeleton, while still surfacing the refresh-in-flight affordances.
+    expect(within(screen.getByTestId("today-timeline")).getByText("Seeded focus block")).toBeTruthy();
+    expect(screen.queryByTestId("dashboard-event-skeletons")).toBeNull();
     expect(screen.getByTestId("focus-window-refresh-status")).toBeTruthy();
     expect(screen.getByTestId("timeline-refresh-status")).toBeTruthy();
-    expect(screen.getAllByText("Updating Google Calendar").length).toBe(2);
   });
 
   it("holds the dashboard timeline skeleton instead of showing a deadline-only timeline while events are cold", () => {

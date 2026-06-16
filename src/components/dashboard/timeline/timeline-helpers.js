@@ -31,6 +31,19 @@ export function formatFullDateForOffset(offset, now) {
   });
 }
 
+/**
+ * Decide whether to blank the timeline to skeletons instead of rendering groups.
+ *
+ * We only hold back on a genuine cold load (`empty_loading` = no seeded events
+ * yet). While a warm refresh is in flight (`refreshing` = seeded events already
+ * on screen) we keep the existing groups visible; blanking them there made the
+ * timeline flash empty on every SSE refresh and on every return to the
+ * dashboard, which reads as "the calendar stopped loading".
+ */
+export function shouldHoldPartialTimeline({ eventLoadingState, filtersEvents }) {
+  return !!filtersEvents && eventLoadingState === "empty_loading";
+}
+
 export function buildTimelineGroups(items, now, filters, { minDay = null } = {}) {
   const groups = new Map();
   for (const item of items) {
