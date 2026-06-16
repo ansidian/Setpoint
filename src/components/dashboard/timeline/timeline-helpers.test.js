@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTimelineGroups,
   resolveTimelineNowMarkerTop,
+  shouldHoldPartialTimeline,
 } from "./timeline-helpers.js";
 
 function row(offsetTop, offsetHeight) {
@@ -55,5 +56,26 @@ describe("timeline helpers", () => {
       now: 500,
       rows: [row(40, 80), row(140, 40)],
     })).toBe(122);
+  });
+
+  describe("shouldHoldPartialTimeline", () => {
+    it("does not blank the timeline once events are ready", () => {
+      expect(shouldHoldPartialTimeline({ eventLoadingState: "ready", filtersEvents: true })).toBe(false);
+    });
+
+    it("keeps showing seeded groups while a warm refresh is in flight (the blank-flash bug)", () => {
+      // 'refreshing' means seeded events are already on screen; holding back to
+      // skeletons here is the regression that makes the timeline flash blank on
+      // every SSE refresh and on returning to the dashboard.
+      expect(shouldHoldPartialTimeline({ eventLoadingState: "refreshing", filtersEvents: true })).toBe(false);
+    });
+
+    it("blanks to skeletons only on a cold load with no seeded events", () => {
+      expect(shouldHoldPartialTimeline({ eventLoadingState: "empty_loading", filtersEvents: true })).toBe(true);
+    });
+
+    it("does not hold for an events-only cold load when the events filter is off", () => {
+      expect(shouldHoldPartialTimeline({ eventLoadingState: "empty_loading", filtersEvents: false })).toBe(false);
+    });
   });
 });

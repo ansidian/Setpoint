@@ -6,6 +6,7 @@ import TimelineHeader from "./timeline/TimelineHeader";
 import {
   buildTimelineGroups,
   formatFullDateForOffset,
+  shouldHoldPartialTimeline,
 } from "./timeline/timeline-helpers";
 import TimelineSkeleton from "./timeline/TimelineSkeleton";
 
@@ -72,7 +73,10 @@ function TodayTimeline({
   );
 
   const todayLabel = formatFullDateForOffset(0, now);
-  const holdPartialTimeline = eventLoadingState !== "ready" && filters.events;
+  const holdPartialTimeline = shouldHoldPartialTimeline({
+    eventLoadingState,
+    filtersEvents: filters.events,
+  });
   const showEventSkeletons = holdPartialTimeline;
   const visibleGroups = holdPartialTimeline ? [] : groups;
   const showRefreshStatus = eventLoadingState === "refreshing";
