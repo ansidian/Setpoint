@@ -44,6 +44,15 @@ describe("alfred message primitives", () => {
     expect(screen.queryByText("The rest can wait.")).toBeNull(); // not split out yet
   });
 
+  it("SayBlock keeps a done preamble as quiet prose (between-tool narration persists, never serif)", () => {
+    // The between-tool narration Alfred says before a tool call settles as a
+    // tagged preamble: it stays in the thread as one quiet block, the same as
+    // while it streamed — it must NOT resolve into the serif answer line.
+    render(<SayBlock text="Let me read a few more confirmation emails. Then check rejections." done preamble />);
+    expect(screen.getByText("Let me read a few more confirmation emails. Then check rejections.")).toBeTruthy();
+    expect(screen.queryByText("Then check rejections.")).toBeNull(); // not split into a serif lead + body
+  });
+
   it("ToolSteps shows the full step trail and live count while the run is in flight", () => {
     render(<ToolSteps accent="#cba6da" done={false} tools={[
       { toolId: "t1", name: "search_email", state: "done", summary: "Mail · 4 matches" },
