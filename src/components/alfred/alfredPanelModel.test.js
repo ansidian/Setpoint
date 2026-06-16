@@ -387,4 +387,33 @@ describe("applyAlfredEvent breakdown", () => {
     expect(out[0].done).toBe(true);
     expect(out[1].type).toBe("breakdown");
   });
+
+  it("absorbs a prior same-kind flat rows block the card already contains (no duplicate list)", () => {
+    // On a split question Haiku may render show_items (a flat list) before the
+    // breakdown card; the card lists the same items inside its buckets, so the
+    // flat list would duplicate every row. The card is the sole surface.
+    const out = play([
+      { type: "rows", kind: "email", items: [{ uid: "em-1" }, { uid: "em-2" }, { uid: "em-3" }] },
+      { type: "breakdown", kind: "email", title: "By outcome", total: 3, buckets: [
+        { label: "Rejections", count: 2, items: [{ uid: "em-1" }, { uid: "em-2" }] },
+        { label: "Ghosted", count: 1, items: [{ uid: "em-3" }] },
+      ] },
+    ]);
+    expect(out.filter((m) => m.type === "rows")).toHaveLength(0);
+    expect(out.filter((m) => m.type === "breakdown")).toHaveLength(1);
+  });
+
+  it("keeps a flat rows block the card does not fully contain (different kind or extra items)", () => {
+    const differentKind = play([
+      { type: "rows", kind: "bill", items: [{ id: "b1" }] },
+      { type: "breakdown", kind: "email", title: "x", total: 1, buckets: [{ label: "A", count: 1, items: [{ uid: "em-1" }] }] },
+    ]);
+    expect(differentKind.filter((m) => m.type === "rows")).toHaveLength(1);
+
+    const extraItem = play([
+      { type: "rows", kind: "email", items: [{ uid: "em-1" }, { uid: "em-9" }] },
+      { type: "breakdown", kind: "email", title: "x", total: 1, buckets: [{ label: "A", count: 1, items: [{ uid: "em-1" }] }] },
+    ]);
+    expect(extraItem.filter((m) => m.type === "rows")).toHaveLength(1);
+  });
 });
