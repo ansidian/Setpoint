@@ -457,6 +457,15 @@ export default function CalendarScrollContainer({
     setMonthDataState(prev => ({ ...prev, tracked: currentMonthData }));
   }
 
+  // Faint week-row texture for unmounted spacers. Only ±2 months are mounted, so
+  // a fast fling can briefly outrun the window and park the viewport on a spacer
+  // until the next rAF+commit mounts the month. Drawing the grid's week-row pitch
+  // makes that moment read as an empty calendar loading in, not a blank void.
+  // Pure CSS on the existing divs: no extra DOM, and off-screen spacers never
+  // paint it, so the normal-scroll cost is unchanged.
+  const spacerRowPitch = layout.cellHeight + layout.gridGap;
+  const spacerBackground = `repeating-linear-gradient(to bottom, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent ${spacerRowPitch}px)`;
+
   const blocks = [];
   for (let i = -SCROLL_RANGE; i <= SCROLL_RANGE; i++) {
     const { year, month } = monthIndexToDate(i, refYear, refMonth);
@@ -469,7 +478,7 @@ export default function CalendarScrollContainer({
           key={i}
           data-month-index={i}
           data-testid={`month-spacer-${year}-${month}`}
-          style={{ height }}
+          style={{ height, background: spacerBackground }}
         />,
       );
       continue;
