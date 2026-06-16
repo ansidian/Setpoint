@@ -127,7 +127,6 @@ export function OverflowMenu({
   onOpenHistory,
   onOpenCalendar,
   onOpenAnalytics,
-  onPrepareAnalytics,
   onOpenCustomize,
 }) {
   return (
@@ -174,7 +173,6 @@ export function OverflowMenu({
             <MenuItem
               icon={BarChart3}
               label="Analytics"
-              onPrepare={onPrepareAnalytics}
               isMobile={isMobile}
               onClick={() => {
                 onCloseMenu();

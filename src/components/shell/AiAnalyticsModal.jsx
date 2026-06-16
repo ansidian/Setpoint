@@ -82,7 +82,7 @@ function SectionError({ onRetry }) {
   );
 }
 
-export default function AiAnalyticsModal({ open, onClose, backdropSnapshot = null }) {
+export default function AiAnalyticsModal({ open, onClose }) {
   const [active, setActive] = useState("alfred");
   const [sections, retry] = useSectionData(open);
   const current = TABS.find((tab) => tab.key === active);
@@ -94,17 +94,20 @@ export default function AiAnalyticsModal({ open, onClose, backdropSnapshot = nul
       <DialogContent
         data-testid="ai-analytics-modal"
         overlayClassName="bg-[#0b0b13]/70"
+        // Static CSS faux-frost over the flat dim scrim. Explicitly overrides the
+        // DialogOverlay base `supports-backdrop-filter:backdrop-blur-xs` to none so
+        // there is no live full-viewport blur re-rasterizing every frame the
+        // dashboard animates behind it — and no per-open html-to-image snapshot.
+        // The card is opaque and heavily dimmed here, so a top highlight + edge
+        // vignette is all that reads; the gradient layers paint over bg-[#0b0b13]/70.
         overlayStyle={{
           backdropFilter: "none",
           WebkitBackdropFilter: "none",
-          ...(backdropSnapshot?.dataUrl
-            ? {
-                backgroundImage: `linear-gradient(rgba(11,11,19,0.54), rgba(11,11,19,0.68)), url("${backdropSnapshot.dataUrl}")`,
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-                backgroundSize: "cover",
-              }
-            : {}),
+          backgroundImage: [
+            "radial-gradient(120% 90% at 50% -10%, rgba(120,130,170,0.10), transparent 60%)",
+            "radial-gradient(140% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.30))",
+            "linear-gradient(rgba(11,11,19,0.62), rgba(11,11,19,0.74))",
+          ].join(", "),
         }}
         className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[#16161e] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px]"
       >
