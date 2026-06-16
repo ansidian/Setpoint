@@ -685,12 +685,16 @@ export async function getCurrentDashboard(userId, {
   dbClient = db,
   now = new Date(),
 } = {}) {
-  const rows = await refreshMissingRows(
-    userId,
-    await loadCacheRows(userId, { dbClient }),
-    { dbClient, now },
-  );
-  const context = await loadRefreshContext(userId, { dbClient });
+  // loadCacheRows (ea_current_data_cache) and loadRefreshContext (todoist + bills
+  // mirror health) read disjoint tables and nothing written before this point
+  // feeds either, so overlap them instead of paying two serial Turso round-trips
+  // up front on every poll. refreshMissingRows only writes on a cold/missing row,
+  // which loadRefreshContext does not read.
+  const [cacheRows, context] = await Promise.all([
+    loadCacheRows(userId, { dbClient }),
+    loadRefreshContext(userId, { dbClient }),
+  ]);
+  const rows = await refreshMissingRows(userId, cacheRows, { dbClient, now });
   const refreshPlan = planCurrentDataRefresh(rows, { mode: "passive", now, context });
   applyProviderPassiveSuppression(refreshPlan, rows, { now, context });
   const forceKeys = new Set();
