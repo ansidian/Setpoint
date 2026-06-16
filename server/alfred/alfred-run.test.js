@@ -389,6 +389,94 @@ describe("runAlfred", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
+  it("still nudges toward group_items when show_items already rendered a flat list on a split question", async () => {
+    // The benchmark failure: a "how many X vs how many Y" question where the model
+    // calls show_items first (a flat list), then answers the split in prose. A prior
+    // show_items must NOT disarm the group_items backstop — the answer still has to
+    // land as a breakdown card, not a flat list plus prose counts.
+    const fetchImpl = fetchScript([
+      toolUseTurn("search_email", { query: "job application" }),
+      toolUseTurn("show_items", { kind: "email", ids: ["em-1", "em-2", "em-3"] }, "tu_2"),
+      textTurn("Rejections: 2, ghosted: 1."),
+      toolUseTurn("group_items", {
+        kind: "email",
+        title: "By outcome",
+        groups: [{ label: "Rejections", ids: ["em-1", "em-2"] }, { label: "Ghosted", ids: ["em-3"] }],
+      }, "tu_4"),
+      textTurn("Rejections: 2, ghosted: 1."),
+    ]);
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "lexical",
+      total: 3,
+      has_more: false,
+      candidates: [
+        { uid: "em-1", subject: "no", body_snippet: "regret", email_date: "2026-06-10T12:00:00Z", read: true, from: { name: "A", address: "a@x.com" }, metadata: {}, scores: {} },
+        { uid: "em-2", subject: "no", body_snippet: "filled", email_date: "2026-06-05T12:00:00Z", read: true, from: { name: "B", address: "b@x.com" }, metadata: {}, scores: {} },
+        { uid: "em-3", subject: "thanks", body_snippet: "applied", email_date: "2026-05-20T12:00:00Z", read: true, from: { name: "C", address: "c@x.com" }, metadata: {}, scores: {} },
+      ],
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "of my job application emails, how many were rejections and how many ghosted me?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { retrieve },
+      recordUsage,
+    });
+
+    const nudge = conversation.messages.find(
+      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("group_items"),
+    );
+    expect(nudge).toBeDefined();
+    expect(nudge.content).toContain("<system-reminder>");
+    expect(events.some((e) => e.type === "breakdown")).toBe(true);
+    expect(events.at(-1).type).toBe("run_end");
+  });
+
+  it("forces group_items via tool_choice on the re-issue after a split question is answered in prose", async () => {
+    // Deterministic floor: even if Haiku ignores the soft group_items reminder, the
+    // re-issued request pins tool_choice to group_items so the breakdown card is
+    // guaranteed (the same forced-tool pattern used by triage/bill extraction).
+    // Here the scripted model "ignores" the nudge (answers prose again); the
+    // observable guarantee is that the loop forced the tool on that re-issue.
+    const fetchImpl = fetchScript([
+      toolUseTurn("search_email", { query: "job application" }),
+      toolUseTurn("show_items", { kind: "email", ids: ["em-1"] }, "tu_2"),
+      textTurn("Rejections: 1, ghosted: 0."),
+      textTurn("Rejections: 1, ghosted: 0."),
+    ]);
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "lexical",
+      total: 1,
+      has_more: false,
+      candidates: [
+        { uid: "em-1", subject: "no", body_snippet: "regret", email_date: "2026-06-10T12:00:00Z", read: true, from: { name: "A", address: "a@x.com" }, metadata: {}, scores: {} },
+      ],
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "how many were rejections and how many ghosted me?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { retrieve },
+      recordUsage,
+    });
+
+    // The request issued right after the group nudge pins the breakdown tool…
+    const forcedBody = JSON.parse(fetchImpl.mock.calls[3][1].body);
+    expect(forcedBody.tool_choice).toEqual({ type: "tool", name: "group_items" });
+    // …and only that one re-issue is forced — earlier turns stay tool_choice-free.
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).tool_choice).toBeUndefined();
+  });
+
   it("nudge text includes 'transactions' when a small search_transactions result is returned without show_items", async () => {
     const fetchImpl = fetchScript([
       toolUseTurn("search_transactions", { start: "2026-05-01", end: "2026-05-31" }),

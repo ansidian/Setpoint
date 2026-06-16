@@ -152,14 +152,31 @@ export function applyAlfredEvent(messages, event) {
       }];
     }
     case "breakdown": {
-      return [...closeOpenSay(messages), {
+      // The card lists every item inside its buckets, so a prior show_items flat
+      // list of the same items would render each row twice (the grouping-question
+      // double-render). Drop a prior same-kind rows block this card fully contains;
+      // a list of another kind, or one with rows the card lacks, is left untouched.
+      const buckets = event.buckets || [];
+      const carded = new Set();
+      for (const bucket of buckets) {
+        for (const item of bucket.items || []) {
+          const id = item?.uid ?? item?.id;
+          if (id != null) carded.add(String(id));
+        }
+      }
+      const isAbsorbedRows = (m) => m.type === "rows"
+        && m.kind === event.kind
+        && (m.items || []).length > 0
+        && (m.items || []).every((item) => carded.has(String(item?.uid ?? item?.id)));
+      const pruned = closeOpenSay(messages).filter((m) => !isAbsorbedRows(m));
+      return [...pruned, {
         id: nextId(),
         type: "breakdown",
         kind: event.kind,
         title: event.title || "",
         caption: event.caption || "",
         total: event.total || 0,
-        buckets: event.buckets || [],
+        buckets,
       }];
     }
     case "run_end":

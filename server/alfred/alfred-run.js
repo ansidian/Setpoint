@@ -77,12 +77,29 @@ async function runAlfredInner({
 
   let retrievedCount = 0;
   let showItemsCalled = false;
+  let groupItemsCalled = false;
   let summarizeCalled = false;
   let nudged = false;
   let nudgedGroup = false;
+  let forceGroupItems = false;
   const groupIntent = looksLikeGroupingQuestion(message);
 
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
+    const body = {
+      model,
+      max_tokens: MAX_TOKENS,
+      stream: true,
+      system,
+      tools: ALFRED_TOOL_DEFINITIONS,
+      messages: withCacheBreakpoint(conversation.messages),
+    };
+    // Deterministic grouping backstop: after the group nudge, pin the breakdown
+    // tool for one turn so a split question can't end as prose again when Haiku
+    // ignores the soft reminder. tool_choice is request-only (outside the cached
+    // prefix), so toggling it per turn doesn't disturb prompt caching. One-shot:
+    // reset immediately so the follow-up turn can produce the prose takeaway.
+    if (forceGroupItems) body.tool_choice = { type: "tool", name: "group_items" };
+    forceGroupItems = false;
     const res = await fetchImpl(ANTHROPIC_URL, {
       method: "POST",
       headers: {
@@ -90,14 +107,7 @@ async function runAlfredInner({
         "x-api-key": apiKey,
         "anthropic-version": ANTHROPIC_VERSION,
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: MAX_TOKENS,
-        stream: true,
-        system,
-        tools: ALFRED_TOOL_DEFINITIONS,
-        messages: withCacheBreakpoint(conversation.messages),
-      }),
+      body: JSON.stringify(body),
       ...(signal ? { signal } : {}),
     });
     if (!res.ok) {
@@ -126,13 +136,17 @@ async function runAlfredInner({
     if (turn.stopReason !== "tool_use" || !toolUses.length) {
       // A split/categorize question answered as prose with no card → nudge toward
       // group_items first (the right surface for a multi-bucket answer), ahead of
-      // the show_items backstop. No item cap: the card earns its keep on large sets.
-      if (!nudgedGroup && groupIntent && !showItemsCalled && !summarizeCalled && retrievedCount > 0) {
+      // the show_items backstop. Gated on !groupItemsCalled, NOT !showItemsCalled:
+      // a prior show_items flat list must not disarm this, or a split answered as
+      // "list + prose counts" slips through (the exact Haiku failure). No item cap:
+      // the card earns its keep on large sets.
+      if (!nudgedGroup && groupIntent && !groupItemsCalled && !summarizeCalled && retrievedCount > 0) {
         nudgedGroup = true;
+        forceGroupItems = true;
         conversation.messages.push({ role: "user", content: GROUP_ITEMS_NUDGE });
         continue;
       }
-      if (!nudged && !showItemsCalled && retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS) {
+      if (!nudged && !showItemsCalled && !groupItemsCalled && retrievedCount > 0 && retrievedCount <= MAX_NUDGE_ITEMS) {
         nudged = true;
         conversation.messages.push({ role: "user", content: SHOW_ITEMS_NUDGE });
         continue;
@@ -169,8 +183,10 @@ async function runAlfredInner({
       }).catch((err) => {
         console.error("[Alfred] tool usage recording failed:", err.message);
       });
-      if (toolUse.name === "show_items" || toolUse.name === "group_items") {
+      if (toolUse.name === "show_items") {
         showItemsCalled = true;
+      } else if (toolUse.name === "group_items") {
+        groupItemsCalled = true;
       } else if (toolUse.name === "summarize_transactions") {
         summarizeCalled = true;
       } else if (!result?.error) {
