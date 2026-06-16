@@ -52,13 +52,28 @@ describe("buildAlfredSystemPrompt", () => {
     expect(prompt).toContain("summarize_transactions");
   });
 
-  it("tells the model to work quietly between tool calls and lead with a single title-style line", () => {
+  it("invites brief between-tool narration and still leads with a single title-style line", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     const lower = prompt.toLowerCase();
-    expect(lower).toContain("between tool calls");
-    expect(lower).toMatch(/do not narrate|progress indicator/);
+    // The owner wants to watch Alfred think as it works: the model is told to
+    // narrate its steps, not to suppress them.
+    expect(lower).toMatch(/narrate|follow your thinking|say what you/);
+    expect(lower).not.toMatch(/work quietly|do not narrate/);
+    // …but kept brief, so it reads like an agentic trail rather than a wall.
+    expect(lower).toMatch(/one short|single sentence|brief/);
+    // The final-answer format is unchanged.
     expect(lower).toContain("title-style");
     expect(lower).toMatch(/markdown header/);
+  });
+
+  it("orders the headline answer after the citation tools, not before", () => {
+    // The headline must be the run's LAST prose so it lands as the serif answer
+    // line (with show_items/group_items/summarize rows rendered above it). If the
+    // model wrote the headline before citing, the panel would tag it a between-tool
+    // preamble and render it as quiet prose instead of the answer.
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
+    const lower = prompt.toLowerCase();
+    expect(lower).toMatch(/never before|after (any )?(show_items|citation|cite)/);
   });
 
   it("forbids permission-seeking sign-offs and hedged counts when an exact answer is obtainable", () => {

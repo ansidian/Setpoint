@@ -207,7 +207,7 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
             {messages.map((m) => {
               if (m.type === "user") return <UserLine key={m.id} text={m.text} accent={accent} />;
               if (m.type === "tools") return <ToolSteps key={m.id} tools={m.tools} done={m.done} accent={accent} />;
-              if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} />;
+              if (m.type === "say") return <SayBlock key={m.id} text={m.text} done={m.done} preamble={m.preamble} />;
               if (m.type === "rows") return <RowsBlock key={m.id} kind={m.kind} items={m.items} accent={accent} onActivateItem={onActivateChip} />;
               if (m.type === "summary") return <AlfredTransactionBreakdown key={m.id} buckets={m.buckets} period={m.period} group_by={m.group_by} accent={accent} />;
               if (m.type === "breakdown") return <AlfredBreakdown key={m.id} kind={m.kind} title={m.title} caption={m.caption} total={m.total} buckets={m.buckets} accent={accent} onActivateItem={onActivateChip} />;

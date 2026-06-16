@@ -57,6 +57,59 @@ describe("AlfredPanel", () => {
     expect(screen.getByText("Any bills?")).toBeTruthy();
   });
 
+  it("keeps every between-tool narration visible, interleaved with its step disclosures, and only serifs the answer", async () => {
+    // The reported regression: narration Alfred says between tool calls vanished.
+    // A real multi-step run must read like an agentic trail — each narration line
+    // persists as quiet prose above the tools it introduced; only the final answer
+    // resolves into the serif line.
+    const narration = 'Let me read a few more confirmation emails to better understand what constitutes "nothing after applied," and check for more rejections.';
+    scriptedRun([
+      { type: "run_start", conversation_id: "c1", model: "claude-sonnet-4-6" },
+      { type: "text_delta", text: "Let me search your mail." },
+      { type: "tool_start", tool_id: "t1", name: "search_email" },
+      { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 12 matches" },
+      { type: "text_delta", text: narration },
+      { type: "tool_start", tool_id: "t2", name: "get_email_body" },
+      { type: "tool_result", tool_id: "t2", name: "get_email_body", ok: true, summary: "Mail · opened message" },
+      { type: "tool_start", tool_id: "t3", name: "get_email_body" },
+      { type: "tool_result", tool_id: "t3", name: "get_email_body", ok: true, summary: "Mail · opened message" },
+      { type: "text_delta", text: "Here's what I found." },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    render(<AlfredPanel {...baseProps} />);
+    const input = screen.getByPlaceholderText("Ask about your day…");
+    fireEvent.change(input, { target: { value: "What needs me?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("Here's what I found.")).toBeTruthy());
+
+    // Both narration lines survived — including the exact text the owner reported losing.
+    const first = screen.getByText("Let me search your mail.");
+    const second = screen.getByText(narration);
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+
+    // …rendered as quiet prose, not promoted to the serif answer line.
+    expect(first.getAttribute("style")).toContain("font-size: 11.5px");
+    expect(first.getAttribute("style")).not.toContain("serif");
+    expect(second.getAttribute("style")).not.toContain("serif");
+
+    // Only the final answer is the serif title line.
+    expect(screen.getByText("Here's what I found.").getAttribute("style")).toContain("serif");
+
+    // The concrete "no stack of serif pseudo-headers" guard: across a multi-narration
+    // run the panel renders EXACTLY ONE serif node (.ea-display) — the answer lead —
+    // never one per narration. (The empty-state title also uses .ea-display, but the
+    // empty state isn't rendered once the thread has messages.)
+    const serifNodes = document.querySelectorAll(".ea-display");
+    expect(serifNodes).toHaveLength(1);
+    expect(serifNodes[0].textContent).toBe("Here's what I found.");
+
+    // Each narration introduced its own settled step disclosure (no lingering spinner).
+    expect(screen.getByRole("button", { name: /1 step\b/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /2 steps/ })).toBeTruthy();
+  });
+
   it("retries a handoff that arrived during an in-flight run instead of dropping it (P2-3)", async () => {
     let resolveFirst;
     api.runAlfredStream

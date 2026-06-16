@@ -74,7 +74,7 @@ export const ToolRows = memo(function ToolRows({ tools, accent }) {
   );
 });
 
-export const SayBlock = memo(function SayBlock({ text: body, done }) {
+export const SayBlock = memo(function SayBlock({ text: body, done, preamble }) {
   // useMemo the lead/body split (perf audit fe-alfred::
   // splitsaytext-rerun-per-delta-quadratic): with the memo wrap above, DONE say
   // blocks never recompute; for the active streaming block this skips the split
@@ -84,12 +84,14 @@ export const SayBlock = memo(function SayBlock({ text: body, done }) {
   // when `done` flips false→true on the same block.
   const { lead, body: rest } = useMemo(() => splitSayText(body), [body]);
 
-  // While streaming, render quietly as one block — don't promote the first
-  // sentence to the serif lead. A say that's still open is either a between-tool
-  // preamble (which the reducer drops on the next tool_start) or the answer
-  // mid-stream; either way it shouldn't flash as a header. Only the finished
-  // answer (done) resolves into the serif title line.
-  if (!done) {
+  // Render quietly as one block — don't promote the first sentence to the serif
+  // lead — when the say is either (a) still streaming, or (b) a settled between-
+  // tool preamble. A preamble is Alfred narrating what it's about to do; it
+  // persists in the thread as plain prose (like any agentic tool) rather than
+  // flashing as a header. Rendering it identically to its streaming state means
+  // there's no visual jump when the next tool_start settles it. Only the finished
+  // answer (done && !preamble) resolves into the serif title line.
+  if (!done || preamble) {
     return (
       <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "rgba(205,214,244,0.6)" }}>{body}</div>
     );

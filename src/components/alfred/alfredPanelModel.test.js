@@ -29,31 +29,74 @@ describe("applyAlfredEvent", () => {
     expect(ms[0]).toMatchObject({ type: "say", text: "Two things need you.", done: false });
   });
 
-  it("drops the between-tool preamble and coalesces tool calls into one live tools block", () => {
+  it("keeps the between-tool preamble as a quiet say and coalesces consecutive tool calls", () => {
     const ms = play([
       { type: "text_delta", text: "Checking." },
       { type: "tool_start", tool_id: "t1", name: "get_upcoming_bills" },
       { type: "tool_result", tool_id: "t1", name: "get_upcoming_bills", ok: true, summary: "Bills · 6 upcoming" },
       { type: "tool_start", tool_id: "t2", name: "show_items" },
     ]);
-    // The "Checking." preamble is dropped, not kept as a serif say block.
-    expect(ms.map((m) => m.type)).toEqual(["tools"]);
-    expect(ms[0].done).toBe(false); // live while the run is in flight
-    expect(ms[0].tools).toEqual([
+    // The "Checking." preamble survives as a tagged say (quiet prose, not serif),
+    // and tools with no narration between them still coalesce into one block.
+    expect(ms.map((m) => m.type)).toEqual(["say", "tools"]);
+    expect(ms[0]).toMatchObject({ type: "say", text: "Checking.", done: true, preamble: true });
+    expect(ms[1].done).toBe(false); // live while the run is in flight
+    expect(ms[1].tools).toEqual([
       { toolId: "t1", name: "get_upcoming_bills", state: "done", summary: "Bills · 6 upcoming" },
       { toolId: "t2", name: "show_items", state: "running", summary: null },
     ]);
   });
 
-  it("drops the preamble before tools but keeps the answer text after them", () => {
+  it("ignores a whitespace-only narration delta instead of leaving an empty preamble block", () => {
+    // Models often emit a leading "\n" or space before the first tool_use. The old
+    // dropOpenSay deleted these silently; keeping the say must not leave a blank line.
+    const ms = play([
+      { type: "text_delta", text: "\n" },
+      { type: "tool_start", tool_id: "t1", name: "search_email" },
+    ]);
+    expect(ms.map((m) => m.type)).toEqual(["tools"]);
+  });
+
+  it("keeps the preamble before tools and the answer text after them", () => {
     const ms = play([
       { type: "text_delta", text: "One sec." },
       { type: "tool_start", tool_id: "t1", name: "search_email" },
       { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 4 matches" },
       { type: "text_delta", text: "Found it." },
     ]);
-    expect(ms.map((m) => m.type)).toEqual(["tools", "say"]);
-    expect(ms[1].text).toBe("Found it.");
+    // preamble (quiet) → tools (settled by the new narration) → answer (still open)
+    expect(ms.map((m) => m.type)).toEqual(["say", "tools", "say"]);
+    expect(ms[0]).toMatchObject({ text: "One sec.", done: true, preamble: true });
+    expect(ms[1].done).toBe(true); // a fresh narration settles the preceding tools block
+    expect(ms[2]).toMatchObject({ text: "Found it.", done: false });
+    expect(ms[2].preamble).toBeFalsy();
+  });
+
+  it("keeps every between-tool narration so multi-step runs read like an agentic trail", () => {
+    // The reported regression: narration said before a tool call vanished the
+    // instant the tool started. Each narration must persist, interleaved with the
+    // tool block it introduced, and earlier blocks must settle (not spin forever).
+    const ms = play([
+      { type: "text_delta", text: "Let me search your mail." },
+      { type: "tool_start", tool_id: "t1", name: "search_email" },
+      { type: "tool_result", tool_id: "t1", name: "search_email", ok: true, summary: "Mail · 12 matches" },
+      { type: "text_delta", text: 'Let me read a few more confirmation emails to better understand what constitutes "nothing after applied," and check for more rejections.' },
+      { type: "tool_start", tool_id: "t2", name: "get_email_body" },
+      { type: "tool_result", tool_id: "t2", name: "get_email_body", ok: true, summary: "Mail · opened message" },
+      { type: "text_delta", text: "Here's what I found." },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    expect(ms.map((m) => m.type)).toEqual(["say", "tools", "say", "tools", "say"]);
+    // Both narrations persisted as quiet preambles…
+    expect(ms[0]).toMatchObject({ text: "Let me search your mail.", preamble: true, done: true });
+    expect(ms[2]).toMatchObject({ preamble: true, done: true });
+    expect(ms[2].text).toContain("read a few more confirmation emails");
+    // …each introducing its own settled tool block (no lingering spinner)…
+    expect(ms[1]).toMatchObject({ type: "tools", done: true });
+    expect(ms[3]).toMatchObject({ type: "tools", done: true });
+    // …and only the final answer resolves into the serif (non-preamble) line.
+    expect(ms[4]).toMatchObject({ text: "Here's what I found.", done: true });
+    expect(ms[4].preamble).toBeFalsy();
   });
 
   it("marks the active tools block done on run_end so it collapses to a steps disclosure", () => {
@@ -64,9 +107,38 @@ describe("applyAlfredEvent", () => {
       { type: "text_delta", text: "Here is the split." },
       { type: "run_end", stop_reason: "end_turn" },
     ]);
-    expect(ms.map((m) => m.type)).toEqual(["tools", "say"]);
-    expect(ms[0].done).toBe(true); // collapsed once the run ends
-    expect(ms[1]).toMatchObject({ type: "say", text: "Here is the split.", done: true });
+    expect(ms.map((m) => m.type)).toEqual(["say", "tools", "say"]);
+    expect(ms[0]).toMatchObject({ text: "Let me look.", preamble: true, done: true });
+    expect(ms[1].done).toBe(true); // collapsed once the run ends
+    expect(ms[2]).toMatchObject({ type: "say", text: "Here is the split.", done: true });
+    expect(ms[2].preamble).toBeFalsy();
+  });
+
+  it("settles every live tools block at run_end, even one left live by an intervening rows emission", () => {
+    // rows emitted mid-tool leaves its tools block live; a later narration opens a
+    // new block without settling that earlier one (settleTrailingTools only catches
+    // a tools block at the tail). finishTools must settle BOTH at run_end — the old
+    // settle-only-the-last behavior would leave the first block spinning forever.
+    const ms = play([
+      { type: "text_delta", text: "Let me pull those up." },
+      { type: "tool_start", tool_id: "t1", name: "show_items" },
+      { type: "rows", kind: "bill", items: [{ id: "b1", name: "Rent", amount: 1850 }] },
+      { type: "tool_result", tool_id: "t1", name: "show_items", ok: true, summary: "Bills · 1 upcoming" },
+      { type: "text_delta", text: "Now checking your deadlines." },
+      { type: "tool_start", tool_id: "t2", name: "get_deadlines" },
+      { type: "tool_result", tool_id: "t2", name: "get_deadlines", ok: true, summary: "Deadlines · 2" },
+      { type: "text_delta", text: "Rent is due and you have 2 deadlines." },
+      { type: "run_end", stop_reason: "end_turn" },
+    ]);
+    const tools = ms.filter((m) => m.type === "tools");
+    expect(tools).toHaveLength(2);
+    expect(tools.every((t) => t.done)).toBe(true); // both blocks settled — no lingering spinner
+    // The two narration lines stay quiet preambles…
+    expect(ms.filter((m) => m.type === "say" && m.preamble)).toHaveLength(2);
+    // …and the headline written after the citation is the serif (non-preamble) answer.
+    const answer = ms[ms.length - 1];
+    expect(answer).toMatchObject({ type: "say", text: "Rent is due and you have 2 deadlines.", done: true });
+    expect(answer.preamble).toBeFalsy();
   });
 
   it("run_error also closes the active tools block and appends the error line", () => {

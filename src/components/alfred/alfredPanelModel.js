@@ -53,27 +53,45 @@ function closeOpenSay(messages) {
   return messages;
 }
 
-// A say closed by a tool_start is a between-tool preamble, not the answer —
-// drop it entirely instead of keeping it as a serif block. Only the say still
-// open at run_end (the final answer) survives. This is what turns the old
-// "stack of ~10 pseudo-headers" into a single live status line + one title line.
-function dropOpenSay(messages) {
+// A say closed by a tool_start is a between-tool preamble — Alfred narrating what
+// it's about to do, not the final answer. Keep it (so the narration persists in
+// the thread like any agentic tool), but tag it `preamble` and mark it done so the
+// renderer holds it as quiet prose instead of promoting it to the serif answer
+// line. That keeps the narration visible without resurrecting the old "stack of
+// ~10 serif pseudo-headers" — only the final answer (a say still open at run_end)
+// resolves into the serif title.
+function closePreambleSay(messages) {
   const last = messages[messages.length - 1];
-  if (last?.type === "say" && !last.done) return messages.slice(0, -1);
+  if (last?.type === "say" && !last.done) {
+    return [...messages.slice(0, -1), { ...last, done: true, preamble: true }];
+  }
   return messages;
 }
 
-// Mark the current run's tools block done so it renders as a collapsed "N steps"
-// disclosure instead of a live status line. Scans from the end and stops at the
-// most recent tools block; a block already done belongs to a prior run, so leave
-// it (and everything before it) untouched.
-function finishTools(messages) {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].type !== "tools") continue;
-    if (messages[i].done) break;
-    return messages.map((m, idx) => (idx === i ? { ...m, done: true } : m));
+// When a fresh narration begins, settle the live tools block it follows so that
+// block collapses to its "N steps" disclosure instead of spinning above the new
+// prose. With preambles now interleaved, a run produces one tools block per
+// narration segment; this is what closes each earlier block as the run moves on.
+function settleTrailingTools(messages) {
+  const last = messages[messages.length - 1];
+  if (last?.type === "tools" && !last.done) {
+    return [...messages.slice(0, -1), { ...last, done: true }];
   }
   return messages;
+}
+
+// Settle every still-live tools block so each renders as a collapsed "N steps"
+// disclosure. Prior runs' blocks are already done, so this only touches the
+// current run's; settling all of them (not just the last) is the backstop that
+// keeps an interleaved run from leaving an earlier block spinning. Returns the
+// same array reference when nothing changed, preserving memo stability.
+function finishTools(messages) {
+  let changed = false;
+  const next = messages.map((m) => {
+    if (m.type === "tools" && !m.done) { changed = true; return { ...m, done: true }; }
+    return m;
+  });
+  return changed ? next : messages;
 }
 
 export function makeUserMessage(text) {
@@ -87,10 +105,17 @@ export function applyAlfredEvent(messages, event) {
       if (last?.type === "say" && !last.done) {
         return [...messages.slice(0, -1), { ...last, text: last.text + event.text }];
       }
-      return [...messages, { id: nextId(), type: "say", text: event.text, done: false }];
+      // Ignore a whitespace-only opening delta (models often emit a leading "\n"
+      // before the first tool_use): starting a say from it would leave a blank
+      // preamble line once a tool_start settles it. Real prose still opens a say.
+      if (!event.text || !event.text.trim()) return messages;
+      // A fresh narration begins: settle the live tools block it follows (if any)
+      // so it collapses behind the new prose instead of spinning above it.
+      const settled = settleTrailingTools(messages);
+      return [...settled, { id: nextId(), type: "say", text: event.text, done: false }];
     }
     case "tool_start": {
-      const trimmed = dropOpenSay(messages);
+      const trimmed = closePreambleSay(messages);
       const entry = { toolId: event.tool_id, name: event.name, state: "running", summary: null };
       const last = trimmed[trimmed.length - 1];
       // Merge into the active (not-done) tools block so a whole run's steps
