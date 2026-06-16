@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@libsql/client";
 import crypto from "crypto";
 import cookieParser from "cookie-parser";
@@ -255,6 +255,19 @@ async function getSettingsRow() {
   return result.rows[0];
 }
 
+// One shared listening server for the whole file instead of request(server)
+// per call. The app is stateless across tests (routers delegate to mocked deps +
+// the per-test testState.db.current), so reuse is safe — and it removes ~26
+// app.listen(0)/close cycles that, under full-suite fork contention, can starve
+// the event loop into a "socket hang up" before a response lands.
+let server;
+beforeAll(() => {
+  server = makeApp().listen(0);
+});
+afterAll(async () => {
+  await new Promise((resolve) => (server ? server.close(() => resolve()) : resolve()));
+});
+
 beforeEach(async () => {
   testState.db.current = await createMigratedDb();
   __resetCurrentDashboardEventsForTests();
@@ -271,7 +284,7 @@ afterEach(async () => {
 describe("auth boundaries", () => {
   it("blocks bearer auth on operational briefing routes", async () => {
     await seedBearer();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/briefing/email-index/health")
       .set("Authorization", "Bearer scoped-token");
 
@@ -280,7 +293,7 @@ describe("auth boundaries", () => {
 
   it("blocks bearer auth on dashboard current route", async () => {
     await seedBearer();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/dashboard/current")
       .set("Authorization", "Bearer scoped-token");
 
@@ -289,7 +302,7 @@ describe("auth boundaries", () => {
 
   it("does not expose briefing pin routes", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/pin/msg-1")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -298,7 +311,7 @@ describe("auth boundaries", () => {
 
   it("settles arrival-grace rows through the authenticated briefing endpoint", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/email/arrival-grace/settle")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -309,7 +322,7 @@ describe("auth boundaries", () => {
 
   it("blocks bearer auth on settings route", async () => {
     await seedBearer();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/settings")
       .set("Authorization", "Bearer scoped-token");
 
@@ -318,7 +331,7 @@ describe("auth boundaries", () => {
 
   it("omits embedding status from settings", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -329,7 +342,7 @@ describe("auth boundaries", () => {
 
   it("returns stored and effective email triage mode from settings", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -340,7 +353,7 @@ describe("auth boundaries", () => {
 
   it("returns default triage sound settings and the bundled sound registry", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -363,7 +376,7 @@ describe("auth boundaries", () => {
 
   it("returns default Bill Pay mappings from settings", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -371,118 +384,49 @@ describe("auth boundaries", () => {
     expect(res.body.bill_pay_mappings).toEqual({ version: 1, profiles: [] });
   });
 
-  it("returns OpenAI triage cache stats for the recent settings diagnostic", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-05-07T12:00:00.000Z"));
+  it("serves triage cache stats over the authed diagnostic route", async () => {
+    // Thin wiring check: the route reaches getTriageCacheStats and returns its
+    // summary shape. The pricing/window/rounding math lives in
+    // server/triage/triage-cache-stats.test.js.
     await seedSession();
-    await testState.db.current.batch([
-      {
-        sql: `INSERT INTO ea_email_triage
-                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, cheap_model_result_json)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          "user-1",
-          "cheap-1",
-          "cheap_model",
-          "2026-05-04T12:00:00.000Z",
-          JSON.stringify({
-            cheap: {
-              input_tokens: 1000,
-              output_tokens: 100,
-              prompt_tokens_details: { cached_tokens: 600 },
-            },
-          }),
-          JSON.stringify({ provider: "openai", model: "gpt-5.4-nano-2026-05-04", tier: "cheap" }),
-        ],
-      },
-      {
-        sql: `INSERT INTO ea_email_triage
-                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, strong_model_result_json)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          "user-1",
-          "strong-1",
-          "strong_model",
-          "2026-05-04T12:05:00.000Z",
-          JSON.stringify({
-            strong: {
-              input_tokens: 2000,
-              output_tokens: 200,
-              input_tokens_details: { cached_tokens: 1000 },
-            },
-          }),
-          JSON.stringify({ provider: "openai", model: "gpt-5.4", tier: "strong" }),
-        ],
-      },
-      {
-        sql: `INSERT INTO ea_email_triage
-                (user_id, email_id, triage_source, last_triaged_at, model_usage_json, cheap_model_result_json)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [
-          "user-1",
-          "anthropic-1",
-          "cheap_model",
-          "2026-05-04T12:10:00.000Z",
-          JSON.stringify({ cheap: { input_tokens: 999, output_tokens: 99 } }),
-          JSON.stringify({ provider: "anthropic", model: "claude-haiku-4-5-20251001", tier: "cheap" }),
-        ],
-      },
-    ]);
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, email_id, triage_source, last_triaged_at, model_usage_json, strong_model_result_json)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [
+        "user-1",
+        "strong-1",
+        "strong_model",
+        new Date().toISOString(),
+        JSON.stringify({
+          strong: {
+            input_tokens: 2000,
+            output_tokens: 200,
+            input_tokens_details: { cached_tokens: 1000 },
+          },
+        }),
+        JSON.stringify({ provider: "openai", model: "gpt-5.4", tier: "strong" }),
+      ],
+    });
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/triage/cache-stats")
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      windowDays: 7,
-      openaiCalls: 2,
-      inputTokens: 3000,
-      cachedInputTokens: 1600,
-      outputTokens: 300,
-      estimatedCostUsd: 0.005967,
-      hitRate: 0.5333,
-      lastTriagedAt: "2026-05-04T12:05:00.000Z",
-      comparisonWindows: {
-        monthToDate: {
-          windowDays: null,
-          windowLabel: "month_to_date",
-          openaiCalls: 2,
-          estimatedCostUsd: 0.005967,
-          estimatedSavingsUsd: 0.002358,
-        },
-      },
-      byTier: {
-        cheap: {
-          calls: 1,
-          inputTokens: 1000,
-          cachedInputTokens: 600,
-          outputTokens: 100,
-          estimatedCostUsd: 0.000217,
-        },
-        strong: {
-          calls: 1,
-          inputTokens: 2000,
-          cachedInputTokens: 1000,
-          outputTokens: 200,
-          estimatedCostUsd: 0.00575,
-        },
-      },
-    });
-    expect(res.body.estimatedSavingsUsd).toBeCloseTo(0.002358, 6);
-    // Triage cache stats no longer carry a semantic-search bolt-on; email-search
-    // usage is served by its own endpoint now.
-    expect(res.body.semanticSearch).toBeUndefined();
+    expect(res.body.windowDays).toBe(7);
+    expect(res.body.openaiCalls).toBe(1);
+    expect(res.body.comparisonWindows.monthToDate).toBeTruthy();
   });
 
   it("requires a session for GET /api/ea/email-search/usage", async () => {
-    const res = await request(makeApp()).get("/api/ea/email-search/usage");
+    const res = await request(server).get("/api/ea/email-search/usage");
     expect(res.status).toBe(401);
   });
 
   it("returns email-search usage for an authed session", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/ea/email-search/usage")
       .set("Cookie", ["ea_session=cookie-session"]);
     expect(res.status).toBe(200);
@@ -493,7 +437,7 @@ describe("auth boundaries", () => {
 
   it("rejects invalid email triage mode writes", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ email_triage_mode: "disabled" });
@@ -504,7 +448,7 @@ describe("auth boundaries", () => {
 
   it("updates valid email triage mode writes", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ email_triage_mode: "paused" });
@@ -513,9 +457,12 @@ describe("auth boundaries", () => {
     expect(await getSettingsRow()).toMatchObject({ email_triage_mode: "paused" });
   });
 
-  it("rejects invalid triage sound settings", async () => {
+  it("rejects invalid triage sound settings without touching the stored row", async () => {
+    // Wiring check: validateTriageSoundSettings gates the write (400) and the
+    // durable row is left unwritten. The per-branch validation messages are
+    // owned by server/triage/triage-sound-settings.test.js.
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({
@@ -528,22 +475,7 @@ describe("auth boundaries", () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toBe("Invalid triage_sound_settings laneScope");
-
-    const soundRes = await request(makeApp())
-      .put("/api/ea/settings")
-      .set("Cookie", ["ea_session=cookie-session"])
-      .send({
-        triage_sound_settings: {
-          laneScope: "needs_attention_and_fyi",
-          triggers: {
-            needs_attention_finalized: { enabled: true, soundId: "linear-upload-file" },
-          },
-        },
-      });
-
-    expect(soundRes.status).toBe(400);
-    expect(soundRes.body.message).toBe("Invalid triage_sound_settings soundId");
+    expect((await getSettingsRow()).triage_sound_settings_json).toBeNull();
   });
 
   it("updates valid triage sound settings writes", async () => {
@@ -562,7 +494,7 @@ describe("auth boundaries", () => {
       },
     };
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ triage_sound_settings: settings });
@@ -573,7 +505,7 @@ describe("auth boundaries", () => {
 
   it("rejects invalid Bill Pay mapping settings", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({
@@ -605,7 +537,7 @@ describe("auth boundaries", () => {
       }],
     };
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ bill_pay_mappings: mappings });
@@ -616,7 +548,7 @@ describe("auth boundaries", () => {
 
   it("stores Todoist OAuth token responses without exposing token material", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({
@@ -639,7 +571,7 @@ describe("auth boundaries", () => {
     });
     expect(settings.todoist_oauth_access_token_expires_at).toEqual(expect.any(String));
 
-    const getRes = await request(makeApp())
+    const getRes = await request(server)
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
     expect(getRes.body.todoist_configured).toBe(true);
@@ -668,7 +600,7 @@ describe("auth boundaries", () => {
       ],
     });
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ todoist_api_token: "personal-token" });
@@ -685,7 +617,7 @@ describe("auth boundaries", () => {
 
   it("stores Discord webhook settings encrypted without exposing the raw webhook", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({
@@ -700,7 +632,7 @@ describe("auth boundaries", () => {
       discord_user_id: "123456789",
     });
 
-    const getRes = await request(makeApp())
+    const getRes = await request(server)
       .get("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -721,7 +653,7 @@ describe("auth boundaries", () => {
       args: ["enc:https://discord.example/webhook", "123", "user-1"],
     });
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .put("/api/ea/settings")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ discord_webhook_url: "", discord_user_id: "" });
@@ -743,7 +675,7 @@ describe("auth boundaries", () => {
       args: ["enc:https://discord.example/webhook", "123", "user-1"],
     });
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/ea/settings/discord-reminder-test")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -760,7 +692,7 @@ describe("auth boundaries", () => {
 
   it("reports missing and rate-limited Discord reminder tests", async () => {
     await seedSession();
-    const missing = await request(makeApp())
+    const missing = await request(server)
       .post("/api/ea/settings/discord-reminder-test")
       .set("Cookie", ["ea_session=cookie-session"]);
     expect(missing.status).toBe(400);
@@ -778,7 +710,7 @@ describe("auth boundaries", () => {
       error: "Discord 429",
     });
 
-    const limited = await request(makeApp())
+    const limited = await request(server)
       .post("/api/ea/settings/discord-reminder-test")
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -793,7 +725,7 @@ describe("auth boundaries", () => {
     const unsubscribe = subscribeCurrentDashboardEvents("user-1", (event) => {
       dashboardEvents.push(event);
     });
-    const createRes = await request(makeApp())
+    const createRes = await request(server)
       .post("/api/ea/reminders")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({
@@ -815,14 +747,14 @@ describe("auth boundaries", () => {
       remind_at: "2026-05-10T16:45:00.000Z",
     });
 
-    const listRes = await request(makeApp())
+    const listRes = await request(server)
       .get("/api/ea/reminders?sourceType=calendar_event&sourceItemId=event-1")
       .set("Cookie", ["ea_session=cookie-session"]);
 
     expect(listRes.status).toBe(200);
     expect(listRes.body.reminders).toHaveLength(1);
 
-    const deleteRes = await request(makeApp())
+    const deleteRes = await request(server)
       .delete(`/api/ea/reminders/${createRes.body.reminder.id}`)
       .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -850,7 +782,7 @@ describe("auth boundaries", () => {
 
   it("blocks bearer auth on notes route", async () => {
     await seedBearer();
-    const res = await request(makeApp())
+    const res = await request(server)
       .get("/api/notes")
       .set("Authorization", "Bearer scoped-token");
 
@@ -859,7 +791,7 @@ describe("auth boundaries", () => {
 
   it("allows scoped bearer auth on quick-txn", async () => {
     await seedBearer(["actual:write"]);
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/actual/quick-txn")
       .set("Authorization", "Bearer scoped-token")
       .send({ account: "Checking", amount: 12.34, payee: "Coffee" });
@@ -873,7 +805,7 @@ describe("auth boundaries", () => {
 
   it("rejects non-numeric quick-txn amounts before calling Actual", async () => {
     await seedBearer(["actual:write"]);
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/actual/quick-txn")
       .set("Authorization", "Bearer scoped-token")
       .send({ account: "Checking", amount: "$12.34", payee: "Coffee" });
@@ -885,7 +817,7 @@ describe("auth boundaries", () => {
 
   it("allows cookie session auth on quick-txn", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/actual/quick-txn")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ account: "Checking", amount: 18.5, payee: "Lunch" });
@@ -908,7 +840,7 @@ describe("auth boundaries", () => {
       schedule_name: "Credit Card Payment",
     };
 
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/actual/send")
       .set("Cookie", ["ea_session=cookie-session"])
       .send(payload);
@@ -919,7 +851,7 @@ describe("auth boundaries", () => {
 
   it("rejects transfer bill sends with missing transfer fields before calling Actual", async () => {
     await seedSession();
-    const res = await request(makeApp())
+    const res = await request(server)
       .post("/api/briefing/actual/send")
       .set("Cookie", ["ea_session=cookie-session"])
       .send({ type: "transfer", amount: 197.5, due_date: "2026-04-30", from_account_id: "acct-checking" });
@@ -943,7 +875,7 @@ describe("auth boundaries", () => {
     ];
 
     for (const [method, path] of cases) {
-      const agent = request(makeApp());
+      const agent = request(server);
       const res = await agent[method](path)
         .set("Cookie", ["ea_session=cookie-session"]);
 
@@ -960,7 +892,7 @@ describe("auth boundaries", () => {
     ];
 
     for (const [method, path] of cases) {
-      const res = await request(makeApp())[method](path)
+      const res = await request(server)[method](path)
         .set("Authorization", "Bearer scoped-token");
 
       expect(res.status).toBe(401);

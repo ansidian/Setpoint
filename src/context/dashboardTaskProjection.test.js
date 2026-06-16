@@ -38,6 +38,100 @@ describe("dashboard task projection", () => {
     expect(deleted.stats).toMatchObject({ incomplete: 1, dueToday: 0, dueThisWeek: 1 });
   });
 
+  it("merges an upsert: supplied fields overwrite, untouched fields survive", () => {
+    const root = {
+      upcoming: [
+        {
+          id: "task",
+          due_date: "2026-05-07",
+          status: "incomplete",
+          content: "Original title",
+          priority: 4,
+        },
+      ],
+      stats: null,
+    };
+
+    const merged = applyDeadlineUpsert(
+      root,
+      { id: "task", status: "complete", content: "New title" },
+      { merge: true, now },
+    );
+
+    expect(merged.upcoming).toHaveLength(1);
+    expect(merged.upcoming[0]).toEqual({
+      id: "task",
+      due_date: "2026-05-07",
+      status: "complete",
+      content: "New title",
+      priority: 4,
+    });
+  });
+
+  it("replaces an upsert (merge:false): non-supplied fields are dropped", () => {
+    const root = {
+      upcoming: [
+        {
+          id: "task",
+          due_date: "2026-05-07",
+          status: "incomplete",
+          content: "Original title",
+          priority: 4,
+        },
+      ],
+      stats: null,
+    };
+
+    const replaced = applyDeadlineUpsert(
+      root,
+      { id: "task", due_date: "2026-05-09", status: "incomplete" },
+      { now },
+    );
+
+    expect(replaced.upcoming).toHaveLength(1);
+    expect(replaced.upcoming[0]).toEqual({
+      id: "task",
+      due_date: "2026-05-09",
+      status: "incomplete",
+    });
+    expect(replaced.upcoming[0].content).toBeUndefined();
+    expect(replaced.upcoming[0].priority).toBeUndefined();
+  });
+
+  it("upsert skips tombstoned entries: re-adds a fresh live deadline alongside the tombstone", () => {
+    const root = {
+      upcoming: [
+        {
+          id: "task",
+          due_date: "2026-05-07",
+          status: "incomplete",
+          _tombstone: true,
+        },
+      ],
+      stats: null,
+    };
+
+    const upserted = applyDeadlineUpsert(
+      root,
+      { id: "task", due_date: "2026-05-08", status: "incomplete" },
+      { merge: true, now },
+    );
+
+    // The tombstone is not matched, so the new entry is appended rather than merged onto it.
+    expect(upserted.upcoming).toHaveLength(2);
+    expect(upserted.upcoming[0]).toMatchObject({ id: "task", _tombstone: true });
+    const live = upserted.upcoming[1];
+    expect(live).toMatchObject({ id: "task", due_date: "2026-05-08", status: "incomplete" });
+    expect(live._tombstone).toBeUndefined();
+
+    // Stats exclude the tombstone and count only the live entry.
+    expect(upserted.stats).toMatchObject({ incomplete: 1, dueToday: 0, dueThisWeek: 1 });
+
+    // deadlineMatches resolves the live entry (tombstone is skipped).
+    expect(deadlineMatches(upserted.upcoming[0], "task")).toBe(false);
+    expect(deadlineMatches(upserted.upcoming[1], "task")).toBe(true);
+  });
+
   it("marks a deadline completing and then complete", () => {
     const root = {
       upcoming: [{ id: "shared", due_date: "2026-05-07", status: "incomplete" }],

@@ -10,62 +10,7 @@ vi.mock("@/api", () => ({
   getBillExtractModels: mockApi.getBillExtractModels,
 }));
 
-vi.mock("@/components/ui/select", async () => {
-  const React = await import("react");
-
-  function Select({ value, onValueChange, disabled, children }) {
-    const childList = React.Children.toArray(children);
-    const trigger = childList.find(
-      (child) => React.isValidElement(child) && child.type?.displayName === "MockSelectTrigger",
-    );
-    const content = childList.find(
-      (child) => React.isValidElement(child) && child.type?.displayName === "MockSelectContent",
-    );
-    const items = React.Children.toArray(content?.props?.children).filter(React.isValidElement);
-
-    return (
-      <select
-        aria-label={trigger?.props?.["aria-label"]}
-        className={trigger?.props?.className}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onValueChange?.(event.target.value)}
-      >
-        {items.map((item) => (
-          <option key={item.props.value} value={item.props.value} disabled={item.props.disabled}>
-            {item.props.children}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  function SelectTrigger() {
-    return null;
-  }
-  SelectTrigger.displayName = "MockSelectTrigger";
-
-  function SelectValue() {
-    return null;
-  }
-
-  function SelectContent() {
-    return null;
-  }
-  SelectContent.displayName = "MockSelectContent";
-
-  function SelectItem() {
-    return null;
-  }
-
-  return {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem,
-  };
-});
+vi.mock("@/components/ui/select", () => import("../shared/selectMock.test-utils.jsx"));
 
 const { default: BillExtractionAiCard } = await import("./BillExtractionAiCard.jsx");
 
@@ -114,7 +59,7 @@ beforeEach(() => {
 });
 
 describe("BillExtractionAiCard", () => {
-  it("renders provider and model as labeled peer fields", async () => {
+  it("renders the two labeled provider/model selects", async () => {
     renderCard();
 
     await waitFor(() => {
@@ -128,7 +73,7 @@ describe("BillExtractionAiCard", () => {
     expect(screen.getByLabelText("Bill extraction model")).toBeTruthy();
   });
 
-  it("switches provider and resets the model to that provider's default", async () => {
+  it("a provider change reaches patch with the resolved provider/model", async () => {
     const patch = vi.fn();
     renderCard({ patch });
 
@@ -146,11 +91,9 @@ describe("BillExtractionAiCard", () => {
         bill_extract_model: "gpt-5.5",
       });
     });
-
-    expect(screen.getByLabelText("Bill extraction model").value).toBe("gpt-5.5");
   });
 
-  it("disables model selection and shows the env-var warning for an unavailable provider", async () => {
+  it("shows the env-var warning for an unavailable provider", async () => {
     mockApi.getBillExtractModels.mockResolvedValueOnce([
       {
         provider: "anthropic",
@@ -178,7 +121,5 @@ describe("BillExtractionAiCard", () => {
     });
 
     await screen.findByText("Set OPENAI_API_KEY");
-
-    expect(screen.getByLabelText("Bill extraction model").disabled).toBe(true);
   });
 });

@@ -1,7 +1,11 @@
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TRIAGE_SOUND_AUDIO_UNLOCK_KEY } from "@/lib/triageSoundPlayback";
+import { playTriageNotificationSound } from "@/lib/triageSoundPlayback";
+
+vi.mock("@/lib/triageSoundPlayback", () => ({
+  playTriageNotificationSound: vi.fn(),
+}));
 
 vi.mock("@/components/ui/select", async () => {
   const React = await import("react");
@@ -125,47 +129,34 @@ describe("TriageSoundSettingsCard", () => {
     expect(screen.getByRole("checkbox", { name: /triage failed/i }).checked).toBe(false);
   });
 
-  it("patches the full triage sound settings object when a trigger is toggled", () => {
+  it("patches the toggled trigger when its checkbox is flipped", () => {
     const { patch, setSettings } = renderCard();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /fyi finalized/i }));
 
     expect(setSettings).toHaveBeenCalled();
     expect(patch).toHaveBeenCalledWith({
-      triage_sound_settings: {
-        laneScope: "needs_attention_and_fyi",
-        volume: 0.8,
-        triggers: {
-          needs_attention_finalized: { enabled: true, soundId: "clear_chime" },
-          email_queued: { enabled: true, soundId: "quick_chime" },
+      triage_sound_settings: expect.objectContaining({
+        triggers: expect.objectContaining({
           fyi_finalized: { enabled: false, soundId: "smooth_modern" },
-          weak_security_grace: { enabled: true, soundId: "low_tone" },
-          triage_failed: { enabled: false, soundId: "low_tone" },
-          event_upcoming: { enabled: true, soundId: "clear_chime" },
-          task_completed: { enabled: true, soundId: "smooth_modern" },
-        },
-      },
+        }),
+      }),
     });
   });
 
-  it("plays the selected row sound from the Test control and marks audio ready", async () => {
-    const play = vi.fn(() => Promise.resolve());
-    const AudioMock = vi.fn(function AudioMock(path) {
-      this.path = path;
-      this.play = play;
-    });
-    vi.stubGlobal("Audio", AudioMock);
+  it("invokes playback for the selected row sound from the Test control", () => {
+    playTriageNotificationSound.mockClear();
     renderCard();
 
     fireEvent.click(screen.getAllByRole("button", { name: /test/i })[0]);
 
-    expect(AudioMock).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
-    expect(play).toHaveBeenCalled();
-    expect(AudioMock.mock.instances[0].volume).toBe(0.8);
-    await waitFor(() => {
-      expect(sessionStorage.getItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY)).toBe("1");
-    });
-    expect(screen.getByText("Test playback unlocks audio for this browser session when the browser allows it.")).toBeTruthy();
+    expect(playTriageNotificationSound).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "clear_chime", path: "/sounds/notifications/clear-chime.mp3" }),
+      expect.objectContaining({ markUnlocked: true, volume: 0.8 }),
+    );
+    expect(
+      screen.getByText("Test playback unlocks audio for this browser session when the browser allows it."),
+    ).toBeTruthy();
   });
 
   it("patches the full triage sound settings object when a trigger sound changes", () => {

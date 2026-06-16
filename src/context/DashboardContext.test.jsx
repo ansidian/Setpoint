@@ -144,6 +144,130 @@ describe("DashboardContext deadline single-owner state", () => {
     expect(remainingDeadlines.upcoming).toEqual([]);
   });
 
+  it("reverts the optimistic completing flag and never completes when the server rejects", async () => {
+    const task = {
+      id: "todo-fails",
+      title: "Server-rejects task",
+      due_date: "2026-04-21",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const onTaskCompleted = vi.fn();
+    const onTaskCompletionIntent = vi.fn();
+    completeDeadlineOccurrence.mockRejectedValue(new Error("provider down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <DashboardProvider
+        deadlines={deadlines}
+        setCalendarDeadlines={setCalendarDeadlines}
+        onTaskCompleted={onTaskCompleted}
+        onTaskCompletionIntent={onTaskCompletionIntent}
+      >
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+    });
+
+    // The intent fired (optimistic) but the completion was rejected, so the row
+    // must return to its pre-click state: _completing cleared, not complete.
+    expect(onTaskCompletionIntent).toHaveBeenCalledWith("todo-fails");
+    const revertedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
+    expect(revertedDeadlines.upcoming[0]).toMatchObject({
+      id: "todo-fails",
+      status: "incomplete",
+    });
+    expect(revertedDeadlines.upcoming[0]._completing).toBeUndefined();
+    expect(onTaskCompleted).not.toHaveBeenCalled();
+
+    // The 600ms removeCompletedTask timer must never have been scheduled, so
+    // advancing time cannot flip the row to complete.
+    const callsBeforeAdvance = setCalendarDeadlines.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(setCalendarDeadlines.mock.calls.length).toBe(callsBeforeAdvance);
+    expect(onTaskCompleted).not.toHaveBeenCalled();
+    const finalDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
+    expect(finalDeadlines.upcoming[0].status).toBe("incomplete");
+
+    errorSpy.mockRestore();
+  });
+
+  it("ignores Complete on a task that is already _completing", async () => {
+    const task = {
+      id: "todo-inflight",
+      title: "Already completing",
+      due_date: "2026-04-21",
+      status: "incomplete",
+      _completing: true,
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const onTaskCompletionIntent = vi.fn();
+
+    render(
+      <DashboardProvider
+        deadlines={deadlines}
+        setCalendarDeadlines={setCalendarDeadlines}
+        onTaskCompletionIntent={onTaskCompletionIntent}
+      >
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+    });
+
+    expect(completeDeadlineOccurrence).not.toHaveBeenCalled();
+    expect(onTaskCompletionIntent).not.toHaveBeenCalled();
+    expect(setCalendarDeadlines).not.toHaveBeenCalled();
+  });
+
+  it("ignores Complete on a task whose status is already complete", async () => {
+    const task = {
+      id: "todo-done",
+      title: "Already complete",
+      due_date: "2026-04-21",
+      status: "complete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const onTaskCompletionIntent = vi.fn();
+
+    render(
+      <DashboardProvider
+        deadlines={deadlines}
+        setCalendarDeadlines={setCalendarDeadlines}
+        onTaskCompletionIntent={onTaskCompletionIntent}
+      >
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+    });
+
+    expect(completeDeadlineOccurrence).not.toHaveBeenCalled();
+    expect(onTaskCompletionIntent).not.toHaveBeenCalled();
+    expect(setCalendarDeadlines).not.toHaveBeenCalled();
+  });
+
   it("seeds the empty store from the current deadlines view so optimistic flags are kept", async () => {
     const task = {
       id: "todo-fallback",

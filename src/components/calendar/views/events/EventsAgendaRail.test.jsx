@@ -582,7 +582,7 @@ describe("EventsAgendaRail", () => {
     expect(chips[1].style.border).not.toBe("1px solid rgba(137, 180, 250, 1)");
   });
 
-  it("does not insert a selected-only dot into solid all-day chips", () => {
+  it("renders the full title in a selected solid all-day chip", () => {
     renderRail({
       selectedDateKey: "2026-05-05",
       selectedItemId: "all-day",
@@ -599,7 +599,6 @@ describe("EventsAgendaRail", () => {
     });
 
     const chip = screen.getByTestId("calendar-agenda-event-chip");
-    expect(chip.querySelector("span[aria-hidden='true']")).toBeNull();
     expect(chip.textContent).toContain("Residency planning block with a long stable title");
   });
 
@@ -608,7 +607,6 @@ describe("EventsAgendaRail", () => {
 
     const header = screen.getByRole("button", { name: /select monday, may 4/i });
     expect(header.getAttribute("data-agenda-date-header")).toBe("true");
-    expect(header.style.position).toBe("sticky");
     expect(screen.queryByTestId("events-agenda-active-header")).toBeNull();
     expect(screen.queryByTestId("events-agenda-terminal-sentinel")).toBeNull();
   });

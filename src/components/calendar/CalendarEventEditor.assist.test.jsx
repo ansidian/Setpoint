@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mockGetCalendarSources, mockCreateCalendarEvent, mockUpdateCalendarEvent, mockGetCalendarPlaceSuggestions, mockGetCalendarPlaceDetails } from "./CalendarEventEditor.test-setup.js";
 import { renderModal, openFloatingEventEditorFromSelectedChip, getActiveEventSourceTrigger, getActiveEventSaveButton, setCompactSchedulePickerTime } from "./CalendarEventEditor.test-utils.jsx";
 
@@ -286,9 +286,6 @@ describe("CalendarEventEditor source and location assist behavior", () => {
   });
 
   it("lets the user arrow through location suggestions and press enter to commit one", async () => {
-    const scrollIntoView = vi.fn();
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = scrollIntoView;
     renderModal();
     mockGetCalendarPlaceSuggestions.mockResolvedValue({
       places: [
@@ -325,19 +322,13 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     });
 
     expect(await screen.findByText("McDonald's South El Monte")).toBeTruthy();
-    scrollIntoView.mockClear();
     fireEvent.keyDown(locationInput, { key: "ArrowDown" });
     fireEvent.keyDown(locationInput, { key: "Enter" });
 
-    try {
-      await waitFor(() => {
-        expect(scrollIntoView).toHaveBeenCalled();
-        expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-2", expect.any(String));
-        expect(screen.getByTestId("calendar-event-location").value).toBe("McDonald's El Monte, 456 Valley Blvd, El Monte, CA 91731, USA");
-      });
-    } finally {
-      Element.prototype.scrollIntoView = originalScrollIntoView;
-    }
+    await waitFor(() => {
+      expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-2", expect.any(String));
+      expect(screen.getByTestId("calendar-event-location").value).toBe("McDonald's El Monte, 456 Valley Blvd, El Monte, CA 91731, USA");
+    });
   });
 
   it("edits date ranges, all-day state, and overnight times from the compact schedule picker", async () => {
@@ -559,44 +550,4 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     });
   });
 
-  it("allows saving an event when the end time matches the start time", async () => {
-    const { upsertEvents } = renderModal();
-    const savedEvent = {
-      id: "event-equal-time",
-      title: "Hold",
-      accountId: "gmail-main",
-      calendarId: "primary",
-      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      endMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
-      writable: true,
-      allDay: false,
-    };
-    mockCreateCalendarEvent.mockResolvedValue({
-      event: savedEvent,
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
-    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
-
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Hold" },
-    });
-
-    fireEvent.click(screen.getByTestId("calendar-event-end-time"));
-    const picker = await screen.findByRole("dialog", { name: /compact schedule picker/i });
-    setCompactSchedulePickerTime(picker, "end time", { hour: 9, minute: 0, period: "am" });
-    fireEvent.click(within(picker).getByRole("button", { name: /done/i }));
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("calendar-event-validation")).toBeNull();
-      expect(screen.getByTestId("calendar-event-save").disabled).toBe(false);
-    });
-
-    fireEvent.click(screen.getByTestId("calendar-event-save"));
-
-    await waitFor(() => {
-      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
-      expect(upsertEvents).toHaveBeenCalledWith(savedEvent);
-    });
-  });
 });

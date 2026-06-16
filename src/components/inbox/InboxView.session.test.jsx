@@ -1384,13 +1384,12 @@ describe("InboxView session state", () => {
 
     render(<DesktopHotkeyHarness />);
 
-    const numberEvent = new KeyboardEvent("keydown", {
-      key: "1",
-      bubbles: true,
-      cancelable: true,
-    });
-    window.dispatchEvent(numberEvent);
-    expect(numberEvent.defaultPrevented).toBe(false);
+    // A shell number key is not an inbox action: it triggers no snapshot
+    // mutation and leaves the selection where it was (observable outcome rather
+    // than asserting the internal preventDefault decision).
+    fireEvent.keyDown(window, { key: "1" });
+    expect(markSnapshotItemHandled).not.toHaveBeenCalled();
+    expect(screen.getByTestId("selected-id").textContent).toBe("gmail-a-msg-1");
 
     fireEvent.keyDown(window, { key: "h" });
 
@@ -1578,6 +1577,7 @@ describe("InboxView session state", () => {
   });
 
 	  it("suppresses read-only frozen snapshot mutations", async () => {
+    vi.useFakeTimers();
     const refreshSnapshot = vi.fn().mockResolvedValue({});
     const activeSnapshot = {
       snapshot: {
@@ -1657,14 +1657,21 @@ describe("InboxView session state", () => {
       </DashboardProvider>,
     );
 
-    await waitFor(() => {
-      expect(screen.getAllByText("Review the lease").length).toBeGreaterThan(0);
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+      await Promise.resolve();
     });
+    expect(screen.getAllByText("Review the lease").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
 
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    // Advance fake time across the read-only suppression window instead of a real
+    // 650ms wall-clock sleep, so this stays deterministic under full-suite fork load.
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+    });
 
     expect(markSnapshotItemHandled).not.toHaveBeenCalled();
     expect(trashEmail).not.toHaveBeenCalled();

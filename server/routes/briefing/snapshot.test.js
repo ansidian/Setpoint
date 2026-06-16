@@ -3,6 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import request from "supertest";
+import { errorHandler } from "../../middleware/async-handler.js";
 
 const mockDb = { execute: vi.fn() };
 
@@ -62,6 +63,15 @@ function makeApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use("/api/briefing", briefingRoutes);
+  // Production parity (server/index.js mounts a terminal errorHandler). A no-route
+  // fall-through here returns a distinguishable JSON body instead of finalhandler's
+  // text/html "Cannot POST", so any future 404 self-identifies its source via
+  // res.body: {message:'Active handled snapshot item not found'} => the real service
+  // ran (module mock not applied); {message:'No route ...'} => route never matched.
+  app.use((req, res) => {
+    res.status(404).json({ message: `No route for ${req.method} ${req.originalUrl}` });
+  });
+  app.use(errorHandler);
   return app;
 }
 

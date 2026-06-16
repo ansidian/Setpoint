@@ -155,7 +155,16 @@ function activateBudgetSnapshot() {
 
 describe("InboxView mobile", () => {
   it("uses the persisted FTS email search instead of local inbox filtering", async () => {
-    searchEmails.mockResolvedValueOnce({
+    // Self-sufficient mock setup: a sibling test (the skeleton case) queues a
+    // searchEmails.mockResolvedValueOnce but asserts on the synchronous loading
+    // state and finishes before the 250ms search debounce fires, so its
+    // once-value is never consumed. vi.clearAllMocks() in afterEach does NOT
+    // drain that queue, so under a perturbed order the leaked value would be
+    // popped by this test's search call ahead of our own. mockReset() drains
+    // any leaked queue/implementation, and a persistent mockResolvedValue
+    // (not ...Once) cannot be consumed out from under us.
+    searchEmails.mockReset();
+    searchEmails.mockResolvedValue({
       accounts: [
         {
           account_id: "gmail-personal",

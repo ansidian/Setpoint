@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockActual = {
   sendBill: vi.fn(),
@@ -36,6 +36,12 @@ const {
   isBillsMirrorMaintenanceDue,
   __resetBillsMirrorRefreshTimersForTests,
 } = await import("./bills-mirror-sync.js");
+
+// scheduleBillsMirrorRefresh arms a real setTimeout; clear it after every test so an
+// armed timer never leaks into a later test (previously only two cases reset inline).
+afterEach(() => {
+  __resetBillsMirrorRefreshTimersForTests();
+});
 
 function rowResult(rows = []) {
   return { rows };
@@ -160,8 +166,14 @@ describe("Bills mirror", () => {
 
     expect(out.bills.map((bill) => bill.scheduleId)).toEqual(["spectrum"]);
     expect(out.allSchedules.map((bill) => bill.scheduleId)).toEqual(["spectrum", "water", "sce"]);
-    const occurrenceQuery = mockDb.execute.mock.calls[1][0];
-    expect(occurrenceQuery.args).toEqual(expect.arrayContaining([
+    // The broader read window (lookback into April, lookahead into August) is the
+    // behavioral contract. Match the occurrence query by its table marker instead of
+    // pinning it to a positional call index.
+    const occurrenceCall = mockDb.execute.mock.calls.find((call) =>
+      /ea_bill_occurrence_mirror/i.test(call[0].sql),
+    );
+    expect(occurrenceCall).toBeTruthy();
+    expect(occurrenceCall[0].args).toEqual(expect.arrayContaining([
       "u1",
       expect.stringMatching(/^2026-04-/),
       expect.stringMatching(/^2026-08-/),
@@ -203,15 +215,19 @@ describe("Bills mirror", () => {
     });
     expect(mockActual.getMetadata).not.toHaveBeenCalled();
     expect(mockActual.getCalendarBillsRange).not.toHaveBeenCalled();
-    expect(mockDb.batch.mock.calls[0][0].map((entry) => entry.sql)).toEqual([
-      expect.stringMatching(/INSERT INTO ea_bills_mirror_state/i),
-      expect.stringMatching(/INSERT INTO ea_actual_metadata_mirror/i),
-      expect.stringMatching(/INSERT INTO ea_bill_schedule_mirror[\s\S]*ON CONFLICT/i),
-      expect.stringMatching(/INSERT INTO ea_bill_occurrence_mirror[\s\S]*ON CONFLICT/i),
-      expect.stringMatching(/DELETE FROM ea_bill_schedule_mirror WHERE user_id = \? AND schedule_id NOT IN/i),
-      expect.stringMatching(/DELETE FROM ea_bill_occurrence_mirror WHERE user_id = \? AND occurrence_id NOT IN/i),
-      expect.stringMatching(/UPDATE ea_bills_mirror_state/i),
-    ]);
+    // The refresh upserts fresh rows and prunes stale ones rather than deleting all and
+    // re-inserting. Assert that behavior without pinning statement order or whitespace:
+    // (1) the occurrence rows are written via an upsert (INSERT ... ON CONFLICT), and
+    // (2) stale occurrences are removed by a NOT IN prune, not an unconditional delete.
+    const batchSql = mockDb.batch.mock.calls[0][0].map((entry) => entry.sql);
+    const occurrenceUpsert = batchSql.find((sql) =>
+      /INSERT INTO ea_bill_occurrence_mirror/i.test(sql) && /ON CONFLICT/i.test(sql),
+    );
+    expect(occurrenceUpsert).toBeTruthy();
+    const occurrencePrune = batchSql.find((sql) =>
+      /DELETE FROM ea_bill_occurrence_mirror/i.test(sql) && /occurrence_id NOT IN/i.test(sql),
+    );
+    expect(occurrencePrune).toBeTruthy();
     expect(out.syncHealth).toMatchObject({ state: "current", configured: true });
     expect(out.allSchedules).toEqual([
       expect.objectContaining({

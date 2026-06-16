@@ -360,10 +360,6 @@ describe("email indexing", () => {
       body_text: "Same body",
       read: 0,
     });
-    const dbClient = {
-      execute: (...args) => testState.db.current.execute(...args),
-      batch: vi.fn((...args) => testState.db.current.batch(...args)),
-    };
 
     await emailIndex.indexEmails("user-1", [
       {
@@ -380,17 +376,22 @@ describe("email indexing", () => {
         date: "2026-05-01T12:00:00Z",
         read: true,
       },
-    ], { dbClient });
+    ]);
 
-    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
-    expect(statements).toHaveLength(1);
-    expect(statements[0].sql).toContain("UPDATE ea_email_index");
-    expect(statements[0].sql).not.toContain("ea_email_fts");
     const indexed = await testState.db.current.execute({
       sql: "SELECT read FROM ea_email_index WHERE uid = ?",
       args: ["gmail-work-msg-read-only"],
     });
     expect(indexed.rows[0].read).toBe(1);
+    // Read-only drift rides the cheap metadata update: the FTS row keeps its
+    // original searchable content rather than being rewritten.
+    const fts = await testState.db.current.execute({
+      sql: "SELECT subject, body_snippet, body_text FROM ea_email_fts WHERE uid = ?",
+      args: ["gmail-work-msg-read-only"],
+    });
+    expect(fts.rows).toEqual([
+      { subject: "Same subject", body_snippet: "Same preview", body_text: "Same body" },
+    ]);
   });
 
   it("routes a snippet-only drift through the cheap metadata update, not an FTS rewrite (P3-2)", async () => {
@@ -409,25 +410,49 @@ describe("email indexing", () => {
     };
     // Baseline index establishes every column, including the normalized date.
     await emailIndex.indexEmails("user-1", [{ ...base, body_preview: "Old preview" }]);
+    // Stand in for the search embedding the re-embedding worker would compute:
+    // a snippet-only drift must NOT invalidate it (the snippet is not part of
+    // the searchable-content set), unlike a real subject/body change.
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_search_embeddings
+              (uid, user_id, account_id, document_text, document_json,
+               source_hash, document_version, embedding_model,
+               embedding_dimensions, embedding)
+            VALUES (?, ?, ?, ?, ?, ?, 1, 'text-embedding-3-small', 1536, ?)`,
+      args: [
+        "gmail-work-msg-snippet",
+        "user-1",
+        "gmail-work",
+        "Subject: Stable subject",
+        JSON.stringify({ subject: "Stable subject" }),
+        "fresh-hash",
+        Buffer.from(new Float32Array([0.1, 0.2]).buffer),
+      ],
+    });
 
-    const dbClient = {
-      execute: (...args) => testState.db.current.execute(...args),
-      batch: vi.fn((...args) => testState.db.current.batch(...args)),
-    };
     // A re-fetch sees only a drifted Gmail snippet — everything else identical.
-    await emailIndex.indexEmails("user-1", [{ ...base, body_preview: "New preview" }], { dbClient });
+    await emailIndex.indexEmails("user-1", [{ ...base, body_preview: "New preview" }]);
 
-    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
-    expect(statements).toHaveLength(1);
-    expect(statements[0].sql).toContain("UPDATE ea_email_index");
-    expect(statements[0].sql).not.toContain("ea_email_fts");
-    expect(statements.some((s) => s.sql.includes("ea_email_search_embeddings"))).toBe(false);
-
+    // The volatile preview is refreshed in the index row...
     const indexed = await testState.db.current.execute({
       sql: "SELECT body_snippet FROM ea_email_index WHERE uid = ?",
       args: ["gmail-work-msg-snippet"],
     });
     expect(indexed.rows[0].body_snippet).toBe("New preview");
+    // ...while the searchable FTS content is left untouched (no FTS rewrite)...
+    const fts = await testState.db.current.execute({
+      sql: "SELECT subject, body_snippet, body_text FROM ea_email_fts WHERE uid = ?",
+      args: ["gmail-work-msg-snippet"],
+    });
+    expect(fts.rows).toEqual([
+      { subject: "Stable subject", body_snippet: "Old preview", body_text: "Stable body" },
+    ]);
+    // ...and the search embedding survives (no re-embedding triggered).
+    const embedding = await testState.db.current.execute({
+      sql: "SELECT source_hash FROM ea_email_search_embeddings WHERE uid = ?",
+      args: ["gmail-work-msg-snippet"],
+    });
+    expect(embedding.rows).toEqual([{ source_hash: "fresh-hash" }]);
   });
 
   it("normalizes provider email dates for temporal search without rewriting unchanged FTS content", async () => {
@@ -439,10 +464,6 @@ describe("email indexing", () => {
       email_date: "2026-05-01T12:00:00.000Z",
       read: 1,
     });
-    const dbClient = {
-      execute: (...args) => testState.db.current.execute(...args),
-      batch: vi.fn((...args) => testState.db.current.batch(...args)),
-    };
 
     await emailIndex.indexEmails("user-1", [
       {
@@ -459,12 +480,7 @@ describe("email indexing", () => {
         date: "Thu, 14 May 2026 18:11:11 +0000",
         read: true,
       },
-    ], { dbClient });
-
-    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
-    expect(statements).toHaveLength(1);
-    expect(statements[0].sql).toContain("email_date_utc");
-    expect(statements[0].sql).not.toContain("ea_email_fts");
+    ]);
 
     const indexed = await testState.db.current.execute({
       sql: "SELECT email_date, email_date_utc FROM ea_email_index WHERE uid = ?",
@@ -474,6 +490,15 @@ describe("email indexing", () => {
       email_date: "Thu, 14 May 2026 18:11:11 +0000",
       email_date_utc: "2026-05-14T18:11:11.000Z",
     });
+    // Date drift rides the cheap metadata update: the searchable FTS content
+    // is left untouched rather than being rewritten.
+    const fts = await testState.db.current.execute({
+      sql: "SELECT subject, body_snippet, body_text FROM ea_email_fts WHERE uid = ?",
+      args: ["gmail-work-msg-date"],
+    });
+    expect(fts.rows).toEqual([
+      { subject: "Same subject", body_snippet: "Same preview", body_text: "Same body" },
+    ]);
   });
 
   it("keeps FTS rowids aligned with email index rowids across content updates", async () => {
@@ -596,10 +621,6 @@ describe("email indexing", () => {
       body_text: "Original body",
       read: 0,
     });
-    const dbClient = {
-      execute: (...args) => testState.db.current.execute(...args),
-      batch: vi.fn((...args) => testState.db.current.batch(...args)),
-    };
 
     await emailIndex.indexEmails("user-1", [
       {
@@ -616,11 +637,33 @@ describe("email indexing", () => {
         date: "2026-05-01T12:00:00Z",
         read: false,
       },
-    ], { dbClient });
+    ]);
 
-    const statements = dbClient.batch.mock.calls.flatMap(([batch]) => batch);
-    const ftsDelete = statements.find((statement) => statement.sql.includes("DELETE FROM ea_email_fts"));
-    expect(ftsDelete?.sql).toContain("WHERE rowid = (SELECT rowid FROM ea_email_index WHERE uid = ?)");
+    // The stale FTS row is replaced by rowid, not appended to: exactly one row
+    // survives, still aligned to the index rowid, carrying the updated content.
+    const counts = await testState.db.current.execute({
+      sql: `SELECT i.rowid AS index_rowid,
+                   COUNT(f.rowid) AS fts_count,
+                   MAX(f.rowid) AS fts_rowid,
+                   MAX(f.subject) AS fts_subject,
+                   MAX(f.body_snippet) AS fts_snippet,
+                   MAX(f.body_text) AS fts_body
+            FROM ea_email_index i
+            LEFT JOIN ea_email_fts f ON f.uid = i.uid AND f.rowid = i.rowid
+            WHERE i.uid = ?
+            GROUP BY i.uid`,
+      args: ["gmail-work-msg-rowid-delete"],
+    });
+    expect(counts.rows).toEqual([
+      {
+        index_rowid: counts.rows[0].index_rowid,
+        fts_count: 1,
+        fts_rowid: counts.rows[0].index_rowid,
+        fts_subject: "Updated subject",
+        fts_snippet: "Updated preview",
+        fts_body: "Updated body",
+      },
+    ]);
   });
 
   it("invalidates the stale search embedding when searchable content changes", async () => {
@@ -723,33 +766,6 @@ describe("email indexing", () => {
     expect(embeddingRows.rows).toEqual([{ source_hash: "fresh-hash" }]);
   });
 
-  it("logs indexing with a scoped current-system prefix", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    try {
-      await emailIndex.indexEmails("user-1", [
-        {
-          uid: "gmail-work-msg-2",
-          account_id: "gmail-work",
-          account_label: "Work",
-          account_email: "work@example.com",
-          account_color: "#123456",
-          account_icon: "Mail",
-          from: "Sender <sender@example.com>",
-          subject: "Updated subject",
-          body_preview: "Updated preview",
-          body_text: "Updated body",
-          date: "2026-05-01T12:00:00Z",
-          read: false,
-        },
-      ]);
-
-      expect(logSpy).toHaveBeenCalledWith("[EA Index] Indexed 1 email(s)");
-      expect(logSpy).not.toHaveBeenCalledWith(expect.stringMatching(/^\[EA\] Indexed .* emails$/));
-    } finally {
-      logSpy.mockRestore();
-    }
-  });
 });
 
 describe("email index backfill trigger", () => {
