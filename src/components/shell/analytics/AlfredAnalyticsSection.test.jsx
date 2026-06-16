@@ -1,6 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
-import { it, expect } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, it, expect } from "vitest";
 import AlfredAnalyticsSection from "./AlfredAnalyticsSection.jsx";
+
+afterEach(cleanup);
 
 it("renders Alfred hero metrics and per-tool breakdown", () => {
   render(<AlfredAnalyticsSection stats={{

@@ -49,6 +49,11 @@ describe("deadline read module", () => {
       { id: "done-1", status: "complete", due_date: "2026-05-04" },
     ]);
     testState.computeDeadlineStats.mockImplementation((items) => ({ total: items.length }));
+    // Safe default so every test is order-independent: reminder hydration reads
+    // stateByKey.get(...), which needs a Map. Without this, a test that doesn't set
+    // its own value only passed because it inherited an earlier sibling test's
+    // mockResolvedValue (clearAllMocks preserves return values) — breaks under reorder.
+    testState.listUpcomingReminderStatesForSources.mockResolvedValue(new Map());
   });
 
   it("builds the current dashboard deadline payload from Todoist-backed deadline rows and stats", async () => {

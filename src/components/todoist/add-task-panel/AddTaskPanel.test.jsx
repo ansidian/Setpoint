@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
+import { ensureChrono } from "../../calendar/events/parseCalendarTitle.js";
 
 const mockCreateDeadline = vi.fn();
 const mockUpdateDeadline = vi.fn();
@@ -53,7 +54,35 @@ function PanelHarness(props) {
   );
 }
 
+// The submit failure paths (provider-create rejection, reminder-create rejection)
+// settle their error state across several promise-resolution + React-commit ticks.
+// A single `runAllTimersAsync` flushes that chain only when a sibling test has
+// already warmed the path; run cold (or under shuffled order) it can return with
+// the `setError`/`setReminderError` re-render still pending, so the error notice
+// is not yet in the DOM. Flush repeatedly until the timer/microtask queue is
+// fully drained so these tests assert on a settled UI regardless of order.
+async function flushSubmitSettled() {
+  for (let i = 0; i < 5; i += 1) {
+    await vi.runAllTimersAsync();
+  }
+}
+
 describe("AddTaskPanel due picker", () => {
+  // The NLP/recurring path (controller -> add-task-panel/parsing.js) reuses the
+  // same lazily-imported chrono-node singleton as the calendar editor
+  // (../../calendar/events/parseCalendarTitle.js). parsing.js calls the
+  // SYNCHRONOUS parseCalendarTitle, which only returns the full natural-language
+  // result once chrono has finished loading; a cold singleton degrades to "no
+  // temporal match", so the recurring `due_string`/preview is wrong. The
+  // singleton persists across files/tests and is only warm if an earlier test
+  // already triggered NLP parsing — under shuffled full-suite order this test can
+  // run cold. Warm it once here so the whole file is order-independent. beforeAll
+  // runs before beforeEach installs fake timers, so the dynamic import resolves on
+  // real timers.
+  beforeAll(async () => {
+    await ensureChrono();
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-19T17:00:10.000Z"));
@@ -132,7 +161,7 @@ describe("AddTaskPanel due picker", () => {
     });
     fireEvent.click(screen.getByTestId("todoist-reminder-preset-30"));
     fireEvent.click(screen.getByText("Add task"));
-    await vi.runAllTimersAsync();
+    await flushSubmitSettled();
 
     expect(mockCreateDeadline).toHaveBeenCalled();
     expect(mockCreateReminder).not.toHaveBeenCalled();
@@ -163,13 +192,13 @@ describe("AddTaskPanel due picker", () => {
     // panel stays open with a "task saved, reminders failed" notice instead of the
     // raw error. P2-14's no-duplicate-on-retry guarantee (below) is unaffected.
     fireEvent.click(screen.getByText("Add task"));
-    await vi.runAllTimersAsync();
+    await flushSubmitSettled();
     expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Task saved, but reminders could not be updated.")).toBeTruthy();
 
     // Retry: must UPDATE the already-committed task, never create a second one.
     fireEvent.click(screen.getByText("Add task"));
-    await vi.runAllTimersAsync();
+    await flushSubmitSettled();
     expect(mockCreateDeadline).toHaveBeenCalledTimes(1);
     expect(mockUpdateDeadline).toHaveBeenCalledWith("todo-new", expect.objectContaining({
       title: "Call dentist",

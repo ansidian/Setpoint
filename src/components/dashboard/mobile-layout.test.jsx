@@ -9,6 +9,9 @@ import CustomizePanel from "../shell/CustomizePanel.jsx";
 
 afterEach(() => {
   cleanup();
+  // Restore real timers so a test's fake clock cannot leak into a sibling under
+  // shuffled order (this repo does not auto-restore between tests).
+  vi.useRealTimers();
 });
 
 function makeBriefing(overrides = {}) {
@@ -428,6 +431,12 @@ describe("CustomizePanel mobile options", () => {
 
 describe("TodayTimeline mobile layout", () => {
   it("uses the mobile timeline row for mobile events", () => {
+    // Pin the clock to the event's day so the timeline keeps it (TodayTimeline
+    // drops items whose day-bucket is before "today"). Without this the test
+    // only passed when a sibling's fake clock leaked into it under sorted order.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-19T16:00:00.000Z").getTime());
+
     render(
       <TodayTimeline
         accent="#cba6da"
