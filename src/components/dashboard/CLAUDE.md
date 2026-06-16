@@ -9,6 +9,7 @@ The landing surface: hero (greeting/callouts/weather), today timeline, and rails
 - `DashboardBody.jsx` — resolves layout mode, renders hero/timeline/rails sections
 - `DashboardShellOverlays.jsx` — mounts modal overlays: calendar, add task, analytics, customize
 - `InboxMountFallback.jsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
+- `KeepAliveTab.jsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
 - `DashboardCalendarModalMount.jsx` — lazy calendar-modal mount with deadline/bill data
 - `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution
 - `dashboardBodyLayoutModel.js` — layout mode (focus/paper/mobile) and section ordering

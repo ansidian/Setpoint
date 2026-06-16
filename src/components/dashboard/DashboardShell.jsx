@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { loadAiAnalyticsModal } from "../shell/aiAnalyticsModalLoader.js";
@@ -14,6 +14,7 @@ import {
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays.jsx";
 import InboxMountFallback from "./InboxMountFallback.jsx";
+import KeepAliveTab from "./KeepAliveTab.jsx";
 import useWarmImport from "../../hooks/useWarmImport";
 import {
   buildDashboardEventsData,
@@ -76,7 +77,8 @@ export function DashboardShell({
   const setShellTab = useCallback((nextTab) => {
     if (nextTab !== "dashboard" && nextTab !== "inbox") return;
     if (!isMobile || nextTab === tab) {
-      setTab(nextTab);
+      // Non-urgent so the show/hide + re-mounted effects yield to user input.
+      startTransition(() => setTab(nextTab));
       return;
     }
     if (tab === "inbox" && nextTab === "dashboard") {
@@ -87,7 +89,7 @@ export function DashboardShell({
       window.history.go(-depth);
       return;
     }
-    setTab(nextTab);
+    startTransition(() => setTab(nextTab));
   }, [isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -460,7 +462,11 @@ export function DashboardShell({
             "linear-gradient(180deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0) 12%)",
         }}
       >
-        {tab === "dashboard" ? (
+        {/* Both tabs stay mounted via KeepAliveTab (Activity + freeze-when-hidden)
+            instead of a ternary that unmounts/remounts per switch — fixes the
+            switch freeze + "scroll into blank", and keeps a dashboard data
+            refresh from reconciling the hidden tab. */}
+        <KeepAliveTab active={tab === "dashboard"}>
           <DashboardBody
             briefing={briefing}
             liveData={liveData}
@@ -501,7 +507,8 @@ export function DashboardShell({
             onJumpSection={jumpToSection}
             setAddTaskOpen={setAddTaskOpen}
           />
-        ) : (
+        </KeepAliveTab>
+        <KeepAliveTab active={tab === "inbox"}>
           <Suspense fallback={<InboxMountFallback />}>
             <InboxView
               accent={accent}
@@ -523,7 +530,7 @@ export function DashboardShell({
               onAskAlfred={askAlfred}
             />
           </Suspense>
-        )}
+        </KeepAliveTab>
       </div>
 
       <DashboardShellOverlays
