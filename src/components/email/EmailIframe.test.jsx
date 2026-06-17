@@ -59,7 +59,10 @@ describe("EmailIframe sanitization (security surface)", () => {
   });
 });
 
-describe("EmailIframe shell-hotkey relay", () => {
+describe("EmailIframe reader-hotkey relay", () => {
+  // The inbox/shell command listeners live on the parent window; relayed events
+  // reach them via the window->document->window propagation of a parent-document
+  // dispatch.
   function withParentKeyListener(run) {
     const received = [];
     const onParentKey = (event) => received.push(event.key);
@@ -71,49 +74,66 @@ describe("EmailIframe shell-hotkey relay", () => {
     }
   }
 
-  it("passes shell tab hotkeys (1/2) through from the email document", () => {
+  // Alfred's Esc handler is a document-CAPTURE listener — the relay must reach it,
+  // not just window listeners, for the preview to close from inside its iframe.
+  function withDocumentCaptureListener(run) {
+    const received = [];
+    const onKey = (event) => received.push(event.key);
+    document.addEventListener("keydown", onKey, true);
+    try {
+      run(received);
+    } finally {
+      document.removeEventListener("keydown", onKey, true);
+    }
+  }
+
+  function loadedIframe(html = "<p>body</p>") {
+    render(<EmailIframe html={html} />);
+    const iframe = screen.getByTitle("Email content");
+    fireEvent.load(iframe);
+    return iframe;
+  }
+
+  it("relays shell tab keys and inbox command keys from the email document", () => {
     withParentKeyListener((received) => {
-      render(<EmailIframe html="<p>Loaded email body</p>" />);
-      const iframe = screen.getByTitle("Email content");
-      fireEvent.load(iframe);
-
-      for (const key of ["1", "2"]) {
-        iframe.contentDocument.dispatchEvent(
-          new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
-        );
+      const doc = loadedIframe("<p>Loaded email body</p>").contentDocument;
+      for (const key of ["1", "2", "f", "d", "j", "o"]) {
+        doc.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
       }
-
-      expect(received).toEqual(["1", "2"]);
+      expect(received).toEqual(["1", "2", "f", "d", "j", "o"]);
     });
   });
 
-  it("does not relay non-shell keys or modifier combos", () => {
-    withParentKeyListener((received) => {
-      render(<EmailIframe html="<p>body</p>" />);
-      const iframe = screen.getByTitle("Email content");
-      fireEvent.load(iframe);
-      const doc = iframe.contentDocument;
+  it("relays Escape to a document-capture listener (Alfred preview close path)", () => {
+    withDocumentCaptureListener((received) => {
+      const doc = loadedIframe().contentDocument;
+      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      expect(received).toEqual(["Escape"]);
+    });
+  });
 
+  it("leaves scroll/native keys and modifier combos un-relayed", () => {
+    withParentKeyListener((received) => {
+      const doc = loadedIframe().contentDocument;
+      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      doc.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: "3", bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "1", metaKey: true, bubbles: true }));
-      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "2", ctrlKey: true, bubbles: true }));
+      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "e", metaKey: true, bubbles: true }));
+      doc.dispatchEvent(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true }));
       doc.dispatchEvent(new KeyboardEvent("keydown", { key: "1", altKey: true, bubbles: true }));
 
       expect(received).toEqual([]);
     });
   });
 
-  it("does not relay shell hotkeys typed into a form field inside the email", () => {
+  it("does not relay command keys typed into a form field inside the email", () => {
     withParentKeyListener((received) => {
-      render(<EmailIframe html="<p>body</p>" />);
-      const iframe = screen.getByTitle("Email content");
-      fireEvent.load(iframe);
-      const doc = iframe.contentDocument;
+      const doc = loadedIframe().contentDocument;
       const host = doc.body || doc.documentElement;
       const input = doc.createElement("input");
       host.appendChild(input);
 
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "d", bubbles: true }));
 
       expect(received).toEqual([]);
     });
