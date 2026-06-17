@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import DOMPurify from "dompurify";
+import { shouldRelayReaderKey } from "./readerHotkeyRelay.js";
 
 // Renders a sanitized email body inside an iframe. The iframe always fills
 // its parent container's height (100%) — EmailReader provides a fixed-size
@@ -24,20 +25,24 @@ export default function EmailIframe({ html }) {
     // value — not a prefix — otherwise width="100" / height="150" get eaten.
     .replace(/<img[^>]*(?:width\s*=\s*["']?[01]["'\s/>]|height\s*=\s*["']?[01]["'\s/>])[^>]*\/?>/gi, ""), [html]);
 
-  // Force every link to open in a new tab. Without this, anchors (especially
-  // those with author-set target="_self"/"_top") navigate the iframe itself
-  // to a blank page since the sandbox blocks top-navigation.
-  const relayShellTabHotkey = useCallback((event) => {
+  // Keydowns inside the email document never bubble to the parent window, so the
+  // inbox/shell/Alfred command listeners (all on the parent) would otherwise go
+  // dead the moment focus enters the email. Re-dispatch the reader command keys
+  // (see readerHotkeyRelay.js) onto the PARENT DOCUMENT — not window — so the
+  // event propagates window->document->window and reaches both the window-level
+  // listeners (inbox j/k/triage, shell 1/2) and Alfred's document-capture Esc
+  // listener. Non-command keys (arrows/space/page, ⌘/Ctrl/Alt combos) are left
+  // native so email scroll, copy, and find still work.
+  const relayReaderHotkey = useCallback((event) => {
     const target = event.target;
-    if (
-      target?.tagName === "INPUT"
-      || target?.tagName === "TEXTAREA"
-      || target?.isContentEditable
-      || event.metaKey
-      || event.ctrlKey
-      || event.altKey
-      || (event.key !== "1" && event.key !== "2")
-    ) {
+    if (!shouldRelayReaderKey({
+      key: event.key,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      targetTag: target?.tagName,
+      isContentEditable: target?.isContentEditable,
+    })) {
       return;
     }
 
@@ -48,13 +53,15 @@ export default function EmailIframe({ html }) {
       cancelable: true,
       shiftKey: event.shiftKey,
     });
-    window.parent?.dispatchEvent(relayed);
+    const parentDocument = window.parent?.document;
+    if (!parentDocument) return;
+    parentDocument.dispatchEvent(relayed);
     if (relayed.defaultPrevented) event.preventDefault();
   }, []);
 
   useEffect(() => () => {
-    hotkeyDocumentRef.current?.removeEventListener("keydown", relayShellTabHotkey);
-  }, [relayShellTabHotkey]);
+    hotkeyDocumentRef.current?.removeEventListener("keydown", relayReaderHotkey);
+  }, [relayReaderHotkey]);
 
   const handleLoad = useCallback(() => {
     try {
@@ -65,15 +72,15 @@ export default function EmailIframe({ html }) {
         a.rel = "noopener noreferrer";
       });
       if (hotkeyDocumentRef.current && hotkeyDocumentRef.current !== doc) {
-        hotkeyDocumentRef.current.removeEventListener("keydown", relayShellTabHotkey);
+        hotkeyDocumentRef.current.removeEventListener("keydown", relayReaderHotkey);
       }
-      doc.removeEventListener("keydown", relayShellTabHotkey);
-      doc.addEventListener("keydown", relayShellTabHotkey);
+      doc.removeEventListener("keydown", relayReaderHotkey);
+      doc.addEventListener("keydown", relayReaderHotkey);
       hotkeyDocumentRef.current = doc;
     } catch {
       // contentDocument may be inaccessible in edge cases; silently skip
     }
-  }, [relayShellTabHotkey]);
+  }, [relayReaderHotkey]);
 
   return (
     <iframe
