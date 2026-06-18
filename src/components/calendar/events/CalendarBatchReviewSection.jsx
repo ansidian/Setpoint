@@ -140,7 +140,7 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
         <div style={{ fontSize: 11.5, fontWeight: 650, color: "#e2e8f0", lineHeight: 1.2 }}>
           Event {index + 1}
         </div>
-        <div style={{ fontSize: 10.5, color: "rgba(205,214,244,0.48)", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: 10.5, color: "var(--color-text-faint)", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {formatDate(item.startDate)}
         </div>
       </div>
@@ -244,7 +244,7 @@ export default function CalendarBatchReviewSection({
         <div style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(226,232,240,0.84)" }}>
           Batch Review
         </div>
-        <div style={{ fontSize: 10.5, color: "rgba(205,214,244,0.48)", lineHeight: 1.4 }}>
+        <div style={{ fontSize: 10.5, color: "var(--color-text-faint)", lineHeight: 1.4 }}>
           These will be created as individual one-off events, not a recurring series.
         </div>
       </div>

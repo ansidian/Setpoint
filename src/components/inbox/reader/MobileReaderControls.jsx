@@ -42,8 +42,11 @@ export function InlineControlButton({ icon, label, active = false, onClick, butt
       style={{
         display: "inline-flex",
         alignItems: "center",
+        justifyContent: "center",
         gap: 6,
         padding: "7px 10px",
+        minHeight: 44,
+        minWidth: 44,
         borderRadius: 10,
         border: `1px solid ${active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
         background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",

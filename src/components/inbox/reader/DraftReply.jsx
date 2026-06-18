@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Sparkles, X, Copy } from "lucide-react";
 import { QuickAction } from "../primitives";
 
-export default function DraftReply({ email, accent, onDiscard }) {
+export default function DraftReply({ email, accent, onDiscard, isMobile = false }) {
   // Parent keys this on email.id so the initializer runs fresh per email.
   const [text, setText] = useState(email.claude?.draftReply || "");
 
@@ -47,7 +47,7 @@ export default function DraftReply({ email, accent, onDiscard }) {
         >
           Drafted reply
         </span>
-        <span style={{ fontSize: 10, color: "rgba(205,214,244,0.5)", marginLeft: 4 }}>
+        <span style={{ fontSize: 10, color: "var(--color-text-faint)", marginLeft: 4 }}>
           · Replying to {email.from}
         </span>
         <span style={{ flex: 1 }} />
@@ -57,7 +57,10 @@ export default function DraftReply({ email, accent, onDiscard }) {
           style={{
             background: "transparent", border: "none", cursor: "pointer",
             color: "rgba(205,214,244,0.5)", padding: 4, borderRadius: 4,
-            display: "inline-flex", fontFamily: "inherit",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "inherit",
+            width: isMobile ? 44 : undefined,
+            height: isMobile ? 44 : undefined,
           }}
         >
           <X size={12} />
@@ -67,6 +70,7 @@ export default function DraftReply({ email, accent, onDiscard }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={4}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
         style={{
           width: "100%", background: "transparent", border: "none", outline: "none",
           padding: "12px 14px", resize: "vertical",
@@ -82,7 +86,7 @@ export default function DraftReply({ email, accent, onDiscard }) {
         }}
       >
         <span style={{ flex: 1 }} />
-        <QuickAction icon={Copy} label="Copy draft" primary onClick={handleCopyDraft} accent={accent} />
+        <QuickAction icon={Copy} label="Copy draft" primary onClick={handleCopyDraft} accent={accent} touch={isMobile} />
       </div>
     </div>
   );

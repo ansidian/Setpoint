@@ -134,7 +134,7 @@ export function RailFactTile({
     >
       <div
         style={{
-          color: "rgba(205,214,244,0.45)",
+          color: "var(--color-text-faint)",
           letterSpacing: 1.4,
           textTransform: "uppercase",
           fontSize: compact ? 8.5 : 9,

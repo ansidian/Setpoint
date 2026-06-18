@@ -16,7 +16,7 @@ export default function CalendarEventEditorHeader({
             {isEditing ? "Edit event" : isBatchMode ? "New batch" : "New event"}
           </span>
         </div>
-        <div style={{ marginTop: 3, fontSize: 11, color: "rgba(205,214,244,0.42)", lineHeight: 1.45 }}>
+        <div style={{ marginTop: 3, fontSize: 11, color: "var(--color-text-faint)", lineHeight: 1.45 }}>
           {isEditing
             ? isEditingRecurring
               ? recurringEditScope

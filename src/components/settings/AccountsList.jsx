@@ -105,12 +105,12 @@ function AccountRow({ acc, accounts, setAccounts, onRemove }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate text-[13px] font-medium text-foreground/90">{label}</span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[1.5px] text-muted-foreground/70">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[1.5px] text-muted-foreground/75">
                 <span className="size-1.5 rounded-full" style={{ background: color }} />
                 {acc.type}
               </span>
             </div>
-            <div className="mt-1 truncate text-[11px] text-muted-foreground/55">
+            <div className="mt-1 truncate text-[11px] text-muted-foreground/75">
               {acc.email}
             </div>
           </div>

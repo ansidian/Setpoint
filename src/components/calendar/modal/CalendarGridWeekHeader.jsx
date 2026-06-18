@@ -19,7 +19,7 @@ export default function CalendarGridWeekHeader({ gap }) {
             textAlign: "center",
             fontSize: 10,
             fontWeight: 600,
-            color: "rgba(205,214,244,0.4)",
+            color: "var(--color-text-faint)",
             padding: 4,
             letterSpacing: 1.6,
             textTransform: "uppercase",

@@ -11,7 +11,7 @@ function StatRow({ value, label }) {
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}
     >
-      <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)" }}>
+      <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>
         {label}
       </span>
       <span
@@ -56,7 +56,7 @@ export function renderEventsFooter({ computed }) {
           paddingTop: 6,
         }}
       >
-        <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)" }}>
+        <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>
           All-day
         </span>
         <span

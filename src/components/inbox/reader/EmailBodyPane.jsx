@@ -13,7 +13,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false }) {
             animation: "spin 0.8s linear infinite",
           }}
         />
-        <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>Loading email…</span>
+        <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>Loading email…</span>
       </div>
     );
   }
@@ -25,7 +25,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false }) {
   const text = body || fallback;
   if (!text) {
     return (
-      <div style={{ padding: "22px 24px", fontSize: 12, color: "rgba(205,214,244,0.45)" }}>
+      <div style={{ padding: "22px 24px", fontSize: 12, color: "var(--color-text-faint)" }}>
         Email body unavailable.
       </div>
     );

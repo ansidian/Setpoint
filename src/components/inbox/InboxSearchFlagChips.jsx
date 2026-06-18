@@ -32,7 +32,7 @@ export default function InboxSearchFlagChips({
         onFocus={() => setHovered(true)}
         onBlur={() => setHovered(false)}
         style={{
-          height: compact ? 34 : 30,
+          height: compact ? 44 : 30,
           padding: compact ? "0 12px" : "0 10px",
           borderRadius: 999,
           touchAction: "manipulation",

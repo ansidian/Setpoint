@@ -17,7 +17,7 @@ function SectionHeader({ title, right }) {
           fontWeight: 600,
           letterSpacing: 2.2,
           textTransform: "uppercase",
-          color: "rgba(205,214,244,0.55)",
+          color: "var(--color-text-faint)",
         }}
       >
         {title}
@@ -80,7 +80,7 @@ function TimelineFilterChip({ active, accent, isMobile = false, label, onToggle 
     ? accent
     : highlighted
       ? "rgba(205,214,244,0.82)"
-      : "rgba(205,214,244,0.5)";
+      : "var(--color-text-faint)";
   const dotBorder = active
     ? accent
     : highlighted

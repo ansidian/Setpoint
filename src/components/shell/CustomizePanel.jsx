@@ -20,7 +20,7 @@ function Row({ label, hint, children }) {
           {label}
         </span>
         {hint && (
-          <span style={{ fontSize: 10, color: "rgba(205,214,244,0.4)" }}>{hint}</span>
+          <span style={{ fontSize: 10, color: "var(--color-text-faint)" }}>{hint}</span>
         )}
       </div>
       <div>{children}</div>
@@ -137,7 +137,6 @@ export default function CustomizePanel({
         border: `1px solid ${accent}38`,
         borderRadius: 12,
         boxShadow: "0 20px 60px rgba(0,0,0,0.7), 0 2px 12px rgba(0,0,0,0.3)",
-        backdropFilter: "blur(12px)",
         padding: "14px 16px 16px",
         isolation: "isolate",
       }}
@@ -158,7 +157,7 @@ export default function CustomizePanel({
           onClick={reset}
           style={{
             background: "transparent", border: "none", cursor: "pointer",
-            color: "rgba(205,214,244,0.5)",
+            color: "var(--color-text-faint)",
             fontSize: 10, fontFamily: "inherit",
             padding: "2px 6px",
           }}

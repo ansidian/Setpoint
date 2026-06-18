@@ -153,7 +153,7 @@ function TodayTimeline({
               padding: "40px 20px",
               textAlign: "center",
               fontSize: 12,
-              color: "rgba(205,214,244,0.4)",
+              color: "var(--color-text-faint)",
             }}
           >
             Nothing on the calendar matching this filter.

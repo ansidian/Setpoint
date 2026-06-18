@@ -174,7 +174,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
                           fontSize: 10, fontFamily: "Fira Code, monospace",
                           padding: "1px 5px", borderRadius: 3,
                           background: "rgba(255,255,255,0.04)",
-                          color: "rgba(205,214,244,0.5)",
+                          color: "var(--color-text-faint)",
                           border: "1px solid rgba(255,255,255,0.08)",
                         }}
                       >
@@ -188,7 +188,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
             );
           })}
           {filtered.length === 0 && (
-            <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "rgba(205,214,244,0.4)" }}>
+            <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--color-text-faint)" }}>
               No matches.
             </div>
           )}

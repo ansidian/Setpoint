@@ -22,7 +22,7 @@ function Kbd({ children }) {
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       minWidth: 14, padding: "1px 4px", borderRadius: 4,
       background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
-      fontFamily: mono, fontSize: 8.5, color: dim,
+      fontFamily: mono, fontSize: 8.5, color: "var(--color-text-faint)",
     }}>{children}</span>
   );
 }
@@ -72,6 +72,7 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
           placeholder={busy ? "Working…" : "Ask about your day…"}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onComposerKey}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
           style={{
             flex: 1, fontSize: 12, color: text, fontFamily: "inherit",
             padding: "8px 10px", borderRadius: 8, outline: "none",
@@ -95,7 +96,7 @@ function AlfredComposer({ open, busy, accent, modelHint, clearSignal, onSubmit }
       </div>
       <div style={{
         display: "flex", alignItems: "center", gap: 6, marginTop: 8,
-        fontSize: 9, color: "rgba(205,214,244,0.35)", fontFamily: mono,
+        fontSize: 9, color: "var(--color-text-faint)", fontFamily: mono,
       }}>
         <Kbd>⌘</Kbd><Kbd>\</Kbd>
         <span style={{ whiteSpace: "nowrap" }}>toggle</span>

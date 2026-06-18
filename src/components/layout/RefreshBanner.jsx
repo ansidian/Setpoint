@@ -6,7 +6,7 @@ export default function RefreshBanner({ progress }) {
         <div className="text-[13px] font-semibold text-foreground/90">
           Syncing dashboard data...
         </div>
-        <div className="text-xs text-muted-foreground/60 mt-0.5 transition-opacity duration-200">
+        <div className="text-xs text-muted-foreground/75 mt-0.5 transition-opacity duration-200">
           {progress || "Starting up..."}
         </div>
       </div>

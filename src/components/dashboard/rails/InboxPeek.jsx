@@ -96,7 +96,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
               </div>
               <div
                 style={{
-                  fontSize: 10.5, color: "rgba(205,214,244,0.45)",
+                  fontSize: 10.5, color: "var(--color-text-faint)",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isMobile ? "normal" : "nowrap",
                 }}
               >
@@ -105,7 +105,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
               {isMobile && (
                 <div
                   style={{
-                    fontSize: 9.5, color: "rgba(205,214,244,0.35)",
+                    fontSize: 9.5, color: "var(--color-text-faint)",
                     fontVariantNumeric: "tabular-nums",
                     marginTop: 6,
                   }}
@@ -117,7 +117,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
             {!isMobile && (
               <div
                 style={{
-                  fontSize: 9.5, color: "rgba(205,214,244,0.35)",
+                  fontSize: 9.5, color: "var(--color-text-faint)",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >

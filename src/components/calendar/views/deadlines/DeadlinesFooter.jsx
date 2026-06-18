@@ -3,7 +3,7 @@ import { DEADLINE_COLOR, deadlineItemsFromData, getDayState, normalizeStatus } f
 
 function LegendDot({ color, label }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
       <span
         style={{
           width: 8,
@@ -52,7 +52,7 @@ export function renderDeadlinesFooter({ viewYear, viewMonth, currentYear, curren
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}
     >
-      <span style={{ fontSize: 11, color: "rgba(205,214,244,0.55)" }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>{label}</span>
       <span
         style={{
           fontSize: 16,

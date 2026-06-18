@@ -141,7 +141,7 @@ function ContextMenu({ quickActions }) {
       }}
     >
       {quickActions.contextMenuTitle ? (
-        <div style={{ color: "rgba(205,214,244,0.54)", fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", padding: "3px 6px 1px" }}>
+        <div style={{ color: "var(--color-text-faint)", fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", padding: "3px 6px 1px" }}>
           {quickActions.contextMenuTitle}
         </div>
       ) : null}

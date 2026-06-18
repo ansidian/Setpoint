@@ -52,7 +52,7 @@ function inlineOverflowItemStyle({ item, selected, active, batchSelected = false
         : quiet
           ? "rgba(255,255,255,0.018)"
           : "rgba(255,255,255,0.03)",
-    color: selected || batchSelected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
+    color: selected || batchSelected ? "#f6f7fb" : quiet ? "var(--color-text-faint)" : "rgba(205,214,244,0.78)",
     cursor: "pointer",
     textAlign: "left",
     fontFamily: "inherit",

@@ -324,7 +324,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
           <div
             style={{
               fontSize: isMobile ? 10.5 : 11,
-              color: "rgba(205,214,244,0.45)",
+              color: "var(--color-text-faint)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: isMobile ? "normal" : "nowrap",
@@ -341,7 +341,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
               display: "inline-flex",
               maxWidth: "100%",
               fontSize: isMobile ? 10 : 10.5,
-              color: "rgba(205,214,244,0.5)",
+              color: "var(--color-text-faint)",
               fontVariantNumeric: "tabular-nums",
               padding: "2px 8px",
               borderRadius: 6,
@@ -357,7 +357,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
         <div
           style={{
             fontSize: 10.5,
-            color: "rgba(205,214,244,0.5)",
+            color: "var(--color-text-faint)",
             fontVariantNumeric: "tabular-nums",
             padding: "2px 8px",
             borderRadius: 6,

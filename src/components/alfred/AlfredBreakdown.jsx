@@ -10,7 +10,7 @@ import { resolveAlfredChipAction } from "./alfredChipActionModel.js";
 import { pacificYMD } from "../calendar/calendarDateUtils.js";
 
 const text = "#cdd6f4";
-const subtle = "#6c7086";
+const subtle = "var(--color-text-faint)";
 const INLINE_THRESHOLD = 5;
 
 // Local kind→row map. The leaf rows are shared from AlfredRows (which keeps its

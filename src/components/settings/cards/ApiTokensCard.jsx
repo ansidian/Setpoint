@@ -123,9 +123,9 @@ export default function ApiTokensCard() {
             <div className="rounded-xl border border-[#f9e2af]/20 bg-[#f9e2af]/10 p-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <StatusPill tone="warning">Copy now</StatusPill>
-                <span className="text-[11px] text-muted-foreground/70">Label: {newToken.label}</span>
+                <span className="text-[11px] text-muted-foreground/75">Label: {newToken.label}</span>
               </div>
-              <div className="mb-2 text-[11px] text-muted-foreground/70">
+              <div className="mb-2 text-[11px] text-muted-foreground/75">
                 Expires {formatDate(newToken.expiresAt)}
               </div>
               <div className="mb-3 rounded-lg border border-foreground/10 bg-[#16161e]/70 px-3 py-2 font-mono text-xs break-all select-all">
@@ -186,7 +186,7 @@ export default function ApiTokensCard() {
           ) : tokens === null ? (
             <FieldHint>Loading…</FieldHint>
           ) : tokens.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/60">
+            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/75">
               No tokens yet.
             </div>
           ) : (
@@ -203,7 +203,7 @@ export default function ApiTokensCard() {
                         {token.scopes.join(", ") || "no scopes"}
                       </StatusPill>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground/65">
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground/75">
                       <span>Created {formatDate(token.created_at)}</span>
                       <span>Last used {formatDate(token.last_used_at)}</span>
                       <span>Expires {formatDate(token.expires_at)}</span>

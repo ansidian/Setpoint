@@ -103,7 +103,7 @@ export default function TriagePanel({ email, accent }) {
             style={{
               marginTop: 10, paddingTop: 10,
               borderTop: `1px dashed ${accent}33`,
-              fontSize: 10, color: "rgba(205,214,244,0.5)",
+              fontSize: 10, color: "var(--color-text-faint)",
               display: "flex", alignItems: "center", gap: 6,
             }}
           >

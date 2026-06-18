@@ -97,7 +97,7 @@ function viewHintStyle(active) {
     fontSize: 9.5,
     fontFamily: "Fira Code, ui-monospace, monospace",
     fontWeight: 500,
-    color: active ? "#cba6da" : "rgba(205,214,244,0.45)",
+    color: active ? "#cba6da" : "var(--color-text-faint)",
     background: active ? "rgba(203,166,218,0.10)" : "rgba(255,255,255,0.04)",
     border: `1px solid ${active ? "rgba(203,166,218,0.24)" : "rgba(255,255,255,0.06)"}`,
     borderRadius: 4,
@@ -230,7 +230,7 @@ export default function CalendarModalHeader({
                 fontWeight: 600,
                 letterSpacing: 2.2,
                 textTransform: "uppercase",
-                color: "rgba(205,214,244,0.55)",
+                color: "var(--color-text-faint)",
               }}
             >
               Calendar Workspace · {viewLabel || "Bills"}
@@ -348,7 +348,7 @@ export default function CalendarModalHeader({
                 onMouseLeave={(event) => {
                   if (active) return;
                   event.currentTarget.style.background = "transparent";
-                  event.currentTarget.style.color = "rgba(205,214,244,0.55)";
+                  event.currentTarget.style.color = "rgba(205,214,244,0.56)";
                   event.currentTarget.style.borderColor = "transparent";
                   event.currentTarget.style.transform = "translateY(0)";
                 }}

@@ -69,7 +69,7 @@ export default function CalendarCell({
   if (!inCurrentMonth) {
     cellBg = "rgba(255,255,255,0.008)";
     cellBorder = "1px solid rgba(255,255,255,0.022)";
-    dateColor = "rgba(205,214,244,0.34)";
+    dateColor = "var(--color-text-faint)";
   }
 
   if (isSelected) {
@@ -101,8 +101,8 @@ export default function CalendarCell({
         : "1px solid rgba(255,255,255,0.022)";
     dateColor =
       pastTone === "items"
-        ? "rgba(205,214,244,0.48)"
-        : "rgba(205,214,244,0.33)";
+        ? "var(--color-text-faint)"
+        : "var(--color-text-faint)";
     if (!hasItems) dateWeight = 400;
   }
 
@@ -343,7 +343,7 @@ export default function CalendarCell({
               display: "inline-flex",
               alignItems: "center",
               gap: 3,
-              color: "rgba(205,214,244,0.48)",
+              color: "var(--color-text-faint)",
               fontSize: 10,
               fontWeight: 600,
               lineHeight: 1,

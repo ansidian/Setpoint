@@ -35,7 +35,7 @@ function fieldLabelStyle() {
     fontWeight: 600,
     letterSpacing: 1.8,
     textTransform: "uppercase",
-    color: "rgba(205,214,244,0.42)",
+    color: "var(--color-text-faint)",
     marginBottom: 4,
   };
 }

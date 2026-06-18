@@ -95,10 +95,15 @@ export default function MobileFilterSheet({
             style={{
               border: "none",
               background: "transparent",
-              color: "rgba(205,214,244,0.55)",
+              color: "var(--color-text-faint)",
               cursor: "pointer",
               fontFamily: "inherit",
               fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 44,
+              padding: "0 12px",
             }}
           >
             Done
@@ -128,7 +133,7 @@ export default function MobileFilterSheet({
           >
             <div>
               <div style={{ fontSize: 12, fontWeight: 600 }}>All accounts</div>
-              <div style={{ fontSize: 11, color: "rgba(205,214,244,0.5)", marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--color-text-faint)", marginTop: 2 }}>
                 {totalUnread} unread across inbox
               </div>
             </div>
@@ -184,7 +189,7 @@ export default function MobileFilterSheet({
                   <div
                     style={{
                       fontSize: 11,
-                      color: "rgba(205,214,244,0.5)",
+                      color: "var(--color-text-faint)",
                       marginTop: 2,
                       overflow: "hidden",
                       textOverflow: "ellipsis",

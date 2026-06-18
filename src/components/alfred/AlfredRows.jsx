@@ -24,7 +24,6 @@ import { resolveAlfredChipAction } from "./alfredChipActionModel.js";
 
 const overdueColor = "#f38ba8";
 
-const dim = "rgba(205,214,244,0.55)";
 const dimmer = "rgba(205,214,244,0.4)";
 const text = "#cdd6f4";
 
@@ -62,7 +61,7 @@ function TitleCell({ title, sub, strike }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 12, fontWeight: 500, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: strike ? "line-through" : "none" }}>{title}</div>
-      {sub ? <div style={{ fontSize: 10, color: dimmer, marginTop: 1, display: "flex", alignItems: "center", gap: 3, minWidth: 0 }}>{sub}</div> : null}
+      {sub ? <div style={{ fontSize: 10, color: "var(--color-text-faint)", marginTop: 1, display: "flex", alignItems: "center", gap: 3, minWidth: 0 }}>{sub}</div> : null}
     </div>
   );
 }
@@ -84,7 +83,7 @@ export function BillRow({ item, onActivate, todayYmd }) {
           fontVariantNumeric: "tabular-nums",
         }}><Check size={9} strokeWidth={3} />Paid · {formatAlfredDate(item.next_date)}</span>
       ) : (
-        <span style={{ fontSize: 10, color: overdue ? overdueColor : dim, fontWeight: overdue ? 600 : 400, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ fontSize: 10, color: overdue ? overdueColor : "var(--color-text-faint)", fontWeight: overdue ? 600 : 400, fontVariantNumeric: "tabular-nums" }}>
           {formatAlfredDate(item.next_date)}
         </span>
       )}
@@ -112,12 +111,12 @@ export function EventRow({ item, accent, onActivate, now, isNext }) {
         boxShadow: isNext ? "0 0 6px rgba(203,166,247,0.6)" : "none",
       }} />
       <span style={{
-        fontSize: 10.5, color: isNext ? text : dim, fontVariantNumeric: "tabular-nums",
+        fontSize: 10.5, color: isNext ? text : "var(--color-text-faint)", fontVariantNumeric: "tabular-nums",
         fontFamily: "var(--font-mono, 'Fira Code', ui-monospace, monospace)",
         width: 56, flexShrink: 0,
       }}>{item.allDay ? "all day" : item.time}</span>
       <TitleCell title={item.title} sub={sub} />
-      <span style={{ fontSize: 10, color: dimmer }}>{item.calendarName}</span>
+      <span style={{ fontSize: 10, color: "var(--color-text-faint)" }}>{item.calendarName}</span>
     </RowShell>
   );
 }
@@ -137,7 +136,7 @@ export function DeadlineRow({ item, onActivate, todayYmd }) {
           {priority}
         </span>
       ) : null}
-      <span style={{ fontSize: 10, color: overdue ? overdueColor : dim, fontWeight: overdue ? 600 : 400, fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 10, color: overdue ? overdueColor : "var(--color-text-faint)", fontWeight: overdue ? 600 : 400, fontVariantNumeric: "tabular-nums" }}>
         {formatAlfredDate(item.due_date)}
       </span>
     </RowShell>
@@ -174,7 +173,7 @@ export function TransactionRow({ item }) {
       <span style={{ fontSize: 12, fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>
         {formatAlfredMoney(item.amount)}
       </span>
-      <span style={{ fontSize: 10, color: dim, fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 10, color: "var(--color-text-faint)", fontVariantNumeric: "tabular-nums" }}>
         {formatAlfredDate(item.date)}
       </span>
     </RowShell>
@@ -183,12 +182,12 @@ export function TransactionRow({ item }) {
 
 const SECTION_TONES = {
   attention: { Icon: Flag, color: "#f38ba8" },
-  done: { Icon: CheckCircle2, color: dimmer },
-  paid: { Icon: Check, color: dimmer },
+  done: { Icon: CheckCircle2, color: "var(--color-text-faint)" },
+  paid: { Icon: Check, color: "var(--color-text-faint)" },
 };
 
 function SectionHeader({ label, tone }) {
-  const { Icon, color } = SECTION_TONES[tone] || { Icon: Clock, color: dimmer };
+  const { Icon, color } = SECTION_TONES[tone] || { Icon: Clock, color: "var(--color-text-faint)" };
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 6, marginTop: 4, padding: "0 2px",
@@ -252,7 +251,7 @@ export const RowsBlock = memo(function RowsBlock({ kind, items, accent, onActiva
           display: "flex", justifyContent: "space-between", alignItems: "center",
           marginTop: 3, padding: "5px 10px",
           borderTop: "1px solid rgba(255,255,255,0.06)",
-          fontSize: 11, color: dim,
+          fontSize: 11, color: "var(--color-text-faint)",
         }}>
           <span>Total due</span>
           <span style={{ fontWeight: 600, color: text, fontVariantNumeric: "tabular-nums" }}>

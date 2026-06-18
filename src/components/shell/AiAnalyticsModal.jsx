@@ -120,7 +120,7 @@ export default function AiAnalyticsModal({ open, onClose }) {
               <DialogTitle className="text-[13px] font-semibold tracking-[1.8px] text-foreground uppercase">
                 AI analytics
               </DialogTitle>
-              <DialogDescription className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/70">
+              <DialogDescription className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground/75">
                 Alfred assistant usage, email-search retrieval cost, and triage model spend.
               </DialogDescription>
             </div>

@@ -10,7 +10,7 @@ export function FieldLabel({ children }) {
         fontWeight: 600,
         letterSpacing: 2.2,
         textTransform: "uppercase",
-        color: "rgba(205,214,244,0.5)",
+        color: "var(--color-text-faint)",
         marginBottom: 6,
       }}
     >
@@ -83,7 +83,7 @@ export function ActionButton({
         borderRadius: 8,
         border,
         background,
-        color: disabled ? "rgba(205,214,244,0.38)" : color,
+        color: disabled ? "var(--color-text-faint)" : color,
         fontSize: 11.5,
         fontWeight: subtle ? 500 : 600,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -174,7 +174,7 @@ export function PickerFieldButton(props) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            color: value ? "#cdd6f4" : "rgba(205,214,244,0.42)",
+            color: value ? "#cdd6f4" : "var(--color-text-faint)",
           }}
         >
           {value || placeholder}
@@ -182,7 +182,7 @@ export function PickerFieldButton(props) {
       </span>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {trailingLabel ? (
-          <span style={{ fontSize: 10, color: "rgba(205,214,244,0.38)", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 10, color: "var(--color-text-faint)", whiteSpace: "nowrap" }}>
             {trailingLabel}
           </span>
         ) : null}

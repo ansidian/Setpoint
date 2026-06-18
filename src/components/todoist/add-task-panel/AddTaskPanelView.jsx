@@ -19,7 +19,7 @@ function buildEditMetadataItems({
     {
       id: "due",
       text: originalDueText,
-      color: editingTask?.due_date ? "rgba(249,226,175,0.86)" : "rgba(205,214,244,0.52)",
+      color: editingTask?.due_date ? "rgba(249,226,175,0.86)" : "var(--color-text-faint)",
     },
     (resolvedProject?.name || editingTask?.class_name || editingTask?.project_name) ? {
       id: "project",

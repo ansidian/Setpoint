@@ -37,13 +37,13 @@ function ExtractButton({ extractState, onClick, disabled = false, className, var
             background:
                 "linear-gradient(120deg, #c88fa0 0%, #c89b85 25%, #8fb8c8 55%, #a89bc4 80%, #c88fa0 100%)",
             backgroundSize: "240% 100%",
-            animation: `aiGradientShift ${extractState === "extracting" ? "2.5s" : "7s"} ease-in-out infinite`,
+            animation: extractState === "extracting" ? "aiGradientShift 2.5s ease-in-out infinite" : "none",
             border: "1px solid rgba(255,255,255,0.1)",
             boxShadow:
                   extractState === "extracting"
                     ? "0 0 10px rgba(168,155,196,0.35), 0 0 18px rgba(143,184,200,0.15)"
                     : "0 1px 6px rgba(168,155,196,0.2)",
-            textShadow: "0 1px 1px rgba(0,0,0,0.2)",
+            textShadow: "0 1px 2px rgba(0,0,0,0.45)",
           }
       }
       onMouseEnter={(event) => {
@@ -104,7 +104,7 @@ export default function BillBadgeHeader({
                 isMobile ? "w-full justify-center text-[10.5px] px-3 py-2" : "text-[10px] px-2 py-1",
               )}
               style={{
-                color: selected ? info.color : "rgba(205,214,244,0.45)",
+                color: selected ? info.color : "var(--color-text-faint)",
                 background: selected ? `${info.color}14` : "rgba(255,255,255,0.02)",
                 border: `1px solid ${selected ? `${info.color}38` : "rgba(255,255,255,0.04)"}`,
               }}
@@ -115,12 +115,12 @@ export default function BillBadgeHeader({
           );
         })}
         {!usesStackedLayout && (
-          <span className="text-[10px] text-muted-foreground/40 italic ml-1 truncate">
+          <span className="text-[10px] text-muted-foreground/75 italic ml-1 truncate">
             {typeHints[editType]}
           </span>
         )}
         {!usesStackedLayout && effectiveModel ? (
-          <span className="text-[10px] text-muted-foreground/40 ml-auto shrink-0">
+          <span className="text-[10px] text-muted-foreground/75 ml-auto shrink-0">
             detected by {modelDisplayName}
           </span>
         ) : !usesStackedLayout && showExtract ? (
@@ -133,13 +133,13 @@ export default function BillBadgeHeader({
         ) : null}
       </div>
       {usesStackedLayout && (
-        <div className={cn("text-muted-foreground/45 italic", isMobile ? "text-[11px] mt-3" : "text-[10px] mt-1.5")}>
+        <div className={cn("text-muted-foreground/75 italic", isMobile ? "text-[11px] mt-3" : "text-[10px] mt-1.5")}>
           {typeHints[editType]}
         </div>
       )}
       {mappingLabel && (
         <div className={cn(
-          "text-muted-foreground/45 truncate",
+          "text-muted-foreground/75 truncate",
           usesStackedLayout
             ? (isMobile ? "text-[11px] mt-2" : "text-[10px] mt-1.5")
             : "text-[10px] mt-1.5",
@@ -150,7 +150,7 @@ export default function BillBadgeHeader({
       )}
       {usesStackedLayout && (
         effectiveModel ? (
-          <div className={cn("text-muted-foreground/40 text-right", isMobile ? "text-[11px] mt-2.5" : "text-[10px] mt-2")}>
+          <div className={cn("text-muted-foreground/75 text-right", isMobile ? "text-[11px] mt-2.5" : "text-[10px] mt-2")}>
             detected by {modelDisplayName}
           </div>
         ) : showExtract ? (

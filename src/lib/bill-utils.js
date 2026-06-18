@@ -31,10 +31,10 @@ export function daysLabel(days) {
 }
 
 export function urgencyColor(days) {
-  if (days === null) return { accent: "#6c7086", text: "rgba(205,214,244,0.5)", bg: "rgba(205,214,244,0.04)" };
+  if (days === null) return { accent: "#6c7086", text: "var(--color-text-faint)", bg: "rgba(205,214,244,0.04)" };
   if (days < 0) return { accent: "#f38ba8", text: "#f38ba8", bg: "rgba(243,139,168,0.1)" };
   if (days === 0) return { accent: "#f97316", text: "#f97316", bg: "rgba(249,115,22,0.1)" };
   if (days === 1) return { accent: "#fab387", text: "#fab387", bg: "rgba(250,179,135,0.1)" };
   if (days <= 3) return { accent: "#f9e2af", text: "#f9e2afcc", bg: "rgba(249,226,175,0.08)" };
-  return { accent: "#a6e3a1", text: "rgba(205,214,244,0.5)", bg: "rgba(205,214,244,0.04)" };
+  return { accent: "#a6e3a1", text: "var(--color-text-faint)", bg: "rgba(205,214,244,0.04)" };
 }

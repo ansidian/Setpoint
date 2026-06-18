@@ -91,7 +91,7 @@ function DeadlinesRail({ accent, deadlines = [], onJump, isMobile = false, loadi
         right={showLoadingPlaceholder ? (
           <div
             data-testid="deadlines-rail-refresh-status"
-            style={{ fontSize: 10, color: "rgba(205,214,244,0.46)" }}
+            style={{ fontSize: 10, color: "var(--color-text-faint)" }}
           >
             Checking deadlines...
           </div>
@@ -219,7 +219,7 @@ function DeadlineRow({ deadline: d, days, accent, onJump, isMobile, completed })
         <div
           style={{
             fontSize: 10.5,
-            color: "rgba(205,214,244,0.45)",
+            color: "var(--color-text-faint)",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: isMobile ? "normal" : "nowrap",

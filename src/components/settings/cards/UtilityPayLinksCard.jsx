@@ -105,7 +105,7 @@ export default function UtilityPayLinksCard({
                 onChange={(event) =>
                   updateLink(index, (current) => ({ ...current, url: event.target.value }))
                 }
-                className="min-w-0 rounded-md border border-white/[0.08] bg-transparent px-2.5 py-1.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 hover:border-white/[0.16] focus:border-white/[0.24]"
+                className="min-w-0 rounded-md border border-white/[0.08] bg-transparent px-2.5 py-1.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/75 hover:border-white/[0.16] focus:border-white/[0.24]"
               />
               {urlInvalid ? (
                 <div className="text-[11px] text-danger">URL must start with http:// or https://</div>

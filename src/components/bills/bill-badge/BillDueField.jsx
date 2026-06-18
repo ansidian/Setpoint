@@ -47,7 +47,7 @@ export default function BillDueField({
           <span
             className={cn(
               "flex min-w-0 items-center gap-2 truncate",
-              dueDisplay ? "text-foreground" : "text-muted-foreground/40",
+              dueDisplay ? "text-foreground" : "text-muted-foreground/75",
             )}
           >
             <CalendarDays size={isMobile ? 15 : 13} />

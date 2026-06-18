@@ -172,7 +172,7 @@ export default function CalendarLocationSuggestionsPanel({
                       display: "block",
                       marginTop: 2,
                       fontSize: 10.5,
-                      color: "rgba(205,214,244,0.5)",
+                      color: "var(--color-text-faint)",
                       lineHeight: 1.45,
                       whiteSpace: "normal",
                       wordBreak: "break-word",

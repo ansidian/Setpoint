@@ -42,6 +42,10 @@
   --font-display: var(--serif-choice, "Instrument Serif"), Georgia, serif;
   --font-mono: Fira Code, monospace;
   --ea-accent: #cba6da;
+  /* Top-layer z-index tokens. Valued in the existing 9998–10020 band to preserve current stacking.
+     (A full z-index-scale renumber of the 10001/10020 band is intentionally deferred.) */
+  --z-popover: 9999;
+  --z-spotlight: 9999;
   --radius: 0.35rem;
   --shadow-x: 0px;
   --shadow-y: 4px;
@@ -131,6 +135,7 @@
   --color-text-body: oklch(0.8787 0.0426 272.2767);
   --color-text-secondary: oklch(0.7510 0.0396 273.9320);
   --color-text-muted: oklch(0.7510 0.0396 273.9320);
+  --color-text-faint: rgba(205, 214, 244, 0.6); /* 5.13:1 on --background — quietest READABLE tier (WCAG AA) */
   --color-border-accent: oklch(0.3240 0.0319 281.9784);
 }
 
@@ -185,7 +190,7 @@ body {
   width: 300px;
   height: 300px;
   pointer-events: none;
-  z-index: 9999;
+  z-index: var(--z-spotlight);
   display: block;
   opacity: 0;
   transform: translate3d(-9999px, -9999px, 0);
@@ -262,18 +267,18 @@ body {
 }
 .analytics-trigger-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(203,166,218,0.22);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ea-accent) 22%, transparent);
 }
 .analytics-trigger-button[aria-pressed="true"] {
-  border-color: rgba(203,166,218,0.28);
-  background: rgba(203,166,218,0.13);
-  color: #cba6da;
+  border-color: color-mix(in srgb, var(--ea-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--ea-accent) 13%, transparent);
+  color: var(--ea-accent);
 }
 .analytics-trigger-button[aria-pressed="true"]:hover,
 .analytics-trigger-button[aria-pressed="true"]:focus-visible {
-  border-color: rgba(203,166,218,0.36);
-  background: rgba(203,166,218,0.16);
-  color: #d8b6e3;
+  border-color: color-mix(in srgb, var(--ea-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--ea-accent) 16%, transparent);
+  color: color-mix(in srgb, var(--ea-accent) 85%, white);
 }
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
@@ -292,6 +297,8 @@ body {
   .analytics-trigger-button:focus-visible {
     transform: translateY(0);
   }
+  /* Note: the AI-shimmer gradient (BillBadgeHeader) is already held static for reduced-motion by
+     the global `*, *::before, *::after { animation-duration: 0.01ms }` reset further below. */
 }
 
 /* Clickable summary badges */

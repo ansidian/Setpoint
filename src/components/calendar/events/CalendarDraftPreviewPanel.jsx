@@ -48,13 +48,13 @@ export default function CalendarDraftPreviewPanel({
       kind: "location",
       label: "Location",
       value: locationSummary,
-      color: draft?.location?.trim() ? "#f5c2e7" : "rgba(166,173,200,0.62)",
+      color: draft?.location?.trim() ? "#f5c2e7" : "rgba(166,173,200,0.75)",
     },
     {
       kind: "repeat",
       label: "Repeat",
       value: recurrenceSummary,
-      color: recurrenceDraft || isRecurringEvent ? "#a6e3a1" : "rgba(166,173,200,0.62)",
+      color: recurrenceDraft || isRecurringEvent ? "#a6e3a1" : "rgba(166,173,200,0.75)",
     },
     statusSummary
       ? {

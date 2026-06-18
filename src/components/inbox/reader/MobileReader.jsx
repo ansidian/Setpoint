@@ -98,7 +98,6 @@ export default function MobileReader({
           gap: 10,
           borderBottom: "1px solid rgba(255,255,255,0.05)",
           background: "rgba(11,11,19,0.94)",
-          backdropFilter: "blur(14px)",
           flexShrink: 0,
         }}
       >
@@ -204,7 +203,7 @@ export default function MobileReader({
               <div
                 style={{
                   fontSize: 10,
-                  color: "rgba(205,214,244,0.5)",
+                  color: "var(--color-text-faint)",
                   marginTop: 1,
                   display: "flex",
                   flexWrap: "wrap",
@@ -292,6 +291,7 @@ export default function MobileReader({
               email={email}
               accent={accent}
               onDiscard={() => setDrafting(false)}
+              isMobile
             />
           </div>
         )}
@@ -363,7 +363,7 @@ export default function MobileReader({
                 )}
                 {email.extractedBill?.due_date && (
                   <>
-                    <span style={{ color: "rgba(205,214,244,0.26)" }}>·</span>
+                    <span style={{ color: "var(--color-text-faint)" }}>·</span>
                     <span style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
                       Due {email.extractedBill.due_date}
                     </span>
@@ -378,6 +378,7 @@ export default function MobileReader({
                     alignItems: "center",
                     gap: 4,
                     padding: "6px 8px",
+                    minHeight: 44,
                     borderRadius: 8,
                     border: "1px solid rgba(255,255,255,0.08)",
                     background: "rgba(255,255,255,0.03)",

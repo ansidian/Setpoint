@@ -287,7 +287,7 @@ function ProfileEditor({
         </div>
 
         {collapsed ? (
-          <div className="flex flex-wrap items-center gap-2 px-3 pb-3 text-[11px] text-muted-foreground/70 sm:px-4">
+          <div className="flex flex-wrap items-center gap-2 px-3 pb-3 text-[11px] text-muted-foreground/75 sm:px-4">
             <StatusPill tone={profile.enabled ? "success" : "neutral"}>
               {profile.enabled ? "Enabled" : "Disabled"}
             </StatusPill>
@@ -476,7 +476,7 @@ export default function BillPayMappingsCard({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/60">
+          <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/75">
             No Bill Pay mappings configured yet.
           </div>
         )}

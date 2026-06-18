@@ -55,7 +55,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }) {
           <div
             style={{
               padding: "6px 10px 8px",
-              fontSize: 10, color: "rgba(205,214,244,0.4)",
+              fontSize: 10, color: "var(--color-text-faint)",
               textTransform: "uppercase", letterSpacing: 0.5,
             }}
           >
@@ -77,7 +77,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }) {
               }}
             >
               <span>{p.label}</span>
-              <span style={{ fontSize: 10, color: "rgba(205,214,244,0.4)" }}>
+              <span style={{ fontSize: 10, color: "var(--color-text-faint)" }}>
                 {new Date(p.at).toLocaleString([], {
                   weekday: "short", hour: "numeric", minute: "2-digit",
                   timeZone: DASHBOARD_TZ,

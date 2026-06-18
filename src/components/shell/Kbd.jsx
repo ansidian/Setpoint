@@ -11,7 +11,7 @@ export function Kbd({ children }) {
         fontSize: 10,
         fontFamily: "Fira Code, ui-monospace, monospace",
         fontWeight: 500,
-        color: "rgba(205,214,244,0.55)",
+        color: "var(--color-text-faint)",
         background: "rgba(255,255,255,0.04)",
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 4,

@@ -9,7 +9,7 @@ import BillDueField from "./BillDueField";
 function FieldShell({ label, children }) {
   return (
     <div className="min-w-0">
-      <div className="text-[9px] uppercase tracking-wider text-muted-foreground/50 mb-1 font-semibold">
+      <div className="text-[9px] uppercase tracking-wider text-muted-foreground/75 mb-1 font-semibold">
         {label}
       </div>
       {children}
@@ -78,7 +78,7 @@ function BillFields({
         <div className={cn("grid grid-cols-2", isMobile ? "gap-3" : "gap-2")}>
           <FieldShell label="Amount">
             <div className="relative">
-              <span className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none", isMobile ? "text-[14px]" : "text-[13px]")}>$</span>
+              <span className={cn("absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/75 pointer-events-none", isMobile ? "text-[14px]" : "text-[13px]")}>$</span>
               <Input
                 type="number"
                 step="0.01"
@@ -175,7 +175,7 @@ function BillFields({
         )}
         <FieldShell label="Amount">
           <div className="relative">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-muted-foreground/40 pointer-events-none">$</span>
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[13px] text-muted-foreground/75 pointer-events-none">$</span>
             <Input
               type="number"
               step="0.01"
@@ -298,17 +298,17 @@ function FeeAndSendRow({
           </button>
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {feeEnabled && parsedFee > 0 ? (
-              <span className={cn("text-muted-foreground/60 truncate", isMobile ? "text-[11px]" : "text-[10px]")}>
+              <span className={cn("text-muted-foreground/75 truncate", isMobile ? "text-[11px]" : "text-[10px]")}>
                 ${baseAmount.toFixed(2)} + ${parsedFee.toFixed(2)} = <span className="text-[#cba6da] font-medium">${totalAmount.toFixed(2)}</span>
               </span>
             ) : (
-              <span className={cn("text-muted-foreground/45 truncate", isMobile ? "text-[11px]" : "text-[10px]")}>
+              <span className={cn("text-muted-foreground/75 truncate", isMobile ? "text-[11px]" : "text-[10px]")}>
                 CC processing fee
               </span>
             )}
             {feeEnabled && !detectedFee && (
               <div className="relative shrink-0">
-                <span className={cn("absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none", isMobile ? "text-[11px]" : "text-[10px]")}>$</span>
+                <span className={cn("absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/75 pointer-events-none", isMobile ? "text-[11px]" : "text-[10px]")}>$</span>
                 <input
                   type="number"
                   step="0.01"
@@ -366,15 +366,15 @@ function FeeAndSendRow({
       </button>
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {feeEnabled && parsedFee > 0 ? (
-          <span className="text-[10px] text-muted-foreground/60 truncate">
+          <span className="text-[10px] text-muted-foreground/75 truncate">
             ${baseAmount.toFixed(2)} + ${parsedFee.toFixed(2)} CC fee = <span className="text-[#cba6da] font-medium">${totalAmount.toFixed(2)}</span>
           </span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/45 truncate">CC processing fee</span>
+          <span className="text-[10px] text-muted-foreground/75 truncate">CC processing fee</span>
         )}
         {feeEnabled && !detectedFee && (
           <div className="relative shrink-0">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/40 pointer-events-none">$</span>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/75 pointer-events-none">$</span>
             <input
               type="number"
               step="0.01"
@@ -477,7 +477,7 @@ export default function BillBadgeForm({
       {(state === "idle" || state === "error") && !actualReady && (
         <div className="flex items-center gap-2 py-3">
           <div className="w-3.5 h-3.5 border-[1.5px] border-white/[0.06] border-t-primary rounded-full animate-spin" />
-          <span className="text-[11px] text-muted-foreground/50">Loading Actual Budget data...</span>
+          <span className="text-[11px] text-muted-foreground/75">Loading Actual Budget data...</span>
         </div>
       )}
 

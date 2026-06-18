@@ -85,7 +85,7 @@ function chipStyle({
       : active
         ? "inset 0 1px 0 rgba(255,255,255,0.04)"
         : "none",
-    color: selected || batchSelected ? "#f6f7fb" : quiet ? "rgba(205,214,244,0.52)" : "rgba(205,214,244,0.78)",
+    color: selected || batchSelected ? "#f6f7fb" : quiet ? "var(--color-text-faint)" : "rgba(205,214,244,0.78)",
     cursor: ghost ? "default" : "pointer",
     pointerEvents: ghost ? "none" : "auto",
     opacity: isPast ? (selected ? 0.92 : 0.82) : quiet ? 0.88 : 1,
@@ -380,7 +380,7 @@ export function MoreButton({
         background: active || open ? "rgba(255,255,255,0.052)" : "rgba(255,255,255,0.018)",
         color: active || open
           ? "#eef2ff"
-          : pastTone === "items" ? "rgba(205,214,244,0.42)" : "rgba(205,214,244,0.56)",
+          : pastTone === "items" ? "var(--color-text-faint)" : "rgba(205,214,244,0.56)",
         cursor: "pointer",
         fontSize: large ? 12 : compact ? 11.5 : 11,
         fontWeight: 600,

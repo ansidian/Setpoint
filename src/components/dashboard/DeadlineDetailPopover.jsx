@@ -83,7 +83,7 @@ function ActionButton({ icon: Icon, label, onClick, accent, variant = "default",
 function InfoRow({ label, value, color }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
-      <span style={{ color: "rgba(205,214,244,0.45)", letterSpacing: 0.3, textTransform: "uppercase", fontSize: 9.5, fontWeight: 600, width: 60 }}>
+      <span style={{ color: "var(--color-text-faint)", letterSpacing: 0.3, textTransform: "uppercase", fontSize: 9.5, fontWeight: 600, width: 60 }}>
         {label}
       </span>
       <span style={{ color: color || "rgba(205,214,244,0.85)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -292,7 +292,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
             <div
               style={{
                 marginTop: 4, fontSize: 11,
-                color: "rgba(205,214,244,0.5)",
+                color: "var(--color-text-faint)",
               }}
             >
               {task.class_name || task.project_name}

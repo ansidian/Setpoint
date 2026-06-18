@@ -10,7 +10,7 @@ export function Kbd({ children }) {
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         minWidth: 18, height: 18, padding: "0 5px",
         fontSize: 10, fontFamily: "Fira Code, ui-monospace, monospace", fontWeight: 500,
-        color: "rgba(205,214,244,0.55)",
+        color: "var(--color-text-faint)",
         background: "rgba(255,255,255,0.04)",
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 4, letterSpacing: 0,
@@ -45,7 +45,7 @@ export function Eyebrow({ children, style }) {
     <div
       style={{
         fontSize: 10, fontWeight: 600, letterSpacing: 2.6, textTransform: "uppercase",
-        color: "rgba(205,214,244,0.55)", ...style,
+        color: "var(--color-text-faint)", ...style,
       }}
     >
       {children}
@@ -228,7 +228,7 @@ export function NumberField({
 export function QuickAction({
   icon: Icon, label, onClick, primary, danger,
   accent = "#cba6da", buttonRef, ariaLabel, tooltip,
-  holdProgress = 0, holdColor, keyHint,
+  holdProgress = 0, holdColor, keyHint, touch = false,
 }) {
   const [hover, setHover] = useState(false);
   const iconOnly = !label;
@@ -247,7 +247,7 @@ export function QuickAction({
         display: "inline-flex", alignItems: "center", gap: 6,
         justifyContent: "center",
         width: iconOnly ? 36 : undefined,
-        height: 36,
+        height: touch ? 44 : 36,
         padding: iconOnly ? 0 : "0 11px",
         borderRadius: 8,
         fontSize: 11, fontWeight: 600, fontFamily: "inherit",

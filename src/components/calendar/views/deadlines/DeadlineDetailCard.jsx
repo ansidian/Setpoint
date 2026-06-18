@@ -294,7 +294,7 @@ export default function DeadlineDetailCard({
               transition={motion.layout}
               style={{
                 fontSize: compact ? 10 : 10.5,
-                color: "rgba(205,214,244,0.54)",
+                color: "var(--color-text-faint)",
                 display: "-webkit-box",
                 WebkitLineClamp: compact ? 1 : 2,
                 WebkitBoxOrient: "vertical",

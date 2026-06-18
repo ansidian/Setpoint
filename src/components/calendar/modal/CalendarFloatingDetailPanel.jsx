@@ -568,7 +568,7 @@ export default function CalendarFloatingDetailPanel({
                 fontWeight: 700,
                 letterSpacing: 1.7,
                 textTransform: "uppercase",
-                color: "rgba(205,214,244,0.52)",
+                color: "var(--color-text-faint)",
               }}
             >
               {label}

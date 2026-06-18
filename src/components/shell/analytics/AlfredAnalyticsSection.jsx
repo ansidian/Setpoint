@@ -42,10 +42,10 @@ export default function AlfredAnalyticsSection({ stats }) {
           Tools used
         </div>
         {tools.length === 0 ? (
-          <div className="text-[12px] text-muted-foreground/65">No tool calls in this window.</div>
+          <div className="text-[12px] text-muted-foreground/75">No tool calls in this window.</div>
         ) : (
           <div className="space-y-0.5">
-            <div className="grid grid-cols-[1fr_3.5rem_3rem_4rem] gap-x-3 px-1.5 pb-1 text-[9px] font-semibold tracking-[1.3px] text-muted-foreground/45 uppercase">
+            <div className="grid grid-cols-[1fr_3.5rem_3rem_4rem] gap-x-3 px-1.5 pb-1 text-[9px] font-semibold tracking-[1.3px] text-muted-foreground/75 uppercase">
               <span>Tool</span>
               <span className="text-right">Calls</span>
               <span className="text-right">Err</span>
@@ -57,10 +57,10 @@ export default function AlfredAnalyticsSection({ stats }) {
                 <div key={tool.name} className="grid grid-cols-[1fr_3.5rem_3rem_4rem] items-center gap-x-3 rounded-md px-1.5 py-1 text-[11px] text-foreground/85 odd:bg-white/[0.015]">
                   <span className="truncate font-medium">{tool.name}</span>
                   <span className="text-right tabular-nums text-foreground">{numberValue(tool.calls)}</span>
-                  <span className={`text-right tabular-nums ${hasErr ? "text-[#f38ba8]" : "text-muted-foreground/50"}`}>
+                  <span className={`text-right tabular-nums ${hasErr ? "text-[#f38ba8]" : "text-muted-foreground/75"}`}>
                     {formatPercent(tool.errorRate)}
                   </span>
-                  <span className="text-right tabular-nums text-muted-foreground/70">{numberValue(tool.avgDurationMs)}ms</span>
+                  <span className="text-right tabular-nums text-muted-foreground/75">{numberValue(tool.avgDurationMs)}ms</span>
                 </div>
               );
             })}
@@ -74,7 +74,7 @@ export default function AlfredAnalyticsSection({ stats }) {
             <Layers3 size={13} className="text-primary/80" />
             Model split
           </div>
-          <p className="mt-1 mb-3 text-[10px] leading-relaxed text-muted-foreground/55">
+          <p className="mt-1 mb-3 text-[10px] leading-relaxed text-muted-foreground/75">
             Model API calls (turns) and estimated cost per model. One query can span several turns.
           </p>
           <div className="space-y-1.5">
@@ -90,7 +90,7 @@ export default function AlfredAnalyticsSection({ stats }) {
                   </span>
                 </div>
                 <div className="flex shrink-0 items-baseline gap-3 text-[11px]">
-                  <span className="tabular-nums text-muted-foreground/70">{numberValue(model.calls)} calls</span>
+                  <span className="tabular-nums text-muted-foreground/75">{numberValue(model.calls)} calls</span>
                   <span className="tabular-nums font-semibold text-primary">{formatUsdEstimate(model.estimatedCostUsd)}</span>
                 </div>
               </div>

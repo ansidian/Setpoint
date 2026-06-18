@@ -81,7 +81,7 @@ function NeighborRow({
             fontWeight: 700,
             letterSpacing: 1.6,
             textTransform: "uppercase",
-            color: "rgba(205,214,244,0.48)",
+            color: "var(--color-text-faint)",
           }}
         >
           {label}
@@ -89,7 +89,7 @@ function NeighborRow({
         <div
           style={{
             fontSize: compact ? 11.5 : 12.5,
-            color: hasDay ? "#eef2ff" : "rgba(205,214,244,0.55)",
+            color: hasDay ? "#eef2ff" : "var(--color-text-faint)",
             fontWeight: 500,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -141,7 +141,7 @@ export function NearbyActivityCard({
           fontWeight: 700,
           letterSpacing: 2,
           textTransform: "uppercase",
-          color: "rgba(205,214,244,0.42)",
+          color: "var(--color-text-faint)",
         }}
       >
         Nearby activity
@@ -180,7 +180,7 @@ export function NearbyActivityCard({
             border: "1px dashed rgba(255,255,255,0.06)",
             fontSize: compact ? 10.5 : 11,
             lineHeight: 1.55,
-            color: "rgba(205,214,244,0.52)",
+            color: "var(--color-text-faint)",
           }}
         >
           {compact

@@ -134,7 +134,7 @@ export function LaneRow({ laneKey, lane, setLane, laneCounts, noiseUnreadCount =
       <span
         style={{
           fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
-          background: "rgba(255,255,255,0.04)", color: "rgba(205,214,244,0.45)",
+          background: "rgba(255,255,255,0.04)", color: "var(--color-text-faint)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -182,7 +182,7 @@ export function LaneAll({ accent, lane, setLane, laneCounts }) {
       <span
         style={{
           fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
-          background: "rgba(255,255,255,0.04)", color: "rgba(205,214,244,0.45)",
+          background: "rgba(255,255,255,0.04)", color: "var(--color-text-faint)",
         }}
       >
         {count}
@@ -272,7 +272,7 @@ export default function Sidebar({
       {!compact && (
         <div style={{ marginTop: "auto", padding: 10 }}>
           <Eyebrow style={{ marginBottom: 8 }}>Shortcuts</Eyebrow>
-          <div style={{ display: "grid", rowGap: 6, fontSize: 10, color: "rgba(205,214,244,0.5)" }}>
+          <div style={{ display: "grid", rowGap: 6, fontSize: 10, color: "var(--color-text-faint)" }}>
             {shortcutRows.map((row) => (
               <ShortcutRow key={`${row.keys.join("-")}-${row.label}`} keys={row.keys} label={row.label} />
             ))}

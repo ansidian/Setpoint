@@ -88,7 +88,7 @@ function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
           style={{
             fontSize: 10,
             marginTop: 4,
-            color: "rgba(205,214,244,0.5)",
+            color: "var(--color-text-faint)",
             lineHeight: 1.35,
           }}
         >
@@ -226,7 +226,7 @@ export default function BriefingHistoryPanel({
               animation: "spin 600ms linear infinite",
             }}
           />
-          <div style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>Loading snapshots...</div>
+          <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>Loading snapshots...</div>
         </div>
       )}
 
@@ -251,7 +251,7 @@ export default function BriefingHistoryPanel({
       {history && groups.length === 0 && (
         <div style={{ padding: "40px 20px", textAlign: "center" }}>
           <ClipboardList size={22} color="rgba(205,214,244,0.25)" style={{ marginBottom: 10 }} />
-          <div style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>No snapshots yet</div>
+          <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>No snapshots yet</div>
         </div>
       )}
 
@@ -272,7 +272,7 @@ export default function BriefingHistoryPanel({
                   fontWeight: 700,
                   letterSpacing: 2,
                   textTransform: "uppercase",
-                  color: "rgba(205,214,244,0.5)",
+                  color: "var(--color-text-faint)",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -318,7 +318,7 @@ export default function BriefingHistoryPanel({
         right: pos.right,
         width: 340,
         maxHeight: `min(460px, calc(100vh - ${pos.top + 16}px))`,
-        zIndex: 9999,
+        zIndex: "var(--z-popover)",
         display: "flex",
         flexDirection: "column",
         background: "#16161e",
@@ -371,7 +371,7 @@ export default function BriefingHistoryPanel({
               fontSize: 10,
               fontWeight: 500,
               fontVariantNumeric: "tabular-nums",
-              color: "rgba(205,214,244,0.55)",
+              color: "var(--color-text-faint)",
             }}
           >
             {totalSnapshots} snapshot{totalSnapshots === 1 ? "" : "s"}

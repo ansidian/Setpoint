@@ -130,14 +130,14 @@ function DeadlineRow({ task, selected, onSelect, quickActions }) {
         }}
       />
       <span style={{ minWidth: 0, gridColumn: 2, display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ color: task.agendaComplete ? "rgba(166,173,200,0.54)" : "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ color: task.agendaComplete ? "rgba(166,173,200,0.75)" : "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
           {task.agendaMeta}
         </span>
         <span style={{ color: task.agendaComplete ? "rgba(205,214,244,0.62)" : "#f1f2fb", fontSize: 12, fontWeight: 650, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textDecoration: task.agendaComplete ? "line-through" : "none", textDecorationColor: "rgba(205,214,244,0.28)" }}>
           {task.agendaTitle}
         </span>
         {task.agendaSubtitle ? (
-          <span style={{ color: "rgba(166,173,200,0.64)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {task.agendaSubtitle}
           </span>
         ) : null}
@@ -150,7 +150,7 @@ function DeadlineRow({ task, selected, onSelect, quickActions }) {
       </span>
       <span style={{ gridColumn: 3, gridRow: "1 / span 3", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, minWidth: 78 }}>
         <DeadlineStatusIcon status={task.status} size={13} />
-        <span style={{ color: "rgba(166,173,200,0.62)", fontSize: 9.5, fontWeight: 700, lineHeight: 1.1, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+        <span style={{ color: "rgba(166,173,200,0.75)", fontSize: 9.5, fontWeight: 700, lineHeight: 1.1, textTransform: "uppercase", whiteSpace: "nowrap" }}>
           {task.agendaStatus}
         </span>
       </span>

@@ -39,7 +39,7 @@ function SectionLabel({
             fontWeight: 700,
             letterSpacing: 1.8,
             textTransform: "uppercase",
-            color: "rgba(205,214,244,0.5)",
+            color: "var(--color-text-faint)",
           }}
         >
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -50,7 +50,7 @@ function SectionLabel({
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: 0.8,
-            color: "rgba(205,214,244,0.34)",
+            color: "var(--color-text-faint)",
           }}
         >
           {itemCount}
@@ -66,7 +66,7 @@ function SectionLabel({
         fontWeight: 700,
         letterSpacing: 1.8,
         textTransform: "uppercase",
-        color: "rgba(205,214,244,0.5)",
+        color: "var(--color-text-faint)",
       }}
     >
       {children}
@@ -275,7 +275,7 @@ function TimelineRow({ item, compact = false }) {
               style={{
                 marginTop: rowMetrics.subtitleMarginTop,
                 fontSize: rowMetrics.subtitleFontSize,
-                color: "rgba(205,214,244,0.52)",
+                color: "var(--color-text-faint)",
                 lineHeight: 1.4,
                 display: "-webkit-box",
                 WebkitLineClamp: compact ? 2 : 3,
@@ -291,7 +291,7 @@ function TimelineRow({ item, compact = false }) {
               style={{
                 marginTop: rowMetrics.metaMarginTop,
                 fontSize: rowMetrics.metaFontSize,
-                color: "rgba(205,214,244,0.38)",
+                color: "var(--color-text-faint)",
                 lineHeight: 1.4,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -376,7 +376,7 @@ export default function TimelineDetailRail({
                   fontWeight: 700,
                   letterSpacing: 1.8,
                   textTransform: "uppercase",
-                  color: "rgba(205,214,244,0.48)",
+                  color: "var(--color-text-faint)",
                 }}
               >
                 {eyebrow}
@@ -487,7 +487,7 @@ export default function TimelineDetailRail({
             style={{
               padding: "12px 0",
               fontSize: 12,
-              color: "rgba(205,214,244,0.5)",
+              color: "var(--color-text-faint)",
             }}
           >
             No items for this day.

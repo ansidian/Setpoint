@@ -299,7 +299,7 @@ function CompactDetailPanel({
           </CompactOption>
         );
       }) : (
-        <div style={{ color: "rgba(205,214,244,0.42)", fontSize: 11.5, padding: "6px 9px" }}>
+        <div style={{ color: "var(--color-text-faint)", fontSize: 11.5, padding: "6px 9px" }}>
           No labels available
         </div>
       )}
@@ -405,7 +405,7 @@ export default function AddTaskPanelInlineEditor({
             <div id="todoist-editor-title" style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
               {isEdit ? "Edit deadline" : "New deadline"}
             </div>
-            <div style={{ marginTop: 3, fontSize: 11, color: "rgba(205,214,244,0.42)", lineHeight: 1.45 }}>
+            <div style={{ marginTop: 3, fontSize: 11, color: "var(--color-text-faint)", lineHeight: 1.45 }}>
               Deadline text can carry dates, priority, projects, and labels.
             </div>
           </div>

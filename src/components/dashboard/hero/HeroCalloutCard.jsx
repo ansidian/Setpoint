@@ -79,7 +79,7 @@ export default function HeroCalloutCard({
                 fontSize: isMobile ? 9 : 9.5,
                 letterSpacing: 0.6,
                 textTransform: "uppercase",
-                color: "rgba(205,214,244,0.45)",
+                color: "var(--color-text-faint)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -148,7 +148,7 @@ export default function HeroCalloutCard({
             <div
               style={{
                 fontSize: isMobile ? 11 : 10.5,
-                color: "rgba(205,214,244,0.55)",
+                color: "var(--color-text-faint)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
