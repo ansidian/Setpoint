@@ -6,6 +6,10 @@ import {
   resolveInputPath,
 } from "../../scripts/clean-notification-mp3.mjs";
 
+// resolveInputPath/buildCleanupPlan return OS-native paths (backslashes on
+// Windows); normalize separators so the path assertions hold cross-platform.
+const toPosix = (p) => p.replace(/\\/g, "/");
+
 describe("clean notification mp3 script", () => {
   it("defaults to cleaning all notification sounds without replacing originals", () => {
     expect(parseArgs([])).toMatchObject({
@@ -22,7 +26,7 @@ describe("clean notification mp3 script", () => {
   it("resolves app public paths from the repo root", () => {
     const smoothModern = resolveInputPath("/public/sounds/notifications/smooth-modern.mp3");
 
-    expect(smoothModern).toMatch(/\/public\/sounds\/notifications\/smooth-modern\.mp3$/);
+    expect(toPosix(smoothModern)).toMatch(/\/public\/sounds\/notifications\/smooth-modern\.mp3$/);
     expect(smoothModern).not.toBe("/public/sounds/notifications/smooth-modern.mp3");
   });
 
@@ -55,7 +59,7 @@ describe("clean notification mp3 script", () => {
     );
 
     expect(plan[0].output).toBe("/tmp/chime.mp3");
-    expect(plan[0].tempOutput).toMatch(/\/tmp\/\.chime\.mp3\.cleaning-\d+\.mp3$/);
+    expect(toPosix(plan[0].tempOutput)).toMatch(/\/tmp\/\.chime\.mp3\.cleaning-\d+\.mp3$/);
   });
 
   it("writes cleaned copies as mp3 even when the source is wav", () => {
@@ -68,7 +72,7 @@ describe("clean notification mp3 script", () => {
       },
     );
 
-    expect(plan[0].output).toBe("/tmp/source.clean.mp3");
-    expect(plan[0].args.at(-1)).toBe("/tmp/source.clean.mp3");
+    expect(toPosix(plan[0].output)).toBe("/tmp/source.clean.mp3");
+    expect(toPosix(plan[0].args.at(-1))).toBe("/tmp/source.clean.mp3");
   });
 });

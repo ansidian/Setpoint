@@ -1,4 +1,7 @@
-#!/usr/bin/env node
+// No `#!/usr/bin/env node` shebang: this module is imported by its Vitest suite
+// (server/scripts/clean-notification-mp3.test.js) and is run via
+// `node scripts/clean-notification-mp3.mjs`. The rolldown transform Vitest uses
+// cannot parse a leading shebang, which fails the whole suite at load time.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
