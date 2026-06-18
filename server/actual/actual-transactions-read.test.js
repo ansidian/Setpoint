@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, rm, writeFile } from "fs/promises";
+import { mkdtemp, mkdir, writeFile } from "fs/promises";
+import { removeTempDir } from "../test-utils/temp-dir.js";
 import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";
@@ -64,7 +65,7 @@ async function fixture() {
 const opts = () => ({ dbClient: settingsDbClient(), dataDir: tempDir, localOnly: true });
 
 afterEach(async () => {
-  if (tempDir) await rm(tempDir, { recursive: true, force: true });
+  if (tempDir) await removeTempDir(tempDir);
   tempDir = null;
 });
 
