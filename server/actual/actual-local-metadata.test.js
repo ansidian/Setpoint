@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, utimes, writeFile } from "fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, utimes, writeFile } from "fs/promises";
+import { removeTempDir } from "../test-utils/temp-dir.js";
 import os from "os";
 import path from "path";
 import { createClient } from "@libsql/client";
@@ -195,7 +196,7 @@ beforeEach(() => {
 afterEach(async () => {
   vi.useRealTimers();
   global.fetch = originalFetch;
-  if (tempDir) await rm(tempDir, { recursive: true, force: true });
+  if (tempDir) await removeTempDir(tempDir);
   tempDir = null;
 });
 

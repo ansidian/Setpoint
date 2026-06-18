@@ -1,5 +1,6 @@
 import { createClient } from "@libsql/client";
-import { mkdtemp, rm } from "fs/promises";
+import { mkdtemp } from "fs/promises";
+import { removeTempDir } from "../test-utils/temp-dir.js";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +28,7 @@ describe("runMigration atomicity (P1-8)", () => {
     await db?.close?.();
     db = null;
     if (dir) {
-      await rm(dir, { recursive: true, force: true });
+      await removeTempDir(dir);
       dir = null;
     }
   });
@@ -104,7 +105,7 @@ describe("runMigration ALTER replay (P2-21/22)", () => {
   }
 
   afterEach(async () => {
-    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+    if (tempDir) await removeTempDir(tempDir);
     tempDir = null;
   });
 
