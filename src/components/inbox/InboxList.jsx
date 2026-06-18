@@ -180,6 +180,7 @@ export default function InboxList({
             }}
             aria-label="Search indexed mail"
             placeholder="Search indexed mail"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
               fontSize: 12, color: "#cdd6f4", fontFamily: "inherit",
@@ -250,9 +251,9 @@ export default function InboxList({
           >
             {unreadCount}
           </span>{" "}
-          <span style={{ color: "rgba(205,214,244,0.4)" }}>unread · </span>
+          <span style={{ color: "var(--color-text-faint)" }}>unread · </span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{totalCount}</span>
-          <span style={{ color: "rgba(205,214,244,0.4)" }}>
+          <span style={{ color: "var(--color-text-faint)" }}>
             {indexedSearchActive
               ? ` indexed result${totalCount === 1 ? "" : "s"}`
               : " total"}
@@ -391,7 +392,7 @@ export default function InboxList({
                       style={{
                         flexShrink: 0,
                         fontSize: 9, fontWeight: 600, letterSpacing: 0.5,
-                        textTransform: "uppercase", color: "rgba(205,214,244,0.4)",
+                        textTransform: "uppercase", color: "var(--color-text-faint)",
                         whiteSpace: "nowrap",
                       }}
                     >

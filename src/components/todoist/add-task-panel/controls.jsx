@@ -165,7 +165,7 @@ export function Dropdown({
           alignItems: "center",
           justifyContent: "space-between",
           cursor: "pointer",
-          color: color || "rgba(205,214,244,0.35)",
+          color: color || "var(--color-text-faint)",
           transform: hover ? "translateY(-1px)" : "translateY(0)",
           transition: "transform 140ms, background 140ms, border-color 140ms",
         }}
@@ -283,7 +283,7 @@ export function TokenAutocomplete({ cursorPos, input, items, type, onSelect }) {
         style={{
           padding: "4px 8px 2px",
           fontSize: 10,
-          color: "rgba(205,214,244,0.3)",
+          color: "var(--color-text-faint)",
           textTransform: "uppercase",
           letterSpacing: "1px",
         }}
@@ -346,7 +346,7 @@ export function LabelPicker({ available, onAdd }) {
           if (event.key === "Enter") setOpen((value) => !value);
         }}
         style={{
-          color: "rgba(205,214,244,0.3)",
+          color: "var(--color-text-faint)",
           fontSize: 11,
           cursor: "pointer",
           padding: "2px 6px",

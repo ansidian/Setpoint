@@ -79,7 +79,7 @@ export default function ReminderDateTimePicker({
           borderRadius: 8,
           border: open ? `1px solid color-mix(in srgb, ${accent} 40%, rgba(255,255,255,0.08))` : "1px solid rgba(255,255,255,0.08)",
           background: open ? `color-mix(in srgb, ${accent} 12%, rgba(255,255,255,0.025))` : "rgba(255,255,255,0.03)",
-          color: disabled ? "rgba(205,214,244,0.36)" : "rgba(205,214,244,0.78)",
+          color: disabled ? "var(--color-text-faint)" : "rgba(205,214,244,0.78)",
           fontSize: 10.5,
           fontWeight: 650,
           fontFamily: "inherit",

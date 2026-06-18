@@ -57,7 +57,7 @@ export default function InboxUndoToast({ undo, onUndo, accent = "#cba6da" }) {
             borderRadius: 8,
             border: `1px solid ${hover && !busy ? `${accent}66` : `${accent}38`}`,
             background: hover && !busy ? `${accent}20` : `${accent}12`,
-            color: busy ? "rgba(205,214,244,0.38)" : accent,
+            color: busy ? "var(--color-text-faint)" : accent,
             cursor: busy ? "default" : "pointer",
             fontFamily: "inherit",
             fontSize: 11,

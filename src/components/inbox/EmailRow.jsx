@@ -97,7 +97,7 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
           <span
             style={{
               fontSize: 10, fontVariantNumeric: "tabular-nums", fontWeight: 500,
-              color: email.urgency === "high" ? urgColor : "rgba(205,214,244,0.4)",
+              color: email.urgency === "high" ? urgColor : "var(--color-text-faint)",
             }}
           >
             {timeAgo(email.date)}

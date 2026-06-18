@@ -29,7 +29,7 @@ function ReminderPill({ chip, disabled, onRemove }) {
         borderRadius: 999,
         border: muted ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(203,166,218,0.22)",
         background: muted ? "rgba(255,255,255,0.025)" : "rgba(203,166,218,0.10)",
-        color: muted ? "rgba(205,214,244,0.48)" : "#cdd6f4",
+        color: muted ? "var(--color-text-faint)" : "#cdd6f4",
         padding: "3px 4px 3px 9px",
         fontSize: 11,
         fontWeight: 600,
@@ -42,7 +42,7 @@ function ReminderPill({ chip, disabled, onRemove }) {
         {chip.label}
       </span>
       {muted ? (
-        <span style={{ color: "rgba(205,214,244,0.42)", fontSize: 10 }}>sent</span>
+        <span style={{ color: "var(--color-text-faint)", fontSize: 10 }}>sent</span>
       ) : null}
       <button
         type="button"
@@ -107,7 +107,7 @@ export default function CalendarEventReminderChips({
           </span>
         </div>
         {chips.length ? (
-          <span style={{ color: "rgba(205,214,244,0.42)", fontSize: 10, fontWeight: 600 }}>
+          <span style={{ color: "var(--color-text-faint)", fontSize: 10, fontWeight: 600 }}>
             {chips.length}
           </span>
         ) : null}

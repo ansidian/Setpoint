@@ -162,7 +162,7 @@ export function CalendarSearchRailHeader({
           style={{
             minHeight: 14,
             fontSize: 10.5,
-            color: search.error ? "#f38ba8" : "rgba(205,214,244,0.48)",
+            color: search.error ? "#f38ba8" : "var(--color-text-faint)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -290,7 +290,7 @@ export function SearchResultRow({
               WebkitBoxOrient: "vertical",
               fontSize: 10.5,
               lineHeight: 1.3,
-              color: "rgba(166,173,200,0.64)",
+              color: "rgba(166,173,200,0.75)",
               overflow: "hidden",
             }}
           >

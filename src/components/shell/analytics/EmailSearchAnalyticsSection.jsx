@@ -8,7 +8,7 @@ const STATUS_COLOR = {
   active: "#a6e3a1",
   warming: "#f9e2af",
   local_fallback: "#89b4fa",
-  empty: "#6c7086",
+  empty: "var(--color-text-faint)",
   unavailable: "#f38ba8",
 };
 
@@ -30,7 +30,7 @@ export default function EmailSearchAnalyticsSection({ stats }) {
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
           <div>
-            <div className="text-[9px] font-semibold tracking-[1.3px] text-muted-foreground/55 uppercase">Status</div>
+            <div className="text-[9px] font-semibold tracking-[1.3px] text-muted-foreground/75 uppercase">Status</div>
             <div className="mt-1 text-[13px] font-semibold capitalize" style={{ color: STATUS_COLOR[cov.semantic_status] || "#a6adc8" }}>
               {String(cov.semantic_status || "unknown").replace(/_/g, " ")}
             </div>

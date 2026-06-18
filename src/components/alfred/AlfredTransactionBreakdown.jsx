@@ -5,7 +5,7 @@ import { spendingBreakdownRows, formatAlfredMoney } from "./alfredPanelModel.js"
 
 const text = "#cdd6f4";
 const muted = "#a6adc8";
-const subtle = "#6c7086";
+const subtle = "var(--color-text-faint)";
 
 const GROUP_LABELS = { category: "BY CATEGORY", payee: "BY PAYEE", month: "BY MONTH" };
 

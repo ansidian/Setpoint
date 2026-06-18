@@ -64,7 +64,7 @@ export default function HeroContextRail({
           <div
             style={{
               fontSize: isMobile ? 10 : 10.5,
-              color: "rgba(205,214,244,0.5)",
+              color: "var(--color-text-faint)",
               marginTop: isMobile ? 3 : 2,
               letterSpacing: 0.2,
             }}

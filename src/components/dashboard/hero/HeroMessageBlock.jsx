@@ -17,7 +17,7 @@ export default function HeroMessageBlock({
           fontWeight: 600,
           letterSpacing: isMobile ? 2 : 2.6,
           textTransform: "uppercase",
-          color: "rgba(205,214,244,0.55)",
+          color: "var(--color-text-faint)",
           marginBottom: isMobile ? 5 : 6,
           display: "inline-flex",
           alignItems: "center",

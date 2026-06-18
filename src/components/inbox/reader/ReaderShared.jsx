@@ -86,7 +86,7 @@ export function ReaderEmptyState() {
                   display: "block",
                   marginTop: 12,
                   fontSize: 11,
-                  color: "rgba(205,214,244,0.44)",
+                  color: "var(--color-text-faint)",
                 }}
               >
                 <Kbd>J</Kbd> <Kbd>K</Kbd> to move through the list.

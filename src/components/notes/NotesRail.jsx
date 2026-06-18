@@ -208,7 +208,7 @@ export default function NotesRail({ accent, isMobile = false }) {
           style={{
             marginTop: 8,
             fontSize: 10,
-            color: "rgba(205,214,244,0.42)",
+            color: "var(--color-text-faint)",
             fontVariantNumeric: "tabular-nums",
           }}
         >

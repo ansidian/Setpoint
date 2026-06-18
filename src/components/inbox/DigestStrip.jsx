@@ -189,7 +189,7 @@ export default function DigestStrip({
             <div
               style={{
                 fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase",
-                color: activityActive ? "#89b4fa" : "rgba(205,214,244,0.55)", fontWeight: 700,
+                color: activityActive ? "#89b4fa" : "var(--color-text-faint)", fontWeight: 700,
               }}
             >
               {statusLabel}

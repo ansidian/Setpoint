@@ -97,12 +97,12 @@ function BillsRail({ accent, bills = [], onJump, isMobile = false, loadingState 
           showLoadingPlaceholder ? (
             <div
               data-testid="bills-rail-refresh-status"
-              style={{ fontSize: 10, color: "rgba(205,214,244,0.46)" }}
+              style={{ fontSize: 10, color: "var(--color-text-faint)" }}
             >
               Loading Actual...
             </div>
           ) : (
-            <div style={{ fontSize: 10, color: "rgba(205,214,244,0.5)" }}>
+            <div style={{ fontSize: 10, color: "var(--color-text-faint)" }}>
               Next 7d ·{" "}
               <span style={{ color: "#cdd6f4", fontWeight: 600 }}>{formatAmount(nextWeekTotal)}</span>
             </div>
@@ -177,7 +177,7 @@ function BillsRail({ accent, bills = [], onJump, isMobile = false, loadingState 
                 <div
                   style={{
                     fontSize: 10.5,
-                    color: "rgba(205,214,244,0.45)",
+                    color: "var(--color-text-faint)",
                     marginTop: 2,
                     overflow: "hidden",
                     textOverflow: "ellipsis",

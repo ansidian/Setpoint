@@ -46,7 +46,7 @@ function dateTextColor(cell) {
   if (cell.hoverPreview) return "rgba(248,250,255,0.98)";
   if (cell.isSelected) return "rgba(248,250,255,0.96)";
   if (cell.isToday) return TODAY_BLUE;
-  if (!cell.inCurrentMonth) return "rgba(205,214,244,0.42)";
+  if (!cell.inCurrentMonth) return "var(--color-text-faint)";
   return "rgba(248,250,255,0.9)";
 }
 
@@ -334,7 +334,7 @@ export default function MiniCalendar({
           display: "grid",
           gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
           gap: 2,
-          color: "rgba(166,173,200,0.54)",
+          color: "rgba(166,173,200,0.75)",
           fontSize: 9,
           fontWeight: 800,
           lineHeight: 1,

@@ -359,7 +359,7 @@ export default function CalendarCellOverflowPopover({
                 fontWeight: 700,
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                color: "rgba(205,214,244,0.46)",
+                color: "var(--color-text-faint)",
               }}
             >
               {popover.viewLabel} overflow

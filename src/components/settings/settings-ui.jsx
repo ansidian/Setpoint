@@ -5,7 +5,7 @@ import { TABS } from "@/components/settings/settings-core";
 
 const FIELD_LABEL_CLASS =
   "mb-1.5 block text-[11px] tracking-[1.5px] uppercase text-muted-foreground font-medium";
-const FIELD_HINT_CLASS = "text-[11px] leading-relaxed text-muted-foreground/60";
+const FIELD_HINT_CLASS = "text-[11px] leading-relaxed text-muted-foreground/75";
 
 const STATUS_TONE_CLASSES = {
   neutral: "border-white/[0.08] bg-white/[0.03] text-muted-foreground/80",
@@ -93,7 +93,7 @@ export function SettingsCard({ title, icon, description, children, headerAction,
                 {title}
               </div>
               {description ? (
-                <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-muted-foreground/65">
+                <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-muted-foreground/75">
                   {description}
                 </p>
               ) : null}
@@ -158,7 +158,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
               <h1 className="ea-display mt-1 text-[32px] leading-none font-normal text-foreground">
                 Settings
               </h1>
-              <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground/65">
+              <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground/75">
                 Manage the accounts, automation, and AI behavior that power your daily dashboard.
               </p>
             </div>

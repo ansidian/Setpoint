@@ -36,7 +36,7 @@ export function OverviewHero({ model, compact = false }) {
               fontWeight: 700,
               letterSpacing: 2.4,
               textTransform: "uppercase",
-              color: "rgba(205,214,244,0.52)",
+              color: "var(--color-text-faint)",
             }}
           >
             {model.eyebrow}
@@ -103,7 +103,7 @@ export function SpotlightCard({ accent, label, value, detail, compact = false })
         border: `1px solid color-mix(in srgb, ${accent} 18%, rgba(255,255,255,0.05))`,
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "rgba(205,214,244,0.48)" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
         {label}
       </div>
       <div
@@ -151,7 +151,7 @@ export function MetricCard({ label, value, detail, accent, compact = false }) {
         minWidth: 0,
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.6, textTransform: "uppercase", color: "rgba(205,214,244,0.44)" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.6, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
         {label}
       </div>
       <div
@@ -171,7 +171,7 @@ export function MetricCard({ label, value, detail, accent, compact = false }) {
           marginTop: compact ? 7 : 8,
           fontSize: 11,
           lineHeight: compact ? 1.42 : 1.5,
-          color: "rgba(205,214,244,0.48)",
+          color: "var(--color-text-faint)",
           ...(compact
             ? {
                 display: "-webkit-box",
@@ -193,7 +193,7 @@ export function FooterFrame({ label, children }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
-      <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1.9, textTransform: "uppercase", color: "rgba(205,214,244,0.4)" }}>
+      <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1.9, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
         {label}
       </div>
       {children}
@@ -318,7 +318,7 @@ export function EmptyDayCard({ model, viewYear, viewMonth, selectedDay, compact 
               }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 5, minWidth: 0 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.2, textTransform: "uppercase", color: "rgba(205,214,244,0.48)" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.2, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
                 {model.selectedDayLabel}
               </div>
               <div style={{ fontSize: compact ? 10.5 : 11, lineHeight: 1.25, color: "rgba(205,214,244,0.58)" }}>

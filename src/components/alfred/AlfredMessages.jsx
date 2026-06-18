@@ -28,7 +28,6 @@ import {
   splitSayText,
 } from "./alfredPanelModel.js";
 
-const dim = "rgba(205,214,244,0.55)";
 const dimmer = "rgba(205,214,244,0.4)";
 const text = "#cdd6f4";
 const mono = "var(--font-mono, 'Fira Code', ui-monospace, monospace)";
@@ -51,7 +50,7 @@ export const ToolRows = memo(function ToolRows({ tools, accent }) {
       {tools.map((t) => {
         const running = t.state === "running";
         const failed = t.state === "error";
-        const color = failed ? "#f38ba8" : running ? dim : "rgba(205,214,244,0.45)";
+        const color = failed ? "#f38ba8" : "var(--color-text-faint)";
         return (
           <div key={t.toolId} style={{
             display: "flex", alignItems: "center", gap: 7, minHeight: 20,
@@ -135,11 +134,11 @@ export const ToolSteps = memo(function ToolSteps({ tools, done, accent }) {
           display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start",
           padding: "2px 4px", background: "transparent", border: "none",
           cursor: done ? "pointer" : "default",
-          fontFamily: mono, fontSize: 10, color: dimmer, borderRadius: 5,
+          fontFamily: mono, fontSize: 10, color: "var(--color-text-faint)", borderRadius: 5,
           transition: "color 150ms ease-out",
         }}
-        onMouseEnter={done ? (e) => { e.currentTarget.style.color = dim; } : undefined}
-        onMouseLeave={done ? (e) => { e.currentTarget.style.color = dimmer; } : undefined}
+        onMouseEnter={done ? (e) => { e.currentTarget.style.color = text; } : undefined}
+        onMouseLeave={done ? (e) => { e.currentTarget.style.color = "var(--color-text-faint)"; } : undefined}
       >
         <Chevron size={11} />
         {done ? null : (
@@ -225,7 +224,7 @@ export function ModelToggle({ modelKey, onChange, accent }) {
               fontSize: 9, fontWeight: 600, letterSpacing: 0.4, textTransform: "capitalize",
               fontFamily: "inherit",
               background: selected ? `${accent}24` : "transparent",
-              color: selected ? accent : dimmer,
+              color: selected ? accent : "var(--color-text-faint)",
               transition: "background 150ms ease-out, color 150ms ease-out",
             }}
           >{m.label}</button>

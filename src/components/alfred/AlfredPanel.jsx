@@ -170,7 +170,7 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
           boxShadow: busy ? `0 0 6px ${accent}` : "none",
           animation: busy ? "alfred-pulse 1.4s ease-in-out infinite" : "none",
         }} />
-        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase", color: dim }}>
+        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
           Alfred
         </span>
         <span style={{ flex: 1 }} />
@@ -193,12 +193,12 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
               <div className="ea-display" style={{ fontSize: 24, color: text, fontFamily: "var(--serif-choice, 'Instrument Serif', serif)" }}>
                 What do you need?
               </div>
-              <div style={{ fontSize: 11.5, color: "rgba(205,214,244,0.5)", marginTop: 6, lineHeight: 1.55 }}>
+              <div style={{ fontSize: 11.5, color: "var(--color-text-faint)", marginTop: 6, lineHeight: 1.55 }}>
                 I can read your calendar, deadlines, bills, and mail. Read-only for now.
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase", color: "rgba(205,214,244,0.4)", marginBottom: 6 }}>Try</div>
+              <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase", color: "var(--color-text-faint)", marginBottom: 6 }}>Try</div>
               <SuggestionList accent={accent} onPick={(label) => submit(label)} />
             </div>
           </div>

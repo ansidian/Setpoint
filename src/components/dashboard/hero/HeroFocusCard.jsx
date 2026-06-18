@@ -67,7 +67,7 @@ function OpenDayBlock({ summary, accent, compact = false, isMobile = false }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 10, color: "rgba(205,214,244,0.45)", textTransform: "uppercase", letterSpacing: 0.7 }}>
+        <div style={{ fontSize: 10, color: "var(--color-text-faint)", textTransform: "uppercase", letterSpacing: 0.7 }}>
           Open day
         </div>
         <span
@@ -150,7 +150,7 @@ function OpenDayBlock({ summary, accent, compact = false, isMobile = false }) {
                 paddingTop: isMobile ? 8 : 6,
                 borderTop: "1px solid rgba(255,255,255,0.05)",
                 fontSize: 10.5,
-                color: "rgba(205,214,244,0.55)",
+                color: "var(--color-text-faint)",
               }}
             >
               {primary.sub ? (
@@ -167,7 +167,7 @@ function OpenDayBlock({ summary, accent, compact = false, isMobile = false }) {
                 </div>
               ) : null}
               {primary.timingLabel ? (
-                <div style={{ color: "rgba(205,214,244,0.4)", whiteSpace: "nowrap" }}>
+                <div style={{ color: "var(--color-text-faint)", whiteSpace: "nowrap" }}>
                   {primary.timingLabel}
                 </div>
               ) : null}
@@ -178,10 +178,10 @@ function OpenDayBlock({ summary, accent, compact = false, isMobile = false }) {
               {summary.secondaries.map((item) => (
                 <div
                   key={item.kind}
-                  style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 10.5, color: "rgba(205,214,244,0.55)" }}
+                  style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 10.5, color: "var(--color-text-faint)" }}
                 >
                   <span>{item.title}</span>
-                  <span style={{ color: "rgba(205,214,244,0.4)" }}>{item.label}</span>
+                  <span style={{ color: "var(--color-text-faint)" }}>{item.label}</span>
                 </div>
               ))}
             </div>
@@ -241,7 +241,7 @@ export default function HeroFocusCard({
             fontSize: isMobile ? 9 : 9.5,
             letterSpacing: 0.8,
             textTransform: "uppercase",
-            color: "rgba(205,214,244,0.4)",
+            color: "var(--color-text-faint)",
           }}
         >
           Focus blocks
@@ -250,7 +250,7 @@ export default function HeroFocusCard({
           <div
             style={{
               fontSize: 10,
-              color: "rgba(205,214,244,0.42)",
+              color: "var(--color-text-faint)",
             }}
           >
             {pressureLabel}
@@ -302,7 +302,7 @@ export default function HeroFocusCard({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 10, color: "rgba(205,214,244,0.45)", textTransform: "uppercase", letterSpacing: 0.7 }}>
+              <div style={{ fontSize: 10, color: "var(--color-text-faint)", textTransform: "uppercase", letterSpacing: 0.7 }}>
                 Best block
               </div>
               <span
@@ -325,7 +325,7 @@ export default function HeroFocusCard({
               <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 600, color: "#cdd6f4", letterSpacing: 0 }}>
                 {primary.timeRangeLabel}
               </div>
-              <div style={{ fontSize: 10.5, color: "rgba(205,214,244,0.52)" }}>
+              <div style={{ fontSize: 10.5, color: "var(--color-text-faint)" }}>
                 {primary.durationLabel}
               </div>
             </div>
@@ -346,14 +346,14 @@ export default function HeroFocusCard({
               }}
             >
               <div>
-                <div style={{ fontSize: 10, color: "rgba(205,214,244,0.42)", textTransform: "uppercase", letterSpacing: 0.7 }}>
+                <div style={{ fontSize: 10, color: "var(--color-text-faint)", textTransform: "uppercase", letterSpacing: 0.7 }}>
                   Backup
                 </div>
                 <div style={{ marginTop: 4, fontSize: 11.5, color: "#cdd6f4" }}>
                   {backup.timeRangeLabel}
                 </div>
               </div>
-              <div style={{ fontSize: 10.5, color: "rgba(205,214,244,0.5)", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: 10.5, color: "var(--color-text-faint)", whiteSpace: "nowrap" }}>
                 {backup.durationLabel}
               </div>
             </div>

@@ -128,7 +128,7 @@ export default function EventsAgendaDeadlineRow({
         >
           <TitleTag>{deadline.agendaTitle}</TitleTag>
         </span>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.62)", fontSize: 10.5, lineHeight: 1.3 }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3 }}>
           {deadline.agendaSubtitle}
         </span>
         {reminderSummary ? (

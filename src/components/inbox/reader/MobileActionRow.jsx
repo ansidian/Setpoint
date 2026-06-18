@@ -20,6 +20,7 @@ export default function MobileActionRow({
         width: "100%",
         minWidth: 0,
         padding: "11px 12px",
+        minHeight: 44,
         borderRadius: 10,
         border: `1px solid ${danger ? "rgba(243,139,168,0.18)" : active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
         background,

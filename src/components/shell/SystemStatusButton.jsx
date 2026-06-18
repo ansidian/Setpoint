@@ -270,7 +270,7 @@ function StatusPanel({ status, onClose, panelRef, position }) {
                 <div style={{ marginTop: 3, fontSize: 11, lineHeight: 1.35, color: "rgba(205,214,244,0.72)" }}>
                   {source.message || "Status details are unavailable."}
                 </div>
-                <div style={{ marginTop: 5, fontSize: 10.5, color: "rgba(166,173,200,0.68)" }}>
+                <div style={{ marginTop: 5, fontSize: 10.5, color: "rgba(166,173,200,0.75)" }}>
                   Last success: {formatTimestamp(source.lastSuccessAt)}
                 </div>
               </div>

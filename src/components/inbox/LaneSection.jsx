@@ -31,7 +31,7 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
           <span
             style={{
               fontSize: 10, fontWeight: 700, letterSpacing: 2,
-              textTransform: "uppercase", color: LANE[laneKey].color,
+              textTransform: "uppercase", color: laneKey === "noise" ? "var(--color-text-faint)" : LANE[laneKey].color,
               minWidth: 0, whiteSpace: "nowrap",
               overflow: "hidden", textOverflow: "ellipsis",
             }}
@@ -42,7 +42,7 @@ function LaneSection({ laneKey, emails, collapsed, noiseUnreadCount, onToggle, r
             style={{
               flexShrink: 0,
               fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-              background: LANE[laneKey].soft, color: `${LANE[laneKey].color}cc`,
+              background: LANE[laneKey].soft, color: laneKey === "noise" ? "var(--color-text-faint)" : `${LANE[laneKey].color}cc`,
               fontVariantNumeric: "tabular-nums",
             }}
           >

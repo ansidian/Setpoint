@@ -24,7 +24,7 @@ export default function EmptyStateSplash({
         overflow: "hidden",
         borderRadius: 18,
         border: "1px solid rgba(255,255,255,0.06)",
-        background: "radial-gradient(circle at 20% 20%, rgba(203,166,218,0.12), transparent 32%), radial-gradient(circle at 78% 30%, rgba(137,180,250,0.1), transparent 28%), linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))",
+        background: "radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--ea-accent) 12%, transparent), transparent 32%), radial-gradient(circle at 78% 30%, rgba(137,180,250,0.1), transparent 28%), linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
     >
@@ -47,7 +47,7 @@ export default function EmptyStateSplash({
           width: compact ? 140 : 180,
           height: compact ? 140 : 180,
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(203,166,218,0.18), transparent 70%)",
+          background: "radial-gradient(circle, color-mix(in srgb, var(--ea-accent) 18%, transparent), transparent 70%)",
           filter: "blur(6px)",
         }}
       />
@@ -111,7 +111,7 @@ export default function EmptyStateSplash({
                 position: "absolute",
                 inset: compact ? 18 : 24,
                 borderRadius: compact ? 16 : 18,
-                background: "radial-gradient(circle at 30% 30%, rgba(203,166,218,0.18), transparent 45%), rgba(11,11,19,0.55)",
+                background: "radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--ea-accent) 18%, transparent), transparent 45%), rgba(11,11,19,0.55)",
               }}
             />
             <div style={{ position: "relative", color: "rgba(205,214,244,0.82)" }}>
@@ -135,7 +135,7 @@ export default function EmptyStateSplash({
               fontWeight: 700,
               letterSpacing: 2.4,
               textTransform: "uppercase",
-              color: "rgba(205,214,244,0.5)",
+              color: "var(--color-text-faint)",
             }}
           >
             {eyebrow}

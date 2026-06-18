@@ -8,7 +8,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'dist-demo', '.claude', '.playwright-cli', '.playwright-mcp', 'playwright-report']),
+  globalIgnores(['dist', 'dist-demo', '.claude', '.playwright-cli', '.playwright-mcp', 'playwright-report', 'docs/']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [js.configs.recommended, reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
@@ -60,6 +60,12 @@ export default defineConfig([
     files: ['playwright.config.js', 'e2e/**/*.js'],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    files: ['**/*.test.js', '**/*.test.ts'],
+    rules: {
+      'import/no-unresolved': ['error', { ignore: ['\\?', '^node:'] }],
     },
   },
 ])

@@ -19,7 +19,7 @@ export function renderBillsFooter({ viewYear, viewMonth, computed }) {
           fontWeight: 600,
           letterSpacing: 2.2,
           textTransform: "uppercase",
-          color: "rgba(205,214,244,0.5)",
+          color: "var(--color-text-faint)",
         }}
       >
         {new Date(viewYear, viewMonth).toLocaleDateString("en-US", { month: "long" })} total

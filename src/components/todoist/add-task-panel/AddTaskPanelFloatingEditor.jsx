@@ -237,7 +237,7 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
-                      color: dueDisplay ? "var(--ea-accent)" : "rgba(205,214,244,0.35)",
+                      color: dueDisplay ? "var(--ea-accent)" : "var(--color-text-faint)",
                     }}
                   >
                     {dueDisplay || "Pick a due date and time"}
@@ -287,7 +287,7 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
                 />
               )}
               {!resolvedLabels.length && !labels.length && (
-                <span style={{ color: "rgba(205,214,244,0.3)", fontSize: 12 }}>
+                <span style={{ color: "var(--color-text-faint)", fontSize: 12 }}>
                   None
                 </span>
               )}

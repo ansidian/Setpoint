@@ -119,7 +119,7 @@ export default function TimePickerView({
           gap: 6,
         }}
       >
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(205,214,244,0.5)" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "var(--color-text-faint)" }}>
           Time
         </div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.92)", fontWeight: 600 }}>
@@ -151,7 +151,7 @@ export default function TimePickerView({
           autoFocus
           inputRef={hourInputRef}
         />
-        <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(205,214,244,0.5)" }}>:</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-faint)" }}>:</div>
         <NumberField
           value={minute}
           onChange={setMinuteVal}

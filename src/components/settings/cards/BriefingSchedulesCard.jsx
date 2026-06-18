@@ -181,7 +181,7 @@ export default function BriefingSchedulesCard({ settings, setSettings, patch }) 
                     }}
                     aria-label={schedule.enabled ? "Disable boundary" : "Enable boundary"}
                   />
-                  <span className="min-w-[52px] text-[11px] text-muted-foreground/60">
+                  <span className="min-w-[52px] text-[11px] text-muted-foreground/75">
                     {schedule.enabled ? "Enabled" : "Disabled"}
                   </span>
                 </div>

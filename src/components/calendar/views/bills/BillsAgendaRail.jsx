@@ -134,14 +134,14 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
           gap: 4,
         }}
       >
-        <span style={{ color: bill.agendaComplete ? "rgba(166,173,200,0.54)" : "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 700, lineHeight: 1.2 }}>
+        <span style={{ color: bill.agendaComplete ? "rgba(166,173,200,0.75)" : "rgba(166,173,200,0.82)", fontSize: 10, fontWeight: 700, lineHeight: 1.2 }}>
           {bill.agendaMeta}
         </span>
         <span style={{ color: bill.agendaComplete ? "rgba(205,214,244,0.62)" : "#f1f2fb", fontSize: 12, fontWeight: 650, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: bill.agendaComplete ? "line-through" : "none", textDecorationColor: "rgba(205,214,244,0.28)" }}>
           {bill.agendaTitle}
         </span>
         {bill.agendaSubtitle ? (
-          <span style={{ color: "rgba(166,173,200,0.64)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ color: "rgba(166,173,200,0.75)", fontSize: 10.5, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {bill.agendaSubtitle}
           </span>
         ) : null}
@@ -150,7 +150,7 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
         <span style={{ color: bill.agendaComplete ? "rgba(166,227,161,0.72)" : color, fontSize: 12, fontWeight: 750, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
           {bill.agendaAmount}
         </span>
-        <span style={{ color: "rgba(166,173,200,0.62)", fontSize: 9.5, fontWeight: 700, lineHeight: 1.1, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+        <span style={{ color: "rgba(166,173,200,0.75)", fontSize: 9.5, fontWeight: 700, lineHeight: 1.1, textTransform: "uppercase", whiteSpace: "nowrap" }}>
           {bill.agendaStatus}
         </span>
       </span>

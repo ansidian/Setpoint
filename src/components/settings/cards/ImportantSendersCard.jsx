@@ -64,7 +64,7 @@ export default function ImportantSendersCard() {
                     <StatusPill tone="neutral">(auto)</StatusPill>
                   ) : null}
                 </div>
-                <div className="mt-1 truncate text-[11px] text-muted-foreground/55">
+                <div className="mt-1 truncate text-[11px] text-muted-foreground/75">
                   {sender.address}
                 </div>
               </div>
@@ -83,7 +83,7 @@ export default function ImportantSendersCard() {
           ))}
 
           {importantSenders.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] italic text-muted-foreground/55">
+            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] italic text-muted-foreground/75">
               No important senders yet. Add one below or let future triage runs learn them automatically.
             </div>
           ) : null}

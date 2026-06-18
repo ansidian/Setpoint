@@ -29,7 +29,7 @@ export function CalendarOverviewRail(props) {
                 fontWeight: 700,
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                color: "rgba(205,214,244,0.48)",
+                color: "var(--color-text-faint)",
               }}
             >
               Month navigator
@@ -66,7 +66,7 @@ export function CalendarOverviewRail(props) {
             background: "rgba(255,255,255,0.018)",
             fontSize: 11,
             lineHeight: 1.52,
-            color: "rgba(205,214,244,0.54)",
+            color: "var(--color-text-faint)",
             flexShrink: 0,
           }}
         >

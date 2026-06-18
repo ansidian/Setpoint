@@ -162,7 +162,7 @@ export default function AnchoredFloatingPanel({
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 12,
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-        zIndex: 9999,
+        zIndex: "var(--z-popover)",
         ...style,
         maxHeight: style?.maxHeight || (typeof height === "number" ? `min(${height}px, calc(100vh - 20px))` : undefined),
         overflow: style?.overflow === "hidden" ? undefined : style?.overflow,

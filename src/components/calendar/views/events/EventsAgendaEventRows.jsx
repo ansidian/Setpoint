@@ -287,7 +287,7 @@ export function TimedRow({
       />
       <span
         style={{
-          color: past ? "rgba(166,173,200,0.52)" : "rgba(166,173,200,0.82)",
+          color: past ? "rgba(166,173,200,0.75)" : "rgba(166,173,200,0.82)",
           fontSize: 10,
           fontWeight: 650,
           fontVariantNumeric: "tabular-nums",
@@ -326,7 +326,7 @@ export function TimedRow({
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              color: "rgba(166,173,200,0.64)",
+              color: "rgba(166,173,200,0.75)",
               fontSize: 10.5,
               lineHeight: 1.3,
             }}

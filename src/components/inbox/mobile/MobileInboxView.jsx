@@ -37,7 +37,7 @@ function MobileChip({ active, label, count, onClick, accent }) {
         gap: 6,
         width: "100%",
         minWidth: 0,
-        minHeight: 40,
+        minHeight: 44,
         padding: "8px 6px",
         borderRadius: 999,
         touchAction: "manipulation",
@@ -62,7 +62,7 @@ function MobileChip({ active, label, count, onClick, accent }) {
           alignItems: "center",
           justifyContent: "center",
           background: active ? `${accent}28` : "rgba(255,255,255,0.06)",
-          color: active ? accent : "rgba(205,214,244,0.5)",
+          color: active ? accent : "var(--color-text-faint)",
           fontSize: 8.5,
           fontWeight: 700,
           fontVariantNumeric: "tabular-nums",
@@ -298,7 +298,7 @@ export default function MobileInboxView({
                   <span style={{ color: "#fff", fontWeight: 700 }}>{mobileChipCounts.__all}</span> in scope
                 </div>
                 {noiseUnreadCount > 0 && (
-                  <div style={{ fontSize: 11, color: "rgba(205,214,244,0.52)" }}>
+                  <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>
                     <span style={{ color: "rgba(205,214,244,0.78)", fontWeight: 700 }}>{noiseUnreadCount}</span> noise unread
                   </div>
                 )}
@@ -424,7 +424,7 @@ export default function MobileInboxView({
                 gap: 8,
                 paddingTop: 10,
                 fontSize: 11,
-                color: "rgba(205,214,244,0.5)",
+                color: "var(--color-text-faint)",
               }}
             >
               <span>{scopedAccount ? scopedAccount.name || scopedAccount.email : "All accounts"}</span>
@@ -482,7 +482,7 @@ export default function MobileInboxView({
                 style={{
                   padding: "36px 18px",
                   textAlign: "center",
-                  color: "rgba(205,214,244,0.45)",
+                  color: "var(--color-text-faint)",
                   fontSize: 12,
                 }}
               >

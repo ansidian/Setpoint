@@ -101,7 +101,7 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <SectionLabel className="mb-0">Volume</SectionLabel>
-                <span className="text-[11px] font-medium text-muted-foreground/70">
+                <span className="text-[11px] font-medium text-muted-foreground/75">
                   {Math.round(soundSettings.volume * 100)}%
                 </span>
               </div>
@@ -142,7 +142,7 @@ export default function TriageSoundSettingsCard({ settings, setSettings, patch }
                         {trigger.enabled ? "On" : "Off"}
                       </StatusPill>
                     </span>
-                    <span className="mt-1 block text-[12px] leading-relaxed text-muted-foreground/65">
+                    <span className="mt-1 block text-[12px] leading-relaxed text-muted-foreground/75">
                       {row.description}
                     </span>
                   </span>

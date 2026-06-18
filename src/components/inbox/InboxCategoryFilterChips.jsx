@@ -87,7 +87,7 @@ function CategoryCount({ active, accent, children, muted = false }) {
         alignItems: "center",
         justifyContent: "center",
         background: muted ? "rgba(255,255,255,0.045)" : active ? `${accent}24` : "rgba(255,255,255,0.055)",
-        color: muted ? "rgba(205,214,244,0.42)" : active ? accent : "rgba(205,214,244,0.42)",
+        color: muted ? "var(--color-text-faint)" : active ? accent : "var(--color-text-faint)",
         fontSize: 8.5,
         fontWeight: 750,
         fontVariantNumeric: "tabular-nums",
@@ -293,7 +293,7 @@ export default function InboxCategoryFilterChips({
                 </span>
                 <span
                   style={{
-                    color: active ? accent : "rgba(205,214,244,0.46)",
+                    color: active ? accent : "var(--color-text-faint)",
                     fontSize: 10,
                     fontWeight: 750,
                     fontVariantNumeric: "tabular-nums",

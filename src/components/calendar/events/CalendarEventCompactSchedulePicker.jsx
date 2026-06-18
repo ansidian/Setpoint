@@ -50,7 +50,7 @@ function TimeSelectButton({ label, value, active, onClick }) {
         textAlign: "left",
       }}
     >
-      <span style={{ fontSize: 10, fontWeight: 750, color: active ? "#f5e0ff" : "rgba(205,214,244,0.48)" }}>
+      <span style={{ fontSize: 10, fontWeight: 750, color: active ? "#f5e0ff" : "var(--color-text-faint)" }}>
         {label}
       </span>
       <span style={{ fontSize: 12, fontWeight: 750, color: active ? "#ffffff" : "rgba(205,214,244,0.86)" }}>
@@ -182,7 +182,7 @@ export default function CalendarEventCompactSchedulePicker({
           {["S", "M", "T", "W", "T", "F", "S"].map((dayLetter, index) => (
             <div
               key={`${dayLetter}-${index}`}
-              style={{ textAlign: "center", fontSize: 9.5, fontWeight: 700, color: "rgba(205,214,244,0.38)" }}
+              style={{ textAlign: "center", fontSize: 9.5, fontWeight: 700, color: "var(--color-text-faint)" }}
             >
               {dayLetter}
             </div>
@@ -216,12 +216,12 @@ export default function CalendarEventCompactSchedulePicker({
                   borderRadius: 7,
                   background,
                   color: disabled
-                    ? "rgba(205,214,244,0.22)"
+                    ? "var(--color-text-faint)"
                     : selected
                       ? "#ffffff"
                       : cell.inMonth
                         ? "rgba(205,214,244,0.82)"
-                        : "rgba(205,214,244,0.32)",
+                        : "var(--color-text-faint)",
                   fontSize: 12,
                   fontWeight: selected ? 750 : 600,
                   fontFamily: "inherit",

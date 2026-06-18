@@ -244,7 +244,7 @@ export default function CalendarDateTimeView({
                 textAlign: "center",
                 fontSize: 10,
                 fontWeight: 600,
-                color: "rgba(205,214,244,0.4)",
+                color: "var(--color-text-faint)",
                 letterSpacing: 0.4,
                 padding: "4px 0",
               }}
@@ -268,7 +268,7 @@ export default function CalendarDateTimeView({
             const isSelected =
               cell.year === draft.year && cell.month === draft.month && cell.day === draft.day;
             const baseColor = !cell.inMonth
-              ? "rgba(205,214,244,0.3)"
+              ? "var(--color-text-faint)"
               : isPast
                 ? "rgba(205,214,244,0.22)"
                 : "rgba(205,214,244,0.85)";
@@ -333,7 +333,7 @@ export default function CalendarDateTimeView({
             ariaLabel="hour"
             accent={accent}
           />
-          <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(205,214,244,0.5)" }}>:</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-text-faint)" }}>:</div>
           <NumberField
             value={minute}
             onChange={setMinuteVal}

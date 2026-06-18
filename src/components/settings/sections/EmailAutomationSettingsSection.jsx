@@ -45,7 +45,7 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
             data-1p-ignore
             data-lpignore="true"
           />
-          <span className="text-[13px] text-muted-foreground/70">hours</span>
+          <span className="text-[13px] text-muted-foreground/75">hours</span>
         </div>
       </SettingsCard>
 
@@ -79,7 +79,7 @@ export default function EmailAutomationSettingsSection({ settings, setSettings, 
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/60">
+            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/75">
               No interests saved yet.
             </div>
           )}

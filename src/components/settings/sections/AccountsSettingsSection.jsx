@@ -221,7 +221,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
               />
             </Suspense>
           ) : (
-            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/60">
+            <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/75">
               No accounts connected yet.
             </div>
           )}
@@ -257,7 +257,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
             <div className="border-t border-white/[0.05] pt-4">
               <div className="mb-3 flex items-center gap-2">
                 <StatusPill tone="neutral">iCloud IMAP</StatusPill>
-                <span className="text-[11px] text-muted-foreground/60">
+                <span className="text-[11px] text-muted-foreground/75">
                   Use an app-specific password from Apple ID settings.
                 </span>
               </div>
@@ -345,7 +345,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
                     setTodoistDirty(true);
                     setTodoistConfigured(false);
                   }}
-                  className="text-[11px] font-medium text-muted-foreground/55 transition-colors hover:text-danger"
+                  className="text-[11px] font-medium text-muted-foreground/75 transition-colors hover:text-danger"
                 >
                   Disconnect
                 </button>
@@ -437,7 +437,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
                 <button
                   type="button"
                   onClick={handleClearDiscordSettings}
-                  className="text-[11px] font-medium text-muted-foreground/55 transition-colors hover:text-danger"
+                  className="text-[11px] font-medium text-muted-foreground/75 transition-colors hover:text-danger"
                 >
                   Clear
                 </button>
@@ -494,7 +494,7 @@ export default function AccountsSettingsSection({ accounts, setAccounts, setting
                   className={cn(SURFACE_ROW_CLASS, "cursor-pointer px-3 py-3 text-left")}
                 >
                   <div className="text-[13px] font-medium text-foreground/90">{result.name}</div>
-                  <div className="mt-1 text-[11px] text-muted-foreground/60">
+                  <div className="mt-1 text-[11px] text-muted-foreground/75">
                     {result.lat.toFixed(4)}, {result.lng.toFixed(4)}
                   </div>
                 </button>

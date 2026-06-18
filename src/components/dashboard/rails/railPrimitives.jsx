@@ -16,13 +16,13 @@ export function SectionHeader({ title, subtitle, right, isMobile = false }) {
         <div
           style={{
             fontSize: 10, fontWeight: 600, letterSpacing: 2.2, textTransform: "uppercase",
-            color: "rgba(205,214,244,0.55)",
+            color: "var(--color-text-faint)",
           }}
         >
           {title}
         </div>
         {subtitle && (
-          <div style={{ fontSize: 11, color: "rgba(205,214,244,0.4)", marginTop: 3 }}>{subtitle}</div>
+          <div style={{ fontSize: 11, color: "var(--color-text-faint)", marginTop: 3 }}>{subtitle}</div>
         )}
       </div>
       {right}
@@ -165,7 +165,7 @@ export function RailGroupLabel({ label, count, tone = "default" }) {
       <div
         style={{
           fontSize: 10,
-          color: "rgba(205,214,244,0.38)",
+          color: "var(--color-text-faint)",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -181,7 +181,7 @@ export function EmptyRow({ icon, label }) {
     <div
       style={{
         padding: "20px 14px", textAlign: "center",
-        fontSize: 11.5, color: "rgba(205,214,244,0.4)",
+        fontSize: 11.5, color: "var(--color-text-faint)",
         display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
       }}
     >

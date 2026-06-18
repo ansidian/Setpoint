@@ -72,7 +72,7 @@ export default function CalendarRecurringScopePrompt({
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {option.label}
               </span>
-              <span style={{ fontSize: 10.5, lineHeight: 1.45, color: selected ? "rgba(203,166,218,0.86)" : "rgba(205,214,244,0.55)" }}>
+              <span style={{ fontSize: 10.5, lineHeight: 1.45, color: selected ? "rgba(203,166,218,0.86)" : "var(--color-text-faint)" }}>
                 {option.description}
               </span>
             </button>

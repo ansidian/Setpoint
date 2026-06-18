@@ -442,7 +442,7 @@ export default function DesktopReader({
                   <span
                     style={{
                       fontSize: 11,
-                      color: "rgba(205,214,244,0.45)",
+                      color: "var(--color-text-faint)",
                       fontWeight: 400,
                       marginLeft: 6,
                     }}
@@ -454,7 +454,7 @@ export default function DesktopReader({
               <div
                 style={{
                   fontSize: 11,
-                  color: "rgba(205,214,244,0.5)",
+                  color: "var(--color-text-faint)",
                   marginTop: 2,
                   display: "flex",
                   alignItems: "center",

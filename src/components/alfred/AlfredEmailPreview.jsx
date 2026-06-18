@@ -55,7 +55,7 @@ export default function AlfredEmailPreview({ item, onClose }) {
           </div>
           <div
             title={absoluteDate ? `Received ${absoluteDate}` : undefined}
-            style={{ fontSize: 11, color: dim, marginTop: 3 }}
+            style={{ fontSize: 11, color: "var(--color-text-faint)", marginTop: 3 }}
           >
             {fromName}{fromAddress && fromAddress !== fromName ? ` <${fromAddress}>` : ""}
             {" · "}{formatAlfredAgo(item.email_date)}

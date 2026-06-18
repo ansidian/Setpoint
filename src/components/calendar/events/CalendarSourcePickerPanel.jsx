@@ -101,7 +101,7 @@ export default function SourcePickerPanel({
                     fontWeight: 600,
                     letterSpacing: 1.6,
                     textTransform: "uppercase",
-                    color: "rgba(205,214,244,0.4)",
+                    color: "var(--color-text-faint)",
                     padding: "0 6px",
                   }}
                 >

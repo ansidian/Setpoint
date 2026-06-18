@@ -124,7 +124,7 @@ export default function PasskeysCard() {
     >
       <div className="flex flex-col gap-4">
         <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-3">
-          <div className="flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground/70">
+          <div className="flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground/75">
             <KeyRound size={14} className="mt-0.5 shrink-0 text-primary/75" />
             <div>
               {enforcementActive ? (
@@ -177,7 +177,7 @@ export default function PasskeysCard() {
         ) : passkeys === null ? (
           <FieldHint>Loading...</FieldHint>
         ) : !hasPasskeys ? (
-          <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/60">
+          <div className="rounded-lg border border-dashed border-white/[0.1] px-3 py-3 text-[12px] text-muted-foreground/75">
             No passkeys registered.
           </div>
         ) : (
@@ -199,7 +199,7 @@ export default function PasskeysCard() {
                         {formatBackupState(passkey.backedUp)}
                       </StatusPill>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground/65">
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground/75">
                       <span>Created {formatDate(passkey.createdAt)}</span>
                       <span>Last used {formatDate(passkey.lastUsedAt)}</span>
                       <span>{formatTransports(passkey.transports)}</span>

@@ -119,7 +119,7 @@ export default function Login({ onLogin }) {
               <div className="text-[11px] font-semibold tracking-[2.5px] uppercase text-muted-foreground">
                 Private Access
               </div>
-              <CardDescription className="text-[13px] text-muted-foreground/70">
+              <CardDescription className="text-[13px] text-muted-foreground/75">
                 Enter your password to continue
               </CardDescription>
             </CardHeader>

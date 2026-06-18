@@ -269,11 +269,11 @@ export default function ActualBudgetConnectionCard({ settings }) {
           ) : null}
         </div>
         {hydrateStatus === "ok" && cacheSummary(hydrateResult) ? (
-          <p className="text-[11px] leading-4 text-muted-foreground/70">
+          <p className="text-[11px] leading-4 text-muted-foreground/75">
             {cacheSummary(hydrateResult)}
           </p>
         ) : hydrateStatus === "missing" && hydrateMsg ? (
-          <p className="text-[11px] leading-4 text-muted-foreground/70">
+          <p className="text-[11px] leading-4 text-muted-foreground/75">
             {hydrateMsg}
           </p>
         ) : null}

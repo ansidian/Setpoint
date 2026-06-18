@@ -73,7 +73,7 @@ export default function TimelineDayGroup({
                   letterSpacing: 0.8,
                   textTransform: "uppercase",
                   fontWeight: 600,
-                  color: isToday ? "#cdd6f4" : "rgba(205,214,244,0.45)",
+                  color: isToday ? "#cdd6f4" : "var(--color-text-faint)",
                 }}
               >
                 {label}
@@ -86,14 +86,14 @@ export default function TimelineDayGroup({
                 letterSpacing: 0.8,
                 textTransform: "uppercase",
                 fontWeight: 600,
-                color: isToday ? "#cdd6f4" : "rgba(205,214,244,0.45)",
+                color: isToday ? "#cdd6f4" : "var(--color-text-faint)",
               }}
             >
               {label}
             </div>
           )}
           <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
-          <div style={{ fontSize: 10, color: "rgba(205,214,244,0.35)" }}>
+          <div style={{ fontSize: 10, color: "var(--color-text-faint)" }}>
             {items.length} {items.length === 1 ? "item" : "items"}
           </div>
         </div>

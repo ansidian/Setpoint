@@ -56,7 +56,7 @@ export function ChipEditor({ label, chips, placeholder, onChange }) {
             if (draft.trim()) commitDraft();
           }}
           placeholder={chips.length ? "" : placeholder}
-          className="h-6 min-w-[110px] flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/45"
+          className="h-6 min-w-[110px] flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/75"
         />
       </div>
     </div>

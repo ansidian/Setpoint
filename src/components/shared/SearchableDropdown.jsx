@@ -71,7 +71,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
                 placeholder={allowCreate ? "Search or type new..." : "Search..."}
               />
               <CommandList className="max-h-[180px]">
-                <CommandEmpty className="py-2 text-xs text-muted-foreground/50">No matches</CommandEmpty>
+                <CommandEmpty className="py-2 text-xs text-muted-foreground/75">No matches</CommandEmpty>
                 <CommandGroup>
                   {options.map(o => (
                     <CommandItem

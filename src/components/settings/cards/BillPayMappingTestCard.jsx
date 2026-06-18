@@ -44,7 +44,7 @@ function compactValue(value) {
 function ResultField({ label, value }) {
   return (
     <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-[1.5px] text-muted-foreground/60">
+      <div className="text-[10px] font-semibold uppercase tracking-[1.5px] text-muted-foreground/75">
         {label}
       </div>
       <div className="mt-1 truncate text-[12px] font-medium text-foreground/85">
@@ -98,7 +98,7 @@ function DiagnosticsResult({ result }) {
         ))}
       </div>
 
-      <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-muted-foreground/70">
+      <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-muted-foreground/75">
         {mapping.reason ? <div>Reason: {mapping.reason.replaceAll("_", " ")}</div> : null}
         {mapping.matchedProfiles?.length ? (
           <div>Identity matches: {mapping.matchedProfiles.join(", ")}</div>
