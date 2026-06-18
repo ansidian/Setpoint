@@ -152,3 +152,10 @@ export function hasOverdue(items) {
 export function allComplete(_items) {
   return false;
 }
+
+export function payUrlForBill(bill, payLinksByScheduleId) {
+  const scheduleId = bill?.scheduleId || bill?.id;
+  if (!scheduleId) return null;
+  const url = payLinksByScheduleId?.[scheduleId];
+  return typeof url === "string" && url ? url : null;
+}

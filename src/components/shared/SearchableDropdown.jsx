@@ -10,7 +10,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-export default function SearchableDropdown({ options, value, onChange, placeholder = "Select...", allowCreate = false, onCreateNew, ariaLabel }) {
+export default function SearchableDropdown({ options, value, onChange, placeholder = "Select...", allowCreate = false, onCreateNew, ariaLabel, onOpen }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -30,7 +30,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
 
   return (
     <div onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-      <Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setSearch(""); }} modal={false}>
+      <Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) onOpen?.(); else setSearch(""); }} modal={false}>
         <PopoverTrigger
           aria-label={ariaLabel}
           className={cn(

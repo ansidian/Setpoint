@@ -454,6 +454,7 @@ export default function useCalendarModalController({
     return {
       ...activeBillsData,
       allSchedules: broadSchedules,
+      payLinksByScheduleId: billsData?.payLinksByScheduleId,
       isLoading: !!billsRangeData?.loading || billsData?.isLoading,
       pendingUpdate: !!visibleBillsCount && (!!billsRangeData?.loading || !!billsData?.pendingUpdate || !!rangeData?.pendingUpdate),
       rangeError: billsRangeData?.error || null,

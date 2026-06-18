@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { CreditCard, ExternalLink } from "lucide-react";
 import { motion as Motion } from "motion/react";
 import TimelineDetailRail from "../../TimelineDetailRail.jsx";
 import {
@@ -12,7 +12,7 @@ import {
 } from "../../DetailRailPrimitives.jsx";
 import { useDetailRailMotion } from "../../detailRailMotion.js";
 import { formatAmount, formatDate, daysLabel, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
-import { billMatchesItemId, formatFullDate, getDayState } from "./billsModel.js";
+import { billMatchesItemId, formatFullDate, getDayState, payUrlForBill } from "./billsModel.js";
 
 function getScheduleUrl(bill, actualBudgetUrl) {
   const scheduleId = bill?.scheduleId || bill?.id;
@@ -132,21 +132,33 @@ function BillSelectedCard({ bill, compact = false, actions }) {
   );
 }
 
-function BillSelectedActions({ bill, actualBudgetUrl, compact = false }) {
+function BillSelectedActions({ bill, actualBudgetUrl, payUrl, compact = false }) {
   if (!bill) return null;
   const scheduleUrl = getScheduleUrl(bill, actualBudgetUrl);
-  if (!scheduleUrl) return null;
+  if (!scheduleUrl && !payUrl) return null;
 
   return (
     <RailActionGroup align="end">
-      <RailAction
-        icon={ExternalLink}
-        label="Open in Actual"
-        href={scheduleUrl}
-        accent="#a6e3a1"
-        tone="accent"
-        size={compact ? "compact" : "default"}
-      />
+      {scheduleUrl ? (
+        <RailAction
+          icon={ExternalLink}
+          label="Open in Actual"
+          href={scheduleUrl}
+          accent="#a6e3a1"
+          tone="accent"
+          size={compact ? "compact" : "default"}
+        />
+      ) : null}
+      {payUrl ? (
+        <RailAction
+          icon={CreditCard}
+          label="Pay Online"
+          href={payUrl}
+          accent="#89b4fa"
+          tone="accent"
+          size={compact ? "compact" : "default"}
+        />
+      ) : null}
     </RailActionGroup>
   );
 }
@@ -219,6 +231,7 @@ function BillsDetail({
   const selectedBill = allItems.find((bill) => billMatchesItemId(bill, selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
   const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
+  const selectedPayUrl = selectedBill ? payUrlForBill(selectedBill, data?.payLinksByScheduleId) : null;
   const summary = [
     `${state.activeCount} unpaid`,
     state.completedCount ? `${state.completedCount} paid` : null,
@@ -235,10 +248,11 @@ function BillsDetail({
         <BillSelectedCard
           bill={selectedBill}
           compact={compactDetail}
-          actions={selectedScheduleUrl ? (
+          actions={(selectedScheduleUrl || selectedPayUrl) ? (
             <BillSelectedActions
               bill={selectedBill}
               actualBudgetUrl={actualBudgetUrl}
+              payUrl={selectedPayUrl}
               compact={compactDetail}
             />
           ) : null}
@@ -276,6 +290,7 @@ function BillsFloatingDetail({
   const selectedBill = allItems.find((bill) => billMatchesItemId(bill, selectedItemId)) || null;
   const compactDetail = state.totalCount >= 4;
   const selectedScheduleUrl = selectedBill ? getScheduleUrl(selectedBill, actualBudgetUrl) : null;
+  const selectedPayUrl = selectedBill ? payUrlForBill(selectedBill, data?.payLinksByScheduleId) : null;
 
   if (!selectedBill) return null;
 
@@ -283,10 +298,11 @@ function BillsFloatingDetail({
     <BillSelectedCard
       bill={selectedBill}
       compact={compactDetail}
-      actions={selectedScheduleUrl ? (
+      actions={(selectedScheduleUrl || selectedPayUrl) ? (
         <BillSelectedActions
           bill={selectedBill}
           actualBudgetUrl={actualBudgetUrl}
+          payUrl={selectedPayUrl}
           compact={compactDetail}
         />
       ) : null}

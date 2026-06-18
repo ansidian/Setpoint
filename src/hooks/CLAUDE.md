@@ -26,6 +26,7 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useCustomize.js` — persists layout/accent/density to localStorage, injects CSS vars
 - `useNotifications.js` — browser notifications for events, bills, important senders
 - `useTriageNotificationSounds.js` — schedules and gates triage notification sounds
+- `useUtilityPayLinks.js` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
 - `settings/useSettingsPage.js` — settings UI orchestration: tabs, debounced auto-save, sync status
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)

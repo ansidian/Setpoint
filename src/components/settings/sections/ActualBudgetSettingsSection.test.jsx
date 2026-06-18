@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,7 +41,7 @@ vi.mock("@/components/shared/SearchableDropdown", () => ({
 
 const { default: ActualBudgetSettingsSection } = await import("./ActualBudgetSettingsSection.jsx");
 
-function renderSection({ initialSettings, patch = vi.fn() } = {}) {
+function renderSection({ initialSettings, patch = vi.fn(), strict = false } = {}) {
   function Harness() {
     const [settings, setSettings] = useState(initialSettings || {
       actual_budget_url: "https://actual.example.test",
@@ -61,7 +61,7 @@ function renderSection({ initialSettings, patch = vi.fn() } = {}) {
 
   return {
     patch,
-    ...render(<Harness />),
+    ...render(strict ? <StrictMode><Harness /></StrictMode> : <Harness />),
   };
 }
 
@@ -241,6 +241,17 @@ describe("ActualBudgetSettingsSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Expand profile 1" }));
 
     expect(await screen.findByText("Old Payee")).toBeTruthy();
+  });
+
+  it("still loads Actual metadata after interaction under StrictMode", async () => {
+    // Regression: the section's mount guard must reset to true on (re)mount so
+    // StrictMode's mount → cleanup → remount does not leave it permanently false,
+    // which would silently drop every metadata state update (stuck "Loading…").
+    renderSection({ strict: true });
+
+    fireEvent.click(await screen.findByRole("button", { name: /profile/i }));
+
+    expect(await screen.findByRole("option", { name: "Citi" })).toBeTruthy();
   });
 
   it("surfaces metadata load failures instead of presenting an ordinary empty mapping list", async () => {

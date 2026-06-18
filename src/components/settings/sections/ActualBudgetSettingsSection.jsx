@@ -3,6 +3,7 @@ import { getActualMetadata } from "@/api";
 import ActualBudgetConnectionCard from "@/components/settings/cards/ActualBudgetConnectionCard";
 import BillPayMappingsCard from "@/components/settings/cards/BillPayMappingsCard";
 import BillPayMappingTestCard from "@/components/settings/cards/BillPayMappingTestCard";
+import UtilityPayLinksCard from "@/components/settings/cards/UtilityPayLinksCard";
 
 const EMPTY_METADATA = { accounts: [], payees: [], categories: [] };
 
@@ -13,8 +14,14 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
   const mountedRef = useRef(true);
   const metadataPromiseRef = useRef(null);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  // Set true on (re)mount, not just false on cleanup: under StrictMode the
+  // mount → cleanup → remount cycle would otherwise leave the ref permanently
+  // false, silently dropping every metadata state update (stuck "Loading…").
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const requestMetadata = useCallback(() => {
@@ -52,6 +59,15 @@ export default function ActualBudgetSettingsSection({ settings, setSettings, pat
         onRequestMetadata={requestMetadata}
       />
       <BillPayMappingTestCard settings={settings} />
+      <UtilityPayLinksCard
+        settings={settings}
+        setSettings={setSettings}
+        patch={patch}
+        metadata={metadata}
+        metadataLoading={metadataLoading}
+        metadataError={metadataError}
+        onRequestMetadata={requestMetadata}
+      />
     </>
   );
 }

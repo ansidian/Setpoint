@@ -3,6 +3,7 @@ import {
   validateEmailInterests,
   validateImportantSenders,
   validateSchedules,
+  validateUtilityPayLinks,
 } from "./settings-schemas.js";
 
 describe("schedules_json schema", () => {
@@ -156,5 +157,38 @@ describe("important senders schema", () => {
       valid: false,
       message: "Duplicate sender address: boss@company.com",
     });
+  });
+});
+
+describe("validateUtilityPayLinks", () => {
+  it("accepts a valid list and trims fields", () => {
+    const result = validateUtilityPayLinks([
+      { scheduleId: " s1 ", label: " Electricity ", url: " https://pay.pge.com " },
+    ]);
+    expect(result.valid).toBe(true);
+    expect(result.value).toEqual([
+      { scheduleId: "s1", label: "Electricity", url: "https://pay.pge.com" },
+    ]);
+  });
+
+  it("rejects a non-array", () => {
+    expect(validateUtilityPayLinks("nope").valid).toBe(false);
+  });
+
+  it("rejects an entry with a blank scheduleId", () => {
+    expect(validateUtilityPayLinks([{ scheduleId: "", url: "https://x" }]).valid).toBe(false);
+  });
+
+  it("rejects a url that is not http(s)", () => {
+    expect(validateUtilityPayLinks([{ scheduleId: "s1", url: "ftp://x" }]).valid).toBe(false);
+    expect(validateUtilityPayLinks([{ scheduleId: "s1", url: "pge.com" }]).valid).toBe(false);
+  });
+
+  it("rejects a duplicate scheduleId", () => {
+    const result = validateUtilityPayLinks([
+      { scheduleId: "s1", url: "https://a" },
+      { scheduleId: "s1", url: "https://b" },
+    ]);
+    expect(result.valid).toBe(false);
   });
 });
