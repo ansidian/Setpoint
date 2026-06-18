@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { makeCalendarBillsData } from "./calendarBillsData";
+import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
 
 const CalendarModal = lazy(() => import("../calendar/CalendarModal"));
 
@@ -35,6 +36,11 @@ export default function DashboardCalendarModalMount({
   calendarDeadlineRange,
   calendarDeadlineActions,
 }) {
+  const payLinksByScheduleId = useUtilityPayLinks();
+  const billsDataWithLinks = useMemo(
+    () => ({ ...(calendarBillsData || makeCalendarBillsData(liveData)), payLinksByScheduleId }),
+    [calendarBillsData, liveData, payLinksByScheduleId],
+  );
   if (isMobile || !calendarMounted) return null;
   const seededDeadlines = calendarDeadlines ?? liveData?.liveDeadlines ?? {};
 
@@ -55,7 +61,7 @@ export default function DashboardCalendarModalMount({
         eventsData={eventsData}
         onEventsVisibleRangeChange={handleCalendarEventsRangeChange}
         weatherData={liveData.liveWeather || briefing?.weather || null}
-        billsData={calendarBillsData || makeCalendarBillsData(liveData)}
+        billsData={billsDataWithLinks}
         billsRangeData={calendarBillRange}
         deadlinesData={deadlineDataForCalendarModal(
           seededDeadlines,

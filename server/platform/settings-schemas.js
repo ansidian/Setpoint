@@ -126,3 +126,36 @@ export function validateImportantSenders(senders) {
   }
   return { valid: true, value: senders };
 }
+
+const UTILITY_PAY_URL_RE = /^https?:\/\//i;
+
+// Pay-link entries match a bill by stable Actual scheduleId; `url` opens in a new
+// tab from BillsDetailRail. `label` is a cached display name for the settings list
+// only and is not used for matching.
+export function validateUtilityPayLinks(links) {
+  if (!Array.isArray(links)) {
+    return { valid: false, message: "utility_pay_links must be an array" };
+  }
+  const seen = new Set();
+  const value = [];
+  for (const link of links) {
+    if (!isPlainObject(link)) {
+      return { valid: false, message: "Invalid utility_pay_links entry: must be an object" };
+    }
+    if (!isNonBlankString(link.scheduleId)) {
+      return { valid: false, message: "Invalid utility_pay_links entry: scheduleId must be a non-empty string" };
+    }
+    const url = typeof link.url === "string" ? link.url.trim() : "";
+    if (!UTILITY_PAY_URL_RE.test(url)) {
+      return { valid: false, message: "Invalid utility_pay_links entry: url must start with http:// or https://" };
+    }
+    const scheduleId = link.scheduleId.trim();
+    if (seen.has(scheduleId)) {
+      return { valid: false, message: `Duplicate utility_pay_links scheduleId: ${scheduleId}` };
+    }
+    seen.add(scheduleId);
+    const label = typeof link.label === "string" ? link.label.trim() : "";
+    value.push({ scheduleId, label, url });
+  }
+  return { valid: true, value };
+}

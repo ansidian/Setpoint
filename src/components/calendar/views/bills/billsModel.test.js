@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billMatchesItemId, compute } from "./billsModel.js";
+import { billMatchesItemId, compute, payUrlForBill } from "./billsModel.js";
 
 describe("billsModel range data", () => {
   it("groups open schedule range instances by composite id", () => {
@@ -40,5 +40,22 @@ describe("billsModel range data", () => {
 
     expect(result.itemsByDate).toEqual({});
     expect(result.itemsByDay).toEqual({});
+  });
+});
+
+describe("payUrlForBill", () => {
+  it("returns the url for a matching scheduleId", () => {
+    expect(payUrlForBill({ scheduleId: "s1" }, { s1: "https://pay" })).toBe("https://pay");
+  });
+
+  it("falls back to the bill id when scheduleId is absent", () => {
+    expect(payUrlForBill({ id: "s9" }, { s9: "https://pay" })).toBe("https://pay");
+  });
+
+  it("returns null when there is no match or no id", () => {
+    expect(payUrlForBill({ scheduleId: "s1" }, { s2: "https://x" })).toBeNull();
+    expect(payUrlForBill({ scheduleId: "s1" }, {})).toBeNull();
+    expect(payUrlForBill({ scheduleId: "s1" }, null)).toBeNull();
+    expect(payUrlForBill({}, { s1: "https://x" })).toBeNull();
   });
 });

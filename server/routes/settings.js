@@ -35,6 +35,7 @@ import {
   validateEmailInterests,
   validateImportantSenders,
   validateSchedules,
+  validateUtilityPayLinks,
 } from "../platform/settings-schemas.js";
 
 // Bare router: mounted behind requireCookieSession in routes/accounts.js.
@@ -79,6 +80,7 @@ router.get("/settings", async (req, res) => {
       email_interests_json,
       triage_sound_settings_json,
       bill_pay_mappings_json,
+      utility_pay_links_json,
       ...safe
     } = result.rows[0];
     safe.actual_budget_configured = !!actual_budget_password_encrypted;
@@ -109,6 +111,7 @@ router.get("/settings", async (req, res) => {
     safe.triage_sound_settings = parseTriageSoundSettingsJson(triage_sound_settings_json);
     safe.triage_notification_sounds = TRIAGE_NOTIFICATION_SOUNDS;
     safe.bill_pay_mappings = parseBillPayMappingsJson(bill_pay_mappings_json);
+    safe.utility_pay_links = utility_pay_links_json ? JSON.parse(utility_pay_links_json) : [];
 
     res.json(safe);
   } catch (err) {
@@ -139,7 +142,7 @@ router.get("/email-search/usage", async (req, res) => {
 
 router.put("/settings", async (req, res) => {
   const userId = process.env.EA_USER_ID;
-  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id } = req.body;
+  const { schedules_json, email_lookback_hours, weather_lat, weather_lng, weather_location, actual_budget_url, actual_budget_password, actual_budget_sync_id, email_ai_provider, email_ai_model, email_interests_json, todoist_api_token, todoist_oauth_token_response, bill_extract_provider, bill_extract_model, email_triage_mode, triage_sound_settings, bill_pay_mappings, discord_webhook_url, discord_user_id, utility_pay_links } = req.body;
 
   try {
     if (todoist_api_token !== undefined && todoist_oauth_token_response !== undefined) {
@@ -243,6 +246,14 @@ router.put("/settings", async (req, res) => {
       }
       updates.push("bill_pay_mappings_json = ?");
       args.push(JSON.stringify(bill_pay_mappings));
+    }
+    if (utility_pay_links !== undefined) {
+      const validation = validateUtilityPayLinks(utility_pay_links);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updates.push("utility_pay_links_json = ?");
+      args.push(JSON.stringify(validation.value));
     }
     if (discord_webhook_url !== undefined) {
       const trimmedWebhook = String(discord_webhook_url || "").trim();

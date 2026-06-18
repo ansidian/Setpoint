@@ -28,6 +28,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `cards/BillPayMappingInputs.jsx` — ChipEditor, TargetDropdown, MappingSelect, ReorderButtons
 - `cards/BillPayMappingTestCard.jsx` — tests mapping resolution against sample email text
 - `cards/billPayMappingsModel.js` — normalizes/validates/mutates the mapping tree
+- `cards/UtilityPayLinksCard.jsx` — per-schedule bill-pay website URLs; source for the calendar "Pay Online" button
 
 ### Cards: connections + security
 - `cards/ActualBudgetConnectionCard.jsx` — Actual server URL/auth config, budget cache hydration
