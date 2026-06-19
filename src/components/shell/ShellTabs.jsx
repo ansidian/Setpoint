@@ -1,12 +1,12 @@
-import { CalendarDays, Inbox, LayoutList } from "lucide-react";
+import { CalendarDays, Inbox, LayoutList, Notebook } from "lucide-react";
 import { Kbd } from "./Kbd.jsx";
 
-const TAB_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays };
-const TAB_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar" };
-const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3" };
+const TAB_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays, notes: Notebook };
+const TAB_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes" };
+const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3", notes: "4" };
 
 export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
-  const tabs = isMobile ? ["dashboard", "inbox"] : ["dashboard", "inbox", "calendar"];
+  const tabs = isMobile ? ["dashboard", "inbox", "notes"] : ["dashboard", "inbox", "calendar", "notes"];
   return (
     <div
       style={{

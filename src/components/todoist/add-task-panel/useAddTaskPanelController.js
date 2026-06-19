@@ -57,13 +57,18 @@ export default function useAddTaskPanelController({
   onTaskDeleted,
   host = "anchored",
   initialDueDate = null,
+  initialInput = "",
+  initialDescription = "",
   onDraftPreviewChange,
   onDirtyChange,
 }) {
   const isInline = host === "inline";
   const isEdit = !!editingTask;
-  const [input, setInput] = useState(() => editingTask?.title || "");
-  const [description, setDescription] = useState(() => editingTask?.description || "");
+  // Seed from initialInput/initialDescription only in CREATE mode; in edit mode
+  // the editingTask always wins (even with a falsy title), matching the
+  // !editingTask-guarded seededCreateDue pattern below.
+  const [input, setInput] = useState(() => (editingTask ? editingTask.title || "" : initialInput || ""));
+  const [description, setDescription] = useState(() => (editingTask ? editingTask.description || "" : initialDescription || ""));
   const [projects, setProjects] = useState([]);
   const [labels, setLabels] = useState([]);
   const [manualProject, setManualProject] = useState(null);

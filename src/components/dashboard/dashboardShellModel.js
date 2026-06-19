@@ -145,6 +145,7 @@ export function resolveShellTabHotkey({
   if (key === "1") return "dashboard";
   if (key === "2") return "inbox";
   if (key === "3") return "calendar";
+  if (key === "4") return "notes";
   return null;
 }
 

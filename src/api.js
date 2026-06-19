@@ -393,3 +393,5 @@ export const createNote = (content) => apiFetch("/api/notes", { method: "POST", 
 export const updateNote = (id, content) => apiFetch(`/api/notes/${id}`, { method: "PATCH", body: JSON.stringify({ content }) });
 export const deleteNote = (id) => apiFetch(`/api/notes/${id}`, { method: "DELETE" });
 export const reorderNotes = (noteIds) => apiFetch("/api/notes/reorder", { method: "PATCH", body: JSON.stringify({ noteIds }) });
+export const archiveNote = (id, archived) =>
+  apiFetch(`/api/notes/${id}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) });

@@ -467,6 +467,15 @@ export async function handleDemoApiRequest(path, options = {}) {
     return clone(seed.notes);
   }
 
+  if (pathname.match(/^\/api\/notes\/[^/]+\/archive$/) && method === "PATCH") {
+    const noteId = decodeURIComponent(pathname.split("/").at(-2));
+    const note = seed.notes.find((entry) => String(entry.id) === String(noteId));
+    if (!note) return notFound(path);
+    note.archived_at = body.archived ? new Date().toISOString() : null;
+    note.updated_at = new Date().toISOString();
+    return { success: true };
+  }
+
   if (pathname.match(/^\/api\/notes\/[^/]+$/) && method === "PATCH") {
     const noteId = decodeURIComponent(pathname.split("/").at(-1));
     const note = seed.notes.find((entry) => String(entry.id) === String(noteId));

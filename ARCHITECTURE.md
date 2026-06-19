@@ -602,7 +602,7 @@ erDiagram
 | `ea_email_search_embeddings` | `005_email_search_embeddings.sql` |
 | `ea_email_triage` | `001_ea_tables.sql`, `015_triage_last_decision_reason.sql` |
 | `ea_gmail_watch_state` | `001_ea_tables.sql` |
-| `ea_notes` | `001_ea_tables.sql` |
+| `ea_notes` | `001_ea_tables.sql`, `021_notes_archive.sql` |
 | `ea_passkey_credentials` | `012_passkey_auth.sql` |
 | `ea_pending_auth` | `012_passkey_auth.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
@@ -758,6 +758,7 @@ The structural route table below is regenerated from `server/index.js` and `serv
 | POST | `/api/notes/` | `server/routes/notes.js` |
 | DELETE | `/api/notes/:id` | `server/routes/notes.js` |
 | PATCH | `/api/notes/:id` | `server/routes/notes.js` |
+| PATCH | `/api/notes/:id/archive` | `server/routes/notes.js` |
 | PATCH | `/api/notes/reorder` | `server/routes/notes.js` |
 | POST | `/api/todoist/webhook/` | `server/routes/todoist-webhook.js` |
 | GET | `/bill-extract-models` | `server/routes/settings.js` |

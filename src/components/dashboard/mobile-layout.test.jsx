@@ -95,7 +95,6 @@ describe("mobile dashboard layout", () => {
       isMobile: true,
       dashboardLayout: "command",
       showInboxPeek: true,
-      showNotes: true,
     });
 
     expect(layoutPlan.layoutMode).toBe("paper");
@@ -125,6 +124,11 @@ describe("mobile dashboard layout", () => {
     expect(screen.queryByText("Signals")).toBeNull();
     const layoutRoot = document.querySelector('[data-layout-mode="command"]');
     expect(layoutRoot).toBeTruthy();
+  });
+
+  it("omits notes from the command primary rail (rail retired)", () => {
+    const plan = resolveDashboardBodyLayout({ dashboardLayout: "command" });
+    expect(plan.commandPrimaryRailSectionOrder).toEqual(["deadlines"]);
   });
 
   it("keeps timeline and rails inside the desktop command layout", () => {

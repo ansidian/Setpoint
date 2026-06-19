@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X } from "lucide-react";
+import { X, Archive, ListPlus } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { linkifyText } from "./notesUtils.jsx";
 
 const EDIT_TEXTAREA_MAX_HEIGHT = 96;
 
-export default function NoteItem({ note, accent, onUpdate, onDelete, compactPreview = false }) {
+export default function NoteItem({
+  note, accent, onUpdate, onDelete, onArchive, onPromote,
+  compactPreview = false, actionsAlwaysVisible = false, age = "",
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [deleteActive, setDeleteActive] = useState(false);
   const textareaRef = useRef(null);
+  const promoteRef = useRef(null);
 
   const {
     attributes,
@@ -79,11 +83,23 @@ export default function NoteItem({ note, accent, onUpdate, onDelete, compactPrev
     if (interactive) event.stopPropagation();
   }, []);
 
+  const handleRowKeyDown = useCallback((e) => {
+    if (editing) return;
+    if ((e.key === "t" || e.key === "T") && onPromote) {
+      e.preventDefault();
+      // Stop the row's `t` from also reaching the shell g-chord window listener
+      // (a pending `g` + `t` would otherwise fire promote AND open-deadline-create).
+      e.stopPropagation();
+      onPromote(note, promoteRef);
+    }
+  }, [editing, onPromote, note]);
+
   return (
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      onKeyDown={handleRowKeyDown}
       onPointerDownCapture={handlePointerDownCapture}
       style={{
         ...style,
@@ -171,34 +187,61 @@ export default function NoteItem({ note, accent, onUpdate, onDelete, compactPrev
         )}
       </div>
 
-      {/* Delete button */}
-      <button
-        type="button"
-        aria-label="Delete note"
-        onClick={() => onDelete(note.id)}
-        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-150"
-        style={{
-          background: "none",
-          border: "none",
-          color: deleteActive ? "#f38ba8" : "rgba(255,255,255, 0.4)",
-          fontSize: 11,
-          flexShrink: 0,
-          padding: 1,
-          cursor: "pointer",
-          position: "relative",
-          lineHeight: 1.5,
-          borderRadius: 4,
-          outline: deleteActive ? "1px solid rgba(243,139,168,0.35)" : "none",
-          transition: "color 140ms ease, transform 140ms cubic-bezier(0.22,1,0.36,1)",
-          transform: deleteActive ? "translateY(-1px)" : "translateY(0)",
-        }}
-        onMouseEnter={() => setDeleteActive(true)}
-        onMouseLeave={() => setDeleteActive(false)}
-        onFocus={() => setDeleteActive(true)}
-        onBlur={() => setDeleteActive(false)}
+      {/* Actions cluster */}
+      <div
+        className={
+          actionsAlwaysVisible
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150"
+        }
+        style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, position: "relative" }}
       >
-        <X size={12} strokeWidth={2.2} />
-      </button>
+        {age && (
+          <span style={{ fontSize: 10, color: "var(--color-text-faint)", fontVariantNumeric: "tabular-nums" }}>{age}</span>
+        )}
+        {onPromote && (
+          <button
+            ref={promoteRef}
+            type="button"
+            aria-label="Add to Todoist"
+            aria-keyshortcuts="t"
+            onClick={() => onPromote(note, promoteRef)}
+            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#a6e3a1")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
+            onFocus={(e) => (e.currentTarget.style.color = "#a6e3a1")}
+            onBlur={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
+          >
+            <ListPlus size={13} strokeWidth={2.2} />
+          </button>
+        )}
+        {onArchive && (
+          <button
+            type="button"
+            aria-label="Archive note"
+            onClick={() => onArchive(note.id)}
+            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#cba6da")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
+            onFocus={(e) => (e.currentTarget.style.color = "#cba6da")}
+            onBlur={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
+          >
+            <Archive size={13} strokeWidth={2.2} />
+          </button>
+        )}
+        <button
+          type="button"
+          aria-label="Delete note"
+          onClick={() => onDelete(note.id)}
+          style={{ background: "none", border: "none", color: deleteActive ? "#f38ba8" : "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
+          onMouseEnter={() => setDeleteActive(true)}
+          onMouseLeave={() => setDeleteActive(false)}
+          onFocus={() => setDeleteActive(true)}
+          onBlur={() => setDeleteActive(false)}
+        >
+          <X size={12} strokeWidth={2.2} />
+        </button>
+      </div>
     </div>
   );
 }
