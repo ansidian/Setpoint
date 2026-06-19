@@ -127,6 +127,64 @@ export function noteTheme(maxHeight) {
 // Re-export the CM symbols the assembler/wrapper need so callers import from one module.
 export { EditorView, keymap, Prec, cmPlaceholder, autocompletion, completionStatus, history, historyKeymap, defaultKeymap, markdown, WidgetType, Decoration, RangeSetBuilder, ViewPlugin };
 
+// Checkbox widget: renders an <input type=checkbox> that toggles one marker char
+// in the document by absolute position on mousedown. The regex requires `]` + whitespace
+// so it matches the SAME well-formed checkboxes as renderNoteMarkdown and toggleCheckboxLine.
+class CheckboxWidget extends WidgetType {
+  constructor(checked, markerPos) { super(); this.checked = checked; this.markerPos = markerPos; }
+  // Compare markerPos too: when an edit above shifts this line, the rebuilt widget
+  // gets a new markerPos, so CM recreates the DOM (and the mousedown closure) — a
+  // stale closure can never dispatch a change at the wrong position.
+  eq(other) { return other.checked === this.checked && other.markerPos === this.markerPos; }
+  toDOM(view) {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = this.checked;
+    box.style.cssText = "margin:0 4px 0 0;vertical-align:middle;accent-color:#cba6da;cursor:pointer";
+    box.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const insert = this.checked ? " " : "x";
+      view.dispatch({ changes: { from: this.markerPos, to: this.markerPos + 1, insert } });
+    });
+    return box;
+  }
+  ignoreEvent() { return false; }
+}
+
+// Matches well-formed checkbox lines: `- [ ] ` or `- [x] ` (space after `]` required).
+// Groups: m[1]=`\s*-\s[`  m[2]=` |x|X`  m[3]=`] ` (two chars)
+const CHECK_LINE_RE = /^(\s*-\s\[)( |x|X)(\]\s)/;
+
+export const checkboxes = ViewPlugin.fromClass(
+  class {
+    constructor(view) { this.decorations = this.build(view); }
+    update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+    build(view) {
+      const builder = new RangeSetBuilder();
+      for (const { from, to } of view.visibleRanges) {
+        let pos = from;
+        while (pos <= to) {
+          const line = view.state.doc.lineAt(pos);
+          const m = line.text.match(CHECK_LINE_RE);
+          if (m) {
+            const markerPos = line.from + m[1].length;          // the space/x char
+            const checked = m[2].toLowerCase() === "x";
+            builder.add(
+              line.from + m[1].length - 1,                      // the "[" char
+              line.from + m[1].length + 2,                      // exclusive end past "]"; the trailing space stays in the doc
+
+              Decoration.replace({ widget: new CheckboxWidget(checked, markerPos) }),
+            );
+          }
+          pos = line.to + 1;
+        }
+      }
+      return builder.finish();
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
+
 // Assembles the full extension list for a NoteEditor instance.
 // callbacksRef.current = { onChange, onSubmit, onCancel, submitOnEnter, getTags }
 export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHeight }) {
@@ -151,6 +209,7 @@ export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHe
     EditorView.lineWrapping,
     livePreview,
     tagChips,
+    checkboxes,
     autocompletion({ override: [makeTagCompletionSource(() => callbacksRef.current.getTags?.() || [])] }),
     submitKeymap,
     keymap.of([...defaultKeymap, ...historyKeymap]),
