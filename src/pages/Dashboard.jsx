@@ -64,6 +64,11 @@ export default function Dashboard() {
     initialData: null,
     fetchRange: getCalendarBillsRange,
     emptyData: null,
+    // Per-month caching (like deadlines): a wide ensure range is split into
+    // <=2-month server fetches and merged, so bills span the whole mounted month
+    // window instead of just the active month. prefetch warms the next edge month.
+    cacheMode: "month",
+    prefetchMonthRadius: 1,
   });
   const loadCalendarDeadlines = deadlinesCache.load;
   const loadCalendarBills = billsCache.load;

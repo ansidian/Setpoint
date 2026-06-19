@@ -153,6 +153,11 @@ export default memo(function CalendarGrid({
 
   const previewComputed = useMemo(() => {
     if (isActiveMonth) return null;
+    // Month-agnostic views (bills) render every mounted month from the single
+    // shared itemsByDate, so they must not run the per-month events/deadlines
+    // preview compute — feeding events-shaped data to bills' compute yields an
+    // empty itemsByDate that would shadow the shared map and blank the month.
+    if (activeView.monthAgnosticItemsByDate) return null;
     if (!previewEvents?.length && !previewDeadlineOverlay?.data) return null;
     if (typeof activeView.compute !== "function") return null;
     return activeView.compute({

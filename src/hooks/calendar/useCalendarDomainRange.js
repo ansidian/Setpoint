@@ -76,6 +76,14 @@ function filterDataForMonth(data, key) {
   if (Array.isArray(next.upcoming)) {
     return filterSectionForMonth(next, key);
   }
+  // Bills range data is { schedules: [...occurrences], payeeMap, ... }. Keep only
+  // the occurrences whose date falls in this month so each month-key caches its
+  // own slice (the server caps a single range request at ~2 months, so wide
+  // windows arrive as several month-group fetches that get split here).
+  if (Array.isArray(next.schedules)) {
+    next.schedules = next.schedules.filter((occurrence) => monthKeyFromDate(occurrence?.next_date) === key);
+    return next;
+  }
   return next;
 }
 
@@ -104,12 +112,33 @@ function combineDeadlineDataForRange(entries, start, end, emptyData) {
   };
 }
 
+function combineBillsDataForRange(entries, start, end, emptyData) {
+  const base = clone(entries.find((entry) => Array.isArray(entry?.data?.schedules))?.data)
+    || clone(emptyData) || { schedules: [] };
+  const seen = new Set();
+  const schedules = [];
+  for (const entry of entries) {
+    for (const occurrence of entry?.data?.schedules || []) {
+      const date = occurrence?.next_date;
+      if (!date || date < start || date > end) continue;
+      const identity = occurrence?.id ?? `${occurrence?.scheduleId ?? ""}:${date}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      schedules.push(clone(occurrence));
+    }
+  }
+  return { ...base, schedules };
+}
+
 function combineDataForRange(cache, keys, start, end, emptyData) {
   const entries = keys.map((key) => cache.get(key)).filter(Boolean);
   const base = clone(entries.find((entry) => entry?.data)?.data) || clone(emptyData);
   if (!base) return base;
   if (Array.isArray(base.upcoming)) {
     return combineDeadlineDataForRange(entries, start, end, emptyData);
+  }
+  if (Array.isArray(base.schedules)) {
+    return combineBillsDataForRange(entries, start, end, emptyData);
   }
   return base;
 }

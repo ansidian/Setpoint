@@ -145,6 +145,61 @@ describe("useCalendarDomainRange", () => {
     ]);
   });
 
+  it("caches bill ranges by month buckets and merges schedules across the visible range", async () => {
+    const fetchRange = vi.fn(async (start, end) => {
+      const months = [];
+      const cursor = new Date(`${start}T12:00:00Z`);
+      const last = new Date(`${end}T12:00:00Z`);
+      while (cursor <= last) {
+        months.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`);
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+      }
+      return {
+        payeeMap: { p1: "Narwhal" },
+        schedules: months.map((month) => ({
+          id: `sched-1:${month}-15`,
+          scheduleId: "sched-1",
+          name: "Narwhal",
+          next_date: `${month}-15`,
+          paid: false,
+        })),
+      };
+    });
+    const { result } = renderHook(() => useCalendarDomainRange({
+      fetchRange,
+      emptyData: null,
+      cacheMode: "month",
+      prefetchMonthRadius: 1,
+    }));
+
+    await act(async () => {
+      await result.current.ensureRange("2026-04-01", "2026-06-30");
+    });
+
+    // Occurrences from every visible month are merged, and non-schedule fields
+    // (payeeMap) survive the combine — proving the schedules shape is handled,
+    // not collapsed to a single month's bucket.
+    expect(result.current.data.payeeMap).toEqual({ p1: "Narwhal" });
+    expect(result.current.data.schedules.map((occurrence) => occurrence.next_date)).toEqual([
+      "2026-04-15",
+      "2026-05-15",
+      "2026-06-15",
+    ]);
+
+    // Scrolling forward reuses cached months; only the new trailing edge is fetched.
+    fetchRange.mockClear();
+    await act(async () => {
+      await result.current.ensureRange("2026-05-01", "2026-07-31");
+    });
+    expect(fetchRange).toHaveBeenCalledTimes(1);
+    expect(fetchRange).toHaveBeenCalledWith("2026-08-01", "2026-08-31");
+    expect(result.current.data.schedules.map((occurrence) => occurrence.next_date)).toEqual([
+      "2026-05-15",
+      "2026-06-15",
+      "2026-07-15",
+    ]);
+  });
+
   it("dedupes concurrent month-bucket fetches", async () => {
     const resolvers = [];
     const fetchRange = vi.fn(() => new Promise((resolve) => {

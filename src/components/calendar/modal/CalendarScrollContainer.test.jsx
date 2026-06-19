@@ -214,6 +214,23 @@ describe("CalendarScrollContainer", () => {
     expect(marchBlock?.textContent).toContain("Torbox");
   });
 
+  it("keeps sharing bills across months even when those months also have events", () => {
+    // Real bills months coexist with calendar events, so getMonthEvents feeds
+    // previewEvents for non-active months. That used to trigger CalendarGrid's
+    // per-month preview compute, which ran bills' compute on events-shaped data
+    // and produced an empty itemsByDate that shadowed the shared map — blanking
+    // every non-active month. Month-agnostic views must skip that preview path.
+    const julyBill = { id: "b-jul", scheduleId: "s-jul", name: "Narwhal", amount: 3.99, next_date: "2026-07-15", type: "bill", paid: false };
+    const { container } = renderContainer({
+      view: "bills",
+      activeView: billsView,
+      itemsByDate: { "2026-07-15": [julyBill] },
+      getMonthEvents: (year, month) => (year === 2026 && month === 6 ? [{ id: "ev-jul", title: "Some event" }] : []),
+    });
+    const julyBlock = container.querySelector("[data-testid='month-block-2026-6']");
+    expect(julyBlock?.textContent).toContain("Narwhal");
+  });
+
   it("does not use native CSS scroll snap — settle alignment owns row snapping", () => {
     // Native snap fights Windows discrete-wheel scrolling: Chromium drops
     // wheel events while a snap animation runs, so notch input kept dying
