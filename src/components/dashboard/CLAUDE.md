@@ -56,6 +56,7 @@ The landing surface: hero (greeting/callouts/weather), today timeline, and rails
 
 ## Related
 
+- `src/components/notes/` — Notes tab (key `4`): CodeMirror live-markdown editor, search, tags, archive, promote (see its map)
 - `src/components/calendar/` — calendar tab mounted via `DashboardCalendarModalMount.jsx`
 - `src/components/alfred/` — Alfred Panel mounted by `DashboardShell.jsx` (⌘\ toggle, ⌘⇧\ new chat)
 - `server/routes/dashboard.js` — state fetch + SSE stream backing this view
