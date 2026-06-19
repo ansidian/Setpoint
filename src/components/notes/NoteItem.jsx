@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { linkifyText } from "./notesUtils.jsx";
+import { renderNoteMarkdown } from "./renderNoteMarkdown.jsx";
+import { toggleCheckboxLine } from "./noteEditorExtensions.js";
 import NoteContextMenu from "./NoteContextMenu.jsx";
 
 const EDIT_TEXTAREA_MAX_HEIGHT = 96;
@@ -186,7 +187,10 @@ export default function NoteItem({
               } : {}),
             }}
           >
-            {linkifyText(note.content, accent)}
+            {renderNoteMarkdown(note.content, {
+              accent,
+              onToggleCheckbox: (idx) => onUpdate(note.id, toggleCheckboxLine(note.content, idx)),
+            })}
           </div>
         )}
       </div>
