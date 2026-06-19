@@ -344,7 +344,7 @@ export default function useCalendarModalHotkeys({
           break;
         default:
           if (event.key === "Enter"
-            || (event.key.length === 1 && !["1", "2", "3", " ", "r", "R"].includes(event.key))) {
+            || (event.key.length === 1 && !["1", "2", "3", "4", " ", "r", "R"].includes(event.key))) {
             consumeCalendarKey();
           }
           break;

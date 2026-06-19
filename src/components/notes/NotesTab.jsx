@@ -27,8 +27,6 @@ export default function NotesTab({ accent, isMobile = false }) {
       .catch((err) => { console.error("Failed to load notes:", err); setLoaded(true); });
   }, []);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
   useEffect(() => {
     function onKey(e) {
       if (e.key !== "/") return;
