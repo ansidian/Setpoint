@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMonthPreviewEntries } from "./calendarMonthPreviewModel.js";
+import { buildMonthPreviewEntries, resolveMountedMonthData } from "./calendarMonthPreviewModel.js";
 
 // June 2026 as reference: index 0 = June (firstDay Mon=1), index 1 = July (firstDay 3).
 const REF_YEAR = 2026;
@@ -86,5 +86,51 @@ describe("buildMonthPreviewEntries", () => {
       activeDeadlineOverlay: disabledOverlay,
     }));
     expect(passthrough.get(0).deadlineOverlay).toBe(disabledOverlay);
+  });
+});
+
+describe("resolveMountedMonthData", () => {
+  const EMPTY = {};
+  const active = {
+    viewData: { isLoading: false },
+    itemsByDay: { 1: ["a"] },
+    itemsByDate: { "2026-05-01": ["a"] },
+    cellMetaByDate: { "2026-05-01": { weather: {} } },
+  };
+  const cached = {
+    viewData: { cached: true },
+    itemsByDay: { 2: ["c"] },
+    itemsByDate: { "2026-04-02": ["c"] },
+    cellMetaByDate: {},
+  };
+
+  it("hands the active month its live computed bundle", () => {
+    expect(resolveMountedMonthData({ isActive: true, active, empty: EMPTY })).toBe(active);
+  });
+
+  it("reuses the cached snapshot for the one-deep cached month", () => {
+    const out = resolveMountedMonthData({ isActive: false, isCached: true, cached, active, empty: EMPTY });
+    expect(out.itemsByDate).toBe(cached.itemsByDate);
+    expect(out.viewData).toBe(cached.viewData);
+  });
+
+  it("renders other mounted months empty by default", () => {
+    const out = resolveMountedMonthData({ isActive: false, isCached: false, active, empty: EMPTY });
+    expect(out.viewData).toBeNull();
+    expect(out.itemsByDate).toBe(EMPTY);
+    expect(out.itemsByDay).toBe(EMPTY);
+  });
+
+  it("shares the active itemsByDate across non-active months when the view is month-agnostic", () => {
+    const out = resolveMountedMonthData({ isActive: false, isCached: false, active, shareItemsByDate: true, empty: EMPTY });
+    expect(out.itemsByDate).toBe(active.itemsByDate);
+    // Non-itemsByDate slots stay empty — only the date-keyed map is month-agnostic.
+    expect(out.viewData).toBeNull();
+  });
+
+  it("prefers the live active itemsByDate over the stale cached one when sharing", () => {
+    const out = resolveMountedMonthData({ isActive: false, isCached: true, cached, active, shareItemsByDate: true, empty: EMPTY });
+    expect(out.itemsByDate).toBe(active.itemsByDate);
+    expect(out.viewData).toBe(cached.viewData);
   });
 });
