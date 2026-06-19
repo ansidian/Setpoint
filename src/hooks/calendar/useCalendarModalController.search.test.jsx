@@ -119,7 +119,7 @@ describe("useCalendarModalController search wiring", () => {
     });
   });
 
-  it("cancels open calendar search with Escape before closing the modal", async () => {
+  it("cancels open calendar search with Escape; top-level Escape no longer closes the surface", async () => {
     const onClose = vi.fn();
     renderHarness({ onClose });
 
@@ -133,6 +133,7 @@ describe("useCalendarModalController search wiring", () => {
       expect(latestShellProps.search.query).toBe("planning");
     });
 
+    // Escape #1 clears the query but leaves the search rail open.
     fireEvent.keyDown(document, { key: "Escape" });
 
     await waitFor(() => {
@@ -141,6 +142,7 @@ describe("useCalendarModalController search wiring", () => {
     });
     expect(onClose).not.toHaveBeenCalled();
 
+    // Escape #2 closes the search rail (inner cascade preserved).
     fireEvent.keyDown(document, { key: "Escape" });
 
     await waitFor(() => {
@@ -148,9 +150,11 @@ describe("useCalendarModalController search wiring", () => {
     });
     expect(onClose).not.toHaveBeenCalled();
 
+    // Escape #3 is now a no-op: the calendar is an in-flow tab, not a dismissable
+    // modal, so a top-level Escape never closes the surface.
     fireEvent.keyDown(document, { key: "Escape" });
 
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("cycles the view with v while calendar search is open but focus is not in the search rail", async () => {

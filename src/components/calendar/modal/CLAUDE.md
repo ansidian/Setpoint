@@ -5,10 +5,9 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 ## Files
 
 ### Shell + header
-- `CalendarModalShell.jsx` — three-rail modal layout, floating detail, backdrop composition
+- `CalendarModalShell.jsx` — three-rail in-flow layout (calendar tab fill), floating detail
 - `CalendarModalHeader.jsx` — month/year title, view toggle, search, close
 - `CalendarJumpToMonth.jsx` — month/year jump picker popover with crossfade transitions
-- `CalendarModalBackdrop.jsx` — fixed gradient backdrop
 - `CalendarModalTexture.jsx` — decorative noise overlay
 - `buildCalendarModalShellProps.js` — adapter: controller bundles → shell props contract
 - `buildContextContent.jsx` — context-rail content router (editor/detail/empty/summary)

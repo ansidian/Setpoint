@@ -209,7 +209,7 @@ describe("DashboardShell mobile behavior", () => {
     expect(screen.queryByTestId("calendar-modal")).toBeNull();
   });
 
-  it("keeps calendar available on desktop and opens it from the hotkey", async () => {
+  it("keeps calendar available on desktop and opens it from the tab hotkey", async () => {
     mockIsMobile = false;
     renderShell();
 
@@ -217,7 +217,9 @@ describe("DashboardShell mobile behavior", () => {
     expect(screen.queryByTestId("calendar-modal")).toBeNull();
     expect(screen.queryByTestId("shell-header-briefing-status")).toBeNull();
 
-    fireEvent.keyDown(window, { key: "c" });
+    // The calendar is the third shell tab; the `3` hotkey activates it, which
+    // mounts the (mocked) calendar surface.
+    fireEvent.keyDown(window, { key: "3" });
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
   });
 
@@ -267,7 +269,7 @@ describe("DashboardShell mobile behavior", () => {
     window.localStorage.setItem("calendar:lastView", "legacy");
     renderShell();
 
-    fireEvent.keyDown(window, { key: "c" });
+    fireEvent.keyDown(window, { key: "3" });
 
     const modal = await screen.findByTestId("calendar-modal");
     expect(modal.textContent).toBe("open");
@@ -297,7 +299,7 @@ describe("DashboardShell mobile behavior", () => {
     });
   });
 
-  it("keeps single-key calendar open and ignores chords while typing", async () => {
+  it("switches to the calendar tab with 3 and ignores chords while typing", async () => {
     mockIsMobile = false;
     renderShell();
 
@@ -309,7 +311,7 @@ describe("DashboardShell mobile behavior", () => {
     expect(screen.queryByTestId("add-task-panel")).toBeNull();
     input.remove();
 
-    fireEvent.keyDown(window, { key: "c" });
+    fireEvent.keyDown(window, { key: "3" });
     expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
   });
 
@@ -465,20 +467,22 @@ describe("DashboardShell mobile behavior", () => {
     expect(props.loadCalendarBills).toHaveBeenCalledWith({ refreshLive: true });
   });
 
-  it("uses browser back to close the desktop calendar modal", async () => {
+  it("exposes the Calendar shell tab on desktop only", () => {
+    mockIsMobile = true;
+    const { unmount } = renderShell();
+
+    // Mobile drops the Calendar tab from the shell tablist.
+    expect(screen.queryByRole("button", { name: /calendar/i })).toBeNull();
+
+    unmount();
+    cleanup();
+
     mockIsMobile = false;
     renderShell();
 
-    fireEvent.keyDown(window, { key: "c" });
-    expect((await screen.findByTestId("calendar-modal")).textContent).toBe("open");
-
-    await act(async () => {
-      window.history.back();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-modal").textContent).toBe("closed");
-    });
+    // Desktop renders the third Calendar tab button alongside Dashboard and Inbox.
+    expect(screen.getByRole("button", { name: /calendar/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /dashboard/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /inbox/i })).toBeTruthy();
   });
 });

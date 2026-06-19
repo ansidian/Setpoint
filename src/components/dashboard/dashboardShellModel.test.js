@@ -67,10 +67,12 @@ describe("dashboard shell model", () => {
       action: "open-event-create",
       clearChord: true,
     });
-    expect(resolveDashboardShellHotkey({ key: "c", calendarOpen: false })).toEqual({ action: "open-calendar" });
-    expect(resolveDashboardShellHotkey({ key: "c", calendarOpen: true })).toEqual({ action: "ignore" });
     expect(resolveDashboardShellHotkey({ key: "a" })).toEqual({ action: "toggle-analytics" });
     expect(resolveDashboardShellHotkey({ key: "y" })).toEqual({ action: "toggle-history" });
+  });
+
+  it("no longer maps 'c' to open-calendar", () => {
+    expect(resolveDashboardShellHotkey({ key: "c" }).action).toBe("ignore");
   });
 
   it("builds dashboard deadline and bill calendar requests through stable shell commands", () => {
@@ -195,14 +197,21 @@ describe("dashboard shell model", () => {
         .toEqual({ action: "ignore" });
     });
 
-    it("resolves 1/2 tab switches only when no blocking overlay is open", () => {
+    it("resolves 1/2/3 tab switches only when no blocking overlay is open", () => {
       expect(resolveShellTabHotkey({ key: "1" })).toBe("dashboard");
       expect(resolveShellTabHotkey({ key: "2" })).toBe("inbox");
       expect(resolveShellTabHotkey({ key: "1", anyBlockingOverlayOpen: true })).toBeNull();
       expect(resolveShellTabHotkey({ key: "2", anyBlockingOverlayOpen: true })).toBeNull();
       expect(resolveShellTabHotkey({ key: "1", editableTarget: true })).toBeNull();
       expect(resolveShellTabHotkey({ key: "1", metaKey: true })).toBeNull();
-      expect(resolveShellTabHotkey({ key: "3" })).toBeNull();
+    });
+
+    it("maps '3' to calendar", () => {
+      expect(resolveShellTabHotkey({ key: "3" })).toBe("calendar");
+    });
+
+    it("suppresses '3' while a blocking overlay is open", () => {
+      expect(resolveShellTabHotkey({ key: "3", anyBlockingOverlayOpen: true })).toBeNull();
     });
   });
 

@@ -88,48 +88,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
     }
   });
 
-  it("blocks calendar close while the floating event editor is dirty", async () => {
-    window.innerWidth = 1900;
-    const onClose = vi.fn();
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={onClose}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-23"
-        eventsData={{
-          editable: true,
-          getEvents: () => [],
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.keyDown(document, { key: "c" });
-    const panel = await screen.findByTestId("calendar-floating-detail-panel");
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Planning block" },
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
-    // The dirty-close was blocked: onClose never fired and the same panel is still
-    // mounted. The transient shake-feedback pulse is cosmetic and was a load-flaky
-    // waitFor race; the durable block is what we assert.
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByTestId("calendar-floating-detail-panel")).toBe(panel);
-
-    fireEvent.click(within(panel).getByRole("button", { name: /^cancel$/i }));
-    await waitFor(() => {
-      expect(screen.queryByTestId("calendar-floating-detail-panel")).toBeNull();
-    });
-  });
-
   it("opens E-key event edits anchored with a visible caret", async () => {
     window.innerWidth = 1900;
 
@@ -397,65 +355,6 @@ describe("CalendarModal floating event edit workspace behavior", () => {
     expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
     expect(screen.getByTestId("calendar-event-editor-rail")).toBeTruthy();
     expect(screen.getByDisplayValue("Design review")).toBeTruthy();
-  });
-
-  it("does not replay a stale dirty-block shake on the next event edit workspace", async () => {
-    window.innerWidth = 1900;
-
-    render(wrapWithDashboard(
-      <CalendarModal
-        open
-        onClose={() => {}}
-        view="events"
-        onViewChange={() => {}}
-        focusDate="2026-04-20"
-        eventsData={{
-          editable: true,
-          getEvents: () => ([
-            {
-              id: "event-1",
-              title: "Design review",
-              startMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
-              endMs: new Date("2026-04-20T18:00:00.000Z").getTime(),
-              allDay: false,
-              color: "#4285f4",
-              writable: true,
-            },
-          ]),
-        }}
-        billsData={{}}
-        deadlinesData={{}}
-      />,
-    ));
-
-    fireEvent.click(within(screen.getByTestId("calendar-cell-20")).getByTestId("calendar-cell-item-chip"));
-    let panel = await screen.findByTestId("calendar-floating-detail-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    });
-    fireEvent.input(screen.getByTestId("calendar-event-title"), {
-      target: { value: "Design review revised" },
-    });
-
-    fireEvent.pointerDown(screen.getByRole("button", { name: /close/i }));
-    await flushAnimationFrame();
-    // Close was blocked because the editor is dirty: the panel stays in edit mode
-    // rather than closing. (Durable signal in place of the transient shake pulse.)
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-
-    fireEvent.click(screen.getByRole("button", { name: /cancel editor/i }));
-    await waitFor(() => {
-      expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("detail");
-    });
-
-    panel = screen.getByTestId("calendar-floating-detail-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: /edit details/i }));
-    await flushAnimationFrame();
-
-    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-floating-mode")).toBe("edit");
-    expect(screen.getByTestId("calendar-floating-detail-panel").querySelector("[data-calendar-floating-editor-feedback='active']")).toBeNull();
   });
 
   it("leaves event workspace popovers alone for ignored month-grid wheel gestures", async () => {

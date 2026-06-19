@@ -1,8 +1,14 @@
+/* eslint-disable react-refresh/only-export-components */
+// Exports both the component (default) and a shared `importCalendar` factory so
+// DashboardShell can warm the chunk and the lazy() mount below reuse one dynamic
+// import — the const-arrow export trips Fast Refresh, hence the file-level
+// disable (matching the convention in src/components/calendar/views/*).
 import { lazy, Suspense, useMemo } from "react";
 import { makeCalendarBillsData } from "./calendarBillsData";
 import { useUtilityPayLinks } from "@/hooks/useUtilityPayLinks";
 
-const CalendarModal = lazy(() => import("../calendar/CalendarModal"));
+export const importCalendar = () => import("../calendar/CalendarModal");
+const CalendarModal = lazy(importCalendar);
 
 function deadlineDataForCalendarModal(deadlines, isLoading) {
   return {
@@ -14,11 +20,7 @@ function deadlineDataForCalendarModal(deadlines, isLoading) {
 }
 
 export default function DashboardCalendarModalMount({
-  isMobile,
-  calendarMounted,
-  calendarOpen,
   calendarOpenRequestId,
-  dismissCalendar,
   calendarView,
   changeCalendarView,
   calendarFocus,
@@ -41,15 +43,13 @@ export default function DashboardCalendarModalMount({
     () => ({ ...(calendarBillsData || makeCalendarBillsData(liveData)), payLinksByScheduleId }),
     [calendarBillsData, liveData, payLinksByScheduleId],
   );
-  if (isMobile || !calendarMounted) return null;
   const seededDeadlines = calendarDeadlines ?? liveData?.liveDeadlines ?? {};
 
   return (
     <Suspense fallback={null}>
       <CalendarModal
-        open={calendarOpen}
+        open={true}
         openRequestId={calendarOpenRequestId}
-        onClose={dismissCalendar}
         view={calendarView}
         onViewChange={changeCalendarView}
         focusDate={calendarFocus}

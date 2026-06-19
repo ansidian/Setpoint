@@ -39,11 +39,9 @@ import useFloatingEditorRouting from "./useFloatingEditorRouting.js";
 import useCalendarDeadlineOverlay from "./useCalendarDeadlineOverlay.js";
 import useAgendaSyncPolicy from "./useAgendaSyncPolicy.js";
 import useCalendarModalHotkeys from "./useCalendarModalHotkeys.js";
-import useCalendarModalOutsideDismiss from "./useCalendarModalOutsideDismiss.js";
 import useCalendarModalSearch from "./useCalendarModalSearch.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
-import useCalendarModalWheelContainment from "./useCalendarModalWheelContainment.js";
 import useCalendarScrollSync from "./useCalendarScrollSync.js";
 import useViewportWidth from "./useViewportWidth.js";
 import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
@@ -72,7 +70,6 @@ const BILLS_FETCH_MONTH_RADIUS = 2;
 
 export default function useCalendarModalController({
   open,
-  onClose,
   view: requestedView,
   onViewChange,
   eventsData,
@@ -863,20 +860,6 @@ export default function useCalendarModalController({
     if (next !== view) handleViewChange(next);
   }, [view, availableCalendarViews, handleViewChange]);
 
-  const closeCalendarModal = useCallback(() => {
-    const current = floatingDetailRef.current;
-    if (
-      (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty)
-      || (eventEditorRef.current?.isEditorOpen && eventEditorRef.current?.isDirty)
-    ) {
-      shakeFloatingEditor();
-      return;
-    }
-    setFloatingDetail(null);
-    setSuppressFocusRing(false);
-    onClose();
-  }, [floatingDetailRef, onClose, setFloatingDetail, setSuppressFocusRing, shakeFloatingEditor]);
-
   function navigateMonth(dir, _options = {}) {
     const currentFloating = floatingDetailRef.current;
     const anyEditorOpen = (currentFloating?.open && (currentFloating.mode === "edit" || currentFloating.mode === "create"))
@@ -1194,16 +1177,10 @@ export default function useCalendarModalController({
     commitSyncSnapshotEffects(syncSnapshot);
   }, [syncSnapshot, open, view, openRequestId]);
 
-  const suppressOutsideClick = useCalendarModalOutsideDismiss({
-    open,
-    panelRef,
-    floatingDetail,
-    setFloatingDetail,
-    closeCalendarModal,
-    shakeFloatingEditor,
-  });
-
-  useCalendarModalWheelContainment({ open, scrollRef });
+  // Outside-dismiss removed with the modal chrome (the calendar is a tab now);
+  // a stable no-op keeps the header/scroll/floating-detail suppressor-registration
+  // calls inert without threading prop removals through those children (Phase 3 tidy).
+  const suppressOutsideClick = useCallback(() => {}, []);
 
   const viewModel = useCalendarModalViewModel({
     open,
@@ -1379,7 +1356,6 @@ export default function useCalendarModalController({
     view,
     viewYear,
     viewMonth,
-    closeCalendarModal,
     closeEventEditor,
     eventEditor,
     deadlineEditor,
@@ -1537,7 +1513,7 @@ export default function useCalendarModalController({
       cancelFloatingEditor, setFloatingEditorDirty, setFloatingEditorSaveRequest, shakeFloatingEditor,
       handleFloatingDeadlineSaved, handleFloatingDeadlineDeleted,
     },
-    handlers: { navigateMonth, jumpToMonth, handleViewChange, suppressOutsideClick, closeCalendarModal, closeEventEditor, focusDeadlineTask, onDisplayMonthChange: handleScrollDisplayMonth, onLabelMonthChange: handleScrollLabelMonth, onFetchSettle: handleScrollFetchSettle, navigateToDate: sync.navigateToDate, navigateToMonth: sync.navigateToMonth, navigateToToday: sync.navigateToToday },
+    handlers: { navigateMonth, jumpToMonth, handleViewChange, suppressOutsideClick, closeEventEditor, focusDeadlineTask, onDisplayMonthChange: handleScrollDisplayMonth, onLabelMonthChange: handleScrollLabelMonth, onFetchSettle: handleScrollFetchSettle, navigateToDate: sync.navigateToDate, navigateToMonth: sync.navigateToMonth, navigateToToday: sync.navigateToToday },
     search: calendarSearchShell,
     availableCalendarViews,
   });
