@@ -25,6 +25,13 @@ const billsView = {
   getItemId: (bill) => bill?.scheduleId || bill?.id,
   matchesItemId: billMatchesItemId,
   label: "Bills",
+  // Bills' compute keys itemsByDate by full date across the entire fetched
+  // range, not by day-of-month within the active month (the way events are
+  // windowed). So the infinite-scroll grid can hand that one map to every
+  // mounted month instead of withholding it from non-active months — which is
+  // what made chips (including paid ones) vanish once scrolled past the
+  // active + cached pair.
+  monthAgnosticItemsByDate: true,
 };
 
 export default billsView;

@@ -50,6 +50,34 @@ function sameInputs(prior, inputs) {
   return recorded.overlay === inputs.overlay;
 }
 
+// Resolves the four data props one mounted month block hands to its CalendarGrid.
+// The active month gets the live computed data; the one-deep cached month reuses
+// its last snapshot; every other mounted month renders empty — EXCEPT when the
+// active view's itemsByDate is month-agnostic. Bills expand their whole fetched
+// range into a single date-keyed map (unlike events, which are windowed per
+// month), so every mounted month shares that map; without it, chips vanish once
+// the viewport scrolls past the active + cached pair.
+export function resolveMountedMonthData({
+  isActive,
+  isCached,
+  cached,
+  active,
+  shareItemsByDate = false,
+  empty = {},
+}) {
+  if (isActive) return active;
+  const base = isCached && cached
+    ? {
+        viewData: cached.viewData,
+        itemsByDay: cached.itemsByDay,
+        itemsByDate: cached.itemsByDate,
+        cellMetaByDate: cached.cellMetaByDate,
+      }
+    : { viewData: null, itemsByDay: empty, itemsByDate: empty, cellMetaByDate: empty };
+  if (shareItemsByDate) base.itemsByDate = active.itemsByDate;
+  return base;
+}
+
 // Builds the preview entry map for the mounted month window, reusing entries
 // from `previous` when a month's inputs are identity-unchanged. Entry field
 // identity is what keeps the memoized month grids from re-rendering on every

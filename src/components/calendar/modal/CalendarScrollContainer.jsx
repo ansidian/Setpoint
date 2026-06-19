@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarGrid from "./CalendarGrid.jsx";
 import { getMonthData } from "../calendarDateUtils.js";
-import { buildMonthPreviewEntries } from "./calendarMonthPreviewModel.js";
+import { buildMonthPreviewEntries, resolveMountedMonthData } from "./calendarMonthPreviewModel.js";
 import {
   monthBlockHeight,
   monthIndexToDate,
@@ -466,6 +466,9 @@ export default function CalendarScrollContainer({
   const spacerRowPitch = layout.cellHeight + layout.gridGap;
   const spacerBackground = `repeating-linear-gradient(to bottom, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent ${spacerRowPitch}px)`;
 
+  const activeMonthData = { viewData, itemsByDay, itemsByDate, cellMetaByDate };
+  const shareItemsByDate = !!activeView?.monthAgnosticItemsByDate;
+
   const blocks = [];
   for (let i = -SCROLL_RANGE; i <= SCROLL_RANGE; i++) {
     const { year, month } = monthIndexToDate(i, refYear, refMonth);
@@ -494,6 +497,14 @@ export default function CalendarScrollContainer({
     const preview = hasFullData ? null : previewByIndex.get(i);
     const previewEvents = preview?.events ?? null;
     const monthDeadlineOverlay = preview ? preview.deadlineOverlay : null;
+    const monthData = resolveMountedMonthData({
+      isActive,
+      isCached,
+      cached,
+      active: activeMonthData,
+      shareItemsByDate,
+      empty: emptyObj,
+    });
 
     blocks.push(
       <div
@@ -522,10 +533,10 @@ export default function CalendarScrollContainer({
           isActiveMonth={isActive}
           previewEvents={previewEvents}
           previewDeadlineOverlay={monthDeadlineOverlay}
-          viewData={isActive ? viewData : isCached ? cached.viewData : null}
-          itemsByDay={isActive ? itemsByDay : isCached ? cached.itemsByDay : emptyObj}
-          itemsByDate={isActive ? itemsByDate : isCached ? cached.itemsByDate : emptyObj}
-          cellMetaByDate={isActive ? cellMetaByDate : isCached ? cached.cellMetaByDate : emptyObj}
+          viewData={monthData.viewData}
+          itemsByDay={monthData.itemsByDay}
+          itemsByDate={monthData.itemsByDate}
+          cellMetaByDate={monthData.cellMetaByDate}
           selectedDay={selectedDay}
           selectedDateKey={selectedDateKey}
           selectedItemId={selectedItemId}
