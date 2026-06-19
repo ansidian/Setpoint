@@ -4,7 +4,10 @@ import { isDemoMode } from "../../demo/config.js";
 // The #tag branch uses a (?<!\S) lookbehind so only start-or-whitespace-anchored
 // tags become chips — matching parseTags() in notesModel.js (so a "#" mid-word like
 // issue#123 is plain text, not a chip that wouldn't actually filter).
-const INLINE_RE = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|_([^_]+)_|`([^`]+)`|(?<!\S)#([a-z0-9][\w-]*)|https?:\/\/[^\s]+)/gi;
+// The final [label](url) branch (groups 8/9) is appended LAST so the earlier group
+// indices stay stable; its URL is restricted to http(s) so a [x](javascript:…) can
+// never render as a live <a> (it falls through to literal text instead).
+const INLINE_RE = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|_([^_]+)_|`([^`]+)`|(?<!\S)#([a-z0-9][\w-]*)|https?:\/\/[^\s]+|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))/gi;
 
 function inlineNodes(text, accent, keyBase) {
   const out = [];
@@ -23,6 +26,12 @@ function inlineNodes(text, accent, keyBase) {
     else if (m[7] != null) out.push(
       <span key={k} data-note-tag={m[7].toLowerCase()} style={{ color: accent || "var(--ea-accent, #cba6da)", background: "rgba(203,166,218,0.12)", borderRadius: 999, padding: "1px 6px", fontSize: "0.92em" }}>#{m[7]}</span>,
     );
+    else if (m[8] != null) {
+      // [label](url) — url is http(s)-only by the regex, so it is safe to render.
+      out.push(isDemoMode()
+        ? m[8]
+        : <a key={k} href={m[9]} target="_blank" rel="noopener noreferrer" style={{ color: accent || "var(--ea-accent, #cba6da)", textDecoration: "underline", textUnderlineOffset: 2 }} onClick={(e) => e.stopPropagation()}>{m[8]}</a>);
+    }
     else if (m[0].startsWith("http")) {
       out.push(isDemoMode()
         ? m[0]

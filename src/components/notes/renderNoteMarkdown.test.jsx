@@ -23,6 +23,18 @@ describe("renderNoteMarkdown", () => {
     expect(link.getAttribute("href")).toBe("https://example.com");
   });
 
+  it("renders a [label](url) markdown link with the label as the anchor text", () => {
+    render(<div>{renderNoteMarkdown("see [Anthropic](https://anthropic.com) docs")}</div>);
+    const link = screen.getByRole("link", { name: "Anthropic" });
+    expect(link.getAttribute("href")).toBe("https://anthropic.com");
+  });
+
+  it("does NOT render a javascript: link — leaves it as literal text (XSS-safe)", () => {
+    const { container } = render(<div>{renderNoteMarkdown("[x](javascript:alert(1))")}</div>);
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("javascript:alert(1)");
+  });
+
   it("renders a leading checkbox and toggles via onToggleCheckbox", () => {
     const onToggle = vi.fn();
     render(<div>{renderNoteMarkdown("- [ ] buy milk", { onToggleCheckbox: onToggle })}</div>);
@@ -35,6 +47,23 @@ describe("renderNoteMarkdown", () => {
   it("does not chip a # mid-word (matches parseTags anchoring)", () => {
     render(<div>{renderNoteMarkdown("see issue#123 later")}</div>);
     expect(screen.queryByText("#123")).toBeNull();
+  });
+
+  it("treats '# Heading' (space after #) as a heading, not a tag", () => {
+    // The heading and #tag grammars are disjoint: '# x' is a heading, '#x' is a tag.
+    const { container } = render(<div>{renderNoteMarkdown("# Heading")}</div>);
+    expect(screen.getByText("Heading")).toBeTruthy();
+    expect(container.querySelector("[data-note-tag]")).toBeNull();
+  });
+
+  it("keeps an inline #tag chip inside a heading line", () => {
+    const { container } = render(<div>{renderNoteMarkdown("# My #project notes")}</div>);
+    expect(container.querySelector('[data-note-tag="project"]')).toBeTruthy();
+  });
+
+  it("chips a numeric #tag like #5", () => {
+    render(<div>{renderNoteMarkdown("ship #5 today")}</div>);
+    expect(screen.getByText("#5").getAttribute("data-note-tag")).toBe("5");
   });
 
   it("renderer and toggleCheckboxLine agree on checkbox index, ignoring malformed boxes", () => {

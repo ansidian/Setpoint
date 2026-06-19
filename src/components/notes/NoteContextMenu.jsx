@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Pencil, ListPlus, Archive, X } from "lucide-react";
+import { Pencil, ListPlus, Archive, ArchiveRestore, X } from "lucide-react";
 
 const MENU_WIDTH = 184;
 const ROW_H = 34;
@@ -34,9 +34,10 @@ function MenuItem({ icon, label, onClick, danger }) {
   );
 }
 
-export default function NoteContextMenu({ x, y, onClose, onEdit, onPromote, onArchive, onDelete }) {
+export default function NoteContextMenu({ x, y, onClose, onEdit, onPromote, onArchive, onUnarchive, onDelete, count = 0 }) {
   const ref = useRef(null);
   const { left, top } = clamp(x, y);
+  const suffix = count > 1 ? ` ${count}` : ""; // bulk menu: "Archive 3", "Delete 3"
 
   useEffect(() => {
     function onPointer(e) { if (!ref.current?.contains(e.target)) onClose(); }
@@ -67,8 +68,9 @@ export default function NoteContextMenu({ x, y, onClose, onEdit, onPromote, onAr
     >
       {onEdit && <MenuItem icon={Pencil} label="Edit" onClick={run(onEdit)} />}
       {onPromote && <MenuItem icon={ListPlus} label="Add to Todoist" onClick={run(onPromote)} />}
-      {onArchive && <MenuItem icon={Archive} label="Archive" onClick={run(onArchive)} />}
-      {onDelete && <MenuItem icon={X} label="Delete" onClick={run(onDelete)} danger />}
+      {onArchive && <MenuItem icon={Archive} label={`Archive${suffix}`} onClick={run(onArchive)} />}
+      {onUnarchive && <MenuItem icon={ArchiveRestore} label={`Unarchive${suffix}`} onClick={run(onUnarchive)} />}
+      {onDelete && <MenuItem icon={X} label={`Delete${suffix}`} onClick={run(onDelete)} danger />}
     </div>,
     document.body,
   );

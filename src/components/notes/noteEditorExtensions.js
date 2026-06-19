@@ -1,5 +1,5 @@
 import { EditorView, Decoration, ViewPlugin, WidgetType, keymap, placeholder as cmPlaceholder } from "@codemirror/view";
-import { RangeSetBuilder, Prec } from "@codemirror/state";
+import { RangeSetBuilder, Prec, EditorSelection } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { autocompletion, completionStatus } from "@codemirror/autocomplete";
@@ -24,6 +24,141 @@ export function toggleCheckboxLine(content, index) {
   return lines.join("\n");
 }
 
+// Toggle a symmetric inline marker (`**`, `*`, `` ` ``) around every selection
+// range — the primitive behind the Cmd/Ctrl+B/I/E hotkeys. Pure: takes a state,
+// returns a transaction spec for state.update(). Behaviour per range:
+//   - markers already hug the selection (just outside, or inside the selection) -> unwrap
+//   - otherwise -> wrap; an empty selection inserts the pair and drops the caret between
+export function toggleMarkerWrap(state, marker) {
+  const ml = marker.length;
+  return state.changeByRange((range) => {
+    const { from, to } = range;
+    const before = state.sliceDoc(Math.max(0, from - ml), from);
+    const after = state.sliceDoc(to, Math.min(state.doc.length, to + ml));
+    // markers sit just outside the selection -> strip them
+    if (before === marker && after === marker) {
+      return {
+        changes: [{ from: from - ml, to: from }, { from: to, to: to + ml }],
+        range: EditorSelection.range(from - ml, to - ml),
+      };
+    }
+    const sel = state.sliceDoc(from, to);
+    // selection already contains its own markers -> strip them
+    if (sel.length >= 2 * ml && sel.startsWith(marker) && sel.endsWith(marker)) {
+      return {
+        changes: { from, to, insert: sel.slice(ml, sel.length - ml) },
+        range: EditorSelection.range(from, to - 2 * ml),
+      };
+    }
+    return {
+      changes: { from, to, insert: marker + sel + marker },
+      range: from === to
+        ? EditorSelection.cursor(from + ml)
+        : EditorSelection.range(from + ml, to + ml),
+    };
+  });
+}
+
+function wrapCommand(marker) {
+  return (view) => {
+    if (view.state.readOnly) return false;
+    view.dispatch(view.state.update(toggleMarkerWrap(view.state, marker), {
+      scrollIntoView: true,
+      userEvent: "input.format",
+    }));
+    return true;
+  };
+}
+
+// Pure: given the currently-selected text, return the [label](url) snippet to
+// insert and the caret offset (relative to the snippet start) to drop the cursor.
+//   - empty selection  -> "[]()", caret inside the [] so you type the label first
+//   - selection is a URL -> "[](url)", caret inside the [] to type the label
+//   - selection is text  -> "[text]()", caret inside the () to type the url
+export function linkInsertion(selText) {
+  const sel = selText || "";
+  if (!sel) return { text: "[]()", caret: 1 };
+  if (/^https?:\/\/\S+$/i.test(sel.trim())) return { text: `[](${sel})`, caret: 1 };
+  const text = `[${sel}]()`;
+  return { text, caret: text.length - 1 };
+}
+
+function linkCommand(view) {
+  if (view.state.readOnly) return false;
+  const tr = view.state.changeByRange((range) => {
+    const { text, caret } = linkInsertion(view.state.sliceDoc(range.from, range.to));
+    return {
+      changes: { from: range.from, to: range.to, insert: text },
+      range: EditorSelection.cursor(range.from + caret),
+    };
+  });
+  view.dispatch(view.state.update(tr, { scrollIntoView: true, userEvent: "input.link" }));
+  return true;
+}
+
+// Formatting hotkeys. Prec.high so they deterministically beat the defaultKeymap
+// (Mod-i = selectParentSyntax) and historyKeymap — an intentional override; those
+// commands are low value in a notes field. Mod-u is intentionally absent: markdown
+// has no underline, and the rendered subset (renderNoteMarkdown.jsx) has no token
+// for it. Mod-k inserts a [label](url) link. Mod- = Cmd on macOS, Ctrl elsewhere.
+export const formattingKeymap = Prec.high(keymap.of([
+  { key: "Mod-b", run: wrapCommand("**"), preventDefault: true },
+  { key: "Mod-i", run: wrapCommand("*"), preventDefault: true },
+  { key: "Mod-e", run: wrapCommand("`"), preventDefault: true },
+  { key: "Mod-k", run: linkCommand, preventDefault: true },
+]));
+
+// Enter behavior on a checkbox line: continue the list, or exit on an empty item.
+// Pure: given a line's text, returns null (not a checkbox), { type: "exit" }, or
+// { type: "continue", insert } where `insert` is dropped at the cursor.
+export function checkboxEnterAction(lineText) {
+  const m = String(lineText).match(/^(\s*-\s\[(?: |x|X)\]\s)(.*)$/);
+  if (!m) return null;
+  if (m[2].trim() === "") return { type: "exit" };
+  const indent = m[1].match(/^\s*/)[0];
+  return { type: "continue", insert: `\n${indent}- [ ] ` };
+}
+
+// Auto-convert: a line-leading `[ ]` or `[]` (then a space) becomes a standard
+// `- [ ] ` task, so notes stay portable GFM while the trigger stays intuitive.
+// Pure: given the text from line-start to the cursor, returns null or { prefix }.
+export function checkboxAutoConvert(beforeCursor) {
+  const m = String(beforeCursor).match(/^(\s*)\[ ?\]$/);
+  if (!m) return null;
+  return { prefix: `${m[1]}- [ ] ` };
+}
+
+// Enter on a checkbox line. Single empty caret only — selections / multi-cursor
+// fall through to the default (submit / newline).
+function checkboxEnterCommand(view) {
+  const { state } = view;
+  if (state.selection.ranges.length !== 1) return false;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const line = state.doc.lineAt(range.head);
+  const action = checkboxEnterAction(line.text);
+  if (!action) return false;
+  if (action.type === "exit") {
+    view.dispatch({ changes: { from: line.from, to: line.to, insert: "" }, selection: { anchor: line.from }, userEvent: "delete", scrollIntoView: true });
+  } else {
+    view.dispatch({ changes: { from: range.head, insert: action.insert }, selection: { anchor: range.head + action.insert.length }, userEvent: "input", scrollIntoView: true });
+  }
+  return true;
+}
+
+// Space after a line-leading `[ ]`/`[]` → expand to `- [ ] `.
+function checkboxConvertCommand(view) {
+  const { state } = view;
+  if (state.selection.ranges.length !== 1) return false;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const line = state.doc.lineAt(range.head);
+  const conv = checkboxAutoConvert(state.sliceDoc(line.from, range.head));
+  if (!conv) return false;
+  view.dispatch({ changes: { from: line.from, to: range.head, insert: conv.prefix }, selection: { anchor: line.from + conv.prefix.length }, userEvent: "input", scrollIntoView: true });
+  return true;
+}
+
 // Autocomplete source: fires inside a `#token`, offers existing tags by prefix.
 // Free tags are still allowed (typing past the menu creates a new tag).
 export function makeTagCompletionSource(getTags) {
@@ -44,6 +179,9 @@ export function makeTagCompletionSource(getTags) {
 const MARKER_TYPES = new Set(["EmphasisMark", "CodeMark", "HeaderMark"]);
 const STYLED_PARENTS = { StrongEmphasis: "cm-note-strong", Emphasis: "cm-note-em", InlineCode: "cm-note-code" };
 const HEADING_TYPES = new Set(["ATXHeading1", "ATXHeading2", "ATXHeading3", "ATXHeading4", "ATXHeading5", "ATXHeading6"]);
+// In a [label](url) Link, hide the brackets/parens and the url off-cursor so just
+// the styled label shows — the live-preview equivalent of renderNoteMarkdown's <a>.
+const LINK_HIDE = new Set(["LinkMark", "URL"]);
 
 function cursorInside(state, from, to) {
   return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
@@ -63,9 +201,15 @@ export const livePreview = ViewPlugin.fromClass(
             const cls = STYLED_PARENTS[node.name];
             if (cls) ranges.push({ from: node.from, to: node.to, deco: Decoration.mark({ class: cls }) });
             else if (HEADING_TYPES.has(node.name)) ranges.push({ from: node.from, to: node.to, deco: Decoration.mark({ class: "cm-note-heading" }) });
+            else if (node.name === "Link") ranges.push({ from: node.from, to: node.to, deco: Decoration.mark({ class: "cm-note-link" }) });
             if (MARKER_TYPES.has(node.name)) {
               const parent = node.node.parent;
               if (parent && !cursorInside(state, parent.from, parent.to)) {
+                ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({}) });
+              }
+            } else if (LINK_HIDE.has(node.name)) {
+              const parent = node.node.parent;
+              if (parent && parent.name === "Link" && !cursorInside(state, parent.from, parent.to)) {
                 ranges.push({ from: node.from, to: node.to, deco: Decoration.replace({}) });
               }
             }
@@ -111,6 +255,9 @@ export const tagChips = ViewPlugin.fromClass(
 export function noteTheme(maxHeight) {
   return EditorView.theme({
     "&": { color: "#cdd6f4", fontSize: "13px", background: "transparent" },
+    // Match the notes search input's ::placeholder (.notes-search-input in index.css)
+    // so both placeholders read identically; CM's base theme would otherwise use #888.
+    ".cm-placeholder": { color: "var(--color-text-faint)" },
     ".cm-content": { fontFamily: "inherit", padding: "9px 12px", caretColor: "#cdd6f4" },
     ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.5", overflowY: "auto", maxHeight: `${maxHeight || 180}px` },
     "&.cm-focused": { outline: "none" },
@@ -118,6 +265,7 @@ export function noteTheme(maxHeight) {
     ".cm-note-em": { fontStyle: "italic" },
     ".cm-note-code": { fontFamily: "ui-monospace, monospace", background: "rgba(255,255,255,0.06)", borderRadius: "4px", padding: "0 3px" },
     ".cm-note-heading": { fontWeight: "700" },
+    ".cm-note-link": { color: "var(--ea-accent, #cba6da)", textDecoration: "underline", textUnderlineOffset: "2px" },
     ".cm-note-tag": { color: "var(--ea-accent, #cba6da)", background: "rgba(203,166,218,0.12)", borderRadius: "999px", padding: "0 4px" },
     ".cm-tooltip-autocomplete": { background: "rgba(24,24,37,0.98)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "8px" },
     ".cm-tooltip-autocomplete ul li[aria-selected]": { background: "rgba(203,166,218,0.16)", color: "#cdd6f4" },
@@ -193,6 +341,7 @@ export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHe
       key: "Enter",
       run: (view) => {
         if (completionStatus(view.state) === "active") return false; // let autocomplete accept
+        if (checkboxEnterCommand(view)) return true; // continue / exit a checkbox list
         const { submitOnEnter, onSubmit } = callbacksRef.current;
         if (!submitOnEnter) return false; // fall through to newline
         onSubmit?.(view.state.doc.toString());
@@ -200,6 +349,7 @@ export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHe
       },
     },
     { key: "Shift-Enter", run: () => false }, // default newline
+    { key: "Space", run: checkboxConvertCommand }, // `[ ]` + space → `- [ ] `
     { key: "Escape", run: () => { callbacksRef.current.onCancel?.(); return true; } },
   ]));
 
@@ -212,6 +362,7 @@ export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHe
     checkboxes,
     autocompletion({ override: [makeTagCompletionSource(() => callbacksRef.current.getTags?.() || [])] }),
     submitKeymap,
+    formattingKeymap,
     keymap.of([...defaultKeymap, ...historyKeymap]),
     cmPlaceholder(placeholderText || ""),
     noteTheme(maxHeight),

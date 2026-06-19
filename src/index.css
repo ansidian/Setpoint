@@ -168,6 +168,23 @@ body {
   font-family: var(--serif-choice, "Instrument Serif"), Georgia, serif;
 }
 
+/* Notes search input: match the CM capture field placeholder (.cm-placeholder in
+   noteEditorExtensions.js noteTheme) so both notes placeholders read identically.
+   opacity:1 stops Firefox/UA from dimming the already-faint token further. */
+.notes-search-input::placeholder {
+  color: var(--color-text-faint);
+  opacity: 1;
+}
+
+/* Note rows: subtle hover lift. box-shadow only — the row is the dnd-kit sortable
+   root and owns `transform` inline, so a hover translate would fight drag. */
+.note-row {
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+}
+.note-row:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+
 [data-calendar-focus-ring="true"]:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ea-accent) 72%, transparent);
   outline-offset: 2px;
