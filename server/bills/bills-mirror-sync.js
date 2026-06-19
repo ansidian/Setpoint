@@ -9,6 +9,12 @@ import {
 
 const BILL_MIRROR_LOOKBACK_DAYS = 30;
 const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
+// How far back cleared (paid) occurrences are retained after their schedule rolls
+// forward, so the calendar bill view keeps paid history instead of dropping it.
+// Bounded to the displayable window: the bills range route rejects months older
+// than 12 months (see validateCalendarRange enforceHistoryWindow), so retaining
+// anything older would be dead weight.
+const BILL_MIRROR_PAID_HISTORY_MONTHS = 12;
 const BILLS_CURRENT_LOOKBACK_DAYS = 30;
 const BILLS_CURRENT_LOOKAHEAD_DAYS = 90;
 export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -546,6 +552,26 @@ async function refreshBillsMirrorInner(userId, {
           args: [userId, ...ids],
         }
       : { sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] });
+    // Occurrences get a history-aware prune: a paid bill whose schedule has rolled
+    // forward is no longer in the fresh set, but we keep its now-past occurrence so
+    // the calendar bill view retains cleared history. Spare rows that are paid and
+    // dated in the recent past (within the retention window); still prune unpaid
+    // orphans and paid history older than the window so the table stays bounded.
+    const today = todayYmd(now);
+    const paidHistoryStart = addMonthsYmd(today, -BILL_MIRROR_PAID_HISTORY_MONTHS);
+    const retainPaidHistory = "NOT (paid = 1 AND occurrence_date < ? AND occurrence_date >= ?)";
+    const pruneOccurrencesQuery = (ids) => (ids.length
+      ? {
+          sql: `DELETE FROM ea_bill_occurrence_mirror
+                WHERE user_id = ?
+                  AND occurrence_id NOT IN (${ids.map(() => "?").join(",")})
+                  AND ${retainPaidHistory}`,
+          args: [userId, ...ids, today, paidHistoryStart],
+        }
+      : {
+          sql: `DELETE FROM ea_bill_occurrence_mirror WHERE user_id = ? AND ${retainPaidHistory}`,
+          args: [userId, today, paidHistoryStart],
+        });
     const queries = [
       {
         sql: `INSERT INTO ea_bills_mirror_state
@@ -598,7 +624,7 @@ async function refreshBillsMirrorInner(userId, {
       // Prune rows no longer in the fresh set (replaces the unconditional
       // delete-all above). Empty fresh set -> delete all this user's rows.
       pruneQuery("ea_bill_schedule_mirror", "schedule_id", freshScheduleIds),
-      pruneQuery("ea_bill_occurrence_mirror", "occurrence_id", freshOccurrenceIds),
+      pruneOccurrencesQuery(freshOccurrenceIds),
       {
         sql: `UPDATE ea_bills_mirror_state
               SET status = 'current',

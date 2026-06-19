@@ -239,6 +239,81 @@ describe("Bills mirror", () => {
     ]);
   });
 
+  it("retains cleared (paid) past occurrences instead of pruning them when a schedule advances", async () => {
+    // A paid bill whose schedule has rolled forward is no longer in the fresh set,
+    // so the orphan prune would normally delete its now-past occurrence. The bill
+    // view should keep cleared history, so the occurrence prune must spare rows that
+    // are paid and dated in the past, within the retention window.
+    const actualMetadata = {
+      accounts: [{ id: "acct-1", name: "Checking" }],
+      payees: [{ id: "payee-1", name: "Mortgage Co" }],
+      payeeMap: { "payee-1": "Mortgage Co" },
+      categories: [],
+      schedules: [
+        {
+          id: "sched-1",
+          name: "Mortgage",
+          next_date: "2026-06-10",
+          type: "bill",
+          conditions: [
+            { field: "payee", value: "payee-1" },
+            { field: "amount", value: -150000 },
+          ],
+        },
+      ],
+      recentTransactions: [],
+    };
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
+    mockDb.batch.mockResolvedValueOnce([]);
+    mockDb.execute.mockResolvedValueOnce(rowResult());
+
+    await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    const occurrencePrune = mockDb.batch.mock.calls[0][0].find((entry) =>
+      /DELETE FROM ea_bill_occurrence_mirror/i.test(entry.sql) && /occurrence_id NOT IN/i.test(entry.sql),
+    );
+    expect(occurrencePrune).toBeTruthy();
+    // Orphans are still pruned, but cleared past occurrences within retention are spared.
+    expect(occurrencePrune.sql).toMatch(/paid = 1/i);
+    // Retention is bounded to the displayable 12-month window: today and today-12mo.
+    expect(occurrencePrune.args).toEqual(expect.arrayContaining(["2026-05-06", "2025-05-06"]));
+  });
+
+  it("retains cleared past occurrences even when the fresh occurrence set is empty", async () => {
+    // The budget has schedules but none are bill-like (all income), so the fresh
+    // occurrence set is empty. The empty-set prune must still spare paid history
+    // rather than unconditionally wiping every occurrence row for the user.
+    const actualMetadata = {
+      accounts: [{ id: "acct-1", name: "Checking" }],
+      payees: [],
+      categories: [],
+      schedules: [
+        { id: "paycheck", name: "Paycheck", next_date: "2026-05-15", type: "income", conditions: [] },
+      ],
+      recentTransactions: [],
+    };
+    mockActualLocal.readLocalActualMetadata.mockResolvedValueOnce(actualMetadata);
+    mockDb.batch.mockResolvedValueOnce([]);
+    mockDb.execute.mockResolvedValueOnce(rowResult());
+
+    await refreshBillsMirror("u1", {
+      actualBudgetUrl: "https://actual.example.test",
+      now: new Date("2026-05-06T12:00:00.000Z"),
+    });
+
+    const occurrencePrune = mockDb.batch.mock.calls[0][0].find((entry) =>
+      /DELETE FROM ea_bill_occurrence_mirror/i.test(entry.sql),
+    );
+    expect(occurrencePrune).toBeTruthy();
+    // No unconditional wipe: paid history within retention is spared.
+    expect(occurrencePrune.sql).toMatch(/paid = 1/i);
+    expect(occurrencePrune.sql).not.toMatch(/occurrence_id NOT IN/i);
+    expect(occurrencePrune.args).toEqual(["u1", "2026-05-06", "2025-05-06"]);
+  });
+
   it("prefers the cached local Actual projection for mirror refreshes", async () => {
     const syncedMetadata = {
       accounts: [],
