@@ -14,7 +14,7 @@ const ICONS = {
   trash: Trash2,
 };
 
-export default function UtilityStatusButton({ data, suppressOutsideClick }) {
+export default function UtilityStatusButton({ data }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef(null);
@@ -56,16 +56,6 @@ export default function UtilityStatusButton({ data, suppressOutsideClick }) {
     document.addEventListener("pointerdown", handle);
     return () => document.removeEventListener("pointerdown", handle);
   }, [open]);
-
-  useEffect(() => {
-    if (!suppressOutsideClick) return undefined;
-    if (open) {
-      suppressOutsideClick((target) => popoverRef.current?.contains(target));
-    } else {
-      suppressOutsideClick(null);
-    }
-    return () => suppressOutsideClick(null);
-  }, [open, suppressOutsideClick]);
 
   return (
     <>

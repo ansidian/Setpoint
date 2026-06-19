@@ -1,6 +1,6 @@
 # Calendar Map (router)
 
-Calendar UI root: `CalendarModal.jsx` is the entry point, delegating state to `src/hooks/calendar/` and rendering through the sub-areas below. Root-level files own the rail system (overview/detail panels framing the grid), date/layout utilities, and shared test infrastructure. Do not add calendar files outside this tree or `src/hooks/calendar/`.
+Calendar UI root: `CalendarModal.jsx` is the entry point (named for history; the calendar now mounts as a persistent `KeepAliveTab` in `DashboardShell`, not a modal overlay), delegating state to `src/hooks/calendar/` and rendering through the sub-areas below. Root-level files own the rail system (overview/detail panels framing the grid), date/layout utilities, and shared test infrastructure. Do not add calendar files outside this tree or `src/hooks/calendar/`.
 
 ## Sub-maps
 
@@ -11,7 +11,7 @@ Calendar UI root: `CalendarModal.jsx` is the entry point, delegating state to `s
 ## Files
 
 ### Entry + rails
-- `CalendarModal.jsx` — entry point delegating to the modal controller hook
+- `CalendarModal.jsx` — entry point delegating to the calendar controller hook
 - `CalendarOverviewRail.jsx` — month navigator with stats and loading frame
 - `CalendarRailPrimitives.jsx` — reusable rail components and utilities
 - `CalendarRailStates.jsx` — rail state transitions: loading, expanded, collapsed
@@ -47,4 +47,4 @@ Calendar UI root: `CalendarModal.jsx` is the entry point, delegating state to `s
 ## Related
 
 - `src/hooks/calendar/` — calendar state and models (see its map)
-- `src/components/dashboard/DashboardCalendarModalMount.jsx` — where the modal mounts
+- `src/components/dashboard/DashboardCalendarModalMount.jsx` — where the calendar tab mounts

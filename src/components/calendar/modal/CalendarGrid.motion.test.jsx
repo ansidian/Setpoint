@@ -78,7 +78,6 @@ function buildGridProps(itemsByDay, overrides = {}) {
       cellHeight: CELL_HEIGHT,
       gridGap: 8,
     },
-    suppressOutsideClick: vi.fn(),
     showEventsLoadingState: false,
     buildFallbackDayState,
     closeEventEditor: vi.fn(),

@@ -45,7 +45,6 @@ export default function CalendarScrollContainer({
   eventQuickActions,
   deadlineQuickActions,
   ghostPreview,
-  suppressOutsideClick,
   onOpenFloatingDetail,
   onCloseFloatingDetail,
   floatingDetailOpen,
@@ -549,7 +548,6 @@ export default function CalendarScrollContainer({
           eventQuickActions={eventQuickActions}
           deadlineQuickActions={deadlineQuickActions}
           ghostPreview={isActive ? ghostPreview : null}
-          suppressOutsideClick={suppressOutsideClick}
           onOpenFloatingDetail={onOpenFloatingDetail}
           onCloseFloatingDetail={onCloseFloatingDetail}
           floatingDetailOpen={floatingDetailOpen}
