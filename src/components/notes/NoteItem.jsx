@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Archive, ListPlus } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { linkifyText } from "./notesUtils.jsx";
+import NoteContextMenu from "./NoteContextMenu.jsx";
 
 const EDIT_TEXTAREA_MAX_HEIGHT = 96;
 
@@ -12,7 +13,7 @@ export default function NoteItem({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
-  const [deleteActive, setDeleteActive] = useState(false);
+  const [menu, setMenu] = useState(null); // { x, y } | null
   const textareaRef = useRef(null);
   const promoteRef = useRef(null);
 
@@ -47,6 +48,8 @@ export default function NoteItem({
   const cancelEdit = useCallback(() => {
     setEditing(false);
   }, []);
+
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -101,6 +104,7 @@ export default function NoteItem({
       {...listeners}
       onKeyDown={handleRowKeyDown}
       onPointerDownCapture={handlePointerDownCapture}
+      onContextMenu={(e) => { if (editing) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
       style={{
         ...style,
         display: "flex",
@@ -199,49 +203,33 @@ export default function NoteItem({
         {age && (
           <span style={{ fontSize: 10, color: "var(--color-text-faint)", fontVariantNumeric: "tabular-nums" }}>{age}</span>
         )}
-        {onPromote && (
-          <button
-            ref={promoteRef}
-            type="button"
-            aria-label="Add to Todoist"
-            aria-keyshortcuts="t"
-            onClick={() => onPromote(note, promoteRef)}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#a6e3a1")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-            onFocus={(e) => (e.currentTarget.style.color = "#a6e3a1")}
-            onBlur={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-          >
-            <ListPlus size={13} strokeWidth={2.2} />
-          </button>
-        )}
-        {onArchive && (
-          <button
-            type="button"
-            aria-label="Archive note"
-            onClick={() => onArchive(note.id)}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#cba6da")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-            onFocus={(e) => (e.currentTarget.style.color = "#cba6da")}
-            onBlur={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-          >
-            <Archive size={13} strokeWidth={2.2} />
-          </button>
-        )}
         <button
+          ref={promoteRef}
           type="button"
-          aria-label="Delete note"
-          onClick={() => onDelete(note.id)}
-          style={{ background: "none", border: "none", color: deleteActive ? "#f38ba8" : "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
-          onMouseEnter={() => setDeleteActive(true)}
-          onMouseLeave={() => setDeleteActive(false)}
-          onFocus={() => setDeleteActive(true)}
-          onBlur={() => setDeleteActive(false)}
+          aria-label="Note actions"
+          aria-haspopup="menu"
+          aria-expanded={menu ? "true" : "false"}
+          onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 4, y: r.bottom + 4 }); }}
+          style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#cdd6f4")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
+          onFocus={(e) => (e.currentTarget.style.color = "#cdd6f4")}
+          onBlur={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
         >
-          <X size={12} strokeWidth={2.2} />
+          <MoreHorizontal size={15} strokeWidth={2.2} />
         </button>
       </div>
+      {menu && (
+        <NoteContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={closeMenu}
+          onEdit={startEdit}
+          onPromote={onPromote ? () => onPromote(note, promoteRef) : undefined}
+          onArchive={onArchive ? () => onArchive(note.id) : undefined}
+          onDelete={() => onDelete(note.id)}
+        />
+      )}
     </div>
   );
 }
