@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, renderHook, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLayoutEffect, useRef } from "react";
 import AddTaskPanel from "../AddTaskPanel";
+import useAddTaskPanelController from "./useAddTaskPanelController";
 import { ensureChrono } from "../../calendar/events/parseCalendarTitle.js";
 
 const mockCreateDeadline = vi.fn();
@@ -753,5 +754,31 @@ describe("AddTaskPanel due picker", () => {
 
     expect(mockDeleteDeadline).toHaveBeenCalledWith("todo-delete");
     expect(onTaskDeleted).toHaveBeenCalledWith("todo-delete");
+  });
+});
+
+describe("useAddTaskPanelController seeding", () => {
+  beforeEach(() => {
+    mockGetTodoistProjects.mockResolvedValue([]);
+    mockGetTodoistLabels.mockResolvedValue([]);
+    mockListReminders.mockResolvedValue({ reminders: [] });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("seeds a NEW task's title/description from initialInput/initialDescription", () => {
+    const { result } = renderHook(() =>
+      useAddTaskPanelController({
+        host: "floating",
+        initialInput: "Buy a standing-desk mat",
+        initialDescription: "the cheap ones flatten out fast",
+      }),
+    );
+    expect(result.current.input).toBe("Buy a standing-desk mat");
+    expect(result.current.description).toBe("the cheap ones flatten out fast");
+    expect(result.current.isEdit).toBe(false);
   });
 });

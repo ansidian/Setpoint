@@ -29,6 +29,8 @@ export { DashboardBody };
 // in the background after the dashboard paints; the bundler dedupes to one fetch.
 const importInboxView = () => import("../inbox/InboxView");
 const InboxView = lazy(importInboxView);
+const importNotesTab = () => import("../notes/NotesTab");
+const NotesTab = lazy(importNotesTab);
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
 export function DashboardShell({
@@ -47,7 +49,9 @@ export function DashboardShell({
   const [tab, setTab] = useState(() => {
     try {
       const saved = localStorage.getItem("ea:tab");
-      return saved === "inbox" ? "inbox" : "dashboard";
+      if (saved === "inbox") return "inbox";
+      if (saved === "notes") return "notes";
+      return "dashboard";
     } catch {
       return "dashboard";
     }
@@ -61,6 +65,8 @@ export function DashboardShell({
   // Same for the calendar chunk so the first switch to the calendar tab is
   // instant without eager-mounting the heavy modal at boot.
   useWarmImport(importCalendar);
+  // And the notes chunk so the first switch to the notes tab is instant.
+  useWarmImport(importNotesTab);
   // Mobile shell history is owned here (the parent) so the tab entry and the
   // reader entry are pushed in a deterministic order (tab, then reader) for both
   // entry points: tapping a list row and opening an email from a dashboard rail.
@@ -80,7 +86,7 @@ export function DashboardShell({
   // scope; the calendar tab stays mounted (Activity-frozen) once first visited.
   const [calendarMounted, setCalendarMounted] = useState(false);
   const setShellTab = useCallback((nextTab) => {
-    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar") return;
+    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes") return;
     if (nextTab === "calendar" && isMobile) return; // desktop-only
     if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
     if (!isMobile || nextTab === tab) {
@@ -448,7 +454,7 @@ export function DashboardShell({
       <div
         style={{
           flex: 1,
-          overflow: (tab === "dashboard" || tab === "calendar") && !isMobile ? "hidden" : "auto",
+          overflow: (tab === "dashboard" || tab === "calendar" || tab === "notes") && !isMobile ? "hidden" : "auto",
           overscrollBehavior: "contain",
           minHeight: 0,
           background:
@@ -533,6 +539,11 @@ export function DashboardShell({
             ) : null}
           </KeepAliveTab>
         )}
+        <KeepAliveTab active={tab === "notes"}>
+          <Suspense fallback={null}>
+            <NotesTab accent={accent} isMobile={isMobile} />
+          </Suspense>
+        </KeepAliveTab>
       </div>
 
       <DashboardShellOverlays

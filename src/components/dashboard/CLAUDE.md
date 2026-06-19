@@ -1,11 +1,11 @@
 # Dashboard Map
 
-The landing surface: hero (greeting/callouts/weather), today timeline, and rails (bills/deadlines/inbox peek), plus the calendar tab and overlay mounts. Entry points are `DashboardShell.jsx` (state + overlays + tabs) and `DashboardBody.jsx` (layout resolution and section rendering).
+The landing surface: hero (greeting/callouts/weather), today timeline, and rails (bills/deadlines/inbox peek), plus the calendar and notes tabs and overlay mounts. Entry points are `DashboardShell.jsx` (state + overlays + tabs) and `DashboardBody.jsx` (layout resolution and section rendering).
 
 ## Files
 
 ### Shell + layout
-- `DashboardShell.jsx` — orchestrates state and tab switching; mounts the dashboard, inbox, and calendar as three `KeepAliveTab`s
+- `DashboardShell.jsx` — orchestrates state and tab switching; mounts the dashboard, inbox, calendar, and notes as four `KeepAliveTab`s
 - `DashboardBody.jsx` — resolves layout mode, renders hero/timeline/rails sections
 - `DashboardShellOverlays.jsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.jsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch

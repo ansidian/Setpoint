@@ -2,7 +2,6 @@ import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react";
 import DashboardHero from "./DashboardHero";
 import TodayTimeline from "./TodayTimeline";
 import { DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
-import NotesRail from "../notes/NotesRail";
 import { focusPressureTarget } from "../../lib/focus-windows";
 import { getEventSelectionId } from "../../lib/shell-helpers";
 import {
@@ -19,12 +18,11 @@ function DashboardBodyInner({
   isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false, calendarDeadlinesError = false,
   onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenDeadlineCreate, onJumpSection, setAddTaskOpen,
 }) {
-  const { dashboardLayout, density, showInboxPeek, showNotes } = customize;
+  const { dashboardLayout, density, showInboxPeek } = customize;
   const layoutPlan = resolveDashboardBodyLayout({
     isMobile,
     dashboardLayout,
     showInboxPeek,
-    showNotes,
   });
   const effectiveLayout = layoutPlan.layoutMode;
 
@@ -279,12 +277,10 @@ function DashboardBodyInner({
     />
   ) : null;
 
-  const notesSection = showNotes ? <NotesRail accent={accent} isMobile={isMobile} /> : null;
   const sectionByKey = {
     deadlines: deadlinesSection,
     bills: billsSection,
     "inbox-peek": inboxSection,
-    notes: notesSection,
   };
   const sectionsFor = (sectionKeys) => sectionKeys.map((key) => sectionByKey[key]).filter(Boolean);
 

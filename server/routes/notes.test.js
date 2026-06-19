@@ -43,7 +43,9 @@ async function createNotesDb() {
       user_id TEXT NOT NULL,
       content TEXT NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      archived_at TEXT,
+      updated_at TEXT
     );
   `);
   return db;
@@ -123,5 +125,45 @@ describe("notes routes", () => {
     const rows = await readNotes(testState.db.current);
     expect(rows).toHaveLength(1);
     expect(rows[0].sort_order).toBe(0);
+  });
+
+  it("archives a note (sets archived_at)", async () => {
+    await seedNote(testState.db.current, "promote me", 0);
+    const id = (await readNotes(testState.db.current))[0].id;
+
+    const res = await request(makeApp()).patch(`/api/notes/${id}/archive`).send({ archived: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    const list = await request(makeApp()).get("/api/notes");
+    const row = list.body.find((n) => n.id === id);
+    // Guard the contract, not just presence: both must hold a real datetime string.
+    expect(row.archived_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it("unarchives a note (clears archived_at and re-bumps updated_at)", async () => {
+    await seedNote(testState.db.current, "back to active", 0);
+    const id = (await readNotes(testState.db.current))[0].id;
+    await request(makeApp()).patch(`/api/notes/${id}/archive`).send({ archived: true });
+
+    await request(makeApp()).patch(`/api/notes/${id}/archive`).send({ archived: false });
+
+    const list = await request(makeApp()).get("/api/notes");
+    const row = list.body.find((n) => n.id === id);
+    expect(row.archived_at).toBeNull();
+    // The clear path also bumps updated_at ("always bumps updated_at").
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it("bumps updated_at when content is edited", async () => {
+    await seedNote(testState.db.current, "old text", 0);
+    const id = (await readNotes(testState.db.current))[0].id;
+
+    const res = await request(makeApp()).patch(`/api/notes/${id}`).send({ content: "new text" });
+
+    expect(res.status).toBe(200);
+    const list = await request(makeApp()).get("/api/notes");
+    expect(list.body.find((n) => n.id === id).updated_at).not.toBeNull();
   });
 });

@@ -13,7 +13,6 @@ const DEFAULTS = {
   serifChoice: "Instrument Serif",
   showInsights: true,
   showInboxPeek: true,
-  showNotes: true,
   showPreview: true,
   sidebarCompact: false,
 };

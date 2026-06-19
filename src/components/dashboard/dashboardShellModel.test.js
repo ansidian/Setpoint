@@ -213,6 +213,10 @@ describe("dashboard shell model", () => {
     it("suppresses '3' while a blocking overlay is open", () => {
       expect(resolveShellTabHotkey({ key: "3", anyBlockingOverlayOpen: true })).toBeNull();
     });
+
+    it("maps '4' to notes", () => {
+      expect(resolveShellTabHotkey({ key: "4" })).toBe("notes");
+    });
   });
 
   describe("alfred hotkeys", () => {

@@ -70,6 +70,23 @@ router.patch("/reorder", async (req, res) => {
   }
 });
 
+router.patch("/:id/archive", async (req, res) => {
+  const { id } = req.params;
+  const archived = !!req.body?.archived;
+  try {
+    await db.execute({
+      sql: archived
+        ? "UPDATE ea_notes SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND user_id = ?"
+        : "UPDATE ea_notes SET archived_at = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+      args: [id, userId()],
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error archiving note:", err);
+    res.status(500).json({ message: "Failed to archive note" });
+  }
+});
+
 router.patch("/:id", async (req, res) => {
   const { id } = req.params;
   const { content } = req.body;
@@ -78,7 +95,7 @@ router.patch("/:id", async (req, res) => {
   }
   try {
     await db.execute({
-      sql: "UPDATE ea_notes SET content = ? WHERE id = ? AND user_id = ?",
+      sql: "UPDATE ea_notes SET content = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
       args: [content.trim(), id, userId()],
     });
     res.json({ success: true });
