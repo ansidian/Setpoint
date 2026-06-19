@@ -6,6 +6,16 @@ export function normalizeCalendarWorkspaceView(view, fallback = "events") {
   return fallback === "bills" ? "bills" : "events";
 }
 
+// Cycle the active calendar view. `views` is the availability-ordered list
+// (e.g. ["events","bills"] when Actual Budget is configured, else ["events"]).
+export function nextCalendarView({ current, views, reverse = false } = {}) {
+  if (!Array.isArray(views) || views.length < 2) return current;
+  const idx = views.indexOf(current);
+  if (idx === -1) return current;
+  const step = reverse ? -1 : 1;
+  return views[(idx + step + views.length) % views.length];
+}
+
 export function readStoredBoolean(storage, key, fallback) {
   if (!storage) return fallback;
   try {

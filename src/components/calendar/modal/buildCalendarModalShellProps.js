@@ -13,6 +13,7 @@ export default function buildCalendarModalShellProps({
   floating,
   handlers,
   search,
+  availableCalendarViews,
 }) {
   return {
     refs: {
@@ -122,5 +123,6 @@ export default function buildCalendarModalShellProps({
       onFetchSettle: handlers.onFetchSettle,
     },
     search,
+    availableCalendarViews: availableCalendarViews ?? ["events"],
   };
 }

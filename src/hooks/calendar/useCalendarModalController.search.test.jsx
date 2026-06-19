@@ -153,9 +153,9 @@ describe("useCalendarModalController search wiring", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("lets command-number view switching work while calendar search is focused", async () => {
+  it("cycles the view with v while calendar search is open but focus is not in the search rail", async () => {
     const onViewChange = vi.fn();
-    renderHarness({ view: "events", onViewChange });
+    renderHarness({ view: "events", onViewChange, billsRangeData: { ensureRange: vi.fn().mockResolvedValue(null) } });
 
     act(() => {
       latestShellProps.search.openSearch();
@@ -163,19 +163,10 @@ describe("useCalendarModalController search wiring", () => {
 
     await waitFor(() => expect(latestShellProps.search.open).toBe(true));
 
-    const input = document.createElement("input");
-    input.setAttribute("data-testid", "calendar-search-input");
-    const rail = document.createElement("div");
-    rail.setAttribute("data-suspend-calendar-hotkeys", "true");
-    rail.appendChild(input);
-    document.body.appendChild(rail);
-    input.focus();
-
-    fireEvent.keyDown(input, { key: "2", metaKey: true });
+    // v pressed while search is open but focus is on the document (not the suspended search rail)
+    fireEvent.keyDown(document, { key: "v" });
 
     expect(onViewChange).toHaveBeenCalledWith("bills");
-
-    rail.remove();
   });
 
   it("activation navigates to the result month, selects the item, and keeps search open", async () => {

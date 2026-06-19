@@ -5,9 +5,9 @@ import CalendarJumpToMonth from "./CalendarJumpToMonth.jsx";
 const TITLE_MONTH_WHITE = "#f8faff";
 const TITLE_YEAR_RED = "#ff453a";
 
-const VIEW_OPTIONS = [
-  { key: "events", label: "Events", Icon: CalendarIcon, hint: "1" },
-  { key: "bills", label: "Bills", Icon: Receipt, hint: "2" },
+const ALL_VIEW_OPTIONS = [
+  { key: "events", label: "Events", Icon: CalendarIcon },
+  { key: "bills", label: "Bills", Icon: Receipt },
 ];
 
 function parseDateKey(dateKey) {
@@ -117,6 +117,7 @@ export default function CalendarModalHeader({
   currentYear,
   currentMonth,
   onViewChange,
+  availableCalendarViews,
   HeaderExtras,
   viewData,
   computed,
@@ -310,59 +311,95 @@ export default function CalendarModalHeader({
           </div>
         </div>
 
-        <div
-          role="group"
-          aria-label="Calendar view"
-          style={{
-            gridArea: "views",
-            display: "grid",
-            gridTemplateColumns: layout.headerStacked ? "repeat(2, minmax(0, 1fr))" : "repeat(2, auto)",
-            alignItems: "center",
-            justifySelf: layout.headerStacked ? "stretch" : "center",
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.05)",
-            borderRadius: 12,
-            padding: 4,
-            gap: 4,
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-          }}
-        >
-          {VIEW_OPTIONS.map((option) => {
-            const active = view === option.key;
-            const { Icon } = option;
-            return (
-              <button
-                type="button"
-                key={option.key}
-                onClick={() => !active && onViewChange?.(option.key)}
-                aria-pressed={active}
-                aria-label={`${option.label} view${active ? ", selected" : ""}`}
-                data-calendar-focus-ring="true"
-                onMouseEnter={(event) => {
-                  if (active) return;
-                  event.currentTarget.style.background = "rgba(255,255,255,0.06)";
-                  event.currentTarget.style.color = "rgba(205,214,244,0.82)";
-                  event.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-                  event.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(event) => {
-                  if (active) return;
-                  event.currentTarget.style.background = "transparent";
-                  event.currentTarget.style.color = "rgba(205,214,244,0.56)";
-                  event.currentTarget.style.borderColor = "transparent";
-                  event.currentTarget.style.transform = "translateY(0)";
-                }}
-                style={viewToggleStyle(active, layout.headerStacked)}
-              >
-                <Icon size={11} strokeWidth={1.8} />
-                {option.label}
-                <kbd style={viewHintStyle(active)}>
-                  {option.hint}
-                </kbd>
-              </button>
-            );
-          })}
-        </div>
+        {(availableCalendarViews?.length ?? 0) > 1 ? (
+          <div
+            style={{
+              gridArea: "views",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              justifySelf: layout.headerStacked ? "stretch" : "center",
+            }}
+          >
+            <div
+              role="tablist"
+              aria-label="Calendar view"
+              data-suspend-calendar-hotkeys="true"
+              style={{
+                display: "grid",
+                gridTemplateColumns: layout.headerStacked
+                  ? `repeat(${(availableCalendarViews?.length ?? 2)}, minmax(0, 1fr))`
+                  : `repeat(${(availableCalendarViews?.length ?? 2)}, auto)`,
+                alignItems: "center",
+                flex: layout.headerStacked ? 1 : undefined,
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.05)",
+                borderRadius: 12,
+                padding: 4,
+                gap: 4,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+              }}
+              onKeyDown={(event) => {
+                const views = availableCalendarViews ?? [];
+                const currentIndex = views.indexOf(view);
+                let nextIndex = -1;
+                if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  nextIndex = currentIndex < views.length - 1 ? currentIndex + 1 : currentIndex;
+                } else if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  nextIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  event.preventDefault();
+                  nextIndex = views.length - 1;
+                }
+                if (nextIndex >= 0 && nextIndex !== currentIndex) {
+                  onViewChange?.(views[nextIndex]);
+                }
+              }}
+            >
+              {ALL_VIEW_OPTIONS.filter((o) => (availableCalendarViews ?? ["events", "bills"]).includes(o.key)).map((option) => {
+                const active = view === option.key;
+                const { Icon } = option;
+                return (
+                  <button
+                    type="button"
+                    key={option.key}
+                    role="tab"
+                    aria-selected={active}
+                    tabIndex={active ? 0 : -1}
+                    onClick={() => !active && onViewChange?.(option.key)}
+                    data-calendar-focus-ring="true"
+                    onMouseEnter={(event) => {
+                      if (active) return;
+                      event.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                      event.currentTarget.style.color = "rgba(205,214,244,0.82)";
+                      event.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                      event.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(event) => {
+                      if (active) return;
+                      event.currentTarget.style.background = "transparent";
+                      event.currentTarget.style.color = "rgba(205,214,244,0.56)";
+                      event.currentTarget.style.borderColor = "transparent";
+                      event.currentTarget.style.transform = "translateY(0)";
+                    }}
+                    style={viewToggleStyle(active, layout.headerStacked)}
+                  >
+                    <Icon size={11} strokeWidth={1.8} />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <kbd style={viewHintStyle(false)}>V</kbd>
+          </div>
+        ) : (
+          <div style={{ gridArea: "views" }} />
+        )}
 
         <div
           style={{

@@ -36,6 +36,7 @@ export default function CalendarModalShell({
   floating,
   handlers,
   search,
+  availableCalendarViews,
 }) {
   const { panelRef, scrollRef, contextRailRef, agendaRailRef } = refs;
   const {
@@ -371,6 +372,7 @@ export default function CalendarModalShell({
             currentYear={currentYear}
             currentMonth={currentMonth}
             onViewChange={onViewChange}
+            availableCalendarViews={availableCalendarViews}
             HeaderExtras={HeaderExtras}
             viewData={viewData}
             computed={computed}

@@ -50,13 +50,17 @@ describe("CalendarModal deadlines rail behavior", () => {
           getEvents: () => [],
         }}
         billsData={{}}
+        billsRangeData={{ ensureRange: () => Promise.resolve(), data: null }}
         deadlinesData={{ upcoming: [] }}
       />,
     ));
 
-    expect(screen.getByRole("button", { name: /events view/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /bills view/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /deadlines view/i })).toBeNull();
+    const list = screen.getByRole("tablist", { name: /calendar view/i });
+    const tabs = within(list).getAllByRole("tab");
+    const tabLabels = tabs.map((t) => t.textContent);
+    expect(tabLabels.some((l) => /events/i.test(l))).toBe(true);
+    expect(tabLabels.some((l) => /bills/i.test(l))).toBe(true);
+    expect(tabLabels.some((l) => /deadlines/i.test(l))).toBe(false);
   });
 
   it("does not route the 3 hotkey to a third workspace", () => {
