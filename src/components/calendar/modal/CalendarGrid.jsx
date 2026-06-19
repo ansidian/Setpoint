@@ -37,7 +37,6 @@ export default memo(function CalendarGrid({
   viewData,
   activeView,
   layout,
-  suppressOutsideClick,
   showGridSkeleton,
   buildFallbackDayState,
   closeEventEditor,
@@ -333,7 +332,6 @@ export default memo(function CalendarGrid({
     eventSelectionActive: !!eventQuickActions?.eventSelectionActive,
     resolvedOverflow,
     setOverflowState,
-    suppressOutsideClick,
   });
 
   return (
@@ -461,7 +459,6 @@ export default memo(function CalendarGrid({
         }}
         onClose={() => setOverflowState(null)}
         onOverflowInteraction={markOverflowInteraction}
-        suppressOutsideClick={suppressOutsideClick}
         quickActions={itemQuickActions}
         onBeforeItemAction={onCloseFloatingDetail}
         floatingDetailOpen={floatingDetailOpen}

@@ -54,7 +54,6 @@ function buildGridProps(overrides = {}) {
       cellHeight: 164,
       gridGap: 8,
     },
-    suppressOutsideClick: vi.fn(),
     showGridSkeleton: false,
     buildFallbackDayState,
     closeEventEditor: vi.fn(),

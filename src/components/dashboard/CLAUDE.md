@@ -1,16 +1,16 @@
 # Dashboard Map
 
-The landing surface: hero (greeting/callouts/weather), today timeline, and rails (bills/deadlines/inbox peek), plus mounts for the calendar modal and overlays. Entry points are `DashboardShell.jsx` (state + overlays + tabs) and `DashboardBody.jsx` (layout resolution and section rendering).
+The landing surface: hero (greeting/callouts/weather), today timeline, and rails (bills/deadlines/inbox peek), plus the calendar tab and overlay mounts. Entry points are `DashboardShell.jsx` (state + overlays + tabs) and `DashboardBody.jsx` (layout resolution and section rendering).
 
 ## Files
 
 ### Shell + layout
-- `DashboardShell.jsx` — orchestrates state, tab switching, calendar/inbox overlays
+- `DashboardShell.jsx` — orchestrates state and tab switching; mounts the dashboard, inbox, and calendar as three `KeepAliveTab`s
 - `DashboardBody.jsx` — resolves layout mode, renders hero/timeline/rails sections
-- `DashboardShellOverlays.jsx` — mounts modal overlays: calendar, add task, analytics, customize
+- `DashboardShellOverlays.jsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.jsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
 - `KeepAliveTab.jsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
-- `DashboardCalendarModalMount.jsx` — lazy calendar-modal mount with deadline/bill data
+- `DashboardCalendarModalMount.jsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data
 - `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution
 - `dashboardBodyLayoutModel.js` — layout mode (focus/paper/mobile) and section ordering
 - `useDashboardShellHotkeys.js` — global shortcuts: command palette, g+d/e chords
@@ -56,6 +56,6 @@ The landing surface: hero (greeting/callouts/weather), today timeline, and rails
 
 ## Related
 
-- `src/components/calendar/` — modal mounted via `DashboardCalendarModalMount.jsx`
+- `src/components/calendar/` — calendar tab mounted via `DashboardCalendarModalMount.jsx`
 - `src/components/alfred/` — Alfred Panel mounted by `DashboardShell.jsx` (⌘\ toggle, ⌘⇧\ new chat)
 - `server/routes/dashboard.js` — state fetch + SSE stream backing this view

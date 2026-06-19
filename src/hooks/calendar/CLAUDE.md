@@ -23,11 +23,9 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarModalViewModel.js` — visible month data and shell prop building
 - `useCalendarModalSelection.js` — view date, selected day, focus tracking per open request
 
-### Modal behavior
+### Calendar behavior
 - `useCalendarModalSearch.js` — search UI state, debounced API calls, highlighting
-- `useCalendarModalHotkeys.js` — escape, arrow nav, month pagination, modifier-key dismissal
-- `useCalendarModalOutsideDismiss.js` — click-outside dismissal, suppression map, focus capture
-- `useCalendarModalWheelContainment.js` — stops wheel scroll escaping the modal
+- `useCalendarModalHotkeys.js` — arrow nav, month pagination, and Escape for the inner cascade (overflow/detail/editor); the calendar is a shell tab now, so Escape no longer closes a surface
 
 ### Floating detail + editor routing
 - `useCalendarFloatingDetail.js` — floating detail anchoring, session memory, placement
@@ -56,7 +54,6 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 
 - Calendar hooks/models live here, UI in `src/components/calendar/` — do not add calendar files elsewhere.
 - Model files are pure and unit-tested directly; hooks consume them and own side effects.
-- Selection and dismissal share suppression conventions — check `useCalendarModalOutsideDismiss.js` before adding new dismiss paths.
 
 ## Related
 

@@ -1177,11 +1177,6 @@ export default function useCalendarModalController({
     commitSyncSnapshotEffects(syncSnapshot);
   }, [syncSnapshot, open, view, openRequestId]);
 
-  // Outside-dismiss removed with the modal chrome (the calendar is a tab now);
-  // a stable no-op keeps the header/scroll/floating-detail suppressor-registration
-  // calls inert without threading prop removals through those children (Phase 3 tidy).
-  const suppressOutsideClick = useCallback(() => {}, []);
-
   const viewModel = useCalendarModalViewModel({
     open,
     view,
@@ -1513,7 +1508,7 @@ export default function useCalendarModalController({
       cancelFloatingEditor, setFloatingEditorDirty, setFloatingEditorSaveRequest, shakeFloatingEditor,
       handleFloatingDeadlineSaved, handleFloatingDeadlineDeleted,
     },
-    handlers: { navigateMonth, jumpToMonth, handleViewChange, suppressOutsideClick, closeEventEditor, focusDeadlineTask, onDisplayMonthChange: handleScrollDisplayMonth, onLabelMonthChange: handleScrollLabelMonth, onFetchSettle: handleScrollFetchSettle, navigateToDate: sync.navigateToDate, navigateToMonth: sync.navigateToMonth, navigateToToday: sync.navigateToToday },
+    handlers: { navigateMonth, jumpToMonth, handleViewChange, closeEventEditor, focusDeadlineTask, onDisplayMonthChange: handleScrollDisplayMonth, onLabelMonthChange: handleScrollLabelMonth, onFetchSettle: handleScrollFetchSettle, navigateToDate: sync.navigateToDate, navigateToMonth: sync.navigateToMonth, navigateToToday: sync.navigateToToday },
     search: calendarSearchShell,
     availableCalendarViews,
   });

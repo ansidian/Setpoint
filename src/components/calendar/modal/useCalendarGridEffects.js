@@ -18,7 +18,6 @@ export default function useCalendarGridEffects({
   eventSelectionActive = false,
   resolvedOverflow,
   setOverflowState,
-  suppressOutsideClick,
 }) {
   useEffect(() => {
     if (!overflowInteractionEnabled || !resolvedOverflow) return undefined;
@@ -65,18 +64,4 @@ export default function useCalendarGridEffects({
     scrollContainer.addEventListener("scroll", handleScroll, { passive: true });
     return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, [overflowInteractionEnabled, gridShellRef, ignoreOverflowScrollUntilRef, resolvedOverflow, setOverflowState]);
-
-  useEffect(() => {
-    if (!overflowInteractionEnabled || !suppressOutsideClick || resolvedOverflow?.mode !== "inline")
-      return undefined;
-    suppressOutsideClick(
-      (target) =>
-        resolvedOverflow.sourceCellElement?.contains(target) ||
-        resolvedOverflow.triggerElement?.contains(target) ||
-        isCalendarInlineOverflowTarget(target) ||
-        isCalendarEventSpanTarget(target) ||
-        isCalendarRailTarget(target),
-    );
-    return () => suppressOutsideClick(null);
-  }, [overflowInteractionEnabled, resolvedOverflow, suppressOutsideClick]);
 }

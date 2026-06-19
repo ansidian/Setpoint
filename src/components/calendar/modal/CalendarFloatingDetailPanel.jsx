@@ -61,7 +61,6 @@ export default function CalendarFloatingDetailPanel({
   children,
   calendarPanelRef,
   railRef,
-  suppressOutsideClick,
   suppressFocusRing = false,
   onClose,
   onUserDraggedChange,
@@ -253,18 +252,6 @@ export default function CalendarFloatingDetailPanel({
       pendingDragPointRef.current = null;
     };
   }, [open, schedulePlacement]);
-
-  useEffect(() => {
-    if (!open || !suppressOutsideClick) return undefined;
-    suppressOutsideClick(
-      (target) =>
-        panelRef.current?.contains(target) ||
-        (target instanceof HTMLElement &&
-          !!target.closest("[data-calendar-floating-detail='true']")),
-      "floating-detail",
-    );
-    return () => suppressOutsideClick(null, "floating-detail");
-  }, [open, suppressOutsideClick]);
 
   useEffect(() => {
     if (!open || !editorMode) return undefined;

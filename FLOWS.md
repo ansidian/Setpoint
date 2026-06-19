@@ -128,7 +128,7 @@ Selection path:
 8. `src/components/calendar/events/calendarEventSelectionModel.js:toggleCalendarEventSelection` — immutable toggle keyed by `calendarEventSelectionIdentity` (account::calendar::series::occurrence)
 9. `src/hooks/calendar/useCalendarModalHotkeys.js:handleKey` — bare Meta/Control with a detail-mode panel open calls the begin-selection callback, falling through to dismissal for ineligible items
 10. `src/hooks/calendar/useCalendarModalController.jsx:addSelectedCalendarEventToSelectionSet` — returns false for identity-less events so the hotkey dismisses the panel instead
-11. `src/hooks/calendar/useCalendarModalOutsideDismiss.js:handleClick` — pointerdown dismissal with a suppressor map; the overflow popover registers a suppressor and stays open during multi-select
+11. `src/components/calendar/modal/CalendarCellOverflowPopover.jsx` — the overflow popover's own pointerdown handler carves out grid cells, rails, and floating-detail targets so it stays open during multi-select (the calendar is a shell tab now; there is no surface-level outside-dismiss)
 12. `src/components/calendar/modal/CalendarGrid.jsx:handleSelectDay` — plain clicks clear the selection set unless the anchor preserves it (`handleSelectItem` likewise)
 13. `src/hooks/calendar/useCalendarModalController.jsx:requestSelectedCalendarEventDelete` — Delete/Backspace batch-deletes the set; cmd+C copies via `copySelectedCalendarEvent`
 

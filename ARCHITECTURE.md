@@ -227,11 +227,9 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useCalendarFloatingDetail` | `src/hooks/calendar/useCalendarFloatingDetail.js` |
 | `useFloatingEditorRouting` | `src/hooks/calendar/useCalendarModalEditorRouting.js` |
 | `useCalendarModalHotkeys` | `src/hooks/calendar/useCalendarModalHotkeys.js` |
-| `useCalendarModalOutsideDismiss` | `src/hooks/calendar/useCalendarModalOutsideDismiss.js` |
 | `useCalendarModalSearch` | `src/hooks/calendar/useCalendarModalSearch.js` |
 | `useCalendarModalSelection` | `src/hooks/calendar/useCalendarModalSelection.js` |
 | `useCalendarModalViewModel` | `src/hooks/calendar/useCalendarModalViewModel.js` |
-| `useCalendarModalWheelContainment` | `src/hooks/calendar/useCalendarModalWheelContainment.js` |
 | `useCalendarRange` | `src/hooks/calendar/useCalendarRange.js` |
 | `useCalendarScrollSync` | `src/hooks/calendar/useCalendarScrollSync.js` |
 | `useDashboardDetailFocus` | `src/hooks/calendar/useDashboardDetailFocus.js` |
@@ -253,6 +251,7 @@ Top-level React hooks enumerated from `src/hooks/**/use*.js` and `src/components
 | `useMediaQuery` | `src/hooks/useMediaQuery.js` |
 | `useNotifications` | `src/hooks/useNotifications.js` |
 | `useTriageNotificationSounds` | `src/hooks/useTriageNotificationSounds.js` |
+| `useUtilityPayLinks` | `src/hooks/useUtilityPayLinks.js` |
 | `useWarmImport` | `src/hooks/useWarmImport.js` |
 <!-- END:hooks -->
 
@@ -608,7 +607,7 @@ erDiagram
 | `ea_pending_auth` | `012_passkey_auth.sql` |
 | `ea_reminders` | `010_discord_reminders.sql` |
 | `ea_sessions` | `001_ea_tables.sql` |
-| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql` |
+| `ea_settings` | `001_ea_tables.sql`, `003_triage_sound_settings.sql`, `008_bill_pay_mappings.sql`, `010_discord_reminders.sql`, `020_utility_pay_links.sql` |
 | `ea_snoozed_emails` | `001_ea_tables.sql` |
 | `ea_todoist_items` | `001_ea_tables.sql` |
 | `ea_todoist_labels` | `001_ea_tables.sql` |

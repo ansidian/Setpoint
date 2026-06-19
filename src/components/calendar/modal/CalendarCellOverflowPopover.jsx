@@ -160,7 +160,6 @@ export default function CalendarCellOverflowPopover({
   onSelectItem,
   onClose,
   onOverflowInteraction,
-  suppressOutsideClick,
   quickActions,
   onBeforeItemAction,
   floatingDetailOpen = false,
@@ -275,22 +274,6 @@ export default function CalendarCellOverflowPopover({
       scrollRef.current.scrollTop = 0;
     }
   }, [popover?.day, popover?.viewMonth, popover?.viewYear]);
-
-  useEffect(() => {
-    if (!suppressOutsideClick) return undefined;
-    if (popover) {
-      suppressOutsideClick((target) => (
-        popoverRef.current?.contains(target)
-        || popover.triggerElement?.contains(target)
-        || isOverflowTriggerTarget(target)
-        || isCalendarFloatingDetailTarget(target)
-        || isCalendarRailTarget(target)
-      ));
-    } else {
-      suppressOutsideClick(null);
-    }
-    return () => suppressOutsideClick(null);
-  }, [popover, suppressOutsideClick]);
 
   if (!popover) return null;
 

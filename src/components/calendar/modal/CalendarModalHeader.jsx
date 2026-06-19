@@ -121,7 +121,6 @@ export default function CalendarModalHeader({
   HeaderExtras,
   viewData,
   computed,
-  suppressOutsideClick,
   eventEditor,
   selectedDay,
   selectedDateKey,
@@ -444,7 +443,6 @@ export default function CalendarModalHeader({
               <HeaderExtras
                 data={viewData}
                 computed={computed}
-                suppressOutsideClick={suppressOutsideClick}
                 editor={eventEditor}
                 selectedDay={selectedDay}
                 selectedDate={selectedDate}

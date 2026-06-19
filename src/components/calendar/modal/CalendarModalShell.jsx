@@ -112,7 +112,6 @@ export default function CalendarModalShell({
     navigateMonth,
     jumpToMonth,
     onViewChange,
-    suppressOutsideClick,
     focusDeadlineTask,
     onDisplayMonthChange,
     onLabelMonthChange,
@@ -365,7 +364,6 @@ export default function CalendarModalShell({
             HeaderExtras={HeaderExtras}
             viewData={viewData}
             computed={computed}
-            suppressOutsideClick={suppressOutsideClick}
             eventEditor={headerEventEditor}
             selectedDay={selectedDay}
             selectedDateKey={selectedDateKey}
@@ -449,7 +447,6 @@ export default function CalendarModalShell({
                 eventQuickActions={eventQuickActions}
                 deadlineQuickActions={deadlineQuickActions}
                 ghostPreview={ghostPreview}
-                suppressOutsideClick={suppressOutsideClick}
                 onOpenFloatingDetail={onOpenFloatingDetail}
                 onCloseFloatingDetail={onCloseFloatingDetail}
                 floatingDetailOpen={!!floatingDetail?.open && !!floatingDetailContent}
@@ -486,7 +483,6 @@ export default function CalendarModalShell({
             label={floatingDetailLabel}
             calendarPanelRef={panelRef}
             railRef={contextRailRef}
-            suppressOutsideClick={suppressOutsideClick}
             suppressFocusRing={suppressFocusRing}
             onClose={floatingEditorOpen ? onCancelFloatingEditor : onCloseFloatingDetail}
             onUserDraggedChange={onFloatingDetailDragged}

@@ -69,8 +69,6 @@ function renderContainer(overrides = {}) {
     setSelectedDay: vi.fn(),
     setSelectedDateKey: vi.fn(),
     setSelectedItemId: vi.fn(),
-
-    suppressOutsideClick: false,
     ...overrides,
   };
   return render(<CalendarScrollContainer {...baseProps} />);
@@ -407,7 +405,6 @@ describe("CalendarScrollContainer", () => {
       setSelectedDay: vi.fn(),
       setSelectedDateKey: vi.fn(),
       setSelectedItemId: vi.fn(),
-      suppressOutsideClick: false,
     };
     const { container, rerender } = render(<CalendarScrollContainer {...props} />);
     const scrollEl = container.querySelector("[data-testid='calendar-scroll-container']");
@@ -549,7 +546,6 @@ describe("CalendarScrollContainer", () => {
           setSelectedDay={() => {}}
           setSelectedDateKey={() => {}}
           setSelectedItemId={() => {}}
-          suppressOutsideClick={false}
         />
       );
     }
@@ -657,8 +653,6 @@ describe("CalendarScrollContainer", () => {
       setSelectedDay: vi.fn(),
       setSelectedDateKey: vi.fn(),
       setSelectedItemId: vi.fn(),
-  
-      suppressOutsideClick: false,
     };
     rerender(<CalendarScrollContainer {...props} />);
     const blocks = container.querySelectorAll("[data-month-block]");
