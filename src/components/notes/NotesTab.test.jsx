@@ -16,6 +16,19 @@ vi.mock("../todoist/AddTaskPanel.jsx", () => ({
   ),
 }));
 
+// Stub the CodeMirror-backed editor so NotesTab tests never mount real CM under
+// happy-dom. Preserves the placeholder so existing placeholder-based queries hold.
+vi.mock("./NoteEditor.jsx", () => ({
+  default: (props) => (
+    <textarea
+      data-testid="note-editor"
+      placeholder={props.placeholder}
+      value={props.value || ""}
+      onChange={(e) => props.onChange?.(e.target.value)}
+    />
+  ),
+}));
+
 import { getNotes } from "../../api.js";
 import NotesTab from "./NotesTab.jsx";
 
