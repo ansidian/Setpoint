@@ -79,6 +79,19 @@ export function getVisibleGridRange(year, month) {
   };
 }
 
+// Range spanning the 6-week grids of [month - radius, month + radius], inclusive.
+// The infinite-scroll grid mounts the active month ± 2, and bills render in every
+// mounted month from one shared date-keyed map — so their data has to be fetched
+// for that whole window at once. A single-month fetch (radius 0) leaves the outer
+// mounted months blank, which is why chips vanished when scrolled out and back.
+export function getMultiMonthGridRange(year, month, radius = 0) {
+  // JS Date normalizes month under/overflow, so month ± radius crosses year
+  // boundaries correctly even with the year held fixed.
+  const { start } = getVisibleGridRange(year, month - radius);
+  const { end } = getVisibleGridRange(year, month + radius);
+  return { start, end };
+}
+
 export function sameYmdMonth(value, year, month) {
   const parsed = parseYmd(value);
   return !!parsed && parsed.year === year && parsed.month === month;

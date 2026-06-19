@@ -21,6 +21,7 @@ import { getDeadlineSelectionId } from "../../components/calendar/views/deadline
 import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
 import buildCalendarModalShellProps from "../../components/calendar/modal/buildCalendarModalShellProps.js";
 import {
+  getMultiMonthGridRange,
   getVisibleGridRange,
   parseYmd,
   ymdFromParts,
@@ -62,6 +63,12 @@ import {
   SCROLL_IDLE_THRESHOLD_MS,
   VIEWS,
 } from "./calendarControllerHelpers.js";
+
+// The scroll grid mounts the active month ± 2 (see mountedWindow). Ensure bills
+// for that whole grid window so every mounted month's cells (and their spill
+// from adjacent months) resolve; month-mode caching fetches it in <=2-month
+// chunks and reuses cached months as you scroll.
+const BILLS_FETCH_MONTH_RADIUS = 2;
 
 export default function useCalendarModalController({
   open,
@@ -1413,7 +1420,14 @@ export default function useCalendarModalController({
   const domainRevision = viewData?.revision;
   useEffect(() => {
     if (!open || view === "events" || !domainEnsureRange) return;
-    const { start, end } = getVisibleGridRange(fetchYear, fetchMonth);
+    // Bills expand into one date-keyed map shared across every mounted month
+    // (active ± 2), so they must be fetched for that whole window — not just the
+    // active month, which left the outer mounted months blank on scroll. The +1
+    // buffer (radius 3 vs the ±2 mount) loads an edge month before it mounts.
+    // Deadlines keep their per-month cache + prefetch and fetch the active grid.
+    const { start, end } = view === "bills"
+      ? getMultiMonthGridRange(fetchYear, fetchMonth, BILLS_FETCH_MONTH_RADIUS)
+      : getVisibleGridRange(fetchYear, fetchMonth);
     domainEnsureRange(start, end).catch((err) => {
       if (err?.name === "AbortError") return;
       console.error(`[Calendar] ${view} range fetch failed:`, err);
