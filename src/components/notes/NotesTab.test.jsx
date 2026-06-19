@@ -37,6 +37,13 @@ describe("NotesTab", () => {
     expect(screen.getByPlaceholderText(/search/i)).toBeTruthy();
   });
 
+  it("does not autofocus the capture field on entry", async () => {
+    render(<NotesTab accent="#cba6da" />);
+    await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
+    const capture = screen.getByPlaceholderText(/jot something down/i);
+    expect(document.activeElement).not.toBe(capture);
+  });
+
   it("promotes a note to a task and auto-archives it", async () => {
     const { archiveNote } = await import("../../api.js");
     render(<NotesTab accent="#cba6da" />);
