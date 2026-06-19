@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Search } from "lucide-react";
 import { getNotes, createNote, updateNote, deleteNote, reorderNotes, archiveNote } from "../../api.js";
 import NoteItem from "./NoteItem.jsx";
+import NoteEditor from "./NoteEditor.jsx";
 import NotesPromoteMount from "./NotesPromoteMount.jsx";
 import { selectVisibleNotes, collectTags, formatNoteAge } from "./notesModel.js";
 
@@ -18,7 +19,6 @@ export default function NotesTab({ accent, isMobile = false }) {
   const [activeTag, setActiveTag] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [promote, setPromote] = useState(null); // { note, anchorRef }
-  const inputRef = useRef(null);
   const searchRef = useRef(null);
 
   useEffect(() => {
@@ -31,7 +31,9 @@ export default function NotesTab({ accent, isMobile = false }) {
     function onKey(e) {
       if (e.key !== "/") return;
       const tag = e.target?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      // CM's editor is a contenteditable <div>, not INPUT/TEXTAREA — guard it
+      // explicitly so typing "/" in a note doesn't yank focus to search.
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.closest?.(".cm-editor")) return;
       e.preventDefault();
       searchRef.current?.focus();
     }
@@ -41,16 +43,13 @@ export default function NotesTab({ accent, isMobile = false }) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleCreate = useCallback(async (e) => {
-    if (e.nativeEvent?.isComposing || e.keyCode === 229) return;
-    if (e.key !== "Enter" || e.shiftKey) return;
-    e.preventDefault();
-    const content = input.trim();
+  const handleCreateSubmit = useCallback(async (raw) => {
+    const content = (raw ?? "").trim();
     if (!content) return;
     setInput("");
     try { const note = await createNote(content); setNotes((prev) => [note, ...prev]); }
     catch (err) { console.error("Failed to create note:", err); setInput(content); }
-  }, [input]);
+  }, []);
 
   const handleUpdate = useCallback(async (id, content) => {
     setNotes((prev) => prev.map((n) => (n.id === id ? { ...n, content } : n)));
@@ -100,15 +99,17 @@ export default function NotesTab({ accent, isMobile = false }) {
             {notes.filter((n) => !n.archived_at).length} active
           </span>
         </div>
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleCreate}
-          placeholder="Jot something down..."
-          rows={1}
-          style={{ ...inputStyle, resize: "none", minHeight: 38, marginBottom: 10 }}
-        />
+        <div style={{ ...inputStyle, padding: 0, marginBottom: 10, overflow: "hidden" }}>
+          <NoteEditor
+            value={input}
+            onChange={setInput}
+            onSubmit={handleCreateSubmit}
+            tags={tags}
+            placeholder="Jot something down…"
+            submitOnEnter
+            maxHeight={180}
+          />
+        </div>
         <div style={{ position: "relative", marginBottom: 12 }}>
           <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#6c7086" }} />
           <input
@@ -166,6 +167,7 @@ export default function NotesTab({ accent, isMobile = false }) {
                       <NoteItem
                         note={note}
                         accent={accent}
+                        tags={tags}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
                         onArchive={handleArchive}

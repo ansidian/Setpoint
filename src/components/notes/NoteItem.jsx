@@ -1,21 +1,19 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { renderNoteMarkdown } from "./renderNoteMarkdown.jsx";
 import { toggleCheckboxLine } from "./noteEditorExtensions.js";
 import NoteContextMenu from "./NoteContextMenu.jsx";
-
-const EDIT_TEXTAREA_MAX_HEIGHT = 96;
+import NoteEditor from "./NoteEditor.jsx";
 
 export default function NoteItem({
   note, accent, onUpdate, onDelete, onArchive, onPromote,
-  compactPreview = false, actionsAlwaysVisible = false, age = "",
+  compactPreview = false, actionsAlwaysVisible = false, age = "", tags = [],
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState(null); // { x, y } | null
-  const textareaRef = useRef(null);
   const promoteRef = useRef(null);
 
   const {
@@ -38,11 +36,9 @@ export default function NoteItem({
     setEditing(true);
   }, [note.content]);
 
-  const commitEdit = useCallback(() => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== note.content) {
-      onUpdate(note.id, trimmed);
-    }
+  const commitEditWith = useCallback((v) => {
+    const trimmed = (v ?? draft).trim();
+    if (trimmed && trimmed !== note.content) onUpdate(note.id, trimmed);
     setEditing(false);
   }, [draft, note.id, note.content, onUpdate]);
 
@@ -52,38 +48,8 @@ export default function NoteItem({
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      const ta = textareaRef.current;
-      ta.focus();
-      ta.selectionStart = ta.selectionEnd = ta.value.length;
-      ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, EDIT_TEXTAREA_MAX_HEIGHT)}px`;
-      ta.style.overflowY = ta.scrollHeight > EDIT_TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
-    }
-  }, [editing]);
-
-  const handleKeyDown = (e) => {
-    // Ignore Enter while an IME composition is in flight: pressing Enter to
-    // accept a candidate must not commit the edit with a partial buffer.
-    if (e.nativeEvent?.isComposing || e.keyCode === 229) return;
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      commitEdit();
-    } else if (e.key === "Escape") {
-      cancelEdit();
-    }
-  };
-
-  const handleInput = (e) => {
-    setDraft(e.target.value);
-    e.target.style.height = "auto";
-    e.target.style.height = `${Math.min(e.target.scrollHeight, EDIT_TEXTAREA_MAX_HEIGHT)}px`;
-    e.target.style.overflowY = e.target.scrollHeight > EDIT_TEXTAREA_MAX_HEIGHT ? "auto" : "hidden";
-  };
-
   const handlePointerDownCapture = useCallback((event) => {
-    const interactive = event.target.closest("a, button, textarea, input");
+    const interactive = event.target.closest("a, button, textarea, input, .cm-editor");
     if (interactive) event.stopPropagation();
   }, []);
 
@@ -146,28 +112,17 @@ export default function NoteItem({
       {/* Content */}
       <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
         {editing ? (
-          <textarea
-            ref={textareaRef}
+          <NoteEditor
             value={draft}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            onBlur={commitEdit}
-            rows={1}
-            style={{
-              width: "100%",
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "#cdd6f4",
-              fontSize: 12,
-              lineHeight: 1.5,
-              fontFamily: "inherit",
-              resize: "none",
-              padding: 0,
-              margin: 0,
-              maxHeight: EDIT_TEXTAREA_MAX_HEIGHT,
-              overflowY: "hidden",
-            }}
+            onChange={setDraft}
+            onSubmit={(v) => commitEditWith(v)}
+            onCancel={cancelEdit}
+            onBlur={(v) => commitEditWith(v)}
+            tags={tags}
+            autoFocus
+            placeholder=""
+            submitOnEnter
+            maxHeight={140}
           />
         ) : (
           <div
