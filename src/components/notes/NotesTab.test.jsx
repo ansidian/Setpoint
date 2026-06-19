@@ -49,8 +49,12 @@ describe("NotesTab", () => {
     render(<NotesTab accent="#cba6da" />);
     await waitFor(() => expect(screen.getByText("active note one")).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText("Add to Todoist")); // opens the (mocked) panel
-    fireEvent.click(screen.getByTestId("fake-add-task"));      // simulate a successful create
+    // open the row's action menu, then choose "Add to Todoist"
+    await waitFor(() => expect(screen.getAllByLabelText("Note actions")[0]).toBeTruthy());
+    fireEvent.click(screen.getAllByLabelText("Note actions")[0]);
+    await waitFor(() => expect(screen.getByRole("menuitem", { name: /add to todoist/i })).toBeTruthy());
+    fireEvent.click(screen.getByRole("menuitem", { name: /add to todoist/i }));
+    fireEvent.click(screen.getByTestId("fake-add-task"));
 
     await waitFor(() => expect(archiveNote).toHaveBeenCalledWith(1, true));
     await waitFor(() => expect(screen.queryByText("active note one")).toBeNull()); // left the active list
