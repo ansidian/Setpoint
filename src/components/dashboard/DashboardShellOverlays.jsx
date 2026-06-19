@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { AnalyticsModalMount } from "../shell/AnalyticsModalMount.jsx";
-import DashboardCalendarModalMount from "./DashboardCalendarModalMount";
 
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
@@ -32,7 +31,6 @@ export default function DashboardShellOverlays({
   historyTriggerRef,
   handleSelectSnapshot,
   setHistoryOpen,
-  calendarMountProps,
 }) {
   return (
     <>
@@ -96,8 +94,6 @@ export default function DashboardShellOverlays({
           />
         </Suspense>
       )}
-
-      <DashboardCalendarModalMount {...calendarMountProps} />
     </>
   );
 }

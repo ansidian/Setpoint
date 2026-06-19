@@ -30,7 +30,6 @@ function ShellHeader({
   onOpenPalette,
   onOpenCustomize,
   onOpenHistory,
-  onOpenCalendar,
   inboxUnreadSignalCount = 0,
   refreshing,
   onQuickRefresh,
@@ -148,7 +147,6 @@ function ShellHeader({
           onToggleMenu={() => setMenuOpen((value) => !value)}
           onCloseMenu={() => setMenuOpen(false)}
           onOpenHistory={onOpenHistory}
-          onOpenCalendar={onOpenCalendar}
           onOpenAnalytics={onOpenAnalytics}
           onOpenCustomize={onOpenCustomize}
         />

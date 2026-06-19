@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   BarChart3,
   LayoutList, Inbox, Clock, AlertCircle, CreditCard,
-  RefreshCw, Search, ArrowRight, Calendar, History, Settings as SettingsIcon, Sliders,
+  RefreshCw, Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon, Sliders,
   CalendarPlus, ListPlus,
 } from "lucide-react";
 
@@ -43,7 +43,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "bills",        icon: CreditCard, label: "Bills",           kind: "scroll", payload: "bills" },
     { id: "new-deadline", icon: ListPlus,   label: "New deadline",     hint: "G T", kind: "deadline-create" },
     { id: "new-event",    icon: CalendarPlus, label: "New event",     hint: "G C", kind: "event" },
-    { id: "calendar",     icon: Calendar,   label: "Open calendar",   hint: "C", kind: "calendar" },
+    { id: "calendar",     icon: CalendarDays, label: "Go to Calendar",  hint: "3", kind: "tab", payload: "calendar" },
     { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },
     { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
     { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },

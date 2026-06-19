@@ -20,9 +20,9 @@ describe("CalendarModal shell and search layout", () => {
       />,
     ));
 
-    const panel = screen.getByTestId("calendar-modal-panel");
-    expect(panel.getAttribute("role")).toBe("dialog");
-    expect(panel.getAttribute("aria-modal")).toBe("true");
+    // The calendar is now an in-flow shell tab, not a dialog: no role="dialog" /
+    // aria-modal. Presence of the panel testid anchors the usability assertions.
+    expect(screen.getByTestId("calendar-modal-panel")).toBeTruthy();
     expect(screen.getByTestId("calendar-grid-month")).toBeTruthy();
     expect(screen.getByTestId("calendar-modal-rail")).toBeTruthy();
 

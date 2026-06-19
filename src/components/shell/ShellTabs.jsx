@@ -1,7 +1,12 @@
-import { Inbox, LayoutList } from "lucide-react";
+import { CalendarDays, Inbox, LayoutList } from "lucide-react";
 import { Kbd } from "./Kbd.jsx";
 
+const TAB_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays };
+const TAB_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar" };
+const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3" };
+
 export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
+  const tabs = isMobile ? ["dashboard", "inbox"] : ["dashboard", "inbox", "calendar"];
   return (
     <div
       style={{
@@ -14,8 +19,9 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
         minWidth: 0,
       }}
     >
-      {["dashboard", "inbox"].map((tabKey) => {
+      {tabs.map((tabKey) => {
         const showUnread = tabKey === "inbox" && inboxUnreadSignalCount > 0;
+        const Icon = TAB_ICONS[tabKey];
         return (
           <button
             key={tabKey}
@@ -42,9 +48,7 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
               touchAction: "manipulation",
             }}
           >
-            {tabKey === "dashboard"
-              ? <LayoutList size={isMobile ? 11 : 12} />
-              : <Inbox size={isMobile ? 11 : 12} />}
+            <Icon size={isMobile ? 11 : 12} />
             {showUnread && (
               <span
                 title={`${inboxUnreadSignalCount} unread`}
@@ -68,8 +72,8 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
                 {inboxUnreadSignalCount > 99 ? "99+" : inboxUnreadSignalCount}
               </span>
             )}
-            <span>{tabKey === "dashboard" ? "Dashboard" : "Inbox"}</span>
-            {!isMobile && <Kbd>{tabKey === "dashboard" ? "1" : "2"}</Kbd>}
+            <span>{TAB_LABELS[tabKey]}</span>
+            {!isMobile && <Kbd>{TAB_KEYS[tabKey]}</Kbd>}
           </button>
         );
       })}

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search, X } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, Receipt, RefreshCw, Search } from "lucide-react";
 import CalendarJumpToMonth from "./CalendarJumpToMonth.jsx";
 
 const TITLE_MONTH_WHITE = "#f8faff";
@@ -128,7 +128,6 @@ export default function CalendarModalHeader({
   viewYear,
   viewMonth,
   setDeadlineEditor,
-  onClose,
   viewLabel,
   search,
 }) {
@@ -480,22 +479,6 @@ export default function CalendarModalHeader({
             }}
           >
             <Search size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            onMouseEnter={(event) => handleHeaderButtonHover(event, true)}
-            onMouseLeave={resetHeaderButtonHover}
-            data-calendar-focus-ring="true"
-            style={{
-              ...headerButtonBaseStyle(),
-              color: "rgba(205,214,244,0.7)",
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-          >
-            <X size={17} />
           </button>
         </div>
       </div>

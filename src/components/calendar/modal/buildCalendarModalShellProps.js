@@ -115,7 +115,6 @@ export default function buildCalendarModalShellProps({
       navigateMonth: handlers.navigateMonth,
       jumpToMonth: handlers.jumpToMonth,
       onViewChange: handlers.handleViewChange,
-      onClose: handlers.closeCalendarModal,
       suppressOutsideClick: handlers.suppressOutsideClick,
       focusDeadlineTask: handlers.focusDeadlineTask,
       onDisplayMonthChange: handlers.onDisplayMonthChange,

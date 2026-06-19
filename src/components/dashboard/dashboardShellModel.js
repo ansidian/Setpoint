@@ -80,7 +80,6 @@ export function resolveDashboardShellHotkey({
   repeat = false,
   editableTarget = false,
   actionChord = null,
-  calendarOpen = false,
   anyBlockingOverlayOpen = false,
   analyticsOpen = false,
   historyOpen = false,
@@ -124,7 +123,6 @@ export function resolveDashboardShellHotkey({
 
   if (normalized === "g") return { action: "start-g-chord" };
   if (normalized === "a") return { action: "toggle-analytics" };
-  if (normalized === "c" && !calendarOpen) return { action: "open-calendar" };
   if (normalized === "y") return { action: "toggle-history" };
   return { action: "ignore" };
 }
@@ -146,6 +144,7 @@ export function resolveShellTabHotkey({
   if (anyBlockingOverlayOpen) return null;
   if (key === "1") return "dashboard";
   if (key === "2") return "inbox";
+  if (key === "3") return "calendar";
   return null;
 }
 

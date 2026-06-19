@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect } from "react";
-import { createPortal } from "react-dom";
 import CalendarQuickActionLayer from "../events/CalendarQuickActionLayer.jsx";
 import DeadlineQuickActionLayer from "../views/deadlines/DeadlineQuickActionLayer.jsx";
 import CalendarModalContextRail from "./CalendarModalContextRail.jsx";
@@ -9,7 +8,6 @@ import CalendarGridWeekHeader from "./CalendarGridWeekHeader.jsx";
 import CalendarScrollContainer from "./CalendarScrollContainer.jsx";
 import buildContextContent from "./buildContextContent.jsx";
 import CalendarModalAgendaRailContentBase from "./CalendarModalAgendaRailContent.jsx";
-import CalendarModalBackdrop from "./CalendarModalBackdrop.jsx";
 import CalendarModalHeader from "./CalendarModalHeader.jsx";
 import CalendarModalTexture from "./CalendarModalTexture.jsx";
 import CalendarSearchRail from "./CalendarSearchRail.jsx";
@@ -114,7 +112,6 @@ export default function CalendarModalShell({
     navigateMonth,
     jumpToMonth,
     onViewChange,
-    onClose,
     suppressOutsideClick,
     focusDeadlineTask,
     onDisplayMonthChange,
@@ -294,37 +291,35 @@ export default function CalendarModalShell({
     />
   );
 
-  return createPortal(
+  return (
     <div
       style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 49,
+        position: "relative",
+        height: "100%",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: layout.viewportMargin,
+        flexDirection: "column",
         isolation: "isolate",
         contain: "layout paint style",
         overflow: "hidden",
       }}
     >
-      <CalendarModalBackdrop />
       <div
         ref={panelRef}
         data-testid="calendar-modal-panel"
         data-calendar-suppress-focus-ring={suppressFocusRing ? "true" : undefined}
         className="isolate flex flex-col"
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="calendar-modal-title"
         tabIndex={-1}
         style={{
           position: "relative",
           zIndex: 1,
+          // In-flow tab fill: flex:1 + minHeight:0 size the panel to the column's
+          // height; width/maxWidth cap it and margin:0 auto centers it horizontally.
+          flex: 1,
+          minHeight: 0,
           width: panelWidth,
           maxWidth: layout.panelMaxWidth || undefined,
-          height: layout.shellHeight,
+          margin: "0 auto",
           maxHeight: layout.shellMaxHeight || undefined,
           overflow: "hidden",
           backgroundColor: "#16161e",
@@ -333,17 +328,11 @@ export default function CalendarModalShell({
             "radial-gradient(circle at 86% 8%, rgba(137,180,250,0.08), transparent 24%)",
             "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01) 18%, rgba(255,255,255,0.01) 82%, rgba(255,255,255,0.025))",
           ].join(", "),
-          borderRadius: 16,
           border: "1px solid rgba(255,255,255,0.06)",
           outline: "none",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
           contain: "layout paint",
           backfaceVisibility: "hidden",
           transform: "translate3d(0, 0, 0)",
-          animation: layout.tier === "xl"
-            ? "calendarPanelSettle 120ms cubic-bezier(0.16, 1, 0.3, 1)"
-            : "calendarPanelEnter 140ms cubic-bezier(0.16, 1, 0.3, 1)",
-          willChange: "transform",
         }}
       >
         <CalendarModalTexture />
@@ -390,7 +379,6 @@ export default function CalendarModalShell({
                 setDeadlineEditor(next);
               }
             }}
-            onClose={onClose}
             viewLabel={activeView.label}
             search={search}
           />
@@ -507,7 +495,6 @@ export default function CalendarModalShell({
           </CalendarFloatingDetailPanel>
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }

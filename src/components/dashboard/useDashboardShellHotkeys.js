@@ -1,13 +1,12 @@
 import { useEffect, useRef } from "react";
 import { resolveDashboardShellHotkey } from "./dashboardShellModel.js";
 
-// Global shell hotkeys: ⌘K palette, a analytics, c calendar, y snapshots,
+// Global shell hotkeys: ⌘K palette, a analytics, y snapshots,
 // g+key action chords (g+d deadline, g+e event) with a 900 ms chord window.
 // Pure key→command resolution lives in dashboardShellModel; this hook owns the
 // listener wiring and the chord state.
 export default function useDashboardShellHotkeys({
   isMobile,
-  calendarOpen,
   analyticsOpen,
   historyOpen = false,
   anyBlockingOverlayOpen = false,
@@ -54,7 +53,6 @@ export default function useDashboardShellHotkeys({
         repeat: e.repeat,
         editableTarget,
         actionChord: actionChordRef.current,
-        calendarOpen,
         anyBlockingOverlayOpen,
         analyticsOpen,
         historyOpen,
@@ -104,11 +102,10 @@ export default function useDashboardShellHotkeys({
         else void openAnalytics();
         return;
       }
-      if (command.action === "open-calendar") { openCalendar(); }
       if (command.action === "toggle-history") { setHistoryOpen((v) => !v); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analyticsOpen, historyOpen, anyBlockingOverlayOpen, calendarOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
+  }, [analyticsOpen, historyOpen, anyBlockingOverlayOpen, closeAnalytics, isMobile, openAnalytics, openPalette, openDeadlineCreate, toggleAlfred, alfredNewChat]);
 }

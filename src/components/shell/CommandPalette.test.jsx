@@ -104,7 +104,7 @@ describe("CommandPalette", () => {
     );
 
     // Unfiltered, both a calendar and a settings command are present.
-    expect(screen.getByText("Open calendar")).toBeTruthy();
+    expect(screen.getByText("Go to Calendar")).toBeTruthy();
     expect(screen.getByText("Open settings")).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText("Jump to anything…"), {
@@ -112,7 +112,7 @@ describe("CommandPalette", () => {
     });
 
     // Only the matching command survives; non-matches drop out.
-    expect(screen.getByText("Open calendar")).toBeTruthy();
+    expect(screen.getByText("Go to Calendar")).toBeTruthy();
     expect(screen.queryByText("Open settings")).toBeNull();
     expect(screen.queryByText("Go to Inbox")).toBeNull();
   });

@@ -11,6 +11,7 @@ import {
 } from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays.jsx";
+import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendarModalMount.jsx";
 import InboxMountFallback from "./InboxMountFallback.jsx";
 import KeepAliveTab from "./KeepAliveTab.jsx";
 import useWarmImport from "../../hooks/useWarmImport";
@@ -57,6 +58,9 @@ export function DashboardShell({
   // Warm the lazy inbox chunk after first paint so the first dashboard->inbox
   // switch is instant instead of staring at a blank fetch.
   useWarmImport(importInboxView);
+  // Same for the calendar chunk so the first switch to the calendar tab is
+  // instant without eager-mounting the heavy modal at boot.
+  useWarmImport(importCalendar);
   // Mobile shell history is owned here (the parent) so the tab entry and the
   // reader entry are pushed in a deterministic order (tab, then reader) for both
   // entry points: tapping a list row and opening an email from a dashboard rail.
@@ -72,8 +76,13 @@ export function DashboardShell({
     historyKey: "eaMobileReader",
     onDismiss: () => setInboxSession((prev) => (prev.selectedId ? { ...prev, selectedId: null } : prev)),
   });
+  // Declared before setShellTab so the calendar mount-on-first-visit setter is in
+  // scope; the calendar tab stays mounted (Activity-frozen) once first visited.
+  const [calendarMounted, setCalendarMounted] = useState(false);
   const setShellTab = useCallback((nextTab) => {
-    if (nextTab !== "dashboard" && nextTab !== "inbox") return;
+    if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar") return;
+    if (nextTab === "calendar" && isMobile) return; // desktop-only
+    if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
     if (!isMobile || nextTab === tab) {
       // Non-urgent so the show/hide + re-mounted effects yield to user input.
       startTransition(() => setTab(nextTab));
@@ -95,8 +104,6 @@ export function DashboardShell({
   const [liveReadOverrides, setLiveReadOverrides] = useState({});
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState(null);
 
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarMounted, setCalendarMounted] = useState(false);
   const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
   const [calendarView, setCalendarView] = useState(() => {
     try {
@@ -153,11 +160,6 @@ export function DashboardShell({
   const openPalette = useCallback(() => {
     setPaletteOpen(true);
   }, []);
-  const dismissCalendar = useBrowserBackDismiss({
-    enabled: !isMobile && calendarOpen,
-    historyKey: "eaDashboardCalendarModal",
-    onDismiss: () => setCalendarOpen(false),
-  });
   // Memoized so the (memoized) AlfredPanel's onOpenCalendarItem can be stable and
   // bail out on unrelated dashboard re-renders. State setters are referentially
   // stable; deps are only the values openCalendar actually reads/calls.
@@ -180,10 +182,10 @@ export function DashboardShell({
     setCalendarForceOverlays({ events: request.forceEventOverlay, deadlines: request.forceDeadlineOverlay, completedDeadlines: request.forceCompletedDeadlineOverlay });
     setCalendarOpenRequestId((value) => value + 1);
     setCalendarMounted(true);
-    setCalendarOpen(true);
+    setShellTab("calendar");
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
     if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
-  }, [isMobile, calendarView, showBills, loadCalendarDeadlines, loadCalendarBills]);
+  }, [isMobile, calendarView, showBills, loadCalendarDeadlines, loadCalendarBills, setShellTab]);
   const openDeadlineCreate = useCallback(() => {
     if (isMobile) {
       setAddTaskOpen(true);
@@ -203,7 +205,6 @@ export function DashboardShell({
   // openAnalytics is already a stable useCallback, so it is wired directly.
   const handleHeaderToggleCustomize = useCallback(() => setCustomizeOpen((v) => !v), []);
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
-  const handleHeaderOpenCalendar = useCallback(() => openCalendar(), [openCalendar]);
   const changeCalendarView = (v) => {
     const nextView = normalizeCalendarWorkspaceView(v);
     setCalendarView(nextView);
@@ -212,30 +213,29 @@ export function DashboardShell({
   };
 
   useEffect(() => {
-    // Pre-existing: force-close the desktop calendar modal when the viewport
-    // drops to mobile. setState-in-effect is intentional here (reacting to an
-    // external viewport change), not derivable from render. (Surfaced by the
-    // React-compiler lint once nearby callbacks were memoized — behavior unchanged.)
+    // The calendar tab is desktop-only; if the viewport drops to mobile while it
+    // is active, fall back to the dashboard. setState-in-effect is intentional
+    // here (reacting to an external viewport change), not derivable from render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (isMobile && calendarOpen) setCalendarOpen(false);
-  }, [isMobile, calendarOpen]);
+    if (isMobile && tab === "calendar") setTab("dashboard");
+  }, [isMobile, tab]);
 
   useEffect(() => {
     onCalendarWorkspaceChange?.({
-      open: calendarOpen,
+      open: tab === "calendar",
       view: calendarView,
       eventsRange: calendarEventsRangeRef.current,
     });
-  }, [calendarOpen, calendarView, onCalendarWorkspaceChange]);
+  }, [tab, calendarView, onCalendarWorkspaceChange]);
 
   const handleCalendarEventsRangeChange = useCallback((range) => {
     calendarEventsRangeRef.current = range;
     onCalendarWorkspaceChange?.({
-      open: calendarOpen,
+      open: tab === "calendar",
       view: calendarView,
       eventsRange: range,
     });
-  }, [calendarOpen, calendarView, onCalendarWorkspaceChange]);
+  }, [tab, calendarView, onCalendarWorkspaceChange]);
 
   // Single signal for "a non-input overlay owns the foreground", gating the global
   // single-key shell hotkeys and ShellHeader's 1/2 tab hotkeys so neither opens overlays
@@ -244,7 +244,6 @@ export function DashboardShell({
 
   useDashboardShellHotkeys({
     isMobile,
-    calendarOpen,
     analyticsOpen,
     historyOpen,
     anyBlockingOverlayOpen,
@@ -314,7 +313,6 @@ export function DashboardShell({
   const handlePaletteAction = useCallback((item) => {
     if (item.kind === "tab") setShellTab(item.payload);
     else if (item.kind === "scroll") jumpToSection(item.payload);
-    else if (item.kind === "calendar") openCalendar();
     else if (item.kind === "deadline-create") openDeadlineCreate();
     else if (item.kind === "event") openCalendar("events", null, "new");
     else if (item.kind === "analytics") {
@@ -393,6 +391,26 @@ export function DashboardShell({
     queueCalendarDeadlineRefresh,
   ]);
 
+  const calendarMountProps = {
+    calendarOpenRequestId,
+    calendarView,
+    changeCalendarView,
+    calendarFocus,
+    calendarFocusItemId,
+    calendarFocusOpenDetail,
+    calendarForceOverlays,
+    eventsData,
+    handleCalendarEventsRangeChange,
+    liveData,
+    briefing,
+    calendarBillsData,
+    calendarBillRange,
+    calendarDeadlines,
+    calendarDeadlinesLoading,
+    calendarDeadlineRange,
+    calendarDeadlineActions,
+  };
+
   return (
     <div
       style={{
@@ -416,7 +434,6 @@ export function DashboardShell({
         onOpenPalette={openPalette}
         onOpenCustomize={handleHeaderToggleCustomize}
         onOpenHistory={handleHeaderToggleHistory}
-        onOpenCalendar={handleHeaderOpenCalendar}
         inboxUnreadSignalCount={inboxUnreadSignalCount}
         refreshing={bd.refreshing}
         onQuickRefresh={onQuickRefresh}
@@ -431,7 +448,7 @@ export function DashboardShell({
       <div
         style={{
           flex: 1,
-          overflow: tab === "dashboard" && !isMobile ? "hidden" : "auto",
+          overflow: (tab === "dashboard" || tab === "calendar") && !isMobile ? "hidden" : "auto",
           overscrollBehavior: "contain",
           minHeight: 0,
           background:
@@ -507,6 +524,15 @@ export function DashboardShell({
             />
           </Suspense>
         </KeepAliveTab>
+        {!isMobile && (
+          <KeepAliveTab active={tab === "calendar"}>
+            {calendarMounted ? (
+              <Suspense fallback={null}>
+                <DashboardCalendarModalMount {...calendarMountProps} />
+              </Suspense>
+            ) : null}
+          </KeepAliveTab>
+        )}
       </div>
 
       <DashboardShellOverlays
@@ -533,29 +559,6 @@ export function DashboardShell({
         historyTriggerRef={historyTriggerRef}
         handleSelectSnapshot={handleSelectSnapshot}
         setHistoryOpen={setHistoryOpen}
-        calendarMountProps={{
-          isMobile,
-          calendarMounted,
-          calendarOpen,
-          calendarOpenRequestId,
-          dismissCalendar,
-          calendarView,
-          changeCalendarView,
-          calendarFocus,
-          calendarFocusItemId,
-          calendarFocusOpenDetail,
-          calendarForceOverlays,
-          eventsData,
-          handleCalendarEventsRangeChange,
-          liveData,
-          briefing,
-          calendarBillsData,
-          calendarBillRange,
-          calendarDeadlines,
-          calendarDeadlinesLoading,
-          calendarDeadlineRange,
-          calendarDeadlineActions,
-        }}
       />
 
       {alfredMounted && (

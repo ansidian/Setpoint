@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   BarChart3,
   History,
-  LayoutList,
   MoreHorizontal,
   Settings as SettingsIcon,
 } from "lucide-react";
@@ -125,7 +124,6 @@ export function OverflowMenu({
   onToggleMenu,
   onCloseMenu,
   onOpenHistory,
-  onOpenCalendar,
   onOpenAnalytics,
   onOpenCustomize,
 }) {
@@ -157,18 +155,6 @@ export function OverflowMenu({
               onOpenHistory?.();
             }}
           />
-          {!isMobile && (
-            <MenuItem
-              icon={LayoutList}
-              label="Calendar"
-              kbd="C"
-              isMobile={isMobile}
-              onClick={() => {
-                onCloseMenu();
-                onOpenCalendar?.();
-              }}
-            />
-          )}
           {isMobile && (
             <MenuItem
               icon={BarChart3}
