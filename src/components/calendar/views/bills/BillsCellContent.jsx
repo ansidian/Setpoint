@@ -26,7 +26,7 @@ function resolveBillChipMetrics(layout) {
   };
 }
 
-function toBillDescriptor(bill) {
+export function toBillDescriptor(bill) {
   const days = daysUntil(bill.next_date);
   const urgency = urgencyColor(days);
   const isTransfer = bill.type === "transfer";
@@ -36,7 +36,7 @@ function toBillDescriptor(bill) {
       ? "#b4befe"
       : days < 0
         ? "#f38ba8"
-        : urgency.text === "rgba(205,214,244,0.5)"
+        : days === null || days > 3
           ? "#a6e3a1"
           : urgency.text;
 
