@@ -48,7 +48,7 @@ import useCalendarScrollSync from "./useCalendarScrollSync.js";
 import useViewportWidth from "./useViewportWidth.js";
 import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
 import { isGoogleSpecialDateEvent } from "../../components/calendar/googleSpecialDateModel.js";
-import { normalizeCalendarWorkspaceView } from "./calendarModalInteractionModel.js";
+import { normalizeCalendarWorkspaceView, nextCalendarView } from "./calendarModalInteractionModel.js";
 import {
   addMonthOffset,
   dedupeEvents,
@@ -853,6 +853,16 @@ export default function useCalendarModalController({
     onViewChange?.(nextView);
   }, [floatingDetailRef, onViewChange, setFloatingDetail, shakeFloatingEditor, view]);
 
+  const billsAvailable = !!billsRangeData?.ensureRange;
+  const availableCalendarViews = useMemo(
+    () => (billsAvailable ? ["events", "bills"] : ["events"]),
+    [billsAvailable],
+  );
+  const cycleView = useCallback((reverse = false) => {
+    const next = nextCalendarView({ current: view, views: availableCalendarViews, reverse });
+    if (next !== view) handleViewChange(next);
+  }, [view, availableCalendarViews, handleViewChange]);
+
   const closeCalendarModal = useCallback(() => {
     const current = floatingDetailRef.current;
     if (
@@ -1386,6 +1396,7 @@ export default function useCalendarModalController({
     floatingDetailRef,
     setFloatingDetail,
     handleViewChange,
+    cycleView,
     usesFloatingEditor,
     cancelFloatingEditor,
     flipFloatingDetailSide,
@@ -1528,6 +1539,7 @@ export default function useCalendarModalController({
     },
     handlers: { navigateMonth, jumpToMonth, handleViewChange, suppressOutsideClick, closeCalendarModal, closeEventEditor, focusDeadlineTask, onDisplayMonthChange: handleScrollDisplayMonth, onLabelMonthChange: handleScrollLabelMonth, onFetchSettle: handleScrollFetchSettle, navigateToDate: sync.navigateToDate, navigateToMonth: sync.navigateToMonth, navigateToToday: sync.navigateToToday },
     search: calendarSearchShell,
+    availableCalendarViews,
   });
 
   return (
