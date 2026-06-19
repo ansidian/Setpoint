@@ -1,20 +1,27 @@
 import { useState, useRef, useCallback } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { renderNoteMarkdown } from "./renderNoteMarkdown.jsx";
 import { toggleCheckboxLine } from "./noteEditorExtensions.js";
+import { parseTags, stripTags, noteEditedAge } from "./notesModel.js";
 import NoteContextMenu from "./NoteContextMenu.jsx";
 import NoteEditor from "./NoteEditor.jsx";
 
 export default function NoteItem({
-  note, accent, onUpdate, onDelete, onArchive, onPromote,
-  compactPreview = false, actionsAlwaysVisible = false, age = "", tags = [],
+  note, accent, onUpdate, onDelete, onArchive, onUnarchive, onPromote,
+  compactPreview = false, actionsAlwaysVisible = false, age = "", tags = [], draggable = true,
+  selected = false, selectedCount = 0, onToggleSelect, onClearSelection, onBulkArchive, onBulkUnarchive, onBulkDelete,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState(null); // { x, y } | null
   const promoteRef = useRef(null);
+
+  // Tags are surfaced once as footer chips, so strip them from the body render.
+  const noteTags = parseTags(note.content);
+  const bodyContent = stripTags(note.content);
+  const editedAge = noteEditedAge(note);
 
   const {
     attributes,
@@ -23,7 +30,7 @@ export default function NoteItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: note.id, disabled: editing });
+  } = useSortable({ id: note.id, disabled: editing || !draggable });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -53,6 +60,19 @@ export default function NoteItem({
     if (interactive) event.stopPropagation();
   }, []);
 
+  // Cmd/Ctrl+click toggles batch selection (and implicitly enters batch mode).
+  // A plain left-click while a selection exists clears it — single-click otherwise
+  // does nothing here, so this matches the conventional "click to deselect".
+  const handleRowClick = useCallback((e) => {
+    if ((e.metaKey || e.ctrlKey) && onToggleSelect) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect(note.id);
+      return;
+    }
+    if (selectedCount > 0 && onClearSelection) onClearSelection();
+  }, [onToggleSelect, onClearSelection, selectedCount, note.id]);
+
   const handleRowKeyDown = useCallback((e) => {
     if (editing) return;
     if ((e.key === "t" || e.key === "T") && onPromote) {
@@ -70,6 +90,7 @@ export default function NoteItem({
       {...attributes}
       {...listeners}
       onKeyDown={handleRowKeyDown}
+      onClick={handleRowClick}
       onPointerDownCapture={handlePointerDownCapture}
       onContextMenu={(e) => { if (editing) return; e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
       style={{
@@ -77,16 +98,18 @@ export default function NoteItem({
         display: "flex",
         alignItems: "flex-start",
         gap: 8,
-        padding: "10px 12px",
-        background: "rgba(36,36,58, 0.4)",
-        border: editing
-          ? "1px solid rgba(203,166,218, 0.2)"
-          : "1px solid rgba(255,255,255, 0.04)",
+        padding: "11px 12px",
+        background: selected ? `${accent || "#cba6da"}1f` : "rgba(36,36,58, 0.4)",
+        border: selected
+          ? `1px solid ${accent || "#cba6da"}`
+          : editing
+            ? "1px solid rgba(203,166,218, 0.2)"
+            : "1px solid rgba(255,255,255, 0.08)",
         borderRadius: 8,
         position: "relative",
-        cursor: editing ? "text" : isDragging ? "grabbing" : "grab",
+        cursor: editing ? "text" : !draggable ? "default" : isDragging ? "grabbing" : "grab",
       }}
-      className="group"
+      className="note-row group"
     >
       {/* Hover overlay */}
       <div
@@ -94,20 +117,22 @@ export default function NoteItem({
         style={{ borderRadius: 8 }}
       />
 
-      {/* Drag handle */}
-      <div
-        style={{
-          color: "rgba(255,255,255, 0.15)",
-          fontSize: 11,
-          paddingTop: 1,
-          flexShrink: 0,
-          position: "relative",
-          lineHeight: 1.5,
-        }}
-        className="group-hover:[color:rgba(255,255,255,0.3)]"
-      >
-        ⠿
-      </div>
+      {/* Drag handle — hidden when the row can't be reordered (e.g. archived view) */}
+      {draggable && (
+        <div
+          style={{
+            color: "rgba(255,255,255, 0.15)",
+            fontSize: 11,
+            paddingTop: 1,
+            flexShrink: 0,
+            position: "relative",
+            lineHeight: 1.5,
+          }}
+          className="group-hover:[color:rgba(255,255,255,0.3)]"
+        >
+          ⠿
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
@@ -125,28 +150,49 @@ export default function NoteItem({
             maxHeight={140}
           />
         ) : (
-          <div
-            onDoubleClick={startEdit}
-            style={{
-              color: "#cdd6f4",
-              fontSize: 12,
-              lineHeight: 1.5,
-              cursor: "default",
-              wordBreak: "break-word",
-              whiteSpace: compactPreview ? "normal" : "pre-wrap",
-              ...(compactPreview ? {
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              } : {}),
-            }}
-          >
-            {renderNoteMarkdown(note.content, {
-              accent,
-              onToggleCheckbox: (idx) => onUpdate(note.id, toggleCheckboxLine(note.content, idx)),
-            })}
-          </div>
+          <>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+              <div
+                onDoubleClick={startEdit}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  color: "#cdd6f4",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  cursor: "default",
+                  wordBreak: "break-word",
+                  whiteSpace: compactPreview ? "normal" : "pre-wrap",
+                  ...(compactPreview ? {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  } : {}),
+                }}
+              >
+                {renderNoteMarkdown(bodyContent, {
+                  accent,
+                  onToggleCheckbox: (idx) => onUpdate(note.id, toggleCheckboxLine(note.content, idx)),
+                })}
+              </div>
+              {age && (
+                <span style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.5, marginTop: 1, color: "var(--color-text-faint)", fontVariantNumeric: "tabular-nums" }}>{age}</span>
+              )}
+            </div>
+            {(noteTags.length > 0 || editedAge) && (
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 7 }}>
+                {noteTags.map((t) => (
+                  <span key={t} style={{ color: accent || "var(--ea-accent, #cba6da)", background: "rgba(203,166,218,0.12)", borderRadius: 999, padding: "1px 8px", fontSize: 11 }}>#{t}</span>
+                ))}
+                {editedAge && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--color-text-faint)" }}>
+                    <Pencil size={11} strokeWidth={2} aria-hidden="true" /> edited {editedAge}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -159,9 +205,6 @@ export default function NoteItem({
         }
         style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, position: "relative" }}
       >
-        {age && (
-          <span style={{ fontSize: 10, color: "var(--color-text-faint)", fontVariantNumeric: "tabular-nums" }}>{age}</span>
-        )}
         <button
           ref={promoteRef}
           type="button"
@@ -179,15 +222,29 @@ export default function NoteItem({
         </button>
       </div>
       {menu && (
-        <NoteContextMenu
-          x={menu.x}
-          y={menu.y}
-          onClose={closeMenu}
-          onEdit={startEdit}
-          onPromote={onPromote ? () => onPromote(note, promoteRef) : undefined}
-          onArchive={onArchive ? () => onArchive(note.id) : undefined}
-          onDelete={() => onDelete(note.id)}
-        />
+        selected && selectedCount > 0 ? (
+          // Right-clicking a selected note acts on the whole selection (bulk).
+          <NoteContextMenu
+            x={menu.x}
+            y={menu.y}
+            onClose={closeMenu}
+            count={selectedCount}
+            onArchive={onBulkArchive}
+            onUnarchive={onBulkUnarchive}
+            onDelete={onBulkDelete}
+          />
+        ) : (
+          <NoteContextMenu
+            x={menu.x}
+            y={menu.y}
+            onClose={closeMenu}
+            onEdit={startEdit}
+            onPromote={onPromote ? () => onPromote(note, promoteRef) : undefined}
+            onArchive={onArchive ? () => onArchive(note.id) : undefined}
+            onUnarchive={onUnarchive ? () => onUnarchive(note.id) : undefined}
+            onDelete={() => onDelete(note.id)}
+          />
+        )
       )}
     </div>
   );

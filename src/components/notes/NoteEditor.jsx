@@ -20,6 +20,13 @@ export default function NoteEditor({
   const viewRef = useRef(null);
   const onBlurRef = useRef();
   onBlurRef.current = onBlur;
+  // True only while the effect cleanup is tearing the view down. CM's
+  // `view.destroy()` blurs the focused editor, and under StrictMode the mount
+  // effect runs mount->cleanup->mount — so that teardown blur fires on a
+  // freshly-focused editor. Routing it to onBlur made inline edit commit+close
+  // instantly ("editing auto-cancels"); it also turned Escape-to-cancel into a
+  // commit. Guard the blur handler so only genuine user blur (click away) commits.
+  const destroyingRef = useRef(false);
   // The last doc CM emitted. Lets the value-sync effect tell a genuine external
   // change (clear after submit, rollback) apart from CM echoing its own edit
   // back through onChange — so it never re-dispatches mid-type and jumps the cursor.
@@ -35,12 +42,17 @@ export default function NoteEditor({
   };
 
   useEffect(() => {
+    destroyingRef.current = false; // reset: refs persist across StrictMode's simulated remount
     const view = new EditorView({
       state: EditorState.create({
         doc: value,
         extensions: [
           buildNoteEditorExtensions({ callbacksRef: cbRef, placeholderText: placeholder, maxHeight }),
-          EditorView.domEventHandlers({ blur: () => { onBlurRef.current?.(viewRef.current?.state.doc.toString() ?? ""); return false; } }),
+          EditorView.domEventHandlers({ blur: () => {
+            if (destroyingRef.current) return false; // ignore the blur emitted by view.destroy()
+            onBlurRef.current?.(viewRef.current?.state.doc.toString() ?? "");
+            return false;
+          } }),
         ],
       }),
       parent: hostRef.current,
@@ -54,7 +66,7 @@ export default function NoteEditor({
         submit: () => cbRef.current.onSubmit?.(view.state.doc.toString()),
       };
     }
-    return () => { view.destroy(); viewRef.current = null; };
+    return () => { destroyingRef.current = true; view.destroy(); viewRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
