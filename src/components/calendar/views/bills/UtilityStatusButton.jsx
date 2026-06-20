@@ -70,7 +70,7 @@ export default function UtilityStatusButton({ data }) {
           data-calendar-focus-ring="true"
           style={{
             position: "relative",
-            color: open ? "#cba6da" : "rgba(205,214,244,0.75)",
+            color: open ? "var(--sp-accent)" : "rgba(205,214,244,0.75)",
             cursor: "pointer",
             width: 36,
             height: 36,
@@ -78,8 +78,8 @@ export default function UtilityStatusButton({ data }) {
             alignItems: "center",
             justifyContent: "center",
             borderRadius: 8,
-            background: open ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.03)",
-            border: `1px solid ${open ? "rgba(203,166,218,0.32)" : "rgba(255,255,255,0.06)"}`,
+            background: open ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "rgba(255,255,255,0.03)",
+            border: `1px solid ${open ? "color-mix(in srgb, var(--sp-accent) 32%, transparent)" : "rgba(255,255,255,0.06)"}`,
             fontFamily: "inherit",
             transition: "background 120ms, border-color 120ms, color 120ms",
           }}
@@ -94,8 +94,8 @@ export default function UtilityStatusButton({ data }) {
                 width: 6,
                 height: 6,
                 borderRadius: "50%",
-                background: "#f97316",
-                boxShadow: "0 0 6px rgba(249,115,22,0.5), 0 0 0 2px #16161e",
+                background: "var(--sp-orange)",
+                boxShadow: "0 0 6px color-mix(in srgb, var(--sp-orange) 50%, transparent), 0 0 0 2px var(--sp-panel)",
               }}
             />
           )}
@@ -108,14 +108,14 @@ export default function UtilityStatusButton({ data }) {
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                background: "#a6e3a1",
+                background: "var(--sp-green)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 6px rgba(166,227,161,0.5), 0 0 0 2px #16161e",
+                boxShadow: "0 0 6px color-mix(in srgb, var(--sp-green) 50%, transparent), 0 0 0 2px var(--sp-panel)",
               }}
             >
-              <Check size={7} color="#16161e" strokeWidth={3.5} />
+              <Check size={7} color="var(--sp-panel)" strokeWidth={3.5} />
             </span>
           )}
         </button>
@@ -131,7 +131,7 @@ export default function UtilityStatusButton({ data }) {
             right: pos.right,
             zIndex: 50,
             width: 280,
-            background: "#16161e",
+            background: "var(--sp-panel)",
             border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 12,
             boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
@@ -159,8 +159,8 @@ export default function UtilityStatusButton({ data }) {
               const color = !utility.found
                 ? "rgba(255,255,255,0.25)"
                 : utility.isStale
-                  ? "#f97316"
-                  : "#a6e3a1";
+                  ? "var(--sp-orange)"
+                  : "var(--sp-green)";
               const days = utility.next_date ? daysUntil(utility.next_date) : null;
               const relative = relativeDateLabel(days);
               const isPastDate = !!utility.next_date && days != null && days < 0;
@@ -168,9 +168,9 @@ export default function UtilityStatusButton({ data }) {
               const dateColor = !utility.found
                 ? "rgba(255,255,255,0.4)"
                 : utility.isStale
-                  ? "#f97316"
+                  ? "var(--sp-orange)"
                   : utility.isHonored && isPastDate
-                    ? "#a6e3a1"
+                    ? "var(--sp-green)"
                     : "rgba(255,255,255,0.4)";
               const tooltipText =
                 utility.found && relative ? (
@@ -200,7 +200,7 @@ export default function UtilityStatusButton({ data }) {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <Icon size={14} color={color} strokeWidth={2} style={{ flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, color: "#cdd6f4", fontWeight: 500 }}>{utility.label}</span>
+                    <span style={{ fontSize: 13, color: "var(--sp-text)", fontWeight: 500 }}>{utility.label}</span>
                   </div>
                   <Tooltip text={tooltipText} side="right" sideOffset={14} delay={200}>
                     <span

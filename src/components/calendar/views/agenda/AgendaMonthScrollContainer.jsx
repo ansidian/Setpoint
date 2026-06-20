@@ -408,14 +408,14 @@ const AgendaMonthScrollContainer = forwardRef(function AgendaMonthScrollContaine
         display: "flex",
         flexDirection: "column",
         gap: 0,
-        background: "#1f1f24",
+        background: "var(--sp-panel)",
         isolation: "isolate",
       }}
     >
       <style>
         {`
           [data-testid="${testId}"] button:focus-visible {
-            outline: 2px solid color-mix(in srgb, var(--ea-accent, #cba6da) 72%, transparent);
+            outline: 2px solid color-mix(in srgb, var(--ea-accent, var(--sp-accent)) 72%, transparent);
             outline-offset: 2px;
           }
           @media (prefers-reduced-motion: reduce) {

@@ -11,7 +11,7 @@ export default function CalendarEventEditorHeader({
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
       <div>
-        <div style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
+        <div style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
           <span id="calendar-event-editor-title">
             {isEditing ? "Edit event" : isBatchMode ? "New batch" : "New event"}
           </span>

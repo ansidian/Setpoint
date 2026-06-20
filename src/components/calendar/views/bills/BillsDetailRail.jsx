@@ -29,7 +29,7 @@ function BillSelectedCard({ bill, compact = false, actions }) {
 
   return (
     <Motion.div layout transition={motion.layout} style={{ flexShrink: 0 }}>
-      <RailHeroCard accent="#a6e3a1" actions={actions}>
+      <RailHeroCard accent="var(--sp-green)" actions={actions}>
         <Motion.div
           layout
           transition={motion.layout}
@@ -42,7 +42,7 @@ function BillSelectedCard({ bill, compact = false, actions }) {
                 width: 9,
                 height: 9,
                 borderRadius: 999,
-                background: bill.paid ? "#a6e3a1" : urgency.accent,
+                background: bill.paid ? "var(--sp-green)" : urgency.accent,
                 boxShadow: `0 0 0 1px ${bill.paid ? "#a6e3a122" : `${urgency.accent}22`}, 0 0 10px ${bill.paid ? "#a6e3a12b" : `${urgency.accent}2b`}`,
               }}
             />
@@ -104,7 +104,7 @@ function BillSelectedCard({ bill, compact = false, actions }) {
             lineHeight: 1,
             letterSpacing: -0.8,
             fontWeight: 600,
-            color: bill.paid ? "#a6e3a1" : urgency.text,
+            color: bill.paid ? "var(--sp-green)" : urgency.text,
             fontVariantNumeric: "tabular-nums",
           }}
         >
@@ -123,7 +123,7 @@ function BillSelectedCard({ bill, compact = false, actions }) {
                 ? formatDate(bill.next_date)
                 : `${daysLabel(days)} · ${formatDate(bill.next_date)}`
               : "No date"}
-            color={bill.paid ? "#a6e3a1" : urgency.text}
+            color={bill.paid ? "var(--sp-green)" : urgency.text}
           />
           <RailFactTile label="Status" value={statusLabel} />
         </Motion.div>
@@ -144,7 +144,7 @@ function BillSelectedActions({ bill, actualBudgetUrl, payUrl, compact = false })
           icon={ExternalLink}
           label="Open in Actual"
           href={scheduleUrl}
-          accent="#a6e3a1"
+          accent="var(--sp-green)"
           tone="accent"
           size={compact ? "compact" : "default"}
         />
@@ -154,7 +154,7 @@ function BillSelectedActions({ bill, actualBudgetUrl, payUrl, compact = false })
           icon={CreditCard}
           label="Pay Online"
           href={payUrl}
-          accent="#89b4fa"
+          accent="var(--sp-blue)"
           tone="accent"
           size={compact ? "compact" : "default"}
         />
@@ -171,9 +171,9 @@ function SourceWarning({ errors = [] }) {
       style={{
         padding: "8px 10px",
         borderRadius: 8,
-        border: "1px solid rgba(249,226,175,0.16)",
-        background: "rgba(249,226,175,0.06)",
-        color: "rgba(249,226,175,0.86)",
+        border: "1px solid color-mix(in srgb, var(--sp-cream) 16%, transparent)",
+        background: "color-mix(in srgb, var(--sp-cream) 6%, transparent)",
+        color: "color-mix(in srgb, var(--sp-cream) 86%, transparent)",
         fontSize: 11,
         lineHeight: 1.35,
       }}
@@ -202,7 +202,7 @@ function toBillRailItem(bill, selectedBillId, onSelectItem) {
         style={{
           fontSize: 13,
           fontWeight: 600,
-          color: bill.paid ? "#a6e3a1" : bill.type === "transfer" ? "#b4befe" : urgency.text,
+          color: bill.paid ? "var(--sp-green)" : bill.type === "transfer" ? "var(--sp-lavender)" : urgency.text,
           whiteSpace: "nowrap",
           fontVariantNumeric: "tabular-nums",
         }}
@@ -243,7 +243,7 @@ function BillsDetail({
       eyebrow="Billing ledger"
       title={formatFullDate(viewYear, viewMonth, selectedDay, selectedDateKey)}
       summary={summary}
-      accent="#a6e3a1"
+      accent="var(--sp-green)"
       headerContent={selectedBill ? (
         <BillSelectedCard
           bill={selectedBill}

@@ -13,8 +13,8 @@ export function OverviewHero({ model, compact = false }) {
         style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: "radial-gradient(rgba(255,255,255,0.08) 0.8px, transparent 0.8px)",
-          backgroundSize: "20px 20px",
+          backgroundImage: "radial-gradient(var(--sp-dot) 0.5px, transparent 0.5px)",
+          backgroundSize: "10px 10px",
           opacity: 0.18,
           maskImage: "linear-gradient(180deg, rgba(0,0,0,0.9), rgba(0,0,0,0.3))",
         }}
@@ -237,8 +237,8 @@ export function EmptyDayPrimaryAction({ action }) {
       style={{
         padding: "10px 12px",
         borderRadius: 12,
-        border: "1px solid rgba(203,166,218,0.16)",
-        background: "rgba(203,166,218,0.055)",
+        border: "1px solid color-mix(in srgb, var(--sp-accent) 16%, transparent)",
+        background: "color-mix(in srgb, var(--sp-accent) 6%, transparent)",
         display: "flex",
         flexDirection: "column",
         gap: 8,
@@ -254,9 +254,9 @@ export function EmptyDayPrimaryAction({ action }) {
           alignSelf: "flex-start",
           padding: "8px 12px",
           borderRadius: 8,
-          border: hovered ? "1px solid rgba(203,166,218,0.38)" : "1px solid rgba(203,166,218,0.24)",
-          background: hovered ? "rgba(203,166,218,0.18)" : "rgba(203,166,218,0.12)",
-          color: "#cba6da",
+          border: hovered ? "1px solid color-mix(in srgb, var(--sp-accent) 38%, transparent)" : "1px solid color-mix(in srgb, var(--sp-accent) 24%, transparent)",
+          background: hovered ? "color-mix(in srgb, var(--sp-accent) 18%, transparent)" : "color-mix(in srgb, var(--sp-accent) 12%, transparent)",
+          color: "var(--sp-accent)",
           fontSize: 11,
           fontWeight: 700,
           fontFamily: "inherit",
@@ -290,8 +290,8 @@ export function EmptyDayCard({ model, viewYear, viewMonth, selectedDay, compact 
         style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: "radial-gradient(rgba(255,255,255,0.08) 0.8px, transparent 0.8px)",
-          backgroundSize: "20px 20px",
+          backgroundImage: "radial-gradient(var(--sp-dot) 0.5px, transparent 0.5px)",
+          backgroundSize: "10px 10px",
           opacity: 0.16,
         }}
       />

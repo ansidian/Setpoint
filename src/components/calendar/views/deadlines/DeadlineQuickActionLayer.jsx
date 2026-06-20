@@ -22,15 +22,15 @@ function menuStyle(menu) {
 function actionButtonColors(tone, active) {
   if (tone === "danger") {
     return {
-      border: active ? "1px solid rgba(243,139,168,0.52)" : "1px solid rgba(243,139,168,0.34)",
-      background: active ? "rgba(243,139,168,0.20)" : "rgba(243,139,168,0.14)",
-      color: "#f38ba8",
+      border: active ? "1px solid color-mix(in srgb, var(--sp-rose) 52%, transparent)" : "1px solid color-mix(in srgb, var(--sp-rose) 34%, transparent)",
+      background: active ? "color-mix(in srgb, var(--sp-rose) 20%, transparent)" : "color-mix(in srgb, var(--sp-rose) 14%, transparent)",
+      color: "var(--sp-rose)",
     };
   }
   return {
     border: active ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(255,255,255,0.08)",
     background: active ? "rgba(255,255,255,0.075)" : "rgba(255,255,255,0.04)",
-    color: "#cdd6f4",
+    color: "var(--sp-text)",
   };
 }
 
@@ -132,7 +132,7 @@ function ContextMenu({ quickActions }) {
         padding: 8,
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.08)",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         isolation: "isolate",
         display: "flex",
@@ -146,7 +146,7 @@ function ContextMenu({ quickActions }) {
         </div>
       ) : null}
       {menu.error ? (
-        <div data-testid="calendar-deadline-quick-action-error" style={{ color: "#f38ba8", fontSize: 11, lineHeight: 1.35, padding: "4px 6px" }}>
+        <div data-testid="calendar-deadline-quick-action-error" style={{ color: "var(--sp-rose)", fontSize: 11, lineHeight: 1.35, padding: "4px 6px" }}>
           {menu.error}
         </div>
       ) : null}
@@ -191,10 +191,10 @@ function ContextMenu({ quickActions }) {
 function Status({ quickActions }) {
   if (!quickActions.status) return null;
   const toneColor = quickActions.status.tone === "error"
-    ? "#f38ba8"
+    ? "var(--sp-rose)"
     : quickActions.status.tone === "success"
-      ? "#a6e3a1"
-      : "#cba6da";
+      ? "var(--sp-green)"
+      : "var(--sp-accent)";
 
   return (
     <div
@@ -207,7 +207,7 @@ function Status({ quickActions }) {
         padding: "5px 8px",
         borderRadius: 8,
         border: "1px solid rgba(255,255,255,0.08)",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         color: toneColor,
         fontSize: 10.5,
         fontWeight: 700,

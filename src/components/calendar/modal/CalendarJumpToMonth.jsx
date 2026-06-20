@@ -32,13 +32,13 @@ function monthCellStyle(isActive, isToday) {
     letterSpacing: 0.1,
     cursor: "pointer",
     border: isActive
-      ? "1px solid rgba(203,166,218,0.28)"
+      ? "1px solid color-mix(in srgb, var(--sp-accent) 28%, transparent)"
       : "1px solid transparent",
     background: isActive
-      ? "rgba(203,166,218,0.14)"
+      ? "color-mix(in srgb, var(--sp-accent) 14%, transparent)"
       : "transparent",
     color: isActive
-      ? "#cba6da"
+      ? "var(--sp-accent)"
       : isToday
         ? "#ff453a"
         : "rgba(205,214,244,0.65)",
@@ -142,7 +142,7 @@ export default function CalendarJumpToMonth({
         left: pos.left,
         width: 232,
         isolation: "isolate",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))",
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 12,

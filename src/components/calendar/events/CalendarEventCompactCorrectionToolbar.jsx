@@ -54,21 +54,21 @@ function IconButton({
   const [hover, setHover] = useState(false);
   const activeColor = color || "var(--ea-accent)";
   const border = invalid
-    ? "rgba(249,115,22,0.42)"
+    ? "color-mix(in srgb, var(--sp-orange) 42%, transparent)"
     : active
       ? `color-mix(in srgb, ${activeColor} 42%, transparent)`
       : hover && !disabled
         ? "rgba(255,255,255,0.16)"
         : "rgba(255,255,255,0.08)";
   const background = invalid
-    ? "rgba(249,115,22,0.10)"
+    ? "color-mix(in srgb, var(--sp-orange) 10%, transparent)"
     : active
       ? `color-mix(in srgb, ${activeColor} 15%, transparent)`
       : hover && !disabled
         ? "rgba(255,255,255,0.06)"
         : "rgba(255,255,255,0.035)";
   const foreground = invalid
-    ? "#f9e2af"
+    ? "var(--sp-cream)"
     : active
       ? activeColor
       : "rgba(205,214,244,0.58)";

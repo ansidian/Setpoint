@@ -64,8 +64,8 @@ export default function CalendarLocationSuggestionsPanel({
             style={{
               padding: "10px 12px",
               borderRadius: 10,
-              border: "1px solid rgba(243,139,168,0.18)",
-              background: "rgba(243,139,168,0.08)",
+              border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
+              background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
               color: "#f5c2e7",
               fontSize: 11.5,
               lineHeight: 1.5,
@@ -109,12 +109,12 @@ export default function CalendarLocationSuggestionsPanel({
                 padding: "10px 12px",
                 borderRadius: 10,
                 border: active
-                  ? "1px solid rgba(203,166,218,0.34)"
+                  ? "1px solid color-mix(in srgb, var(--sp-accent) 34%, transparent)"
                   : "1px solid rgba(255,255,255,0.06)",
                 background: active
-                  ? "rgba(203,166,218,0.12)"
+                  ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)"
                   : "rgba(255,255,255,0.03)",
-                color: "#cdd6f4",
+                color: "var(--sp-text)",
                 fontFamily: "inherit",
                 cursor: "pointer",
                 textAlign: "left",
@@ -130,10 +130,10 @@ export default function CalendarLocationSuggestionsPanel({
               onMouseLeave={(event) => {
                 event.currentTarget.style.transform = "translateY(0)";
                 event.currentTarget.style.background = active
-                  ? "rgba(203,166,218,0.12)"
+                  ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)"
                   : "rgba(255,255,255,0.03)";
                 event.currentTarget.style.borderColor = active
-                  ? "rgba(203,166,218,0.34)"
+                  ? "color-mix(in srgb, var(--sp-accent) 34%, transparent)"
                   : "rgba(255,255,255,0.06)";
               }}
             >
@@ -145,8 +145,8 @@ export default function CalendarLocationSuggestionsPanel({
                   borderRadius: 999,
                   display: "inline-grid",
                   placeItems: "center",
-                  color: active ? "#cba6da" : "rgba(205,214,244,0.55)",
-                  background: active ? "rgba(203,166,218,0.1)" : "rgba(255,255,255,0.03)",
+                  color: active ? "var(--sp-accent)" : "rgba(205,214,244,0.55)",
+                  background: active ? "color-mix(in srgb, var(--sp-accent) 10%, transparent)" : "rgba(255,255,255,0.03)",
                   flexShrink: 0,
                 }}
               >
@@ -188,7 +188,7 @@ export default function CalendarLocationSuggestionsPanel({
                   height: 18,
                   display: "inline-grid",
                   placeItems: "center",
-                  color: active ? "#cba6da" : "transparent",
+                  color: active ? "var(--sp-accent)" : "transparent",
                 }}
               >
                 <Check size={14} />

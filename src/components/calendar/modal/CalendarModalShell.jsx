@@ -321,10 +321,10 @@ export default function CalendarModalShell({
           margin: "0 auto",
           maxHeight: layout.shellMaxHeight || undefined,
           overflow: "hidden",
-          backgroundColor: "#16161e",
+          backgroundColor: "var(--sp-panel)",
           backgroundImage: [
-            "radial-gradient(circle at top left, rgba(203,166,218,0.14), transparent 30%)",
-            "radial-gradient(circle at 86% 8%, rgba(137,180,250,0.08), transparent 24%)",
+            "radial-gradient(circle at top left, color-mix(in srgb, var(--sp-accent) 14%, transparent), transparent 30%)",
+            "radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--sp-blue) 8%, transparent), transparent 24%)",
             "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01) 18%, rgba(255,255,255,0.01) 82%, rgba(255,255,255,0.025))",
           ].join(", "),
           border: "1px solid rgba(255,255,255,0.06)",

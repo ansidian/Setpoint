@@ -108,8 +108,8 @@ export function CalendarChipReminderMarker({ item }) {
         width: 5,
         height: 5,
         borderRadius: 999,
-        background: "#f9e2af",
-        boxShadow: "0 0 0 2px rgba(249,226,175,0.12)",
+        background: "var(--sp-cream)",
+        boxShadow: "0 0 0 2px color-mix(in srgb, var(--sp-cream) 12%, transparent)",
         pointerEvents: "none",
       }}
     />
@@ -157,9 +157,9 @@ export function CalendarChipStatusIcon({ item, selected, metrics }) {
   const itemHeight = metrics?.itemHeight ?? 24;
   const size = itemHeight >= 36 ? 11 : 10;
   const statusColor = item.statusIcon === "complete"
-    ? "#a6e3a1"
+    ? "var(--sp-green)"
     : item.statusIcon === "in_progress"
-      ? "#89dceb"
+      ? "var(--sp-cyan)"
       : metadataColor(item, selected);
   const Icon = item.statusIcon === "complete" ? CheckCircle2 : CircleDashed;
 

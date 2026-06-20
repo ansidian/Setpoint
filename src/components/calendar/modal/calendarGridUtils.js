@@ -4,7 +4,7 @@ import { isPinnedCalendarGhost } from "./calendarEventSpanLayout.js";
 export const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 export const CELL_HEADER_HEIGHT = 24;
 export const CURRENT_MONTH_BOUNDARY_COLOR = "#0095FF";
-export const OTHER_MONTH_BOUNDARY_COLOR = "rgba(137,180,250,0.32)";
+export const OTHER_MONTH_BOUNDARY_COLOR = "color-mix(in srgb, var(--sp-blue) 32%, transparent)";
 const INLINE_OVERFLOW_LAYER_PADDING = 4;
 const INLINE_OVERFLOW_LAYER_BORDER_WIDTH = 1;
 const INLINE_OVERFLOW_LAYER_ITEM_HEIGHT = 36;

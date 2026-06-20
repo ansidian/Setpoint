@@ -259,7 +259,7 @@ export default function CalendarEventEditorRail({
                     bottom: floatingHost ? -12 : "auto",
                     zIndex: floatingHost ? 2 : "auto",
                     background: floatingHost
-                      ? "linear-gradient(180deg, rgba(22,22,30,0), #16161e 18%)"
+                      ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-panel) 0%, transparent), var(--sp-panel) 18%)"
                       : "transparent",
                   }}
                 >

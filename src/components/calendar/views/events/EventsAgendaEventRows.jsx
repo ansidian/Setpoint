@@ -160,7 +160,7 @@ export function AllDayChip({
         {event.agendaTitle}
       </span>
       {reminderSummary ? (
-        <span data-testid="calendar-agenda-reminder-label" aria-label={reminderSummary} style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, color: "#f9e2af", fontSize: 10 }}>
+        <span data-testid="calendar-agenda-reminder-label" aria-label={reminderSummary} style={{ display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0, color: "var(--sp-cream)", fontSize: 10 }}>
           <Bell size={10} aria-hidden />
           {reminderSummary.replace(/^Reminder\s+/, "")}
         </span>
@@ -246,7 +246,7 @@ export function TimedRow({
         background: batchSelected
           ? `linear-gradient(180deg, ${colorWithAlpha(color, 0.22)}, ${colorWithAlpha(color, 0.10)})`
           : selected ? colorWithAlpha(color, 0.18) : "rgba(255,255,255,0.025)",
-        color: past ? "rgba(205,214,244,0.48)" : "#cdd6f4",
+        color: past ? "rgba(205,214,244,0.48)" : "var(--sp-text)",
         cursor: "pointer",
         textAlign: "left",
         transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
@@ -316,7 +316,7 @@ export function TimedRow({
             lineHeight: 1.25,
           }}
         >
-          {hasVideo ? <Video size={12} strokeWidth={2} aria-label="Video meeting" style={{ display: "inline", marginRight: 5, verticalAlign: "-2px", color: "#89b4fa" }} /> : null}
+          {hasVideo ? <Video size={12} strokeWidth={2} aria-label="Video meeting" style={{ display: "inline", marginRight: 5, verticalAlign: "-2px", color: "var(--sp-blue)" }} /> : null}
           {event.agendaTitle}
         </span>
         {location ? (
@@ -335,7 +335,7 @@ export function TimedRow({
           </span>
         ) : null}
         {reminderSummary ? (
-          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#f9e2af", fontSize: 10.5, lineHeight: 1.3 }}>
+          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--sp-cream)", fontSize: 10.5, lineHeight: 1.3 }}>
             <Bell size={11} aria-hidden />
             {reminderSummary}
           </span>

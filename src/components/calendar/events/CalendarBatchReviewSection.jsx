@@ -26,9 +26,9 @@ function rowShellStyle(hasError) {
     gap: 8,
     padding: "7px 8px",
     borderRadius: 8,
-    border: hasError ? "1px solid rgba(243,139,168,0.18)" : "1px solid rgba(255,255,255,0.045)",
+    border: hasError ? "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)" : "1px solid rgba(255,255,255,0.045)",
     background: hasError
-      ? "rgba(243,139,168,0.055)"
+      ? "color-mix(in srgb, var(--sp-rose) 6%, transparent)"
       : "rgba(255,255,255,0.022)",
   };
 }
@@ -87,7 +87,7 @@ function PickerButton({ icon: IconComponent, value, testId, disabled, anchorRef,
         borderRadius: 6,
         border: "1px solid rgba(255,255,255,0.06)",
         background: "rgba(255,255,255,0.024)",
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         fontSize: 11,
         fontWeight: 650,
         cursor: disabled ? "not-allowed" : "pointer",
@@ -152,7 +152,7 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
             gridColumn: "1 / -1",
             padding: "6px 8px",
             borderRadius: 6,
-            background: "rgba(243,139,168,0.08)",
+            background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
             color: "#f5c2e7",
             fontSize: 10.5,
             lineHeight: 1.4,
@@ -184,9 +184,9 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
           width: 26,
           height: 26,
           borderRadius: 8,
-          border: "1px solid rgba(243,139,168,0.18)",
-          background: "rgba(243,139,168,0.04)",
-          color: disabled ? "rgba(243,139,168,0.35)" : "#f38ba8",
+          border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
+          background: "color-mix(in srgb, var(--sp-rose) 4%, transparent)",
+          color: disabled ? "color-mix(in srgb, var(--sp-rose) 35%, transparent)" : "var(--sp-rose)",
           cursor: disabled ? "not-allowed" : "pointer",
           padding: 0,
           flexShrink: 0,
@@ -194,14 +194,14 @@ function BatchRow({ item, index, allDay, disabled, onUpdateDraft, onRemoveDraft 
         }}
         onMouseEnter={(event) => {
           if (!disabled) {
-            event.currentTarget.style.background = "rgba(243,139,168,0.08)";
-            event.currentTarget.style.borderColor = "rgba(243,139,168,0.28)";
+            event.currentTarget.style.background = "color-mix(in srgb, var(--sp-rose) 8%, transparent)";
+            event.currentTarget.style.borderColor = "color-mix(in srgb, var(--sp-rose) 28%, transparent)";
             event.currentTarget.style.transform = "translateY(-1px)";
           }
         }}
         onMouseLeave={(event) => {
-          event.currentTarget.style.background = "rgba(243,139,168,0.04)";
-          event.currentTarget.style.borderColor = "rgba(243,139,168,0.18)";
+          event.currentTarget.style.background = "color-mix(in srgb, var(--sp-rose) 4%, transparent)";
+          event.currentTarget.style.borderColor = "color-mix(in srgb, var(--sp-rose) 18%, transparent)";
           event.currentTarget.style.transform = "translateY(0)";
         }}
       >

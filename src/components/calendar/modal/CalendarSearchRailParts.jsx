@@ -46,9 +46,9 @@ function buttonChromeStyle(active = false) {
     width: 30,
     height: 30,
     borderRadius: 8,
-    border: `1px solid ${active ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.07)"}`,
-    background: active ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.035)",
-    color: active ? "#cba6da" : "rgba(205,214,244,0.72)",
+    border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 28%, transparent)" : "rgba(255,255,255,0.07)"}`,
+    background: active ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "rgba(255,255,255,0.035)",
+    color: active ? "var(--sp-accent)" : "rgba(205,214,244,0.72)",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -67,8 +67,8 @@ function applyButtonHover(event) {
 
 function resetButtonHover(event, active = false) {
   event.currentTarget.style.transform = "translateY(0)";
-  event.currentTarget.style.background = active ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.035)";
-  event.currentTarget.style.borderColor = active ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.07)";
+  event.currentTarget.style.background = active ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "rgba(255,255,255,0.035)";
+  event.currentTarget.style.borderColor = active ? "color-mix(in srgb, var(--sp-accent) 28%, transparent)" : "rgba(255,255,255,0.07)";
 }
 
 export function CalendarSearchRailHeader({
@@ -89,7 +89,7 @@ export function CalendarSearchRailHeader({
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
-          <Search size={13} aria-hidden="true" color="rgba(203,166,218,0.78)" />
+          <Search size={13} aria-hidden="true" color="color-mix(in srgb, var(--sp-accent) 78%, transparent)" />
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.3, textTransform: "uppercase", color: "rgba(205,214,244,0.68)" }}>
             Search
           </span>
@@ -135,7 +135,7 @@ export function CalendarSearchRailHeader({
             border: 0,
             outline: "none",
             background: "transparent",
-            color: "#cdd6f4",
+            color: "var(--sp-text)",
             fontFamily: "inherit",
             fontSize: 12,
             letterSpacing: 0,
@@ -162,7 +162,7 @@ export function CalendarSearchRailHeader({
           style={{
             minHeight: 14,
             fontSize: 10.5,
-            color: search.error ? "#f38ba8" : "var(--color-text-faint)",
+            color: search.error ? "var(--sp-rose)" : "var(--color-text-faint)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -219,7 +219,7 @@ export function SearchResultRow({
         borderRadius: 8,
         border: selected ? `1px solid ${colorWithAlpha(color, 0.75)}` : "1px solid rgba(255,255,255,0.055)",
         background: selected ? colorWithAlpha(color, 0.18) : "rgba(255,255,255,0.025)",
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         textAlign: "left",
         cursor: "pointer",
         fontFamily: "inherit",
@@ -276,7 +276,7 @@ export function SearchResultRow({
             fontSize: 12,
             lineHeight: 1.25,
             fontWeight: 600,
-            color: "#cdd6f4",
+            color: "var(--sp-text)",
             overflow: "hidden",
           }}
         >
@@ -328,7 +328,7 @@ export function SearchDateHeader({ dateKey, todayKey, weather, onActivate, regis
         padding: "8px 10px 7px",
         border: 0,
         borderRadius: 0,
-        background: "#1f1f24",
+        background: "var(--sp-panel)",
         color: isToday ? "#0495FF" : "#B1B1B3",
         fontFamily: "inherit",
         fontSize: 12,
@@ -348,10 +348,10 @@ export function SearchDateHeader({ dateKey, todayKey, weather, onActivate, regis
         }
       }}
       onMouseEnter={(event) => {
-        event.currentTarget.style.background = "#23232a";
+        event.currentTarget.style.background = "var(--sp-panel)";
       }}
       onMouseLeave={(event) => {
-        event.currentTarget.style.background = "#1f1f24";
+        event.currentTarget.style.background = "var(--sp-panel)";
       }}
     >
       <span>{label}</span>

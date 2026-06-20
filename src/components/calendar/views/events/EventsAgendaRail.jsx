@@ -103,9 +103,9 @@ function AgendaHeader({
         border: "0",
         borderRadius: 0,
         background: dropActive
-          ? "linear-gradient(180deg, rgba(203,166,218,0.16), rgba(203,166,218,0.08)), #1f1f24"
-          : "#1f1f24",
-        boxShadow: dropActive ? "inset 0 0 0 1px rgba(203,166,218,0.24)" : "none",
+          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel)"
+          : "var(--sp-panel)",
+        boxShadow: dropActive ? "inset 0 0 0 1px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
         color: group.dateKey === todayKey ? "#0495FF" : "#B1B1B3",
         fontSize: 12,
         fontWeight: 800,
@@ -118,13 +118,13 @@ function AgendaHeader({
       }}
       onMouseEnter={(event) => {
         event.currentTarget.style.background = dropActive
-          ? "linear-gradient(180deg, rgba(203,166,218,0.18), rgba(203,166,218,0.09)), #23232a"
-          : "#23232a";
+          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 18%, transparent), color-mix(in srgb, var(--sp-accent) 9%, transparent)), var(--sp-panel)"
+          : "var(--sp-panel)";
       }}
       onMouseLeave={(event) => {
         event.currentTarget.style.background = dropActive
-          ? "linear-gradient(180deg, rgba(203,166,218,0.16), rgba(203,166,218,0.08)), #1f1f24"
-          : "#1f1f24";
+          ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 16%, transparent), color-mix(in srgb, var(--sp-accent) 8%, transparent)), var(--sp-panel)"
+          : "var(--sp-panel)";
       }}
     >
       <span>{group.headerLabel}</span>

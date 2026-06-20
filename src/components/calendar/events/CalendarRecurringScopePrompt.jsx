@@ -48,8 +48,8 @@ export default function CalendarRecurringScopePrompt({
               }}
               onMouseLeave={(event) => {
                 event.currentTarget.style.transform = "translateY(0)";
-                event.currentTarget.style.background = selected ? "rgba(203,166,218,0.14)" : "rgba(255,255,255,0.03)";
-                event.currentTarget.style.borderColor = selected ? "rgba(203,166,218,0.34)" : "rgba(255,255,255,0.08)";
+                event.currentTarget.style.background = selected ? "color-mix(in srgb, var(--sp-accent) 14%, transparent)" : "rgba(255,255,255,0.03)";
+                event.currentTarget.style.borderColor = selected ? "color-mix(in srgb, var(--sp-accent) 34%, transparent)" : "rgba(255,255,255,0.08)";
               }}
               style={{
                 display: "flex",
@@ -58,10 +58,10 @@ export default function CalendarRecurringScopePrompt({
                 padding: "12px 12px 11px",
                 borderRadius: 10,
                 border: selected
-                  ? "1px solid rgba(203,166,218,0.34)"
+                  ? "1px solid color-mix(in srgb, var(--sp-accent) 34%, transparent)"
                   : "1px solid rgba(255,255,255,0.08)",
-                background: selected ? "rgba(203,166,218,0.14)" : "rgba(255,255,255,0.03)",
-                color: selected ? "#cba6da" : "#cdd6f4",
+                background: selected ? "color-mix(in srgb, var(--sp-accent) 14%, transparent)" : "rgba(255,255,255,0.03)",
+                color: selected ? "var(--sp-accent)" : "var(--sp-text)",
                 textAlign: "left",
                 cursor: disabled ? "not-allowed" : "pointer",
                 fontFamily: "inherit",
@@ -72,7 +72,7 @@ export default function CalendarRecurringScopePrompt({
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {option.label}
               </span>
-              <span style={{ fontSize: 10.5, lineHeight: 1.45, color: selected ? "rgba(203,166,218,0.86)" : "var(--color-text-faint)" }}>
+              <span style={{ fontSize: 10.5, lineHeight: 1.45, color: selected ? "color-mix(in srgb, var(--sp-accent) 86%, transparent)" : "var(--color-text-faint)" }}>
                 {option.description}
               </span>
             </button>

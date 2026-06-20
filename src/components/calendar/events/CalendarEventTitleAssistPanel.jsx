@@ -32,7 +32,7 @@ export default function CalendarEventTitleAssistPanel({
           data-testid="calendar-event-title-source-preview"
           style={{ fontSize: 11.5, color: "rgba(205,214,244,0.62)", lineHeight: 1.45 }}
         >
-          Parsed calendar source: <span style={{ color: "#89dceb" }}>{titleAssist.sourceQuery}</span>
+          Parsed calendar source: <span style={{ color: "var(--sp-cyan)" }}>{titleAssist.sourceQuery}</span>
         </div>
       ) : null}
     </div>

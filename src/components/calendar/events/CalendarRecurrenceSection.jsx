@@ -102,7 +102,7 @@ function StyledSelect({ options, value, onChange, disabled, testId }) {
           borderRadius: 8,
           border: "1px solid rgba(255,255,255,0.06)",
           background: open ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.03)",
-          color: "#cdd6f4",
+          color: "var(--sp-text)",
           fontSize: 12,
           fontFamily: "inherit",
           cursor: disabled ? "not-allowed" : "pointer",
@@ -152,8 +152,8 @@ function StyledSelect({ options, value, onChange, disabled, testId }) {
                     padding: "7px 10px",
                     borderRadius: 6,
                     border: "none",
-                    background: isSelected ? "rgba(203,166,218,0.12)" : "transparent",
-                    color: isSelected ? "#cba6da" : "#cdd6f4",
+                    background: isSelected ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "transparent",
+                    color: isSelected ? "var(--sp-accent)" : "var(--sp-text)",
                     fontSize: 12,
                     fontWeight: isSelected ? 600 : 400,
                     fontFamily: "inherit",
@@ -165,7 +165,7 @@ function StyledSelect({ options, value, onChange, disabled, testId }) {
                     if (!isSelected) event.currentTarget.style.background = "rgba(255,255,255,0.05)";
                   }}
                   onMouseLeave={(event) => {
-                    event.currentTarget.style.background = isSelected ? "rgba(203,166,218,0.12)" : "transparent";
+                    event.currentTarget.style.background = isSelected ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "transparent";
                   }}
                 >
                   {o.label}
@@ -196,7 +196,7 @@ function InlineInput({ type, value, testId, disabled, onChange, min, step }) {
         border: "1px solid rgba(255,255,255,0.06)",
         borderRadius: 8,
         padding: "8px 10px",
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         fontSize: 12,
         outline: "none",
         boxSizing: "border-box",
@@ -333,10 +333,10 @@ export default function CalendarRecurrenceSection({
                     padding: "6px 10px",
                     borderRadius: 999,
                     border: selected
-                      ? "1px solid rgba(203,166,218,0.34)"
+                      ? "1px solid color-mix(in srgb, var(--sp-accent) 34%, transparent)"
                       : "1px solid rgba(255,255,255,0.08)",
-                    background: selected ? "rgba(203,166,218,0.14)" : "rgba(255,255,255,0.03)",
-                    color: selected ? "#cba6da" : "rgba(205,214,244,0.7)",
+                    background: selected ? "color-mix(in srgb, var(--sp-accent) 14%, transparent)" : "rgba(255,255,255,0.03)",
+                    color: selected ? "var(--sp-accent)" : "rgba(205,214,244,0.7)",
                     fontSize: 11,
                     fontWeight: 600,
                     cursor: disabled ? "not-allowed" : "pointer",

@@ -511,7 +511,7 @@ export default function CalendarFloatingDetailPanel({
             width: "100%",
             borderRadius: 16,
             border: "1px solid rgba(255,255,255,0.09)",
-            background: "#16161e",
+            background: "var(--sp-panel)",
             boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
             isolation: "isolate",
             overflow: "hidden",

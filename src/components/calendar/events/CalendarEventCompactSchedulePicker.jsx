@@ -13,8 +13,8 @@ import {
 const ACCENT = "var(--ea-accent)";
 
 const segmentStyle = (active) => ({
-  border: active ? "1px solid rgba(203,166,218,0.36)" : "1px solid rgba(255,255,255,0.07)",
-  background: active ? "rgba(203,166,218,0.14)" : "rgba(255,255,255,0.035)",
+  border: active ? "1px solid color-mix(in srgb, var(--sp-accent) 36%, transparent)" : "1px solid rgba(255,255,255,0.07)",
+  background: active ? "color-mix(in srgb, var(--sp-accent) 14%, transparent)" : "rgba(255,255,255,0.035)",
   color: active ? "#f5e0ff" : "rgba(205,214,244,0.74)",
   borderRadius: 8,
   padding: "7px 9px",
@@ -199,7 +199,7 @@ export default function CalendarEventCompactSchedulePicker({
             const background = selected
               ? ACCENT
               : inRange
-                ? "rgba(203,166,218,0.16)"
+                ? "color-mix(in srgb, var(--sp-accent) 16%, transparent)"
                 : "transparent";
 
             return (
@@ -212,7 +212,7 @@ export default function CalendarEventCompactSchedulePicker({
                 onClick={() => selectDate(cell.dateKey)}
                 style={{
                   height: 28,
-                  border: inRange ? "1px solid rgba(203,166,218,0.22)" : "1px solid transparent",
+                  border: inRange ? "1px solid color-mix(in srgb, var(--sp-accent) 22%, transparent)" : "1px solid transparent",
                   borderRadius: 7,
                   background,
                   color: disabled
@@ -255,7 +255,7 @@ export default function CalendarEventCompactSchedulePicker({
               setActiveTimeField(null);
               updateField("allDay", event.target.checked);
             }}
-            style={{ accentColor: "#cba6da" }}
+            style={{ accentColor: "var(--sp-accent)" }}
           />
           All day
         </label>

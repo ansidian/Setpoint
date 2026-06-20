@@ -31,12 +31,12 @@ function PresetButton({ option, selected, disabled, onSelect }) {
         padding: "7px 9px",
         borderRadius: 8,
         border: selected
-          ? "1px solid rgba(203,166,218,0.34)"
+          ? "1px solid color-mix(in srgb, var(--sp-accent) 34%, transparent)"
           : hover && !disabled
             ? "1px solid rgba(255,255,255,0.13)"
             : "1px solid rgba(255,255,255,0.06)",
         background: selected
-          ? "rgba(203,166,218,0.13)"
+          ? "color-mix(in srgb, var(--sp-accent) 13%, transparent)"
           : hover && !disabled
             ? "rgba(255,255,255,0.055)"
             : "rgba(255,255,255,0.03)",
@@ -51,7 +51,7 @@ function PresetButton({ option, selected, disabled, onSelect }) {
       }}
     >
       <span>{option.label}</span>
-      <Check size={13} style={{ color: selected ? "#cba6da" : "transparent" }} />
+      <Check size={13} style={{ color: selected ? "var(--sp-accent)" : "transparent" }} />
     </button>
   );
 }
