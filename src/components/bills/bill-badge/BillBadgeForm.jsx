@@ -285,21 +285,21 @@ function FeeAndSendRow({
               setFeeOverride(!feeEnabled);
             }}
             className={cn("relative rounded-full transition-colors duration-200 flex-shrink-0 cursor-pointer", isMobile ? "w-[34px] h-[18px]" : "w-[28px] h-[14px]")}
-            style={{ background: feeEnabled ? "rgba(203,166,218,0.35)" : "rgba(255,255,255,0.08)" }}
+            style={{ background: feeEnabled ? "color-mix(in srgb, var(--sp-accent) 35%, transparent)" : "rgba(255,255,255,0.08)" }}
             aria-label="Toggle CC fee"
           >
             <span
               className={cn("absolute rounded-full transition-all duration-200", isMobile ? "top-[2px] w-[14px] h-[14px]" : "top-[2px] w-[10px] h-[10px]")}
               style={{
                 left: isMobile ? (feeEnabled ? "18px" : "2px") : (feeEnabled ? "15px" : "3px"),
-                background: feeEnabled ? "#cba6da" : "rgba(205,214,244,0.3)",
+                background: feeEnabled ? "var(--sp-accent)" : "rgba(205,214,244,0.3)",
               }}
             />
           </button>
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {feeEnabled && parsedFee > 0 ? (
               <span className={cn("text-muted-foreground/75 truncate", isMobile ? "text-[11px]" : "text-[10px]")}>
-                ${baseAmount.toFixed(2)} + ${parsedFee.toFixed(2)} = <span className="text-[#cba6da] font-medium">${totalAmount.toFixed(2)}</span>
+                ${baseAmount.toFixed(2)} + ${parsedFee.toFixed(2)} = <span className="text-[var(--sp-accent)] font-medium">${totalAmount.toFixed(2)}</span>
               </span>
             ) : (
               <span className={cn("text-muted-foreground/75 truncate", isMobile ? "text-[11px]" : "text-[10px]")}>
@@ -318,7 +318,7 @@ function FeeAndSendRow({
                   onClick={(event) => event.stopPropagation()}
                   placeholder="0.00"
                   className={cn(
-                    "pl-[16px] pr-2 rounded-md font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus:border-[#cba6da]/40",
+                    "pl-[16px] pr-2 rounded-md font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus:border-[var(--sp-accent)]/40",
                     isMobile ? "w-[76px] h-[28px] text-[11px]" : "w-[68px] h-[22px] text-[10px]",
                   )}
                 />
@@ -334,8 +334,8 @@ function FeeAndSendRow({
             "w-full mt-3 gap-1.5 font-semibold transition-all duration-200",
             isMobile ? "h-10 text-[13px]" : "h-9 text-[12px]",
             canSend
-              ? "bg-[#cba6da] text-[#1e1e2e] border-none hover:bg-[#d4b3e2] hover:-translate-y-px active:translate-y-0"
-              : "bg-[#cba6da]/20 text-muted-foreground border-none cursor-not-allowed",
+              ? "bg-[var(--sp-accent)] text-[var(--sp-page)] border-none hover:bg-[#d4b3e2] hover:-translate-y-px active:translate-y-0"
+              : "bg-[var(--sp-accent)]/20 text-muted-foreground border-none cursor-not-allowed",
           )}
         >
           <Plus size={14} strokeWidth={2.5} />
@@ -353,21 +353,21 @@ function FeeAndSendRow({
           setFeeOverride(!feeEnabled);
         }}
         className="relative w-[28px] h-[14px] rounded-full transition-colors duration-200 flex-shrink-0 cursor-pointer"
-        style={{ background: feeEnabled ? "rgba(203,166,218,0.35)" : "rgba(255,255,255,0.08)" }}
+        style={{ background: feeEnabled ? "color-mix(in srgb, var(--sp-accent) 35%, transparent)" : "rgba(255,255,255,0.08)" }}
         aria-label="Toggle CC fee"
       >
         <span
           className="absolute top-[2px] w-[10px] h-[10px] rounded-full transition-all duration-200"
           style={{
             left: feeEnabled ? "15px" : "3px",
-            background: feeEnabled ? "#cba6da" : "rgba(205,214,244,0.3)",
+            background: feeEnabled ? "var(--sp-accent)" : "rgba(205,214,244,0.3)",
           }}
         />
       </button>
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {feeEnabled && parsedFee > 0 ? (
           <span className="text-[10px] text-muted-foreground/75 truncate">
-            ${baseAmount.toFixed(2)} + ${parsedFee.toFixed(2)} CC fee = <span className="text-[#cba6da] font-medium">${totalAmount.toFixed(2)}</span>
+            ${baseAmount.toFixed(2)} + ${parsedFee.toFixed(2)} CC fee = <span className="text-[var(--sp-accent)] font-medium">${totalAmount.toFixed(2)}</span>
           </span>
         ) : (
           <span className="text-[10px] text-muted-foreground/75 truncate">CC processing fee</span>
@@ -383,7 +383,7 @@ function FeeAndSendRow({
               onChange={(event) => setCustomFee(event.target.value)}
               onClick={(event) => event.stopPropagation()}
               placeholder="0.00"
-              className="w-[68px] pl-[16px] pr-2 h-[22px] rounded-md text-[10px] font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus:border-[#cba6da]/40"
+              className="w-[68px] pl-[16px] pr-2 h-[22px] rounded-md text-[10px] font-medium bg-input-bg border border-white/[0.08] text-foreground outline-none focus:border-[var(--sp-accent)]/40"
             />
           </div>
         )}
@@ -395,8 +395,8 @@ function FeeAndSendRow({
         className={cn(
           "h-8 px-4 gap-1.5 text-[11px] font-semibold transition-all duration-200 shrink-0",
           canSend
-            ? "bg-[#cba6da] text-[#1e1e2e] border-none hover:bg-[#d4b3e2] hover:-translate-y-px active:translate-y-0"
-            : "bg-[#cba6da]/20 text-muted-foreground border-none cursor-not-allowed",
+            ? "bg-[var(--sp-accent)] text-[var(--sp-page)] border-none hover:bg-[#d4b3e2] hover:-translate-y-px active:translate-y-0"
+            : "bg-[var(--sp-accent)]/20 text-muted-foreground border-none cursor-not-allowed",
         )}
       >
         <Plus size={13} strokeWidth={2.5} />
@@ -531,7 +531,7 @@ export default function BillBadgeForm({
             onSend={handleSend}
           />
           {state === "error" && (
-            <div className="text-[11px] text-[#f38ba8] mt-1.5">
+            <div className="text-[11px] text-[var(--sp-rose)] mt-1.5">
               {errorMessage || "Failed to send — check fields and try again."}
             </div>
           )}
@@ -541,19 +541,19 @@ export default function BillBadgeForm({
       {state === "sending" && (
         <div
           className="flex items-center justify-center gap-2 px-4 py-1.5 mt-2 rounded-md"
-          style={{ background: "rgba(203,166,218,0.06)", border: "1px solid rgba(203,166,218,0.1)" }}
+          style={{ background: "color-mix(in srgb, var(--sp-accent) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--sp-accent) 10%, transparent)" }}
         >
           <div className="w-3.5 h-3.5 border-[1.5px] border-white/[0.06] border-t-primary rounded-full animate-spin" />
-          <span className="text-[11px] text-[#cba6da] font-medium">Syncing with Actual Budget…</span>
+          <span className="text-[11px] text-[var(--sp-accent)] font-medium">Syncing with Actual Budget…</span>
         </div>
       )}
       {state === "sent" && (
         <div
           className="flex items-center justify-center gap-1.5 px-4 py-1.5 mt-2 rounded-md"
-          style={{ background: "rgba(166,227,161,0.06)", border: "1px solid rgba(166,227,161,0.15)" }}
+          style={{ background: "color-mix(in srgb, var(--sp-green) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--sp-green) 15%, transparent)" }}
         >
-          <Check size={13} strokeWidth={2.5} color="#a6e3a1" />
-          <span className="text-[11px] font-semibold" style={{ color: "#a6e3a1" }}>
+          <Check size={13} strokeWidth={2.5} color="var(--sp-green)" />
+          <span className="text-[11px] font-semibold" style={{ color: "var(--sp-green)" }}>
             {successMessage}
           </span>
         </div>

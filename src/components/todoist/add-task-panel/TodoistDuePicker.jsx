@@ -5,7 +5,7 @@ import useIsMobile from "@/hooks/useIsMobile";
 
 const PICKER_WIDTH = 300;
 const PICKER_HEIGHT = 432;
-const ACCENT = "var(--ea-accent)";
+const ACCENT = "var(--sp-accent)";
 
 export default function TodoistDuePicker({
   anchorRef,

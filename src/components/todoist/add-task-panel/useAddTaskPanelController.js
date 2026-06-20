@@ -75,7 +75,7 @@ export default function useAddTaskPanelController({
   const [manualPriority, setManualPriority] = useState(editingTask?.priority ?? null);
   const [manualLabels, setManualLabels] = useState(
     editingTask?.labels?.length
-      ? editingTask.labels.map((name) => ({ id: `name:${name}`, name, color: "#cba6da" }))
+      ? editingTask.labels.map((name) => ({ id: `name:${name}`, name, color: "var(--sp-accent)" }))
       : null,
   );
   const seededCreateDue = useMemo(

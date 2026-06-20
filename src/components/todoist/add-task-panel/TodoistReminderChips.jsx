@@ -27,9 +27,9 @@ function ReminderPill({ chip, disabled, onRemove }) {
         gap: 6,
         minHeight: 26,
         borderRadius: 999,
-        border: muted ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(249,226,175,0.22)",
-        background: muted ? "rgba(255,255,255,0.025)" : "rgba(249,226,175,0.08)",
-        color: muted ? "var(--color-text-faint)" : "#cdd6f4",
+        border: muted ? "1px solid rgba(255,255,255,0.06)" : "1px solid color-mix(in srgb, var(--sp-cream) 22%, transparent)",
+        background: muted ? "rgba(255,255,255,0.025)" : "color-mix(in srgb, var(--sp-cream) 8%, transparent)",
+        color: muted ? "var(--color-text-faint)" : "var(--sp-text)",
         padding: "3px 4px 3px 9px",
         fontSize: 11,
         fontWeight: 600,
@@ -103,7 +103,7 @@ export default function TodoistReminderChips({
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 7, minWidth: 0 }}>
-          <Bell size={13} color="rgba(249,226,175,0.86)" aria-hidden />
+          <Bell size={13} color="color-mix(in srgb, var(--sp-cream) 86%, transparent)" aria-hidden />
           <span style={{ color: "rgba(205,214,244,0.72)", fontSize: 11, fontWeight: 700 }}>
             Reminders
           </span>
@@ -150,7 +150,7 @@ export default function TodoistReminderChips({
       ) : null}
 
       <ReminderDateTimePicker
-        accent="#f9e2af"
+        accent="var(--sp-cream)"
         ariaLabel="Custom Todoist reminder picker"
         customReminder={customReminder}
         disabled={disabled || !hasAnchor}
@@ -161,7 +161,7 @@ export default function TodoistReminderChips({
       />
 
       {reminderError ? (
-        <div style={{ color: "#f9e2af", fontSize: 11, lineHeight: 1.35 }}>
+        <div style={{ color: "var(--sp-cream)", fontSize: 11, lineHeight: 1.35 }}>
           {reminderError}
         </div>
       ) : null}

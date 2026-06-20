@@ -95,7 +95,7 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
-            <div id="todoist-editor-title" style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
+            <div id="todoist-editor-title" style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
               {isEdit ? "Edit deadline" : "New deadline"}
             </div>
           </div>
@@ -257,7 +257,7 @@ export default function AddTaskPanelFloatingEditor({ active, state }) {
               style={{
                 background: "rgba(205,214,244,0.04)",
                 border: resolvedLabels.length
-                  ? "1px solid rgba(166,218,203,0.15)"
+                  ? "1px solid color-mix(in srgb, var(--sp-teal) 15%, transparent)"
                   : "1px solid rgba(205,214,244,0.08)",
                 borderRadius: 8,
                 padding: "6px 12px",

@@ -37,8 +37,8 @@ export default function BillBadge({
       }}
       className={usesStackedLayout ? "px-0 py-0" : "rounded-xl px-4 py-3"}
       style={usesStackedLayout ? undefined : {
-        background: "rgba(203,166,218,0.04)",
-        border: "1px solid rgba(203,166,218,0.1)",
+        background: "color-mix(in srgb, var(--sp-accent) 4%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--sp-accent) 10%, transparent)",
       }}
     >
       <BillBadgeForm

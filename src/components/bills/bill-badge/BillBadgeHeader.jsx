@@ -28,9 +28,9 @@ function ExtractButton({ extractState, onClick, disabled = false, className, var
       style={
         extractState === "error"
           ? {
-            color: "#f38ba8",
-            background: "rgba(243,139,168,0.1)",
-            border: "1px solid rgba(243,139,168,0.3)",
+            color: "var(--sp-rose)",
+            background: "color-mix(in srgb, var(--sp-rose) 10%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--sp-rose) 30%, transparent)",
           }
           : {
             color: "#ffffff",

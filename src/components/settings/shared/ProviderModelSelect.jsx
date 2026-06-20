@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { SectionLabel } from "@/components/settings/settings-ui";
 
-const SELECT_CONTENT_CLASS = "bg-[#16161e] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
+const SELECT_CONTENT_CLASS = "bg-[var(--sp-panel)] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
 const SELECT_TRIGGER_CLASS = "w-full bg-input/30 transition-colors hover:bg-input/50";
 
 export default function ProviderModelSelect({
