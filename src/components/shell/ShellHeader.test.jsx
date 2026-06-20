@@ -31,7 +31,6 @@ function renderHeader(overrides = {}) {
         onTab={vi.fn()}
         onOpenPalette={vi.fn()}
         onOpenAnalytics={vi.fn()}
-        onOpenCustomize={vi.fn()}
         onOpenHistory={vi.fn()}
         onOpenCalendar={vi.fn()}
         onQuickRefresh={vi.fn()}

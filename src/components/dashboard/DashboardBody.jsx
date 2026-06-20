@@ -1,31 +1,24 @@
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react";
-import DashboardHero from "./DashboardHero";
 import TodayTimeline from "./TodayTimeline";
-import { DeadlinesRail, BillsRail, InboxPeek } from "./rails/Rails";
-import { focusPressureTarget } from "../../lib/focus-windows";
+import NeedsYouBand from "./needsYou/NeedsYouBand";
+import ContextColumn from "./context/ContextColumn.jsx";
 import { getEventSelectionId } from "../../lib/shell-helpers";
 import {
-  DashboardBodyLayout,
+  ThreeTierLayout,
   DashboardSurface,
 } from "./layout/DashboardScenePrimitives";
-import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel";
 import { calendarContentSignature } from "../../hooks/currentDashboardModel";
+import { markSnapshotItemHandled } from "../../api";
+import { useDashboard } from "../../context/DashboardContext";
 
 const EMPTY_EMAIL_ACCOUNTS = [];
 
 function DashboardBodyInner({
-  briefing, liveData, activeSnapshot, calendarRange, customize, accent,
-  isMobile = false, calendarDeadlines = undefined, calendarDeadlinesLoading = false, calendarDeadlinesError = false,
-  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar, onOpenDeadlinesCalendar, onOpenDeadlineCreate, onJumpSection, setAddTaskOpen,
+  liveData, activeSnapshot, calendarRange, accent,
+  isMobile = false, calendarDeadlines = undefined, calendarDeadlinesError = false,
+  onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar,
 }) {
-  const { dashboardLayout, density, showInboxPeek } = customize;
-  const layoutPlan = resolveDashboardBodyLayout({
-    isMobile,
-    dashboardLayout,
-    showInboxPeek,
-  });
-  const effectiveLayout = layoutPlan.layoutMode;
-
+  const { handleCompleteTask } = useDashboard();
   const seededEvents = useMemo(() => liveData.liveCalendar || [], [liveData.liveCalendar]);
   const [events, setEvents] = useState([]);
   const [liveEventsReady, setLiveEventsReady] = useState(false);
@@ -136,23 +129,15 @@ function DashboardBodyInner({
     return Array.from(accounts.values());
   }, [accent, activeSnapshot]);
   const emailAccounts = activeSnapshotEmailAccounts || EMPTY_EMAIL_ACCOUNTS;
-  const pressureNow = useMemo(() => new Date(`${today}T12:00:00Z`).getTime(), [today]);
+  // NeedsYouBand reads liveDeadlines.upcoming (object form); `deadlines` is the
+  // flattened array, so wrap it (memoized to keep the band's model cache stable).
+  const bandDeadlines = useMemo(() => ({ upcoming: deadlines }), [deadlines]);
   const displayEvents = liveEventsReady ? events : seededEvents;
   const eventLoadingState = liveEventsReady
     ? "ready"
     : seededEvents.length > 0
       ? "refreshing"
       : "empty_loading";
-  const billsLoadingState = liveData.actualConfigured && liveData.billsLoading && !bills.length
-    ? "empty_loading"
-    : "ready";
-  const deadlinesLoadingState = !calendarDeadlinesReady && !allowCurrentDeadlineFallback && (calendarDeadlinesLoading || calendarDeadlines === null)
-    ? "empty_loading"
-    : "ready";
-  const pressureFocusTarget = useMemo(
-    () => focusPressureTarget(deadlines, pressureNow),
-    [deadlines, pressureNow],
-  );
 
   const handleRailJump = useCallback((payload, anchor) => {
     if (!payload) return;
@@ -170,132 +155,56 @@ function DashboardBodyInner({
     }
   }, [onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 
-  // Stable handler for the (memoized) InboxPeek rail's footer button, so a pure
-  // poll/refresh re-render of DashboardBody does not hand it a fresh arrow identity.
+  // Stable inbox-open handler shared by the band and the context column, so a
+  // pure poll/refresh re-render does not hand them a fresh arrow identity.
   const handleOpenInbox = useCallback(() => onOpenEmail(null), [onOpenEmail]);
 
-  // Stable callbacks for the (memoized) hero, so a pure poll/refresh re-render
-  // of DashboardBody does not hand DashboardHero fresh function identities.
-  const handleHeroOpenPressure = useCallback(() => {
-    onOpenDeadlinesCalendar?.(pressureFocusTarget?.date || null, pressureFocusTarget?.id || null);
-  }, [onOpenDeadlinesCalendar, pressureFocusTarget]);
+  // Wire the band's "handled" action straight to the snapshot endpoint; it emits
+  // the SSE the dashboard refetches on, so no extra dispatch hook is needed here.
+  const handleMarkHandled = useCallback((snapshotItemId) => {
+    if (snapshotItemId != null) Promise.resolve(markSnapshotItemHandled(snapshotItemId)).catch(() => {});
+  }, []);
 
-  const handleHeroQuickAction = useCallback((action) => {
-    if (action === "deadline") {
-      if (onOpenDeadlineCreate) onOpenDeadlineCreate();
-      else setAddTaskOpen?.(true);
-    } else if (action === "event") {
-      onOpenEventsCalendar(today, "new");
-    }
-  }, [onOpenDeadlineCreate, setAddTaskOpen, onOpenEventsCalendar, today]);
+  // Deadline "Mark done" in the band routes through the same canonical completer
+  // the deadline popover uses (optimistic flag → completeDeadlineOccurrence →
+  // revert on failure), so the Todoist task is actually marked complete.
+  const handleCompleteDeadline = useCallback((id, data) => {
+    Promise.resolve(handleCompleteTask(id, data)).catch(() => {});
+  }, [handleCompleteTask]);
 
-  const handleHeroJump = useCallback((payload, anchor) => {
-    if (payload?.kind === "deadline") {
-      if (payload.data) {
-        onOpenDeadline(payload.data, anchor);
-      } else if (payload.id && payload.date) {
-        onOpenDeadlinesCalendar?.(payload.date, payload.id);
-      } else {
-        onOpenDeadlinesCalendar?.(payload.date || null);
-      }
-    } else if (payload?.kind === "event") {
-      if (payload.id && payload.date) onOpenEventsCalendar(payload.date, payload.id);
-      else onJumpSection("timeline");
-    } else if (payload?.kind === "bill") {
-      if (payload.id && payload.date) onOpenBillsCalendar(payload.date, payload.id);
-      else onOpenBillsCalendar(payload.date || null);
-    } else {
-      onJumpSection("timeline");
-    }
-  }, [onOpenDeadline, onOpenDeadlinesCalendar, onOpenEventsCalendar, onJumpSection, onOpenBillsCalendar]);
-
-  const hero = (
-    <DashboardHero
-      accent={accent}
-      density={density}
-      isMobile={isMobile}
-      stack={isMobile}
-      briefing={briefing}
-      liveWeather={liveData.liveWeather}
-      liveCalendar={displayEvents}
-      liveDeadlines={deadlines}
+  const band = (
+    <NeedsYouBand
+      snapshotLanes={activeSnapshot?.lanes}
+      liveDeadlines={bandDeadlines}
       liveBills={bills}
-      onOpenPressure={handleHeroOpenPressure}
-      eventLoadingState={eventLoadingState}
-      onQuickAction={handleHeroQuickAction}
-      onJump={handleHeroJump}
+      maxCards={5}
+      onOpenEmail={onOpenEmail}
+      onMarkHandled={handleMarkHandled}
+      onCompleteDeadline={handleCompleteDeadline}
+      onOpen={handleRailJump}
     />
   );
 
   const timeline = (
-    <TodayTimeline
-      accent={accent}
-      density={density}
-      isMobile={isMobile}
-      events={displayEvents}
-      deadlines={deadlines}
-      onJump={handleRailJump}
-      eventLoadingState={eventLoadingState}
-      scrollContained={!isMobile}
-    />
+    <TodayTimeline accent={accent} isMobile={isMobile} events={displayEvents} deadlines={deadlines}
+      onJump={handleRailJump} eventLoadingState={eventLoadingState} scrollContained={!isMobile} />
   );
 
   const timelinePanel = (
-    <DashboardSurface
-      isMobile={isMobile}
-      style={{
-        minHeight: isMobile ? 520 : 0,
-        height: !isMobile && effectiveLayout !== "paper" ? "100%" : undefined,
-        flex: !isMobile && effectiveLayout === "paper" ? "1 1 0" : undefined,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <DashboardSurface isMobile={isMobile}
+      style={{ minHeight: isMobile ? 520 : 0, height: !isMobile ? "100%" : undefined, display: "flex", flexDirection: "column" }}>
       {timeline}
     </DashboardSurface>
   );
 
-  const deadlinesSection = <DeadlinesRail accent={accent} deadlines={deadlines} onJump={handleRailJump} isMobile={isMobile} loadingState={deadlinesLoadingState} />;
-
-  const billsSection = (
-    <BillsRail
-      accent={accent}
-      bills={bills}
-      onJump={handleRailJump}
-      isMobile={isMobile}
-      loadingState={billsLoadingState}
-    />
-  );
-
-  const inboxSection = showInboxPeek ? (
-    <InboxPeek
-      accent={accent}
-      isMobile={isMobile}
+  const contextColumn = (
+    <ContextColumn accent={accent} isMobile={isMobile} liveWeather={liveData.liveWeather}
+      liveDeadlines={deadlines} liveBills={bills} snapshotLanes={activeSnapshot?.lanes}
       emailAccounts={emailAccounts}
-      onJump={handleRailJump}
-      onOpenInbox={handleOpenInbox}
-    />
-  ) : null;
-
-  const sectionByKey = {
-    deadlines: deadlinesSection,
-    bills: billsSection,
-    "inbox-peek": inboxSection,
-  };
-  const sectionsFor = (sectionKeys) => sectionKeys.map((key) => sectionByKey[key]).filter(Boolean);
-
-  return (
-    <DashboardBodyLayout
-      layoutMode={effectiveLayout}
-      isMobile={isMobile}
-      hero={hero}
-      timelinePanel={timelinePanel}
-      mobileSections={sectionsFor(layoutPlan.mobileSectionOrder)}
-      primaryRailSections={sectionsFor(layoutPlan.primaryRailSectionOrder)}
-      commandPrimaryRailSections={sectionsFor(layoutPlan.commandPrimaryRailSectionOrder)}
-      commandSecondaryRailSections={sectionsFor(layoutPlan.commandSecondaryRailSectionOrder)}
-    />
+      onJump={handleRailJump} onOpenInbox={handleOpenInbox} />
   );
+
+  return <ThreeTierLayout isMobile={isMobile} band={band} timelinePanel={timelinePanel} contextColumn={contextColumn} />;
 }
 
 // Memoized so the dashboard poll loop / SSE refetch / 5-min refresh skip

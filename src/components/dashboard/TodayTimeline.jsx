@@ -1,10 +1,13 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion as Motion } from "motion/react";
+import { ChevronRight, ChevronDown } from "lucide-react";
 import { buildTimeline } from "../../lib/shell-helpers";
 import TimelineDayGroup from "./timeline/TimelineDayGroup";
 import TimelineHeader from "./timeline/TimelineHeader";
+import TimelineRow from "./timeline/TimelineRow";
 import {
   buildTimelineGroups,
+  buildTodayTomorrowRestGroups,
   formatFullDateForOffset,
   shouldHoldPartialTimeline,
 } from "./timeline/timeline-helpers";
@@ -36,6 +39,8 @@ function TodayTimeline({
 }) {
   const [filters, setFilters] = useState({ events: true, deadlines: true });
   const [now, setNow] = useState(() => Date.now());
+  const [tomorrowOpen, setTomorrowOpen] = useState(false);
+  const [restOpen, setRestOpen] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
@@ -72,6 +77,12 @@ function TodayTimeline({
     [filtered, nowDayKey, filters],
   );
 
+  const ttr = useMemo(
+    () => buildTodayTomorrowRestGroups(filtered, now, filters),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, nowDayKey, filters],
+  );
+
   const todayLabel = formatFullDateForOffset(0, now);
   const holdPartialTimeline = shouldHoldPartialTimeline({
     eventLoadingState,
@@ -101,6 +112,7 @@ function TodayTimeline({
         accent={accent}
         filters={filters}
         isMobile={isMobile}
+        now={now}
         onToggleFilter={(key) => setFilters((prev) => ({ ...prev, [key]: !prev[key] }))}
         showRefreshStatus={showRefreshStatus}
         todayLabel={todayLabel}
@@ -119,47 +131,184 @@ function TodayTimeline({
         }}
       >
         {showEventSkeletons && <TimelineSkeleton isMobile={isMobile} />}
-        <AnimatePresence initial={false}>
-          {visibleGroups.map(([day, dayItems], gi) => (
-            <Motion.div
-              key={day}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{
-                opacity: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
-                y: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
-              }}
-              style={isMobile ? undefined : {
-                contentVisibility: "auto",
-                containIntrinsicSize: "180px",
-              }}
-            >
+
+        {isMobile ? (
+          <AnimatePresence initial={false}>
+            {visibleGroups.map(([day, dayItems], gi) => (
+              <Motion.div
+                key={day}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{
+                  opacity: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+                  y: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
+                }}
+              >
+                <TimelineDayGroup
+                  day={day}
+                  items={dayItems}
+                  now={now}
+                  accent={accent}
+                  onJump={onJump}
+                  isFirst={gi === 0}
+                  isMobile
+                />
+              </Motion.div>
+            ))}
+          </AnimatePresence>
+        ) : (
+          !showEventSkeletons && (
+            <>
               <TimelineDayGroup
-                day={day}
-                items={dayItems}
+                day={0}
+                items={ttr.today}
                 now={now}
                 accent={accent}
                 onJump={onJump}
-                isFirst={gi === 0}
-                isMobile={isMobile}
+                isFirst
+                isMobile={false}
               />
-            </Motion.div>
-          ))}
-        </AnimatePresence>
-        {visibleGroups.length === 0 && !showEventSkeletons && (
-          <div
-            style={{
-              padding: "40px 20px",
-              textAlign: "center",
-              fontSize: 12,
-              color: "var(--color-text-faint)",
-            }}
-          >
-            Nothing on the calendar matching this filter.
-          </div>
+              <div
+                style={{
+                  marginTop: 16,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: 2.2,
+                  textTransform: "uppercase",
+                  color: "rgba(205,214,244,0.4)",
+                  padding: "0 6px 4px",
+                }}
+              >
+                Later
+              </div>
+              <TomorrowGroup
+                open={tomorrowOpen}
+                onToggle={() => setTomorrowOpen((v) => !v)}
+                items={ttr.tomorrow}
+                count={ttr.tomorrowCount}
+                label={formatFullDateForOffset(1, now)}
+                now={now}
+                accent={accent}
+                onJump={onJump}
+              />
+              <RestOfWeekGroup
+                open={restOpen}
+                onToggle={() => setRestOpen((v) => !v)}
+                rest={ttr.rest}
+                count={ttr.restCount}
+                now={now}
+                accent={accent}
+                onJump={onJump}
+              />
+            </>
+          )
         )}
+
+        {isMobile
+          ? visibleGroups.length === 0 && !showEventSkeletons && (
+            <div
+              style={{
+                padding: "40px 20px",
+                textAlign: "center",
+                fontSize: 12,
+                color: "var(--color-text-faint)",
+              }}
+            >
+              Nothing on the calendar matching this filter.
+            </div>
+          )
+          : ttr.today.length === 0
+            && ttr.tomorrow.length === 0
+            && ttr.restCount === 0
+            && !showEventSkeletons && (
+            <div
+              style={{
+                padding: "40px 20px",
+                textAlign: "center",
+                fontSize: 12,
+                color: "var(--color-text-faint)",
+              }}
+            >
+              Nothing on the calendar matching this filter.
+            </div>
+          )}
       </div>
+    </div>
+  );
+}
+
+function TomorrowGroup({ accent, count, items, label, now, onJump, onToggle, open }) {
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const Chevron = open ? ChevronDown : ChevronRight;
+  const summary = [
+    count.events ? `${count.events} event${count.events === 1 ? "" : "s"}` : null,
+    count.deadlines ? `${count.deadlines} deadline${count.deadlines === 1 ? "" : "s"}` : null,
+  ].filter(Boolean).join(" · ") || "Nothing scheduled";
+
+  return (
+    <div>
+      <button type="button" aria-expanded={open} onClick={onToggle}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+          <Chevron size={14} color="rgba(205,214,244,0.5)" />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "#cdd6f4" }}>Tomorrow</span>
+          <span style={{ fontSize: 11, color: "rgba(205,214,244,0.4)" }}>{label}</span>
+        </span>
+        <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{summary}</span>
+      </button>
+      {open && (
+        <div style={{ padding: "4px 6px 6px 28px" }}>
+          {items.map((item, i) => (
+            <div key={`tom-${item.kind}-${i}`}>
+              <TimelineRow item={item} now={now} accent={accent} onJump={onJump} />
+            </div>
+          ))}
+          {items.length === 0 && (
+            <div style={{ fontSize: 11, color: "var(--color-text-faint)", padding: "6px 0" }}>Nothing scheduled tomorrow.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RestOfWeekGroup({ accent, count, now, onJump, onToggle, open, rest }) {
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const Chevron = open ? ChevronDown : ChevronRight;
+  if (count <= 0) return null;
+
+  return (
+    <div>
+      <button type="button" aria-expanded={open} onClick={onToggle}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+          <Chevron size={14} color="rgba(205,214,244,0.5)" />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "#cdd6f4" }}>Rest of this week</span>
+        </span>
+        <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{count} {count === 1 ? "item" : "items"}</span>
+      </button>
+      {open && (
+        <div style={{ paddingTop: 12 }}>
+          {rest.map(([day, dayItems]) => (
+            <TimelineDayGroup
+              key={`rest-${day}`}
+              day={day}
+              items={dayItems}
+              now={now}
+              accent={accent}
+              onJump={onJump}
+              isMobile={false}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

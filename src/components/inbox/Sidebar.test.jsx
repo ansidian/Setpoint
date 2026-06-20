@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Sidebar from "./Sidebar.jsx";
+import { SIDEBAR_COMPACT_KEY } from "./sidebarCompactStore.js";
 
 const baseProps = {
   accent: "#cba6da",
@@ -20,12 +21,19 @@ const baseProps = {
     noise: 0,
   },
   totalUnread: 1,
-  compact: false,
   onOpenDashboard: () => {},
 };
 
+// These tests assert on lane rows and shortcut hints, which only render in the
+// expanded sidebar. The sidebar now owns its compact state (default compact-on),
+// so seed the persisted flag to "0" (expanded) before each render.
+beforeEach(() => {
+  window.localStorage.setItem(SIDEBAR_COMPACT_KEY, "0");
+});
+
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
 });
 
 describe("Sidebar shortcuts", () => {

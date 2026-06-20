@@ -1,21 +1,3 @@
-import { daysUntil } from "../../../lib/bill-utils";
-
-export const PRIORITY_COLOR = {
-  1: "#f38ba8",
-  2: "#f9e2af",
-  3: "#89b4fa",
-};
-
-// Total of unpaid bills due within `maxDays` Pacific-days from today. Computed
-// over the FULL bills list — not the rail's sliced 4-row preview — so the
-// "Next 7d" headline doesn't undercount when more bills are due than are shown.
-export function sumBillsDueWithin(bills, maxDays) {
-  return (bills || []).reduce((sum, b) => {
-    const d = daysUntil(b.next_date);
-    return d != null && d >= 0 && d <= maxDays && !b.paid ? sum + (b.amount || 0) : sum;
-  }, 0);
-}
-
 export function timeAgo(iso) {
   if (!iso) return "";
   const d = new Date(iso);

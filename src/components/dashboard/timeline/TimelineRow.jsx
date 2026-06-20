@@ -27,6 +27,8 @@ import { daysUntil } from "../../../lib/bill-utils";
 import { formatReminderSummary } from "../../calendar/reminderDisplay.js";
 import {
   PRIORITY_COLOR,
+  percentElapsed,
+  formatNowMarkerLabel,
 } from "./timeline-helpers";
 import { TODOIST_DEADLINE_COLOR } from "../../../../shared/deadline-source-colors.js";
 
@@ -150,6 +152,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
       }}
       style={{
         position: "relative",
+        overflow: isLive ? "hidden" : "visible",
         padding: isMobile ? "10px 10px 10px 22px" : "11px 12px",
         marginBottom: 4,
         borderRadius: 10,
@@ -271,7 +274,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
                 color: dotColor,
               }}
             >
-              Live
+              Live now
             </span>
           )}
           {priorityLevel && <PriorityFlag level={priorityLevel} />}
@@ -367,6 +370,19 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
           {meta}
         </div>
       )}
+      {isLive && !isMobile && item.kind === "event" && item.startMs != null && item.endMs != null && (() => {
+        const pct = percentElapsed(item.startMs, item.endMs, now);
+        const pctStr = `${pct * 100}%`;
+        return (
+          <div data-testid="timeline-now-marker" style={{ gridColumn: "1 / -1", position: "relative", height: 22, marginTop: 8, borderTop: `1px solid ${accent}2e`, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: pctStr, background: `linear-gradient(90deg, ${accent}29, ${accent}0d)` }} />
+            <div style={{ position: "absolute", left: pctStr, top: 0, bottom: 0, width: 1.5, background: accent, boxShadow: `0 0 8px ${accent}` }} />
+            <div style={{ position: "absolute", left: pctStr, top: "50%", transform: "translate(8px, -50%)", fontFamily: "var(--font-mono)", fontSize: 9.5, fontWeight: 700, color: accent, whiteSpace: "nowrap" }}>
+              {formatNowMarkerLabel(now, pct)}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

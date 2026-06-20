@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Inbox, Mail, Briefcase, GraduationCap, DollarSign, Layers, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Inbox, Mail, Briefcase, GraduationCap, DollarSign, Layers, Send, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { Kbd, Eyebrow } from "./primitives";
+import { readSidebarCompact, writeSidebarCompact } from "./sidebarCompactStore.js";
 
 const ACCOUNT_ICON = { Mail, Briefcase, GraduationCap, DollarSign, Inbox };
 
@@ -191,11 +192,31 @@ export function LaneAll({ accent, lane, setLane, laneCounts }) {
   );
 }
 
+function CollapseButton({ accent, compact, onToggle }) {
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const Icon = compact ? PanelLeftOpen : PanelLeftClose;
+  const lift = hover || focus;
+  return (
+    <button type="button" onClick={onToggle}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
+      aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}
+      title={compact ? "Expand sidebar" : "Collapse sidebar"}
+      style={{ display: "flex", alignItems: "center", justifyContent: compact ? "center" : "flex-end", width: "100%", padding: "4px 6px", background: lift ? "rgba(255,255,255,0.05)" : "transparent", border: "1px solid transparent", borderRadius: 8, cursor: "pointer", color: lift ? accent : "rgba(205,214,244,0.6)", transform: lift ? "translateY(-1px)" : "translateY(0)", transition: "background 120ms, color 120ms, transform 120ms", fontFamily: "inherit" }}>
+      <Icon size={15} />
+    </button>
+  );
+}
+
 export default function Sidebar({
   accent, accounts, accountId, setAccountId,
-  lane, setLane, laneCounts, totalUnread, noiseUnreadCount = 0, compact,
+  lane, setLane, laneCounts, totalUnread, noiseUnreadCount = 0,
   onOpenDashboard, selectedEmail = null, readOnly = false,
 }) {
+  const [compact, setCompact] = useState(readSidebarCompact);
+  useEffect(() => { writeSidebarCompact(compact); }, [compact]);
+
   const shortcutRows = buildShortcutRows(selectedEmail, readOnly);
 
   return (
@@ -206,8 +227,10 @@ export default function Sidebar({
         borderRight: "1px solid rgba(255,255,255,0.04)",
         background: "rgba(24,24,37,0.35)",
         overflow: "hidden",
+        transition: "width 180ms ease",
       }}
     >
+      <CollapseButton accent={accent} compact={compact} onToggle={() => setCompact((v) => !v)} />
       <button
         type="button"
         onClick={onOpenDashboard}

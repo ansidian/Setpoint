@@ -125,7 +125,6 @@ export function OverflowMenu({
   onCloseMenu,
   onOpenHistory,
   onOpenAnalytics,
-  onOpenCustomize,
 }) {
   return (
     <>
@@ -166,15 +165,6 @@ export function OverflowMenu({
               }}
             />
           )}
-          <MenuItem
-            icon={SettingsIcon}
-            label="Customize"
-            isMobile={isMobile}
-            onClick={() => {
-              onCloseMenu();
-              onOpenCustomize?.();
-            }}
-          />
           <MenuLink
             icon={SettingsIcon}
             label="Settings"

@@ -31,7 +31,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 
 **SSE:** `dashboard-current-changed` with `source: "bills"` — emitted via `server/dashboard/current-events.js:publishCurrentDashboardEvent`, streamed by the GET `/current/events` handler in `server/routes/dashboard.js` — consumed by `src/hooks/useCurrentDashboard.js:handleChanged`.
 
-**UI:** dashboard bills rail (`src/components/dashboard/rails/BillsRail.jsx`), calendar bills view (`src/components/calendar/views/bills/BillsDetailRail.jsx`), and bill badge form dropdowns on next metadata load.
+**UI:** dashboard Needs-you band + Coming-up card (`src/components/dashboard/needsYou/needsYouModel.js` classifies due-today bills; `src/components/dashboard/context/ComingUpCard.jsx` lists upcoming ones), calendar bills view (`src/components/calendar/views/bills/BillsDetailRail.jsx`), and bill badge form dropdowns on next metadata load.
 
 ## 2. Email sync → inbox triage
 

@@ -18,7 +18,6 @@ const EMPTY_ACTIVE_SNAPSHOT_VIEW = {
 
 export default function InboxView({
   accent,
-  customize,
   emailAccounts,
   briefingSummary,
   briefingGeneratedAt,
@@ -125,7 +124,6 @@ export default function InboxView({
     onLiveReadOverrideChange,
     snoozedEntries,
     resurfacedEntries,
-    customize,
     isMobile,
     briefingGeneratedAt: activeSnapshotView?.snapshot?.updated_at || briefingGeneratedAt,
     sessionState: normalizedSessionState,

@@ -149,4 +149,30 @@ describe("TimelineRow", () => {
     expect(row.textContent).not.toContain("All day");
     expect(row.querySelector("[data-dashboard-timeline-title='true']")?.style.WebkitLineClamp).toBe("2");
   });
+
+  it("renders a bounded in-card now marker only for the live event row", () => {
+    const now = new Date("2026-05-05T20:25:00.000Z").getTime();
+    const liveEvent = {
+      kind: "event",
+      startMs: new Date("2026-05-05T20:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-05T21:00:00.000Z").getTime(),
+      data: { id: "live-1", title: "Product sync", startMs: new Date("2026-05-05T20:00:00.000Z").getTime(), endMs: new Date("2026-05-05T21:00:00.000Z").getTime() },
+    };
+    const pastEvent = {
+      kind: "event",
+      startMs: new Date("2026-05-05T18:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-05T19:00:00.000Z").getTime(),
+      data: { id: "past-1", title: "Earlier standup", startMs: new Date("2026-05-05T18:00:00.000Z").getTime(), endMs: new Date("2026-05-05T19:00:00.000Z").getTime() },
+    };
+
+    render(<TimelineRow accent="#cba6da" item={liveEvent} now={now} />);
+    const marker = screen.getByTestId("timeline-now-marker");
+    expect(marker.textContent).toContain("NOW");
+    expect(marker.textContent).toContain("% elapsed");
+    expect(marker.textContent).toContain("42%");
+
+    cleanup();
+    render(<TimelineRow accent="#cba6da" item={pastEvent} now={now} />);
+    expect(screen.queryByTestId("timeline-now-marker")).toBeNull();
+  });
 });

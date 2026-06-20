@@ -37,7 +37,6 @@ function renderDashboardBody({
   ensureRange,
   onOpenBillsCalendar = () => {},
   onOpenDeadline = () => {},
-  onOpenDeadlinesCalendar = () => {},
   onOpenEventsCalendar = () => {},
   liveData: liveDataOverrides = {},
   calendarDeadlines = undefined,
@@ -47,7 +46,6 @@ function renderDashboardBody({
   return render(
     <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <DashboardBody
-        briefing={briefing}
         liveData={{
         liveBills: [],
         liveWeather: briefing.weather,
@@ -68,12 +66,6 @@ function renderDashboardBody({
           error: null,
           revision: 0,
         }}
-        customize={{
-          dashboardLayout: "focus",
-          density: "comfortable",
-          showInsights: true,
-          showInboxPeek: false,
-        }}
         accent="#cba6da"
         isMobile={false}
         calendarDeadlines={calendarDeadlines}
@@ -83,8 +75,6 @@ function renderDashboardBody({
         onOpenDeadline={onOpenDeadline}
         onOpenBillsCalendar={onOpenBillsCalendar}
         onOpenEventsCalendar={onOpenEventsCalendar}
-        onOpenDeadlinesCalendar={onOpenDeadlinesCalendar}
-        onJumpSection={() => {}}
       />
     </DashboardProvider>,
   );
@@ -102,13 +92,10 @@ describe("Dashboard event loading", () => {
       ensureRange: vi.fn(() => new Promise(() => {})),
     });
 
-    // Previously the timeline blanked to skeletons on every refresh (and on
-    // returning to the dashboard), which read as "the calendar stopped
-    // loading". With seeded events present we now keep showing them and drop
-    // the skeleton, while still surfacing the refresh-in-flight affordances.
+    // With seeded events present the timeline keeps showing them and drops the
+    // skeleton, while still surfacing the refresh-in-flight status row.
     expect(within(screen.getByTestId("today-timeline")).getByText("Seeded focus block")).toBeTruthy();
     expect(screen.queryByTestId("dashboard-event-skeletons")).toBeNull();
-    expect(screen.getByTestId("focus-window-refresh-status")).toBeTruthy();
     expect(screen.getByTestId("timeline-refresh-status")).toBeTruthy();
   });
 
@@ -123,97 +110,11 @@ describe("Dashboard event loading", () => {
     });
 
     expect(screen.getByTestId("dashboard-event-skeletons")).toBeTruthy();
-    expect(screen.getByTestId("focus-window-skeleton")).toBeTruthy();
+    // The deadline still surfaces in the context column's Coming-up list, but the
+    // timeline itself holds the skeleton rather than degrading to deadlines-only.
     expect(screen.getAllByText("Essay").length).toBeGreaterThan(0);
     expect(within(screen.getByTestId("today-timeline")).queryByText("Essay")).toBeNull();
-    expect(screen.queryByTestId("focus-window-refresh-status")).toBeNull();
     expect(screen.queryByTestId("timeline-refresh-status")).toBeNull();
-  });
-
-  it("shows a local bills placeholder while Actual data is still loading", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    renderDashboardBody({
-      briefing: makeBriefing([]),
-      ensureRange: vi.fn().mockResolvedValue([]),
-      liveData: {
-        liveBills: [],
-        billsLoading: true,
-        actualConfigured: true,
-        isPolling: true,
-      },
-    });
-
-    expect(screen.getByTestId("bills-rail-loading-placeholder")).toBeTruthy();
-    expect(screen.getByTestId("bills-rail-refresh-status")).toBeTruthy();
-    expect(screen.queryByText("No upcoming bills")).toBeNull();
-  });
-
-  it("keeps the bills placeholder during initial Actual loading before polling flips on", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    renderDashboardBody({
-      briefing: makeBriefing([]),
-      ensureRange: vi.fn().mockResolvedValue([]),
-      liveData: {
-        liveBills: [],
-        billsLoading: true,
-        actualConfigured: true,
-        isPolling: false,
-      },
-    });
-
-    expect(screen.getByTestId("bills-rail-loading-placeholder")).toBeTruthy();
-    expect(screen.queryByText("No upcoming bills")).toBeNull();
-  });
-
-  it("activates the nearest pressure deadline row", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    const onOpenDeadlinesCalendar = vi.fn();
-    renderDashboardBody({
-      briefing: makeBriefing([]),
-      ensureRange: vi.fn().mockResolvedValue([]),
-      onOpenDeadlinesCalendar,
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /deadline soon/i }));
-    expect(onOpenDeadlinesCalendar).toHaveBeenCalledWith("2026-04-20", "deadline-1");
-  });
-
-  it("holds stored briefing deadlines while live calendar deadlines are still loading", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    renderDashboardBody({
-      briefing: {
-        ...makeBriefing([]),
-        deadlines: {
-          upcoming: [{
-            id: "deadline-rec",
-            title: "Stale recurring review",
-            due_date: "2026-04-21",
-            status: "open",
-            is_recurring: true,
-          }],
-          stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
-        },
-      },
-      ensureRange: vi.fn().mockResolvedValue([]),
-      calendarDeadlines: null,
-      calendarDeadlinesLoading: true,
-    });
-
-    expect(screen.getByTestId("deadlines-rail-loading-placeholder")).toBeTruthy();
-    expect(screen.queryByText("Stale recurring review")).toBeNull();
-    expect(screen.queryByRole("button", { name: /deadline soon/i })).toBeNull();
   });
 
   it("uses live calendar deadlines over stale briefing deadlines", () => {
@@ -250,12 +151,14 @@ describe("Dashboard event loading", () => {
       onOpenDeadline,
     });
 
-    expect(screen.queryByRole("button", { name: /deadline soon/i })).toBeNull();
-    fireEvent.click(screen.getByTestId("hero-callout-deadline"));
+    // The context column's Coming-up list opens the live (calendar) record, not
+    // the stale briefing one, through onJump -> handleRailJump -> onOpenDeadline.
+    const comingUp = screen.getByTestId("context-coming-up");
+    fireEvent.click(within(comingUp).getByText("Recurring review"));
     expect(onOpenDeadline).toHaveBeenCalledWith(expect.objectContaining({
       id: "deadline-rec",
       due_date: "2026-04-23",
-    }), expect.any(HTMLElement));
+    }), undefined);
   });
 
   it("deep links timeline events to the selected calendar chip", async () => {
@@ -281,7 +184,7 @@ describe("Dashboard event loading", () => {
     expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1");
   });
 
-  it("deep links bill rail rows to their schedule id and bill date", () => {
+  it("deep links coming-up bill rows to their schedule id and bill date", () => {
     const now = new Date("2026-04-19T16:00:00.000Z").getTime();
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -320,7 +223,6 @@ describe("Dashboard event loading", () => {
     const { rerender } = render(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
         <DashboardBody
-          briefing={briefing}
           liveData={{ liveBills: [], liveWeather: briefing.weather, liveEmails: [] }}
           calendarRange={{
             ensureRange,
@@ -331,20 +233,12 @@ describe("Dashboard event loading", () => {
             error: null,
             revision: 0,
           }}
-          customize={{
-            dashboardLayout: "focus",
-            density: "comfortable",
-            showInsights: true,
-            showInboxPeek: false,
-          }}
           accent="#cba6da"
           isMobile={false}
           onOpenEmail={() => {}}
           onOpenDeadline={() => {}}
           onOpenBillsCalendar={() => {}}
           onOpenEventsCalendar={() => {}}
-          onOpenDeadlinesCalendar={() => {}}
-          onJumpSection={() => {}}
         />
       </DashboardProvider>,
     );
@@ -354,7 +248,6 @@ describe("Dashboard event loading", () => {
     rerender(
       <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
         <DashboardBody
-          briefing={briefing}
           liveData={{ liveBills: [], liveWeather: briefing.weather, liveEmails: [] }}
           calendarRange={{
             ensureRange,
@@ -365,20 +258,12 @@ describe("Dashboard event loading", () => {
             error: null,
             revision: 1,
           }}
-          customize={{
-            dashboardLayout: "focus",
-            density: "comfortable",
-            showInsights: true,
-            showInboxPeek: false,
-          }}
           accent="#cba6da"
           isMobile={false}
           onOpenEmail={() => {}}
           onOpenDeadline={() => {}}
           onOpenBillsCalendar={() => {}}
           onOpenEventsCalendar={() => {}}
-          onOpenDeadlinesCalendar={() => {}}
-          onJumpSection={() => {}}
         />
       </DashboardProvider>,
     );

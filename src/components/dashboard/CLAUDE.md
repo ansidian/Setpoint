@@ -1,46 +1,47 @@
 # Dashboard Map
 
-The landing surface: hero (greeting/callouts/weather), today timeline, and rails (bills/deadlines/inbox peek), plus the calendar and notes tabs and overlay mounts. Entry points are `DashboardShell.jsx` (state + overlays + tabs) and `DashboardBody.jsx` (layout resolution and section rendering).
+The landing surface: a Needs-you band, today timeline, and a context column, plus the calendar and notes tabs and overlay mounts. Entry points are `DashboardShell.jsx` (state + overlays + tabs) and `DashboardBody.jsx` (the 3-tier render).
 
 ## Files
 
 ### Shell + layout
 - `DashboardShell.jsx` — orchestrates state and tab switching; mounts the dashboard, inbox, calendar, and notes as four `KeepAliveTab`s
-- `DashboardBody.jsx` — resolves layout mode, renders hero/timeline/rails sections
+- `DashboardBody.jsx` — renders the three tiers (NeedsYouBand / TodayTimeline / ContextColumn) through `ThreeTierLayout`; resolves live deadlines/bills/events and wires their click-to-open handlers
 - `DashboardShellOverlays.jsx` — mounts modal overlays: add task, analytics, customize, command palette, briefing history (no longer the calendar — it is a tab now)
 - `InboxMountFallback.jsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
 - `KeepAliveTab.jsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
 - `DashboardCalendarModalMount.jsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data
 - `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution
-- `dashboardBodyLayoutModel.js` — layout mode (focus/paper/mobile) and section ordering
 - `useDashboardShellHotkeys.js` — global shortcuts: command palette, g+d/e chords
-- `layout/DashboardScenePrimitives.jsx` — motion-wrapped frame and scene regions
+- `layout/DashboardScenePrimitives.jsx` — motion-wrapped frame, scene regions, and the `ThreeTierLayout` band/timeline/context wiring
 - `layout/dashboard-scene-tokens.js` — transition timings and stagger delays
 
-### Hero
-- `DashboardHero.jsx` — hero section entry: callouts and quick actions
-- `hero/HeroMessageBlock.jsx` — greeting, current time, day summary
-- `hero/HeroCalloutCard.jsx` — urgent next event/deadline/bill cards with urgency coloring
-- `hero/HeroContextRail.jsx` — weather and focus-window sidebar
-- `hero/HeroFocusCard.jsx` — daily focus windows and open-day summary
-- `hero/dashboard-hero-helpers.js` — callout card builders, weather icon mapping
+### Tier 1 — Needs-you band
+- `needsYou/NeedsYouBand.jsx` — the band: a needs-you count plus the most urgent overdue/due-today/email priority cards
+- `needsYou/needsYouModel.js` — classifies deadlines/bills/emails into urgent + backfill cards (overdue/due-today only; bills admit `days===0`)
+- `needsYou/NeedsYouCountBlock.jsx` — the leading count + breakdown block
+- `needsYou/PriorityCard.jsx` — a single priority card; deadline/bill bodies are click-to-open, emails open via their button
 
-### Timeline
+### Tier 2 — Timeline
 - `TodayTimeline.jsx` — merges events and deadlines chronologically with live now marker
-- `timeline/TimelineDayGroup.jsx` — day grouping and now-marker positioning
-- `timeline/TimelineHeader.jsx` — section title and refresh status
-- `timeline/TimelineRow.jsx` — event/deadline row with duration/reminder display
-- `timeline/TimelineNowMarker.jsx` — animated current-time indicator
+- `timeline/TimelineClock.jsx` — ticking current-time source for the now marker
+- `timeline/TimelineDayGroup.jsx` — day grouping and the spine; injects the focus-window now marker into the today rail
+- `timeline/TimelineHeader.jsx` — section title, live clock, and refresh status
+- `timeline/TimelineRow.jsx` — event/deadline row; the live row renders the bounded in-card now-marker (NOW H:MM · N% elapsed)
+- `timeline/TimelineNowMarker.jsx` — standalone "NOW · H:MM" marker for a focus-window gap (no live event); mutually exclusive with TimelineRow's in-card line
 - `timeline/TimelineSkeleton.jsx` — loading placeholders
-- `timeline/timeline-helpers.js` — day grouping, layout constants, marker math
+- `timeline/timeline-helpers.js` — day grouping, layout constants, now-marker progress math (percentElapsed / formatNowMarkerLabel / formatNowMarkerClock), and the focus-window marker slot (resolveTodayNowMarkerIndex)
 
-### Rails
-- `rails/Rails.jsx` — rail component aggregator
-- `rails/BillsRail.jsx` — upcoming payments with due date and amount urgency
-- `rails/DeadlinesRail.jsx` — tasks grouped by priority with status icons
-- `rails/InboxPeek.jsx` — important-email preview with needs-you count
-- `rails/railModel.js` — priority palette and time-ago formatting
-- `rails/railPrimitives.jsx` — shared rail headers, urgency pills, badges
+### Tier 3 — Context column
+- `context/ContextColumn.jsx` — the right column: weather, coming-up, and the inbox peek
+- `context/WeatherCard.jsx` — current weather card (inlines its own icon mapping)
+- `context/ComingUpCard.jsx` — upcoming (future) deadlines/bills list
+- `context/comingUpModel.js` — builds the coming-up rows from live deadlines/bills
+
+### Rails (context-column building blocks)
+- `rails/InboxPeek.jsx` — important-email preview with needs-you count (used by `ContextColumn`)
+- `rails/railModel.js` — `timeAgo` relative-time formatting for the inbox peek
+- `rails/railPrimitives.jsx` — shared `SectionHeader`/`OpenInboxButton`/`EmptyRow` used by the inbox peek and Coming-up card
 
 ### Data + details
 - `calendarBillsData.js` — transforms live data into calendar-compatible bill shape
@@ -51,7 +52,8 @@ The landing surface: hero (greeting/callouts/weather), today timeline, and rails
 
 ## Local patterns
 
-- Layout modes (focus/paper/mobile) are resolved once in `dashboardBodyLayoutModel.js`; sections render mode-agnostically.
+- One fixed layout, branched on `isMobile` inside `ThreeTierLayout` (`layout/DashboardScenePrimitives.jsx`): desktop is a no-page-scroll column (band on top, timeline + 344px context column below); mobile stacks the same three tiers. There are no per-user layout modes.
+- Overdue/due-today deadlines and due-today bills live only in the Needs-you band (the single home for "open this now"); the context column shows future items. `DashboardBody` passes the band `{ upcoming: deadlines }` because the band model reads the object form.
 - Motion uses scene tokens for staggered entry; respect reduced motion.
 
 ## Related

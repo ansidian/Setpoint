@@ -62,9 +62,9 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
                   fontSize: 9.5,
                   fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
-                  color: "#89b4fa",
-                  background: "rgba(137,180,250,0.14)",
-                  border: "1px solid rgba(137,180,250,0.32)",
+                  color: "var(--sp-rose)",
+                  background: "color-mix(in srgb, var(--sp-rose) 18%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--sp-rose) 32%, transparent)",
                   borderRadius: 99,
                   letterSpacing: 0,
                 }}
