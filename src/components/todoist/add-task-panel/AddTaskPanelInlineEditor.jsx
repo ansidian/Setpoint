@@ -27,7 +27,7 @@ function CompactIconButton({
 }) {
   const [hover, setHover] = useState(false);
   const fallbackIcon = Icon ? createElement(Icon, { size: 15, "aria-hidden": true }) : null;
-  const activeColor = danger ? "#f38ba8" : "var(--ea-accent)";
+  const activeColor = danger ? "var(--sp-rose)" : "var(--sp-accent)";
   const border = active
     ? `color-mix(in srgb, ${activeColor} 42%, transparent)`
     : hover && !disabled
@@ -78,10 +78,10 @@ function CompactIconButton({
 
 function CompactPriorityBadge({ level }) {
   const colors = {
-    1: "#f38ba8",
-    2: "#f9e2af",
-    3: "#89b4fa",
-    4: "#a6adc8",
+    1: "var(--sp-rose)",
+    2: "var(--sp-cream)",
+    3: "var(--sp-blue)",
+    4: "var(--sp-subtext)",
   };
   const color = colors[level] || colors[4];
   const litCount = 5 - level;
@@ -142,12 +142,12 @@ function CompactOption({ children, onClick, active = false, color = null }) {
         minHeight: 30,
         borderRadius: 8,
         border: active
-          ? `1px solid color-mix(in srgb, ${color || "var(--ea-accent)"} 34%, transparent)`
+          ? `1px solid color-mix(in srgb, ${color || "var(--sp-accent)"} 34%, transparent)`
           : "1px solid rgba(255,255,255,0.06)",
         background: active
-          ? `color-mix(in srgb, ${color || "var(--ea-accent)"} 12%, transparent)`
+          ? `color-mix(in srgb, ${color || "var(--sp-accent)"} 12%, transparent)`
           : "rgba(255,255,255,0.025)",
-        color: color || "#cdd6f4",
+        color: color || "var(--sp-text)",
         padding: "6px 9px",
         fontSize: 11.5,
         fontWeight: 600,
@@ -234,7 +234,7 @@ function CompactDetailPanel({
           <CompactOption
             key={project.id}
             active={resolvedProject?.id === project.id}
-            color={project.color || "var(--ea-accent)"}
+            color={project.color || "var(--sp-accent)"}
             onClick={() => {
               setManualProject(project);
               setOverrides((prev) => ({ ...prev, project: true }));
@@ -256,7 +256,7 @@ function CompactDetailPanel({
           <CompactOption
             key={option.value || "none"}
             active={resolvedPriority === option.value}
-            color={option.value && option.value <= 2 ? "#f38ba8" : option.value === 3 ? "#89b4fa" : null}
+            color={option.value && option.value <= 2 ? "var(--sp-rose)" : option.value === 3 ? "var(--sp-blue)" : null}
             onClick={() => {
               setManualPriority(option.value);
               setOverrides((prev) => ({ ...prev, priority: true }));
@@ -286,7 +286,7 @@ function CompactDetailPanel({
           <CompactOption
             key={label.id}
             active={activeLabel}
-            color="#a6dac0"
+            color="var(--sp-teal)"
             onClick={() => {
               const updated = activeLabel
                 ? resolvedLabels.filter((entry) => entry.id !== label.id && entry.name !== label.name)
@@ -402,7 +402,7 @@ export default function AddTaskPanelInlineEditor({
       <div style={{ padding: 0, display: "flex", flexDirection: "column", gap: 0, minHeight: 0, flex: 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
-            <div id="todoist-editor-title" style={{ fontSize: 14, color: "#cba6da", fontWeight: 500 }}>
+            <div id="todoist-editor-title" style={{ fontSize: 14, color: "var(--sp-accent)", fontWeight: 500 }}>
               {isEdit ? "Edit deadline" : "New deadline"}
             </div>
             <div style={{ marginTop: 3, fontSize: 11, color: "var(--color-text-faint)", lineHeight: 1.45 }}>
@@ -478,7 +478,7 @@ export default function AddTaskPanelInlineEditor({
             />
           </div>
 
-          <div style={{ marginTop: "auto", paddingTop: 6, position: "sticky", bottom: -12, zIndex: 2, background: "linear-gradient(180deg, rgba(22,22,30,0), #16161e 18%)" }}>
+          <div style={{ marginTop: "auto", paddingTop: 6, position: "sticky", bottom: -12, zIndex: 2, background: "linear-gradient(180deg, rgba(22,22,30,0), var(--sp-panel) 18%)" }}>
             <CompactActions
               canSubmit={canSubmit}
               cancelDelete={cancelDelete}

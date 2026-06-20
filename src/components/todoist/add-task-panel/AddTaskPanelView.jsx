@@ -19,22 +19,22 @@ function buildEditMetadataItems({
     {
       id: "due",
       text: originalDueText,
-      color: editingTask?.due_date ? "rgba(249,226,175,0.86)" : "var(--color-text-faint)",
+      color: editingTask?.due_date ? "color-mix(in srgb, var(--sp-cream) 86%, transparent)" : "var(--color-text-faint)",
     },
     (resolvedProject?.name || editingTask?.class_name || editingTask?.project_name) ? {
       id: "project",
       text: resolvedProject?.name || editingTask?.class_name || editingTask?.project_name,
-      color: "rgba(203,166,218,0.86)",
+      color: "color-mix(in srgb, var(--sp-accent) 86%, transparent)",
     } : null,
     resolvedPriority ? {
       id: "priority",
       text: `P${resolvedPriority}`,
-      color: resolvedPriority <= 2 ? "#f38ba8" : resolvedPriority === 3 ? "#89b4fa" : "rgba(205,214,244,0.7)",
+      color: resolvedPriority <= 2 ? "var(--sp-rose)" : resolvedPriority === 3 ? "var(--sp-blue)" : "rgba(205,214,244,0.7)",
     } : null,
     resolvedLabels.length ? {
       id: "labels",
       text: resolvedLabels.map((label) => label.name).join(", "),
-      color: "#a6dac0",
+      color: "var(--sp-teal)",
     } : null,
   ].filter(Boolean);
 }

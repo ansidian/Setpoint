@@ -82,7 +82,7 @@ function FloatingMenu({ open, triggerRef, panelRef, onClose, children, minWidth 
         overflowY: "auto",
         overscrollBehavior: "contain",
         isolation: "isolate",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         border: "1px solid rgba(205,214,244,0.12)",
         borderRadius: 8,
         zIndex: 10002,
@@ -97,10 +97,10 @@ function FloatingMenu({ open, triggerRef, panelRef, onClose, children, minWidth 
 
 export function PriorityIndicator({ level }) {
   const colors = {
-    1: "#f38ba8",
-    2: "#f9e2af",
-    3: "#89b4fa",
-    4: "#a6adc8",
+    1: "var(--sp-rose)",
+    2: "var(--sp-cream)",
+    3: "var(--sp-blue)",
+    4: "var(--sp-subtext)",
   };
   const color = colors[level] || colors[4];
   const litCount = 5 - level;
@@ -202,7 +202,7 @@ export function Dropdown({
                 padding: "8px 12px",
                 fontSize: 12,
                 cursor: "pointer",
-                color: "#cdd6f4",
+                color: "var(--sp-text)",
                 borderBottom:
                   index < options.length - 1
                     ? "1px solid rgba(205,214,244,0.06)"
@@ -270,7 +270,7 @@ export function TokenAutocomplete({ cursorPos, input, items, type, onSelect }) {
         left: 0,
         right: 0,
         marginTop: 4,
-        background: "#16161e",
+        background: "var(--sp-panel)",
         border: "1px solid rgba(205,214,244,0.12)",
         borderRadius: 8,
         maxHeight: 160,
@@ -304,7 +304,7 @@ export function TokenAutocomplete({ cursorPos, input, items, type, onSelect }) {
             padding: "6px 12px",
             fontSize: 12,
             cursor: "pointer",
-            color: type === "project" ? "#cba6da" : "#a6dac0",
+            color: type === "project" ? "var(--sp-accent)" : "var(--sp-teal)",
             background: index === safeIdx ? "rgba(205,214,244,0.06)" : "transparent",
             display: "flex",
             alignItems: "center",
@@ -383,7 +383,7 @@ export function LabelPicker({ available, onAdd }) {
                 padding: "6px 12px",
                 fontSize: 12,
                 cursor: "pointer",
-                color: "#a6dac0",
+                color: "var(--sp-teal)",
               }}
               onMouseEnter={(event) => {
                 event.currentTarget.style.background = "rgba(205,214,244,0.06)";

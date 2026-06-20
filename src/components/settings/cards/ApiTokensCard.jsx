@@ -120,7 +120,7 @@ export default function ApiTokensCard() {
       >
         <div className="flex flex-col gap-4">
           {newToken ? (
-            <div className="rounded-xl border border-[#f9e2af]/20 bg-[#f9e2af]/10 p-4">
+            <div className="rounded-xl border border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 p-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <StatusPill tone="warning">Copy now</StatusPill>
                 <span className="text-[11px] text-muted-foreground/75">Label: {newToken.label}</span>
@@ -128,7 +128,7 @@ export default function ApiTokensCard() {
               <div className="mb-2 text-[11px] text-muted-foreground/75">
                 Expires {formatDate(newToken.expiresAt)}
               </div>
-              <div className="mb-3 rounded-lg border border-foreground/10 bg-[#16161e]/70 px-3 py-2 font-mono text-xs break-all select-all">
+              <div className="mb-3 rounded-lg border border-foreground/10 bg-[var(--sp-panel)]/70 px-3 py-2 font-mono text-xs break-all select-all">
                 {newToken.token}
               </div>
               <div className="flex flex-wrap items-center gap-2">

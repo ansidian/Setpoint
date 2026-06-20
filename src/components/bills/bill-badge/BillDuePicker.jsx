@@ -4,7 +4,7 @@ import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeVi
 
 const PICKER_WIDTH = 300;
 const PICKER_HEIGHT = 386;
-const ACCENT = "var(--ea-accent)";
+const ACCENT = "var(--sp-accent)";
 
 export default function BillDuePicker({
   anchorRef,

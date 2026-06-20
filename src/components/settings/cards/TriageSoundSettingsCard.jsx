@@ -22,7 +22,7 @@ import {
 import { playTriageNotificationSound } from "@/lib/triageSoundPlayback";
 import { cn } from "@/lib/utils";
 
-const SELECT_CONTENT_CLASS = "bg-[#16161e] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
+const SELECT_CONTENT_CLASS = "bg-[var(--sp-panel)] shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.08]";
 const SELECT_TRIGGER_CLASS = "h-8 w-full min-w-[150px] bg-input/30 text-[12px] transition-colors hover:bg-input/50";
 
 const LANE_SCOPE_OPTIONS = [

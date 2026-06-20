@@ -13,8 +13,8 @@ export function TodoistErrorNotice({ error, compact = false }) {
       style={{
         padding: compact ? "9px 10px" : "10px 12px",
         borderRadius: 8,
-        border: "1px solid rgba(243,139,168,0.18)",
-        background: "rgba(243,139,168,0.08)",
+        border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
+        background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
         color: "#f5c2e7",
         fontSize: 11.5,
         lineHeight: 1.5,
@@ -78,7 +78,7 @@ export function TodoistTaskTextSection({
         placeholder="e.g. Buy groceries tomorrow ! #Shopping @errand"
         style={{
           ...textFieldStyle({ invalid: false }),
-          boxShadow: input ? "0 0 0 1px rgba(203,166,218,0.15)" : "none",
+          boxShadow: input ? "0 0 0 1px color-mix(in srgb, var(--sp-accent) 15%, transparent)" : "none",
         }}
       />
       {autocompleteType === "project" && (
@@ -110,9 +110,9 @@ export function TodoistTaskTextSection({
             maxWidth: "100%",
             padding: "5px 8px",
             borderRadius: 999,
-            border: "1px solid rgba(137,180,250,0.18)",
-            background: "rgba(137,180,250,0.08)",
-            color: "#89b4fa",
+            border: "1px solid color-mix(in srgb, var(--sp-blue) 18%, transparent)",
+            background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
+            color: "var(--sp-blue)",
             fontSize: 11,
             lineHeight: 1.3,
           }}
@@ -142,11 +142,11 @@ export function TodoistSelectedLabelChips({
         <span
           key={label.id}
           style={{
-            background: "rgba(166,218,203,0.1)",
-            border: "1px solid rgba(166,218,203,0.2)",
+            background: "color-mix(in srgb, var(--sp-teal) 10%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--sp-teal) 20%, transparent)",
             borderRadius,
             padding,
-            color: "#a6dac0",
+            color: "var(--sp-teal)",
             fontSize,
             display: "inline-flex",
             alignItems: "center",

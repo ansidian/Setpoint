@@ -10,9 +10,9 @@ const FIELD_HINT_CLASS = "text-[11px] leading-relaxed text-muted-foreground/75";
 const STATUS_TONE_CLASSES = {
   neutral: "border-white/[0.08] bg-white/[0.03] text-muted-foreground/80",
   accent: "border-primary/20 bg-primary/[0.1] text-primary",
-  success: "border-[#a6e3a1]/20 bg-[#a6e3a1]/10 text-[#a6e3a1]",
-  warning: "border-[#f9e2af]/20 bg-[#f9e2af]/10 text-[#f9e2af]",
-  danger: "border-[#f38ba8]/20 bg-[#f38ba8]/10 text-[#f38ba8]",
+  success: "border-[var(--sp-green)]/20 bg-[var(--sp-green)]/10 text-[var(--sp-green)]",
+  warning: "border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 text-[var(--sp-cream)]",
+  danger: "border-[var(--sp-rose)]/20 bg-[var(--sp-rose)]/10 text-[var(--sp-rose)]",
 };
 
 export function StatusPill({ tone = "neutral", className, children }) {
@@ -138,7 +138,7 @@ export function SettingsLayout({ activeTab, onTabChange, headerAction, children 
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10"
-        style={{ background: "radial-gradient(ellipse at top, #1a1a2a, #0b0b13 60%)" }}
+        style={{ background: "radial-gradient(ellipse at top, var(--sp-page), var(--sp-deep) 60%)" }}
       />
 
       <div className="mx-auto max-w-[1140px]">

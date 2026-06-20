@@ -1,7 +1,7 @@
 export function buildContainerStyle({ isMobile, pos, host, active, keyboardOffset }) {
   const base = {
     position: "fixed",
-    background: "#16161e",
+    background: "var(--sp-panel)",
     border: "1px solid rgba(255,255,255,0.06)",
     padding: 0,
     zIndex: "var(--z-popover)",
