@@ -43,6 +43,7 @@ describe("normalizeWeatherPayload", () => {
             temperatureLow: 53.2,
             icon: "partly-cloudy-night",
             summary: "Clouds late",
+            precipProbability: 0.7,
           },
         ],
       },
@@ -55,10 +56,13 @@ describe("normalizeWeatherPayload", () => {
       icon: "CloudMoon",
       timezone: "America/Los_Angeles",
     });
-    expect(weather.hourly[0]).toMatchObject({ temp: 62, icon: "Moon" });
+    // The strip starts at the current hour and flags it as "now"; that is the
+    // single accented cell on the dashboard.
+    expect(weather.hourly[0]).toMatchObject({ temp: 63, icon: "Moon", now: true });
+    expect(weather.hourly.filter((h) => h.now)).toHaveLength(1);
     expect(weather.dailyForecast).toEqual([
-      { dateKey: "2026-05-01", high: 72, low: 55, icon: "Sun", summary: "Clear" },
-      { dateKey: "2026-05-02", high: 70, low: 53, icon: "CloudMoon", summary: "Clouds late" },
+      { dateKey: "2026-05-01", high: 72, low: 55, icon: "Sun", summary: "Clear", rain: null },
+      { dateKey: "2026-05-02", high: 70, low: 53, icon: "CloudMoon", summary: "Clouds late", rain: 70 },
     ]);
   });
 });

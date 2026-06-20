@@ -34,7 +34,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 
 ### Tier 3 — Context column
 - `context/ContextColumn.jsx` — the right column: weather, coming-up, and the inbox peek
-- `context/WeatherCard.jsx` — current weather card (inlines its own icon mapping)
+- `context/WeatherCard.jsx` — weather card that expands on hover/focus/tap to reveal the rest-of-today hourly strip and a next-3-days forecast
+- `context/weatherCardModel.js` — pure transforms shaping the live feed into the hover card's hour/day view-models (now-accent, rain chip, condition labels)
 - `context/ComingUpCard.jsx` — upcoming (future) deadlines/bills list
 - `context/comingUpModel.js` — builds the coming-up rows from live deadlines/bills
 
