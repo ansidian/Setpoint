@@ -49,8 +49,8 @@ function LiveEmailNotice({ email }) {
         margin: "16px 20px 0",
         borderRadius: 12,
         padding: "10px 14px",
-        background: "linear-gradient(135deg, rgba(137,180,250,0.06), rgba(137,180,250,0.02))",
-        border: "1px dashed rgba(137,180,250,0.28)",
+        background: "linear-gradient(135deg, color-mix(in srgb, var(--sp-blue) 6%, transparent), color-mix(in srgb, var(--sp-blue) 2%, transparent))",
+        border: "1px dashed color-mix(in srgb, var(--sp-blue) 28%, transparent)",
         display: "flex",
         alignItems: "center",
         gap: 10,
@@ -66,7 +66,7 @@ function LiveEmailNotice({ email }) {
           width: 22,
           height: 22,
           borderRadius: 6,
-          background: "rgba(137,180,250,0.12)",
+          background: "color-mix(in srgb, var(--sp-blue) 12%, transparent)",
         }}
       >
         <span
@@ -74,7 +74,7 @@ function LiveEmailNotice({ email }) {
             position: "absolute",
             inset: 4,
             borderRadius: 999,
-            background: "#89b4fa",
+            background: "var(--sp-blue)",
             opacity: 0.3,
             animation: "livepulse 2s ease-out infinite",
           }}
@@ -84,8 +84,8 @@ function LiveEmailNotice({ email }) {
             width: 5,
             height: 5,
             borderRadius: 999,
-            background: "#89b4fa",
-            boxShadow: "0 0 6px #89b4fa",
+            background: "var(--sp-blue)",
+            boxShadow: "0 0 6px var(--sp-blue)",
             position: "relative",
           }}
         />
@@ -97,7 +97,7 @@ function LiveEmailNotice({ email }) {
             fontWeight: 700,
             letterSpacing: 2,
             textTransform: "uppercase",
-            color: "#89b4fa",
+            color: "var(--sp-blue)",
           }}
         >
           {status}
@@ -142,8 +142,8 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
             height: "100%",
             display: "flex",
             flexDirection: "column",
-            borderLeft: "1px solid rgba(203,166,218,0.12)",
-            background: "rgba(22,22,30,0.55)",
+            borderLeft: "1px solid color-mix(in srgb, var(--sp-accent) 12%, transparent)",
+            background: "color-mix(in srgb, var(--sp-panel) 55%, transparent)",
             overflowY: "auto",
             overscrollBehavior: "contain",
             isolation: "isolate",
@@ -167,7 +167,7 @@ function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, bill
                 fontWeight: 700,
                 letterSpacing: 2,
                 textTransform: "uppercase",
-                color: "#cba6da",
+                color: "var(--sp-accent)",
               }}
             >
               Pay bill
@@ -258,7 +258,7 @@ export default function DesktopReader({
         minWidth: 0,
         display: "flex",
         flexDirection: "column",
-        background: "rgba(22,22,30,0.5)",
+        background: "color-mix(in srgb, var(--sp-panel) 50%, transparent)",
         minHeight: 0,
       }}
     >
@@ -520,7 +520,7 @@ export default function DesktopReader({
             display: "flex",
             alignItems: "center",
             gap: 8,
-            background: "rgba(24,24,37,0.8)",
+            background: "color-mix(in srgb, var(--sp-mantle) 80%, transparent)",
           }}
         >
           <Sparkles size={11} color={accent} />

@@ -9,7 +9,7 @@ export function MobileSection({ title, accent, open, onToggle, children, testId 
       style={{
         margin: "14px 16px 0",
         borderRadius: 12,
-        background: "rgba(24,24,37,0.72)",
+        background: "color-mix(in srgb, var(--sp-mantle) 72%, transparent)",
         border: `1px solid ${accent}22`,
         overflow: "hidden",
       }}
@@ -59,7 +59,7 @@ export function ReaderEmptyState() {
     <div
       style={{
         flex: 1,
-        background: "rgba(22,22,30,0.5)",
+        background: "color-mix(in srgb, var(--sp-panel) 50%, transparent)",
         padding: "20px 20px 0",
         display: "flex",
         flexDirection: "column",

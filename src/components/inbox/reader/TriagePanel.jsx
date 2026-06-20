@@ -16,7 +16,7 @@ export default function TriagePanel({ email, accent }) {
       style={{
         margin: "16px 20px 0",
         borderRadius: 12, overflow: "hidden",
-        background: `linear-gradient(135deg, ${accent}10, rgba(137,220,235,0.02))`,
+        background: `linear-gradient(135deg, ${accent}10, color-mix(in srgb, var(--sp-cyan) 2%, transparent))`,
         border: `1px solid ${accent}38`,
         position: "relative",
       }}

@@ -250,7 +250,7 @@ export default function InboxCategoryFilterChips({
             padding: 6,
             borderRadius: 12,
             border: "1px solid rgba(255,255,255,0.10)",
-            background: "#16161e",
+            background: "var(--sp-panel)",
             boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
           }}
         >

@@ -19,7 +19,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false }) {
   }
   if (error) {
     return (
-      <div style={{ padding: "22px 24px", fontSize: 12, color: "#f38ba8" }}>{error}</div>
+      <div style={{ padding: "22px 24px", fontSize: 12, color: "var(--sp-rose)" }}>{error}</div>
     );
   }
   const text = body || fallback;

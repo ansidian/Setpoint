@@ -48,14 +48,14 @@ function InboxLiveLoadingBlock({ compact = false }) {
         margin: "10px 12px 6px",
         padding: compact ? "10px 12px 8px" : "10px 12px 12px",
         borderRadius: 8,
-        border: "1px solid rgba(137,180,250,0.18)",
-        background: "rgba(137,180,250,0.06)",
+        border: "1px solid color-mix(in srgb, var(--sp-blue) 18%, transparent)",
+        background: "color-mix(in srgb, var(--sp-blue) 6%, transparent)",
         color: "rgba(205,214,244,0.72)",
         fontSize: 11,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
+        <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "color-mix(in srgb, var(--sp-blue) 75%, transparent)" }} />
         Checking live mail
       </div>
       <InboxLiveSkeletonRows count={compact ? 2 : 3} compact />
@@ -141,7 +141,7 @@ export default function InboxList({
     <div
       style={{
         display: "flex", flexDirection: "column", minWidth: 0, flex: 1,
-        background: "rgba(24,24,37,0.30)",
+        background: "color-mix(in srgb, var(--sp-mantle) 30%, transparent)",
         borderRight: "1px solid rgba(255,255,255,0.04)",
         minHeight: 0,
       }}
@@ -183,7 +183,7 @@ export default function InboxList({
             className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ea-accent)]/60"
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
-              fontSize: 12, color: "#cdd6f4", fontFamily: "inherit",
+              fontSize: 12, color: "var(--sp-text)", fontFamily: "inherit",
             }}
           />
           {searchQuery ? (
@@ -201,9 +201,9 @@ export default function InboxList({
                 transition: "background 120ms, border-color 120ms, color 120ms",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(243,139,168,0.14)";
-                e.currentTarget.style.borderColor = "rgba(243,139,168,0.32)";
-                e.currentTarget.style.color = "#f38ba8";
+                e.currentTarget.style.background = "color-mix(in srgb, var(--sp-rose) 14%, transparent)";
+                e.currentTarget.style.borderColor = "color-mix(in srgb, var(--sp-rose) 32%, transparent)";
+                e.currentTarget.style.color = "var(--sp-rose)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "rgba(255,255,255,0.06)";
@@ -276,9 +276,9 @@ export default function InboxList({
             style={{
               padding: "10px 14px",
               fontSize: 11,
-              color: "#f38ba8",
-              borderBottom: "1px solid rgba(243,139,168,0.12)",
-              background: "rgba(243,139,168,0.06)",
+              color: "var(--sp-rose)",
+              borderBottom: "1px solid color-mix(in srgb, var(--sp-rose) 12%, transparent)",
+              background: "color-mix(in srgb, var(--sp-rose) 6%, transparent)",
             }}
           >
             {indexedSearchError}
@@ -289,9 +289,9 @@ export default function InboxList({
             style={{
               padding: "10px 14px",
               fontSize: 11,
-              color: "#f38ba8",
-              borderBottom: "1px solid rgba(243,139,168,0.12)",
-              background: "rgba(243,139,168,0.06)",
+              color: "var(--sp-rose)",
+              borderBottom: "1px solid color-mix(in srgb, var(--sp-rose) 12%, transparent)",
+              background: "color-mix(in srgb, var(--sp-rose) 6%, transparent)",
             }}
           >
             {activeSnapshotError}
@@ -303,8 +303,8 @@ export default function InboxList({
               margin: "10px 12px 6px",
               padding: "10px 12px",
               borderRadius: 8,
-              border: "1px solid rgba(137,180,250,0.18)",
-              background: "rgba(137,180,250,0.06)",
+              border: "1px solid color-mix(in srgb, var(--sp-blue) 18%, transparent)",
+              background: "color-mix(in srgb, var(--sp-blue) 6%, transparent)",
               color: "rgba(205,214,244,0.72)",
               fontSize: 11,
               display: "flex",
@@ -317,8 +317,8 @@ export default function InboxList({
                 width: 7,
                 height: 7,
                 borderRadius: 999,
-                background: "#89b4fa",
-                boxShadow: "0 0 8px rgba(137,180,250,0.65)",
+                background: "var(--sp-blue)",
+                boxShadow: "0 0 8px color-mix(in srgb, var(--sp-blue) 65%, transparent)",
               }}
             />
             Processing {processingCount} email{processingCount === 1 ? "" : "s"}
@@ -333,7 +333,7 @@ export default function InboxList({
           <>
             {grouped.live.length > 0 && (
               <div>
-                <StickyHeader borderColor="rgba(137,180,250,0.12)">
+                <StickyHeader borderColor="color-mix(in srgb, var(--sp-blue) 12%, transparent)">
                   <div
                     role="button"
                     tabIndex={0}
@@ -355,21 +355,21 @@ export default function InboxList({
                       <span
                         style={{
                           position: "absolute", inset: 0, borderRadius: 999,
-                          background: "#89b4fa", opacity: 0.3,
+                          background: "var(--sp-blue)", opacity: 0.3,
                           animation: "livepulse 2s ease-out infinite",
                         }}
                       />
                       <span
                         style={{
-                          width: 5, height: 5, borderRadius: 999, background: "#89b4fa",
-                          boxShadow: "0 0 8px #89b4fa",
+                          width: 5, height: 5, borderRadius: 999, background: "var(--sp-blue)",
+                          boxShadow: "0 0 8px var(--sp-blue)",
                         }}
                       />
                     </span>
                     <span
                       style={{
                         fontSize: 10, fontWeight: 700, letterSpacing: 2,
-                        textTransform: "uppercase", color: "#89b4fa",
+                        textTransform: "uppercase", color: "var(--sp-blue)",
                         minWidth: 0, whiteSpace: "nowrap",
                         overflow: "hidden", textOverflow: "ellipsis",
                       }}
@@ -380,7 +380,7 @@ export default function InboxList({
                       style={{
                         flexShrink: 0,
                         fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-                        background: "rgba(137,180,250,0.14)", color: "rgba(137,180,250,0.9)",
+                        background: "color-mix(in srgb, var(--sp-blue) 14%, transparent)", color: "color-mix(in srgb, var(--sp-blue) 90%, transparent)",
                         fontVariantNumeric: "tabular-nums",
                         whiteSpace: "nowrap",
                       }}

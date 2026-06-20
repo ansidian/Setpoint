@@ -87,7 +87,7 @@ export default function MobileReader({
         flexDirection: "column",
         minHeight: 0,
         overflow: "hidden",
-        background: "#16161e",
+        background: "var(--sp-panel)",
       }}
     >
       <div
@@ -97,7 +97,7 @@ export default function MobileReader({
           alignItems: "center",
           gap: 10,
           borderBottom: "1px solid rgba(255,255,255,0.05)",
-          background: "rgba(11,11,19,0.94)",
+          background: "color-mix(in srgb, var(--sp-deep) 94%, transparent)",
           flexShrink: 0,
         }}
       >
@@ -246,7 +246,7 @@ export default function MobileReader({
                 marginTop: 8,
                 padding: "8px 10px",
                 borderRadius: 12,
-                background: `linear-gradient(135deg, ${accent}12, rgba(137,220,235,0.04))`,
+                background: `linear-gradient(135deg, ${accent}12, color-mix(in srgb, var(--sp-cyan) 4%, transparent))`,
                 border: `1px solid ${accent}2c`,
               }}
             >
@@ -310,7 +310,7 @@ export default function MobileReader({
               maxHeight: "58%",
               display: "flex",
               flexDirection: "column",
-              borderTop: "1px solid rgba(166,227,161,0.18)",
+              borderTop: "1px solid color-mix(in srgb, var(--sp-green) 18%, transparent)",
               background: "rgba(20,20,28,0.98)",
               boxShadow: "0 -12px 28px rgba(0,0,0,0.28)",
             }}
@@ -345,7 +345,7 @@ export default function MobileReader({
                     fontWeight: 700,
                     letterSpacing: 1.8,
                     textTransform: "uppercase",
-                    color: "#a6e3a1",
+                    color: "var(--sp-green)",
                   }}
                 >
                   Bill pay
