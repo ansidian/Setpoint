@@ -111,6 +111,15 @@ async function createTodoistMirrorTestDb() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, label_id)
     );
+
+    CREATE TABLE ea_completed_tasks (
+      user_id TEXT NOT NULL,
+      todoist_id TEXT NOT NULL,
+      completed_at TEXT DEFAULT (datetime('now')),
+      due_date TEXT NOT NULL,
+      snapshot_json TEXT,
+      PRIMARY KEY (user_id, todoist_id, due_date)
+    );
   `);
   return db;
 }
@@ -142,6 +151,22 @@ async function seedSyncState(fields) {
       fields.updatedAt || fields.lastSuccessAt || "2026-05-04T15:00:00.000Z",
     ],
   });
+}
+
+async function seedCompletedOccurrence({ userId = "u1", todoistId, dueDate, completedAt = "2026-06-20T18:47:33.000Z" }) {
+  await testState.db.current.execute({
+    sql: `INSERT INTO ea_completed_tasks (user_id, todoist_id, completed_at, due_date, snapshot_json)
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [userId, todoistId, completedAt, dueDate, "{}"],
+  });
+}
+
+async function listCompletedOccurrences(userId = "u1") {
+  const result = await testState.db.current.execute({
+    sql: "SELECT todoist_id, due_date FROM ea_completed_tasks WHERE user_id = ? ORDER BY todoist_id, due_date",
+    args: [userId],
+  });
+  return result.rows.map((row) => ({ todoistId: String(row.todoist_id), dueDate: String(row.due_date) }));
 }
 
 beforeEach(async () => {
@@ -1210,5 +1235,93 @@ describe("Todoist mirror reads", () => {
     })).resolves.toEqual([
       { id: "label-1", name: "school", color: "grape" },
     ]);
+  });
+});
+
+describe("syncTodoistMirror completed-occurrence reconciliation", () => {
+  it("clears the stale completion tombstone when a non-recurring task is reopened in Todoist", async () => {
+    await seedTodoistToken();
+    await seedSyncState({ lastSuccessAt: "2026-06-20T18:00:00.000Z" });
+    // Completed in Setpoint earlier (tombstone written), then reopened in Todoist.
+    await seedCompletedOccurrence({ todoistId: "chore-1", dueDate: "2026-06-20" });
+
+    const syncApiClient = vi.fn(async () => ({
+      sync_token: "sync-token-reopen",
+      items: [{
+        id: "chore-1",
+        content: "Mop and clean",
+        checked: false,
+        is_deleted: false,
+        due: { date: "2026-06-20", is_recurring: false },
+      }],
+    }));
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-06-20T19:05:00.000Z"),
+    });
+
+    await expect(listCompletedOccurrences("u1")).resolves.toEqual([]);
+  });
+
+  it("preserves a recurring task's tombstone even when an occurrence is reported active again (resurrection guard)", async () => {
+    await seedTodoistToken();
+    await seedSyncState({ lastSuccessAt: "2026-06-20T18:00:00.000Z" });
+    await seedCompletedOccurrence({ todoistId: "recur-1", dueDate: "2026-06-20" });
+
+    const syncApiClient = vi.fn(async () => ({
+      sync_token: "sync-token-resurrect",
+      items: [{
+        id: "recur-1",
+        content: "Check-in",
+        checked: false,
+        is_deleted: false,
+        due: { date: "2026-06-20", is_recurring: true },
+      }],
+    }));
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-06-20T19:05:00.000Z"),
+    });
+
+    await expect(listCompletedOccurrences("u1")).resolves.toEqual([
+      { todoistId: "recur-1", dueDate: "2026-06-20" },
+    ]);
+  });
+
+  it("heals a pre-existing stale tombstone for a task the mirror already holds as active, even when it is absent from this sync's delta", async () => {
+    await seedTodoistToken();
+    await seedSyncState({ lastSuccessAt: "2026-06-20T18:00:00.000Z" });
+    // The reopen landed in an earlier sync (mirror already checked=0); the stale
+    // tombstone predates the fix and will never reappear in an incremental delta.
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_todoist_items
+              (user_id, item_id, content, checked, is_deleted, due_date, due_is_recurring, synced_at, updated_at)
+            VALUES (?, ?, ?, 0, 0, ?, 0, ?, ?)`,
+      args: ["u1", "old-1", "Mop and clean", "2026-06-18", "2026-06-18T00:00:00.000Z", "2026-06-18T00:00:00.000Z"],
+    });
+    await seedCompletedOccurrence({ todoistId: "old-1", dueDate: "2026-06-18" });
+
+    const syncApiClient = vi.fn(async () => ({
+      sync_token: "sync-token-unrelated",
+      items: [{
+        id: "other-1",
+        content: "Buy groceries",
+        checked: false,
+        is_deleted: false,
+        due: { date: "2026-06-21", is_recurring: false },
+      }],
+    }));
+
+    await syncTodoistMirror("u1", {
+      dbClient: testState.db.current,
+      syncApiClient,
+      now: new Date("2026-06-20T19:05:00.000Z"),
+    });
+
+    await expect(listCompletedOccurrences("u1")).resolves.toEqual([]);
   });
 });

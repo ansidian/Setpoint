@@ -21,6 +21,7 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 
 - Todoist data is mirrored locally; reads go through the mirror, not the live API.
 - Tombstones guard completed recurring tasks against webhook resurrection.
+- Mirror sync reconciles `ea_completed_tasks`: a non-recurring occurrence the mirror reports active again (a Todoist reopen) drops its stale completion tombstone so `completeDeadlineOccurrence` re-closes it instead of short-circuiting. Recurring occurrences keep their tombstone (resurrection guard).
 
 ## Related
 

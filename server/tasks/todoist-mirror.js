@@ -416,6 +416,37 @@ function fullSyncTombstoneStatements(userId, timestamp) {
   ];
 }
 
+// A completion tombstone in ea_completed_tasks records an occurrence the user
+// closed from Setpoint, and completeDeadlineOccurrence trusts it to short-circuit
+// the Todoist /close on a repeat Mark-done. When Todoist reports that same
+// occurrence as active again (the user reopened/unchecked it), the tombstone is
+// stale and that short-circuit would silently skip the close forever.
+//
+// Reconcile against the freshly-written mirror (so it runs INSIDE the sync batch,
+// after the item upserts): drop every tombstone whose item the mirror now holds as
+// active for that exact due_date. This is set-based so it also heals tombstones
+// reopened in an earlier sync — they never reappear in an incremental delta.
+//
+// Recurring tasks (due_is_recurring = 1) are deliberately excluded: completing one
+// advances its due date, so the old occurrence's tombstone stays the resurrection
+// guard against a stale sync re-reporting that already-advanced occurrence active.
+function completedOccurrenceReconcileStatement(userId) {
+  return {
+    sql: `DELETE FROM ea_completed_tasks
+          WHERE user_id = ?
+            AND (todoist_id, due_date) IN (
+              SELECT item_id, due_date
+              FROM ea_todoist_items
+              WHERE user_id = ?
+                AND checked = 0
+                AND is_deleted = 0
+                AND due_is_recurring = 0
+                AND due_date IS NOT NULL
+            )`,
+    args: [userId, userId],
+  };
+}
+
 function itemStatement(userId, item, timestamp) {
   const deleted = boolInt(item.is_deleted);
   return {
@@ -602,6 +633,7 @@ async function applySyncResponse(userId, response, {
   const statements = [];
   if (isFullSync) statements.push(...fullSyncTombstoneStatements(userId, timestamp));
   statements.push(...(response.items || []).map((item) => itemStatement(userId, item, timestamp)));
+  statements.push(completedOccurrenceReconcileStatement(userId));
   statements.push(...(response.projects || []).map((project) => projectStatement(userId, project, timestamp)));
   statements.push(...(response.labels || []).map((label) => labelStatement(userId, label, timestamp)));
   statements.push(stateSuccessStatement(userId, response, timestamp, isFullSync, syncStartedAt));
