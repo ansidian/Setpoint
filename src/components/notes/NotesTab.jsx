@@ -25,9 +25,9 @@ function ViewToggle({ label, count, on, onClick, accent }) {
       style={{
         fontSize: 11, padding: "3px 10px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
         display: "inline-flex", alignItems: "center", gap: 5,
-        color: on ? (accent || "#cba6da") : "#a6adc8",
+        color: on ? (accent || "var(--sp-accent)") : "var(--sp-subtext)",
         background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
-        border: `1px solid ${on ? (accent || "#cba6da") : "rgba(255,255,255,0.07)"}`,
+        border: `1px solid ${on ? (accent || "var(--sp-accent)") : "rgba(255,255,255,0.07)"}`,
         transition: "color 150ms, background 150ms, border-color 150ms",
       }}
     >
@@ -253,7 +253,7 @@ export default function NotesTab({ accent, isMobile = false }) {
 
   const inputStyle = {
     width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 8, padding: "9px 12px", color: "#cdd6f4", fontSize: 13, fontFamily: "inherit",
+    borderRadius: 8, padding: "9px 12px", color: "var(--sp-text)", fontSize: 13, fontFamily: "inherit",
     outline: "none", boxSizing: "border-box",
   };
 
@@ -261,7 +261,7 @@ export default function NotesTab({ accent, isMobile = false }) {
     <div style={{ position: "relative", display: "flex", flexDirection: "column", height: "100%", minHeight: 0, padding: isMobile ? 16 : "20px 24px", maxWidth: 720, margin: "0 auto", width: "100%" }}>
       <div style={{ flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{ color: "#cdd6f4", fontSize: 15, fontWeight: 600 }}>Notes</span>
+          <span style={{ color: "var(--sp-text)", fontSize: 15, fontWeight: 600 }}>Notes</span>
           <div style={{ display: "flex", gap: 5, marginLeft: "auto" }}>
             <ViewToggle label="Active" count={activeCount} on={view === "active"} onClick={() => changeView("active")} accent={accent} />
             {(archivedCount > 0 || view === "archived") && (
@@ -281,7 +281,7 @@ export default function NotesTab({ accent, isMobile = false }) {
           />
         </div>
         <div style={{ position: "relative", marginBottom: 12 }}>
-          <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#6c7086" }} />
+          <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--sp-overlay)" }} />
           <input
             ref={searchRef}
             className="notes-search-input"
@@ -302,9 +302,9 @@ export default function NotesTab({ accent, isMobile = false }) {
                   onClick={() => setActiveTag(on ? null : tag)}
                   style={{
                     fontSize: 11, padding: "3px 9px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit",
-                    color: on ? (accent || "#cba6da") : "#a6adc8",
+                    color: on ? (accent || "var(--sp-accent)") : "var(--sp-subtext)",
                     background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${on ? (accent || "#cba6da") : "rgba(255,255,255,0.07)"}`,
+                    border: `1px solid ${on ? (accent || "var(--sp-accent)") : "rgba(255,255,255,0.07)"}`,
                     transition: "color 150ms, background 150ms, border-color 150ms",
                   }}
                 >
@@ -324,8 +324,8 @@ export default function NotesTab({ accent, isMobile = false }) {
             <div style={{ color: "var(--color-text-faint)", fontSize: 12, paddingTop: 8 }}>No archived notes.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 8, paddingTop: 56 }}>
-              <NotebookPen size={26} strokeWidth={1.6} style={{ color: "rgba(203,166,218,0.7)" }} aria-hidden="true" />
-              <div style={{ color: "#cdd6f4", fontSize: 13, fontWeight: 500 }}>No notes yet</div>
+              <NotebookPen size={26} strokeWidth={1.6} style={{ color: "color-mix(in srgb, var(--sp-accent) 70%, transparent)" }} aria-hidden="true" />
+              <div style={{ color: "var(--sp-text)", fontSize: 13, fontWeight: 500 }}>No notes yet</div>
               <div style={{ color: "var(--color-text-faint)", fontSize: 12, maxWidth: 240 }}>
                 Jot a thought above. Add #tags to group them, or promote one to a task.
               </div>

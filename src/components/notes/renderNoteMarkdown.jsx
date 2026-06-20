@@ -24,18 +24,18 @@ function inlineNodes(text, accent, keyBase) {
       <code key={k} style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.92em", background: "rgba(255,255,255,0.06)", padding: "0 4px", borderRadius: 4 }}>{m[6]}</code>,
     );
     else if (m[7] != null) out.push(
-      <span key={k} data-note-tag={m[7].toLowerCase()} style={{ color: accent || "var(--ea-accent, #cba6da)", background: "rgba(203,166,218,0.12)", borderRadius: 999, padding: "1px 6px", fontSize: "0.92em" }}>#{m[7]}</span>,
+      <span key={k} data-note-tag={m[7].toLowerCase()} style={{ color: accent || "var(--ea-accent, var(--sp-accent))", background: "color-mix(in srgb, var(--sp-accent) 12%, transparent)", borderRadius: 999, padding: "1px 6px", fontSize: "0.92em" }}>#{m[7]}</span>,
     );
     else if (m[8] != null) {
       // [label](url) — url is http(s)-only by the regex, so it is safe to render.
       out.push(isDemoMode()
         ? m[8]
-        : <a key={k} href={m[9]} target="_blank" rel="noopener noreferrer" style={{ color: accent || "var(--ea-accent, #cba6da)", textDecoration: "underline", textUnderlineOffset: 2 }} onClick={(e) => e.stopPropagation()}>{m[8]}</a>);
+        : <a key={k} href={m[9]} target="_blank" rel="noopener noreferrer" style={{ color: accent || "var(--ea-accent, var(--sp-accent))", textDecoration: "underline", textUnderlineOffset: 2 }} onClick={(e) => e.stopPropagation()}>{m[8]}</a>);
     }
     else if (m[0].startsWith("http")) {
       out.push(isDemoMode()
         ? m[0]
-        : <a key={k} href={m[0]} target="_blank" rel="noopener noreferrer" style={{ color: accent || "var(--ea-accent, #cba6da)", textDecoration: "none" }} onClick={(e) => e.stopPropagation()}>{m[0]}</a>);
+        : <a key={k} href={m[0]} target="_blank" rel="noopener noreferrer" style={{ color: accent || "var(--ea-accent, var(--sp-accent))", textDecoration: "none" }} onClick={(e) => e.stopPropagation()}>{m[0]}</a>);
     }
     last = m.index + m[0].length;
   }
@@ -62,7 +62,7 @@ export function renderNoteMarkdown(content, { accent, onToggleCheckbox } = {}) {
             aria-label={cb[3]}
             onChange={() => onToggleCheckbox?.(idx)}
             onClick={(e) => e.stopPropagation()}
-            style={{ marginTop: 3, accentColor: accent || "#cba6da", cursor: "pointer" }}
+            style={{ marginTop: 3, accentColor: accent || "var(--sp-accent)", cursor: "pointer" }}
           />
           <span style={{ textDecoration: checked ? "line-through" : "none", opacity: checked ? 0.6 : 1 }}>
             {inlineNodes(cb[3], accent, `${li}`)}

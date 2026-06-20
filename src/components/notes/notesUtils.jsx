@@ -13,7 +13,7 @@ export function linkifyText(text, accentColor) {
         href={part}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ color: accentColor || "var(--ea-accent, #cba6da)", textDecoration: "none" }}
+        style={{ color: accentColor || "var(--ea-accent, var(--sp-accent))", textDecoration: "none" }}
         onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
         onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
         onClick={(e) => e.stopPropagation()}

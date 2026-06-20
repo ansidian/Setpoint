@@ -23,7 +23,7 @@ function MenuItem({ icon, label, onClick, danger }) {
         display: "flex", alignItems: "center", gap: 9, width: "100%",
         background: "none", border: "none", cursor: "pointer", textAlign: "left",
         padding: "8px 12px", fontSize: 12.5, fontFamily: "inherit", borderRadius: 6,
-        color: danger ? "#f38ba8" : "#cdd6f4",
+        color: danger ? "var(--sp-rose)" : "var(--sp-text)",
       }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
@@ -61,7 +61,7 @@ export default function NoteContextMenu({ x, y, onClose, onEdit, onPromote, onAr
       role="menu"
       style={{
         position: "fixed", left, top, width: MENU_WIDTH, zIndex: 60,
-        background: "rgba(24,24,37,0.98)", border: "1px solid rgba(255,255,255,0.10)",
+        background: "color-mix(in srgb, var(--sp-mantle) 98%, transparent)", border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: 9, padding: 4, boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
         backdropFilter: "blur(8px)",
       }}

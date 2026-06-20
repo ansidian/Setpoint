@@ -4,9 +4,9 @@ import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 // Kind drives the icon + color so archive / delete / restore read differently at a
 // glance — the whole point of the toast (you couldn't tell them apart before).
 const KINDS = {
-  archive: { Icon: Archive, color: "#cba6da" },
-  delete: { Icon: Trash2, color: "#f38ba8" },
-  restore: { Icon: ArchiveRestore, color: "#a6e3a1" },
+  archive: { Icon: Archive, color: "var(--sp-accent)" },
+  delete: { Icon: Trash2, color: "var(--sp-rose)" },
+  restore: { Icon: ArchiveRestore, color: "var(--sp-green)" },
 };
 
 export default function NotesToast({ toast, onUndo }) {
@@ -32,8 +32,8 @@ export default function NotesToast({ toast, onUndo }) {
         padding: "8px 10px 8px 14px",
         borderRadius: 10,
         border: "1px solid rgba(255,255,255,0.10)",
-        background: "#16161e",
-        color: "#cdd6f4",
+        background: "var(--sp-panel)",
+        color: "var(--sp-text)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
         isolation: "isolate",
       }}
@@ -52,8 +52,8 @@ export default function NotesToast({ toast, onUndo }) {
             height: 28,
             padding: "0 10px",
             borderRadius: 8,
-            border: `1px solid ${hover ? `${color}66` : `${color}38`}`,
-            background: hover ? `${color}20` : `${color}12`,
+            border: `1px solid ${hover ? `color-mix(in srgb, ${color} 40%, transparent)` : `color-mix(in srgb, ${color} 22%, transparent)`}`,
+            background: hover ? `color-mix(in srgb, ${color} 13%, transparent)` : `color-mix(in srgb, ${color} 7%, transparent)`,
             color,
             cursor: "pointer",
             fontFamily: "inherit",
