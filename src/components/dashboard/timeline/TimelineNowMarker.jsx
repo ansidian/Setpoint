@@ -1,77 +1,28 @@
-import { pacificClock } from "../../../lib/shell-helpers";
+import { formatNowMarkerClock } from "./timeline-helpers";
 
-export default function TimelineNowMarker({
-  accent,
-  isMobile = false,
-  now,
-  spineLeft,
-  top,
-}) {
+/**
+ * Standalone "NOW · 12:40" marker shown on the today timeline when the current
+ * moment falls in a focus window (a gap between events, with nothing live). When
+ * an event is live the in-card progress line in TimelineRow owns the marker
+ * instead — the two are mutually exclusive (see resolveTodayNowMarkerIndex).
+ */
+export default function TimelineNowMarker({ accent, now }) {
   return (
     <div
-      data-testid="timeline-now-marker"
-      style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        top,
-        pointerEvents: "none",
-        zIndex: 5,
-      }}
+      data-testid="timeline-gap-now-marker"
+      style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 4px 6px", pointerEvents: "none" }}
     >
-      <div
+      <span
         style={{
-          position: "absolute",
-          ...(isMobile
-            ? { left: spineLeft + 10 }
-            : { left: 0 }),
-          top: 0,
-          transform: "translateY(-50%)",
-          fontSize: isMobile ? 9 : 9.5,
-          fontWeight: 700,
-          letterSpacing: 0.4,
-          textTransform: "uppercase",
-          color: accent,
-          padding: isMobile ? "2px 7px" : "2px 8px",
-          background: `${accent}15`,
-          borderRadius: 99,
-          border: `1px solid ${accent}30`,
-          whiteSpace: "nowrap",
+          fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+          color: accent, background: `color-mix(in srgb, ${accent} 14%, transparent)`,
+          borderRadius: 5, padding: "2px 6px", whiteSpace: "nowrap",
         }}
       >
-        Now · {pacificClock(new Date(now))}
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          left: spineLeft - 6,
-          top: 0,
-          transform: "translateY(-50%)",
-          width: 13,
-          height: 13,
-        }}
-      >
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            borderRadius: 99,
-            background: accent,
-            boxShadow: `0 0 12px ${accent}, 0 0 0 3px ${accent}25`,
-            animation: "dashPulse 2s ease-in-out infinite",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          left: spineLeft + 8,
-          right: 0,
-          top: 0,
-          height: 1,
-          background: `linear-gradient(90deg, ${accent}60, transparent)`,
-        }}
-      />
+        NOW · {formatNowMarkerClock(now)}
+      </span>
+      <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${accent}, color-mix(in srgb, ${accent} 10%, transparent))` }} />
+      <span style={{ width: 7, height: 7, borderRadius: 99, background: accent, boxShadow: `0 0 8px ${accent}` }} />
     </div>
   );
 }

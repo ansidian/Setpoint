@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   BarChart3,
   LayoutList, Inbox, Clock, AlertCircle, CreditCard,
-  RefreshCw, Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon, Sliders,
+  RefreshCw, Search, ArrowRight, CalendarDays, History, Settings as SettingsIcon,
   CalendarPlus, ListPlus, Notebook,
 } from "lucide-react";
 
@@ -47,8 +47,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
     { id: "go-notes",     icon: Notebook,   label: "Go to Notes",      hint: "4", kind: "tab", payload: "notes" },
     { id: "analytics",    icon: BarChart3,  label: "Analytics",       hint: "A", kind: "analytics" },
     { id: "history",      icon: History,    label: "Snapshots", hint: "Y", kind: "history" },
-    { id: "customize",    icon: Sliders,    label: "Customize",       kind: "customize" },
-    { id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },
+{ id: "refresh",      icon: RefreshCw,  label: "Sync now",        hint: "R", kind: "refresh" },
     { id: "settings",     icon: SettingsIcon, label: "Open settings", hint: ["⌘", ","], shortcutLabel: "Command comma", kind: "settings" },
   ], []);
 

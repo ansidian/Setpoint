@@ -42,6 +42,22 @@
   --font-display: var(--serif-choice, "Instrument Serif"), Georgia, serif;
   --font-mono: Fira Code, monospace;
   --ea-accent: #cba6da;
+  /* ── Catppuccin Mocha canonical palette (Color Scope A) ──
+     Additive --sp-* namespace consumed by the dashboard band / timeline / context
+     redesign. --sp-accent reconciles mockup markup that references var(--sp-accent)
+     (which the app did not define) back to the live lavender accent. The legacy
+     oklch shadcn tokens and the @theme inline --color-* aliases are left untouched;
+     the app-wide hex/oklch sweep is Scope B (a separate later effort). */
+  --sp-page: #1e1e2e;
+  --sp-deep: #0b0b13;
+  --sp-dot: #2b2b42;
+  --sp-header-chrome: rgba(11, 11, 19, 0.92);
+  --sp-rose: #f38ba8;
+  --sp-cream: #f9e2af;
+  --sp-green: #a6e3a1;
+  --sp-cyan: #89dceb;
+  --sp-blue: #89b4fa;
+  --sp-accent: var(--ea-accent);
   /* Top-layer z-index tokens. Valued in the existing 9998–10020 band to preserve current stacking.
      (A full z-index-scale renumber of the 10001/10020 band is intentionally deferred.) */
   --z-popover: 9999;
@@ -155,10 +171,15 @@ html, body, #root {
 
 body {
   font-family: Montserrat, sans-serif;
-  background-color: var(--background);
+  /* Catppuccin Mocha canvas: page base + 5%-accent top radial glow + dot-grid.
+     Layer order matters — the accent radial sits ABOVE the dot-grid so the glow
+     reads at the top edge; background-size pairs positionally (auto for the
+     radial glow, 10px 10px for the dots). */
+  background-color: var(--sp-page);
   background-image:
-    radial-gradient(oklch(0.2973 0.0294 276.2144) 0.5px, transparent 0.5px);
-  background-size: 10px 10px;
+    radial-gradient(circle at 50% -8%, color-mix(in srgb, var(--sp-accent) 5%, transparent), transparent 42%),
+    radial-gradient(var(--sp-dot) 0.5px, transparent 0.5px);
+  background-size: auto, 10px 10px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

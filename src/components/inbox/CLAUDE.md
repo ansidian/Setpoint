@@ -19,6 +19,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `EmailRow.jsx` — single email row: avatar, preview, urgency/lane bar
 - `DigestStrip.jsx` — header strip: live/snapshot status, lane counts, processing activity
 - `Sidebar.jsx` — account and lane navigation
+- `sidebarCompactStore.js` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
 - `inboxRow.js` — canonical row normalization: field fallbacks, read-override merge
 - `inboxWorkItems.js` — work item pipelines: active-snapshot, live, resurfaced-snooze
 - `inboxCountsModel.js` — scoped unread counts under account/category filters

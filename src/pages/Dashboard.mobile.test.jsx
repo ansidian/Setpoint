@@ -1,19 +1,14 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider } from "../context/DashboardContext.jsx";
 import { BrowserRouter } from "react-router-dom";
 import { resetInboxSession } from "../components/inbox/useInboxSessionState.js";
 
 let mockIsMobile = false;
-let mockCustomize = null;
 let latestInboxProps = null;
 
 vi.mock("../hooks/useIsMobile", () => ({
   default: () => mockIsMobile,
-}));
-
-vi.mock("../hooks/useCustomize", () => ({
-  default: () => mockCustomize,
 }));
 
 vi.mock("../components/calendar/CalendarModal", () => ({
@@ -78,12 +73,6 @@ vi.mock("../components/shell/aiAnalyticsModalLoader.js", () => ({
   }),
 }));
 
-vi.mock("../components/shell/CustomizePanel", () => ({
-  default: function CustomizePanelMock() {
-    return null;
-  },
-}));
-
 vi.mock("../components/inbox/InboxView", () => ({
   default: function InboxViewMock(props) {
     latestInboxProps = props;
@@ -106,16 +95,6 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   resetInboxSession();
-});
-
-beforeEach(() => {
-  mockCustomize = {
-    dashboardLayout: "command",
-    density: "comfortable",
-    showInsights: true,
-    showInboxPeek: true,
-    accent: "#cba6da",
-  };
 });
 
 function makeBriefing() {
@@ -402,6 +381,11 @@ describe("DashboardShell mobile behavior", () => {
   });
 
   it("opens the desktop calendar from deadline clicks and loads deadline data", async () => {
+    // Pin the clock to the fixture day so the deadline classifies as due-today and
+    // lands in the Needs-you band (the only home for overdue/due-today items now
+    // that the rails are retired). shouldAdvanceTime keeps waitFor's poll alive.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-04-20T12:00:00-07:00"));
     mockIsMobile = false;
     const props = makeProps();
     props.bd.briefing.deadlines.upcoming = [
@@ -416,7 +400,7 @@ describe("DashboardShell mobile behavior", () => {
     ];
     props.calendarDeadlines = {
       upcoming: props.bd.briefing.deadlines.upcoming,
-      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 1, totalPoints: 0 },
+      stats: { incomplete: 1, dueToday: 1, dueThisWeek: 1, totalPoints: 0 },
     };
 
     render(
@@ -427,16 +411,22 @@ describe("DashboardShell mobile behavior", () => {
       </BrowserRouter>,
     );
 
-    fireEvent.click(screen.getAllByText("Ship report")[0]);
+    const band = screen.getByTestId("needs-you-band");
+    fireEvent.click(within(band).getByText("Ship report"));
 
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");
       expect(modal.textContent).toBe("open");
     });
     expect(props.loadCalendarDeadlines).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it("opens the desktop calendar from bill clicks and refreshes bill data", async () => {
+    // Pin the clock so the bill is due-today (classifyBill admits only days===0),
+    // putting "Rent" in the band as a clickable priority card.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-04-20T12:00:00-07:00"));
     mockIsMobile = false;
     const props = makeProps();
     props.liveData.liveBills = [
@@ -458,13 +448,15 @@ describe("DashboardShell mobile behavior", () => {
       </BrowserRouter>,
     );
 
-    fireEvent.click(screen.getAllByText("Rent").at(-1));
+    const band = screen.getByTestId("needs-you-band");
+    fireEvent.click(within(band).getByText("Rent"));
 
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");
       expect(modal.textContent).toBe("open");
     });
     expect(props.loadCalendarBills).toHaveBeenCalledWith({ refreshLive: true });
+    vi.useRealTimers();
   });
 
   it("exposes the Calendar shell tab on desktop only", () => {

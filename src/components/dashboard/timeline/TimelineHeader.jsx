@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Tooltip from "../../shared/Tooltip";
+import { TimelineClock } from "./TimelineClock.jsx";
 
 function SectionHeader({ title, right }) {
   return (
@@ -139,6 +140,7 @@ export default function TimelineHeader({
   accent,
   filters,
   isMobile = false,
+  now,
   onToggleFilter,
   showRefreshStatus = false,
   todayLabel,
@@ -160,6 +162,7 @@ export default function TimelineHeader({
             justifyContent: isMobile ? "flex-start" : "flex-end",
           }}
         >
+          {typeof now === "number" && <TimelineClock now={now} />}
           {showRefreshStatus && <TimelineRefreshStatus accent={accent} />}
           <div
             role="group"

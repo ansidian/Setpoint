@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback, star
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { useDashboard } from "../../context/DashboardContext";
-import useCustomize from "../../hooks/useCustomize";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
 import {
@@ -33,13 +32,29 @@ const importNotesTab = () => import("../notes/NotesTab");
 const NotesTab = lazy(importNotesTab);
 const AlfredPanel = lazy(() => import("../alfred/AlfredPanel"));
 
+// Former Customize defaults, now hardcoded. The accent + serif are also baked
+// into src/index.css static fallbacks (--ea-accent / --serif-choice), so the
+// runtime CSS-var injection the old customize hook did is no longer needed.
+const SHELL_PREFS = Object.freeze({
+  dashboardLayout: "focus",
+  inboxLayout: "two-pane",
+  inboxGrouping: "swimlanes",
+  density: "comfortable",
+  inboxDensity: "comfortable",
+  aiVerbosity: "standard",
+  accent: "#cba6da",
+  serifChoice: "Instrument Serif",
+  showInsights: true,
+  showInboxPeek: true,
+  showPreview: true,
+});
+
 export function DashboardShell({
   bd, liveData, calendarRange, activeSnapshot, onQuickRefresh,
   historyOpen, setHistoryOpen, historyTriggerRef, calendarDeadlines, calendarDeadlinesLoading,
   calendarDeadlinesError = false, loadCalendarDeadlines = () => {},
   calendarBillsData, calendarBillRange, calendarDeadlineRange, loadCalendarBills = () => {}, onCalendarWorkspaceChange,
 }) {
-  const customize = useCustomize();
   const isMobile = useIsMobile();
   const {
     handleAddTask,
@@ -106,7 +121,6 @@ export function DashboardShell({
   }, [isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [liveReadOverrides, setLiveReadOverrides] = useState({});
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState(null);
 
@@ -209,7 +223,6 @@ export function DashboardShell({
   // Stable ShellHeader callbacks so the memoized header (+ its chrome children)
   // stop re-rendering on every dashboard SSE/refresh re-render of DashboardShell.
   // openAnalytics is already a stable useCallback, so it is wired directly.
-  const handleHeaderToggleCustomize = useCallback(() => setCustomizeOpen((v) => !v), []);
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
   const changeCalendarView = (v) => {
     const nextView = normalizeCalendarWorkspaceView(v);
@@ -246,7 +259,7 @@ export function DashboardShell({
   // Single signal for "a non-input overlay owns the foreground", gating the global
   // single-key shell hotkeys and ShellHeader's 1/2 tab hotkeys so neither opens overlays
   // behind, nor desyncs the tab from, the open modal.
-  const anyBlockingOverlayOpen = customizeOpen || analyticsOpen || historyOpen;
+  const anyBlockingOverlayOpen = analyticsOpen || historyOpen;
 
   useDashboardShellHotkeys({
     isMobile,
@@ -263,7 +276,7 @@ export function DashboardShell({
     alfredNewChat,
   });
 
-  const { accent } = customize;
+  const accent = SHELL_PREFS.accent;
   const briefing = bd.briefing;
   const dashboardCalendarDeadlines = calendarDeadlines;
 
@@ -328,7 +341,6 @@ export function DashboardShell({
       });
     }
     else if (item.kind === "history") setHistoryOpen(true);
-    else if (item.kind === "customize") setCustomizeOpen(true);
     else if (item.kind === "refresh") onQuickRefresh?.();
     // SPA navigation (honors the router basename, keeps SSE/caches alive) — the
     // old window.location.href forced a full reload and ignored a sub-path base.
@@ -438,7 +450,6 @@ export function DashboardShell({
         analyticsOpen={analyticsOpen}
         onOpenAnalytics={openAnalytics}
         onOpenPalette={openPalette}
-        onOpenCustomize={handleHeaderToggleCustomize}
         onOpenHistory={handleHeaderToggleHistory}
         inboxUnreadSignalCount={inboxUnreadSignalCount}
         refreshing={bd.refreshing}
@@ -467,15 +478,12 @@ export function DashboardShell({
             refresh from reconciling the hidden tab. */}
         <KeepAliveTab active={tab === "dashboard"}>
           <DashboardBody
-            briefing={briefing}
             liveData={liveData}
             activeSnapshot={activeSnapshot?.snapshot}
             calendarRange={calendarRange}
-            customize={customize}
             accent={accent}
             isMobile={isMobile}
             calendarDeadlines={dashboardCalendarDeadlines}
-            calendarDeadlinesLoading={calendarDeadlinesLoading}
             calendarDeadlinesError={!!calendarDeadlinesError}
             onOpenEmail={openEmailInInbox}
             onOpenDeadline={(task, anchor) => {
@@ -498,20 +506,13 @@ export function DashboardShell({
               openDetail: !!itemId && itemId !== "new",
               forceEventOverlay: !!itemId && itemId !== "new",
             })}
-            onOpenDeadlinesCalendar={(date, itemId) => {
-              const request = dashboardDeadlineCalendarRequest(itemId, date);
-              openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
-            }}
-            onOpenDeadlineCreate={openDeadlineCreate}
-            onJumpSection={jumpToSection}
-            setAddTaskOpen={setAddTaskOpen}
           />
         </KeepAliveTab>
         <KeepAliveTab active={tab === "inbox"}>
           <Suspense fallback={<InboxMountFallback />}>
             <InboxView
               accent={accent}
-              customize={customize}
+              customize={SHELL_PREFS}
               emailAccounts={[]}
               briefingSummary=""
               briefingGeneratedAt={liveData.briefingGeneratedAt}
@@ -560,10 +561,6 @@ export function DashboardShell({
         handlePaletteAction={handlePaletteAction}
         analyticsOpen={analyticsOpen}
         closeAnalytics={closeAnalytics}
-        customizeOpen={customizeOpen}
-        setCustomizeOpen={setCustomizeOpen}
-        customize={customize}
-        tab={tab}
         historyOpen={historyOpen}
         historicalSnapshotView={historicalSnapshotView}
         activeSnapshot={activeSnapshot}

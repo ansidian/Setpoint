@@ -4,7 +4,6 @@ import { AnalyticsModalMount } from "../shell/AnalyticsModalMount.jsx";
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
 const CommandPalette = lazy(() => import("../shell/CommandPalette"));
-const CustomizePanel = lazy(() => import("../shell/CustomizePanel"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
 
 export default function DashboardShellOverlays({
@@ -21,10 +20,6 @@ export default function DashboardShellOverlays({
   handlePaletteAction,
   analyticsOpen,
   closeAnalytics,
-  customizeOpen,
-  setCustomizeOpen,
-  customize,
-  tab,
   historyOpen,
   historicalSnapshotView,
   activeSnapshot,
@@ -71,18 +66,6 @@ export default function DashboardShellOverlays({
       )}
 
       <AnalyticsModalMount open={analyticsOpen} onClose={closeAnalytics} />
-
-      {customizeOpen && (
-        <Suspense fallback={null}>
-          <CustomizePanel
-            open={customizeOpen}
-            onClose={() => setCustomizeOpen(false)}
-            customize={customize}
-            tab={tab}
-            isMobile={isMobile}
-          />
-        </Suspense>
-      )}
 
       {historyOpen && (
         <Suspense fallback={null}>

@@ -28,7 +28,6 @@ function ShellHeader({
   analyticsOpen = false,
   onOpenAnalytics,
   onOpenPalette,
-  onOpenCustomize,
   onOpenHistory,
   inboxUnreadSignalCount = 0,
   refreshing,
@@ -148,7 +147,6 @@ function ShellHeader({
           onCloseMenu={() => setMenuOpen(false)}
           onOpenHistory={onOpenHistory}
           onOpenAnalytics={onOpenAnalytics}
-          onOpenCustomize={onOpenCustomize}
         />
       </div>
     </div>

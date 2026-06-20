@@ -1,14 +1,14 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { Fragment } from "react";
 import { dayBucketLabel } from "../../../lib/shell-helpers";
 import Tooltip from "../../shared/Tooltip";
-import TimelineNowMarker from "./TimelineNowMarker";
 import TimelineRow from "./TimelineRow";
+import TimelineNowMarker from "./TimelineNowMarker";
 import {
   formatFullDateForOffset,
   GUTTER,
   MOBILE_GUTTER,
   MOBILE_SPINE_LEFT,
-  resolveTimelineNowMarkerTop,
+  resolveTodayNowMarkerIndex,
   SPINE_LEFT,
 } from "./timeline-helpers";
 
@@ -26,31 +26,12 @@ export default function TimelineDayGroup({
   const isToday = day === 0;
   const showRelativeTooltip = day === 1 || day <= -2 || (day >= 2 && day <= 6);
 
-  const rowRefs = useRef([]);
-  const markerTopRef = useRef(null);
-  const [markerTop, setMarkerTop] = useState(null);
-
   const gutter = isMobile ? MOBILE_GUTTER : GUTTER;
   const spineLeft = isMobile ? MOBILE_SPINE_LEFT : SPINE_LEFT;
-
-  useLayoutEffect(() => {
-    const commitMarkerTop = (nextMarkerTop) => {
-      if (Object.is(markerTopRef.current, nextMarkerTop)) return;
-      markerTopRef.current = nextMarkerTop;
-      setMarkerTop(nextMarkerTop);
-    };
-
-    if (!isToday) {
-      commitMarkerTop(null);
-      return;
-    }
-    rowRefs.current = rowRefs.current.slice(0, items.length);
-    commitMarkerTop(resolveTimelineNowMarkerTop({
-      items,
-      now,
-      rows: rowRefs.current,
-    }));
-  }, [isToday, items, now]);
+  // The focus-window NOW marker lives only on the desktop today rail; when an
+  // event is live, resolveTodayNowMarkerIndex returns null and the in-card
+  // progress line in TimelineRow owns the marker instead.
+  const nowMarkerIndex = !isMobile && isToday ? resolveTodayNowMarkerIndex(items, now) : null;
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -118,23 +99,18 @@ export default function TimelineDayGroup({
           }}
         />
         {items.map((item, index) => (
-          <div
-            key={`${item.kind}-${index}`}
-            ref={(element) => {
-              rowRefs.current[index] = element;
-            }}
-          >
-            <TimelineRow item={item} now={now} accent={accent} onJump={onJump} isMobile={isMobile} />
-          </div>
+          <Fragment key={`${item.kind}-${index}`}>
+            {nowMarkerIndex === index && <TimelineNowMarker now={now} accent={accent} />}
+            <TimelineRow
+              item={item}
+              now={now}
+              accent={accent}
+              onJump={onJump}
+              isMobile={isMobile}
+            />
+          </Fragment>
         ))}
-        {!isMobile && isToday && markerTop != null && (
-          <TimelineNowMarker
-            accent={accent}
-            now={now}
-            top={markerTop}
-            spineLeft={spineLeft}
-          />
-        )}
+        {nowMarkerIndex === items.length && <TimelineNowMarker now={now} accent={accent} />}
       </div>
     </div>
   );

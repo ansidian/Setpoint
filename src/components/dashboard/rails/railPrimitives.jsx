@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Circle,
-  CircleDashed,
-  Flag,
-} from "lucide-react";
-import { daysLabel, urgencyForDays } from "../../../lib/shell-helpers";
-import { PRIORITY_COLOR } from "./railModel.js";
+import { ArrowRight } from "lucide-react";
 
 export function SectionHeader({ title, subtitle, right, isMobile = false }) {
   return (
@@ -26,34 +18,6 @@ export function SectionHeader({ title, subtitle, right, isMobile = false }) {
         )}
       </div>
       {right}
-    </div>
-  );
-}
-
-function verboseDaysLabel(days) {
-  if (days == null || Number.isNaN(days)) return "No due date";
-  if (days === 0) return "Today";
-  if (days === 1) return "Tomorrow";
-  if (days < 0) {
-    const count = Math.abs(days);
-    return `${count} ${count === 1 ? "day" : "days"} overdue`;
-  }
-  return `In ${days} days`;
-}
-
-export function UrgencyPill({ days, accent, compact, verbose = false }) {
-  const u = urgencyForDays(days, accent).key;
-  const color = u === "high" ? "#f38ba8" : u === "medium" ? "#f9e2af" : accent;
-  return (
-    <div
-      style={{
-        fontSize: compact ? 9.5 : 10, fontWeight: 600,
-        padding: "2px 7px", borderRadius: 99,
-        background: `${color}22`, color, letterSpacing: 0.2,
-        fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
-      }}
-    >
-      {verbose ? verboseDaysLabel(days) : daysLabel(days)}
     </div>
   );
 }
@@ -99,79 +63,6 @@ export function OpenInboxButton({ accent, onClick }) {
         <ArrowRight size={9} />
       </span>
     </button>
-  );
-}
-
-export function DeadlineStatusIcon({ status, size = 12 }) {
-  if (status === "complete") return <CheckCircle2 size={size} color="#a6e3a1" />;
-  if (status === "in_progress") return <CircleDashed size={size} color="#89dceb" />;
-  return <Circle size={size} color="rgba(205,214,244,0.45)" />;
-}
-
-export function PriorityFlag({ level, size = 11 }) {
-  const color = PRIORITY_COLOR[level];
-  if (!color) return null;
-  return (
-    <span
-      title={`P${level}`}
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: size + 4, height: size + 4, borderRadius: 4,
-        background: `${color}1e`, border: `1px solid ${color}38`,
-        flexShrink: 0,
-      }}
-    >
-      <Flag size={size - 2} color={color} strokeWidth={2.2} />
-    </span>
-  );
-}
-
-export function CountBadge({ n }) {
-  return (
-    <div
-      style={{
-        fontSize: 10, fontWeight: 500, padding: "1px 7px", borderRadius: 99,
-        background: "rgba(255,255,255,0.05)", color: "rgba(205,214,244,0.6)",
-      }}
-    >
-      {n}
-    </div>
-  );
-}
-
-export function RailGroupLabel({ label, count, tone = "default" }) {
-  const color = tone === "success" ? "#a6e3a1" : "rgba(205,214,244,0.58)";
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        marginBottom: 6,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: 1.4,
-          textTransform: "uppercase",
-          color,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: "var(--color-text-faint)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {count}
-      </div>
-    </div>
   );
 }
 

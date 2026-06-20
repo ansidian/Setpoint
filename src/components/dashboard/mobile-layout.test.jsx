@@ -1,11 +1,8 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DashboardHero from "./DashboardHero.jsx";
 import TodayTimeline from "./TodayTimeline.jsx";
 import { DashboardProvider } from "../../context/DashboardContext.jsx";
 import { DashboardBody } from "../../pages/Dashboard.jsx";
-import { resolveDashboardBodyLayout } from "./dashboardBodyLayoutModel.js";
-import CustomizePanel from "../shell/CustomizePanel.jsx";
 
 afterEach(() => {
   cleanup();
@@ -44,11 +41,7 @@ function makeBriefing(overrides = {}) {
   };
 }
 
-const currentDeadlineFixture = [
-  { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
-];
-
-function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", showInsights = true, onOpenEmail = () => {} } = {}) {
+function renderDashboardBody({ isMobile = false, onOpenEmail = () => {} } = {}) {
   const briefing = makeBriefing();
   const liveData = {
     liveBills: [{ id: "bill-1", name: "Rent", amount: 1800, next_date: "2026-04-21", payee: "Landlord", paid: false }],
@@ -61,7 +54,6 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
   return render(
     <DashboardProvider briefing={briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
       <DashboardBody
-        briefing={briefing}
         liveData={liveData}
         calendarRange={{
           ensureRange: vi.fn().mockResolvedValue([]),
@@ -71,260 +63,35 @@ function renderDashboardBody({ isMobile = false, dashboardLayout = "focus", show
           loading: false,
           error: null,
         }}
-        customize={{
-          dashboardLayout,
-          density: "comfortable",
-          showInsights,
-          showInboxPeek: true,
-        }}
         accent="#cba6da"
         isMobile={isMobile}
         onOpenEmail={onOpenEmail}
         onOpenDeadline={() => {}}
         onOpenBillsCalendar={() => {}}
         onOpenEventsCalendar={() => {}}
-        onJumpSection={() => {}}
       />
     </DashboardProvider>,
   );
 }
 
-describe("mobile dashboard layout", () => {
-  it("forces the mobile dashboard body into paper mode without the insights section", () => {
-    const layoutPlan = resolveDashboardBodyLayout({
-      isMobile: true,
-      dashboardLayout: "command",
-      showInboxPeek: true,
-    });
-
-    expect(layoutPlan.layoutMode).toBe("paper");
-    expect(layoutPlan.mobileSectionOrder).toEqual(["deadlines", "bills", "inbox-peek"]);
-
-    renderDashboardBody({ isMobile: true, dashboardLayout: "command", showInsights: true });
-
+describe("mobile dashboard 3-tier layout", () => {
+  it("stacks the three tiers on mobile", () => {
+    renderDashboardBody({ isMobile: true });
     const body = screen.getByTestId("dashboard-body-mobile");
-    expect(body.getAttribute("data-layout-mode")).toBe("paper");
-    expect(screen.queryByText("Signals")).toBeNull();
-    expect(document.querySelector('[data-sect="deadlines"]')).toBeTruthy();
-    expect(document.querySelector('[data-sect="bills"]')).toBeTruthy();
-    expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
-    expect(document.querySelector('[data-sect="insights"]')).toBeNull();
-    expect(document.querySelector('[data-sect="timeline"]')).toBeTruthy();
+    expect(body.getAttribute("data-layout-mode")).toBe("mobile");
+    expect(screen.getByTestId("needs-you-band")).toBeTruthy();
+    expect(screen.getByTestId("today-timeline-mobile")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
+    expect(document.querySelector('[data-sect="deadlines"]')).toBeNull();
+    expect(document.querySelector('[data-sect="bills"]')).toBeNull();
   });
 
-  it("keeps desktop layout selection when not mobile", () => {
-    expect(resolveDashboardBodyLayout({
-      isMobile: false,
-      dashboardLayout: "command",
-      showInboxPeek: false,
-    }).commandSecondaryRailSectionOrder).toEqual(["bills"]);
-
-    renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
-
-    expect(screen.queryByText("Signals")).toBeNull();
-    const layoutRoot = document.querySelector('[data-layout-mode="command"]');
-    expect(layoutRoot).toBeTruthy();
-  });
-
-  it("omits notes from the command primary rail (rail retired)", () => {
-    const plan = resolveDashboardBodyLayout({ dashboardLayout: "command" });
-    expect(plan.commandPrimaryRailSectionOrder).toEqual(["deadlines"]);
-  });
-
-  it("keeps timeline and rails inside the desktop command layout", () => {
-    renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
-
-    expect(document.querySelector('[data-layout-mode="command"]')).toBeTruthy();
-    expect(screen.getByTestId("dashboard-command-rails")).toBeTruthy();
+  it("renders the fixed desktop 3-tier layout with the 344px context column", () => {
+    renderDashboardBody({ isMobile: false });
+    expect(document.querySelector('[data-layout-mode="desktop"]')).toBeTruthy();
+    expect(screen.getByTestId("needs-you-band")).toBeTruthy();
     expect(screen.getByTestId("today-timeline")).toBeTruthy();
-    expect(document.querySelector('[data-sect="deadlines"]')).toBeTruthy();
-    expect(document.querySelector('[data-sect="bills"]')).toBeTruthy();
-    expect(document.querySelector('[data-sect="inbox-peek"]')).toBeTruthy();
-  });
-
-  it("lets the desktop timeline own scroll in the command layout", () => {
-    renderDashboardBody({ isMobile: false, dashboardLayout: "command" });
-
-    const timeline = screen.getByTestId("today-timeline");
-    const rails = screen.getByTestId("dashboard-command-rails");
-
-    expect(timeline.style.height).toBe("100%");
-    expect(timeline.style.overflow).toBe("hidden");
-    expect(rails.style.overflow).toBe("hidden");
-  });
-
-  it("wires the inbox peek open button to open the inbox", () => {
-    const onOpenEmail = vi.fn();
-    renderDashboardBody({ isMobile: false, dashboardLayout: "focus", onOpenEmail });
-
-    const openButton = screen.getByRole("button", { name: /open/i });
-    fireEvent.click(openButton);
-
-    expect(onOpenEmail).toHaveBeenCalled();
-  });
-});
-
-describe("DashboardHero mobile layout", () => {
-  it("keeps mobile callouts available without the insight copy", () => {
-    render(
-      <DashboardHero
-        accent="#cba6da"
-        density="comfortable"
-        isMobile
-        briefing={makeBriefing()}
-        liveBills={[{ id: "bill-1", name: "Rent", amount: 1800, next_date: "2026-04-21", payee: "Landlord", paid: false }]}
-        liveCalendar={[]}
-        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
-        onJump={() => {}}
-      />,
-    );
-
-    expect(screen.getByTestId("dashboard-hero-mobile")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-hero-callouts")).toBeTruthy();
-    expect(screen.queryByText("You have a heavier deadline cluster than usual.")).toBeNull();
-  });
-
-  it("does not render batch briefing email summary or ready status in the hero", () => {
-    render(
-      <DashboardHero
-        accent="#cba6da"
-        density="comfortable"
-        briefing={makeBriefing({
-          emails: {
-            summary: "4 emails across 2 accounts. 3 need attention, 1 FYI, 0 noise.",
-            accounts: [],
-          },
-        })}
-        liveBills={[]}
-        liveCalendar={[]}
-        liveDeadlines={currentDeadlineFixture}
-        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
-        onJump={() => {}}
-      />,
-    );
-
-    expect(screen.queryByText("4 emails across 2 accounts. 3 need attention, 1 FYI, 0 noise.")).toBeNull();
-    expect(screen.queryByText("Briefing ready")).toBeNull();
-  });
-
-  it("keeps desktop quick actions in the primary hero column", () => {
-    render(
-      <DashboardHero
-        accent="#cba6da"
-        density="comfortable"
-        briefing={makeBriefing()}
-        liveBills={[]}
-        liveCalendar={[]}
-        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
-        onJump={() => {}}
-      />,
-    );
-
-    const primaryColumn = screen.getByTestId("dashboard-hero-primary");
-    const newTask = within(primaryColumn).getByRole("button", { name: /new deadline/i });
-    const addEvent = within(primaryColumn).getByRole("button", { name: /add event/i });
-
-    expect(primaryColumn.contains(newTask)).toBe(true);
-    expect(primaryColumn.contains(addEvent)).toBe(true);
-    expect(primaryColumn.compareDocumentPosition(screen.getByTestId("focus-window-card")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("shows an open-day priority summary instead of a midnight countdown when calendar is empty", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    render(
-      <DashboardHero
-        accent="#cba6da"
-        density="comfortable"
-        briefing={makeBriefing({
-          calendar: [],
-          deadlines: {
-            upcoming: [
-              { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
-            ],
-          },
-        })}
-        liveBills={[]}
-        liveCalendar={[]}
-        liveDeadlines={currentDeadlineFixture}
-        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
-        onJump={() => {}}
-      />,
-    );
-
-    const openDay = screen.getByTestId("focus-window-open-day");
-    expect(openDay).toBeTruthy();
-    expect(openDay.textContent).toMatch(/Open day/);
-    expect(openDay.textContent).toMatch(/Next deadline/);
-    expect(openDay.textContent).toMatch(/Finalize deck/);
-    expect(openDay.textContent).toMatch(/Due tomorrow/);
-    expect(openDay.textContent).not.toMatch(/Due soon/);
-    expect(screen.queryByTestId("focus-window-open-day-duration")).toBeNull();
-    expect(openDay.textContent).not.toMatch(/\d+h \d+m/);
-    expect(screen.queryByText(/No more events today/i)).toBeNull();
-  });
-
-  it("falls back to a light hint when the open day has no pressure signals", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    render(
-      <DashboardHero
-        accent="#cba6da"
-        density="comfortable"
-        briefing={{
-          weather: { temp: 71, condition: "Sunny", city: "Los Angeles" },
-          calendar: [],
-          deadlines: { upcoming: [] },
-          emails: { summary: "", accounts: [] },
-        }}
-        liveBills={[]}
-        liveCalendar={[]}
-        liveDeadlines={[]}
-        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
-        onJump={() => {}}
-      />,
-    );
-
-    expect(screen.getByTestId("focus-window-open-day-light")).toBeTruthy();
-    expect(screen.getByText(/Calendar is open/i)).toBeTruthy();
-    expect(screen.queryByText(/\d+h \d+m/)).toBeNull();
-  });
-
-  it("wires the focus pressure pill to open the pressure view", () => {
-    const now = new Date("2026-04-19T16:00:00.000Z").getTime();
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-    const onOpenPressure = vi.fn();
-
-    render(
-      <DashboardHero
-        accent="#cba6da"
-        density="comfortable"
-        briefing={makeBriefing({
-          calendar: [],
-          deadlines: {
-            upcoming: [
-              { id: "deadline-1", title: "Finalize deck", due_date: "2026-04-20", class_name: "Ops", status: "open" },
-            ],
-          },
-        })}
-        liveBills={[]}
-        liveCalendar={[]}
-        liveDeadlines={currentDeadlineFixture}
-        liveWeather={{ temp: 71, condition: "Sunny", city: "Los Angeles" }}
-        onJump={() => {}}
-        onOpenPressure={onOpenPressure}
-      />,
-    );
-
-    const pressureButton = screen.getByRole("button", { name: /deadline soon/i });
-    fireEvent.click(pressureButton);
-
-    expect(onOpenPressure).toHaveBeenCalled();
+    expect(screen.getByTestId("dashboard-context-column")).toBeTruthy();
   });
 });
 
@@ -347,89 +114,99 @@ describe("TodayTimeline controls", () => {
     expect(deadlinesFilter.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("keeps the now marker visible when events are toggled off", () => {
+  it("expands the rest-of-this-week disclosure to reveal its items on click", () => {
+    // Pin the clock so a Thursday event lands in the rest-of-week bucket (day 3).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T16:00:00.000Z").getTime());
+
     render(
       <TodayTimeline
         accent="#cba6da"
-        events={[]}
+        events={[
+          {
+            id: "rest-ev",
+            title: "Thursday review",
+            startMs: new Date("2026-05-14T18:00:00.000Z").getTime(),
+            endMs: new Date("2026-05-14T19:00:00.000Z").getTime(),
+          },
+        ]}
         deadlines={[]}
         onJump={() => {}}
       />,
     );
 
-    expect(screen.getByTestId("timeline-now-marker")).toBeTruthy();
+    const timeline = screen.getByTestId("today-timeline");
+    const toggle = screen.getByRole("button", { name: /rest of this week/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(timeline.textContent).not.toMatch(/Thursday review/);
 
-    fireEvent.click(screen.getByRole("switch", { name: /events/i }));
+    fireEvent.click(toggle);
 
-    expect(screen.getByTestId("timeline-now-marker")).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(timeline.textContent).toMatch(/Thursday review/);
   });
-});
 
-describe("CustomizePanel mobile options", () => {
-  it("hides dashboard layout and density controls on mobile", () => {
+  it("renders a standalone NOW marker in a focus-window gap between events", () => {
+    // Pin now (1pm PDT) between a finished morning event and an upcoming one.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T20:00:00.000Z").getTime());
+
     render(
-      <CustomizePanel
-        open
-        onClose={() => {}}
-        tab="dashboard"
-        isMobile
-        customize={{
-          accent: "#cba6da",
-          serifChoice: "Instrument Serif",
-          dashboardLayout: "focus",
-          inboxLayout: "two-pane",
-          inboxGrouping: "swimlanes",
-          density: "comfortable",
-          inboxDensity: "default",
-          aiVerbosity: "standard",
-          showInsights: true,
-          showInboxPeek: true,
-          showPreview: true,
-          sidebarCompact: false,
-          setKey: () => {},
-          reset: () => {},
-        }}
+      <TodayTimeline
+        accent="#cba6da"
+        events={[
+          {
+            id: "past-ev",
+            title: "Morning standup",
+            startMs: new Date("2026-05-11T17:00:00.000Z").getTime(),
+            endMs: new Date("2026-05-11T18:00:00.000Z").getTime(),
+          },
+          {
+            id: "future-ev",
+            title: "Afternoon review",
+            startMs: new Date("2026-05-11T22:00:00.000Z").getTime(),
+            endMs: new Date("2026-05-11T23:00:00.000Z").getTime(),
+          },
+        ]}
+        deadlines={[]}
+        onJump={() => {}}
       />,
     );
 
-    expect(screen.queryByText("Dashboard layout")).toBeNull();
-    expect(screen.queryByText("Dashboard density")).toBeNull();
-    expect(screen.queryByText("Show signals")).toBeNull();
-    expect(screen.getByText("Show inbox peek")).toBeTruthy();
+    expect(screen.getByTestId("timeline-gap-now-marker")).toBeTruthy();
+    // Nothing is live, so the in-card progress-line marker is absent.
+    expect(screen.queryByTestId("timeline-now-marker")).toBeNull();
   });
 
-  it("hides desktop-only inbox controls on mobile", () => {
+  it("shows the in-card now marker inside a live event row", () => {
+    // Pin the clock to the middle of the event so the now marker renders.
+    vi.useFakeTimers();
+    const now = new Date("2026-05-05T20:25:00.000Z").getTime();
+    vi.setSystemTime(now);
+
+    const liveEvent = {
+      kind: "event",
+      startMs: new Date("2026-05-05T20:00:00.000Z").getTime(),
+      endMs: new Date("2026-05-05T21:00:00.000Z").getTime(),
+      data: {
+        id: "focus",
+        title: "Focus block",
+        startMs: new Date("2026-05-05T20:00:00.000Z").getTime(),
+        endMs: new Date("2026-05-05T21:00:00.000Z").getTime(),
+      },
+    };
+
     render(
-      <CustomizePanel
-        open
-        onClose={() => {}}
-        tab="inbox"
-        isMobile
-        customize={{
-          accent: "#cba6da",
-          serifChoice: "Instrument Serif",
-          dashboardLayout: "focus",
-          inboxLayout: "two-pane",
-          inboxGrouping: "swimlanes",
-          density: "comfortable",
-          inboxDensity: "default",
-          aiVerbosity: "standard",
-          showInsights: true,
-          showInboxPeek: true,
-          showPreview: true,
-          sidebarCompact: false,
-          setKey: () => {},
-          reset: () => {},
-        }}
+      <TodayTimeline
+        accent="#cba6da"
+        events={[liveEvent]}
+        deadlines={[]}
+        now={now}
+        onJump={() => {}}
       />,
     );
 
-    expect(screen.queryByText("Inbox layout")).toBeNull();
-    expect(screen.queryByText("Grouping")).toBeNull();
-    expect(screen.queryByText("Inbox density")).toBeNull();
-    expect(screen.queryByText("Show previews in list")).toBeNull();
-    expect(screen.queryByText("Compact sidebar")).toBeNull();
-    expect(screen.getByText("Briefing detail")).toBeTruthy();
+    expect(screen.getByTestId("timeline-now-marker")).toBeTruthy();
   });
 });
 

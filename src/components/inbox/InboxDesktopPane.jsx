@@ -48,7 +48,6 @@ function InboxDesktopPane({
   showDraft,
   showPreview,
   density,
-  sidebarCompact,
   layout,
   grouping,
   activeSnapshotMode = false,
@@ -96,7 +95,6 @@ function InboxDesktopPane({
           laneCounts={laneCounts}
           totalUnread={totalUnread}
           noiseUnreadCount={noiseUnreadCount}
-          compact={sidebarCompact}
           onOpenDashboard={onOpenDashboard}
           selectedEmail={selectedEmail}
           readOnly={readOnly}

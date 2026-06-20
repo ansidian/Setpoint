@@ -1,4 +1,4 @@
-import { dayBucket } from "../../../lib/shell-helpers";
+import { dayBucket, eventState, pacificClock } from "../../../lib/shell-helpers";
 
 export const PRIORITY_COLOR = {
   1: "#f38ba8",
@@ -19,7 +19,6 @@ export const SPINE_LEFT = GUTTER - 16;
 export const PILL_SPINE_GAP = 16;
 export const MOBILE_GUTTER = 30;
 export const MOBILE_SPINE_LEFT = 6;
-export const NOW_MARKER_EDGE_INSET = 14;
 
 export function formatFullDateForOffset(offset, now) {
   const date = new Date(now + offset * 86400000);
@@ -59,57 +58,83 @@ export function buildTimelineGroups(items, now, filters, { minDay = null } = {})
   return [...groups.entries()].sort((a, b) => a[0] - b[0]);
 }
 
-function clampNowMarkerTop(top, edgeInset = NOW_MARKER_EDGE_INSET) {
-  return Math.max(edgeInset, top);
+/**
+ * Fraction (0..1) of the way `nowMs` is through the [startMs, endMs) window.
+ * Before the start -> 0, at/after the end -> 1, zero-length/inverted -> 0.
+ * Drives the in-card live progress line on the today timeline.
+ */
+export function percentElapsed(startMs, endMs, nowMs) {
+  const span = endMs - startMs;
+  if (!(span > 0)) return 0;
+  const raw = (nowMs - startMs) / span;
+  if (raw <= 0) return 0;
+  if (raw >= 1) return 1;
+  return raw;
 }
 
-export function resolveTimelineNowMarkerTop({
-  items,
-  now,
-  rows,
-  edgeInset = NOW_MARKER_EDGE_INSET,
-}) {
-  if (!items.length) return edgeInset;
-
-  let liveIndex = -1;
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    if (item.kind !== "event") continue;
-    if (item.data?.allDay) continue;
-    if (item.startMs != null && item.endMs != null && item.startMs <= now && now < item.endMs) {
-      liveIndex = index;
-      break;
-    }
-  }
-
-  if (liveIndex >= 0 && rows[liveIndex]) {
-    const row = rows[liveIndex];
-    const item = items[liveIndex];
-    const progress = (now - item.startMs) / (item.endMs - item.startMs);
-    return clampNowMarkerTop(row.offsetTop + progress * row.offsetHeight, edgeInset);
-  }
-
-  let firstFutureIndex = -1;
-  for (let index = 0; index < items.length; index += 1) {
-    const ms = items[index].startMs ?? items[index].dueAtMs;
-    if (ms != null && ms > now) {
-      firstFutureIndex = index;
-      break;
-    }
-  }
-
-  if (firstFutureIndex === 0) return edgeInset;
-
-  if (firstFutureIndex > 0 && rows[firstFutureIndex - 1]) {
-    const previousRow = rows[firstFutureIndex - 1];
-    return clampNowMarkerTop(previousRow.offsetTop + previousRow.offsetHeight + 2, edgeInset);
-  }
-
-  const lastIndex = items.length - 1;
-  if (rows[lastIndex]) {
-    const lastRow = rows[lastIndex];
-    return clampNowMarkerTop(lastRow.offsetTop + lastRow.offsetHeight + 2, edgeInset);
-  }
-
-  return edgeInset;
+/**
+ * Bare Pacific clock without the meridiem ("1:18"). pacificClock returns
+ * "1:18 PM"; both now-marker labels drop the meridiem to match the mockup.
+ */
+export function formatNowMarkerClock(nowMs) {
+  return pacificClock(new Date(nowMs)).split(" ")[0];
 }
+
+/**
+ * "NOW 1:18 · 30% elapsed" — the in-card live marker label.
+ */
+export function formatNowMarkerLabel(nowMs, percent) {
+  return `NOW ${formatNowMarkerClock(nowMs)} · ${Math.round(percent * 100)}% elapsed`;
+}
+
+/**
+ * Where the standalone "NOW" marker sits among a today group's chronologically
+ * sorted items — the focus-window marker shown when nothing is live. Returns the
+ * insertion index (0..items.length) so it renders just before the next upcoming
+ * item, or null when an event is currently live (the in-card progress line owns
+ * the marker then) or the day has no items.
+ */
+export function resolveTodayNowMarkerIndex(items, now) {
+  if (!items || items.length === 0) return null;
+  const liveInCard = items.some(
+    (it) => it.kind === "event"
+      && !it.data?.allDay
+      && it.startMs != null
+      && it.endMs != null
+      && eventState(it.data, now) === "live",
+  );
+  if (liveInCard) return null;
+  let index = 0;
+  for (const it of items) {
+    const ms = it.startMs ?? it.dueAtMs;
+    if (ms != null && ms <= now) index += 1;
+    else break;
+  }
+  return index;
+}
+
+/**
+ * Partition timeline items into today / tomorrow / rest-of-this-week for the
+ * collapsible "Tomorrow" group and the "Rest of this week" count affordance.
+ * Buckets: 0 = today, 1 = tomorrow, 2..6 = rest of this week (>6 is excluded).
+ */
+export function buildTodayTomorrowRestGroups(items, now, filters) {
+  const groups = buildTimelineGroups(items, now, filters, { minDay: 0 });
+  const byDay = new Map(groups);
+  const today = byDay.get(0) ?? [];
+  const tomorrow = byDay.get(1) ?? [];
+
+  const tomorrowCount = { events: 0, deadlines: 0 };
+  for (const it of tomorrow) {
+    if (it.kind === "event") tomorrowCount.events += 1;
+    else if (it.kind === "deadline") tomorrowCount.deadlines += 1;
+  }
+
+  // Keep the `[day, items]` shape from buildTimelineGroups so the disclosure can
+  // render each rest-of-week day as its own TimelineDayGroup.
+  const rest = groups.filter(([day]) => day >= 2 && day <= 6);
+  const restCount = rest.reduce((sum, [, dayItems]) => sum + dayItems.length, 0);
+
+  return { today, tomorrow, tomorrowCount, rest, restCount };
+}
+

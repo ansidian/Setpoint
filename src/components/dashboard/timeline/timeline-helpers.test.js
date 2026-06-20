@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTimelineGroups,
-  resolveTimelineNowMarkerTop,
+  buildTodayTomorrowRestGroups,
+  formatNowMarkerLabel,
+  percentElapsed,
+  resolveTodayNowMarkerIndex,
   shouldHoldPartialTimeline,
 } from "./timeline-helpers.js";
-
-function row(offsetTop, offsetHeight) {
-  return { offsetTop, offsetHeight };
-}
 
 describe("timeline helpers", () => {
   it("keeps an empty today group whenever a timeline filter remains active", () => {
@@ -31,31 +30,23 @@ describe("timeline helpers", () => {
     expect(groups.map(([day]) => day)).toEqual([0, 1]);
   });
 
-  it("insets the now marker from the top edge before the first future row", () => {
-    expect(resolveTimelineNowMarkerTop({
-      items: [{ kind: "deadline", dueAtMs: 300 }],
-      now: 100,
-      rows: [row(40, 28)],
-    })).toBe(14);
-  });
-
-  it("places the now marker proportionally inside a live event", () => {
-    expect(resolveTimelineNowMarkerTop({
-      items: [{ kind: "event", startMs: 100, endMs: 300 }],
-      now: 200,
-      rows: [row(40, 80)],
-    })).toBe(80);
-  });
-
-  it("keeps the now marker from tracking through all-day events", () => {
-    expect(resolveTimelineNowMarkerTop({
-      items: [
-        { kind: "event", startMs: 0, endMs: 1000, data: { allDay: true } },
-        { kind: "deadline", dueAtMs: 1200 },
-      ],
-      now: 500,
-      rows: [row(40, 80), row(140, 40)],
-    })).toBe(122);
+  describe("percentElapsed", () => {
+    it("returns the fractional progress through a window", () => {
+      expect(percentElapsed(100, 300, 200)).toBe(0.5);
+      expect(percentElapsed(0, 1000, 300)).toBe(0.3);
+    });
+    it("clamps to 0 before the window starts", () => {
+      expect(percentElapsed(100, 300, 50)).toBe(0);
+      expect(percentElapsed(100, 300, 100)).toBe(0);
+    });
+    it("clamps to 1 once the window has ended", () => {
+      expect(percentElapsed(100, 300, 300)).toBe(1);
+      expect(percentElapsed(100, 300, 9999)).toBe(1);
+    });
+    it("returns 0 for a zero-length or inverted window", () => {
+      expect(percentElapsed(300, 300, 300)).toBe(0);
+      expect(percentElapsed(300, 100, 200)).toBe(0);
+    });
   });
 
   describe("shouldHoldPartialTimeline", () => {
@@ -77,5 +68,108 @@ describe("timeline helpers", () => {
     it("does not hold for an events-only cold load when the events filter is off", () => {
       expect(shouldHoldPartialTimeline({ eventLoadingState: "empty_loading", filtersEvents: false })).toBe(false);
     });
+  });
+
+  describe("formatNowMarkerLabel", () => {
+    it("formats the in-card marker as 'NOW H:MM · N% elapsed' without a meridiem", () => {
+      const now = Date.parse("2026-03-06T21:18:00.000Z"); // 1:18 PM Pacific
+      expect(formatNowMarkerLabel(now, 0.3)).toBe("NOW 1:18 · 30% elapsed");
+    });
+    it("rounds the percent to a whole number", () => {
+      const now = Date.parse("2026-03-06T21:18:00.000Z");
+      expect(formatNowMarkerLabel(now, 0.666)).toBe("NOW 1:18 · 67% elapsed");
+    });
+  });
+});
+
+describe("buildTodayTomorrowRestGroups", () => {
+  const now = Date.parse("2026-05-11T16:00:00.000Z");
+  const at = (offsetDays, hour = 18) => Date.parse(`2026-05-${String(11 + offsetDays).padStart(2, "0")}T${hour}:00:00.000Z`);
+  const filters = { events: true, deadlines: true };
+
+  it("splits items into today, tomorrow, and a rest-of-week count", () => {
+    const items = [
+      { kind: "event", startMs: at(0), data: {} },
+      { kind: "event", startMs: at(1, 17), data: {} },
+      { kind: "deadline", dueAtMs: at(1, 23), data: {} },
+      { kind: "event", startMs: at(2), data: {} },
+      { kind: "deadline", dueAtMs: at(4), data: {} },
+    ];
+    const result = buildTodayTomorrowRestGroups(items, now, filters);
+    expect(result.today).toHaveLength(1);
+    expect(result.tomorrow).toHaveLength(2);
+    expect(result.tomorrowCount).toEqual({ events: 1, deadlines: 1 });
+    expect(result.restCount).toBe(2);
+  });
+
+  it("returns empty tomorrow/zero rest when only today has items", () => {
+    const items = [{ kind: "event", startMs: at(0), data: {} }];
+    const result = buildTodayTomorrowRestGroups(items, now, filters);
+    expect(result.today).toHaveLength(1);
+    expect(result.tomorrow).toEqual([]);
+    expect(result.tomorrowCount).toEqual({ events: 0, deadlines: 0 });
+    expect(result.restCount).toBe(0);
+  });
+
+  it("excludes items past this week (bucket > 6) from the rest count", () => {
+    const items = [
+      { kind: "deadline", dueAtMs: at(6), data: {} },
+      { kind: "deadline", dueAtMs: at(9), data: {} },
+    ];
+    const result = buildTodayTomorrowRestGroups(items, now, filters);
+    expect(result.restCount).toBe(1);
+  });
+
+  it("exposes the rest-of-week items grouped by day so the disclosure can render them", () => {
+    const items = [
+      { kind: "event", startMs: at(2), data: {} },
+      { kind: "deadline", dueAtMs: at(2, 23), data: {} },
+      { kind: "deadline", dueAtMs: at(4), data: {} },
+      { kind: "deadline", dueAtMs: at(9), data: {} }, // past this week → excluded
+    ];
+    const result = buildTodayTomorrowRestGroups(items, now, filters);
+    expect(result.rest.map(([day]) => day)).toEqual([2, 4]);
+    expect(result.rest[0][1]).toHaveLength(2);
+    expect(result.rest[1][1]).toHaveLength(1);
+    expect(result.restCount).toBe(3);
+  });
+});
+
+describe("resolveTodayNowMarkerIndex", () => {
+  const now = Date.parse("2026-05-11T20:00:00.000Z");
+  const ev = (startISO, endISO) => {
+    const startMs = Date.parse(startISO);
+    const endMs = Date.parse(endISO);
+    return { kind: "event", startMs, endMs, data: { id: startISO, title: "e", startMs, endMs } };
+  };
+
+  it("places the focus-window marker between a finished event and the next upcoming one", () => {
+    const items = [
+      ev("2026-05-11T17:00:00.000Z", "2026-05-11T18:00:00.000Z"), // past
+      ev("2026-05-11T22:00:00.000Z", "2026-05-11T23:00:00.000Z"), // future
+    ];
+    expect(resolveTodayNowMarkerIndex(items, now)).toBe(1);
+  });
+
+  it("returns null while an event is live so the in-card progress line owns the marker", () => {
+    const items = [ev("2026-05-11T19:30:00.000Z", "2026-05-11T20:30:00.000Z")]; // live at 20:00
+    expect(resolveTodayNowMarkerIndex(items, now)).toBeNull();
+  });
+
+  it("returns null when the day has no items", () => {
+    expect(resolveTodayNowMarkerIndex([], now)).toBeNull();
+  });
+
+  it("anchors the marker at the top before the first upcoming item", () => {
+    const items = [ev("2026-05-11T22:00:00.000Z", "2026-05-11T23:00:00.000Z")];
+    expect(resolveTodayNowMarkerIndex(items, now)).toBe(0);
+  });
+
+  it("anchors the marker after the last item once the day is fully past", () => {
+    const items = [
+      ev("2026-05-11T17:00:00.000Z", "2026-05-11T18:00:00.000Z"),
+      ev("2026-05-11T18:30:00.000Z", "2026-05-11T19:00:00.000Z"),
+    ];
+    expect(resolveTodayNowMarkerIndex(items, now)).toBe(2);
   });
 });

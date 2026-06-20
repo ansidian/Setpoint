@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { Kbd } from "./Kbd.jsx";
 
 export function RefreshButton({
   isMobile = false,
@@ -38,9 +37,10 @@ export function RefreshButton({
         minHeight: isMobile ? 40 : undefined,
         touchAction: "manipulation",
         borderRadius: 8,
-        border: `1px solid ${hover && !busy ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
-        background: hover && !busy ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-        color: hover && !busy ? "#cdd6f4" : "rgba(205,214,244,0.85)",
+        border: "1px solid transparent",
+        background: "var(--sp-accent)",
+        color: "#181825",
+        filter: lifted ? "brightness(1.06)" : "none",
         fontFamily: "inherit",
         fontSize: isMobile ? 10.5 : 11,
         fontWeight: 500,
@@ -53,17 +53,20 @@ export function RefreshButton({
         flexShrink: 0,
         opacity: busy ? 0.6 : 1,
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
-        transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
+        transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms, filter 150ms",
       }}
     >
       <RefreshCw
         size={isMobile ? 10 : 11}
+        color="#181825"
         style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}
       />
       <span style={{ position: "relative", whiteSpace: "nowrap" }}>
         {refreshing ? "Syncing…" : "Sync now"}
       </span>
-      {!isMobile && <Kbd>R</Kbd>}
+      {!isMobile && (
+        <span style={{ color: "#181825", opacity: 0.85, fontFamily: "var(--font-mono)", fontSize: 10 }}>R</span>
+      )}
     </button>
   );
 }

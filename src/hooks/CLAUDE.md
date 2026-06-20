@@ -1,6 +1,6 @@
 # Hooks Map (router)
 
-Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, browser interactions (history, media queries, key holds), customization persistence, and notifications. Calendar-specific hooks live in `calendar/` (see `calendar/CLAUDE.md`).
+Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, browser interactions (history, media queries, key holds), and notifications. Calendar-specific hooks live in `calendar/` (see `calendar/CLAUDE.md`).
 
 ## Sub-maps
 
@@ -23,7 +23,6 @@ Cross-cutting frontend hooks: dashboard data fetching/streaming, snapshot sync, 
 - `useWarmImport.js` — warms a lazy dynamic import on idle after first paint
 
 ### Preferences + notifications
-- `useCustomize.js` — persists layout/accent/density to localStorage, injects CSS vars
 - `useNotifications.js` — browser notifications for events, bills, important senders
 - `useTriageNotificationSounds.js` — schedules and gates triage notification sounds
 - `useUtilityPayLinks.js` — builds `{scheduleId: url}` pay-link map from settings; refreshes on `ea-settings-changed`
