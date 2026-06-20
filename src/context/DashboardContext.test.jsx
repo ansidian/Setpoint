@@ -268,6 +268,42 @@ describe("DashboardContext deadline single-owner state", () => {
     expect(setCalendarDeadlines).not.toHaveBeenCalled();
   });
 
+  it("ignores Complete on a deadline with no due_date (the occurrence completer needs a date)", async () => {
+    // completeDeadlineOccurrence keys on (id, due_date); a deadline without one
+    // cannot be completed, so the guard must bail before firing the intent (the
+    // sound) or hitting the server — never half-fire on an uncompletable row.
+    const task = {
+      id: "todo-undated",
+      title: "No due date",
+      due_date: null,
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    const onTaskCompletionIntent = vi.fn();
+
+    render(
+      <DashboardProvider
+        deadlines={deadlines}
+        setCalendarDeadlines={setCalendarDeadlines}
+        onTaskCompletionIntent={onTaskCompletionIntent}
+      >
+        <Probe task={task} />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Complete"));
+    });
+
+    expect(completeDeadlineOccurrence).not.toHaveBeenCalled();
+    expect(onTaskCompletionIntent).not.toHaveBeenCalled();
+    expect(setCalendarDeadlines).not.toHaveBeenCalled();
+  });
+
   it("seeds the empty store from the current deadlines view so optimistic flags are kept", async () => {
     const task = {
       id: "todo-fallback",
