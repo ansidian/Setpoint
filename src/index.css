@@ -225,9 +225,9 @@ body {
 }
 
 [data-calendar-focus-ring="true"]:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ea-accent) 72%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--sp-accent) 72%, transparent);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ea-accent) 14%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sp-accent) 14%, transparent);
 }
 
 [data-calendar-suppress-focus-ring="true"] [data-calendar-focus-ring="true"]:focus-visible {
@@ -323,18 +323,18 @@ body {
 }
 .analytics-trigger-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ea-accent) 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp-accent) 22%, transparent);
 }
 .analytics-trigger-button[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--ea-accent) 28%, transparent);
-  background: color-mix(in srgb, var(--ea-accent) 13%, transparent);
-  color: var(--ea-accent);
+  border-color: color-mix(in srgb, var(--sp-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--sp-accent) 13%, transparent);
+  color: var(--sp-accent);
 }
 .analytics-trigger-button[aria-pressed="true"]:hover,
 .analytics-trigger-button[aria-pressed="true"]:focus-visible {
-  border-color: color-mix(in srgb, var(--ea-accent) 36%, transparent);
-  background: color-mix(in srgb, var(--ea-accent) 16%, transparent);
-  color: color-mix(in srgb, var(--ea-accent) 85%, white);
+  border-color: color-mix(in srgb, var(--sp-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--sp-accent) 16%, transparent);
+  color: color-mix(in srgb, var(--sp-accent) 85%, white);
 }
 @keyframes scaleIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes aiGradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }

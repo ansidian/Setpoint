@@ -217,7 +217,7 @@ export default function Dashboard() {
       <div className="min-h-screen text-foreground font-sans flex items-center justify-center p-6">
         <div className="w-full max-w-[880px]">
           <EmptyStateSplash
-            icon={<Sun size={46} className="text-[#f9e2af]" />}
+            icon={<Sun size={46} className="text-[var(--sp-cream)]" />}
             eyebrow="Current dashboard"
             title="No current snapshot yet"
             message="Connect the inboxes and services that feed the dashboard, then sync current data to seed the workspace."
