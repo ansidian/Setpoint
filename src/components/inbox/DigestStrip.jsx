@@ -92,10 +92,9 @@ export default function DigestStrip({
           </div>
           {resolvedSummary && (
             <div
-              className="ea-display"
               style={{
                 fontSize: 12, color: "rgba(205,214,244,0.9)",
-                marginTop: 4, fontStyle: "italic",
+                marginTop: 4,
               }}
             >
               {resolvedSummary}
