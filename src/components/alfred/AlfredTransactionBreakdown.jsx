@@ -3,8 +3,8 @@
 import { memo } from "react";
 import { spendingBreakdownRows, formatAlfredMoney } from "./alfredPanelModel.js";
 
-const text = "#cdd6f4";
-const muted = "#a6adc8";
+const text = "var(--sp-text)";
+const muted = "var(--sp-subtext)";
 const subtle = "var(--color-text-faint)";
 
 const GROUP_LABELS = { category: "BY CATEGORY", payee: "BY PAYEE", month: "BY MONTH" };
@@ -28,7 +28,7 @@ function AlfredTransactionBreakdown({ buckets, period, group_by, accent }) {
   const rows = spendingBreakdownRows(buckets);
   if (!rows.length) return null;
   return (
-    <div style={{ background: "rgba(36,36,58,0.45)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "13px 13px 9px" }}>
+    <div style={{ background: "color-mix(in srgb, var(--sp-surface) 45%, transparent)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "13px 13px 9px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
         <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, color: subtle }}>{GROUP_LABELS[group_by] || "BY CATEGORY"}</span>
         <span style={{ fontSize: 11, color: subtle }}>{periodLabel(period)}</span>
@@ -45,7 +45,7 @@ function AlfredTransactionBreakdown({ buckets, period, group_by, accent }) {
             <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.05)" }}>
               <div
                 className="alfred-bar-grow"
-                style={{ width: `${r.pct}%`, height: "100%", borderRadius: 2, transformOrigin: "left", background: r.isOther ? "rgba(108,112,134,0.7)" : accent, opacity: r.isOther ? 1 : 0.85 }}
+                style={{ width: `${r.pct}%`, height: "100%", borderRadius: 2, transformOrigin: "left", background: r.isOther ? "color-mix(in srgb, var(--sp-overlay) 70%, transparent)" : accent, opacity: r.isOther ? 1 : 0.85 }}
               />
             </div>
           </div>

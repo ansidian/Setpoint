@@ -6,7 +6,7 @@ import { formatPercent, formatUsdEstimate, formatCompactNumber, numberValue, for
 // A small, on-brand rotation (lavender accent, info blue, income cyan, success
 // green) so each model is visually distinct in the split without inventing
 // decorative colors. Order is stable per render via the row index.
-const MODEL_ACCENTS = ["#cba6da", "#89b4fa", "#89dceb", "#a6e3a1"];
+const MODEL_ACCENTS = ["var(--sp-accent)", "var(--sp-blue)", "var(--sp-cyan)", "var(--sp-green)"];
 
 export default function AlfredAnalyticsSection({ stats }) {
   const metrics = useMemo(() => ([
@@ -38,7 +38,7 @@ export default function AlfredAnalyticsSection({ stats }) {
 
       <div className="rounded-lg border border-white/[0.06] bg-black/[0.10] p-3">
         <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold tracking-[1.4px] text-foreground uppercase">
-          <Wrench size={13} className="text-[#89b4fa]" />
+          <Wrench size={13} className="text-[var(--sp-blue)]" />
           Tools used
         </div>
         {tools.length === 0 ? (
@@ -57,7 +57,7 @@ export default function AlfredAnalyticsSection({ stats }) {
                 <div key={tool.name} className="grid grid-cols-[1fr_3.5rem_3rem_4rem] items-center gap-x-3 rounded-md px-1.5 py-1 text-[11px] text-foreground/85 odd:bg-white/[0.015]">
                   <span className="truncate font-medium">{tool.name}</span>
                   <span className="text-right tabular-nums text-foreground">{numberValue(tool.calls)}</span>
-                  <span className={`text-right tabular-nums ${hasErr ? "text-[#f38ba8]" : "text-muted-foreground/75"}`}>
+                  <span className={`text-right tabular-nums ${hasErr ? "text-[var(--sp-rose)]" : "text-muted-foreground/75"}`}>
                     {formatPercent(tool.errorRate)}
                   </span>
                   <span className="text-right tabular-nums text-muted-foreground/75">{numberValue(tool.avgDurationMs)}ms</span>

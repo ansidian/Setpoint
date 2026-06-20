@@ -107,7 +107,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 520, borderRadius: 14,
-          background: "#16161e",
+          background: "var(--sp-panel)",
           border: "1px solid rgba(255,255,255,0.08)",
           boxShadow: "0 30px 80px rgba(0,0,0,0.7)",
           overflow: "hidden",
@@ -130,7 +130,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
             placeholder="Jump to anything…"
             style={{
               flex: 1, background: "transparent", border: "none",
-              color: "#cdd6f4", fontSize: 14, outline: "none",
+              color: "var(--sp-text)", fontSize: 14, outline: "none",
               fontFamily: "inherit",
             }}
           />
@@ -150,7 +150,7 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 12px", borderRadius: 7, cursor: "pointer",
-                  fontSize: 12.5, color: "#cdd6f4",
+                  fontSize: 12.5, color: "var(--sp-text)",
                   background: active ? `${accent}12` : "transparent",
                   border: `1px solid ${active ? `${accent}30` : "transparent"}`,
                   transition: "background 150ms",

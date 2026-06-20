@@ -11,7 +11,7 @@ import useEmailBody from "../inbox/reader/useEmailBody.js";
 import { formatAlfredAbsolute, formatAlfredAgo } from "./alfredPanelModel.js";
 
 const dim = "rgba(205,214,244,0.55)";
-const text = "#cdd6f4";
+const text = "var(--sp-text)";
 
 export default function AlfredEmailPreview({ item, onClose }) {
   const panelRef = useRef(null);
@@ -40,7 +40,7 @@ export default function AlfredEmailPreview({ item, onClose }) {
         width: "min(560px, calc(100vw - 48px))",
         display: "flex", flexDirection: "column",
         isolation: "isolate", overscrollBehavior: "contain",
-        background: "#16161e", borderRadius: 12,
+        background: "var(--sp-panel)", borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.1)",
         boxShadow: "-24px 0 60px rgba(0,0,0,0.55)",
       }}

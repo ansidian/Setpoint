@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { numberValue, formatUsdEstimate, formatCompactNumber } from "./analyticsFormat.js";
 
 export function Metric({ label, value, icon: Icon, tone = "neutral" }) {
-  const color = tone === "accent" ? "#cba6da" : tone === "success" ? "#a6e3a1" : "#a6adc8";
+  const color = tone === "accent" ? "var(--sp-accent)" : tone === "success" ? "var(--sp-green)" : "var(--sp-subtext)";
   return (
     <div
       className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3"

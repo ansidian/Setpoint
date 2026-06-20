@@ -9,7 +9,7 @@ import { BillRow, DeadlineRow, EmailRow, EventRow, TransactionRow } from "./Alfr
 import { resolveAlfredChipAction } from "./alfredChipActionModel.js";
 import { pacificYMD } from "../calendar/calendarDateUtils.js";
 
-const text = "#cdd6f4";
+const text = "var(--sp-text)";
 const subtle = "var(--color-text-faint)";
 const INLINE_THRESHOLD = 5;
 
@@ -44,7 +44,7 @@ function Bucket({ row, items, kind, accent, onActivateItem, todayYmd, now }) {
       <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.05)" }}>
         <div
           className="alfred-bar-grow"
-          style={{ width: `${row.pct}%`, height: "100%", borderRadius: 2, transformOrigin: "left", background: row.isOther ? "rgba(108,112,134,0.7)" : accent, opacity: 0.85 }}
+          style={{ width: `${row.pct}%`, height: "100%", borderRadius: 2, transformOrigin: "left", background: row.isOther ? "color-mix(in srgb, var(--sp-overlay) 70%, transparent)" : accent, opacity: 0.85 }}
         />
       </div>
       {open && Row ? (
@@ -78,7 +78,7 @@ function AlfredBreakdown({ kind, title, caption, total, buckets, accent, onActiv
   const now = new Date();
   const todayYmd = pacificYMD(now.getTime());
   return (
-    <div style={{ background: "rgba(36,36,58,0.45)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "13px 13px 10px" }}>
+    <div style={{ background: "color-mix(in srgb, var(--sp-surface) 45%, transparent)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "13px 13px 10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 13 }}>
         <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.2, color: subtle }}>{title}</span>
         <span style={{ fontSize: 11, color: subtle }}>{caption ? `${caption} · ` : ""}{total} total</span>

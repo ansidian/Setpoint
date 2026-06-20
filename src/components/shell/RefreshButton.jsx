@@ -39,7 +39,7 @@ export function RefreshButton({
         borderRadius: 8,
         border: "1px solid transparent",
         background: "var(--sp-accent)",
-        color: "#181825",
+        color: "var(--sp-mantle)",
         filter: lifted ? "brightness(1.06)" : "none",
         fontFamily: "inherit",
         fontSize: isMobile ? 10.5 : 11,
@@ -58,14 +58,14 @@ export function RefreshButton({
     >
       <RefreshCw
         size={isMobile ? 10 : 11}
-        color="#181825"
+        color="var(--sp-mantle)"
         style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}
       />
       <span style={{ position: "relative", whiteSpace: "nowrap" }}>
         {refreshing ? "Syncing…" : "Sync now"}
       </span>
       {!isMobile && (
-        <span style={{ color: "#181825", opacity: 0.85, fontFamily: "var(--font-mono)", fontSize: 10 }}>R</span>
+        <span style={{ color: "var(--sp-mantle)", opacity: 0.85, fontFamily: "var(--font-mono)", fontSize: 10 }}>R</span>
       )}
     </button>
   );

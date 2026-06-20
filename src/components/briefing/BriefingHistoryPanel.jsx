@@ -6,8 +6,6 @@ import useIsMobile from "../../hooks/useIsMobile";
 import BottomSheet from "../ui/BottomSheet";
 import { groupByDate, formatWindow, countLabel } from "./briefingHistoryModel.js";
 
-const ACCENT = "#cba6da";
-
 function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
   const [hover, setHover] = useState(false);
   const statusLabel = item.readOnly ? "Read-only" : "Active";
@@ -31,8 +29,8 @@ function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
         justifyContent: "space-between",
         gap: 12,
         cursor: active ? "default" : loading ? "wait" : "pointer",
-        background: active ? `${ACCENT}12` : hover ? "rgba(255,255,255,0.035)" : "transparent",
-        border: `1px solid ${active ? `${ACCENT}30` : "transparent"}`,
+        background: active ? "color-mix(in srgb, var(--sp-accent) 7%, transparent)" : hover ? "rgba(255,255,255,0.035)" : "transparent",
+        border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 19%, transparent)" : "transparent"}`,
         transition: "background 150ms, border-color 150ms, transform 150ms",
         transform: hover && !active ? "translateY(-1px)" : "translateY(0)",
       }}
@@ -45,9 +43,9 @@ function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
             top: 8,
             bottom: 8,
             width: 3,
-            background: ACCENT,
+            background: "var(--sp-accent)",
             borderRadius: 2,
-            boxShadow: `0 0 8px ${ACCENT}60`,
+            boxShadow: "0 0 8px color-mix(in srgb, var(--sp-accent) 38%, transparent)",
           }}
         />
       )}
@@ -74,9 +72,9 @@ function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
               fontWeight: 700,
               letterSpacing: 0.8,
               textTransform: "uppercase",
-              color: item.readOnly ? "rgba(205,214,244,0.58)" : ACCENT,
-              background: item.readOnly ? "rgba(255,255,255,0.05)" : `${ACCENT}14`,
-              border: `1px solid ${item.readOnly ? "rgba(255,255,255,0.07)" : `${ACCENT}26`}`,
+              color: item.readOnly ? "rgba(205,214,244,0.58)" : "var(--sp-accent)",
+              background: item.readOnly ? "rgba(255,255,255,0.05)" : "color-mix(in srgb, var(--sp-accent) 8%, transparent)",
+              border: `1px solid ${item.readOnly ? "rgba(255,255,255,0.07)" : "color-mix(in srgb, var(--sp-accent) 15%, transparent)"}`,
               padding: "2px 6px",
               borderRadius: 6,
             }}
@@ -102,8 +100,8 @@ function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
             width: 13,
             height: 13,
             borderRadius: 99,
-            border: `1.5px solid ${ACCENT}30`,
-            borderTopColor: ACCENT,
+            border: "1.5px solid color-mix(in srgb, var(--sp-accent) 19%, transparent)",
+            borderTopColor: "var(--sp-accent)",
             animation: "spin 600ms linear infinite",
             flexShrink: 0,
           }}
@@ -114,7 +112,7 @@ function SnapshotRow({ item, active, loading, isMobile, onSelect }) {
             flexShrink: 0,
             fontSize: 10,
             fontWeight: 600,
-            color: active ? `${ACCENT}cc` : "rgba(180,190,254,0.55)",
+            color: active ? "color-mix(in srgb, var(--sp-accent) 80%, transparent)" : "rgba(180,190,254,0.55)",
             opacity: isMobile || hover || active ? 1 : 0.75,
           }}
         >
@@ -221,8 +219,8 @@ export default function BriefingHistoryPanel({
               height: 16,
               borderRadius: 99,
               margin: "0 auto 12px",
-              border: `2px solid ${ACCENT}26`,
-              borderTopColor: ACCENT,
+              border: "2px solid color-mix(in srgb, var(--sp-accent) 15%, transparent)",
+              borderTopColor: "var(--sp-accent)",
               animation: "spin 600ms linear infinite",
             }}
           />
@@ -237,9 +235,9 @@ export default function BriefingHistoryPanel({
             padding: "10px 12px",
             borderRadius: 8,
             fontSize: 11,
-            color: "#f38ba8",
-            background: "rgba(243,139,168,0.08)",
-            border: "1px solid rgba(243,139,168,0.22)",
+            color: "var(--sp-rose)",
+            background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--sp-rose) 22%, transparent)",
             textAlign: "center",
             lineHeight: 1.5,
           }}
@@ -321,7 +319,7 @@ export default function BriefingHistoryPanel({
         zIndex: "var(--z-popover)",
         display: "flex",
         flexDirection: "column",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
@@ -337,7 +335,7 @@ export default function BriefingHistoryPanel({
           alignItems: "center",
           justifyContent: "space-between",
           borderBottom: "1px solid rgba(255,255,255,0.05)",
-          background: `linear-gradient(135deg, ${ACCENT}0e, transparent 60%)`,
+          background: "linear-gradient(135deg, color-mix(in srgb, var(--sp-accent) 5%, transparent), transparent 60%)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -346,12 +344,12 @@ export default function BriefingHistoryPanel({
               width: 22,
               height: 22,
               borderRadius: 6,
-              background: `${ACCENT}18`,
+              background: "color-mix(in srgb, var(--sp-accent) 9%, transparent)",
               display: "grid",
               placeItems: "center",
             }}
           >
-            <Clock size={11} color={ACCENT} />
+            <Clock size={11} color="var(--sp-accent)" />
           </div>
           <span
             style={{
@@ -359,7 +357,7 @@ export default function BriefingHistoryPanel({
               fontWeight: 700,
               letterSpacing: 2,
               textTransform: "uppercase",
-              color: ACCENT,
+              color: "var(--sp-accent)",
             }}
           >
             Snapshots

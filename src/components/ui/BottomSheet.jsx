@@ -94,7 +94,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-[#0b0b13]/50 animate-[fadeIn_200ms_ease]"
+        className="absolute inset-0 bg-[var(--sp-deep)]/50 animate-[fadeIn_200ms_ease]"
         onClick={onClose}
       />
 
@@ -104,7 +104,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
         className="absolute bottom-0 left-0 right-0 flex flex-col animate-[slideUp_300ms_cubic-bezier(0.16,1,0.3,1)]"
         style={{
           ...(height ? { height } : { maxHeight }),
-          background: "#16161e",
+          background: "var(--sp-panel)",
           borderRadius: "12px 12px 0 0",
           border: "1px solid rgba(255,255,255,0.08)",
           borderBottom: "none",
