@@ -434,10 +434,12 @@ export function DashboardShell({
       style={{
         position: "fixed", inset: 0,
         display: "flex", flexDirection: "column",
-        background: [
-          `radial-gradient(circle at top, ${accent}08 0%, transparent 24%)`,
-          "linear-gradient(180deg, #0b0c12 0%, #0a0b10 100%)",
-        ].join(", "),
+        // Transparent so the body's Catppuccin Mocha canvas shows through:
+        // var(--sp-page) base + 5% accent top-glow + var(--sp-dot) dot-grid (see
+        // src/index.css `body`, matching the design mockup). Previously an OPAQUE
+        // #0b0c12->#0a0b10 near-black gradient was painted here, covering the
+        // textured canvas and flattening the dashboard to near-black.
+        background: "transparent",
         color: "var(--sp-text)",
         overflow: "hidden",
       }}
