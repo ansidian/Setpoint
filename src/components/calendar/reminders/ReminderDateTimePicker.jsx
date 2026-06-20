@@ -101,7 +101,7 @@ export default function ReminderDateTimePicker({
         }}
       >
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-          <Bell size={11} color="#f9e2af" aria-hidden />
+          <Bell size={11} color="var(--sp-cream)" aria-hidden />
           <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {label}
           </span>

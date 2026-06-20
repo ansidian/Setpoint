@@ -43,7 +43,7 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
         padding: "8px 10px 7px",
         border: "0",
         borderRadius: 0,
-        background: "#1f1f24",
+        background: "var(--sp-panel)",
         color: group.dateKey === todayKey ? "#0495FF" : "#B1B1B3",
         fontSize: 12,
         fontWeight: 800,
@@ -55,10 +55,10 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
         transition: "background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1)",
       }}
       onMouseEnter={(event) => {
-        event.currentTarget.style.background = "#23232a";
+        event.currentTarget.style.background = "var(--sp-panel)";
       }}
       onMouseLeave={(event) => {
-        event.currentTarget.style.background = "#1f1f24";
+        event.currentTarget.style.background = "var(--sp-panel)";
       }}
     >
       <span>{group.headerLabel}</span>
@@ -86,7 +86,7 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
         borderRadius: 8,
         border: selected ? `1px solid color-mix(in srgb, ${color} 72%, rgba(255,255,255,0.08))` : "1px solid rgba(255,255,255,0.055)",
         background: selected ? `color-mix(in srgb, ${color} 18%, transparent)` : "rgba(255,255,255,0.025)",
-        color: bill.agendaComplete ? "rgba(205,214,244,0.58)" : "#cdd6f4",
+        color: bill.agendaComplete ? "rgba(205,214,244,0.58)" : "var(--sp-text)",
         cursor: "pointer",
         textAlign: "left",
         transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
@@ -147,7 +147,7 @@ function BillRow({ bill, selected, onSelect, onPreviewStart, onPreviewEnd }) {
         ) : null}
       </span>
       <span style={{ gridColumn: 3, gridRow: "1 / span 3", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, minWidth: 68 }}>
-        <span style={{ color: bill.agendaComplete ? "rgba(166,227,161,0.72)" : color, fontSize: 12, fontWeight: 750, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        <span style={{ color: bill.agendaComplete ? "color-mix(in srgb, var(--sp-green) 72%, transparent)" : color, fontSize: 12, fontWeight: 750, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
           {bill.agendaAmount}
         </span>
         <span style={{ color: "rgba(166,173,200,0.75)", fontSize: 9.5, fontWeight: 700, lineHeight: 1.1, textTransform: "uppercase", whiteSpace: "nowrap" }}>

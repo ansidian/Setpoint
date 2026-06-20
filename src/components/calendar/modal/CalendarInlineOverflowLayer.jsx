@@ -248,7 +248,7 @@ export default function CalendarInlineOverflowLayer({
         borderRadius: "0 0 10px 10px",
         border: "1px solid rgba(255,255,255,0.08)",
         borderTop: 0,
-        background: "#16161e",
+        background: "var(--sp-panel)",
         boxShadow: "0 18px 42px rgba(0,0,0,0.45)",
         pointerEvents: "auto",
         isolation: "isolate",

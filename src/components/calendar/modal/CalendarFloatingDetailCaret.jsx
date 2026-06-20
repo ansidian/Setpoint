@@ -1,4 +1,4 @@
-const CARET_BORDER = "1px solid rgba(203,166,218,0.22)";
+const CARET_BORDER = "1px solid color-mix(in srgb, var(--sp-accent) 22%, transparent)";
 
 // Diamond pointing from the panel edge back at its anchor cell. Rendered only when
 // the placement resolver picked an anchored side (no caret while user-dragged).
@@ -15,12 +15,12 @@ export default function CalendarFloatingDetailCaret({ caretSide, caretTop }) {
         width: 12,
         height: 12,
         transform: "rotate(45deg)",
-        background: "#1b1b27",
+        background: "var(--sp-panel)",
         borderLeft: caretSide === "left" ? CARET_BORDER : 0,
         borderBottom: caretSide === "left" ? CARET_BORDER : 0,
         borderRight: caretSide === "right" ? CARET_BORDER : 0,
         borderTop: caretSide === "right" ? CARET_BORDER : 0,
-        boxShadow: "0 0 10px rgba(203,166,218,0.10)",
+        boxShadow: "0 0 10px color-mix(in srgb, var(--sp-accent) 10%, transparent)",
         zIndex: 0,
         pointerEvents: "none",
       }}

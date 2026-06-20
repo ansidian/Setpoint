@@ -193,7 +193,7 @@ function TimelineRow({ item, compact = false }) {
             bottom: 0,
             width: 1,
             background: item.selected
-              ? "rgba(203,166,218,0.18)"
+              ? "color-mix(in srgb, var(--sp-accent) 18%, transparent)"
               : "rgba(255,255,255,0.055)",
           }}
         />
@@ -206,7 +206,7 @@ function TimelineRow({ item, compact = false }) {
             width: rowMetrics.dotBox,
             height: rowMetrics.dotBox,
             borderRadius: 9999,
-            background: "#0d0d15",
+            background: "var(--sp-deep)",
             display: "grid",
             placeItems: "center",
             border: `1px solid ${item.dotColor ? `${item.dotColor}55` : "rgba(255,255,255,0.15)"}`,
@@ -237,17 +237,17 @@ function TimelineRow({ item, compact = false }) {
           padding: rowMetrics.cardPadding,
           borderRadius: rowMetrics.cardRadius,
           border: item.selected
-            ? "1px solid rgba(203,166,218,0.28)"
+            ? "1px solid color-mix(in srgb, var(--sp-accent) 28%, transparent)"
             : hovered
               ? "1px solid rgba(255,255,255,0.06)"
               : "1px solid rgba(255,255,255,0.04)",
           background: item.selected
-            ? "linear-gradient(180deg, rgba(203,166,218,0.11), rgba(203,166,218,0.05))"
+            ? "linear-gradient(180deg, color-mix(in srgb, var(--sp-accent) 11%, transparent), color-mix(in srgb, var(--sp-accent) 5%, transparent))"
             : hovered
               ? "rgba(255,255,255,0.028)"
               : "rgba(255,255,255,0.015)",
           boxShadow: item.selected
-            ? "0 0 0 1px rgba(203,166,218,0.05), inset 0 1px 0 rgba(255,255,255,0.03)"
+            ? "0 0 0 1px color-mix(in srgb, var(--sp-accent) 5%, transparent), inset 0 1px 0 rgba(255,255,255,0.03)"
             : "inset 0 1px 0 rgba(255,255,255,0.02)",
           transition: "background 130ms, border-color 130ms, box-shadow 130ms",
         }}

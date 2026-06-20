@@ -96,9 +96,9 @@ export function RailReminderIndicator({ children, compact = false }) {
         gap: 6,
         padding: compact ? "4px 8px" : "5px 10px",
         borderRadius: 999,
-        border: "1px solid rgba(249,226,175,0.28)",
-        background: "rgba(249,226,175,0.10)",
-        color: "#f9e2af",
+        border: "1px solid color-mix(in srgb, var(--sp-cream) 28%, transparent)",
+        background: "color-mix(in srgb, var(--sp-cream) 10%, transparent)",
+        color: "var(--sp-cream)",
         fontSize: compact ? 10 : 11,
         fontWeight: 650,
         letterSpacing: 0.12,
@@ -240,42 +240,42 @@ export function RailAction({
   const isAccent = tone === "accent";
   const isSuccess = tone === "success";
   const color = isSuccess
-    ? "#a6e3a1"
+    ? "var(--sp-green)"
     : isAccent
       ? "#f6f7fb"
       : isGhost
         ? "rgba(205,214,244,0.74)"
         : "rgba(238,242,255,0.84)";
   const background = isSuccess
-    ? "rgba(166,227,161,0.12)"
+    ? "color-mix(in srgb, var(--sp-green) 12%, transparent)"
     : isAccent
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 34%, rgba(255,255,255,0.03)), color-mix(in srgb, ${accent} 22%, rgba(255,255,255,0.02)))`
       : isGhost
         ? "transparent"
         : "rgba(255,255,255,0.025)";
   const border = isSuccess
-    ? "1px solid rgba(166,227,161,0.3)"
+    ? "1px solid color-mix(in srgb, var(--sp-green) 30%, transparent)"
     : isAccent
       ? `1px solid color-mix(in srgb, ${accent} 40%, rgba(255,255,255,0.08))`
       : isGhost
         ? "1px solid transparent"
         : "1px solid rgba(255,255,255,0.08)";
   const hoverBackground = isSuccess
-    ? "rgba(166,227,161,0.18)"
+    ? "color-mix(in srgb, var(--sp-green) 18%, transparent)"
     : isAccent
       ? `linear-gradient(180deg, color-mix(in srgb, ${accent} 42%, rgba(255,255,255,0.04)), color-mix(in srgb, ${accent} 28%, rgba(255,255,255,0.03)))`
       : isGhost
         ? "rgba(255,255,255,0.03)"
         : "rgba(255,255,255,0.045)";
   const hoverBorder = isSuccess
-    ? "rgba(166,227,161,0.42)"
+    ? "color-mix(in srgb, var(--sp-green) 42%, transparent)"
     : isAccent
       ? `color-mix(in srgb, ${accent} 52%, rgba(255,255,255,0.12))`
       : isGhost
         ? "rgba(255,255,255,0.05)"
         : "rgba(255,255,255,0.12)";
   const hoverShadow = isSuccess
-    ? "0 10px 22px rgba(166,227,161,0.12)"
+    ? "0 10px 22px color-mix(in srgb, var(--sp-green) 12%, transparent)"
     : isAccent
       ? `0 0 0 1px color-mix(in srgb, ${accent} 10%, transparent), 0 12px 24px color-mix(in srgb, ${accent} 12%, transparent)`
       : "none";

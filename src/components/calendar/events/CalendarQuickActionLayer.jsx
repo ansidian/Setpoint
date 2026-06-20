@@ -44,22 +44,22 @@ function menuStyle(menu) {
 function actionButtonColors(tone, active) {
   if (tone === "danger") {
     return {
-      border: active ? "1px solid rgba(243,139,168,0.52)" : "1px solid rgba(243,139,168,0.34)",
-      background: active ? "rgba(243,139,168,0.20)" : "rgba(243,139,168,0.14)",
-      color: "#f38ba8",
+      border: active ? "1px solid color-mix(in srgb, var(--sp-rose) 52%, transparent)" : "1px solid color-mix(in srgb, var(--sp-rose) 34%, transparent)",
+      background: active ? "color-mix(in srgb, var(--sp-rose) 20%, transparent)" : "color-mix(in srgb, var(--sp-rose) 14%, transparent)",
+      color: "var(--sp-rose)",
     };
   }
   if (tone === "primary") {
     return {
-      border: active ? "1px solid rgba(203,166,218,0.42)" : "1px solid rgba(255,255,255,0.08)",
-      background: active ? "rgba(203,166,218,0.22)" : "rgba(203,166,218,0.16)",
-      color: "#cba6da",
+      border: active ? "1px solid color-mix(in srgb, var(--sp-accent) 42%, transparent)" : "1px solid rgba(255,255,255,0.08)",
+      background: active ? "color-mix(in srgb, var(--sp-accent) 22%, transparent)" : "color-mix(in srgb, var(--sp-accent) 16%, transparent)",
+      color: "var(--sp-accent)",
     };
   }
   return {
     border: active ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(255,255,255,0.08)",
     background: active ? "rgba(255,255,255,0.075)" : "rgba(255,255,255,0.04)",
-    color: "#cdd6f4",
+    color: "var(--sp-text)",
   };
 }
 
@@ -212,13 +212,13 @@ function ColorDotButton({ color, selected, disabled, onClick, scopeCount = 1 }) 
         display: "grid",
         placeItems: "center",
         border: selected
-          ? "2px solid color-mix(in srgb, var(--ea-accent, #cba6da) 82%, white 8%)"
+          ? "2px solid color-mix(in srgb, var(--ea-accent, var(--sp-accent)) 82%, white 8%)"
           : interactive
             ? "2px solid rgba(255,255,255,0.42)"
             : "2px solid rgba(255,255,255,0.16)",
         background: color.hex,
         boxShadow: selected
-          ? "0 0 0 2px rgba(22,22,30,0.95), 0 0 0 4px color-mix(in srgb, var(--ea-accent, #cba6da) 42%, transparent)"
+          ? "0 0 0 2px color-mix(in srgb, var(--sp-panel) 95%, transparent), 0 0 0 4px color-mix(in srgb, var(--ea-accent, var(--sp-accent)) 42%, transparent)"
           : interactive
             ? "0 0 0 2px rgba(255,255,255,0.06)"
             : "none",
@@ -238,7 +238,7 @@ function ColorDotButton({ color, selected, disabled, onClick, scopeCount = 1 }) 
             color: checkColor,
             filter: checkColor === "#16161e"
               ? "drop-shadow(0 0 1px rgba(248,245,255,0.88))"
-              : "drop-shadow(0 0 1px rgba(22,22,30,0.82))",
+              : "drop-shadow(0 0 1px color-mix(in srgb, var(--sp-panel) 82%, transparent))",
           }}
         />
       ) : null}
@@ -313,19 +313,19 @@ function ScopeButton({ option, selected, disabled, onClick }) {
         borderRadius: 8,
         border: selected
           ? interactive
-            ? "1px solid rgba(203,166,218,0.50)"
-            : "1px solid rgba(203,166,218,0.38)"
+            ? "1px solid color-mix(in srgb, var(--sp-accent) 50%, transparent)"
+            : "1px solid color-mix(in srgb, var(--sp-accent) 38%, transparent)"
           : interactive
             ? "1px solid rgba(255,255,255,0.15)"
             : "1px solid rgba(255,255,255,0.08)",
         background: selected
           ? interactive
-            ? "rgba(203,166,218,0.22)"
-            : "rgba(203,166,218,0.15)"
+            ? "color-mix(in srgb, var(--sp-accent) 22%, transparent)"
+            : "color-mix(in srgb, var(--sp-accent) 15%, transparent)"
           : interactive
             ? "rgba(255,255,255,0.07)"
             : "rgba(255,255,255,0.035)",
-        color: selected ? "#cba6da" : "#cdd6f4",
+        color: selected ? "var(--sp-accent)" : "var(--sp-text)",
         fontSize: 10.5,
         lineHeight: 1.2,
         fontWeight: 700,
@@ -400,7 +400,7 @@ function ContextMenu({ quickActions }) {
         padding: 8,
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.08)",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         isolation: "isolate",
         display: "flex",
@@ -409,7 +409,7 @@ function ContextMenu({ quickActions }) {
       }}
     >
       {menu.error ? (
-        <div data-testid="calendar-quick-action-error" style={{ color: "#f38ba8", fontSize: 11, lineHeight: 1.35, padding: "4px 6px" }}>
+        <div data-testid="calendar-quick-action-error" style={{ color: "var(--sp-rose)", fontSize: 11, lineHeight: 1.35, padding: "4px 6px" }}>
           {menu.error}
         </div>
       ) : null}
@@ -499,7 +499,7 @@ function ScopePrompt({ quickActions }) {
         padding: 12,
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.08)",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         isolation: "isolate",
         display: "flex",
@@ -508,7 +508,7 @@ function ScopePrompt({ quickActions }) {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#eef2ff" }}>{title}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--sp-text)" }}>{title}</div>
         <div style={{ fontSize: 11, lineHeight: 1.4, color: "rgba(205,214,244,0.58)" }}>
           Choose the recurrence scope before confirming.
         </div>
@@ -528,7 +528,7 @@ function ScopePrompt({ quickActions }) {
         })}
       </div>
       {prompt.error ? (
-        <div data-testid="calendar-quick-action-error" style={{ color: "#f38ba8", fontSize: 11, lineHeight: 1.35 }}>
+        <div data-testid="calendar-quick-action-error" style={{ color: "var(--sp-rose)", fontSize: 11, lineHeight: 1.35 }}>
           {prompt.error}
         </div>
       ) : null}
@@ -548,10 +548,10 @@ function ScopePrompt({ quickActions }) {
 function Status({ quickActions }) {
   if (!quickActions.status) return null;
   const toneColor = quickActions.status.tone === "error"
-    ? "#f38ba8"
+    ? "var(--sp-rose)"
     : quickActions.status.tone === "success"
-      ? "#a6e3a1"
-      : "#cba6da";
+      ? "var(--sp-green)"
+      : "var(--sp-accent)";
 
   return (
     <div
@@ -564,7 +564,7 @@ function Status({ quickActions }) {
         padding: "5px 8px",
         borderRadius: 8,
         border: "1px solid rgba(255,255,255,0.08)",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         color: toneColor,
         fontSize: 10.5,
         fontWeight: 700,

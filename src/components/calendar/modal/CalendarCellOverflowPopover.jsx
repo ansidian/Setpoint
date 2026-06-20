@@ -309,7 +309,7 @@ export default function CalendarCellOverflowPopover({
         padding: "12px 12px 10px",
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.08)",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         isolation: "isolate",
         overscrollBehavior: "contain",

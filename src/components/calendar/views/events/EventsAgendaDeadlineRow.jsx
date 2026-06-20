@@ -5,7 +5,7 @@ import { colorWithAlpha } from "./eventsAgendaColor.js";
 function AgendaDeadlineStatus({ deadline }) {
   if (!deadline.agendaStatusIcon) return null;
   const Icon = deadline.agendaStatusIcon === "complete" ? CheckCircle2 : CircleDashed;
-  const color = deadline.agendaStatusIcon === "complete" ? "#a6e3a1" : "#89dceb";
+  const color = deadline.agendaStatusIcon === "complete" ? "var(--sp-green)" : "var(--sp-cyan)";
 
   return (
     <span
@@ -71,7 +71,7 @@ export default function EventsAgendaDeadlineRow({
         borderRadius: 8,
         border: selected ? `1px solid ${colorWithAlpha(color, 0.72)}` : "1px solid rgba(255,255,255,0.055)",
         background: selected ? colorWithAlpha(color, 0.16) : "rgba(255,255,255,0.022)",
-        color: deadline.agendaComplete ? "rgba(205,214,244,0.48)" : "#cdd6f4",
+        color: deadline.agendaComplete ? "rgba(205,214,244,0.48)" : "var(--sp-text)",
         cursor: "pointer",
         textAlign: "left",
         transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
@@ -139,7 +139,7 @@ export default function EventsAgendaDeadlineRow({
               display: "inline-flex",
               alignItems: "center",
               gap: 4,
-              color: "#f9e2af",
+              color: "var(--sp-cream)",
               fontSize: 10.5,
               lineHeight: 1.3,
               minWidth: 0,

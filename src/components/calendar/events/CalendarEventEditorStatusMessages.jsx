@@ -13,8 +13,8 @@ export default function CalendarEventEditorStatusMessages({
         style={{
           padding: "10px 12px",
           borderRadius: 8,
-          border: "1px solid rgba(243,139,168,0.18)",
-          background: "rgba(243,139,168,0.08)",
+          border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
+          background: "color-mix(in srgb, var(--sp-rose) 8%, transparent)",
           color: "#f5c2e7",
           fontSize: 11.5,
           lineHeight: 1.5,
@@ -38,8 +38,8 @@ export default function CalendarEventEditorStatusMessages({
       style={{
         padding: "10px 12px",
         borderRadius: 8,
-        border: "1px solid rgba(249,115,22,0.24)",
-        background: "rgba(249,115,22,0.08)",
+        border: "1px solid color-mix(in srgb, var(--sp-orange) 24%, transparent)",
+        background: "color-mix(in srgb, var(--sp-orange) 8%, transparent)",
         color: "#fdba74",
         fontSize: 11.5,
         lineHeight: 1.5,

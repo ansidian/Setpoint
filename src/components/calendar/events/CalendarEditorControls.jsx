@@ -38,21 +38,21 @@ export function ActionButton({
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
 
-  let background = "rgba(203,166,218,0.12)";
-  let border = "1px solid rgba(203,166,218,0.24)";
-  let color = "#cba6da";
+  let background = "color-mix(in srgb, var(--sp-accent) 12%, transparent)";
+  let border = "1px solid color-mix(in srgb, var(--sp-accent) 24%, transparent)";
+  let color = "var(--sp-accent)";
 
   if (danger) {
-    background = hover && !disabled ? "rgba(243,139,168,0.18)" : "rgba(243,139,168,0.12)";
-    border = hover && !disabled ? "1px solid rgba(243,139,168,0.38)" : "1px solid rgba(243,139,168,0.28)";
-    color = "#f38ba8";
+    background = hover && !disabled ? "color-mix(in srgb, var(--sp-rose) 18%, transparent)" : "color-mix(in srgb, var(--sp-rose) 12%, transparent)";
+    border = hover && !disabled ? "1px solid color-mix(in srgb, var(--sp-rose) 38%, transparent)" : "1px solid color-mix(in srgb, var(--sp-rose) 28%, transparent)";
+    color = "var(--sp-rose)";
   } else if (subtle) {
     background = hover && !disabled ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)";
     border = hover && !disabled ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.08)";
     color = "rgba(205,214,244,0.78)";
   } else if (hover && !disabled) {
-    background = "rgba(203,166,218,0.18)";
-    border = "1px solid rgba(203,166,218,0.34)";
+    background = "color-mix(in srgb, var(--sp-accent) 18%, transparent)";
+    border = "1px solid color-mix(in srgb, var(--sp-accent) 34%, transparent)";
   }
 
   return (
@@ -174,7 +174,7 @@ export function PickerFieldButton(props) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            color: value ? "#cdd6f4" : "var(--color-text-faint)",
+            color: value ? "var(--sp-text)" : "var(--color-text-faint)",
           }}
         >
           {value || placeholder}

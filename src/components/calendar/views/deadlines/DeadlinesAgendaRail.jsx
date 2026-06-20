@@ -43,7 +43,7 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
         padding: "8px 10px 7px",
         border: "0",
         borderRadius: 0,
-        background: "#1f1f24",
+        background: "var(--sp-panel)",
         color: group.dateKey === todayKey ? "#0495FF" : "#B1B1B3",
         fontSize: 12,
         fontWeight: 800,
@@ -55,10 +55,10 @@ function AgendaHeader({ group, todayKey, onActivate, registerHeader }) {
         transition: "background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1)",
       }}
       onMouseEnter={(event) => {
-        event.currentTarget.style.background = "#23232a";
+        event.currentTarget.style.background = "var(--sp-panel)";
       }}
       onMouseLeave={(event) => {
-        event.currentTarget.style.background = "#1f1f24";
+        event.currentTarget.style.background = "var(--sp-panel)";
       }}
     >
       <span>{group.headerLabel}</span>
@@ -102,7 +102,7 @@ function DeadlineRow({ task, selected, onSelect, quickActions }) {
         borderRadius: 8,
         border: selected ? `1px solid color-mix(in srgb, ${color} 72%, rgba(255,255,255,0.08))` : "1px solid rgba(255,255,255,0.055)",
         background: selected ? `color-mix(in srgb, ${color} 18%, transparent)` : "rgba(255,255,255,0.025)",
-        color: task.agendaComplete ? "rgba(205,214,244,0.58)" : "#cdd6f4",
+        color: task.agendaComplete ? "rgba(205,214,244,0.58)" : "var(--sp-text)",
         cursor: "pointer",
         textAlign: "left",
         transition: "transform 170ms cubic-bezier(0.16, 1, 0.3, 1), background-color 170ms cubic-bezier(0.16, 1, 0.3, 1), border-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
@@ -142,7 +142,7 @@ function DeadlineRow({ task, selected, onSelect, quickActions }) {
           </span>
         ) : null}
         {reminderSummary ? (
-          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#f9e2af", fontSize: 10.5, lineHeight: 1.3 }}>
+          <span data-testid="calendar-agenda-reminder-label" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--sp-cream)", fontSize: 10.5, lineHeight: 1.3 }}>
             <Bell size={11} aria-hidden />
             {reminderSummary}
           </span>
@@ -185,7 +185,7 @@ function CompletedToggle({ enabled, onToggle }) {
         flex: "0 0 auto",
         padding: "9px 10px 10px",
         borderTop: "1px solid rgba(255,255,255,0.06)",
-        background: "#1f1f24",
+        background: "var(--sp-panel)",
       }}
     >
       <button
@@ -202,8 +202,8 @@ function CompletedToggle({ enabled, onToggle }) {
           gap: 8,
           padding: "6px 8px",
           borderRadius: 999,
-          border: enabled ? "1px solid rgba(166,227,161,0.38)" : "1px solid rgba(255,255,255,0.08)",
-          background: enabled ? "rgba(166,227,161,0.12)" : "rgba(255,255,255,0.035)",
+          border: enabled ? "1px solid color-mix(in srgb, var(--sp-green) 38%, transparent)" : "1px solid rgba(255,255,255,0.08)",
+          background: enabled ? "color-mix(in srgb, var(--sp-green) 12%, transparent)" : "rgba(255,255,255,0.035)",
           color: enabled ? "rgba(205,214,244,0.92)" : "rgba(166,173,200,0.72)",
           cursor: "pointer",
           fontSize: 10.5,
@@ -215,11 +215,11 @@ function CompletedToggle({ enabled, onToggle }) {
         }}
         onMouseEnter={(event) => {
           event.currentTarget.style.transform = "translateY(-1px)";
-          event.currentTarget.style.borderColor = enabled ? "rgba(166,227,161,0.52)" : "rgba(255,255,255,0.14)";
+          event.currentTarget.style.borderColor = enabled ? "color-mix(in srgb, var(--sp-green) 52%, transparent)" : "rgba(255,255,255,0.14)";
         }}
         onMouseLeave={(event) => {
           event.currentTarget.style.transform = "translateY(0)";
-          event.currentTarget.style.borderColor = enabled ? "rgba(166,227,161,0.38)" : "rgba(255,255,255,0.08)";
+          event.currentTarget.style.borderColor = enabled ? "color-mix(in srgb, var(--sp-green) 38%, transparent)" : "rgba(255,255,255,0.08)";
         }}
       >
         <span>Completed</span>
@@ -232,7 +232,7 @@ function CompletedToggle({ enabled, onToggle }) {
             padding: 2,
             display: "flex",
             justifyContent: enabled ? "flex-end" : "flex-start",
-            background: enabled ? "rgba(166,227,161,0.26)" : "rgba(255,255,255,0.08)",
+            background: enabled ? "color-mix(in srgb, var(--sp-green) 26%, transparent)" : "rgba(255,255,255,0.08)",
             boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)",
             transition: "background-color 170ms cubic-bezier(0.16, 1, 0.3, 1)",
           }}
@@ -242,8 +242,8 @@ function CompletedToggle({ enabled, onToggle }) {
               width: 12,
               height: 12,
               borderRadius: 999,
-              background: enabled ? "#a6e3a1" : "rgba(166,173,200,0.72)",
-              boxShadow: enabled ? "0 0 8px rgba(166,227,161,0.32)" : "none",
+              background: enabled ? "var(--sp-green)" : "rgba(166,173,200,0.72)",
+              boxShadow: enabled ? "0 0 8px color-mix(in srgb, var(--sp-green) 32%, transparent)" : "none",
             }}
           />
         </span>
@@ -360,7 +360,7 @@ const DeadlinesAgendaRail = forwardRef(function DeadlinesAgendaRail({
   ), [todayKey, selectedDateKey, selectedItemId, onDateAction, onDeadlineAction, deadlineQuickActions]);
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", background: "#1f1f24" }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", background: "var(--sp-panel)" }}>
       <AgendaMonthScrollContainer
         ref={ref}
         testId="deadlines-agenda-rail"

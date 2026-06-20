@@ -156,9 +156,9 @@ function DeadlinesDetail({
           style={{
             padding: "8px 10px",
             borderRadius: 8,
-            border: "1px solid rgba(249,226,175,0.16)",
-            background: "rgba(249,226,175,0.06)",
-            color: "rgba(249,226,175,0.86)",
+            border: "1px solid color-mix(in srgb, var(--sp-cream) 16%, transparent)",
+            background: "color-mix(in srgb, var(--sp-cream) 6%, transparent)",
+            color: "color-mix(in srgb, var(--sp-cream) 86%, transparent)",
             fontSize: 11,
             lineHeight: 1.35,
           }}

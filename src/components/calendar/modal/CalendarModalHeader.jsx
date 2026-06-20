@@ -59,8 +59,8 @@ function handleHeaderButtonHover(event, active) {
 }
 
 function resetHeaderButtonHover(event, active = false) {
-  event.currentTarget.style.background = active ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.03)";
-  event.currentTarget.style.borderColor = active ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.06)";
+  event.currentTarget.style.background = active ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "rgba(255,255,255,0.03)";
+  event.currentTarget.style.borderColor = active ? "color-mix(in srgb, var(--sp-accent) 28%, transparent)" : "rgba(255,255,255,0.06)";
   event.currentTarget.style.transform = "translateY(0)";
 }
 
@@ -76,11 +76,11 @@ function viewToggleStyle(active, stretched = false) {
     fontSize: 11,
     fontWeight: 600,
     letterSpacing: 0.24,
-    border: `1px solid ${active ? "rgba(203,166,218,0.22)" : "transparent"}`,
+    border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 22%, transparent)" : "transparent"}`,
     cursor: active ? "default" : "pointer",
     fontFamily: "inherit",
-    background: active ? "rgba(203,166,218,0.12)" : "transparent",
-    color: active ? "#cba6da" : "rgba(205,214,244,0.56)",
+    background: active ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "transparent",
+    color: active ? "var(--sp-accent)" : "rgba(205,214,244,0.56)",
     transform: "translateY(0)",
     transition: "transform 140ms, background 150ms, color 150ms, border-color 150ms",
   };
@@ -97,9 +97,9 @@ function viewHintStyle(active) {
     fontSize: 9.5,
     fontFamily: "Fira Code, ui-monospace, monospace",
     fontWeight: 500,
-    color: active ? "#cba6da" : "var(--color-text-faint)",
-    background: active ? "rgba(203,166,218,0.10)" : "rgba(255,255,255,0.04)",
-    border: `1px solid ${active ? "rgba(203,166,218,0.24)" : "rgba(255,255,255,0.06)"}`,
+    color: active ? "var(--sp-accent)" : "var(--color-text-faint)",
+    background: active ? "color-mix(in srgb, var(--sp-accent) 10%, transparent)" : "rgba(255,255,255,0.04)",
+    border: `1px solid ${active ? "color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "rgba(255,255,255,0.06)"}`,
     borderRadius: 4,
     letterSpacing: 0,
     marginLeft: 2,
@@ -159,7 +159,7 @@ export default function CalendarModalHeader({
         zIndex: 2,
         margin: `${-layout.shellPadding}px ${-layout.shellPadding}px 0`,
         padding: `${layout.shellPadding}px ${layout.shellPadding}px ${layout.contentGap}px`,
-        background: "linear-gradient(180deg, rgba(22,22,30,0.98), rgba(22,22,30,0.94) 72%, rgba(22,22,30,0))",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-panel) 98%, transparent), color-mix(in srgb, var(--sp-panel) 94%, transparent) 72%, color-mix(in srgb, var(--sp-panel) 0%, transparent))",
       }}
     >
       <div
@@ -424,8 +424,8 @@ export default function CalendarModalHeader({
                   width: 32,
                   height: 32,
                   borderRadius: 8,
-                  border: "1px solid rgba(137,180,250,0.18)",
-                  background: "rgba(137,180,250,0.08)",
+                  border: "1px solid color-mix(in srgb, var(--sp-blue) 18%, transparent)",
+                  background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
                   color: "rgba(205,214,244,0.72)",
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
                 }}
@@ -469,9 +469,9 @@ export default function CalendarModalHeader({
             data-calendar-focus-ring="true"
             style={{
               ...headerButtonBaseStyle(),
-              background: search?.open ? "rgba(203,166,218,0.12)" : "rgba(255,255,255,0.03)",
-              borderColor: search?.open ? "rgba(203,166,218,0.28)" : "rgba(255,255,255,0.06)",
-              color: search?.open ? "#cba6da" : "rgba(205,214,244,0.7)",
+              background: search?.open ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)" : "rgba(255,255,255,0.03)",
+              borderColor: search?.open ? "color-mix(in srgb, var(--sp-accent) 28%, transparent)" : "rgba(255,255,255,0.06)",
+              color: search?.open ? "var(--sp-accent)" : "rgba(205,214,244,0.7)",
               cursor: "pointer",
               flexShrink: 0,
             }}

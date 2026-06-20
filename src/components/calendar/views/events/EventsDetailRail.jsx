@@ -155,7 +155,7 @@ function DeadlineTimelineStatus({ task, compact = false }) {
   const status = normalizeStatus(task?.status);
   if (status !== "complete" && status !== "in_progress") return null;
   const Icon = status === "complete" ? CheckCircle2 : CircleDashed;
-  const color = status === "complete" ? "#a6e3a1" : "#89dceb";
+  const color = status === "complete" ? "var(--sp-green)" : "var(--sp-cyan)";
 
   return (
     <span

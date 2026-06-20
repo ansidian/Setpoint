@@ -150,11 +150,11 @@ export function textFieldStyle({ invalid = false } = {}) {
     width: "100%",
     background: "rgba(255,255,255,0.03)",
     border: invalid
-      ? "1px solid rgba(249, 115, 22, 0.42)"
+      ? "1px solid color-mix(in srgb, var(--sp-orange) 42%, transparent)"
       : "1px solid rgba(255,255,255,0.06)",
     borderRadius: 8,
     padding: "10px 12px",
-    color: "#cdd6f4",
+    color: "var(--sp-text)",
     fontSize: 12.5,
     outline: "none",
     boxSizing: "border-box",

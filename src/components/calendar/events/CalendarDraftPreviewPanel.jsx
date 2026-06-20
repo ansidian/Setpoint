@@ -36,7 +36,7 @@ export default function CalendarDraftPreviewPanel({
       kind: "schedule",
       label: "Schedule",
       value: scheduleSummary,
-      color: conflictCount ? "#f5c2e7" : "#cdd6f4",
+      color: conflictCount ? "#f5c2e7" : "var(--sp-text)",
     },
     {
       kind: "source",
@@ -54,14 +54,14 @@ export default function CalendarDraftPreviewPanel({
       kind: "repeat",
       label: "Repeat",
       value: recurrenceSummary,
-      color: recurrenceDraft || isRecurringEvent ? "#a6e3a1" : "rgba(166,173,200,0.75)",
+      color: recurrenceDraft || isRecurringEvent ? "var(--sp-green)" : "rgba(166,173,200,0.75)",
     },
     statusSummary
       ? {
           kind: conflictCount ? "conflict" : "status",
           label: conflictCount ? "Conflict" : "Status",
           value: statusSummary,
-          color: conflictCount ? "#f5c2e7" : "#89dceb",
+          color: conflictCount ? "#f5c2e7" : "var(--sp-cyan)",
         }
       : null,
   ].filter(Boolean);

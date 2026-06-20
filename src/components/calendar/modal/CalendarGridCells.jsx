@@ -5,7 +5,7 @@ import { isPinnedCalendarGhost } from "./calendarEventSpanLayout.js";
 import { sameOverflowDate } from "./calendarGridUtils.js";
 import { buildGridRows, leadingBoundaryType } from "../../../hooks/calendar/calendarGridRowModel.js";
 
-const BOUNDARY_BORDER_COLOR = "rgba(137,180,250,0.32)";
+const BOUNDARY_BORDER_COLOR = "color-mix(in srgb, var(--sp-blue) 32%, transparent)";
 const BOUNDARY_BORDER_COLOR_CURRENT = "#0095FF";
 
 export default function CalendarGridCells({

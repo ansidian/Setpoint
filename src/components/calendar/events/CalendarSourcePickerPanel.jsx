@@ -113,14 +113,14 @@ export default function SourcePickerPanel({
                   const selected = selectedSet.has(item.value);
                   const active = activeValue === item.value;
                   const borderColor = selected
-                    ? "rgba(203,166,218,0.34)"
+                    ? "color-mix(in srgb, var(--sp-accent) 34%, transparent)"
                     : active
-                      ? "rgba(137,220,235,0.28)"
+                      ? "color-mix(in srgb, var(--sp-cyan) 28%, transparent)"
                       : "rgba(255,255,255,0.06)";
                   const background = selected
-                    ? "rgba(203,166,218,0.12)"
+                    ? "color-mix(in srgb, var(--sp-accent) 12%, transparent)"
                     : active
-                      ? "rgba(137,220,235,0.08)"
+                      ? "color-mix(in srgb, var(--sp-cyan) 8%, transparent)"
                       : "rgba(255,255,255,0.03)";
 
                   return (
@@ -141,7 +141,7 @@ export default function SourcePickerPanel({
                         borderRadius: 10,
                         border: `1px solid ${borderColor}`,
                         background,
-                        color: "#cdd6f4",
+                        color: "var(--sp-text)",
                         fontFamily: "inherit",
                         cursor: "pointer",
                         textAlign: "left",
@@ -182,7 +182,7 @@ export default function SourcePickerPanel({
                           height: 18,
                           display: "inline-grid",
                           placeItems: "center",
-                          color: selected ? "#cba6da" : "transparent",
+                          color: selected ? "var(--sp-accent)" : "transparent",
                         }}
                       >
                         <Check size={14} />

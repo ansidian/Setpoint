@@ -10,10 +10,10 @@ function formatCellWeather(weather) {
 
 function weatherIconColor(icon) {
   const normalized = String(icon || "").toLowerCase();
-  if (normalized.includes("sun") || normalized.includes("clear")) return "rgba(249,226,175,0.72)";
-  if (normalized.includes("rain") || normalized.includes("drizzle")) return "rgba(137,180,250,0.68)";
+  if (normalized.includes("sun") || normalized.includes("clear")) return "color-mix(in srgb, var(--sp-cream) 72%, transparent)";
+  if (normalized.includes("rain") || normalized.includes("drizzle")) return "color-mix(in srgb, var(--sp-blue) 68%, transparent)";
   if (normalized.includes("snow")) return "rgba(205,214,244,0.74)";
-  if (normalized.includes("storm") || normalized.includes("thunder")) return "rgba(249,226,175,0.66)";
+  if (normalized.includes("storm") || normalized.includes("thunder")) return "color-mix(in srgb, var(--sp-cream) 66%, transparent)";
   return "rgba(166,173,200,0.66)";
 }
 
@@ -73,20 +73,20 @@ export default function CalendarCell({
   }
 
   if (isSelected) {
-    cellBg = "rgba(203,166,218,0.06)";
-    cellBorder = "1px solid rgba(203,166,218,0.4)";
+    cellBg = "color-mix(in srgb, var(--sp-accent) 6%, transparent)";
+    cellBorder = "1px solid color-mix(in srgb, var(--sp-accent) 40%, transparent)";
     cellShadow =
-      "0 0 0 1px rgba(203,166,218,0.18), 0 4px 14px rgba(203,166,218,0.18)";
-    dateColor = "#cba6da";
+      "0 0 0 1px color-mix(in srgb, var(--sp-accent) 18%, transparent), 0 4px 14px color-mix(in srgb, var(--sp-accent) 18%, transparent)";
+    dateColor = "var(--sp-accent)";
     dateWeight = 600;
   } else if (allComplete) {
-    accentBar = "#a6e3a1";
-    dateColor = "rgba(166,227,161,0.85)";
+    accentBar = "var(--sp-green)";
+    dateColor = "color-mix(in srgb, var(--sp-green) 85%, transparent)";
   } else if (hasOverdue) {
-    accentBar = "#f38ba8";
-    dateColor = "rgba(243,139,168,0.9)";
+    accentBar = "var(--sp-rose)";
+    dateColor = "color-mix(in srgb, var(--sp-rose) 90%, transparent)";
   } else if (hasItems) {
-    dateColor = "#cdd6f4";
+    dateColor = "var(--sp-text)";
     dateWeight = 500;
   }
 
@@ -114,17 +114,17 @@ export default function CalendarCell({
   }
 
   if (inlineOverflowOpen) {
-    cellBg = "rgba(22,22,30,0.98)";
+    cellBg = "color-mix(in srgb, var(--sp-panel) 98%, transparent)";
     cellBorder = "1px solid rgba(255,255,255,0.12)";
     cellShadow = "0 16px 36px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05)";
   }
 
   const isDropTarget = quickActions?.dropTargetDate === dateKey;
   if (isDropTarget) {
-    cellBg = "rgba(203,166,218,0.10)";
-    cellBorder = "1px solid rgba(203,166,218,0.58)";
+    cellBg = "color-mix(in srgb, var(--sp-accent) 10%, transparent)";
+    cellBorder = "1px solid color-mix(in srgb, var(--sp-accent) 58%, transparent)";
     cellShadow =
-      "0 0 0 1px rgba(203,166,218,0.20), inset 0 0 0 1px rgba(203,166,218,0.08)";
+      "0 0 0 1px color-mix(in srgb, var(--sp-accent) 20%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--sp-accent) 8%, transparent)";
   }
 
   if (isToday) {

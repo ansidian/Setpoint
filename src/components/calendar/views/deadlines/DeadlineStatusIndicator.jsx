@@ -6,10 +6,10 @@ import { normalizeStatus, statusLabel } from "./deadlinesModel.js";
 export function getDeadlineStatusMeta(status) {
   const normalized = normalizeStatus(status);
   if (normalized === "complete") {
-    return { normalized, label: statusLabel(normalized), color: "#a6e3a1", Icon: CheckCircle2 };
+    return { normalized, label: statusLabel(normalized), color: "var(--sp-green)", Icon: CheckCircle2 };
   }
   if (normalized === "in_progress") {
-    return { normalized, label: statusLabel(normalized), color: "#89dceb", Icon: CircleDashed };
+    return { normalized, label: statusLabel(normalized), color: "var(--sp-cyan)", Icon: CircleDashed };
   }
   return { normalized, label: statusLabel(normalized), color: "rgba(205,214,244,0.55)", Icon: Circle };
 }

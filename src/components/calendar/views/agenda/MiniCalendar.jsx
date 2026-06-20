@@ -169,7 +169,7 @@ export function AgendaRailWithMiniCalendar({ miniCalendar, children }) {
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        background: "#1f1f24",
+        background: "var(--sp-panel)",
         isolation: "isolate",
       }}
     >
@@ -248,7 +248,7 @@ export default function MiniCalendar({
             transform: translateY(0);
           }
           [data-testid="calendar-mini-calendar"] button:focus-visible {
-            outline: 2px solid color-mix(in srgb, var(--ea-accent, #cba6da) 72%, transparent);
+            outline: 2px solid color-mix(in srgb, var(--ea-accent, var(--sp-accent)) 72%, transparent);
             outline-offset: 2px;
           }
           @media (prefers-reduced-motion: reduce) {

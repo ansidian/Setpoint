@@ -328,7 +328,7 @@ export default function CalendarSearchRail({ search, layoutMode = "three-rail", 
           display: "flex",
           flexDirection: "column",
           gap: 0,
-          background: "#1f1f24",
+          background: "var(--sp-panel)",
           isolation: "isolate",
         }}
       >
