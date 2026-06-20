@@ -311,7 +311,7 @@ export default function MobileReader({
               display: "flex",
               flexDirection: "column",
               borderTop: "1px solid color-mix(in srgb, var(--sp-green) 18%, transparent)",
-              background: "rgba(20,20,28,0.98)",
+              background: "color-mix(in srgb, var(--sp-panel) 98%, transparent)",
               boxShadow: "0 -12px 28px rgba(0,0,0,0.28)",
             }}
           >
