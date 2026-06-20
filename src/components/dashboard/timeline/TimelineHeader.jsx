@@ -43,7 +43,7 @@ function TimelineRefreshStatus({ accent }) {
         fontSize: 9.5,
         fontWeight: 600,
         letterSpacing: 0.25,
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         whiteSpace: "nowrap",
       }}
     >

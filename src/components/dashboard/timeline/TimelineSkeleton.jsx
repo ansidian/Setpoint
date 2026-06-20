@@ -49,7 +49,7 @@ export default function TimelineSkeleton({ isMobile = false }) {
                 height: 13,
                 borderRadius: 99,
                 border: "1px solid rgba(255,255,255,0.15)",
-                background: "#0b0b13",
+                background: "var(--sp-deep)",
               }}
             />
             <Skeleton className="h-[12px] w-[42px] bg-white/8" />

@@ -37,7 +37,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
               <span
                 style={{
                   fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 99,
-                  background: "rgba(243,139,168,0.15)", color: "#f38ba8",
+                  background: "color-mix(in srgb, var(--sp-rose) 15%, transparent)", color: "var(--sp-rose)",
                 }}
               >
                 {needsYou} needs you
@@ -76,8 +76,8 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
               style={{
                 width: 6, height: 6, borderRadius: 99,
                 background:
-                  e._lane === "needs_attention" ? "#f38ba8"
-                  : e._lane === "fyi" ? "#89dceb"
+                  e._lane === "needs_attention" ? "var(--sp-rose)"
+                  : e._lane === "fyi" ? "var(--sp-cyan)"
                   : "rgba(205,214,244,0.25)",
                 margin: "0 auto",
                 opacity: e.read ? 0.35 : 1,
@@ -86,7 +86,7 @@ function InboxPeek({ accent = "#cba6da", emailAccounts = [], onJump, onOpenInbox
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: 12, color: e.read ? "rgba(205,214,244,0.65)" : "#cdd6f4",
+                  fontSize: 12, color: e.read ? "rgba(205,214,244,0.65)" : "var(--sp-text)",
                   fontWeight: e.read ? 400 : 600,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isMobile ? "normal" : "nowrap",
                   marginBottom: 2,

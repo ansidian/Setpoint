@@ -16,27 +16,27 @@ function ActionButton({ icon: Icon, label, onClick, accent, variant = "default",
   const isPrimary = variant === "primary";
   const isDanger = variant === "danger";
   const isAccent = variant === "accent";
-  const successColor = "#a6e3a1";
+  const successColor = "var(--sp-green)";
   const color = isPrimary
     ? successColor
     : isAccent
     ? accent
     : isDanger
-    ? "#f38ba8"
+    ? "var(--sp-rose)"
     : "rgba(205,214,244,0.8)";
   const bg = isPrimary
-    ? (active ? "rgba(166,227,161,0.14)" : "rgba(255,255,255,0.02)")
+    ? (active ? "color-mix(in srgb, var(--sp-green) 14%, transparent)" : "rgba(255,255,255,0.02)")
     : isAccent
     ? (active ? `${accent}18` : `${accent}0c`)
     : active
     ? "rgba(255,255,255,0.05)"
     : "rgba(255,255,255,0.02)";
   const border = isPrimary
-    ? `1px solid ${active ? "rgba(166,227,161,0.4)" : "rgba(166,227,161,0.22)"}`
+    ? `1px solid ${active ? "color-mix(in srgb, var(--sp-green) 40%, transparent)" : "color-mix(in srgb, var(--sp-green) 22%, transparent)"}`
     : isAccent
     ? `1px solid ${accent}38`
     : isDanger
-    ? "1px solid rgba(243,139,168,0.22)"
+    ? "1px solid color-mix(in srgb, var(--sp-rose) 22%, transparent)"
     : "1px solid rgba(255,255,255,0.08)";
 
   return (
@@ -95,6 +95,8 @@ function InfoRow({ label, value, color }) {
 
 // Provider priorities use 1 = urgent, 2 = high, 3 = medium, 4 = low. We only
 // render a badge for 1-3 since 4 is the default "no flag" baseline.
+// literal hexes: meta.color is consumed via `${meta.color}1e` / `${meta.color}38`
+// hex-alpha concat in PriorityBadge below, where a var(--sp-*) would be invalid CSS
 const PRIORITY_META = {
   1: { color: "#f38ba8", label: "P1 · Urgent" },
   2: { color: "#f9e2af", label: "P2 · High" },
@@ -200,7 +202,7 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
 
   const deadlineLabel = "Deadline";
   const deadlineColor = task.color || task.sourceColor || TODOIST_DEADLINE_COLOR || accent;
-  const dueColor = urgency.key === "high" ? "#f38ba8" : urgency.key === "medium" ? "#f9e2af" : deadlineColor;
+  const dueColor = urgency.key === "high" ? "var(--sp-rose)" : urgency.key === "medium" ? "var(--sp-cream)" : deadlineColor;
 
   return createPortal(
     <>

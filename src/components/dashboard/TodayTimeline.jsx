@@ -255,7 +255,7 @@ function TomorrowGroup({ accent, count, items, label, now, onJump, onToggle, ope
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
           <Chevron size={14} color="rgba(205,214,244,0.5)" />
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: "#cdd6f4" }}>Tomorrow</span>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sp-text)" }}>Tomorrow</span>
           <span style={{ fontSize: 11, color: "rgba(205,214,244,0.4)" }}>{label}</span>
         </span>
         <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{summary}</span>
@@ -290,7 +290,7 @@ function RestOfWeekGroup({ accent, count, now, onJump, onToggle, open, rest }) {
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 6px", border: "none", borderBottom: "1px solid rgba(255,255,255,0.04)", background: hover || focus ? "rgba(255,255,255,0.02)" : "transparent", cursor: "pointer", color: "inherit", font: "inherit", transition: "background 130ms ease" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
           <Chevron size={14} color="rgba(205,214,244,0.5)" />
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: "#cdd6f4" }}>Rest of this week</span>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--sp-text)" }}>Rest of this week</span>
         </span>
         <span style={{ fontSize: 11, color: "rgba(205,214,244,0.5)" }}>{count} {count === 1 ? "item" : "items"}</span>
       </button>

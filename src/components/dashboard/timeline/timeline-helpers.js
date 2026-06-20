@@ -1,5 +1,9 @@
 import { dayBucket, eventState, pacificClock } from "../../../lib/shell-helpers";
 
+// NOTE: literal hexes (not --sp-* tokens) because these values are consumed via
+// `${color}NN` hex-alpha string concat in TimelineRow (e.g. `${color}1e`); a
+// `var(--sp-*)NN` concat is invalid CSS. Same Scope-B carve-out as the inbox /
+// calendar concat-fed color maps. Values equal --sp-rose / --sp-cream / --sp-blue.
 export const PRIORITY_COLOR = {
   1: "#f38ba8",
   2: "#f9e2af",

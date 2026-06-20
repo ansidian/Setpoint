@@ -438,7 +438,7 @@ export function DashboardShell({
           `radial-gradient(circle at top, ${accent}08 0%, transparent 24%)`,
           "linear-gradient(180deg, #0b0c12 0%, #0a0b10 100%)",
         ].join(", "),
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         overflow: "hidden",
       }}
     >
