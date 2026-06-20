@@ -58,7 +58,7 @@ export default function MobileFilterSheet({
           padding: "16px 16px 24px",
           borderTopLeftRadius: 16,
           borderTopRightRadius: 16,
-          background: "#16161e",
+          background: "var(--sp-panel)",
           borderTop: `1px solid ${accent}30`,
           boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
           overflowY: "auto",

@@ -66,7 +66,7 @@ export default function DigestStrip({
       style={{
         margin: "14px 18px 0", padding: "14px 18px",
         borderRadius: 12,
-        background: `linear-gradient(135deg, ${accent}14, rgba(137,220,235,0.04))`,
+        background: `linear-gradient(135deg, ${accent}14, color-mix(in srgb, var(--sp-cyan) 4%, transparent))`,
         border: `1px solid ${accent}38`,
         display: "grid",
         gridTemplateColumns: "minmax(260px, 1.25fr) auto minmax(196px, 0.9fr)",
@@ -156,8 +156,8 @@ export default function DigestStrip({
           style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "6px 10px 6px 8px", borderRadius: 8,
-            background: activityActive ? "rgba(137,180,250,0.08)" : "rgba(255,255,255,0.02)",
-            border: activityActive ? "1px dashed rgba(137,180,250,0.28)" : "1px dashed rgba(255,255,255,0.08)",
+            background: activityActive ? "color-mix(in srgb, var(--sp-blue) 8%, transparent)" : "rgba(255,255,255,0.02)",
+            border: activityActive ? "1px dashed color-mix(in srgb, var(--sp-blue) 28%, transparent)" : "1px dashed rgba(255,255,255,0.08)",
             opacity: activityActive ? 1 : 0.52,
             minWidth: 184,
           }}
@@ -172,15 +172,15 @@ export default function DigestStrip({
               <span
                 style={{
                   position: "absolute", inset: 0, borderRadius: 999,
-                  background: activityActive ? "#89b4fa" : "rgba(205,214,244,0.3)",
+                  background: activityActive ? "var(--sp-blue)" : "rgba(205,214,244,0.3)",
                   opacity: 0.3,
                   animation: activityActive ? "livepulse 2s ease-out infinite" : "none",
               }}
             />
             <span
               style={{
-                width: 5, height: 5, borderRadius: 999, background: activityActive ? "#89b4fa" : "rgba(205,214,244,0.45)",
-                boxShadow: activityActive ? "0 0 6px #89b4fa" : "none",
+                width: 5, height: 5, borderRadius: 999, background: activityActive ? "var(--sp-blue)" : "rgba(205,214,244,0.45)",
+                boxShadow: activityActive ? "0 0 6px var(--sp-blue)" : "none",
               }}
             />
           </span>
@@ -188,7 +188,7 @@ export default function DigestStrip({
             <div
               style={{
                 fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase",
-                color: activityActive ? "#89b4fa" : "var(--color-text-faint)", fontWeight: 700,
+                color: activityActive ? "var(--sp-blue)" : "var(--color-text-faint)", fontWeight: 700,
               }}
             >
               {statusLabel}

@@ -119,8 +119,8 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
                 display: "inline-flex", alignItems: "center", gap: 4,
                 fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
                 padding: "2px 6px", borderRadius: 4,
-                color: "#f97316", background: "rgba(249,115,22,0.08)",
-                border: "1px dashed rgba(249,115,22,0.32)",
+                color: "var(--sp-orange)", background: "color-mix(in srgb, var(--sp-orange) 8%, transparent)",
+                border: "1px dashed color-mix(in srgb, var(--sp-orange) 32%, transparent)",
               }}
               title="Resurfaced from snooze"
             >
@@ -134,14 +134,14 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
                 display: "inline-flex", alignItems: "center", gap: 4,
                 fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
                 padding: "2px 6px", borderRadius: 4,
-                color: "#89b4fa", background: "rgba(137,180,250,0.08)",
-                border: "1px dashed rgba(137,180,250,0.28)",
+                color: "var(--sp-blue)", background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
+                border: "1px dashed color-mix(in srgb, var(--sp-blue) 28%, transparent)",
               }}
             >
               <span
                 style={{
-                  width: 4, height: 4, borderRadius: 999, background: "#89b4fa",
-                  boxShadow: "0 0 5px #89b4fa",
+                  width: 4, height: 4, borderRadius: 999, background: "var(--sp-blue)",
+                  boxShadow: "0 0 5px var(--sp-blue)",
                 }}
               />
               {email._pendingSecurityGrace ? pendingGraceLabel : "Live"}
@@ -153,8 +153,8 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
                 display: "inline-flex", alignItems: "center", gap: 4,
                 fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
                 padding: "2px 6px", borderRadius: 4,
-                color: "#89b4fa", background: "rgba(137,180,250,0.08)",
-                border: "1px solid rgba(137,180,250,0.24)",
+                color: "var(--sp-blue)", background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--sp-blue) 24%, transparent)",
               }}
             >
               <Clock size={8} />

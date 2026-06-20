@@ -150,14 +150,14 @@ function MobileLiveLoadingBlock({ compact = false, activeSnapshotMode = false })
         margin: "8px 16px 2px",
         padding: compact ? "10px 12px 8px" : "10px 12px 12px",
         borderRadius: 10,
-        border: "1px solid rgba(137,180,250,0.18)",
-        background: "rgba(137,180,250,0.06)",
+        border: "1px solid color-mix(in srgb, var(--sp-blue) 18%, transparent)",
+        background: "color-mix(in srgb, var(--sp-blue) 6%, transparent)",
         color: "rgba(205,214,244,0.72)",
         fontSize: 11,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "rgba(137,180,250,0.75)" }} />
+        <Skeleton style={{ width: 8, height: 8, borderRadius: 999, background: "color-mix(in srgb, var(--sp-blue) 75%, transparent)" }} />
         {activeSnapshotMode ? "Syncing active snapshot" : "Checking live mail"}
       </div>
       <MobileLiveSkeletonRows count={compact ? 2 : 3} compact />
@@ -224,7 +224,7 @@ export default function MobileInboxView({
         height: "100%",
         minHeight: 0,
         background: "transparent",
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
       }}
     >
       {selectedEmail ? (
@@ -254,7 +254,7 @@ export default function MobileInboxView({
               style={{
                 padding: "14px 14px 12px",
                 borderRadius: 14,
-                background: `linear-gradient(135deg, ${accent}12, rgba(137,220,235,0.04))`,
+                background: `linear-gradient(135deg, ${accent}12, color-mix(in srgb, var(--sp-cyan) 4%, transparent))`,
                 border: `1px solid ${accent}2c`,
               }}
             >
@@ -318,7 +318,7 @@ export default function MobileInboxView({
               // on every scroll frame — one of the most expensive mobile scroll costs.
               // The background was already ~98% opaque, so dropping the blur is visually
               // near-identical while removing the per-frame compositor work.
-              background: "linear-gradient(180deg, rgba(11,11,19,0.99), rgba(11,11,19,0.97))",
+              background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-deep) 99%, transparent), color-mix(in srgb, var(--sp-deep) 97%, transparent))",
               borderTop: "1px solid rgba(255,255,255,0.04)",
               borderBottom: "1px solid rgba(255,255,255,0.04)",
             }}
@@ -355,7 +355,7 @@ export default function MobileInboxView({
                     background: "transparent",
                     border: "none",
                     outline: "none",
-                    color: "#cdd6f4",
+                    color: "var(--sp-text)",
                     fontSize: 12,
                     fontFamily: "inherit",
                   }}
@@ -445,9 +445,9 @@ export default function MobileInboxView({
                   margin: "8px 16px",
                   padding: "10px 12px",
                   borderRadius: 10,
-                  border: "1px solid rgba(243,139,168,0.18)",
-                  background: "rgba(243,139,168,0.06)",
-                  color: "#f38ba8",
+                  border: "1px solid color-mix(in srgb, var(--sp-rose) 18%, transparent)",
+                  background: "color-mix(in srgb, var(--sp-rose) 6%, transparent)",
+                  color: "var(--sp-rose)",
                   fontSize: 11,
                 }}
               >

@@ -24,9 +24,9 @@ export default function InboxUndoToast({ undo, onUndo, accent = "#cba6da" }) {
         minHeight: 42,
         padding: "8px 10px 8px 14px",
         borderRadius: 10,
-        border: `1px solid ${undo.error ? "rgba(243,139,168,0.32)" : "rgba(255,255,255,0.10)"}`,
-        background: "#16161e",
-        color: "#cdd6f4",
+        border: `1px solid ${undo.error ? "color-mix(in srgb, var(--sp-rose) 32%, transparent)" : "rgba(255,255,255,0.10)"}`,
+        background: "var(--sp-panel)",
+        color: "var(--sp-text)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
         isolation: "isolate",
       }}
@@ -39,7 +39,7 @@ export default function InboxUndoToast({ undo, onUndo, accent = "#cba6da" }) {
           whiteSpace: "nowrap",
           fontSize: 12,
           fontWeight: 600,
-          color: undo.error ? "#f38ba8" : "rgba(205,214,244,0.92)",
+          color: undo.error ? "var(--sp-rose)" : "rgba(205,214,244,0.92)",
         }}
       >
         {message}

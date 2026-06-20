@@ -225,7 +225,7 @@ export default function Sidebar({
         width: compact ? 60 : 232, flexShrink: 0,
         padding: "14px 10px", display: "flex", flexDirection: "column", gap: 18,
         borderRight: "1px solid rgba(255,255,255,0.04)",
-        background: "rgba(24,24,37,0.35)",
+        background: "color-mix(in srgb, var(--sp-mantle) 35%, transparent)",
         overflow: "hidden",
         transition: "width 180ms ease",
       }}

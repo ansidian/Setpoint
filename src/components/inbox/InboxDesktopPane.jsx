@@ -68,7 +68,7 @@ function InboxDesktopPane({
         height: "100%",
         minHeight: 0,
         background: "transparent",
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
       }}
     >
       <DigestStrip
@@ -109,7 +109,7 @@ function InboxDesktopPane({
             border: "1px solid rgba(255,255,255,0.05)",
             borderRadius: 14,
             overflow: "hidden",
-            background: "rgba(22,22,30,0.4)",
+            background: "color-mix(in srgb, var(--sp-panel) 40%, transparent)",
             boxShadow: "0 20px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.03)",
           }}
         >

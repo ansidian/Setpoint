@@ -26,7 +26,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
       style={{
         margin: "16px 20px 24px",
         borderRadius: 12, overflow: "hidden",
-        background: "rgba(24,24,37,0.6)",
+        background: "color-mix(in srgb, var(--sp-mantle) 60%, transparent)",
         border: `1px solid ${accent}44`,
         boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
       }}
@@ -74,7 +74,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
         style={{
           width: "100%", background: "transparent", border: "none", outline: "none",
           padding: "12px 14px", resize: "vertical",
-          fontFamily: "inherit", fontSize: 13, color: "#cdd6f4", lineHeight: 1.55,
+          fontFamily: "inherit", fontSize: 13, color: "var(--sp-text)", lineHeight: 1.55,
           boxSizing: "border-box",
         }}
       />

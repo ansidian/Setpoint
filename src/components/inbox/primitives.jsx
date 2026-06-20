@@ -60,7 +60,7 @@ export function StickyHeader({ children, borderColor }) {
         display: "flex", alignItems: "center", gap: 8,
         padding: "12px 16px 8px",
         position: "sticky", top: 0, zIndex: 2,
-        background: "linear-gradient(180deg, rgba(30,30,46,0.99), rgba(30,30,46,0.96))",
+        background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-page) 99%, transparent), color-mix(in srgb, var(--sp-page) 96%, transparent))",
         borderBottom: `1px solid ${borderColor}`,
       }}
     >
@@ -134,7 +134,7 @@ export function NumberField({
   max,
   pad = 0,
   ariaLabel,
-  accent = "#f97316",
+  accent = "var(--sp-orange)",
   autoFocus = false,
   inputRef = null,
 }) {
@@ -253,12 +253,12 @@ export function QuickAction({
         fontSize: 11, fontWeight: 600, fontFamily: "inherit",
         cursor: "pointer", transition: "background 150ms, border-color 150ms, color 150ms, transform 150ms",
         transform: hover ? "translateY(-1px)" : "translateY(0)",
-        background: primary ? `linear-gradient(135deg, ${accent}38, rgba(137,220,235,0.18))`
+        background: primary ? `linear-gradient(135deg, ${accent}38, color-mix(in srgb, var(--sp-cyan) 18%, transparent))`
                  : hover ? "rgba(255,255,255,0.05)"
                  : "rgba(255,255,255,0.02)",
         border: primary ? `1px solid ${accent}66`
-              : `1px solid ${danger ? "rgba(243,139,168,0.22)" : "rgba(255,255,255,0.08)"}`,
-        color: primary ? accent : danger ? "#f38ba8" : "rgba(205,214,244,0.7)",
+              : `1px solid ${danger ? "color-mix(in srgb, var(--sp-rose) 22%, transparent)" : "rgba(255,255,255,0.08)"}`,
+        color: primary ? accent : danger ? "var(--sp-rose)" : "rgba(205,214,244,0.7)",
         whiteSpace: "nowrap",
       }}
     >
@@ -296,7 +296,7 @@ export function QuickAction({
             lineHeight: 1,
             fontFamily: "Fira Code, ui-monospace, monospace",
             color: "rgba(205,214,244,0.58)",
-            background: "rgba(11,11,19,0.75)",
+            background: "color-mix(in srgb, var(--sp-deep) 75%, transparent)",
             border: "1px solid rgba(255,255,255,0.08)",
             pointerEvents: "none",
           }}
