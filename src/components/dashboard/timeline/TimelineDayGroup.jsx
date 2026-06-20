@@ -54,7 +54,7 @@ export default function TimelineDayGroup({
                   letterSpacing: 0.8,
                   textTransform: "uppercase",
                   fontWeight: 600,
-                  color: isToday ? "#cdd6f4" : "var(--color-text-faint)",
+                  color: isToday ? "var(--sp-text)" : "var(--color-text-faint)",
                 }}
               >
                 {label}
@@ -67,7 +67,7 @@ export default function TimelineDayGroup({
                 letterSpacing: 0.8,
                 textTransform: "uppercase",
                 fontWeight: 600,
-                color: isToday ? "#cdd6f4" : "var(--color-text-faint)",
+                color: isToday ? "var(--sp-text)" : "var(--color-text-faint)",
               }}
             >
               {label}

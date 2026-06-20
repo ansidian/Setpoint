@@ -52,9 +52,9 @@ export function PriorityCard({ card, variant = "urgent", onOpen, onMarkHandled, 
     else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data });
   };
   const style = variant === "backfill"
-    ? { ...baseCardStyle, background: "rgba(36,36,58,0.5)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.94 }
+    ? { ...baseCardStyle, background: "color-mix(in srgb, var(--sp-surface) 50%, transparent)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.94 }
     : { ...baseCardStyle,
-        background: `color-mix(in srgb, ${card.tone} 7%, rgba(36,36,58,0.5))`,
+        background: `color-mix(in srgb, ${card.tone} 7%, color-mix(in srgb, var(--sp-surface) 50%, transparent))`,
         border: `1px solid color-mix(in srgb, ${card.tone} 26%, transparent)`,
         cursor: bodyClickable ? "pointer" : "default" };
 

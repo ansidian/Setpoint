@@ -125,7 +125,7 @@ export default function WeatherCard({ weather }) {
                         <Icon name={d.iconName} size={15} strokeWidth={2} color={d.color} style={{ flexShrink: 0 }} />
                         <span style={{ fontSize: 11.5, color: "rgba(205,214,244,0.6)", whiteSpace: "nowrap" }}>{d.cond}</span>
                         {d.rain && (
-                          <span style={{ fontSize: 9.5, fontWeight: 600, color: "#89b4fa", fontVariantNumeric: "tabular-nums" }}>{d.rain}</span>
+                          <span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--sp-blue)", fontVariantNumeric: "tabular-nums" }}>{d.rain}</span>
                         )}
                       </span>
                       <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}>

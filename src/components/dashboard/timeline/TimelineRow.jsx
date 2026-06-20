@@ -102,8 +102,8 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     Icon = deadline.status === "complete" ? CheckCircle2
       : deadline.status === "in_progress" ? CircleDashed
       : Circle;
-    iconColor = deadline.status === "complete" ? "#a6e3a1"
-      : deadline.status === "in_progress" ? "#89dceb"
+    iconColor = deadline.status === "complete" ? "var(--sp-green)"
+      : deadline.status === "in_progress" ? "var(--sp-cyan)"
       : "rgba(205,214,244,0.55)";
     leftLabel = deadline.due_time || "11:59p";
     title = deadline.title;
@@ -123,6 +123,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
     return null;
   }
 
+  // literal hexes: these flow into `${effectiveRailDotColor}NN` hex-alpha concat below; a var(--sp-*) would break it
   const urgencyColors = { high: "#f38ba8", medium: "#f9e2af", low: accent };
   const dotColor = urgencyColors[urgency] || accent;
   const effectiveRailDotColor = railDotColor || dotColor;
@@ -190,7 +191,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
           width: 13,
           height: 13,
           borderRadius: 99,
-          background: "#0b0b13",
+          background: "var(--sp-deep)",
           display: "grid",
           placeItems: "center",
           border: `1px solid ${railBorderColor}`,
@@ -245,7 +246,7 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
             style={{
               fontSize: isMobile ? 12.5 : 13,
               fontWeight: 500,
-              color: "#cdd6f4",
+              color: "var(--sp-text)",
               overflow: "hidden",
               textOverflow: isSpecialDateEvent ? "clip" : "ellipsis",
               whiteSpace: isMobile || isSpecialDateEvent ? "normal" : "nowrap",
@@ -287,8 +288,8 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
                 letterSpacing: 0.5,
                 textTransform: "uppercase",
                 fontWeight: 600,
-                background: "#f38ba820",
-                color: "#f38ba8",
+                background: "color-mix(in srgb, var(--sp-rose) 13%, transparent)",
+                color: "var(--sp-rose)",
                 whiteSpace: "nowrap",
               }}
             >
@@ -307,9 +308,9 @@ export default function TimelineRow({ accent, isMobile = false, item, now, onJum
                 maxWidth: isMobile ? "100%" : 170,
                 padding: "2px 6px",
                 borderRadius: 999,
-                border: "1px solid rgba(249,226,175,0.28)",
-                background: "rgba(249,226,175,0.10)",
-                color: "#f9e2af",
+                border: "1px solid color-mix(in srgb, var(--sp-cream) 28%, transparent)",
+                background: "color-mix(in srgb, var(--sp-cream) 10%, transparent)",
+                color: "var(--sp-cream)",
                 fontSize: isMobile ? 9.5 : 10,
                 fontWeight: 650,
                 lineHeight: 1,
