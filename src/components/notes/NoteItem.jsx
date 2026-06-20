@@ -99,11 +99,13 @@ export default function NoteItem({
         alignItems: "flex-start",
         gap: 8,
         padding: "11px 12px",
-        background: selected ? `${accent || "#cba6da"}1f` : "rgba(36,36,58, 0.4)",
+        background: selected
+          ? (accent ? `${accent}1f` : "color-mix(in srgb, var(--sp-accent) 12%, transparent)")
+          : "color-mix(in srgb, var(--sp-surface) 40%, transparent)",
         border: selected
-          ? `1px solid ${accent || "#cba6da"}`
+          ? `1px solid ${accent || "var(--sp-accent)"}`
           : editing
-            ? "1px solid rgba(203,166,218, 0.2)"
+            ? "1px solid color-mix(in srgb, var(--sp-accent) 20%, transparent)"
             : "1px solid rgba(255,255,255, 0.08)",
         borderRadius: 8,
         position: "relative",
@@ -157,7 +159,7 @@ export default function NoteItem({
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  color: "#cdd6f4",
+                  color: "var(--sp-text)",
                   fontSize: 13,
                   lineHeight: 1.5,
                   cursor: "default",
@@ -183,7 +185,7 @@ export default function NoteItem({
             {(noteTags.length > 0 || editedAge) && (
               <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 7 }}>
                 {noteTags.map((t) => (
-                  <span key={t} style={{ color: accent || "var(--ea-accent, #cba6da)", background: "rgba(203,166,218,0.12)", borderRadius: 999, padding: "1px 8px", fontSize: 11 }}>#{t}</span>
+                  <span key={t} style={{ color: accent || "var(--ea-accent, var(--sp-accent))", background: "color-mix(in srgb, var(--sp-accent) 12%, transparent)", borderRadius: 999, padding: "1px 8px", fontSize: 11 }}>#{t}</span>
                 ))}
                 {editedAge && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--color-text-faint)" }}>
@@ -213,9 +215,9 @@ export default function NoteItem({
           aria-expanded={menu ? "true" : "false"}
           onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 4, y: r.bottom + 4 }); }}
           style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", padding: 1, cursor: "pointer", lineHeight: 1, borderRadius: 4 }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#cdd6f4")}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--sp-text)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
-          onFocus={(e) => (e.currentTarget.style.color = "#cdd6f4")}
+          onFocus={(e) => (e.currentTarget.style.color = "var(--sp-text)")}
           onBlur={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
         >
           <MoreHorizontal size={15} strokeWidth={2.2} />

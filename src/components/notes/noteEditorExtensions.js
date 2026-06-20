@@ -254,21 +254,21 @@ export const tagChips = ViewPlugin.fromClass(
 
 export function noteTheme(maxHeight) {
   return EditorView.theme({
-    "&": { color: "#cdd6f4", fontSize: "13px", background: "transparent" },
+    "&": { color: "var(--sp-text)", fontSize: "13px", background: "transparent" },
     // Match the notes search input's ::placeholder (.notes-search-input in index.css)
     // so both placeholders read identically; CM's base theme would otherwise use #888.
     ".cm-placeholder": { color: "var(--color-text-faint)" },
-    ".cm-content": { fontFamily: "inherit", padding: "9px 12px", caretColor: "#cdd6f4" },
+    ".cm-content": { fontFamily: "inherit", padding: "9px 12px", caretColor: "var(--sp-text)" },
     ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.5", overflowY: "auto", maxHeight: `${maxHeight || 180}px` },
     "&.cm-focused": { outline: "none" },
     ".cm-note-strong": { fontWeight: "700" },
     ".cm-note-em": { fontStyle: "italic" },
     ".cm-note-code": { fontFamily: "ui-monospace, monospace", background: "rgba(255,255,255,0.06)", borderRadius: "4px", padding: "0 3px" },
     ".cm-note-heading": { fontWeight: "700" },
-    ".cm-note-link": { color: "var(--ea-accent, #cba6da)", textDecoration: "underline", textUnderlineOffset: "2px" },
-    ".cm-note-tag": { color: "var(--ea-accent, #cba6da)", background: "rgba(203,166,218,0.12)", borderRadius: "999px", padding: "0 4px" },
-    ".cm-tooltip-autocomplete": { background: "rgba(24,24,37,0.98)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "8px" },
-    ".cm-tooltip-autocomplete ul li[aria-selected]": { background: "rgba(203,166,218,0.16)", color: "#cdd6f4" },
+    ".cm-note-link": { color: "var(--ea-accent, var(--sp-accent))", textDecoration: "underline", textUnderlineOffset: "2px" },
+    ".cm-note-tag": { color: "var(--ea-accent, var(--sp-accent))", background: "color-mix(in srgb, var(--sp-accent) 12%, transparent)", borderRadius: "999px", padding: "0 4px" },
+    ".cm-tooltip-autocomplete": { background: "color-mix(in srgb, var(--sp-mantle) 98%, transparent)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: "8px" },
+    ".cm-tooltip-autocomplete ul li[aria-selected]": { background: "color-mix(in srgb, var(--sp-accent) 16%, transparent)", color: "var(--sp-text)" },
   });
 }
 
@@ -288,7 +288,7 @@ class CheckboxWidget extends WidgetType {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = this.checked;
-    box.style.cssText = "margin:0 4px 0 0;vertical-align:middle;accent-color:#cba6da;cursor:pointer";
+    box.style.cssText = "margin:0 4px 0 0;vertical-align:middle;accent-color:var(--sp-accent);cursor:pointer";
     box.addEventListener("mousedown", (e) => {
       e.preventDefault();
       const insert = this.checked ? " " : "x";
