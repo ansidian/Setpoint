@@ -151,26 +151,13 @@
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
 
-  /* EA token aliases mapped to Catppuccin Mocha */
-  --color-accent-light: oklch(0.8467 0.0833 210.2545);
-  --color-accent-lighter: oklch(0.8787 0.0426 272.2767);
-  --color-accent-lightest: oklch(0.7510 0.0396 273.9320);
-  --color-accent-secondary: oklch(0.7871 0.1187 304.7693);
-  --color-danger: oklch(0.7556 0.1297 2.7642);
-  --color-warning: oklch(0.8237 0.1015 52.6294);
-  --color-success: oklch(0.8577 0.1092 142.7153);
-  --color-info: oklch(0.8467 0.0833 210.2545);
-  --color-orange: oklch(0.8237 0.1015 52.6294);
-  --color-surface: oklch(0.2429 0.0304 283.9110);
-  --color-surface-hover: #313244;
-  --color-elevated: oklch(0.2973 0.0294 276.2144);
-  --color-input-bg: #313244;
-  --color-text-primary: oklch(0.8787 0.0426 272.2767);
-  --color-text-body: oklch(0.8787 0.0426 272.2767);
-  --color-text-secondary: oklch(0.7510 0.0396 273.9320);
-  --color-text-muted: oklch(0.7510 0.0396 273.9320);
+  /* EA token aliases — Scope B retired the dead oklch aliases (each verified to have
+     ZERO var() consumers app-wide after the --sp-* retokenization). Only --color-text-faint
+     remains live (78 refs): the quietest WCAG-AA readable text tier, with no --sp-* equivalent.
+     The off-palette #313244 (--color-surface-hover/--color-input-bg) had no consumer, so no
+     --sp-surface-2 token was minted. The shadcn @theme --color-* -> var(--<token>) block above
+     is Scope C and intentionally untouched. */
   --color-text-faint: rgba(205, 214, 244, 0.6); /* 5.13:1 on --background — quietest READABLE tier (WCAG AA) */
-  --color-border-accent: oklch(0.3240 0.0319 281.9784);
 }
 
 @layer base {
