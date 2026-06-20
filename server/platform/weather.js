@@ -59,21 +59,29 @@ export function normalizeWeatherPayload(data) {
         low,
         icon: getIcon(day.icon),
         summary: day.summary || "",
+        rain: Number.isFinite(day.precipProbability) ? Math.round(day.precipProbability * 100) : null,
       };
     })
     .filter(Boolean);
 
-  // Build hourly, every 2 hours starting from the next future hour.
+  // Build the "rest of today" strip every 2 hours, starting at the current hour
+  // so the dashboard can accent it as "now". The current-hour bucket is the
+  // entry just before the first future entry.
   const nowUnix = current.time;
   const hourly = [];
   const hours = data.hourly?.data || [];
-  const startIdx = hours.findIndex((h) => h.time > nowUnix);
-  for (let i = startIdx; i >= 0 && i < hours.length && hourly.length < 8; i += 2) {
+  const futureIdx = hours.findIndex((h) => h.time > nowUnix);
+  let startIdx;
+  if (futureIdx === -1) startIdx = hours.length ? hours.length - 1 : -1;
+  else if (futureIdx === 0) startIdx = 0;
+  else startIdx = futureIdx - 1;
+  for (let i = startIdx; i >= 0 && i < hours.length && hourly.length < 6; i += 2) {
     const h = hours[i];
     hourly.push({
       time: formatHour(h.time, timezone),
       temp: Math.round(h.temperature),
       icon: getIcon(h.icon),
+      now: hourly.length === 0,
     });
   }
 
