@@ -78,7 +78,7 @@ function ShellHeader({
         gap: 12,
         padding: isMobile ? "10px 12px" : "12px 20px",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
-        background: "rgba(11,11,19,0.94)",
+        background: "color-mix(in srgb, var(--sp-deep) 94%, transparent)",
         position: "sticky",
         top: 0,
         zIndex: 40,
@@ -95,9 +95,9 @@ function ShellHeader({
             height: isMobile ? 24 : 26,
             padding: isMobile ? "0 8px" : "0 10px",
             borderRadius: 999,
-            border: "1px solid rgba(137,180,250,0.24)",
-            background: "rgba(137,180,250,0.08)",
-            color: "#89b4fa",
+            border: "1px solid color-mix(in srgb, var(--sp-blue) 24%, transparent)",
+            background: "color-mix(in srgb, var(--sp-blue) 8%, transparent)",
+            color: "var(--sp-blue)",
             fontSize: isMobile ? 10 : 10.5,
             fontWeight: 700,
             letterSpacing: 0.4,
@@ -112,8 +112,8 @@ function ShellHeader({
               width: 5,
               height: 5,
               borderRadius: 999,
-              background: "#89b4fa",
-              boxShadow: "0 0 8px rgba(137,180,250,0.45)",
+              background: "var(--sp-blue)",
+              boxShadow: "0 0 8px color-mix(in srgb, var(--sp-blue) 45%, transparent)",
             }}
           />
           Demo data

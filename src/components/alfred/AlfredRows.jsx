@@ -22,10 +22,10 @@ import {
 import { pacificYMD } from "../calendar/calendarDateUtils.js";
 import { resolveAlfredChipAction } from "./alfredChipActionModel.js";
 
-const overdueColor = "#f38ba8";
+const overdueColor = "var(--sp-rose)";
 
 const dimmer = "rgba(205,214,244,0.4)";
-const text = "#cdd6f4";
+const text = "var(--sp-text)";
 
 function RowShell({ onActivate, title, dim, children }) {
   const [hover, setHover] = useState(false);
@@ -47,7 +47,7 @@ function RowShell({ onActivate, title, dim, children }) {
       style={{
         display: "flex", alignItems: "center", gap: 9, minHeight: 36,
         padding: "5px 10px", borderRadius: 9,
-        background: hover ? "rgba(46,46,72,0.55)" : "rgba(36,36,58,0.4)",
+        background: hover ? "rgba(46,46,72,0.55)" : "color-mix(in srgb, var(--sp-surface) 40%, transparent)",
         border: `1px solid ${hover ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)"}`,
         cursor: interactive ? "pointer" : undefined,
         opacity: dim ? 0.5 : 1,
@@ -78,8 +78,8 @@ export function BillRow({ item, onActivate, todayYmd }) {
       {item.paid ? (
         <span style={{
           display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 600,
-          padding: "2px 7px", borderRadius: 999, color: "#a6e3a1",
-          background: "rgba(166,227,161,0.12)", border: "1px solid rgba(166,227,161,0.25)",
+          padding: "2px 7px", borderRadius: 999, color: "var(--sp-green)",
+          background: "color-mix(in srgb, var(--sp-green) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--sp-green) 25%, transparent)",
           fontVariantNumeric: "tabular-nums",
         }}><Check size={9} strokeWidth={3} />Paid · {formatAlfredDate(item.next_date)}</span>
       ) : (
@@ -107,8 +107,8 @@ export function EventRow({ item, accent, onActivate, now, isNext }) {
         width: 6, height: 6, borderRadius: 999, flexShrink: 0,
         // Per-calendar color (item.color) restores the color coding; the next
         // event's purple highlight still wins so it stays the standout.
-        background: isNext ? "#cba6f7" : (item.color || accent),
-        boxShadow: isNext ? "0 0 6px rgba(203,166,247,0.6)" : "none",
+        background: isNext ? "var(--sp-mauve)" : (item.color || accent),
+        boxShadow: isNext ? "0 0 6px color-mix(in srgb, var(--sp-mauve) 60%, transparent)" : "none",
       }} />
       <span style={{
         fontSize: 10.5, color: isNext ? text : "var(--color-text-faint)", fontVariantNumeric: "tabular-nums",
@@ -129,10 +129,10 @@ export function DeadlineRow({ item, onActivate, todayYmd }) {
   const overdue = !done && isOverdueYmd(item.due_date, todayYmd);
   return (
     <RowShell onActivate={onActivate} dim={done}>
-      <StatusIcon size={13} color={done ? "#a6e3a1" : dimmer} />
+      <StatusIcon size={13} color={done ? "var(--sp-green)" : dimmer} />
       <TitleCell title={item.content ?? item.title ?? ""} sub={null} strike={done} />
       {priority ? (
-        <span style={{ fontSize: 9.5, fontWeight: 700, color: priority === "P1" ? "#f38ba8" : priority === "P2" ? "#fab387" : "#89b4fa" }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, color: priority === "P1" ? "var(--sp-rose)" : priority === "P2" ? "var(--sp-peach)" : "var(--sp-blue)" }}>
           {priority}
         </span>
       ) : null}
@@ -146,7 +146,7 @@ export function DeadlineRow({ item, onActivate, todayYmd }) {
 export function EmailRow({ item, onActivate }) {
   // Dot encodes two signals: attention lane → color, unread → fill vs ring.
   const { unread, attention } = emailDotState(item);
-  const dotColor = attention ? "#f38ba8" : "#94e2d5";
+  const dotColor = attention ? "var(--sp-rose)" : "var(--sp-teal)";
   const fromName = item.from?.name || item.from?.address || "";
   const absolute = item.email_date ? formatAlfredAbsolute(item.email_date) : "";
   return (
@@ -155,7 +155,7 @@ export function EmailRow({ item, onActivate }) {
         width: 6, height: 6, borderRadius: 999, flexShrink: 0, boxSizing: "border-box",
         background: unread ? dotColor : "transparent",
         border: unread ? "none" : `1.5px solid ${dotColor}`,
-        boxShadow: attention && unread ? "0 0 6px rgba(243,139,168,0.6)" : "none",
+        boxShadow: attention && unread ? "0 0 6px color-mix(in srgb, var(--sp-rose) 60%, transparent)" : "none",
       }} />
       <TitleCell
         title={item.subject}
@@ -181,7 +181,7 @@ export function TransactionRow({ item }) {
 }
 
 const SECTION_TONES = {
-  attention: { Icon: Flag, color: "#f38ba8" },
+  attention: { Icon: Flag, color: "var(--sp-rose)" },
   done: { Icon: CheckCircle2, color: "var(--color-text-faint)" },
   paid: { Icon: Check, color: "var(--color-text-faint)" },
 };

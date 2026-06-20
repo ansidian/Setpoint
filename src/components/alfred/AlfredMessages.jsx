@@ -29,7 +29,7 @@ import {
 } from "./alfredPanelModel.js";
 
 const dimmer = "rgba(205,214,244,0.4)";
-const text = "#cdd6f4";
+const text = "var(--sp-text)";
 const mono = "var(--font-mono, 'Fira Code', ui-monospace, monospace)";
 
 export const UserLine = memo(function UserLine({ text: body, accent }) {
@@ -50,7 +50,7 @@ export const ToolRows = memo(function ToolRows({ tools, accent }) {
       {tools.map((t) => {
         const running = t.state === "running";
         const failed = t.state === "error";
-        const color = failed ? "#f38ba8" : "var(--color-text-faint)";
+        const color = failed ? "var(--sp-rose)" : "var(--color-text-faint)";
         return (
           <div key={t.toolId} style={{
             display: "flex", alignItems: "center", gap: 7, minHeight: 20,
@@ -60,8 +60,8 @@ export const ToolRows = memo(function ToolRows({ tools, accent }) {
               {running
                 ? <RefreshCw size={10} color={accent} style={{ animation: "alfred-spin 1s linear infinite" }} />
                 : failed
-                  ? <AlertCircle size={11} color="#f38ba8" />
-                  : <Check size={10} strokeWidth={2.5} color="rgba(166,227,161,0.7)" />}
+                  ? <AlertCircle size={11} color="var(--sp-rose)" />
+                  : <Check size={10} strokeWidth={2.5} color="color-mix(in srgb, var(--sp-green) 70%, transparent)" />}
             </span>
             <span style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {running ? alfredToolRunningLabel(t.name) : (t.summary || alfredToolRunningLabel(t.name))}
@@ -155,7 +155,7 @@ export const ErrorLine = memo(function ErrorLine({ text: body }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 7,
-      fontSize: 11, lineHeight: 1.5, color: "#f38ba8",
+      fontSize: 11, lineHeight: 1.5, color: "var(--sp-rose)",
     }}>
       <AlertCircle size={11} />
       <span>{body}</span>

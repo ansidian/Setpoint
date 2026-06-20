@@ -38,7 +38,7 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
               letterSpacing: 0.3,
               fontFamily: "inherit",
               background: tab === tabKey ? "rgba(255,255,255,0.06)" : "transparent",
-              color: tab === tabKey ? "#cdd6f4" : "var(--color-text-faint)",
+              color: tab === tabKey ? "var(--sp-text)" : "var(--color-text-faint)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",

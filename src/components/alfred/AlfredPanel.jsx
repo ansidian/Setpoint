@@ -22,7 +22,7 @@ import AlfredTransactionBreakdown from "./AlfredTransactionBreakdown.jsx";
 import AlfredBreakdown from "./AlfredBreakdown.jsx";
 
 const dim = "rgba(205,214,244,0.55)";
-const text = "#cdd6f4";
+const text = "var(--sp-text)";
 
 function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalendarItem }) {
   const { messages, busy, modelKey, setModelKey, submit, newChat } = useAlfredChat();
@@ -144,7 +144,7 @@ function AlfredPanel({ open, onClose, accent, handoff, newChatTick, onOpenCalend
         position: "fixed", top: 0, right: 0, bottom: 0,
         width: "min(420px, calc(100vw - 24px))",
         zIndex: 60, display: "flex", flexDirection: "column",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         borderLeft: "1px solid rgba(255,255,255,0.1)",
         boxShadow: open ? "-24px 0 60px rgba(0,0,0,0.55)" : "none",
         transform: open ? "translateX(0)" : "translateX(calc(100% + 40px))",

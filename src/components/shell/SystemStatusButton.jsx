@@ -142,10 +142,10 @@ function StatusPanel({ status, onClose, panelRef, position }) {
         isolation: "isolate",
         padding: 10,
         borderRadius: 12,
-        background: "#16161e",
+        background: "var(--sp-panel)",
         border: "1px solid rgba(255,255,255,0.09)",
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         zIndex: 80,
       }}
       onWheel={(event) => {
@@ -189,13 +189,13 @@ function StatusPanel({ status, onClose, panelRef, position }) {
           style={{
             border: "1px solid rgba(255,255,255,0.08)",
             background: closeActive ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
-            color: closeActive ? "#cdd6f4" : "rgba(205,214,244,0.74)",
+            color: closeActive ? "var(--sp-text)" : "rgba(205,214,244,0.74)",
             borderRadius: 7,
             cursor: "pointer",
             fontSize: 11,
             padding: "3px 7px",
             transform: closeActive ? "translateY(-1px)" : "translateY(0)",
-            boxShadow: closeFocus ? "0 0 0 2px rgba(203,166,218,0.24)" : "none",
+            boxShadow: closeFocus ? "0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
             transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms, box-shadow 150ms",
           }}
         >
@@ -227,7 +227,7 @@ function StatusPanel({ status, onClose, panelRef, position }) {
               />
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 650, color: "#cdd6f4" }}>
+                  <div style={{ fontSize: 12, fontWeight: 650, color: "var(--sp-text)" }}>
                     {source.label || source.key}
                   </div>
                   <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.6 }}>
@@ -327,7 +327,7 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
             : active
               ? "rgba(255,255,255,0.06)"
               : "rgba(255,255,255,0.03)",
-          boxShadow: focused ? "0 0 0 2px rgba(203,166,218,0.24)" : "none",
+          boxShadow: focused ? "0 0 0 2px color-mix(in srgb, var(--sp-accent) 24%, transparent)" : "none",
           cursor: "pointer",
           display: "inline-grid",
           placeItems: "center",

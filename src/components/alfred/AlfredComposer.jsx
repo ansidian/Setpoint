@@ -13,7 +13,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { ArrowUp } from "lucide-react";
 
 const dim = "rgba(205,214,244,0.55)";
-const text = "#cdd6f4";
+const text = "var(--sp-text)";
 const mono = "var(--font-mono, 'Fira Code', ui-monospace, monospace)";
 
 function Kbd({ children }) {

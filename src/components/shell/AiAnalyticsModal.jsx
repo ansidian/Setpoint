@@ -69,12 +69,12 @@ function SectionSkeleton() {
 
 function SectionError({ onRetry }) {
   return (
-    <div className="rounded-lg border border-[#f38ba8]/20 bg-[#f38ba8]/[0.08] p-4">
-      <p className="text-[12px] leading-relaxed text-[#f38ba8]">Couldn’t load this section.</p>
+    <div className="rounded-lg border border-[var(--sp-rose)]/20 bg-[var(--sp-rose)]/[0.08] p-4">
+      <p className="text-[12px] leading-relaxed text-[var(--sp-rose)]">Couldn’t load this section.</p>
       <button
         type="button"
         onClick={onRetry}
-        className="mt-2.5 rounded-md border border-[#f38ba8]/30 bg-[#f38ba8]/[0.10] px-2.5 py-1 text-[11px] font-medium text-[#f38ba8] transition-colors duration-150 hover:bg-[#f38ba8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f38ba8]/50"
+        className="mt-2.5 rounded-md border border-[var(--sp-rose)]/30 bg-[var(--sp-rose)]/[0.10] px-2.5 py-1 text-[11px] font-medium text-[var(--sp-rose)] transition-colors duration-150 hover:bg-[var(--sp-rose)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sp-rose)]/50"
       >
         Try again
       </button>
@@ -93,7 +93,7 @@ export default function AiAnalyticsModal({ open, onClose }) {
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
       <DialogContent
         data-testid="ai-analytics-modal"
-        overlayClassName="bg-[#0b0b13]/70"
+        overlayClassName="bg-[var(--sp-deep)]/70"
         // Static CSS faux-frost over the flat dim scrim. Explicitly overrides the
         // DialogOverlay base `supports-backdrop-filter:backdrop-blur-xs` to none so
         // there is no live full-viewport blur re-rasterizing every frame the
@@ -106,10 +106,10 @@ export default function AiAnalyticsModal({ open, onClose }) {
           backgroundImage: [
             "radial-gradient(120% 90% at 50% -10%, rgba(120,130,170,0.10), transparent 60%)",
             "radial-gradient(140% 120% at 50% 50%, transparent 55%, rgba(0,0,0,0.30))",
-            "linear-gradient(rgba(11,11,19,0.62), rgba(11,11,19,0.74))",
+            "linear-gradient(color-mix(in srgb, var(--sp-deep) 62%, transparent), color-mix(in srgb, var(--sp-deep) 74%, transparent))",
           ].join(", "),
         }}
-        className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[#16161e] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px]"
+        className="max-h-[min(760px,calc(100vh-2rem))] overflow-y-auto border border-white/[0.08] bg-[var(--sp-panel)] p-0 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.7)] sm:max-w-[760px]"
       >
         <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
           <div className="flex items-start gap-3">

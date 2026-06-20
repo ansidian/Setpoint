@@ -158,7 +158,7 @@ export default function AnchoredFloatingPanel({
         left: pos.left,
         width: pos.width,
         isolation: "isolate",
-        background: "#16161e",
+        background: "var(--sp-panel)",
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 12,
         boxShadow: "0 20px 60px rgba(0,0,0,0.7)",

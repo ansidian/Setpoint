@@ -35,13 +35,13 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger, isMobile }) {
         borderRadius: 6,
         cursor: "pointer",
         fontSize: 12,
-        color: danger ? "#f38ba8" : "#cdd6f4",
+        color: danger ? "var(--sp-rose)" : "var(--sp-text)",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
         touchAction: "manipulation",
         transition: "background 150ms",
       }}
     >
-      <Icon size={12} color={danger ? "#f38ba8" : "rgba(205,214,244,0.55)"} />
+      <Icon size={12} color={danger ? "var(--sp-rose)" : "rgba(205,214,244,0.55)"} />
       <span style={{ flex: 1 }}>{label}</span>
       {kbd && <Kbd>{kbd}</Kbd>}
     </div>
@@ -67,7 +67,7 @@ function MenuLink({ icon, label, to, onClick, isMobile }) {
         borderRadius: 6,
         textDecoration: "none",
         fontSize: 12,
-        color: "#cdd6f4",
+        color: "var(--sp-text)",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
         touchAction: "manipulation",
         transition: "background 150ms",
@@ -104,7 +104,7 @@ function OverflowButton({ open, onClick, isMobile }) {
         borderRadius: 8,
         border: `1px solid ${active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)"}`,
         background: active ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-        color: active ? "#cdd6f4" : "rgba(205,214,244,0.75)",
+        color: active ? "var(--sp-text)" : "rgba(205,214,244,0.75)",
         cursor: "pointer",
         display: "grid",
         placeItems: "center",
@@ -138,7 +138,7 @@ export function OverflowMenu({
             minWidth: 210,
             padding: 6,
             borderRadius: 10,
-            background: "#16161e",
+            background: "var(--sp-panel)",
             border: "1px solid rgba(255,255,255,0.08)",
             boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
             zIndex: 50,
