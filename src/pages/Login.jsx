@@ -104,7 +104,7 @@ export default function Login({ onLogin }) {
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10"
-        style={{ background: "radial-gradient(ellipse at top, #1a1a2a, #0b0b13 60%)" }}
+        style={{ background: "radial-gradient(ellipse at top, var(--sp-page), var(--sp-deep) 60%)" }}
       />
 
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
@@ -114,7 +114,7 @@ export default function Login({ onLogin }) {
               <img
                 src={publicAssetUrl("setpoint.svg")}
                 alt="Setpoint"
-                style={{ height: 32, filter: "drop-shadow(0 2px 8px rgba(203,166,218,0.18))" }}
+                style={{ height: 32, filter: "drop-shadow(0 2px 8px color-mix(in srgb, var(--sp-accent) 18%, transparent))" }}
               />
               <div className="text-[11px] font-semibold tracking-[2.5px] uppercase text-muted-foreground">
                 Private Access
@@ -151,7 +151,7 @@ export default function Login({ onLogin }) {
                 ) : (
                   <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3 text-left">
                     <div className="flex items-start gap-2.5">
-                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-[#cba6da]/20 bg-[#cba6da]/10 text-[#cba6da]">
+                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-[var(--sp-accent)]/20 bg-[var(--sp-accent)]/10 text-[var(--sp-accent)]">
                         <KeyRound size={15} />
                       </span>
                       <div className="min-w-0">
@@ -170,8 +170,8 @@ export default function Login({ onLogin }) {
                   <div
                     className={`rounded-lg border px-3 py-2 text-left text-[12px] leading-relaxed ${
                       locked
-                        ? "border-[#f9e2af]/20 bg-[#f9e2af]/10 text-[#f9e2af]"
-                        : "border-[#f38ba8]/20 bg-[#f38ba8]/10 text-[#f38ba8]"
+                        ? "border-[var(--sp-cream)]/20 bg-[var(--sp-cream)]/10 text-[var(--sp-cream)]"
+                        : "border-[var(--sp-rose)]/20 bg-[var(--sp-rose)]/10 text-[var(--sp-rose)]"
                     }`}
                     role="alert"
                   >
