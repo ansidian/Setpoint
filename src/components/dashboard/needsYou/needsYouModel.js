@@ -129,16 +129,21 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
     const upcoming = [
       ...(liveDeadlines?.upcoming || [])
         .filter((d) => d.status !== "complete")
-        .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || d.project_name || "Deadline"}`, foot: "Deadline" }))
+        .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || d.project_name || "Deadline"}`, foot: "Deadline", completable: true, jumpId: d.id, data: d }))
         .filter((x) => x.when != null && x.when > 0),
       ...(liveBills || [])
         .filter((b) => !b.paid)
-        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill" }))
+        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill", completable: false }))
         .filter((x) => x.when != null && x.when > 0),
-    ].sort((a, b) => a.when - b.when).slice(0, slotsLeft);
+    ]
+      .filter((u) => !handled.includes(u.id))
+      .sort((a, b) => a.when - b.when).slice(0, slotsLeft);
     const backfillCards = upcoming.map((u) => ({
       id: u.id, kind: "backfill", source: "Coming up", sourceIcon: "Clock",
       title: u.title, meta: u.meta, foot: u.foot,
+      // Deadlines are completable from the band too (bills aren't Todoist items);
+      // jumpId/data feed the same canonical completer the urgent cards use.
+      completable: !!u.completable, jumpId: u.jumpId ?? null, data: u.data ?? null,
       pill: { label: u.when === 1 ? "Tomorrow" : `In ${u.when} days`, tone: TONE.cream },
     }));
 

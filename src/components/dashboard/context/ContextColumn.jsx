@@ -7,7 +7,7 @@ import { buildComingUp } from "./comingUpModel.js";
 export default function ContextColumn({
   liveWeather, liveDeadlines, liveBills, snapshotLanes: _snapshotLanes,
   emailAccounts = [], accent = "#cba6da", isMobile = false,
-  showInboxPeek = true, onJump, onOpenInbox,
+  showInboxPeek = true, onJump, onOpenInbox, onCompleteDeadline,
 }) {
   const comingUp = useMemo(() => buildComingUp({ liveDeadlines, liveBills, days: 7 }), [liveDeadlines, liveBills]);
 
@@ -26,6 +26,14 @@ export default function ContextColumn({
     else onJump?.({ kind: "bill", id: record.id, data: record, date: record.next_date || null });
   };
 
+  // Coming-up deadlines complete through the same canonical completer the band
+  // uses: (taskId, record) → completeDeadlineOccurrence(id, due_date).
+  const handleComingUpComplete = (row) => {
+    const record = recordsById.get(row.id);
+    if (!record) return;
+    onCompleteDeadline?.(record.id, record);
+  };
+
   return (
     <div
       data-testid="dashboard-context-column"
@@ -35,7 +43,7 @@ export default function ContextColumn({
       }}
     >
       <WeatherCard weather={liveWeather} />
-      <ComingUpCard items={comingUp} onJump={handleComingUpJump} />
+      <ComingUpCard items={comingUp} onJump={handleComingUpJump} onComplete={onCompleteDeadline ? handleComingUpComplete : undefined} />
       {showInboxPeek && (
         <InboxPeek accent={accent} emailAccounts={emailAccounts} onJump={onJump} onOpenInbox={onOpenInbox} isMobile={isMobile} />
       )}

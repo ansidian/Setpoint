@@ -71,6 +71,22 @@ export default function useDeadlineOverlayState({
     writeStoredBoolean(overlayStorage(), DEADLINE_OVERLAY_STORAGE_KEY, value);
   }, []);
 
+  // Undo a dashboard-forced open: return the in-memory flags (and the stored
+  // deadline preferences) to the snapshot captured before the force, so a forced
+  // peek never clobbers the user's saved choice. Idempotent — a null ref no-ops,
+  // so it is safe to call from both restore triggers below.
+  const restoreForcedOverlays = useCallback(() => {
+    const forced = forcedVisibilityRef.current;
+    if (!forced) return;
+    forcedVisibilityRef.current = null;
+    const { previous } = forced;
+    setEventOverlayVisible(previous.eventOverlayVisible);
+    setDeadlineOverlayVisible(previous.deadlineOverlayVisible);
+    setCompletedDeadlineOverlayVisible(previous.completedDeadlineOverlayVisible);
+    writeStoredBoolean(overlayStorage(), DEADLINE_OVERLAY_STORAGE_KEY, previous.storedDeadlineOverlayVisible);
+    writeStoredBoolean(overlayStorage(), COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, previous.storedCompletedDeadlineOverlayVisible);
+  }, []);
+
   useEffect(() => {
     overlayVisibilityRef.current = {
       eventOverlayVisible,
@@ -130,16 +146,20 @@ export default function useDeadlineOverlayState({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceCompletedDeadlineOverlay, forceDeadlineOverlay, forceEventOverlay, open, openRequestId, view]);
 
+  // Restore on leave. Two triggers, because the calendar surface can go away two
+  // ways: an explicit close (`open` → false, the modal-era path still covered by
+  // tests) and the calendar keep-alive tab being hidden. As a persistent tab,
+  // `open` stays true for its whole lifetime, so React's <Activity> is what
+  // signals "left the calendar": it runs this effect's cleanup when the tab is
+  // hidden (the same settle-on-leave lever InboxView uses). Either way we revert
+  // any dashboard-forced overlays to the user's stored preferences.
   useEffect(() => {
-    if (open || !forcedVisibilityRef.current) return;
-    const previous = forcedVisibilityRef.current.previous;
-    forcedVisibilityRef.current = null;
-    setEventOverlayVisible(previous.eventOverlayVisible);
-    setDeadlineOverlayVisible(previous.deadlineOverlayVisible);
-    setCompletedDeadlineOverlayVisible(previous.completedDeadlineOverlayVisible);
-    writeStoredBoolean(overlayStorage(), DEADLINE_OVERLAY_STORAGE_KEY, previous.storedDeadlineOverlayVisible);
-    writeStoredBoolean(overlayStorage(), COMPLETED_DEADLINE_OVERLAY_STORAGE_KEY, previous.storedCompletedDeadlineOverlayVisible);
-  }, [open]);
+    if (!open) {
+      restoreForcedOverlays();
+      return undefined;
+    }
+    return restoreForcedOverlays;
+  }, [open, restoreForcedOverlays]);
 
   return {
     eventOverlayVisible,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock, Check, Calendar } from "lucide-react";
 import { StatusChip } from "../../shared/StatusChip";
+import MarkDoneAction from "../MarkDoneAction.jsx";
 
 const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
 
@@ -60,10 +61,23 @@ export function PriorityCard({ card, variant = "urgent", onOpen, onMarkHandled, 
 
   // Footer action: emails get "Mark handled", deadlines get a real "Mark done",
   // bills get none (they aren't completable here — body click opens the calendar).
+  // Backfill (upcoming) cards show their "Coming up" foot at rest; completable
+  // ones (deadlines) reveal the same quiet text-only Mark-done on hover/focus —
+  // subordinate to the urgent cards' filled button, since they aren't urgent.
   const footer = variant === "backfill" ? (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(205,214,244,0.42)" }}>
-      <Calendar size={11} color="rgba(205,214,244,0.42)" />{card.foot}
-    </span>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: 16 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(205,214,244,0.42)", opacity: card.completable && hover ? 0 : 1, transition: "opacity 130ms ease", pointerEvents: "none" }}>
+        <Calendar size={11} color="rgba(205,214,244,0.42)" />{card.foot}
+      </span>
+      {card.completable && (
+        <MarkDoneAction
+          onComplete={() => onComplete?.(card)}
+          revealed={hover}
+          itemTitle={card.title}
+          style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}
+        />
+      )}
+    </div>
   ) : card.email ? (
     card.handleable ? <CardActionButton tone={card.tone} label="Mark handled" onClick={() => onMarkHandled?.(card)} /> : null
   ) : card.completable ? (

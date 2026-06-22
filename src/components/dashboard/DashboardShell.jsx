@@ -19,6 +19,7 @@ import {
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
   resolveCalendarOpenState,
+  shouldClearCalendarFocusOnLeave,
 } from "./dashboardShellModel.js";
 import useDashboardShellHotkeys from "./useDashboardShellHotkeys.js";
 import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
@@ -246,6 +247,33 @@ export function DashboardShell({
       eventsRange: calendarEventsRangeRef.current,
     });
   }, [tab, calendarView, onCalendarWorkspaceChange]);
+
+  // A dashboard deep-link is a one-shot for that single navigation: it forces
+  // calendar overlays on (e.g. show-completed so a completed deadline is visible)
+  // AND focuses/opens that item's detail. Once the user leaves the calendar tab,
+  // drop BOTH so a later *manual* return (or a later show-completed toggle) can't
+  // resurrect them — otherwise pressing "D" to show completed re-attaches the old
+  // dashboard-focused detail. (The calendar also reverts its in-memory overlay
+  // flags to the stored preferences on leave — see useDeadlineOverlayState.)
+  const prevTabRef = useRef(tab);
+  useEffect(() => {
+    const leftCalendar = shouldClearCalendarFocusOnLeave({ prevTab: prevTabRef.current, tab });
+    prevTabRef.current = tab;
+    if (!leftCalendar) return;
+    // Reacting to a tab transition (external navigation), not deriving render
+    // state; functional/guarded updates no-op when already cleared. Keyed on `tab`
+    // so every leave path is covered (header tabs, hotkeys, mobile fallback, back).
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setCalendarForceOverlays((cur) => (
+      cur.events || cur.deadlines || cur.completedDeadlines
+        ? { events: false, deadlines: false, completedDeadlines: false }
+        : cur
+    ));
+    setCalendarFocusItemId((cur) => (cur ? null : cur));
+    setCalendarFocusOpenDetail((cur) => (cur ? false : cur));
+    setCalendarFocus((cur) => (cur ? null : cur));
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [tab]);
 
   const handleCalendarEventsRangeChange = useCallback((range) => {
     calendarEventsRangeRef.current = range;

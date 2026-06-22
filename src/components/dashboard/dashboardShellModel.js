@@ -70,6 +70,16 @@ export function dashboardBillCalendarRequest(date, itemId) {
   };
 }
 
+// A dashboard deep-link forces calendar overlays on and focuses an item for that
+// one navigation. The forced overlays + focus must be dropped when the user leaves
+// the calendar tab, so a later manual return can't resurrect the stale detail.
+// This is the pure leave-detection the shell effect keys on: true only on a
+// calendar → non-calendar transition (every leave path — header tabs, hotkeys,
+// mobile fallback, back — funnels through the same `tab` change).
+export function shouldClearCalendarFocusOnLeave({ prevTab, tab } = {}) {
+  return prevTab === "calendar" && tab !== "calendar";
+}
+
 export function resolveDashboardShellHotkey({
   key,
   code = "",
