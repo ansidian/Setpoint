@@ -11,7 +11,7 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `AccountsList.jsx` — draggable, editable account rows with icon/color pickers
 
 ### Sections (one per tab)
-- `sections/AccountsSettingsSection.jsx` — accounts, Gmail/iCloud auth, Todoist token, Discord, weather location
+- `sections/AccountsSettingsSection.jsx` — thin shell composing the ConnectedAccounts / Todoist / DiscordReminders / WeatherLocation cards
 - `sections/ActualBudgetSettingsSection.jsx` — Actual connection plus bill-pay mapping cards
 - `sections/EmailAutomationSettingsSection.jsx` — triage mode, sounds, AI models, extraction, lookback
 - `sections/SystemSettingsSection.jsx` — passkeys and API tokens
@@ -31,6 +31,10 @@ The settings surface: tabbed sections composed of cards covering accounts, integ
 - `cards/UtilityPayLinksCard.jsx` — per-schedule bill-pay website URLs; source for the calendar "Pay Online" button
 
 ### Cards: connections + security
+- `cards/ConnectedAccountsCard.jsx` — Gmail OAuth + iCloud IMAP account add/remove; feeds the email snapshot pipeline
+- `cards/TodoistCard.jsx` — Todoist API token save/disconnect for email-automation follow-up sync
+- `cards/DiscordRemindersCard.jsx` — Discord webhook URL + user ID for private reminder delivery, with test-send
+- `cards/WeatherLocationCard.jsx` — city geocode → lat/lng patch for dashboard weather snapshots
 - `cards/ActualBudgetConnectionCard.jsx` — Actual server URL/auth config, budget cache hydration
 - `cards/BriefingSchedulesCard.jsx` — snapshot window boundaries with FLIP reorder animation
 - `cards/ApiTokensCard.jsx` — API token list/create/revoke with scopes and expiry
