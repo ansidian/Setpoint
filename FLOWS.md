@@ -40,7 +40,7 @@ When a fix touches a flow, walk every hop — partial fixes here are the known f
 1. `server/email/gmail-sync.js:processNextGmailHistorySyncJob` — claims a queued job, loads the account
 2. `server/email/gmail-sync.js:syncGmailHistoryForAccount` — pages Gmail history, fetches new messages, reconciles read/removal state
 3. `server/email/email-index.js:indexEmails` — parses and writes emails into `ea_email_index`
-4. `server/email/gmail-sync.js:triageStatementsForEmail` — inserts a pending `ea_email_triage` row and an arrival-grace-scheduled triage job
+4. `server/email/gmailTriageStatements.js:triageStatementsForEmail` — inserts a pending `ea_email_triage` row and an arrival-grace-scheduled triage job
 5. `server/snapshots/snapshot-triage-attachment.js:attachArrivalGraceEmailToActiveSnapshot` — upserts a queued-lane snapshot item, publishes `email_triage_queued`
 6. `server/scheduler.js:runEmailTriageWorker` — per-minute cron drains triage jobs (also drained inline by `server/snapshots/snapshot-service.js:syncActiveSnapshot`)
 7. `server/triage/triage-worker.js:processNextEmailTriageJob` — claims the job, handles skip/defer/grace branches

@@ -1,199 +1,43 @@
 import db from "../db/connection.js";
-import { buildBillOccurrencesFromSchedules } from "../actual/actual-bill-occurrences.js";
 import {
   hasActualMetadataRows,
   loadActualMetadataForProjection,
   metadataWithPayeeMap,
   upsertMetadataProjectionQuery,
 } from "../actual/actual-metadata-projection.js";
+import {
+  BILLS_CURRENT_LOOKAHEAD_DAYS,
+  BILLS_CURRENT_LOOKBACK_DAYS,
+  BILLS_MIRROR_MAINTENANCE_TTL_MS,
+  addDaysYmd,
+  addMonthsYmd,
+  billMirrorRefreshRange,
+  currentPayloadFromOccurrences,
+  isBillsMirrorMaintenanceDue,
+  isoNow,
+  mirrorStateFromRow,
+  normalizeMirrorOccurrence,
+  occurrenceFromRow,
+  occurrenceMirrorArgs,
+  occurrencesFromMetadata,
+  scheduleMirrorArgs,
+  todayYmd,
+} from "./billsMirrorModel.js";
 
-const BILL_MIRROR_LOOKBACK_DAYS = 30;
-const BILL_MIRROR_LOOKAHEAD_MONTHS = 18;
+// Pure date/range math, row projections, arg builders, and the maintenance-due
+// predicate now live in billsMirrorModel.js; re-export the public ones so
+// bills-service.js's facade pass-through stays intact.
+export { billMirrorRefreshRange, isBillsMirrorMaintenanceDue, BILLS_MIRROR_MAINTENANCE_TTL_MS };
+
 // How far back cleared (paid) occurrences are retained after their schedule rolls
 // forward, so the calendar bill view keeps paid history instead of dropping it.
 // Bounded to the displayable window: the bills range route rejects months older
 // than 12 months (see validateCalendarRange enforceHistoryWindow), so retaining
 // anything older would be dead weight.
 const BILL_MIRROR_PAID_HISTORY_MONTHS = 12;
-const BILLS_CURRENT_LOOKBACK_DAYS = 30;
-const BILLS_CURRENT_LOOKAHEAD_DAYS = 90;
-export const BILLS_MIRROR_MAINTENANCE_TTL_MS = 6 * 60 * 60 * 1000;
-const BILLS_MIRROR_FAILURE_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const BILLS_MIRROR_REFRESH_TIMERS = new Map();
 const BILLS_MIRROR_REFRESH_IN_FLIGHT = new Map();
 let billsMirrorRefreshWorkerTimer = null;
-
-function isoNow(now = new Date()) {
-  return now.toISOString();
-}
-
-function todayYmd(now = new Date()) {
-  return now.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-}
-
-function addDaysYmd(ymd, days) {
-  const date = new Date(`${ymd}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function addMonthsYmd(ymd, months) {
-  const date = new Date(`${ymd}T00:00:00Z`);
-  date.setUTCMonth(date.getUTCMonth() + months);
-  return date.toISOString().slice(0, 10);
-}
-
-export function billMirrorRefreshRange({ now = new Date() } = {}) {
-  const today = todayYmd(now);
-  return {
-    start: addDaysYmd(today, -BILL_MIRROR_LOOKBACK_DAYS),
-    end: addMonthsYmd(today, BILL_MIRROR_LOOKAHEAD_MONTHS),
-  };
-}
-
-function boolFromDb(value) {
-  return value === true || value === 1 || value === "1";
-}
-
-function occurrencesFromMetadata(metadata, range) {
-  const normalized = metadataWithPayeeMap(metadata);
-  return buildBillOccurrencesFromSchedules(normalized.schedules, {
-    payeeMap: normalized.payeeMap,
-    recentTransactions: normalized.recentTransactions,
-    range,
-  });
-}
-
-function mirrorStateFromRow(row) {
-  if (!row) {
-    return {
-      state: "needs_sync",
-      configured: null,
-      lastSuccessAt: null,
-      lastAttemptAt: null,
-      lastError: null,
-      pendingRefreshAt: null,
-      refreshStartedAt: null,
-    };
-  }
-  return {
-    state: row.status || "needs_sync",
-    configured: boolFromDb(row.actual_configured),
-    lastSuccessAt: row.last_success_at || null,
-    lastAttemptAt: row.last_attempt_at || null,
-    lastError: row.last_error || null,
-    pendingRefreshAt: row.pending_refresh_at || null,
-    refreshStartedAt: row.refresh_started_at || null,
-  };
-}
-
-export function isBillsMirrorMaintenanceDue(syncHealth, { now = new Date() } = {}) {
-  if (!syncHealth) return false;
-  if (syncHealth.configured !== true) return false;
-  if (syncHealth.pendingRefreshAt || syncHealth.refreshStartedAt) return false;
-  if (syncHealth.state !== "current" && syncHealth.state !== "degraded") return false;
-  if (syncHealth.state === "degraded") {
-    const lastAttempt = new Date(syncHealth.lastAttemptAt || "").getTime();
-    if (Number.isFinite(lastAttempt) && now.getTime() - lastAttempt < BILLS_MIRROR_FAILURE_BACKOFF_MS) {
-      return false;
-    }
-  }
-  const lastSuccess = new Date(syncHealth.lastSuccessAt || "").getTime();
-  if (!Number.isFinite(lastSuccess)) return false;
-  return now.getTime() - lastSuccess >= BILLS_MIRROR_MAINTENANCE_TTL_MS;
-}
-
-function occurrenceFromRow(row) {
-  return {
-    id: row.occurrence_id,
-    scheduleId: row.schedule_id,
-    name: row.name || row.payee || "Unknown",
-    payee: row.payee || row.name || "Unknown",
-    amount: Number(row.amount || 0),
-    next_date: row.occurrence_date,
-    paid: boolFromDb(row.paid),
-    type: row.type || "bill",
-    openActionDisabled: boolFromDb(row.open_action_disabled),
-  };
-}
-
-function normalizeMirrorOccurrence(schedule) {
-  const scheduleId = schedule.scheduleId || schedule.schedule_id || schedule.id;
-  const date = schedule.next_date || schedule.occurrence_date;
-  const occurrenceId = schedule.id && String(schedule.id).includes(":")
-    ? String(schedule.id)
-    : `${scheduleId}:${date}`;
-  return {
-    id: occurrenceId,
-    scheduleId,
-    name: schedule.name || schedule.payee || "Unknown",
-    payee: schedule.payee || schedule.name || "Unknown",
-    amount: Number(schedule.amount || 0),
-    next_date: date,
-    paid: !!schedule.paid,
-    type: schedule.type || "bill",
-    openActionDisabled: !!schedule.openActionDisabled,
-  };
-}
-
-function scheduleMirrorArgs(userId, occurrence, timestamp) {
-  return [
-    userId,
-    occurrence.scheduleId,
-    occurrence.name,
-    occurrence.payee,
-    occurrence.amount,
-    occurrence.type,
-    occurrence.next_date,
-    occurrence.paid ? 1 : 0,
-    JSON.stringify(occurrence),
-    timestamp,
-  ];
-}
-
-function occurrenceMirrorArgs(userId, occurrence, timestamp) {
-  return [
-    userId,
-    occurrence.id,
-    occurrence.scheduleId,
-    occurrence.next_date,
-    occurrence.name,
-    occurrence.payee,
-    occurrence.amount,
-    occurrence.type,
-    occurrence.paid ? 1 : 0,
-    occurrence.openActionDisabled ? 1 : 0,
-    JSON.stringify(occurrence),
-    timestamp,
-  ];
-}
-
-function currentPayloadFromOccurrences(occurrences, {
-  actualBudgetUrl = null,
-  actualConfigured = false,
-  syncHealth,
-  now = new Date(),
-} = {}) {
-  const today = todayYmd(now);
-  const weekFromNow = addDaysYmd(today, 7);
-  const lookbackStart = addDaysYmd(today, -BILLS_CURRENT_LOOKBACK_DAYS);
-  const lookaheadEnd = addDaysYmd(today, BILLS_CURRENT_LOOKAHEAD_DAYS);
-  const bills = occurrences.filter((occurrence) =>
-    occurrence.next_date >= today && occurrence.next_date <= weekFromNow,
-  );
-  const allSchedules = occurrences.filter((occurrence) =>
-    occurrence.next_date >= lookbackStart && occurrence.next_date <= lookaheadEnd,
-  );
-  return {
-    bills,
-    allSchedules,
-    payeeMap: {},
-    actualConfigured,
-    actualBudgetUrl,
-    syncHealth,
-    billsSyncHealth: syncHealth,
-  };
-}
 
 export async function loadActualBudgetUrl(userId, { dbClient = db } = {}) {
   const result = await dbClient.execute({

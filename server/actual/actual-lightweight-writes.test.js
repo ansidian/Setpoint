@@ -182,6 +182,18 @@ describe("findExistingSchedule (P2-16 cross-type guard)", () => {
     // A transfer write (positive amount) named "Acme" must NOT clobber the bill schedule.
     expect(__testing__.findExistingSchedule([billSchedule], null, null, 5000, "Acme")).toBeNull();
   });
+
+  it("extends the cross-type guard to isbetween schedules via the shared amount-condition parser (P3-76)", () => {
+    const rangeBill = {
+      id: "sched-range-bill",
+      name: "Acme",
+      conditions: [{ op: "isbetween", field: "amount", value: { num1: -4000, num2: -6000 } }],
+    };
+    // Range midpoint is -5000 (negative => bill). A positive transfer named "Acme" must not clobber it.
+    expect(__testing__.findExistingSchedule([rangeBill], null, null, 5000, "Acme")).toBeNull();
+    // A same-sign bill write still reuses it.
+    expect(__testing__.findExistingSchedule([rangeBill], null, null, -5000, "Acme")).toBe(rangeBill);
+  });
 });
 
 describe("computeSyncSince (P2-15 since-window)", () => {
