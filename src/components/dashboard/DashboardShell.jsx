@@ -1,13 +1,9 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { useDashboard } from "../../context/DashboardContext";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
-import {
-  collectActiveReadOverrideKeys,
-  computeInboxUnreadSignalCount,
-} from "./inboxBadgeModel.js";
 import { DashboardBody } from "./DashboardBody";
 import DashboardShellOverlays from "./DashboardShellOverlays.jsx";
 import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendarModalMount.jsx";
@@ -18,11 +14,12 @@ import {
   buildDashboardEventsData,
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
-  resolveCalendarOpenState,
-  shouldClearCalendarFocusOnLeave,
 } from "./dashboardShellModel.js";
 import useDashboardShellHotkeys from "./useDashboardShellHotkeys.js";
-import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
+import useCalendarWorkspaceState from "./useCalendarWorkspaceState.js";
+import useAlfredPanelState from "./useAlfredPanelState.js";
+import useLiveReadOverrides from "./useLiveReadOverrides.js";
+import { scrollToSection } from "./scrollToSection.js";
 import { getInboxSession, resetInboxSession, setInboxSession, useInboxSelectedId } from "../inbox/useInboxSessionState";
 export { DashboardBody };
 // Single import factory so the inbox chunk can be both lazy-mounted and warmed
@@ -122,50 +119,45 @@ export function DashboardShell({
   }, [isMobile, tab]);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [liveReadOverrides, setLiveReadOverrides] = useState({});
   const [historicalSnapshotView, setHistoricalSnapshotView] = useState(null);
-
-  const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
-  const [calendarView, setCalendarView] = useState(() => {
-    try {
-      const saved = localStorage.getItem("calendar:lastView");
-      if (saved === "bills" || saved === "events") return saved;
-      return "events";
-    } catch { return "events"; }
-  });
-  const showBills = !!liveData.actualConfigured;
-  const [calendarFocus, setCalendarFocus] = useState(null);
-  const [calendarFocusItemId, setCalendarFocusItemId] = useState(null);
-  const [calendarFocusOpenDetail, setCalendarFocusOpenDetail] = useState(false);
-  const [calendarForceOverlays, setCalendarForceOverlays] = useState({ events: false, deadlines: false, completedDeadlines: false });
-  const calendarEventsRangeRef = useRef(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
-  const [alfredOpen, setAlfredOpen] = useState(false);
-  const [alfredMounted, setAlfredMounted] = useState(false);
-  const [alfredNewChatTick, setAlfredNewChatTick] = useState(0);
-  const [alfredHandoff, setAlfredHandoff] = useState(null);
-  const alfredHandoffSeq = useRef(0);
-  const toggleAlfred = useCallback(() => {
-    setAlfredMounted(true);
-    setAlfredOpen((v) => !v);
-  }, []);
-  // Stable close handler so the memoized AlfredPanel's Esc-listener effect stops
-  // re-binding on every dashboard SSE/refresh re-render of DashboardShell.
-  const closeAlfred = useCallback(() => setAlfredOpen(false), []);
-  const alfredNewChat = useCallback(() => {
-    setAlfredMounted(true);
-    setAlfredOpen(true);
-    setAlfredNewChatTick((t) => t + 1);
-  }, []);
-  const askAlfred = useCallback((query) => {
-    const q = String(query || "").trim();
-    if (!q) return;
-    setAlfredMounted(true);
-    setAlfredOpen(true);
-    alfredHandoffSeq.current += 1;
-    setAlfredHandoff({ id: alfredHandoffSeq.current, query: q });
-  }, []);
+
+  const {
+    alfredOpen,
+    alfredMounted,
+    alfredNewChatTick,
+    alfredHandoff,
+    toggleAlfred,
+    closeAlfred,
+    alfredNewChat,
+    askAlfred,
+  } = useAlfredPanelState();
+
+  const { liveReadOverrides, handleLiveReadOverrideChange, inboxUnreadSignalCount } =
+    useLiveReadOverrides({ activeSnapshot, liveData });
+
+  const {
+    calendarOpenRequestId,
+    calendarView,
+    calendarFocus,
+    calendarFocusItemId,
+    calendarFocusOpenDetail,
+    calendarForceOverlays,
+    openCalendar,
+    changeCalendarView,
+    handleCalendarEventsRangeChange,
+  } = useCalendarWorkspaceState({
+    isMobile,
+    tab,
+    setShellTab,
+    setCalendarMounted,
+    liveData,
+    loadCalendarDeadlines,
+    loadCalendarBills,
+    onCalendarWorkspaceChange,
+  });
+
   // The Analytics modal and Command Palette render a static CSS faux-frost
   // backdrop (see their overlay styles) — no per-open html-to-image rasterization
   // and no live backdrop-filter, so opening them is just a state flip.
@@ -181,32 +173,6 @@ export function DashboardShell({
   const openPalette = useCallback(() => {
     setPaletteOpen(true);
   }, []);
-  // Memoized so the (memoized) AlfredPanel's onOpenCalendarItem can be stable and
-  // bail out on unrelated dashboard re-renders. State setters are referentially
-  // stable; deps are only the values openCalendar actually reads/calls.
-  const openCalendar = useCallback((viewKey, focusDate = null, focusItemId = null, options = {}) => {
-    const request = resolveCalendarOpenState({
-      isMobile,
-      viewKey,
-      currentView: calendarView,
-      showBills,
-      focusDate,
-      focusItemId,
-      options,
-    });
-    if (!request) return;
-    setCalendarView(request.view);
-    try { localStorage.setItem("calendar:lastView", request.view); } catch { /* ignore */ }
-    setCalendarFocus(request.focusDate);
-    setCalendarFocusItemId(request.focusItemId);
-    setCalendarFocusOpenDetail(request.focusOpenDetail);
-    setCalendarForceOverlays({ events: request.forceEventOverlay, deadlines: request.forceDeadlineOverlay, completedDeadlines: request.forceCompletedDeadlineOverlay });
-    setCalendarOpenRequestId((value) => value + 1);
-    setCalendarMounted(true);
-    setShellTab("calendar");
-    if (request.shouldLoadDeadlines) loadCalendarDeadlines();
-    if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
-  }, [isMobile, calendarView, showBills, loadCalendarDeadlines, loadCalendarBills, setShellTab]);
   const openDeadlineCreate = useCallback(() => {
     if (isMobile) {
       setAddTaskOpen(true);
@@ -215,22 +181,17 @@ export function DashboardShell({
     openCalendar("events", null, "new", { source: "dashboard", forceDeadlineOverlay: true });
   }, [isMobile, openCalendar]);
   // Stable handler for AlfredPanel chip deep-links — depends only on the now-stable
-  // openCalendar, so the memoized panel can bail on unrelated parent re-renders.
+  // closeAlfred + openCalendar, so the memoized panel can bail on unrelated parent
+  // re-renders.
   const handleAlfredOpenCalendarItem = useCallback((request) => {
-    setAlfredOpen(false);
+    closeAlfred();
     openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
-  }, [openCalendar]);
+  }, [closeAlfred, openCalendar]);
 
   // Stable ShellHeader callbacks so the memoized header (+ its chrome children)
   // stop re-rendering on every dashboard SSE/refresh re-render of DashboardShell.
   // openAnalytics is already a stable useCallback, so it is wired directly.
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
-  const changeCalendarView = (v) => {
-    const nextView = normalizeCalendarWorkspaceView(v);
-    setCalendarView(nextView);
-    try { localStorage.setItem("calendar:lastView", nextView); } catch { /* ignore */ }
-    if (nextView === "bills") loadCalendarBills({ refreshLive: true });
-  };
 
   useEffect(() => {
     // The calendar tab is desktop-only; if the viewport drops to mobile while it
@@ -239,50 +200,6 @@ export function DashboardShell({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isMobile && tab === "calendar") setTab("dashboard");
   }, [isMobile, tab]);
-
-  useEffect(() => {
-    onCalendarWorkspaceChange?.({
-      open: tab === "calendar",
-      view: calendarView,
-      eventsRange: calendarEventsRangeRef.current,
-    });
-  }, [tab, calendarView, onCalendarWorkspaceChange]);
-
-  // A dashboard deep-link is a one-shot for that single navigation: it forces
-  // calendar overlays on (e.g. show-completed so a completed deadline is visible)
-  // AND focuses/opens that item's detail. Once the user leaves the calendar tab,
-  // drop BOTH so a later *manual* return (or a later show-completed toggle) can't
-  // resurrect them — otherwise pressing "D" to show completed re-attaches the old
-  // dashboard-focused detail. (The calendar also reverts its in-memory overlay
-  // flags to the stored preferences on leave — see useDeadlineOverlayState.)
-  const prevTabRef = useRef(tab);
-  useEffect(() => {
-    const leftCalendar = shouldClearCalendarFocusOnLeave({ prevTab: prevTabRef.current, tab });
-    prevTabRef.current = tab;
-    if (!leftCalendar) return;
-    // Reacting to a tab transition (external navigation), not deriving render
-    // state; functional/guarded updates no-op when already cleared. Keyed on `tab`
-    // so every leave path is covered (header tabs, hotkeys, mobile fallback, back).
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setCalendarForceOverlays((cur) => (
-      cur.events || cur.deadlines || cur.completedDeadlines
-        ? { events: false, deadlines: false, completedDeadlines: false }
-        : cur
-    ));
-    setCalendarFocusItemId((cur) => (cur ? null : cur));
-    setCalendarFocusOpenDetail((cur) => (cur ? false : cur));
-    setCalendarFocus((cur) => (cur ? null : cur));
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [tab]);
-
-  const handleCalendarEventsRangeChange = useCallback((range) => {
-    calendarEventsRangeRef.current = range;
-    onCalendarWorkspaceChange?.({
-      open: tab === "calendar",
-      view: calendarView,
-      eventsRange: range,
-    });
-  }, [tab, calendarView, onCalendarWorkspaceChange]);
 
   // Single signal for "a non-input overlay owns the foreground", gating the global
   // single-key shell hotkeys and ShellHeader's 1/2 tab hotkeys so neither opens overlays
@@ -311,10 +228,7 @@ export function DashboardShell({
   // Scroll/jump to data-sect targets within the dashboard tab
   const jumpToSection = useCallback((slug) => {
     setShellTab("dashboard");
-    setTimeout(() => {
-      const el = document.querySelector(`[data-sect="${slug}"]`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
+    scrollToSection(slug);
   }, [setShellTab]);
 
   // Email click anywhere → switch to inbox and let its state handle selection.
@@ -376,45 +290,6 @@ export function DashboardShell({
   }, [closePalette, jumpToSection, navigate, onQuickRefresh, openAnalytics, openCalendar, openDeadlineCreate, setHistoryOpen, setShellTab]);
 
   const eventsData = useMemo(() => buildDashboardEventsData(calendarRange), [calendarRange]);
-
-  useEffect(() => {
-    const activeUids = collectActiveReadOverrideKeys({
-      activeSnapshotView: activeSnapshot?.snapshot,
-      liveEmails: liveData.liveEmails,
-      resurfacedEntries: liveData.resurfacedEntries,
-    });
-    // Pre-existing: prune read-overrides whose emails left the active snapshot.
-    // The functional setState only commits when something actually changed (it
-    // returns prev otherwise), so no cascading render. (Surfaced by the
-    // React-compiler lint once nearby callbacks were memoized — behavior unchanged.)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLiveReadOverrides((prev) => {
-      const next = {};
-      let changed = false;
-      for (const [uid, read] of Object.entries(prev)) {
-        if (activeUids.has(uid)) next[uid] = read;
-        else changed = true;
-      }
-      return changed ? next : prev;
-    });
-  }, [activeSnapshot?.snapshot, liveData.liveEmails, liveData.resurfacedEntries]);
-
-  const handleLiveReadOverrideChange = useCallback((uid, read) => {
-    if (!uid) return;
-    setLiveReadOverrides((prev) => {
-      if (prev[uid] === read) return prev;
-      return { ...prev, [uid]: !!read };
-    });
-  }, []);
-
-  const inboxUnreadSignalCount = useMemo(() => {
-    return computeInboxUnreadSignalCount({
-      activeSnapshot: activeSnapshot?.snapshot,
-      liveEmails: liveData.liveEmails,
-      resurfacedEntries: liveData.resurfacedEntries,
-      liveReadOverrides,
-    });
-  }, [activeSnapshot?.snapshot, liveData.liveEmails, liveData.resurfacedEntries, liveReadOverrides]);
 
   const liveEmailsLoading = liveData.isPolling;
   const queueCalendarDeadlineRefresh = useCallback(() => {

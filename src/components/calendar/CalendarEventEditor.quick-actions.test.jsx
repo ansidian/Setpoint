@@ -156,8 +156,7 @@ describe("CalendarEventEditor quick action behavior", () => {
     deferred.resolve({ event: created });
 
     // Field-by-field clone payload (startDate/startTime/colorId) is locked at the
-    // pure layer in useCalendarQuickActions.test.js (buildCloneEventPayload, lines
-    // 129-141). Here we only assert Duplicate reaches the create boundary.
+    // pure layer in calendarQuickActionModel.test.js (buildCloneEventPayload). Here we only assert Duplicate reaches the create boundary.
     await waitFor(() => {
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Duplicate me" }),
@@ -214,8 +213,7 @@ describe("CalendarEventEditor quick action behavior", () => {
     deferred.resolve({ event: created });
 
     // The pasted clone's field map (startDate/startTime/colorId) is locked at the
-    // pure layer in useCalendarQuickActions.test.js (buildCloneEventPayload, lines
-    // 129-141). Here we only assert Cmd+V reaches the single-item create boundary.
+    // pure layer in calendarQuickActionModel.test.js (buildCloneEventPayload). Here we only assert Cmd+V reaches the single-item create boundary.
     await waitFor(() => {
       expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
         expect.objectContaining({ title: "Copy with keys" }),

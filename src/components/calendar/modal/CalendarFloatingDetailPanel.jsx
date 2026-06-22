@@ -1,12 +1,9 @@
 import { AnimatePresence, motion as Motion, useReducedMotion } from "motion/react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import CalendarFloatingDetailCaret from "./CalendarFloatingDetailCaret.jsx";
 import CalendarFloatingDetailCloseButton from "./CalendarFloatingDetailCloseButton.jsx";
-import {
-  clampFloatingPosition,
-  resolveFloatingDetailPlacement,
-} from "./calendarFloatingDetailPlacement.js";
+import useFloatingDetailPlacement from "./useFloatingDetailPlacement.js";
 
 function shellTransition(reducedMotion, instantPosition) {
   if (reducedMotion || instantPosition) return { duration: 0.01 };
@@ -24,21 +21,6 @@ function contentTransition(reducedMotion) {
     duration: 0.16,
     ease: [0.16, 1, 0.3, 1],
   };
-}
-
-function samePlacement(a, b) {
-  return a
-    && b
-    && Math.round(a.top) === Math.round(b.top)
-    && Math.round(a.left) === Math.round(b.left)
-    && Math.round(a.width) === Math.round(b.width)
-    && Math.round(a.maxHeight) === Math.round(b.maxHeight)
-    && Math.round(a.caretTop || 0) === Math.round(b.caretTop || 0)
-    && a.caretSide === b.caretSide;
-}
-
-function rectFromElement(element) {
-  return element?.isConnected ? element.getBoundingClientRect() : null;
 }
 
 // On Windows at a fractional devicePixelRatio (e.g. 1.25), a GPU-composited layer
@@ -66,192 +48,31 @@ export default function CalendarFloatingDetailPanel({
   onUserDraggedChange,
 }) {
   const reducedMotion = useReducedMotion();
-  const panelRef = useRef(null);
-  const draggingRef = useRef(false);
-  const dragSessionRef = useRef(null);
-  const positionRafRef = useRef(0);
-  const dragRafRef = useRef(0);
-  const pendingDragPointRef = useRef(null);
-  const measuredPlacementKeysRef = useRef(new Set());
-  const snapNextMeasuredPlacementKeyRef = useRef(null);
-  const [measuredSize, setMeasuredSize] = useState({ width: 380, height: 0, maxHeight: 520 });
-  const [placementState, setPlacementState] = useState({ key: null, placement: null });
-  const [manualPosition, setManualPosition] = useState(null);
-  const [dragging, setDragging] = useState(false);
   const [feedbackActive, setFeedbackActive] = useState(false);
-  const [measuredPlacementKey, setMeasuredPlacementKey] = useState(null);
-  const [snapPlacementKey, setSnapPlacementKey] = useState(null);
-  const [snapPlacementIntent, setSnapPlacementIntent] = useState(null);
-  const [hasRevealedMeasuredPlacement, setHasRevealedMeasuredPlacement] = useState(false);
 
   const open = !!detail?.open && !!children;
   const mode = detail?.mode || "detail";
   const editorMode = mode === "edit" || mode === "create";
   const contentKey = `${mode}-${detail?.view || "view"}-${detail?.itemId || "item"}-${detail?.dateKey || "date"}`;
-  const placementKey = detail?.placementKey;
-  const placement =
-    placementState.key === detail?.placementKey
-      ? placementState.placement
-      : detail?.initialPlacement || null;
-  const manualDragActive = !!detail?.userDragged;
-  const manualPlacementActive = manualPosition?.placementKey === placementKey;
 
-  const computePlacement = useCallback(
-    () => {
-      if (!detail || typeof window === "undefined") return null;
-
-      const calendarRect = rectFromElement(calendarPanelRef?.current);
-      const railRect = rectFromElement(railRef?.current);
-      const anchorRect = rectFromElement(detail.anchorElement);
-      const sourceRect = rectFromElement(detail.sourceCellElement);
-      const exclusionRect = rectFromElement(detail.exclusionElement);
-
-      if (!anchorRect) {
-        return null;
-      }
-
-      return resolveFloatingDetailPlacement({
-        anchorRect,
-        sourceRect,
-        exclusionRect,
-        calendarRect,
-        railRect,
-        panelHeight: measuredSize.height,
-        mode,
-        preferredSide: detail.preferredSide || null,
-        forcedSide: detail.forcedSide || null,
-        allowRailOverlap: detail.sideIntent === "user-flip",
-      });
-    },
-    [
-      calendarPanelRef,
-      detail,
-      measuredSize.height,
-      mode,
-      railRef,
-    ],
-  );
-
-  const updatePlacement = useCallback(
-    () => {
-      if (
-        !open ||
-        detail?.userDragged ||
-        draggingRef.current ||
-        manualPlacementActive
-      )
-        return;
-      const next = computePlacement();
-      if (!next) return;
-      if (snapNextMeasuredPlacementKeyRef.current === detail?.placementKey) {
-        snapNextMeasuredPlacementKeyRef.current = null;
-        setSnapPlacementKey(detail?.placementKey || null);
-      }
-      setMeasuredSize((current) =>
-        current.width === next.width && current.maxHeight === next.maxHeight
-          ? current
-          : { ...current, width: next.width, maxHeight: next.maxHeight },
-      );
-      setPlacementState((current) =>
-        current.key === detail?.placementKey &&
-        samePlacement(current.placement, next)
-          ? current
-          : { key: detail?.placementKey || null, placement: next },
-      );
-    },
-    [
-      computePlacement,
-      detail?.placementKey,
-      detail?.userDragged,
-      manualPlacementActive,
-      open,
-    ],
-  );
-
-  const schedulePlacement = useCallback(() => {
-    if (positionRafRef.current) return;
-    positionRafRef.current = window.requestAnimationFrame(() => {
-      positionRafRef.current = 0;
-      updatePlacement();
-    });
-  }, [updatePlacement]);
-
-  useLayoutEffect(() => {
-    // Pre-paint DOM measurement prevents the panel from animating through the rail before it flips.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    updatePlacement();
-  }, [updatePlacement]);
-
-  useLayoutEffect(() => {
-    const element = panelRef.current;
-    if (!open || !element || typeof ResizeObserver === "undefined")
-      return undefined;
-    const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      if (!rect) return;
-      setMeasuredSize((current) => {
-        const nextHeight = Math.round(rect.height);
-        const nextWidth = Math.round(rect.width || current.width);
-        if (
-          placementKey &&
-          !measuredPlacementKeysRef.current.has(placementKey)
-        ) {
-          measuredPlacementKeysRef.current.add(placementKey);
-          if (!hasRevealedMeasuredPlacement) {
-            snapNextMeasuredPlacementKeyRef.current = placementKey;
-            setSnapPlacementIntent(detail?.sideIntent || "auto");
-          }
-          setMeasuredPlacementKey(placementKey);
-        }
-        if (current.height === nextHeight && current.width === nextWidth)
-          return current;
-        return {
-          ...current,
-          height: nextHeight,
-          width: nextWidth || current.width,
-        };
-      });
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [detail?.sideIntent, hasRevealedMeasuredPlacement, open, placementKey]);
-
-  useEffect(() => {
-    if (!snapPlacementKey || typeof window === "undefined") return undefined;
-    const frame = window.requestAnimationFrame(() => {
-      setSnapPlacementKey(null);
-      setSnapPlacementIntent(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [snapPlacementKey]);
-
-  useEffect(() => {
-    const nextRevealed = open
-      ? !placementKey ||
-        measuredPlacementKey === placementKey ||
-        hasRevealedMeasuredPlacement
-      : false;
-    if (nextRevealed === hasRevealedMeasuredPlacement) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHasRevealedMeasuredPlacement(nextRevealed);
-  }, [hasRevealedMeasuredPlacement, measuredPlacementKey, open, placementKey]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    window.addEventListener("resize", schedulePlacement);
-    return () => {
-      window.removeEventListener("resize", schedulePlacement);
-      if (positionRafRef.current) {
-        window.cancelAnimationFrame(positionRafRef.current);
-        positionRafRef.current = 0;
-      }
-      if (dragRafRef.current) {
-        window.cancelAnimationFrame(dragRafRef.current);
-        dragRafRef.current = 0;
-      }
-      pendingDragPointRef.current = null;
-    };
-  }, [open, schedulePlacement]);
+  const {
+    panelRef,
+    resolvedPlacement,
+    manualPlacementActive,
+    awaitingMeasuredPlacement,
+    instantPlacementTransition,
+    dragging,
+    handleDragPointerDown,
+    handleDragPointerMove,
+    finishManualDrag,
+  } = useFloatingDetailPlacement({
+    detail,
+    open,
+    mode,
+    calendarPanelRef,
+    railRef,
+    onUserDraggedChange,
+  });
 
   useEffect(() => {
     if (!open || !editorMode) return undefined;
@@ -270,7 +91,7 @@ export default function CalendarFloatingDetailPanel({
       element?.focus?.({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(id);
-  }, [contentKey, editorMode, open]);
+  }, [contentKey, editorMode, open, panelRef]);
 
   useEffect(() => {
     if (!open || !editorMode || !detail?.shakeKey) return undefined;
@@ -288,158 +109,10 @@ export default function CalendarFloatingDetailPanel({
     };
   }, [detail?.shakeKey, editorMode, open, reducedMotion]);
 
-  const applyManualPosition = useCallback(
-    (clientX, clientY) => {
-      const session = dragSessionRef.current;
-      if (!session || session.placementKey !== placementKey) return;
-      // Clamp against the calendar's LIVE rect, not the one captured at pointer-down.
-      // If the viewport resizes or the layout shifts mid-drag, the pointer-down rect
-      // is stale and would clamp to the wrong bounds. Re-reading is one
-      // getBoundingClientRect per rAF-throttled move — negligible. Fall back to the
-      // cached session rect only when the element is gone (disconnected/unmounted).
-      const liveCalendarRect =
-        rectFromElement(calendarPanelRef?.current) || session.calendarRect;
-      const next = clampFloatingPosition(
-        {
-          left: clientX - session.offsetX,
-          top: clientY - session.offsetY,
-        },
-        {
-          width: session.panelWidth || measuredSize.width,
-          height: session.panelHeight || measuredSize.height || 300,
-          maxHeight: session.maxHeight || measuredSize.maxHeight,
-        },
-        liveCalendarRect,
-      );
-      setManualPosition((current) =>
-        current &&
-        current.placementKey === session.placementKey &&
-        Math.round(current.left) === Math.round(next.left) &&
-        Math.round(current.top) === Math.round(next.top)
-          ? current
-          : { ...next, placementKey: session.placementKey },
-      );
-    },
-    [
-      calendarPanelRef,
-      measuredSize.height,
-      measuredSize.maxHeight,
-      measuredSize.width,
-      placementKey,
-    ],
-  );
-
-  const scheduleManualPosition = useCallback(
-    (clientX, clientY) => {
-      pendingDragPointRef.current = { clientX, clientY };
-      if (dragRafRef.current) return;
-      dragRafRef.current = window.requestAnimationFrame(() => {
-        dragRafRef.current = 0;
-        const point = pendingDragPointRef.current;
-        pendingDragPointRef.current = null;
-        if (point) applyManualPosition(point.clientX, point.clientY);
-      });
-    },
-    [applyManualPosition],
-  );
-
-  const handleDragPointerDown = useCallback(
-    (event) => {
-      if ((event.button ?? 0) !== 0) return;
-      const panelRect = rectFromElement(panelRef.current);
-      if (!panelRect || !placementKey) return;
-      event.preventDefault();
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      draggingRef.current = true;
-      dragSessionRef.current = {
-        pointerId: event.pointerId,
-        placementKey,
-        offsetX: event.clientX - panelRect.left,
-        offsetY: event.clientY - panelRect.top,
-        panelWidth: panelRect.width,
-        panelHeight: panelRect.height,
-        maxHeight: measuredSize.maxHeight,
-        calendarRect: rectFromElement(calendarPanelRef?.current),
-        startX: event.clientX,
-        startY: event.clientY,
-        moved: false,
-      };
-    },
-    [calendarPanelRef, measuredSize.maxHeight, placementKey],
-  );
-
-  const handleDragPointerMove = useCallback(
-    (event) => {
-      const session = dragSessionRef.current;
-      if (!session || session.pointerId !== event.pointerId) return;
-      const deltaX = event.clientX - session.startX;
-      const deltaY = event.clientY - session.startY;
-      if (!session.moved && Math.hypot(deltaX, deltaY) < 2) return;
-      session.moved = true;
-      setDragging((current) => (current ? current : true));
-      scheduleManualPosition(event.clientX, event.clientY);
-    },
-    [scheduleManualPosition],
-  );
-
-  const finishManualDrag = useCallback(
-    (event) => {
-      const session = dragSessionRef.current;
-      if (!session || session.pointerId !== event.pointerId) return;
-      event.currentTarget.releasePointerCapture?.(event.pointerId);
-      if (session.moved) {
-        if (dragRafRef.current) {
-          window.cancelAnimationFrame(dragRafRef.current);
-          dragRafRef.current = 0;
-        }
-        pendingDragPointRef.current = null;
-        applyManualPosition(event.clientX, event.clientY);
-      }
-      dragSessionRef.current = null;
-      draggingRef.current = false;
-      setDragging(false);
-      if (!session.moved) return;
-      onUserDraggedChange?.(true, session.placementKey);
-    },
-    [applyManualPosition, onUserDraggedChange],
-  );
-
   if (!open || typeof document === "undefined") return null;
 
-  const anchoredPlacement = placement || {
-    top: 24,
-    left: 24,
-    width: measuredSize.width,
-    maxHeight: measuredSize.maxHeight,
-    caretSide: null,
-    caretTop: 0,
-  };
-  const resolvedPlacement = manualPlacementActive
-    ? {
-        ...anchoredPlacement,
-        top: manualPosition.top,
-        left: manualPosition.left,
-        caretSide: null,
-        caretTop: 0,
-      }
-    : anchoredPlacement;
-  const manualTransitionActive =
-    manualPlacementActive || dragging || manualDragActive;
-  const snapTransitionActive =
-    snapPlacementKey === placementKey &&
-    (snapPlacementIntent === "user-flip" ||
-      !(detail?.sideIntent === "user-flip" && hasRevealedMeasuredPlacement));
-  const awaitingMeasuredPlacement =
-    open &&
-    !!placementKey &&
-    typeof ResizeObserver !== "undefined" &&
-    !manualPlacementActive &&
-    !hasRevealedMeasuredPlacement &&
-    measuredPlacementKey !== placementKey;
   const feedbackVisible =
     feedbackActive && open && editorMode && !!detail?.shakeKey;
-  const instantPlacementTransition =
-    manualTransitionActive || snapTransitionActive || awaitingMeasuredPlacement;
 
   return createPortal(
     <AnimatePresence initial={false}>
@@ -525,6 +198,7 @@ export default function CalendarFloatingDetailPanel({
           }}
         >
           <div
+            data-testid="calendar-floating-detail-drag-handle"
             onPointerDown={handleDragPointerDown}
             onPointerMove={handleDragPointerMove}
             onPointerUp={finishManualDrag}

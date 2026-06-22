@@ -29,6 +29,7 @@ function renderReader(overrides = {}) {
         fromEmail: "sender@example.test",
         date: "2026-05-03T15:00:00.000Z",
         _activeSnapshot: true,
+        snapshot_item_id: 42,
         _lane: "needs_attention",
         ...overrides.email,
       }}
@@ -250,6 +251,17 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+  });
+
+  it("hides snapshot lifecycle actions when snapshot_item_id is missing (drift guard)", () => {
+    // An active-snapshot row without a snapshot_item_id cannot be acted on (the
+    // dispatch + hotkeys both require it), so the buttons must not appear.
+    renderReader({ email: { _lane: "needs_attention", snapshot_item_id: undefined } });
+
+    expect(screen.queryByRole("button", { name: /mark handled/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
   });
 });
 

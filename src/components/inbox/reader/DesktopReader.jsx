@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { isCatchUpEmail, pendingSecurityGraceLabel, timeClock, timeSince } from "../helpers";
+import { pendingSecurityGraceLabel, timeClock, timeSince } from "../helpers";
 import { Avatar, QuickAction } from "../primitives";
 import SnoozePicker from "../SnoozePicker";
 import BillBadge from "../../bills/BillBadge";
@@ -24,6 +24,8 @@ import TriagePanel from "./TriagePanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
 import { resolveBillExtractionBody } from "./billExtractionBody";
+import { resolveReaderActions } from "./readerActionsModel.js";
+import { resolveBillSeed } from "./billSeedModel.js";
 
 function LiveEmailNotice({ email }) {
   const pendingGrace = !!email?._pendingSecurityGrace;
@@ -120,12 +122,7 @@ function LiveEmailNotice({ email }) {
 
 function BillDrawer({ billOpen, billMounted, setBillOpen, email, bodyState, billResolution }) {
   const extractionBody = resolveBillExtractionBody(bodyState);
-  const billSeed = billResolution?.resolvedBill || email.extractedBill || {
-    payee: "",
-    amount: null,
-    due_date: "",
-    type: "expense",
-  };
+  const billSeed = resolveBillSeed(billResolution, email.extractedBill);
 
   return (
     <div
@@ -235,21 +232,20 @@ export default function DesktopReader({
   readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
-  const catchUp = isCatchUpEmail(email);
-  const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  const isQueuedSnapshot = email._lane === "queued";
-  const isUntriagedReadSnapshot = email._lane === "untriaged_read";
-  const showSnapshotActions = email._activeSnapshot && !readOnly && !catchUp;
-  const showSnapshotWorkflowActions = showSnapshotActions && !isQueuedSnapshot && !isUntriagedReadSnapshot;
-  const canDismissSnapshot = showSnapshotActions && !isUntriagedReadSnapshot;
-  const isHandledSnapshot = showSnapshotWorkflowActions && email._lane === "handled";
-  const canMarkHandledSnapshot = showSnapshotWorkflowActions
-    && !isHandledSnapshot
-    && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
-  const showMutableActions = !readOnly;
+  const {
+    catchUp,
+    showMutableActions,
+    showDestructiveActions,
+    billToggleEligible,
+    canReopen,
+    canHandle,
+    canDismiss,
+    canMoveToNeeds,
+    canMoveToFyi,
+    canMoveToNoise,
+  } = resolveReaderActions(email, { readOnly });
   const showReadAction = showMutableActions;
-  const showDestructiveActions = showMutableActions && !catchUp;
-  const showBillToggle = email._untriaged || email.hasBill || isQueuedSnapshot || isUntriagedReadSnapshot;
+  const showBillToggle = billToggleEligible;
 
   return (
     <div
@@ -283,7 +279,7 @@ export default function DesktopReader({
             accent="#a6e3a1"
           />
         )}
-        {isHandledSnapshot && (
+        {canReopen && (
           <QuickAction
             icon={Check}
             ariaLabel="Reopen"
@@ -293,7 +289,7 @@ export default function DesktopReader({
             keyHint="H"
           />
         )}
-        {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
+        {canMoveToNeeds && (
           <QuickAction
             icon={Zap}
             ariaLabel="Move to Needs Attention"
@@ -303,7 +299,7 @@ export default function DesktopReader({
             keyHint="A"
           />
         )}
-        {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
+        {canMoveToFyi && (
           <QuickAction
             icon={FileText}
             ariaLabel="Move to FYI"
@@ -313,7 +309,7 @@ export default function DesktopReader({
             keyHint="F"
           />
         )}
-        {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "noise" && (
+        {canMoveToNoise && (
           <QuickAction
             icon={BellOff}
             ariaLabel="Move to Noise"
@@ -323,7 +319,7 @@ export default function DesktopReader({
             keyHint="N"
           />
         )}
-        {canMarkHandledSnapshot && (
+        {canHandle && (
           <QuickAction
             icon={Check}
             ariaLabel="Mark handled"
@@ -333,7 +329,7 @@ export default function DesktopReader({
             keyHint="H"
           />
         )}
-        {canDismissSnapshot && !isHandledSnapshot && (
+        {canDismiss && (
           <QuickAction
             icon={CalendarX}
             ariaLabel="Dismiss from today"

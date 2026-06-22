@@ -54,3 +54,37 @@ export function getInitialDueEpoch(editingTask) {
   return epochFromLa(year, month - 1, day, hour, minute);
 }
 
+// Convert a Todoist display time ("2:30 PM") to the <input type="time"> value
+// ("14:30"); falls back to "09:00" when absent or unparseable. Reuses the shared
+// am/pm parser so the regex lives in exactly one place.
+export function displayTimeToInputValue(dueTime) {
+  if (!dueTime) return "09:00";
+  const parsed = parseDueTime(dueTime);
+  if (!parsed) return "09:00";
+  return `${String(parsed.hour).padStart(2, "0")}:${String(parsed.minute).padStart(2, "0")}`;
+}
+
+// Seed a manual due (9am LA) from a "YYYY-MM-DD" string for CREATE mode when a
+// calendar day is preselected. Null for a missing/malformed date.
+export function buildSeededDue(initialDueDate) {
+  if (!initialDueDate) return null;
+  const [year, month, day] = String(initialDueDate).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return buildManualDue(epochFromLa(year, month - 1, day, 9, 0));
+}
+
+// The "due" label shown before the user touches anything: the editing task's own
+// due date/time when present, else the create-mode seeded display. Takes the
+// primitive due fields (not the whole task) so the caller's memo can depend on
+// exactly those fields.
+export function buildSeededDueDisplay({ dueDate, dueTime, seededCreateDue }) {
+  if (dueDate) {
+    const [year, month, day] = dueDate.split("-").map(Number);
+    if (!year || !month || !day) return null;
+    const date = new Date(year, month - 1, day);
+    const time = dueTime ? parseDueTime(dueTime) : null;
+    return formatResolvedDate({ date, time });
+  }
+  return seededCreateDue?.display || null;
+}
+

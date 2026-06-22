@@ -10,43 +10,32 @@ import {
   updateDeadline,
 } from "../../../api";
 import useIsMobile from "../../../hooks/useIsMobile";
-import { epochFromLa } from "../../inbox/helpers";
-import { formatResolvedDate, parseTokens, parseTokensWithChrono } from "./parsing";
+import { parseTokens, parseTokensWithChrono } from "./parsing";
 import { ensureChrono, isChronoReady } from "../../calendar/events/parseCalendarTitle";
-import { buildManualDue, getInitialDueEpoch } from "./due";
-import { deadlinePreviewFromEpoch, minutesFromDisplayTime } from "../../calendar/ghostPreview.js";
 import {
-  applyUpcomingReminderState,
-  projectUpcomingReminderState,
-} from "../../calendar/reminderDisplay.js";
-import { buildDeadlineMutationPayload, canSubmitTask } from "./submitPayload";
-import { applyTodoistReminderMutations } from "./applyTodoistReminderMutations.js";
+  buildManualDue,
+  getInitialDueEpoch,
+  buildSeededDue,
+  displayTimeToInputValue,
+  buildSeededDueDisplay,
+} from "./due";
+import {
+  resolveAddTaskLabels,
+  resolveAddTaskDue,
+  buildAddTaskDraftPreview,
+  buildOriginalDueValue,
+  buildAddTaskDirtySnapshot,
+  buildAddTaskDirtyBaseline,
+} from "./addTaskViewModel.js";
+import { canSubmitTask } from "./submitPayload";
+import { submitAddTaskFlow } from "./submitAddTaskFlow.js";
+import useAddTaskPanelPlacement from "./useAddTaskPanelPlacement.js";
 import {
   createTodoistReminderDraftFromCustom,
   createTodoistReminderDraftFromOffset,
   getTodoistReminderPresetState,
   TODOIST_REMINDER_PRESETS,
-  todoistAnchorFromTask,
 } from "./todoistReminderModel.js";
-
-function buildSeededDue(initialDueDate) {
-  if (!initialDueDate) return null;
-  const [year, month, day] = String(initialDueDate).split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return buildManualDue(epochFromLa(year, month - 1, day, 9, 0));
-}
-
-function displayTimeToInputValue(dueTime) {
-  if (!dueTime) return "09:00";
-  const match = String(dueTime).match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
-  if (!match) return "09:00";
-  let hour = parseInt(match[1], 10);
-  const minute = match[2] ? parseInt(match[2], 10) : 0;
-  const ampm = match[3].toLowerCase();
-  if (ampm === "pm" && hour < 12) hour += 12;
-  if (ampm === "am" && hour === 12) hour = 0;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
 
 export default function useAddTaskPanelController({
   anchorRef,
@@ -97,27 +86,14 @@ export default function useAddTaskPanelController({
       }
       : {},
   );
-  const seededDueDisplay = useMemo(() => {
-    if (editingTask?.due_date) {
-      const [year, month, day] = editingTask.due_date.split("-").map(Number);
-      if (!year || !month || !day) return null;
-      const date = new Date(year, month - 1, day);
-      let time = null;
-      if (editingTask.due_time) {
-        const match = editingTask.due_time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
-        if (match) {
-          let hour = parseInt(match[1], 10);
-          const minute = match[2] ? parseInt(match[2], 10) : 0;
-          const ampm = match[3].toLowerCase();
-          if (ampm === "pm" && hour < 12) hour += 12;
-          if (ampm === "am" && hour === 12) hour = 0;
-          time = { hour, minute };
-        }
-      }
-      return formatResolvedDate({ date, time });
-    }
-    return seededCreateDue?.display || null;
-  }, [editingTask?.due_date, editingTask?.due_time, seededCreateDue]);
+  const seededDueDisplay = useMemo(
+    () => buildSeededDueDisplay({
+      dueDate: editingTask?.due_date,
+      dueTime: editingTask?.due_time,
+      seededCreateDue,
+    }),
+    [editingTask?.due_date, editingTask?.due_time, seededCreateDue],
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -129,17 +105,12 @@ export default function useAddTaskPanelController({
     date: editingTask?.due_date || initialDueDate || "",
     time: displayTimeToInputValue(editingTask?.due_time),
   }));
-  const [pos, setPos] = useState(null);
   const isMobile = useIsMobile();
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [autocompleteType, setAutocompleteType] = useState(null);
   const [cursorPos, setCursorPos] = useState(0);
-  const [visible, setVisible] = useState(() => isInline);
-  const [closing, setClosing] = useState(false);
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   const [duePickerNow, setDuePickerNow] = useState(() => Date.now());
   const panelRef = useRef(null);
-  const closeTimerRef = useRef(null);
   const inputRef = useRef(null);
   const dueTriggerRef = useRef(null);
   const duePickerRef = useRef(null);
@@ -147,21 +118,18 @@ export default function useAddTaskPanelController({
   // reminder-create failure) updates it instead of creating a duplicate.
   const committedTaskRef = useRef(null);
 
-  const requestClose = useCallback(() => {
-    if (isInline) {
-      onClose();
-      return;
-    }
-    if (closeTimerRef.current) return;
-    setClosing(true);
-    closeTimerRef.current = setTimeout(() => {
-      onClose();
-    }, 180);
-  }, [isInline, onClose]);
-
-  useEffect(() => () => {
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-  }, []);
+  const { pos, keyboardOffset, visible, closing, requestClose } = useAddTaskPanelPlacement({
+    isInline,
+    host,
+    isMobile,
+    onClose,
+    anchorRef,
+    panelRef,
+    inputRef,
+    duePickerRef,
+    duePickerOpen,
+    setDuePickerOpen,
+  });
 
   const confirmDeleteIntent = useCallback(() => {
     if (!isEdit || deleting) return;
@@ -262,41 +230,34 @@ export default function useAddTaskPanelController({
 
   const resolvedProject = overrides.project ? manualProject : parsed.project || null;
   const resolvedPriority = overrides.priority ? manualPriority : parsed.priority || null;
-  const resolvedLabels = useMemo(() => (
-    overrides.labels
-      ? manualLabels || []
-      : parsed.labels.length
-        ? parsed.labels
-        : []
-  ), [manualLabels, overrides.labels, parsed.labels]);
-  const resolvedDue = overrides.due
-    ? manualDue?.dueString || null
-    : parsed.recurringDueString || parsed.dateDueString || parsed.datePhrase || seededCreateDue?.dueString || null;
-  const dueDisplay = manualDue?.display || parsed.dateFormatted || seededDueDisplay || "";
-  const recurrenceSummary = !overrides.due ? parsed.recurrenceSummary : null;
-  const pickerDueEpoch = manualDue?.epochMs ?? seededDueEpoch;
-  const draftPreview = useMemo(() => {
-    const manualPreview = manualDue?.epochMs != null ? deadlinePreviewFromEpoch(manualDue.epochMs) : null;
-    const parsedPreview = !overrides.due ? parsed.duePreview : null;
-    const seededPreview = seededDueEpoch != null ? deadlinePreviewFromEpoch(seededDueEpoch) : null;
-    const due = manualPreview || parsedPreview || seededPreview;
-    if (!due?.dueDate) return null;
-    const dueMinutes = due.dueMinutes ?? minutesFromDisplayTime(due.dueTime);
-    const originalMinutes = minutesFromDisplayTime(editingTask?.due_time);
-    const placementChanged = !isEdit
-      || due.dueDate !== editingTask?.due_date
-      || (dueMinutes ?? null) !== (originalMinutes ?? null);
-    return {
-      kind: "deadline",
-      title: parsed.stripped || input.trim() || editingTask?.title || "",
-      dueDate: due.dueDate,
-      dueTime: due.dueTime || null,
-      priority: resolvedPriority,
-      source: "todoist",
-      isEditing: isEdit,
-      placementChanged,
-    };
-  }, [editingTask?.due_date, editingTask?.due_time, editingTask?.title, input, isEdit, manualDue?.epochMs, overrides.due, parsed.duePreview, parsed.stripped, resolvedPriority, seededDueEpoch]);
+  const resolvedLabels = useMemo(
+    () => resolveAddTaskLabels({ useManualLabels: overrides.labels, manualLabels, parsedLabels: parsed.labels }),
+    [manualLabels, overrides.labels, parsed.labels],
+  );
+  const { resolvedDue, dueDisplay, recurrenceSummary, pickerDueEpoch } = resolveAddTaskDue({
+    useManualDue: overrides.due,
+    manualDue,
+    parsed,
+    seededCreateDue,
+    seededDueDisplay,
+    seededDueEpoch,
+  });
+  const draftPreview = useMemo(
+    () => buildAddTaskDraftPreview({
+      manualDueEpochMs: manualDue?.epochMs ?? null,
+      useManualDue: overrides.due,
+      parsedDuePreview: parsed.duePreview,
+      parsedStripped: parsed.stripped,
+      seededDueEpoch,
+      editingDueDate: editingTask?.due_date,
+      editingDueTime: editingTask?.due_time,
+      editingTitle: editingTask?.title,
+      isEdit,
+      input,
+      resolvedPriority,
+    }),
+    [editingTask?.due_date, editingTask?.due_time, editingTask?.title, input, isEdit, manualDue?.epochMs, overrides.due, parsed.duePreview, parsed.stripped, resolvedPriority, seededDueEpoch],
+  );
 
   const reminderDraftTask = useMemo(() => ({
     ...(editingTask || {}),
@@ -318,31 +279,32 @@ export default function useAddTaskPanelController({
     }));
   }, [reminderDraftTask.due_date, reminderDraftTask.due_time]);
 
-  const originalDueValue = useMemo(() => (
-    editingTask
-      ? editingTask.due_string || [editingTask.due_date, editingTask.due_time].filter(Boolean).join(" ") || null
-      : seededCreateDue?.dueString || null
-  ), [editingTask, seededCreateDue?.dueString]);
+  const originalDueValue = useMemo(
+    () => buildOriginalDueValue({ editingTask, seededDueString: seededCreateDue?.dueString }),
+    [editingTask, seededCreateDue?.dueString],
+  );
 
-  const dirtySnapshot = useMemo(() => JSON.stringify({
-    content: String(parsed.stripped || input || "").trim(),
-    description: String(description || "").trim(),
-    project: resolvedProject?.name || resolvedProject?.id || null,
-    priority: resolvedPriority || null,
-    labels: (resolvedLabels || []).map((label) => label.name).sort(),
-    due: isEdit && !overrides.due ? originalDueValue : resolvedDue || null,
-  }), [description, input, isEdit, originalDueValue, overrides.due, parsed.stripped, resolvedDue, resolvedLabels, resolvedPriority, resolvedProject?.id, resolvedProject?.name]);
+  const dirtySnapshot = useMemo(
+    () => buildAddTaskDirtySnapshot({
+      parsedStripped: parsed.stripped,
+      input,
+      description,
+      resolvedProjectName: resolvedProject?.name,
+      resolvedProjectId: resolvedProject?.id,
+      resolvedPriority,
+      resolvedLabels,
+      isEdit,
+      useManualDue: overrides.due,
+      originalDueValue,
+      resolvedDue,
+    }),
+    [description, input, isEdit, originalDueValue, overrides.due, parsed.stripped, resolvedDue, resolvedLabels, resolvedPriority, resolvedProject?.id, resolvedProject?.name],
+  );
 
-  const dirtyBaseline = useMemo(() => JSON.stringify({
-    content: String(editingTask?.title || "").trim(),
-    description: String(editingTask?.description || "").trim(),
-    project: editingTask
-      ? editingTask.project_id || editingTask.project_name || editingTask.class_name || null
-      : null,
-    priority: editingTask?.priority || null,
-    labels: (editingTask?.labels || []).map((name) => String(name)).sort(),
-    due: originalDueValue,
-  }), [editingTask, originalDueValue]);
+  const dirtyBaseline = useMemo(
+    () => buildAddTaskDirtyBaseline({ editingTask, originalDueValue }),
+    [editingTask, originalDueValue],
+  );
   const isDirty = dirtySnapshot !== dirtyBaseline;
 
   useEffect(() => {
@@ -478,148 +440,6 @@ export default function useAddTaskPanelController({
     }, 0);
   }, [input]);
 
-  const updatePos = useCallback(() => {
-    if (isInline) {
-      setPos({ inline: true });
-      return;
-    }
-    if (host === "modal") {
-      setPos({ modal: true });
-      return;
-    }
-    if (isMobile) {
-      setPos({ mobile: true });
-      return;
-    }
-    if (!anchorRef?.current) return;
-    const rect = anchorRef.current.getBoundingClientRect();
-    const panelWidth = 360;
-    const measuredHeight = panelRef.current?.offsetHeight;
-    const panelHeight = measuredHeight && measuredHeight > 80 ? measuredHeight : 520;
-    const margin = 12;
-
-    let left = rect.left;
-    if (left + panelWidth > window.innerWidth - margin) {
-      left = Math.max(margin, window.innerWidth - panelWidth - margin);
-    }
-    if (left < margin) left = margin;
-
-    let top = rect.bottom + 8;
-    if (top + panelHeight > window.innerHeight - margin) {
-      const aboveTop = rect.top - panelHeight - 8;
-      if (aboveTop > margin) top = aboveTop;
-      else top = Math.max(margin, window.innerHeight - panelHeight - margin);
-    }
-
-    setPos({ top, left, width: panelWidth });
-  }, [anchorRef, isInline, host, isMobile]);
-
-  useEffect(() => {
-    if (isInline) return undefined;
-    updatePos();
-    window.addEventListener("resize", updatePos);
-    window.addEventListener("scroll", updatePos, true);
-    return () => {
-      window.removeEventListener("resize", updatePos);
-      window.removeEventListener("scroll", updatePos, true);
-    };
-  }, [isInline, updatePos]);
-
-  // Track virtual-keyboard height on mobile so the bottom-sheet sits above it.
-  useEffect(() => {
-    if (isInline) return undefined;
-    if (!isMobile || typeof window === "undefined" || !window.visualViewport) {
-      setKeyboardOffset(0);
-      return undefined;
-    }
-    const vv = window.visualViewport;
-    const onResize = () => {
-      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      setKeyboardOffset(offset);
-    };
-    vv.addEventListener("resize", onResize);
-    vv.addEventListener("scroll", onResize);
-    onResize();
-    return () => {
-      vv.removeEventListener("resize", onResize);
-      vv.removeEventListener("scroll", onResize);
-    };
-  }, [isInline, isMobile]);
-
-  useEffect(() => {
-    if (isInline) return undefined;
-    const element = panelRef.current;
-    if (!element || typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver(() => updatePos());
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [isInline, updatePos]);
-
-  useEffect(() => {
-    if (isInline) {
-      inputRef.current?.focus({ preventScroll: true });
-      return undefined;
-    }
-
-    const raf = requestAnimationFrame(() => setVisible(true));
-    const timer = setTimeout(() => inputRef.current?.focus(), 50);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(timer);
-    };
-  }, [isInline]);
-
-  useEffect(() => {
-    if (isInline) return undefined;
-    function handleClick(event) {
-      if (anchorRef?.current?.contains(event.target)) return;
-      if (panelRef.current?.contains(event.target)) return;
-      if (duePickerRef.current?.contains(event.target)) return;
-      requestClose();
-    }
-    document.addEventListener("pointerdown", handleClick);
-    return () => document.removeEventListener("pointerdown", handleClick);
-  }, [anchorRef, isInline, requestClose]);
-
-  useEffect(() => {
-    function handleKey(event) {
-      if (event.key !== "Escape") return;
-      if (duePickerOpen) {
-        event.preventDefault();
-        setDuePickerOpen(false);
-        return;
-      }
-      requestClose();
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [duePickerOpen, requestClose]);
-
-  useEffect(() => {
-    if (!isMobile || isInline) return undefined;
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevBodyOverflow;
-      document.documentElement.style.overflow = prevHtmlOverflow;
-    };
-  }, [isInline, isMobile]);
-
-  useEffect(() => {
-    const element = panelRef.current;
-    if (!element) return undefined;
-    function handleWheel(event) {
-      const { scrollTop, scrollHeight, clientHeight } = element;
-      const atTop = scrollTop <= 0 && event.deltaY < 0;
-      const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && event.deltaY > 0;
-      if (atTop || atBottom) event.preventDefault();
-    }
-    element.addEventListener("wheel", handleWheel, { passive: false });
-    return () => element.removeEventListener("wheel", handleWheel);
-  }, []);
-
   // Base canSubmit on the effective (token-stripped) title so tokens-only input
   // like "#Work @home" disables submit instead of firing a doomed 400.
   const canSubmit = canSubmitTask({ parsed, input });
@@ -630,69 +450,33 @@ export default function useAddTaskPanelController({
     setSubmitting(true);
     setError(null);
     try {
-      // Paste-then-instant-submit may have parsed while chrono was still loading,
-      // dropping a recurring time-of-day (and leaking the time text into the title).
-      // Re-parse with chrono guaranteed loaded and recompute the due string before
-      // persisting. Scoped to recurring input only — that is the sole chrono-dependent
-      // case (non-recurring dates resolve their time via regex, cold-safe), so the
-      // await never touches the plain-date path. No-op once chrono is warm.
-      let effectiveParsed = parsed;
-      let effectiveDue = resolvedDue;
-      if (!overrides.due && input && parsed.recurrenceDraft && !isChronoReady()) {
-        effectiveParsed = await parseTokensWithChrono(input, projects, labels, { seededDueDate: seededNlpDueDate });
-        effectiveDue = effectiveParsed.recurringDueString
-          || effectiveParsed.dateDueString
-          || effectiveParsed.datePhrase
-          || seededCreateDue?.dueString
-          || null;
-      }
-      const payload = buildDeadlineMutationPayload({
-        parsed: effectiveParsed,
+      const { committedTask, projectedTask, created, deleted, errors } = await submitAddTaskFlow({
+        parsed,
+        resolvedDue,
+        overrides,
         input,
+        projects,
+        labels,
+        seededNlpDueDate,
+        seededCreateDue,
         description,
         resolvedProject,
         resolvedPriority,
         resolvedLabels,
-        resolvedDue: effectiveDue,
         isEdit,
-      });
-
-      let task;
-      if (isEdit) {
-        task = await updateDeadline(editingTask.id, payload);
-      } else if (committedTaskRef.current) {
-        // Retry after a partial failure: the task already exists, so update it
-        // rather than creating a second copy on Todoist.
-        task = await updateDeadline(committedTaskRef.current.id, payload);
-      } else {
-        task = await createDeadline(payload);
-        committedTaskRef.current = task;
-      }
-      const savedTask = isEdit ? { ...editingTask, ...task, id: editingTask.id } : task;
-
-      // The deadline mutation above is already committed, so reminder failures must
-      // NOT abort the flow. Collect each reminder op's error instead of throwing, always
-      // fire onTaskUpdated/onTaskAdded with best-known projected state, and only close
-      // when every reminder op succeeded — leaving the panel open on partial failure so
-      // badges reconcile.
-      const { appliedReminders, created, deleted, errors } = await applyTodoistReminderMutations({
-        savedTask,
+        editingTask,
         todoistReminders,
         removedReminderIds,
+        committedTask: committedTaskRef.current,
+        createDeadline,
+        updateDeadline,
         createReminder,
         deleteReminder,
+        parseTokensWithChrono,
+        isChronoReady,
       });
+      committedTaskRef.current = committedTask;
 
-      const remindersChanged = deleted > 0 || created > 0;
-      const shouldProjectReminderState = remindersChanged || appliedReminders.length > 0;
-      const projectedTask = shouldProjectReminderState
-        ? applyUpcomingReminderState(
-          savedTask,
-          projectUpcomingReminderState(appliedReminders, {
-            anchorAt: todoistAnchorFromTask(savedTask)?.anchorAt || null,
-          }),
-        )
-        : savedTask;
       if (isEdit) {
         onTaskUpdated?.(projectedTask);
       } else {

@@ -2,20 +2,6 @@ import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRe
 import eventsView from "../../components/calendar/views/eventsView.jsx";
 import { getCalendarLayoutMetrics } from "../../components/calendar/calendarLayout.js";
 import useCalendarEventEditor from "../../components/calendar/events/useCalendarEventEditor.js";
-import {
-  addCalendarEventSelection,
-  calendarEventSelectionIdentity,
-  calendarEventSelectionSize,
-  clearCalendarEventSelection,
-  createCalendarEventClipboard,
-  createCalendarEventSelectionSet,
-  getOrderedCalendarEventSelection,
-  isCalendarEventSelected,
-  removeCalendarEventSelection,
-  resolveCalendarEventActionScope,
-  toggleCalendarEventSelection,
-} from "../../components/calendar/events/calendarEventSelectionModel.js";
-import useCalendarQuickActions from "../../components/calendar/events/useCalendarQuickActions.js";
 import useDeadlineQuickActions from "../../components/calendar/views/deadlines/useDeadlineQuickActions.js";
 import { getDeadlineSelectionId } from "../../components/calendar/views/deadlines/deadlinesModel.js";
 import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
@@ -32,6 +18,7 @@ import {
   monthIndexToDate,
   NAVIGABLE_MONTH_RADIUS,
 } from "./calendarScrollModel.js";
+import useCalendarEventSelectionSet from "./useCalendarEventSelectionSet.js";
 import useCalendarFloatingDetail from "./useCalendarFloatingDetail.js";
 import useDashboardDetailFocus from "./useDashboardDetailFocus.js";
 import useDeadlineOverlayState from "./useDeadlineOverlayState.js";
@@ -39,28 +26,23 @@ import useFloatingEditorRouting from "./useFloatingEditorRouting.js";
 import useCalendarDeadlineOverlay from "./useCalendarDeadlineOverlay.js";
 import useAgendaSyncPolicy from "./useAgendaSyncPolicy.js";
 import useCalendarModalHotkeys from "./useCalendarModalHotkeys.js";
-import useCalendarModalSearch from "./useCalendarModalSearch.js";
+import useCalendarSearchActivation from "./useCalendarSearchActivation.js";
 import useCalendarModalSelection from "./useCalendarModalSelection.js";
 import useCalendarModalViewModel from "./useCalendarModalViewModel.js";
 import useCalendarScrollSync from "./useCalendarScrollSync.js";
 import useViewportWidth from "./useViewportWidth.js";
-import { activationTargetFromCalendarSearchResult } from "./calendarModalSearchModel.js";
-import { isGoogleSpecialDateEvent } from "../../components/calendar/googleSpecialDateModel.js";
 import { normalizeCalendarWorkspaceView, nextCalendarView } from "./calendarModalInteractionModel.js";
 import {
   addMonthOffset,
   dedupeEvents,
-  deadlineOverlayRecordData,
   EMPTY_CALENDAR_EVENTS,
-  findGridChipAnchor,
   findItemLocation,
-  hasDeadlineItemsInRange,
   isCompleteItem,
   itemMatchesViewId,
-  rangeMatches,
   SCROLL_IDLE_THRESHOLD_MS,
   VIEWS,
 } from "./calendarControllerHelpers.js";
+import { computeCalendarEntryReadiness } from "./calendarEntryReadinessModel.js";
 
 // The scroll grid mounts the active month ± 2 (see mountedWindow). Ensure bills
 // for that whole grid window so every mounted month's cells (and their spill
@@ -148,7 +130,6 @@ export default function useCalendarModalController({
   const navigateMonthRef = useRef(null);
   const eventEditorRef = useRef(null);
   const agendaSelectionAnchorRef = useRef(null);
-  const searchActivationSeqRef = useRef(0);
   const scrollDirectionRef = useRef("idle");
   const prevMonthIndexRef = useRef(null);
   const scrollDrivenRef = useRef(false);
@@ -159,7 +140,6 @@ export default function useCalendarModalController({
     fetchAnchorRef.current = fetchAnchor;
   }, [fetchAnchor]);
   const fetchAbortRef = useRef(null);
-  const searchResultGridNavigableRef = useRef(() => true);
   const {
     floatingDetail,
     setFloatingDetail,
@@ -250,34 +230,6 @@ export default function useCalendarModalController({
   const eventsStaleRefreshPending = !!eventsData?.staleRefreshPending;
   const eventsRevision = eventsData?.revision;
   const eventsCacheStamp = eventsData?.cacheStamp ?? 0;
-  const [calendarEventClipboard, setCalendarEventClipboard] = useState(null);
-  const [calendarEventSelectionSet, setCalendarEventSelectionSet] = useState(() => createCalendarEventSelectionSet());
-  const calendarEventSelectionRef = useRef(calendarEventSelectionSet);
-  useEffect(() => {
-    calendarEventSelectionRef.current = calendarEventSelectionSet;
-  }, [calendarEventSelectionSet]);
-  const calendarEventSelectionCount = calendarEventSelectionSize(calendarEventSelectionSet);
-  const clearCalendarEventSelectionSet = useCallback(() => {
-    setCalendarEventSelectionSet((current) => (
-      calendarEventSelectionSize(current) > 0 ? clearCalendarEventSelection() : current
-    ));
-  }, []);
-  const removeFromCalendarEventSelectionSet = useCallback((events) => {
-    const identities = (Array.isArray(events) ? events : [events])
-      .map((event) => calendarEventSelectionIdentity(event))
-      .filter(Boolean);
-    if (!identities.length) return;
-    setCalendarEventSelectionSet((current) => {
-      if (calendarEventSelectionSize(current) === 0) return current;
-      const next = identities.reduce(
-        (selection, identity) => removeCalendarEventSelection(selection, identity),
-        current,
-      );
-      return calendarEventSelectionSize(next) === calendarEventSelectionSize(current)
-        ? current
-        : next;
-    });
-  }, []);
 
   function focusEditorDate(ymd) {
     focusDateKey(ymd);
@@ -409,34 +361,20 @@ export default function useCalendarModalController({
 
   const viewData = useMemo(() => {
     if (view === "events") {
-      const prevMonth = addMonthOffset(viewYear, viewMonth, -1);
-      const nextMonth = addMonthOffset(viewYear, viewMonth, 1);
-      const visibleRange = getVisibleGridRange(viewYear, viewMonth);
-      const committedOverlayData = deadlineOverlayRecordData(committedDeadlineOverlayData, visibleRange);
-      const seededOverlayData = !planningReadiness.deadlinesDelayed
-        && (!deadlinesRangeData?.dataRange || rangeMatches(deadlinesRangeData.dataRange, visibleRange))
-        ? deadlinesRangeData?.data
-        : null;
-      const currentOverlayData = !planningReadiness.deadlinesDelayed ? deadlinesData : null;
-      const hasResolvedDeadlineRange = !!committedOverlayData
-        || !!(seededOverlayData && deadlinesRangeData?.dataRange && rangeMatches(deadlinesRangeData.dataRange, visibleRange));
-      const hasVisibleDeadlineSeed = hasDeadlineItemsInRange(seededOverlayData, visibleRange)
-        || hasDeadlineItemsInRange(currentOverlayData, visibleRange);
-      const eventsRangeLoading = eventsLoading
-        || !!eventsIsMonthLoading?.(prevMonth.year, prevMonth.month)
-        || !!eventsIsMonthLoading?.(viewYear, viewMonth)
-        || !!eventsIsMonthLoading?.(nextMonth.year, nextMonth.month);
-      const awaitingDeadlineOverlay = deadlineOverlayVisible
-        && !!deadlinesRangeData?.ensureRange
-        && ["idle", "loading", "slow"].includes(planningReadiness.state)
-        && !hasResolvedDeadlineRange
-        && !hasVisibleDeadlineSeed;
-      const eventsEntryReady = !eventsEnsureRange || !!planningReadiness.eventsReadyAt;
-      const deadlinesEntryReady = !deadlineOverlayVisible
-        || !deadlinesRangeData?.ensureRange
-        || !!planningReadiness.deadlinesReadyAt
-        || !!planningReadiness.deadlinesDelayed;
-      const agendaEntryReady = eventsEntryReady && deadlinesEntryReady && !awaitingDeadlineOverlay;
+      const { eventsRangeLoading, agendaEntryReady } = computeCalendarEntryReadiness({
+        viewYear,
+        viewMonth,
+        eventsLoading,
+        eventsIsMonthLoading,
+        eventsEnsureRange,
+        deadlineOverlayVisible,
+        committedDeadlineOverlayData,
+        deadlinesEnsureRange: deadlinesRangeData?.ensureRange,
+        deadlinesSeedData: deadlinesRangeData?.data,
+        deadlinesDataRange: deadlinesRangeData?.dataRange,
+        planningReadiness,
+        deadlinesData,
+      });
       return {
         events: visibleCalendarEvents,
         deadlineOverlay,
@@ -492,129 +430,6 @@ export default function useCalendarModalController({
     billsRangeData?.revision,
   ]);
 
-  const searchTargetVisibleInCurrentGrid = useCallback((dateKey) => {
-    const range = getVisibleGridRange(viewYear, viewMonth);
-    return !!dateKey && dateKey >= range.start && dateKey <= range.end;
-  }, [viewMonth, viewYear]);
-
-  const activateCalendarSearchResult = useCallback((result, activationContext = null) => {
-    const target = activationTargetFromCalendarSearchResult(result);
-    const parsed = parseYmd(target?.dateKey);
-    if (!target || !parsed) return false;
-    const current = floatingDetailRef.current;
-    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
-      shakeFloatingEditor();
-      return false;
-    }
-    if (eventEditor.isEditorOpen && eventEditor.isDirty) {
-      shakeFloatingEditor();
-      return false;
-    }
-
-    const targetView = target.view === "bills" ? "bills" : "events";
-    if (targetView !== view) onViewChange?.(targetView);
-    closeEventEditor();
-    setDeadlineEditor(null);
-    setDeadlineDraftPreview(null);
-    setFloatingDetail(null);
-    if (!searchTargetVisibleInCurrentGrid(target.dateKey)) {
-      setViewDate({ year: parsed.year, month: parsed.month });
-      setFetchAnchor({ year: parsed.year, month: parsed.month });
-      setLabelMonth({ year: parsed.year, month: parsed.month });
-    }
-    setSelectedDay(parsed.day);
-    setSelectedDateKey(target.dateKey);
-    setSelectedItemId(target.itemId);
-    searchActivationSeqRef.current += 1;
-    const requestKey = `search:${searchActivationSeqRef.current}:${targetView}:${target.dateKey}:${target.itemId}`;
-    setPendingItemDetailFocus({
-      openRequestId: searchActivationSeqRef.current,
-      view: targetView,
-      detailKind: target.detailKind || null,
-      dateKey: target.dateKey,
-      itemId: target.itemId,
-      requestKey,
-      attempts: 0,
-      anchorElement: activationContext?.anchorElement || null,
-      sourceCellElement: activationContext?.sourceCellElement || activationContext?.anchorElement || null,
-      anchorKind: activationContext?.anchorKind || "search-result-row",
-      searchResult: result,
-    });
-    return true;
-  }, [
-    closeEventEditor,
-    eventEditor.isDirty,
-    eventEditor.isEditorOpen,
-    floatingDetailRef,
-    onViewChange,
-    setFloatingDetail,
-    setDeadlineDraftPreview,
-    setDeadlineEditor,
-    searchTargetVisibleInCurrentGrid,
-    setFetchAnchor,
-    setLabelMonth,
-    setSelectedDateKey,
-    setSelectedDay,
-    setSelectedItemId,
-    setViewDate,
-    shakeFloatingEditor,
-    view,
-  ]);
-
-  const isCalendarSearchResultGridNavigable = useCallback((...args) => (
-    searchResultGridNavigableRef.current?.(...args) ?? true
-  ), []);
-
-  const activateCalendarSearchDateHeader = useCallback((dateKey) => {
-    const parsed = parseYmd(dateKey);
-    if (!parsed) return false;
-    const current = floatingDetailRef.current;
-    if (current?.open && (current.mode === "edit" || current.mode === "create")) {
-      if (current.dirty) {
-        shakeFloatingEditor();
-        return false;
-      }
-      if (current.view === "events") eventEditor.closeEditor?.();
-      if (current.detailKind === "deadline") {
-        setDeadlineEditor(null);
-        setDeadlineDraftPreview(null);
-      }
-    } else {
-      closeEventEditor();
-    }
-    setFloatingDetail(null);
-    if (!searchTargetVisibleInCurrentGrid(dateKey)) {
-      setViewDate({ year: parsed.year, month: parsed.month });
-      setFetchAnchor({ year: parsed.year, month: parsed.month });
-      setLabelMonth({ year: parsed.year, month: parsed.month });
-    }
-    setSelectedDay(parsed.day);
-    setSelectedDateKey(dateKey);
-    setSelectedItemId(null);
-    return true;
-  }, [
-    closeEventEditor,
-    eventEditor,
-    floatingDetailRef,
-    setDeadlineDraftPreview,
-    setDeadlineEditor,
-    setFloatingDetail,
-    searchTargetVisibleInCurrentGrid,
-    setFetchAnchor,
-    setLabelMonth,
-    setSelectedDateKey,
-    setSelectedDay,
-    setSelectedItemId,
-    setViewDate,
-    shakeFloatingEditor,
-  ]);
-
-  const calendarSearch = useCalendarModalSearch({
-    modalOpen: open,
-    view,
-    onActivateResult: activateCalendarSearchResult,
-  });
-
   useLayoutEffect(() => {
     if (
       !open
@@ -639,180 +454,34 @@ export default function useCalendarModalController({
     view,
   ]);
 
-  // Mirror the inputs of selected-event resolution so the resolver (and the
-  // selection handlers built on it) keep one identity across month crossings;
-  // a fresh resolver per crossing would re-render every mounted month grid
-  // through the quick-actions chain.
-  const selectionResolutionRef = useRef({ events: EMPTY_CALENDAR_EVENTS, itemId: null });
-  useEffect(() => {
-    selectionResolutionRef.current = { events: visibleCalendarEvents, itemId: activeSelectedItemId };
-  });
-  const resolveSelectedCalendarEvent = useCallback(() => {
-    const { events, itemId: selectionItemId } = selectionResolutionRef.current;
-    if (view !== "events" || selectionItemId == null) return null;
-    const selected = events.find((event) => {
-      const itemId = activeView.getItemId ? activeView.getItemId(event) : event.id;
-      return String(itemId) === String(selectionItemId);
-    });
-    if (!selected?.startMs || !selected?.calendarId || !selected?.accountId) return null;
-    return selected;
-  }, [activeView, view]);
-
-  const copyCalendarEvent = useCallback((event) => {
-    const clipboard = createCalendarEventClipboard(event);
-    if (!clipboard) return false;
-    setCalendarEventClipboard(clipboard);
-    setFloatingDetail(null);
-    return true;
-  }, [setFloatingDetail]);
-
-  const copySelectedCalendarEvent = useCallback(() => {
-    const selectionClipboard = createCalendarEventClipboard(calendarEventSelectionRef.current);
-    if (selectionClipboard) {
-      setCalendarEventClipboard(selectionClipboard);
-      setFloatingDetail(null);
-      return true;
-    }
-    return copyCalendarEvent(resolveSelectedCalendarEvent());
-  }, [copyCalendarEvent, resolveSelectedCalendarEvent, setFloatingDetail]);
-
-  // Returns true only when a selection set was actually begun; ineligible
-  // events (special dates, read-only sources) return false so the bare
-  // cmd/ctrl hotkey falls through to dismissing the floating detail.
-  const addSelectedCalendarEventToSelectionSet = useCallback(() => {
-    const selectedEvent = resolveSelectedCalendarEvent();
-    if (!calendarEventSelectionIdentity(selectedEvent)) {
-      return false;
-    }
-    closeEventEditor();
-    setFloatingDetail(null);
-    setSelectedItemId(null);
-    setCalendarEventSelectionSet((selection) => addCalendarEventSelection(selection, selectedEvent));
-    return true;
-  }, [
-    closeEventEditor,
-    resolveSelectedCalendarEvent,
-    setFloatingDetail,
-    setSelectedItemId,
-  ]);
-
-  const resolveContextEventActionScope = useCallback((event) => (
-    resolveCalendarEventActionScope(calendarEventSelectionSet, event)
-  ), [calendarEventSelectionSet]);
-
-  const baseEventQuickActions = useCalendarQuickActions({
-    editable: eventsEditable,
-    layout: activeLayout,
-    refreshRange: eventsRefreshRange,
-    upsertEvents: eventsUpsertEvents,
-    removeEvent: eventsRemoveEvent,
-    onCopyEvent: copyCalendarEvent,
-    onBatchDeleted: removeFromCalendarEventSelectionSet,
-    resolveEventActionScope: resolveContextEventActionScope,
-    onSelectEvent: (itemId, dateKey) => {
-      const parsed = parseYmd(dateKey);
-      if (parsed) {
-        setSelectedDateKey(dateKey);
-        setSelectedDay(parsed.day);
-      }
-      setSelectedItemId(itemId != null ? String(itemId) : null);
-      window.requestAnimationFrame(() => {
-        agendaRailRef.current?.scrollToEvent?.(itemId, dateKey);
-      });
-    },
-    onEventDeleted: (itemId) => {
-      const current = floatingDetailRef.current;
-      if (itemId != null && current?.open && current.view === "events" && String(current.itemId) === String(itemId)) {
-        setFloatingDetail(null);
-      }
-      if (itemId != null && String(selectedItemId) === String(itemId)) {
-        setSelectedItemId(null);
-      }
-    },
-  });
-
-  const toggleCalendarEventSelectionSet = useCallback(({ event } = {}) => {
-    if (view !== "events") return false;
-    const eventIdentity = calendarEventSelectionIdentity(event);
-    // Special dates (birthdays) can never join the selection set, but a
-    // modifier-click on them still follows the same dismiss path as any
-    // other chip so the floating detail closes consistently.
-    const dismissOnly = !eventIdentity && isGoogleSpecialDateEvent(event);
-    if (!eventIdentity && !dismissOnly) return false;
-    const selectedEvent = resolveSelectedCalendarEvent();
-    const selectedIdentity = calendarEventSelectionIdentity(selectedEvent);
-    const current = floatingDetailRef.current;
-    if (current?.open && (current.mode === "edit" || current.mode === "create") && current.dirty) {
-      shakeFloatingEditor();
-      return true;
-    }
-    closeEventEditor();
-    setFloatingDetail(null);
-    setSelectedItemId(null);
-    if (dismissOnly) return true;
-    setCalendarEventSelectionSet((selection) => {
-      const seededSelection = calendarEventSelectionSize(selection) === 0
-        && selectedIdentity
-        && selectedIdentity !== eventIdentity
-        ? addCalendarEventSelection(selection, selectedEvent)
-        : selection;
-      return toggleCalendarEventSelection(seededSelection, event);
-    });
-    return true;
-  }, [
-    closeEventEditor,
-    floatingDetailRef,
-    resolveSelectedCalendarEvent,
-    setFloatingDetail,
-    setSelectedItemId,
-    shakeFloatingEditor,
-    view,
-  ]);
-
-  // The toggle handler's identity follows editor/floating-detail callbacks;
-  // routing it through a ref keeps eventQuickActions (a prop of every mounted
-  // month grid) stable across controller re-renders that don't change the
-  // selection itself.
-  const toggleCalendarEventSelectionSetRef = useRef(null);
-  useEffect(() => {
-    toggleCalendarEventSelectionSetRef.current = toggleCalendarEventSelectionSet;
-  });
-  const stableToggleEventSelection = useCallback(
-    (...args) => toggleCalendarEventSelectionSetRef.current?.(...args),
-    [],
-  );
-
-  const eventQuickActions = useMemo(() => ({
-    ...baseEventQuickActions,
-    eventSelectionActive: calendarEventSelectionCount > 0,
-    eventSelectionCount: calendarEventSelectionCount,
-    clearEventSelection: clearCalendarEventSelectionSet,
-    isEventSelectionSelected: (event) => isCalendarEventSelected(calendarEventSelectionSet, event),
-    toggleEventSelection: stableToggleEventSelection,
-  }), [
-    baseEventQuickActions,
-    calendarEventSelectionCount,
-    calendarEventSelectionSet,
-    clearCalendarEventSelectionSet,
-    stableToggleEventSelection,
-  ]);
-
-  const requestSelectedCalendarEventDelete = useCallback(() => {
-    const events = getOrderedCalendarEventSelection(calendarEventSelectionRef.current);
-    if (!events.length) return false;
-    return !!eventQuickActions.requestBatchDelete?.({ events });
-  }, [eventQuickActions]);
-
-  const pasteCopiedCalendarEvent = useCallback(() => {
-    if (!calendarEventClipboard || !activeSelectedDateKey) return;
-    const pasteResult = eventQuickActions.pasteEvent?.(calendarEventClipboard, activeSelectedDateKey);
-    if (pasteResult) clearCalendarEventSelectionSet();
-  }, [
-    activeSelectedDateKey,
-    calendarEventClipboard,
-    clearCalendarEventSelectionSet,
+  const {
     eventQuickActions,
-  ]);
+    clearCalendarEventSelectionSet,
+    copySelectedCalendarEvent,
+    pasteCopiedCalendarEvent,
+    requestSelectedCalendarEventDelete,
+    addSelectedCalendarEventToSelectionSet,
+  } = useCalendarEventSelectionSet({
+    view,
+    activeView,
+    activeLayout,
+    visibleCalendarEvents,
+    activeSelectedItemId,
+    activeSelectedDateKey,
+    selectedItemId,
+    eventsEditable,
+    eventsRefreshRange,
+    eventsUpsertEvents,
+    eventsRemoveEvent,
+    floatingDetailRef,
+    setFloatingDetail,
+    setSelectedItemId,
+    setSelectedDay,
+    setSelectedDateKey,
+    closeEventEditor,
+    shakeFloatingEditor,
+    agendaRailRef,
+  });
 
   const deadlineQuickActions = useDeadlineQuickActions({
     enabled: open && view === "events" && deadlineOverlayVisible,
@@ -1209,67 +878,35 @@ export default function useCalendarModalController({
   });
   const { canGoPrev, computed, itemsByDay } = viewModel;
 
-  const getCalendarSearchResultActivationContext = useCallback((result, _index, fallbackContext = {}) => {
-    const target = activationTargetFromCalendarSearchResult(result);
-    const parsed = parseYmd(target?.dateKey);
-    if (!target || !parsed) {
-      return {
-        anchorKind: "search-result-row",
-        anchorElement: fallbackContext.anchorElement || null,
-        sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement || null,
-      };
-    }
-    const targetView = target.view === "bills" ? "bills" : "events";
-    const fallbackRowContext = fallbackContext.anchorElement
-      ? {
-          anchorKind: "search-result-row",
-          anchorElement: fallbackContext.anchorElement,
-          sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement,
-        }
-      : null;
-    if (targetView !== view || !searchTargetVisibleInCurrentGrid(target.dateKey)) {
-      if (fallbackRowContext && (result?.type === "event" || result?.type === "deadline")) return fallbackRowContext;
-      return { anchorKind: "grid-chip" };
-    }
-    const location = findItemLocation(activeView, computed, target.itemId, target.dateKey);
-    const itemId = activeView.getItemId ? activeView.getItemId(location?.item) : location?.item?.id;
-    const gridAnchor = findGridChipAnchor(panelRef.current, itemId ?? target.itemId, location?.dateKey || target.dateKey);
-    if (gridAnchor) return { anchorKind: "grid-chip" };
-    return {
-      anchorKind: "search-result-row",
-      anchorElement: fallbackContext.anchorElement || null,
-      sourceCellElement: fallbackContext.sourceCellElement || fallbackContext.anchorElement || null,
-    };
-  }, [
-    activeView,
-    computed,
-    searchTargetVisibleInCurrentGrid,
+  const { calendarSearch, calendarSearchShell } = useCalendarSearchActivation({
+    open,
     view,
-  ]);
-
-  useLayoutEffect(() => {
-    searchResultGridNavigableRef.current = (result) => {
-      const target = activationTargetFromCalendarSearchResult(result);
-      const parsed = parseYmd(target?.dateKey);
-      if (!target || !parsed) return false;
-      const targetView = target.view === "bills" ? "bills" : "events";
-      if (targetView !== view) return true;
-      if (!target.detailKind && result?.type === "event" && !eventOverlayVisible) return false;
-      if (target.detailKind === "deadline") return true;
-      if (!searchTargetVisibleInCurrentGrid(target.dateKey)) return true;
-      const location = findItemLocation(activeView, computed, target.itemId, target.dateKey);
-      if (location) return true;
-      return result?.type === "event" || result?.type === "deadline";
-    };
-  }, [
+    onViewChange,
+    viewYear,
+    viewMonth,
     activeView,
-    completedDeadlineOverlayVisible,
     computed,
-    deadlineOverlayVisible,
     eventOverlayVisible,
-    searchTargetVisibleInCurrentGrid,
-    view,
-  ]);
+    deadlineOverlayVisible,
+    completedDeadlineOverlayVisible,
+    floatingDetailRef,
+    eventEditor,
+    closeEventEditor,
+    shakeFloatingEditor,
+    setDeadlineEditor,
+    setDeadlineDraftPreview,
+    setFloatingDetail,
+    setViewDate,
+    setFetchAnchor,
+    setLabelMonth,
+    setSelectedDay,
+    setSelectedDateKey,
+    setSelectedItemId,
+    setPendingItemDetailFocus,
+    panelRef,
+    activeSelectedDateKey,
+    activeSelectedItemId,
+  });
 
   useLayoutEffect(() => {
     if (!open || view !== "bills" || !activeSelectedItemId || !activeSelectedDateKey) return;
@@ -1440,22 +1077,6 @@ export default function useCalendarModalController({
     });
     return () => window.cancelAnimationFrame(id);
   }, [eventEditor.isEditorOpen, floatingDetailRef, setFloatingDetail]);
-
-  const calendarSearchShell = useMemo(() => ({
-    ...calendarSearch,
-    selectedDateKey: activeSelectedDateKey,
-    selectedItemId: activeSelectedItemId,
-    activateDateHeader: activateCalendarSearchDateHeader,
-    getResultActivationContext: getCalendarSearchResultActivationContext,
-    isResultNavigable: isCalendarSearchResultGridNavigable,
-  }), [
-    activateCalendarSearchDateHeader,
-    activeSelectedDateKey,
-    activeSelectedItemId,
-    calendarSearch,
-    getCalendarSearchResultActivationContext,
-    isCalendarSearchResultGridNavigable,
-  ]);
 
   if (!open) return null;
 

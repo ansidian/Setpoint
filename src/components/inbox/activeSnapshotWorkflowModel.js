@@ -49,7 +49,7 @@ export function isSnapshotDismissibleLane(email) {
   return SNAPSHOT_DISMISSIBLE_LANES.has(email?._lane);
 }
 
-function hasActiveSnapshotItem(email) {
+export function hasActiveSnapshotItem(email) {
   return !!email?._activeSnapshot && !!email.snapshot_item_id;
 }
 

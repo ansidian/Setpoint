@@ -1,22 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import useDismissablePortal from "../../../../hooks/useDismissablePortal.js";
+import { clampMenuPosition } from "../../events/quickActionMenuLayout.js";
 
 function stop(event) {
   event.stopPropagation();
-}
-
-function menuStyle(menu) {
-  const width = 220;
-  const padding = 12;
-  const left = Math.min(
-    Math.max(padding, menu.x),
-    Math.max(padding, window.innerWidth - width - padding),
-  );
-  const top = Math.min(
-    Math.max(padding, menu.y),
-    Math.max(padding, window.innerHeight - 170),
-  );
-  return { left, top, width };
 }
 
 function actionButtonColors(tone, active) {
@@ -93,28 +81,17 @@ function ContextMenu({ quickActions }) {
   const menu = quickActions.contextMenu;
   const ref = useRef(null);
 
-  useEffect(() => {
-    if (!menu) return undefined;
-    function handlePointerDown(event) {
-      if (ref.current?.contains(event.target)) return;
-      quickActions.closeContextMenu();
-    }
-    function handleKeyDown(event) {
-      if (event.key !== "Escape") return;
-      quickActions.closeContextMenu();
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [menu, quickActions]);
+  // Outside-pointerdown + capture-phase Escape dismissal, shared with the
+  // calendar event quick-action menu (exact-match contract: document/bubble
+  // pointerdown, document/capture Escape with preventDefault + stopPropagation).
+  useDismissablePortal({
+    ref,
+    active: !!menu,
+    onDismiss: quickActions.closeContextMenu,
+  });
 
   if (!menu) return null;
-  const pos = menuStyle(menu);
+  const pos = clampMenuPosition({ x: menu.x, y: menu.y, bottomReserve: 170 });
   const busy = !!menu.busy;
 
   return createPortal(

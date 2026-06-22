@@ -47,6 +47,9 @@ Event creation and editing: the editor rail, natural-language title parsing, rec
 - `CalendarDraftPreviewPanel.jsx` — read-only draft summary with conflict count
 - `CalendarQuickActionLayer.jsx` — portal context menu for duplication and shortcuts
 - `useCalendarQuickActions.js` — clipboard paste, cloning, quick-create workflows
+- `calendarQuickActionModel.js` — pure reschedule/clone/paste/color/delete payload + date-math builders (DST-safe, Pacific epoch) consumed by `useCalendarQuickActions.js`
+- `quickActionColorModel.js` — pure color-id resolution + check-icon contrast for the quick-action color grid
+- `quickActionMenuLayout.js` — viewport-clamped menu positioning (`clampMenuPosition`, shared with the deadline quick-action menu in `views/deadlines/`) + focus/roving/tab helpers for the quick-action context menu (focus logic wired through `useDismissablePortal`)
 
 ### Selection
 - `calendarEventSelectionModel.js` — selection eligibility checks and identity keys

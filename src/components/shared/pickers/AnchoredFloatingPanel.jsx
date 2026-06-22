@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { computePlacement } from "@/components/inbox/helpers";
+import useDismissablePortal from "@/hooks/useDismissablePortal";
 
 export default function AnchoredFloatingPanel({
   anchorRef,
@@ -118,17 +119,16 @@ export default function AnchoredFloatingPanel({
     return () => observer.disconnect();
   }, [panelMounted, resolvedPanelRef, updatePos]);
 
-  useEffect(() => {
-    function handlePointerDown(event) {
-      if (resolvedPanelRef.current?.contains(event.target)) return;
-      if (anchorRef.current?.contains(event.target)) return;
-      if (event.target?.closest?.("[data-calendar-popover-panel='true']")) return;
-      onClose?.();
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [anchorRef, onClose, resolvedPanelRef]);
+  // Outside-pointerdown + Escape dismissal via the shared primitive. The panel
+  // and anchor are spared; the `data-calendar-popover-panel` selector lets a
+  // click in a sibling calendar popover avoid dismissing this one. Escape closes
+  // the panel (capture phase) — the panel previously had no Escape handling.
+  useDismissablePortal({
+    active: true,
+    refs: [resolvedPanelRef, anchorRef],
+    ignoreSelector: "[data-calendar-popover-panel='true']",
+    onDismiss: onClose,
+  });
 
   useEffect(() => {
     const element = resolvedPanelRef.current;

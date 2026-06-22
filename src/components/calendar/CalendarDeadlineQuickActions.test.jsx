@@ -117,4 +117,50 @@ describe("Calendar deadline quick actions", () => {
       id: "deadline-context-status",
     }));
   });
+
+  it("dismisses the context menu on an outside pointerdown", async () => {
+    renderDeadlineModal({
+      deadlines: [{
+        id: "todo-outside-dismiss",
+        title: "Renew parking permit",
+        due_date: "2026-04-20",
+        status: "incomplete",
+      }],
+    });
+
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+    expect(await screen.findByTestId("calendar-deadline-context-menu")).toBeTruthy();
+
+    fireEvent.pointerDown(document.body);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-deadline-context-menu")).toBeNull();
+    });
+  });
+
+  it("dismisses the context menu on Escape", async () => {
+    renderDeadlineModal({
+      deadlines: [{
+        id: "todo-escape-dismiss",
+        title: "Renew parking permit",
+        due_date: "2026-04-20",
+        status: "incomplete",
+      }],
+    });
+
+    fireEvent.contextMenu(await screen.findByTestId("calendar-cell-item-chip"), {
+      clientX: 140,
+      clientY: 180,
+    });
+    expect(await screen.findByTestId("calendar-deadline-context-menu")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("calendar-deadline-context-menu")).toBeNull();
+    });
+  });
 });
