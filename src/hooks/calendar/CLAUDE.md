@@ -7,6 +7,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 ### Models (pure)
 - `calendarRangeModel.js` — month key arithmetic, range expansion, fetch grouping
 - `calendarScrollModel.js` — month index math, navigable radius, settle window, week-row alignment, scroll direction, prefetch range
+- `calendarSettleModel.js` — pure scroll-settle decision tree (defer-on-mismatch, settledAway, scroll-driven/align gating, display/label/fetch outputs) extracted from `CalendarScrollContainer`'s settle timer
 - `calendarScrollSyncModel.js` — pure decisions for grid↔agenda scroll sync
 - `calendarGridRowModel.js` — fixed week-row heights and per-month row layout math
 - `agendaFetchModel.js` — agenda month fetch planning: initial months, scroll prefetch
@@ -17,6 +18,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `calendarModalSearchModel.js` — search scope, placeholders, coverage checks, result filtering
 - `calendarModalSelectionModel.js` — focus date parsing, grid visibility, view sync snapshots
 - `calendarControllerHelpers.js` — pure controller helpers (month math, event dedupe, range/overlay matching, item-location/focus resolution, search-result mapping) extracted from `useCalendarModalController.jsx`
+- `calendarEntryReadinessModel.js` — entry-readiness projection (events-range loading + agenda-entry-ready gate over committed/seeded/current deadline overlay data) extracted from the `viewData` memo in `useCalendarModalController.jsx`
 
 ### Controller + view model
 - `useCalendarModalController.jsx` — main orchestrator wiring sub-hooks and editors
@@ -24,6 +26,8 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarModalSelection.js` — view date, selected day, focus tracking per open request
 
 ### Calendar behavior
+- `useCalendarEventSelectionSet.js` — event multi-select + clipboard submachine (selection set, copy/paste, seeded-toggle rules) hosting the event quick-actions bundle so its batch-delete callback prunes the selection; extracted from `useCalendarModalController.jsx`
+- `useCalendarSearchActivation.js` — calendar-search activation cluster (search UI hook + result/date-header activation, grid-navigability, anchor resolution) extracted from `useCalendarModalController.jsx`; must be called after the view model (reads `computed`)
 - `useCalendarModalSearch.js` — search UI state, debounced API calls, highlighting
 - `useCalendarModalHotkeys.js` — arrow nav, month pagination, and Escape for the inner cascade (overflow/detail/editor); the calendar is a shell tab now, so Escape no longer closes a surface
 
@@ -37,6 +41,8 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarDomainRange.js` — deadline/bill prefetch planning from visible bounds
 - `useAgendaFetch.js` — agenda month fetching: initial mount fetch, scroll-driven prefetch
 - `useCalendarScrollSync.js` — grid↔agenda scroll orchestration: settle-driven sync, navigation commands
+- `useCalendarScrollViewport.js` — the infinite multi-month scroll state machine (user-vs-programmatic refs, settle lifecycle via `calendarSettleModel`, mount centering, rAF scroll handler, prop-driven nav/crossfade) extracted from `CalendarScrollContainer`; returns `{containerRef, refYear, refMonth, wFirst, wLast, getHeight}`
+- `useEditorCancelOnScroll.js` — clean-floating-editor cancel-on-owner-scroll latch; exposes `maybeCancelEditorOnScroll(programmaticNavActive)` consumed by the scroll handler
 - `useStaleDomainCache.js` — generic TTL-gated cache wrapper for domain fetches
 - `useDeadlineOverlayState.js` — overlay visibility triad with persistence
 - `usePlanningReadinessState.js` — planning state machine, deadline fetch orchestration

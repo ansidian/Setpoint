@@ -13,6 +13,10 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `DashboardCalendarModalMount.jsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data
 - `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution
 - `useDashboardShellHotkeys.js` — global shortcuts: command palette, g+d/e chords
+- `useCalendarWorkspaceState.js` — calendar workspace state slice: view/focus/overlay deep-link state, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
+- `useAlfredPanelState.js` — Alfred panel mount/open/new-chat/handoff state and its stable actions
+- `useLiveReadOverrides.js` — live read-override map + derived inbox unread-signal count; prunes overrides whose emails left the active snapshot
+- `scrollToSection.js` — smooth-scroll to a dashboard `data-sect` target after a tab switch
 - `layout/DashboardScenePrimitives.jsx` — motion-wrapped frame, scene regions, and the `ThreeTierLayout` band/timeline/context wiring
 - `layout/dashboard-scene-tokens.js` — transition timings and stagger delays
 

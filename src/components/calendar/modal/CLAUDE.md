@@ -13,7 +13,9 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `buildContextContent.jsx` — context-rail content router (editor/detail/empty/summary)
 
 ### Grid + cells
-- `CalendarScrollContainer.jsx` — infinite multi-month scroll viewport: grid stacking, settle-driven week-row alignment (no native CSS snap — it fights Windows wheel input), boundary stepping
+- `CalendarScrollContainer.jsx` — thin scroll-viewport shell: hosts `useCalendarScrollViewport` + `useEditorCancelOnScroll`, maps the mounted window to `CalendarMonthBlock`s + spacers
+- `CalendarMonthBlock.jsx` — one mounted month: derives block state (`calendarMonthBlockModel`), resolves data/preview, renders the headerless `CalendarGrid`
+- `calendarMonthBlockModel.js` — per-block active/cached/full-data/skeleton derivation (pure)
 - `CalendarGrid.jsx` — month grid orchestration: cells, overlays, selection handlers
 - `CalendarGridCells.jsx` — renders day cells, derives per-cell state
 - `CalendarCell.jsx` — single day cell: styling, header, weather, drag-drop targets
@@ -41,11 +43,14 @@ The calendar modal's structural layer: month grid, day cells with chip stacks an
 - `calendarEventSpanLayout.js` — span lane allocation, segment splitting, lane height single-source
 
 ### Floating detail
-- `CalendarFloatingDetailPanel.jsx` — anchored floating panel: drag, resize response
+- `CalendarFloatingDetailPanel.jsx` — anchored floating panel shell: Motion portal, caret, frame, editor autofocus/shake
+- `useFloatingDetailPlacement.js` — positioning state machine: measure (ResizeObserver) → reveal gate → side-flip snap + anchored-placement compute/clamp; hosts `useFloatingDetailDrag` (they share `measuredSize`/drag state in a cycle)
+- `useFloatingDetailDrag.js` — pointer-drag mechanics (drag session, rAF-throttled manual position, user-dragged commit) + `rectFromElement` helper
+- `calendarFloatingDetailRevealModel.js` — pure reveal/snap decision rules (`samePlacement`, anchored/render-placement merge, manual/snap/awaiting/instant transition predicates)
 - `CalendarFloatingDetailCaret.jsx` — anchored caret triangle pointing back to the source cell
 - `CalendarFloatingDetailCloseButton.jsx` — close control shared by detail and editor headers
 - `CalendarFloatingDetailContent.jsx` — routes detail/editor for deadlines vs events
-- `calendarFloatingDetailPlacement.js` — anchor placement with viewport clamping and side flip
+- `calendarFloatingDetailPlacement.js` — anchor placement geometry with viewport clamping and side flip
 
 ### Rails
 - `CalendarSearchRail.jsx` — left rail: search input, date-grouped results, keyboard nav

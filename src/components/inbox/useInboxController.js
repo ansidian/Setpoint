@@ -4,19 +4,24 @@ import useInboxUndoSlot from "./useInboxUndoSlot";
 import {
   markEmailAsRead,
   markAllEmailsAsRead,
-  searchEmails,
 } from "../../api";
 import {
   makeSynthAccount,
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
-  composeReadOverrides,
 } from "./inboxWorkItems.js";
-import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
+import {
+  computeScopedNoiseUnreadCount,
+  computeLaneCounts,
+  computeLiveCount,
+  computeMobileChipCounts,
+  computeUnreadCount,
+} from "./inboxCountsModel.js";
 import { computeNextTickDelay } from "./inboxNowTick.js";
-import { normalizeIndexedSearchResults } from "./indexedSearchModel.js";
-import { SNAPSHOT_LANE_ORDER } from "./activeSnapshotWorkflowModel.js";
+import { selectVisibleEmails } from "./inboxVisibleEmailsModel.js";
+import { resolveReadScope, READ_SCOPE, planMarkAllVisibleRead } from "./inboxReadRoutingModel.js";
+import useIndexedSearch from "./useIndexedSearch";
 import useInboxActionDispatch from "./useInboxActionDispatch";
 import useInboxKeyboardCommands from "./useInboxKeyboardCommands";
 import useInboxSessionState from "./useInboxSessionState";
@@ -62,20 +67,12 @@ export default function useInboxController({
   const [liveTrashedUids, setLiveTrashedUids] = useState(() => new Set());
   const [billOpen, setBillOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("__all");
-  const [indexedSearch, setIndexedSearch] = useState({
-    query: "",
-    emails: [],
-    accountsById: {},
-    loading: false,
-    error: null,
-  });
-  const searchRequestRef = useRef(0);
-  // Local read-toggles applied to indexed-search hits that are not live/snapshot
-  // emails. These live only in indexedSearch.emails, not in liveReadOverrides,
-  // so a fresh search response would otherwise rebuild rows from server read +
-  // liveReadOverrides and drop a just-applied toggle. Carry them forward here so
-  // re-merges reconcile against the latest local search read state.
-  const searchReadOverridesRef = useRef(new Map());
+  const {
+    indexedSearch,
+    indexedSearchActive,
+    updateIndexedSearchRead,
+    markIndexedSearchReadBulk,
+  } = useIndexedSearch({ search, liveReadOverrides });
   const {
     undo,
     undoSlotRef,
@@ -98,10 +95,12 @@ export default function useInboxController({
   // See the computeNextTickDelay effect after flatEmails.
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset locally-mutable map when the entries prop changes
     setSnoozedMap(new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])));
   }, [snoozedEntries]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset locally-mutable map when the entries prop changes
     setResurfacedMap(new Map((resurfacedEntries || []).map((entry) => [entry.uid, entry])));
   }, [resurfacedEntries]);
 
@@ -118,6 +117,7 @@ export default function useInboxController({
 
   useEffect(() => {
     if (activeSnapshotMode) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset filter when leaving snapshot mode
     setCategoryFilter("__all");
   }, [activeSnapshotMode]);
 
@@ -199,8 +199,6 @@ export default function useInboxController({
     return () => clearTimeout(id);
   }, [snoozedMap, flatEmails, nowTick]);
 
-  const indexedSearchActive = search.trim().length >= 2;
-
   // Stable account lookup for the rows: only re-allocates the merged object when
   // search state or the underlying maps actually change. Previously each pane
   // re-spread `{ ...accountsById, ...indexedSearchAccountsById }` in its render
@@ -212,28 +210,16 @@ export default function useInboxController({
       : accountsById
   ), [indexedSearchActive, accountsById, indexedSearch.accountsById]);
 
-  const visibleEmails = useMemo(() => {
-    if (indexedSearchActive) return indexedSearch.emails;
-    return flatEmails.filter((email) => {
-      const uid = email.uid || email.id;
-      const snoozeUntil = snoozedMap.get(uid);
-      if (snoozeUntil && snoozeUntil > nowTick) return false;
-      if (accountId !== "__all" && email._accountKey !== accountId) return false;
-      if (categoryFilter !== "__all" && email.category !== categoryFilter) return false;
-      if (lane === "__live" && !email._untriaged) return false;
-      if (lane !== "__all" && lane !== "__live" && email._lane !== lane) return false;
-      return true;
-    }).sort((a, b) => {
-      if (a._untriaged && !b._untriaged) return -1;
-      if (!a._untriaged && b._untriaged) return 1;
-      if (SNAPSHOT_LANE_ORDER[a._lane] !== SNAPSHOT_LANE_ORDER[b._lane]) {
-        return (SNAPSHOT_LANE_ORDER[a._lane] ?? 4) - (SNAPSHOT_LANE_ORDER[b._lane] ?? 4);
-      }
-      const aKey = a._resurfacedAt || new Date(a.date).getTime();
-      const bKey = b._resurfacedAt || new Date(b.date).getTime();
-      return bKey - aKey;
-    });
-  }, [
+  const visibleEmails = useMemo(() => selectVisibleEmails({
+    flatEmails,
+    indexedSearchActive,
+    indexedSearchEmails: indexedSearch.emails,
+    accountId,
+    categoryFilter,
+    lane,
+    snoozedMap,
+    nowTick,
+  }), [
     flatEmails,
     accountId,
     categoryFilter,
@@ -244,108 +230,22 @@ export default function useInboxController({
     indexedSearchActive,
   ]);
 
-  useEffect(() => {
-    const term = search.trim();
-    searchRequestRef.current += 1;
-    const requestId = searchRequestRef.current;
+  const laneCounts = useMemo(
+    () => computeLaneCounts(flatEmails, { accountId }),
+    [flatEmails, accountId],
+  );
 
-    if (term.length < 2) {
-      setIndexedSearch({
-        query: term,
-        emails: [],
-        accountsById: {},
-        loading: false,
-        error: null,
-      });
-      return undefined;
-    }
+  const liveCount = useMemo(
+    () => computeLiveCount(flatEmails, { accountId }),
+    [flatEmails, accountId],
+  );
 
-    setIndexedSearch((prev) => ({
-      ...prev,
-      query: term,
-      loading: true,
-      error: null,
-    }));
+  const mobileChipCounts = useMemo(
+    () => computeMobileChipCounts(flatEmails, { accountId, snoozedMap, nowTick }),
+    [flatEmails, snoozedMap, nowTick, accountId],
+  );
 
-    const timeout = setTimeout(() => {
-      searchEmails(term)
-        .then((data) => {
-          if (searchRequestRef.current !== requestId) return;
-          // Reconcile fresh results against the latest read state: session-wide
-          // liveReadOverrides first, then local indexed-search toggles (which win)
-          // so a read/unread applied just before this search does not go stale.
-          const readOverrides = composeReadOverrides(
-            liveReadOverrides,
-            searchReadOverridesRef.current,
-          );
-          setIndexedSearch(normalizeIndexedSearchResults(data, readOverrides));
-        })
-        .catch((err) => {
-          if (searchRequestRef.current !== requestId) return;
-          setIndexedSearch({
-            query: term,
-            emails: [],
-            accountsById: {},
-            loading: false,
-            error: err.message || "Search failed",
-          });
-        });
-    }, 250);
-
-    return () => clearTimeout(timeout);
-  // Intentionally key the API request only on the query. Some callers pass
-  // object-literal read override defaults, and including that object here
-  // would restart the debounce after every search-state render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
-
-  const laneCounts = useMemo(() => {
-    const counts = { queued: 0, needs_attention: 0, action: 0, carryover: 0, catch_up: 0, fyi: 0, handled: 0, untriaged_read: 0, noise: 0 };
-    for (const email of flatEmails) {
-      if (accountId !== "__all" && email._accountKey !== accountId) continue;
-      if (email._untriaged) continue;
-      if (email._lane in counts) counts[email._lane] += 1;
-    }
-    counts.action = counts.needs_attention;
-    return counts;
-  }, [flatEmails, accountId]);
-
-  const liveCount = useMemo(() => {
-    return flatEmails.filter(
-      (email) => email._untriaged && (accountId === "__all" || email._accountKey === accountId),
-    ).length;
-  }, [flatEmails, accountId]);
-
-  const mobileChipCounts = useMemo(() => {
-    const counts = {
-      __all: 0,
-      __live: 0,
-      queued: 0,
-      needs_attention: 0,
-      action: 0,
-      carryover: 0,
-      catch_up: 0,
-      fyi: 0,
-      handled: 0,
-      untriaged_read: 0,
-      noise: 0,
-    };
-    for (const email of flatEmails) {
-      const uid = email.uid || email.id;
-      const snoozeUntil = snoozedMap.get(uid);
-      if (snoozeUntil && snoozeUntil > nowTick) continue;
-      if (accountId !== "__all" && email._accountKey !== accountId) continue;
-      counts.__all += 1;
-      if (email._untriaged) counts.__live += 1;
-      else if (email._lane && counts[email._lane] != null) counts[email._lane] += 1;
-    }
-    counts.action = counts.needs_attention;
-    return counts;
-  }, [flatEmails, snoozedMap, nowTick, accountId]);
-
-  const totalUnread = useMemo(() => {
-    return flatEmails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
-  }, [flatEmails]);
+  const totalUnread = useMemo(() => computeUnreadCount(flatEmails), [flatEmails]);
 
   const noiseUnreadCount = useMemo(() => computeScopedNoiseUnreadCount(flatEmails, {
     accountId,
@@ -355,9 +255,7 @@ export default function useInboxController({
     nowTick,
   }), [accountId, categoryFilter, flatEmails, indexedSearchActive, nowTick, snoozedMap]);
 
-  const unreadInView = useMemo(() => {
-    return visibleEmails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
-  }, [visibleEmails]);
+  const unreadInView = useMemo(() => computeUnreadCount(visibleEmails), [visibleEmails]);
 
   const selectedEmail = useMemo(() => {
     if (!selectedId) return null;
@@ -381,46 +279,22 @@ export default function useInboxController({
   }, [selectedEmail, selectedId, setSelectedId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- close the bill drawer when the selected email changes
     setBillOpen(false);
   }, [selectedId]);
 
-  const updateIndexedSearchRead = useCallback((uid, read) => {
-    if (uid) searchReadOverridesRef.current.set(uid, !!read);
-    setIndexedSearch((prev) => ({
-      ...prev,
-      emails: prev.emails.map((email) => (
-        email.uid === uid || email.id === uid ? { ...email, read } : email
-      )),
-    }));
-  }, []);
-
   const markAllVisibleRead = useCallback(() => {
     if (readOnly) return;
-    const unread = visibleEmails.filter((email) => !email.read);
+    const { unread, overrideUids, allUids } = planMarkAllVisibleRead(visibleEmails);
     if (unread.length === 0) return;
 
-    const liveUids = [];
-    for (const email of unread) {
-      if (email._live && email.uid) liveUids.push(email.uid);
-      else if (email._activeSnapshot && email.uid) onLiveReadOverrideChange(email.uid, true);
-    }
+    for (const uid of overrideUids) onLiveReadOverrideChange(uid, true);
 
-    if (liveUids.length) {
-      for (const uid of liveUids) onLiveReadOverrideChange(uid, true);
-    }
-
-    const allUids = unread.map((email) => email.uid).filter(Boolean);
     if (allUids.length) {
-      for (const uid of allUids) searchReadOverridesRef.current.set(uid, true);
-      setIndexedSearch((prev) => ({
-        ...prev,
-        emails: prev.emails.map((email) => (
-          allUids.includes(email.uid) ? { ...email, read: true } : email
-        )),
-      }));
+      markIndexedSearchReadBulk(allUids);
       markAllEmailsAsRead(allUids).catch(() => {});
     }
-  }, [readOnly, visibleEmails, onLiveReadOverrideChange]);
+  }, [readOnly, visibleEmails, onLiveReadOverrideChange, markIndexedSearchReadBulk]);
 
   // Stable open handler so EmailRow's React.memo holds across list re-renders.
   // Previously each pane passed an inline `(email) => setSelectedId(...)` arrow,
@@ -460,13 +334,8 @@ export default function useInboxController({
       const email = selectedEmail;
       if (!email || email.read) return;
 
-      if (email._live) {
-        onLiveReadOverrideChange(email.uid, true);
-        markEmailAsRead(email.uid).catch(() => {});
-        return;
-      }
-
-      if (email._activeSnapshot && email.uid) {
+      const scope = resolveReadScope(email);
+      if (scope === READ_SCOPE.LIVE || scope === READ_SCOPE.SNAPSHOT) {
         onLiveReadOverrideChange(email.uid, true);
         markEmailAsRead(email.uid).catch(() => {});
         return;

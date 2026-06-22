@@ -2,12 +2,9 @@ import { useRef, useState } from "react";
 import {
   ArrowLeft,
   BellOff,
-  ChevronDown,
-  ChevronUp,
   Check,
   Clock,
   CreditCard,
-  Ellipsis,
   FileText,
   ExternalLink,
   Mail,
@@ -17,16 +14,15 @@ import {
   Zap,
 } from "lucide-react";
 import { getGmailUrl } from "../../../lib/email-links";
-import { isCatchUpEmail, timeClock, timeSince } from "../helpers";
-import { Avatar } from "../primitives";
+import { timeSince } from "../helpers";
 import SnoozePicker from "../SnoozePicker";
-import BillBadge from "../../bills/BillBadge";
 import AnchoredFloatingPanel from "../../shared/pickers/AnchoredFloatingPanel";
 import EmailBodyPane from "./EmailBodyPane";
 import DraftReply from "./DraftReply";
-import { resolveBillExtractionBody } from "./billExtractionBody";
 import MobileActionRow from "./MobileActionRow";
-import { InlineControlButton, MobileStatusPill } from "./MobileReaderControls.jsx";
+import { resolveReaderActions } from "./readerActionsModel.js";
+import MobileBillDrawer from "./MobileBillDrawer";
+import MobileReaderHeader from "./MobileReaderHeader";
 
 export default function MobileReader({
   email,
@@ -46,33 +42,27 @@ export default function MobileReader({
   readOnly = false,
 }) {
   const gmailUrl = getGmailUrl(email);
-  const catchUp = isCatchUpEmail(email);
-  const showMutableActions = !readOnly;
-  const showDestructiveActions = showMutableActions && !catchUp;
-  const snapshotLane = email._lane === "carryover" ? "needs_attention" : email._lane;
-  const isQueuedSnapshot = email._lane === "queued";
-  const isUntriagedReadSnapshot = email._lane === "untriaged_read";
-  const showBillToggle = showDestructiveActions
-    && (email._untriaged || email.hasBill || isQueuedSnapshot || isUntriagedReadSnapshot);
-  const showSnapshotActions = email._activeSnapshot && showDestructiveActions;
-  const showSnapshotWorkflowActions = showSnapshotActions && !isQueuedSnapshot && !isUntriagedReadSnapshot;
-  const canDismissSnapshot = showSnapshotActions && !isUntriagedReadSnapshot;
-  const isHandledSnapshot = showSnapshotWorkflowActions && email._lane === "handled";
-  const canMarkHandledSnapshot = showSnapshotWorkflowActions && !isHandledSnapshot && (snapshotLane === "needs_attention" || snapshotLane === "fyi");
+  const {
+    catchUp,
+    isQueuedSnapshot,
+    isUntriagedReadSnapshot,
+    showMutableActions,
+    showDestructiveActions,
+    billToggleEligible,
+    showSnapshotWorkflowActions,
+    canReopen,
+    canHandle,
+    canDismiss,
+    canMoveToNeeds,
+    canMoveToFyi,
+    canMoveToNoise,
+  } = resolveReaderActions(email, { readOnly });
+  const showBillToggle = showDestructiveActions && billToggleEligible;
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
   const actionsBtnRef = useRef(null);
   const actionsPanelRef = useRef(null);
-  const extractionBody = resolveBillExtractionBody(bodyState);
-  const billSeed = billResolution?.resolvedBill || email.extractedBill || {
-    payee: "",
-    amount: null,
-    due_date: "",
-    type: "expense",
-  };
-
-  const billPanelHeight = billExpanded ? "52%" : "38%";
   const handleAction = (kind, payload) => {
     setActionsOpen(false);
     onAction(kind, payload);
@@ -151,130 +141,19 @@ export default function MobileReader({
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "10px 16px 8px", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-            <h1
-              className="ea-display"
-              style={{
-                flex: 1,
-                margin: 0,
-                fontSize: 18,
-                lineHeight: 1.06,
-                fontWeight: 500,
-                letterSpacing: -0.35,
-                color: "#fff",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
-            >
-              {email.subject}
-            </h1>
-            <InlineControlButton
-              buttonRef={actionsBtnRef}
-              icon={Ellipsis}
-              label="Actions"
-              active={actionsOpen || snoozeOpen}
-              onClick={() => setActionsOpen((value) => !value)}
-            />
-          </div>
-
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 9 }}>
-            <Avatar
-              name={email.from}
-              email={email.fromEmail}
-              color={account?.color || accent}
-              size={28}
-            />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#fff",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {email.from}
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "var(--color-text-faint)",
-                  marginTop: 1,
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span>{timeClock(email.date)}</span>
-                <span style={{ opacity: 0.35 }}>·</span>
-                <span>{timeSince(email.date)}</span>
-                {account?.name && (
-                  <>
-                    <span style={{ opacity: 0.35 }}>·</span>
-                    <span style={{ color: account.color || accent }}>{account.name}</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-            {email._untriaged && (
-              <MobileStatusPill color="#89b4fa" label="Live" />
-            )}
-            {isQueuedSnapshot && (
-              <MobileStatusPill color="#89b4fa" label="Queued" subtle />
-            )}
-            {isUntriagedReadSnapshot && (
-              <MobileStatusPill color="#a6adc8" label="Read" subtle />
-            )}
-            {billOpen && (
-              <MobileStatusPill color="#a6e3a1" label="Bill pay open" subtle />
-            )}
-            {drafting && <MobileStatusPill color={accent} label="Draft open" subtle />}
-          </div>
-
-          {triageSummary && (
-            <div
-              style={{
-                marginTop: 8,
-                padding: "8px 10px",
-                borderRadius: 12,
-                background: `linear-gradient(135deg, ${accent}12, color-mix(in srgb, var(--sp-cyan) 4%, transparent))`,
-                border: `1px solid ${accent}2c`,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: 1.2,
-                  textTransform: "uppercase",
-                  color: accent,
-                }}
-              >
-                Briefing triage
-              </div>
-              <div
-                className="ea-display"
-                style={{
-                  marginTop: 4,
-                  fontSize: 11.5,
-                  lineHeight: 1.45,
-                  color: "rgba(255,255,255,0.9)",
-                }}
-              >
-                {triageSummary}
-              </div>
-            </div>
-          )}
-        </div>
+        <MobileReaderHeader
+          email={email}
+          account={account}
+          accent={accent}
+          actionsBtnRef={actionsBtnRef}
+          actionsActive={actionsOpen || snoozeOpen}
+          onToggleActions={() => setActionsOpen((value) => !value)}
+          isQueuedSnapshot={isQueuedSnapshot}
+          isUntriagedReadSnapshot={isUntriagedReadSnapshot}
+          billOpen={billOpen}
+          drafting={drafting}
+          triageSummary={triageSummary}
+        />
 
         {drafting && !catchUp && email.claude?.draftReply && (
           <div
@@ -301,123 +180,13 @@ export default function MobileReader({
         </div>
 
         {billOpen && (
-          <div
-            data-testid="inbox-mobile-bill-panel"
-            style={{
-              flexShrink: 0,
-              height: billPanelHeight,
-              minHeight: 220,
-              maxHeight: "58%",
-              display: "flex",
-              flexDirection: "column",
-              borderTop: "1px solid color-mix(in srgb, var(--sp-green) 18%, transparent)",
-              background: "color-mix(in srgb, var(--sp-panel) 98%, transparent)",
-              boxShadow: "0 -12px 28px rgba(0,0,0,0.28)",
-            }}
-          >
-            <div
-              style={{
-                padding: "10px 14px 8px",
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-                <button
-                  type="button"
-                  aria-label={billExpanded ? "Collapse bill pay" : "Expand bill pay"}
-                  onClick={() => setBillExpanded((value) => !value)}
-                  style={{
-                    width: 44,
-                    height: 6,
-                    borderRadius: 999,
-                    border: "none",
-                    background: "rgba(255,255,255,0.16)",
-                    cursor: "pointer",
-                    padding: 0,
-                  }}
-                />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: 1.8,
-                    textTransform: "uppercase",
-                    color: "var(--sp-green)",
-                  }}
-                >
-                  Bill pay
-                </span>
-                {email.extractedBill?.amount != null && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(205,214,244,0.62)",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    ${Number(email.extractedBill.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </span>
-                )}
-                {email.extractedBill?.due_date && (
-                  <>
-                    <span style={{ color: "var(--color-text-faint)" }}>·</span>
-                    <span style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
-                      Due {email.extractedBill.due_date}
-                    </span>
-                  </>
-                )}
-                <span style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  onClick={() => setBillExpanded((value) => !value)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "6px 8px",
-                    minHeight: 44,
-                    borderRadius: 8,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.03)",
-                    color: "rgba(205,214,244,0.72)",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    fontSize: 10,
-                    fontWeight: 600,
-                  }}
-                >
-                  {billExpanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-                  {billExpanded ? "Less" : "More"}
-                </button>
-              </div>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                overscrollBehavior: "contain",
-                padding: "10px 14px 16px",
-              }}
-            >
-              <BillBadge
-                layout="mobile"
-                bill={billSeed}
-                model={email.billModel}
-                emailSubject={email.subject}
-                emailFrom={email.from}
-                emailBody={extractionBody.body}
-                emailBodyLoading={extractionBody.loading}
-                emailBodySource={extractionBody.source}
-                emailBodyError={extractionBody.error}
-                mapping={billResolution?.mapping}
-                mappingLoading={billResolution?.status === "loading"}
-              />
-            </div>
-          </div>
+          <MobileBillDrawer
+            email={email}
+            billExpanded={billExpanded}
+            setBillExpanded={setBillExpanded}
+            bodyState={bodyState}
+            billResolution={billResolution}
+          />
         )}
       </div>
 
@@ -457,42 +226,42 @@ export default function MobileReader({
                 }}
               />
             )}
-            {isHandledSnapshot && (
+            {canReopen && (
               <MobileActionRow
                 icon={Check}
                 label="Reopen"
                 onClick={() => handleAction("snapshot-reopen")}
               />
             )}
-            {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "needs_attention" && (
+            {canMoveToNeeds && (
               <MobileActionRow
                 icon={Zap}
                 label="Move to Needs"
                 onClick={() => handleAction("snapshot-move-lane", "needs_attention")}
               />
             )}
-            {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "fyi" && (
+            {canMoveToFyi && (
               <MobileActionRow
                 icon={FileText}
                 label="Move to FYI"
                 onClick={() => handleAction("snapshot-move-lane", "fyi")}
               />
             )}
-            {showSnapshotWorkflowActions && !isHandledSnapshot && snapshotLane !== "noise" && (
+            {canMoveToNoise && (
               <MobileActionRow
                 icon={BellOff}
                 label="Move to Noise"
                 onClick={() => handleAction("snapshot-move-lane", "noise")}
               />
             )}
-            {canMarkHandledSnapshot && (
+            {canHandle && (
               <MobileActionRow
                 icon={Check}
                 label="Handled"
                 onClick={() => handleAction("snapshot-handled")}
               />
             )}
-            {canDismissSnapshot && !isHandledSnapshot && (
+            {canDismiss && (
               <MobileActionRow
                 icon={XCircle}
                 label="Dismiss"

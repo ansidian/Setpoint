@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { checkSizeBaseline, isSizeCheckedSource } from './lib/component-sizes.mjs'
 
 const root = process.cwd()
 const componentSizeBaselinePath = 'docs/quality/component-size-baseline.json'
@@ -149,45 +150,24 @@ async function readComponentSizeBaseline() {
   return baseline
 }
 
-async function checkComponentSizes() {
+async function checkSourceFileSizes() {
   const baseline = await readComponentSizeBaseline()
   if (!baseline) return
-  const threshold = baseline.threshold
-  const componentFiles = await collectFiles('src', (relativePath) => {
-    if (!/\.(jsx|tsx)$/.test(relativePath)) return false
-    if (/\.test\.(jsx|tsx)$/.test(relativePath)) return false
-    return relativePath.includes('/components/') || relativePath.includes('/pages/')
-  })
 
-  const oversized = []
-  for (const file of componentFiles) {
+  // Govern every non-test source file under src/ — not just .jsx/.tsx under
+  // /components/ or /pages/. Hooks (src/hooks/**) and loose .js controllers/models
+  // were the blind spot that let a 1519-line hook grow unguarded.
+  const sourceFiles = await collectFiles('src', isSizeCheckedSource)
+  const files = []
+  for (const file of sourceFiles) {
     const text = await readText(file)
     const lineCount = text.split(/\r?\n/).length - (text.endsWith('\n') ? 1 : 0)
-    if (lineCount <= threshold) continue
-    oversized.push([file, lineCount])
-
-    const allowed = baseline.files[file]
-    if (!allowed) {
-      failures.push(`${file} is ${lineCount} lines and is not in the component-size baseline`)
-    } else if (lineCount > allowed) {
-      failures.push(`${file} grew from baseline ${allowed} lines to ${lineCount}; decompose or update the baseline with justification`)
-    }
+    files.push({ path: file, lineCount })
   }
 
-  const currentFiles = new Set(oversized.map(([file]) => file))
-  for (const file of Object.keys(baseline.files)) {
-    if (!currentFiles.has(file)) {
-      warnings.push(`${file} is in the component-size baseline but no longer exceeds ${threshold} lines; remove it from the baseline`)
-    }
-  }
-
-  if (oversized.length > 0) {
-    const summary = oversized
-      .sort((a, b) => b[1] - a[1])
-      .map(([file, count]) => `  - ${file}: ${count}`)
-      .join('\n')
-    warnings.push(`Oversized component debt above ${threshold} lines:\n${summary}`)
-  }
+  const result = checkSizeBaseline({ files, baseline })
+  failures.push(...result.failures)
+  warnings.push(...result.warnings)
 }
 
 await checkIgnoredKnowledge()
@@ -195,7 +175,7 @@ await checkAgentsMap()
 await checkHistoricalDocsCleanup()
 await checkAreaMaps()
 await checkImportBoundariesAcrossDomains()
-await checkComponentSizes()
+await checkSourceFileSizes()
 
 for (const warning of warnings) {
   console.warn(`Warning: ${warning}`)

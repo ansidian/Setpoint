@@ -8,6 +8,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `InboxView.jsx` — composes live/snapshot modes, session state, undo coordination
 - `InboxDesktopPane.jsx` — desktop layout: digest, sidebar, list, reader, undo toast
 - `useInboxController.js` — central state machine: selection, filters, search, undo, Alfred handoff
+- `inboxReadRoutingModel.js` — read-scope routing (`resolveReadScope`) + `planMarkAllVisibleRead`; one home for the live/snapshot/indexed decision shared by mark-all and auto-mark-read
 - `useInboxActionDispatch.js` — action handlers: trash, snooze, lane move, mark read, draft reply
 - `useInboxSessionState.js` — external session store surviving unmount/tab switches
 - `useSnapshotOptimisticOverlay.js` — reconciles optimistic overlays against snapshot refreshes
@@ -22,7 +23,8 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `sidebarCompactStore.js` — persisted read/write/default for the inbox sidebar compact toggle (key `ea:inboxSidebarCompact`)
 - `inboxRow.js` — canonical row normalization: field fallbacks, read-override merge
 - `inboxWorkItems.js` — work item pipelines: active-snapshot, live, resurfaced-snooze
-- `inboxCountsModel.js` — scoped unread counts under account/category filters
+- `inboxVisibleEmailsModel.js` — `selectVisibleEmails`: the rendered-row projection (indexed-search short-circuit + snooze/account/category/lane filter + untriaged/lane/recency sort)
+- `inboxCountsModel.js` — scoped unread counts under account/category filters, plus lane/live/mobile-chip/unread count projections
 - `inboxNowTick.js` — schedules the `nowTick` timeout to the soonest snooze boundary or grace-label transition
 - `inboxProcessingModel.js` — triage activity counts from processing state
 - `snapshotSummary.js` — lane breakdown text for the digest header
@@ -35,6 +37,7 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `InboxSearchFlagChips.jsx` — is:unread toggle chip
 - `InboxSearchFlagChipsModel.js` — parses/toggles is:read|is:unread flags in queries
 - `indexedSearchModel.js` — normalizes indexed search results, merges read state
+- `useIndexedSearch.js` — debounced indexed-search hook: query effect, stale-response guard, local read-override reconciliation (`updateIndexedSearchRead`/`markIndexedSearchReadBulk`)
 
 ### Reader
 - `reader/Reader.jsx` — detail-pane router (desktop/mobile), body loading, snooze/bill state
@@ -46,9 +49,13 @@ The email triage and reading surface, desktop and mobile: live-polled email, act
 - `reader/useEmailBody.js` — fetches and caches body HTML, preview fallback
 - `reader/useBillPayResolver.js` — resolves bill extraction for the open email
 - `reader/billExtractionBody.js` — body state for the bill-pay workflow
+- `reader/billSeedModel.js` — pure bill-pay seed derivation (`resolveBillSeed`) + USD amount formatting (`formatBillAmount`) shared by both readers' bill drawers
 - `reader/MobileReader.jsx` — mobile detail pane with action row
+- `reader/MobileBillDrawer.jsx` — mobile slide-up bill-pay sheet (expand/collapse affordance) extracted from MobileReader
+- `reader/MobileReaderHeader.jsx` — mobile reader subject/sender/status-pills/briefing-triage header block extracted from MobileReader
 - `reader/MobileActionRow.jsx` — single-row mobile action buttons
 - `reader/MobileReaderControls.jsx` — pill badges and inline mobile controls
+- `reader/readerActionsModel.js` — shared action visibility for both reader panes; delegates snapshot lifecycle gating to `activeSnapshotWorkflowModel` so buttons match the hotkeys/dispatch (incl. the `snapshot_item_id` guard)
 
 ### Mobile
 - `mobile/MobileInboxView.jsx` — mobile layout: chip filter bar, compact rows, reader

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarFloatingDetailPanel from "./CalendarFloatingDetailPanel.jsx";
 import { resolveFloatingDetailPlacement } from "./calendarFloatingDetailPlacement.js";
@@ -893,5 +893,157 @@ describe("CalendarFloatingDetailPanel", () => {
     });
 
     expect(Number(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-y"))).toBe(initialY);
+  });
+
+  function renderDraggable(onUserDraggedChange) {
+    const calendarPanel = appendRectElement({
+      top: 0, left: 0, right: 900, bottom: 900, width: 900, height: 900,
+    });
+    const anchorElement = appendRectElement({
+      top: 400, left: 600, right: 700, bottom: 424, width: 100, height: 24,
+    });
+    const detail = {
+      open: true,
+      mode: "detail",
+      placementKey: "drag-placement-1",
+      view: "bills",
+      itemId: "bill-1",
+      dateKey: "2026-04-20",
+      anchorElement,
+      sourceCellElement: null,
+      exclusionElement: null,
+      preferredSide: "left",
+      forcedSide: null,
+      sideIntent: "auto",
+      userDragged: false,
+      initialPlacement: resolveFloatingDetailPlacement({
+        anchorRect: anchorElement.getBoundingClientRect(),
+        sourceRect: null,
+        exclusionRect: null,
+        calendarRect: calendarPanel.getBoundingClientRect(),
+        railRect: null,
+        panelHeight: 220,
+        mode: "detail",
+        preferredSide: "left",
+      }),
+    };
+    render(
+      <CalendarFloatingDetailPanel
+        detail={detail}
+        label="Bills"
+        calendarPanelRef={{ current: calendarPanel }}
+        railRef={{ current: null }}
+        onClose={() => {}}
+        onUserDraggedChange={onUserDraggedChange}
+      >
+        <div>Rent</div>
+      </CalendarFloatingDetailPanel>,
+    );
+    return detail;
+  }
+
+  it("commits a manual drag: moves the panel and reports the user-dragged placement", async () => {
+    const onUserDraggedChange = vi.fn();
+    const detail = renderDraggable(onUserDraggedChange);
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+    await nextFrame();
+
+    // Give the panel a non-zero origin so the pointer-down offset capture
+    // (clientX - panelRect.left) actually bites and is pinned by the assertions below.
+    const panel = screen.getByTestId("calendar-floating-detail-panel");
+    panel.getBoundingClientRect = vi.fn(() => domRect({
+      top: 20, left: 40, right: 420, bottom: 240, width: 380, height: 220,
+    }));
+
+    const handle = screen.getByTestId("calendar-floating-detail-drag-handle");
+    act(() => {
+      fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, button: 0, pointerId: 1 });
+      // Past the 2px threshold, so this is treated as a drag, not a click.
+      fireEvent.pointerMove(handle, { clientX: 300, clientY: 260, pointerId: 1 });
+    });
+    await nextFrame();
+    act(() => {
+      fireEvent.pointerUp(handle, { clientX: 300, clientY: 260, pointerId: 1 });
+    });
+
+    // offset = (downX - panelLeft, downY - panelTop) = (60, 80); manual pos =
+    // (moveX - offsetX, moveY - offsetY) = (240, 180), both inside the calendar.
+    expect(Number(panel.getAttribute("data-motion-animate-x"))).toBe(240);
+    expect(Number(panel.getAttribute("data-motion-animate-y"))).toBe(180);
+    // A manual drag snaps instantly (no spring) and drops the caret.
+    expect(panel.getAttribute("data-motion-transition-x-duration")).toBe("0.01");
+    expect(onUserDraggedChange).toHaveBeenCalledWith(true, detail.placementKey);
+  });
+
+  it("treats an exactly-2px move as a drag (threshold is inclusive of 2)", async () => {
+    const onUserDraggedChange = vi.fn();
+    const detail = renderDraggable(onUserDraggedChange);
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+    await nextFrame();
+
+    const handle = screen.getByTestId("calendar-floating-detail-drag-handle");
+    act(() => {
+      fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, button: 0, pointerId: 1 });
+      // hypot(2, 0) === 2.0 — `< 2` lets this through as a drag; `<= 2` would not.
+      fireEvent.pointerMove(handle, { clientX: 102, clientY: 100, pointerId: 1 });
+    });
+    await nextFrame();
+    act(() => {
+      fireEvent.pointerUp(handle, { clientX: 102, clientY: 100, pointerId: 1 });
+    });
+
+    expect(onUserDraggedChange).toHaveBeenCalledWith(true, detail.placementKey);
+  });
+
+  it("treats a movement just past the 2px threshold as a drag", async () => {
+    const onUserDraggedChange = vi.fn();
+    const detail = renderDraggable(onUserDraggedChange);
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+    await nextFrame();
+
+    const handle = screen.getByTestId("calendar-floating-detail-drag-handle");
+    act(() => {
+      fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, button: 0, pointerId: 1 });
+      // 3px > the 2px threshold — the smallest motion that still counts as a drag.
+      fireEvent.pointerMove(handle, { clientX: 103, clientY: 100, pointerId: 1 });
+    });
+    await nextFrame();
+    act(() => {
+      fireEvent.pointerUp(handle, { clientX: 103, clientY: 100, pointerId: 1 });
+    });
+
+    expect(onUserDraggedChange).toHaveBeenCalledWith(true, detail.placementKey);
+  });
+
+  it("does not commit a sub-threshold pointer interaction as a drag", async () => {
+    const onUserDraggedChange = vi.fn();
+    renderDraggable(onUserDraggedChange);
+
+    await act(async () => {
+      resizeCallback([{ contentRect: { height: 220, width: 380 } }]);
+    });
+    await nextFrame();
+
+    const placedX = screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-x");
+    const handle = screen.getByTestId("calendar-floating-detail-drag-handle");
+    act(() => {
+      fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, button: 0, pointerId: 1 });
+      // Below the 2px movement threshold — a click, not a drag.
+      fireEvent.pointerMove(handle, { clientX: 100.5, clientY: 100.5, pointerId: 1 });
+      fireEvent.pointerUp(handle, { clientX: 100.5, clientY: 100.5, pointerId: 1 });
+    });
+
+    expect(onUserDraggedChange).not.toHaveBeenCalled();
+    // The panel stays on its anchored placement.
+    expect(screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-animate-x")).toBe(placedX);
   });
 });

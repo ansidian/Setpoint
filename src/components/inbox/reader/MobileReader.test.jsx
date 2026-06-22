@@ -28,6 +28,7 @@ function renderMobileReader(overrides = {}) {
         from: "Bank",
         fromEmail: "bank@example.test",
         date: "2026-05-03T15:00:00.000Z",
+        snapshot_item_id: 42,
         hasBill: true,
         preview: "Preview without bill details.",
         body: "Summary body.",
@@ -191,6 +192,20 @@ describe("MobileReader bill extraction", () => {
     expect(screen.queryByText("Dismiss")).toBeNull();
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Handled")).toBeNull();
+  });
+
+  it("hides snapshot lifecycle actions when snapshot_item_id is missing (drift guard)", () => {
+    renderMobileReader({
+      billOpen: false,
+      email: { hasBill: false, _activeSnapshot: true, _lane: "needs_attention", snapshot_item_id: undefined },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.queryByText("Handled")).toBeNull();
+    expect(screen.queryByText("Dismiss")).toBeNull();
+    expect(screen.queryByText("Move to FYI")).toBeNull();
+    expect(screen.queryByText("Move to Noise")).toBeNull();
   });
 });
 

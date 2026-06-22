@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AnchoredFloatingPanel from "./AnchoredFloatingPanel.jsx";
 
@@ -145,5 +145,61 @@ describe("AnchoredFloatingPanel", () => {
     expect(panel.style.overflow).not.toBe("hidden");
     expect(panel.style.overflowY).toBe("auto");
     expect(panel.style.overscrollBehavior).toBe("contain");
+  });
+
+  it("closes on Escape", async () => {
+    const onClose = vi.fn();
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        width={300}
+        height={386}
+        role="dialog"
+        ariaLabel="Test anchored panel"
+        onClose={onClose}
+      >
+        <div style={{ height: 200 }}>Content</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    await screen.findByRole("dialog", { name: "Test anchored panel" });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses on an outside pointerdown but spares the panel, anchor, and sibling calendar popovers", async () => {
+    const onClose = vi.fn();
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        width={300}
+        height={386}
+        role="dialog"
+        ariaLabel="Test anchored panel"
+        onClose={onClose}
+      >
+        <button type="button">Inside</button>
+      </AnchoredFloatingPanel>,
+    );
+
+    const panel = await screen.findByRole("dialog", { name: "Test anchored panel" });
+
+    fireEvent.pointerDown(panel);
+    fireEvent.pointerDown(anchor);
+    expect(onClose).not.toHaveBeenCalled();
+
+    const sibling = document.createElement("div");
+    sibling.setAttribute("data-calendar-popover-panel", "true");
+    const inner = document.createElement("button");
+    sibling.appendChild(inner);
+    document.body.appendChild(sibling);
+    fireEvent.pointerDown(inner);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(document.body);
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    sibling.remove();
   });
 });

@@ -1,11 +1,18 @@
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import Tooltip from "@/components/shared/Tooltip";
+import { GOOGLE_EVENT_COLORS } from "../../../../shared/calendar-event-colors.js";
+import useDismissablePortal from "../../../hooks/useDismissablePortal.js";
 import {
-  GOOGLE_EVENT_COLORS,
-  googleEventColorIdForSourceHex,
-} from "../../../../shared/calendar-event-colors.js";
+  containTabFocus,
+  contextMenuFocusItems,
+  focusableItems,
+  focusFirstMenuItem,
+  focusMenuColor,
+  menuStyle,
+} from "./quickActionMenuLayout.js";
+import { checkColorForDot, selectedEventColorId } from "./quickActionColorModel.js";
 
 const SCOPE_OPTIONS = [
   { value: "one", label: "Just this one" },
@@ -13,32 +20,8 @@ const SCOPE_OPTIONS = [
   { value: "all", label: "All events" },
 ];
 
-const FOCUSABLE_SELECTOR = [
-  "button:not(:disabled)",
-  "[href]",
-  "input:not(:disabled)",
-  "select:not(:disabled)",
-  "textarea:not(:disabled)",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
 function stop(event) {
   event.stopPropagation();
-}
-
-function menuStyle(menu) {
-  const width = 220;
-  const padding = 12;
-  const height = 220;
-  const left = Math.min(
-    Math.max(padding, menu.x),
-    Math.max(padding, window.innerWidth - width - padding),
-  );
-  const top = Math.min(
-    Math.max(padding, menu.y),
-    Math.max(padding, window.innerHeight - height - padding),
-  );
-  return { left, top, width };
 }
 
 function actionButtonColors(tone, active) {
@@ -61,82 +44,6 @@ function actionButtonColors(tone, active) {
     background: active ? "rgba(255,255,255,0.075)" : "rgba(255,255,255,0.04)",
     color: "var(--sp-text)",
   };
-}
-
-function focusableItems(container) {
-  if (!container) return [];
-  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR));
-}
-
-function focusFirstMenuItem(container) {
-  focusableItems(container)[0]?.focus({ preventScroll: true });
-}
-
-function colorDotItems(container) {
-  if (!container) return [];
-  return Array.from(container.querySelectorAll("[data-calendar-event-color-button='true']:not(:disabled)"));
-}
-
-function contextMenuFocusItems(container) {
-  const dots = colorDotItems(container);
-  return dots.length ? dots : focusableItems(container);
-}
-
-function focusMenuColor(container) {
-  const dots = colorDotItems(container);
-  if (!dots.length) {
-    focusFirstMenuItem(container);
-    return;
-  }
-  const selected = dots.find((element) => element.getAttribute("aria-pressed") === "true");
-  (selected || dots[0])?.focus({ preventScroll: true });
-}
-
-function containTabFocus(event, container, itemResolver = focusableItems) {
-  const items = itemResolver(container);
-  if (!items.length) return;
-  const first = items[0];
-  const last = items.at(-1);
-  const active = document.activeElement;
-
-  if (!items.includes(active)) {
-    event.preventDefault();
-    (event.shiftKey ? last : first).focus({ preventScroll: true });
-    return;
-  }
-
-  if (event.shiftKey && active === first) {
-    event.preventDefault();
-    last.focus({ preventScroll: true });
-    return;
-  }
-
-  if (!event.shiftKey && active === last) {
-    event.preventDefault();
-    first.focus({ preventScroll: true });
-  }
-}
-
-function normalizedHex(value) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-function selectedEventColorId(event) {
-  if (event?.colorId) return String(event.colorId);
-  if (event?.sourceColorId) return String(event.sourceColorId);
-  const visibleColor = normalizedHex(event?.color || event?.sourceColor);
-  if (!visibleColor) return null;
-  return googleEventColorIdForSourceHex(visibleColor);
-}
-
-function checkColorForDot(hex) {
-  const clean = hex.replace("#", "");
-  if (clean.length !== 6) return "#f8f5ff";
-  const red = Number.parseInt(clean.slice(0, 2), 16);
-  const green = Number.parseInt(clean.slice(2, 4), 16);
-  const blue = Number.parseInt(clean.slice(4, 6), 16);
-  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
-  return luminance > 0.58 ? "#16161e" : "#f8f5ff";
 }
 
 function ActionButton({ children, tone = "default", disabled, onClick, testId }) {
@@ -345,37 +252,24 @@ function ContextMenu({ quickActions }) {
   const menu = quickActions.contextMenu;
   const ref = useRef(null);
 
-  useEffect(() => {
-    if (!menu) return undefined;
-    function handlePointerDown(event) {
-      if (ref.current?.contains(event.target)) return;
-      quickActions.closeContextMenu();
-    }
-    function handleKeyDown(event) {
-      if (event.key === "Tab") {
-        containTabFocus(event, ref.current, menu.confirm ? focusableItems : contextMenuFocusItems);
-        return;
-      }
-      if (event.key === "Escape") {
-        quickActions.closeContextMenu();
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown, true);
-    window.queueMicrotask(() => {
-      if (menu.confirm) {
+  useDismissablePortal({
+    ref,
+    active: !!menu,
+    onDismiss: quickActions.closeContextMenu,
+    onTabKey: (event) => containTabFocus(
+      event,
+      ref.current,
+      menu?.confirm ? focusableItems : contextMenuFocusItems,
+    ),
+    onActivate: () => {
+      if (menu?.confirm) {
         focusFirstMenuItem(ref.current);
       } else {
         focusMenuColor(ref.current);
       }
-    });
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [menu, quickActions]);
+    },
+    activateKey: menu,
+  });
 
   if (!menu) return null;
   const pos = menuStyle(menu);
@@ -456,25 +350,11 @@ function ScopePrompt({ quickActions }) {
   const prompt = quickActions.prompt;
   const ref = useRef(null);
 
-  useEffect(() => {
-    if (!prompt) return undefined;
-    function handlePointerDown(event) {
-      if (ref.current?.contains(event.target)) return;
-      quickActions.cancelPrompt();
-    }
-    function handleKeyDown(event) {
-      if (event.key !== "Escape") return;
-      quickActions.cancelPrompt();
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [prompt, quickActions]);
+  useDismissablePortal({
+    ref,
+    active: !!prompt,
+    onDismiss: quickActions.cancelPrompt,
+  });
 
   if (!prompt) return null;
   const title = prompt.kind === "delete"

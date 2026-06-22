@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { computeScopedNoiseUnreadCount } from "./inboxCountsModel.js";
+import {
+  computeScopedNoiseUnreadCount,
+  computeLaneCounts,
+  computeLiveCount,
+  computeMobileChipCounts,
+  computeUnreadCount,
+} from "./inboxCountsModel.js";
 
 function email(overrides = {}) {
   const uid = overrides.uid || overrides.id || "msg-1";
@@ -47,5 +53,83 @@ describe("computeScopedNoiseUnreadCount", () => {
       snoozedMap: new Map([["snoozed-noise", nowTick + 60_000]]),
       nowTick,
     })).toBe(1);
+  });
+});
+
+describe("computeLaneCounts", () => {
+  it("tallies per-lane counts in the account scope, skipping untriaged rows", () => {
+    const counts = computeLaneCounts([
+      email({ uid: "q1", _lane: "queued" }),
+      email({ uid: "na1", _lane: "needs_attention" }),
+      email({ uid: "na2", _lane: "needs_attention" }),
+      email({ uid: "live1", _untriaged: true, _lane: "queued" }),
+      email({ uid: "other-acct", _lane: "fyi", _accountKey: "personal" }),
+    ], { accountId: "work" });
+
+    expect(counts.queued).toBe(1);
+    expect(counts.needs_attention).toBe(2);
+    expect(counts.fyi).toBe(0);
+  });
+
+  it("mirrors needs_attention into the action alias", () => {
+    const counts = computeLaneCounts([
+      email({ uid: "na1", _lane: "needs_attention" }),
+    ]);
+    expect(counts.action).toBe(counts.needs_attention);
+    expect(counts.action).toBe(1);
+  });
+
+  it("ignores snooze state (unlike the mobile chip counts)", () => {
+    // A snoozedMap that would hide this row everywhere snooze is honored; lane
+    // counts must still include it. Guards against snooze filtering creeping in.
+    const counts = computeLaneCounts([
+      email({ uid: "snoozable", _lane: "fyi" }),
+    ], { accountId: "__all", snoozedMap: new Map([["snoozable", Number.MAX_SAFE_INTEGER]]) });
+    expect(counts.fyi).toBe(1);
+  });
+});
+
+describe("computeLiveCount", () => {
+  it("counts untriaged rows in the account scope", () => {
+    const emails = [
+      email({ uid: "live1", _untriaged: true }),
+      email({ uid: "live2", _untriaged: true }),
+      email({ uid: "triaged", _untriaged: false }),
+      email({ uid: "other", _untriaged: true, _accountKey: "personal" }),
+    ];
+    expect(computeLiveCount(emails, { accountId: "work" })).toBe(2);
+    expect(computeLiveCount(emails, { accountId: "__all" })).toBe(3);
+  });
+});
+
+describe("computeMobileChipCounts", () => {
+  it("honors snooze, counts untriaged toward __live, and tracks __all", () => {
+    const nowTick = 1_000;
+    const counts = computeMobileChipCounts([
+      email({ uid: "live1", _untriaged: true, _lane: "queued" }),
+      email({ uid: "na1", _lane: "needs_attention" }),
+      email({ uid: "snoozed", _lane: "fyi" }),
+    ], {
+      accountId: "work",
+      snoozedMap: new Map([["snoozed", nowTick + 500]]),
+      nowTick,
+    });
+
+    expect(counts.__all).toBe(2);
+    expect(counts.__live).toBe(1);
+    expect(counts.needs_attention).toBe(1);
+    expect(counts.action).toBe(1);
+    expect(counts.fyi).toBe(0);
+  });
+});
+
+describe("computeUnreadCount", () => {
+  it("counts unread rows but excludes the untriaged_read lane", () => {
+    const count = computeUnreadCount([
+      email({ uid: "unread-1", read: false, _lane: "needs_attention" }),
+      email({ uid: "read-1", read: true, _lane: "needs_attention" }),
+      email({ uid: "untriaged-read", read: false, _lane: "untriaged_read" }),
+    ]);
+    expect(count).toBe(1);
   });
 });
