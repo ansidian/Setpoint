@@ -10,6 +10,7 @@ import {
   actualSessionKey,
   classifySchedules,
   findScheduleByPayee,
+  findScheduleByName,
   buildDateCondition,
   mapOpenBillInstances,
   transactionSearchStart,
@@ -256,19 +257,11 @@ async function findExistingSchedule(payeeId, accountId, amount, name) {
   }
   if (name) {
     const allSchedules = await getSchedulesWithConditions({ includeCompleted: true });
-    const byName = allSchedules.find(s => s.name === name);
-    if (byName) {
-      // Cross-type guard (bill <-> transfer): refuse a bare-name match whose amount
-      // sign differs from this write, so a transfer can't clobber a same-named bill.
-      const amountCond = (byName.conditions || []).find(
-        (c) => c.field === "amount" && ["is", "isapprox", "isbetween"].includes(c.op),
-      );
-      const existingAmount = amountCond?.value;
-      if (typeof existingAmount === "number" && existingAmount !== 0 && Math.sign(existingAmount) !== Math.sign(amount)) {
-        return null;
-      }
-      return byName.id;
-    }
+    // Name fallback with the cross-type sign guard (bill <-> transfer). The amount read
+    // routes through actual-amount-condition.js so an `isbetween` range is interpreted,
+    // not skipped, and a transfer can't clobber a same-named range bill (P3-76).
+    const byName = findScheduleByName(allSchedules, name, amount);
+    if (byName) return byName.id;
   }
   return null;
 }

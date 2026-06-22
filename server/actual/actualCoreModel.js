@@ -2,7 +2,7 @@
 // schedule classification + matching, schedule-condition building, date helpers, and
 // the metadata/bill projections. No @actual-app/api, no DB — the residual owns the SDK
 // session lifecycle, the lock/cache singletons, and all IO.
-import { amountConditionCents } from "./actual-amount-condition.js";
+import { amountConditionBounds, amountConditionCents } from "./actual-amount-condition.js";
 import { buildBillOccurrencesFromSchedules, isSchedulePaid } from "./actual-bill-occurrences.js";
 
 export function actualSessionKey(config) {
@@ -53,12 +53,34 @@ export function findScheduleByPayee(schedules, payeeId, accountId, amountCents) 
     if (amtCond.op === 'is' && Math.abs(amtCond.value) === amt) return s;
     if (amtCond.op === 'isapprox' && Math.abs(Math.abs(amtCond.value) - amt) / amt < 0.3) return s;
     if (amtCond.op === 'isbetween') {
-      const lo = Math.min(Math.abs(amtCond.value.num1), Math.abs(amtCond.value.num2));
-      const hi = Math.max(Math.abs(amtCond.value.num1), Math.abs(amtCond.value.num2));
-      if (amt >= lo * 0.7 && amt <= hi * 1.3) return s;
+      // Route through the shared amount-condition source of truth instead of reading
+      // num1/num2 inline, so a missing num2 defaults to num1 rather than going NaN.
+      const { lo, hi } = amountConditionBounds(amtCond);
+      const loA = Math.abs(lo), hiA = Math.abs(hi);
+      if (amt >= Math.min(loA, hiA) * 0.7 && amt <= Math.max(loA, hiA) * 1.3) return s;
     }
   }
   return acctMatches[0];
+}
+
+// Find a same-named schedule, refusing a cross-type reuse (bill <-> transfer): the
+// amount-condition sign distinguishes a payment (negative) from a transfer/income
+// (positive), so a transfer must not clobber a same-named bill. The amount read goes
+// through actual-amount-condition.js so an `isbetween` range is interpreted by its
+// midpoint sign rather than skipped — the legacy `typeof value === "number"` guard
+// silently passed every isbetween object through, letting a transfer overwrite a range
+// bill (P3-76). Returns the matched schedule or null.
+export function findScheduleByName(schedules, name, amountCents) {
+  const byName = schedules.find(s => s.name === name);
+  if (!byName) return null;
+  const amtCond = (byName.conditions || []).find(
+    c => c.field === "amount" && ["is", "isapprox", "isbetween"].includes(c.op),
+  );
+  const existingAmount = amountConditionCents(amtCond);
+  if (existingAmount !== 0 && Math.sign(existingAmount) !== Math.sign(amountCents)) {
+    return null;
+  }
+  return byName;
 }
 
 export function buildDateCondition(oldConditions, newDueDate) {
