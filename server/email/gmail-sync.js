@@ -1,51 +1,47 @@
 import db from "../db/connection.js";
-import { getAccessToken, fetchEmails, fetchEmailsByIds, isMessageRead, chunkArray } from "./gmail.js";
+import { fetchEmails, fetchEmailsByIds, isMessageRead } from "./gmail.js";
 import { indexEmails } from "./email-index.js";
 import {
   attachArrivalGraceEmailToActiveSnapshot,
-  markProviderRemovedFromActiveSnapshots,
   getOrCreateActiveSnapshot,
 } from "../snapshots/snapshot-service.js";
-import { ARRIVAL_GRACE_SOURCE, arrivalGraceDeadline } from "../snapshots/arrival-grace.js";
+import { triageStatementsForEmail } from "./gmailTriageStatements.js";
+import { decodeGmailPubSubNotification } from "./gmailPubSubNotification.js";
+export { decodeGmailPubSubNotification } from "./gmailPubSubNotification.js";
+import {
+  collectInboxMessageIds,
+  collectUnreadLabelMessageIds,
+  collectProviderRemovalEvents,
+} from "./gmailHistoryProjection.js";
+import {
+  reconcileReadStateForExistingMessages,
+  reconcileProviderRemovalForExistingMessages,
+} from "./gmailReconciliation.js";
+import {
+  fetchGmailHistoryPage,
+  fetchGmailMessageMetadata,
+  fetchGmailProfileHistoryId,
+  requestGmailWatch,
+} from "./gmailSyncClient.js";
+export {
+  fetchGmailHistoryPage,
+  fetchGmailMessageMetadata,
+  fetchGmailProfileHistoryId,
+} from "./gmailSyncClient.js";
+import {
+  persistGmailWatchState,
+  getStoredHistoryId,
+  markWatchError,
+  seedInactiveWatchStateStatement,
+  advanceCursorStatement,
+  touchCursorStatement,
+} from "./gmailWatchStore.js";
+export { persistGmailWatchState } from "./gmailWatchStore.js";
 
 const DEFAULT_GMAIL_TOPIC = process.env.GMAIL_PUBSUB_TOPIC;
 const WATCH_RENEWAL_LEAD_MS = 24 * 60 * 60 * 1000;
 const MAX_HISTORY_PAGES = 20;
 const GMAIL_HISTORY_RECOVERY_LOOKBACK_HOURS = 14 * 24;
-// SQLite caps bound parameters per statement; chunk uid IN lists to stay well
-// under it (mirrors EMAIL_INDEX_LOOKUP_CHUNK_SIZE in email-index.js).
-const GMAIL_ROW_LOOKUP_CHUNK_SIZE = 500;
-// Bound the parallel per-message metadata fetches during reconciliation (mirrors
-// the chunk size fetchMessages uses) so a large label-change burst does not open
-// hundreds of simultaneous Gmail requests.
-const GMAIL_METADATA_FETCH_CHUNK_SIZE = 15;
-
-function decodeBase64UrlJson(value) {
-  if (!value || typeof value !== "string") {
-    throw new Error("Pub/Sub message.data is required");
-  }
-  try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-  } catch (err) {
-    throw new Error(`Invalid Pub/Sub Gmail payload: ${err.message}`);
-  }
-}
-
-export function decodeGmailPubSubNotification(body) {
-  const payload = decodeBase64UrlJson(body?.message?.data);
-  const emailAddress = String(payload.emailAddress || "").trim().toLowerCase();
-  const historyId = String(payload.historyId || "").trim();
-  if (!emailAddress || !historyId) {
-    throw new Error("Gmail Pub/Sub payload requires emailAddress and historyId");
-  }
-  return {
-    emailAddress,
-    historyId,
-    pubsubMessageId: body.message?.messageId || body.message?.message_id || null,
-    publishTime: body.message?.publishTime || null,
-    subscription: body.subscription || null,
-  };
-}
 
 async function findGmailAccountByEmail(emailAddress, dbClient) {
   const result = await dbClient.execute({
@@ -121,50 +117,6 @@ export async function enqueueHistorySyncFromPubSub(body, { dbClient = db } = {})
   };
 }
 
-function watchExpirationIso(expiration) {
-  const millis = Number(expiration);
-  if (!Number.isFinite(millis)) {
-    throw new Error("Gmail watch response missing numeric expiration");
-  }
-  return new Date(millis).toISOString();
-}
-
-export async function persistGmailWatchState(account, {
-  historyId,
-  expiration,
-  status = "active",
-  lastError = "",
-  now = new Date(),
-}, { dbClient = db } = {}) {
-  const expirationIso = watchExpirationIso(expiration);
-  const renewedAt = now.toISOString();
-  await dbClient.execute({
-    sql: `INSERT INTO ea_gmail_watch_state
-            (user_id, account_id, email_address, last_history_id,
-             watch_expiration_at, watch_status, last_renewed_at, last_error)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(user_id, account_id) DO UPDATE SET
-            email_address = excluded.email_address,
-            last_history_id = excluded.last_history_id,
-            watch_expiration_at = excluded.watch_expiration_at,
-            watch_status = excluded.watch_status,
-            last_renewed_at = excluded.last_renewed_at,
-            last_error = excluded.last_error,
-            updated_at = datetime('now')`,
-    args: [
-      account.user_id,
-      account.id,
-      account.email,
-      String(historyId || ""),
-      expirationIso,
-      status,
-      renewedAt,
-      lastError,
-    ],
-  });
-  return expirationIso;
-}
-
 export async function registerGmailWatch(account, {
   dbClient = db,
   fetchImpl = fetch,
@@ -175,24 +127,7 @@ export async function registerGmailWatch(account, {
   if (!topicName) {
     throw new Error("GMAIL_PUBSUB_TOPIC is required to register Gmail watches");
   }
-  const accessToken = token || await getAccessToken(account);
-  const res = await fetchImpl("https://gmail.googleapis.com/gmail/v1/users/me/watch", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      labelIds: ["INBOX"],
-      labelFilterBehavior: "INCLUDE",
-      topicName,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text?.();
-    throw new Error(`Gmail watch failed for ${account.email}: ${res.status}${text ? ` ${text}` : ""}`);
-  }
-  const data = await res.json();
+  const data = await requestGmailWatch(account, { fetchImpl, token, topicName });
   const expirationIso = await persistGmailWatchState(account, {
     historyId: data.historyId,
     expiration: data.expiration,
@@ -206,350 +141,6 @@ export async function registerGmailWatch(account, {
     watch_expiration_at: expirationIso,
     status: "active",
   };
-}
-
-function collectInboxMessageIds(history = []) {
-  const ids = new Set();
-  for (const record of history) {
-    for (const entry of record.messagesAdded || []) {
-      const message = entry.message || {};
-      if (message.id && message.labelIds?.includes("INBOX")) ids.add(message.id);
-    }
-    for (const entry of record.labelsAdded || []) {
-      const message = entry.message || {};
-      const labels = entry.labelIds || message.labelIds || [];
-      if (message.id && labels.includes("INBOX")) ids.add(message.id);
-    }
-  }
-  return [...ids];
-}
-
-function eventLabelIds(entry) {
-  return entry.labelIds || entry.message?.labelIds || [];
-}
-
-function collectUnreadLabelMessageIds(history = []) {
-  const ids = new Set();
-  for (const record of history) {
-    for (const entry of record.labelsAdded || []) {
-      if (entry.message?.id && eventLabelIds(entry).includes("UNREAD")) ids.add(entry.message.id);
-    }
-    for (const entry of record.labelsRemoved || []) {
-      if (entry.message?.id && eventLabelIds(entry).includes("UNREAD")) ids.add(entry.message.id);
-    }
-  }
-  return [...ids];
-}
-
-function collectProviderRemovalEvents(history = []) {
-  const events = new Map();
-  const addEvent = (messageId, eventType) => {
-    if (!messageId) return;
-    const current = events.get(messageId) || new Set();
-    current.add(eventType);
-    events.set(messageId, current);
-  };
-
-  for (const record of history) {
-    for (const entry of record.labelsRemoved || []) {
-      if (entry.message?.id && eventLabelIds(entry).includes("INBOX")) {
-        addEvent(entry.message.id, "inbox_removed");
-      }
-    }
-    for (const entry of record.labelsAdded || []) {
-      if (entry.message?.id && eventLabelIds(entry).includes("TRASH")) {
-        addEvent(entry.message.id, "trash_added");
-      }
-    }
-    for (const entry of record.messagesDeleted || []) {
-      addEvent(entry.message?.id, "message_deleted");
-    }
-  }
-  return events;
-}
-
-export async function fetchGmailHistoryPage({
-  account,
-  startHistoryId,
-  pageToken = null,
-  fetchImpl = fetch,
-  token,
-}) {
-  const accessToken = token || await getAccessToken(account);
-  const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/history");
-  url.searchParams.set("startHistoryId", startHistoryId);
-  url.searchParams.append("historyTypes", "messageAdded");
-  url.searchParams.append("historyTypes", "labelAdded");
-  url.searchParams.append("historyTypes", "labelRemoved");
-  url.searchParams.append("historyTypes", "messageDeleted");
-  if (pageToken) url.searchParams.set("pageToken", pageToken);
-
-  const res = await fetchImpl(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) {
-    const err = new Error(`Gmail history.list failed for ${account.email}: ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  return res.json();
-}
-
-export async function fetchGmailMessageMetadata(account, messageId, {
-  fetchImpl = fetch,
-  token,
-} = {}) {
-  const accessToken = token || await getAccessToken(account);
-  const res = await fetchImpl(
-    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata&fields=labelIds`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`Gmail message metadata failed for ${account.email}/${messageId}: ${res.status}`);
-  return res.json();
-}
-
-// Returns the account's CURRENT historyId via users.getProfile, used by the
-// 404-recovery branch so it never re-persists the stale cursor that just 404'd.
-export async function fetchGmailProfileHistoryId(account, {
-  fetchImpl = fetch,
-  token,
-} = {}) {
-  const accessToken = token || await getAccessToken(account);
-  const res = await fetchImpl(
-    "https://www.googleapis.com/gmail/v1/users/me/profile?fields=historyId",
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (!res.ok) throw new Error(`Gmail profile fetch failed for ${account.email}: ${res.status}`);
-  const profile = await res.json();
-  const historyId = profile?.historyId ? String(profile.historyId) : null;
-  return historyId;
-}
-
-async function getStoredHistoryId(account, dbClient) {
-  const result = await dbClient.execute({
-    sql: `SELECT last_history_id
-          FROM ea_gmail_watch_state
-          WHERE user_id = ? AND account_id = ?
-          LIMIT 1`,
-    args: [account.user_id, account.id],
-  });
-  return result.rows[0]?.last_history_id || null;
-}
-
-function triageStatementsForEmail(userId, accountId, email, {
-  arrivalGrace = false,
-  now = new Date(),
-} = {}) {
-  const idempotencyKey = `email_triage:${userId}:${accountId}:${email.uid}`;
-  const scheduledFor = arrivalGrace ? arrivalGraceDeadline(now) : null;
-  const payload = JSON.stringify({
-    uid: email.uid,
-    subject: email.subject || "",
-    ...(arrivalGrace
-      ? {
-          arrivalGrace: true,
-          queuedAt: now.toISOString(),
-          graceDeadline: scheduledFor,
-        }
-      : {}),
-  });
-  return [
-    {
-      sql: `INSERT OR IGNORE INTO ea_email_triage
-              (user_id, account_id, email_id, triage_status, triage_source)
-            VALUES (?, ?, ?, 'pending', ?)`,
-      args: [userId, accountId, email.uid, arrivalGrace ? ARRIVAL_GRACE_SOURCE : "unknown"],
-    },
-    {
-      sql: `INSERT INTO ea_triage_jobs
-              (user_id, account_id, email_id, job_type, idempotency_key,
-               priority, payload_json, scheduled_for)
-            VALUES (?, ?, ?, 'email_triage', ?, 2, ?, ?)
-            ON CONFLICT(idempotency_key) DO NOTHING`,
-      args: [userId, accountId, email.uid, idempotencyKey, payload, scheduledFor],
-    },
-  ];
-}
-
-// Resolve every account_id that holds indexed rows for this Gmail mailbox: the
-// synced account plus any sibling ids carrying the same canonical email under a
-// stale account_id (re-OAuth / canonical drift). One DISTINCT lookup returns a
-// tiny id set instead of the wide all-rows scan the caller used to materialize.
-async function resolveGmailMailboxAccountIds(account, dbClient) {
-  const ids = new Set();
-  for (const id of [account.id, account.uid_account_id, account.canonical_id]) {
-    if (id) ids.add(id);
-  }
-  const email = account.email || "";
-  if (email) {
-    const result = await dbClient.execute({
-      sql: `SELECT DISTINCT account_id
-            FROM ea_email_index
-            WHERE user_id = ?
-              AND uid LIKE 'gmail-%'
-              AND lower(account_email) = lower(?)`,
-      args: [account.user_id, email],
-    });
-    for (const row of result.rows) {
-      if (row.account_id) ids.add(row.account_id);
-    }
-  }
-  return [...ids];
-}
-
-async function findExistingGmailRowsForMessageIds(account, messageIds, dbClient) {
-  const uniqueMessageIds = [...new Set(messageIds)].filter(Boolean);
-  if (!uniqueMessageIds.length) return new Map();
-
-  // P1-5: query the uid PRIMARY KEY with chunked IN lists for exactly the
-  // candidate uids (gmail-<accountId>-<messageId>) instead of scanning the whole
-  // gmail slice of ea_email_index and filtering messageIds in JS. Candidate uids
-  // are built from (accountId, messageId) pairs and mapped back to their
-  // messageId, which is robust to account_ids that themselves contain dashes.
-  const accountIds = await resolveGmailMailboxAccountIds(account, dbClient);
-  if (!accountIds.length) return new Map();
-
-  const uidToMessageId = new Map();
-  for (const accountId of accountIds) {
-    for (const messageId of uniqueMessageIds) {
-      uidToMessageId.set(`gmail-${accountId}-${messageId}`, messageId);
-    }
-  }
-  const candidateUids = [...uidToMessageId.keys()];
-
-  const rowsByMessageId = new Map();
-  for (let i = 0; i < candidateUids.length; i += GMAIL_ROW_LOOKUP_CHUNK_SIZE) {
-    const chunk = candidateUids.slice(i, i + GMAIL_ROW_LOOKUP_CHUNK_SIZE);
-    const result = await dbClient.execute({
-      sql: `SELECT uid, account_id, account_email
-            FROM ea_email_index
-            WHERE user_id = ?
-              AND uid IN (${chunk.map(() => "?").join(",")})`,
-      args: [account.user_id, ...chunk],
-    });
-    for (const row of result.rows) {
-      const messageId = uidToMessageId.get(row.uid);
-      if (!messageId) continue;
-      const bucket = rowsByMessageId.get(messageId);
-      if (bucket) bucket.push(row);
-      else rowsByMessageId.set(messageId, [row]);
-    }
-  }
-  return rowsByMessageId;
-}
-
-async function reconcileReadStateForExistingMessages(account, messageIds, {
-  dbClient,
-  fetchMessageReadStateFn,
-} = {}) {
-  const uniqueMessageIds = [...new Set(messageIds)].filter(Boolean);
-  if (!uniqueMessageIds.length) return 0;
-
-  const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, uniqueMessageIds, dbClient);
-  const pendingIds = uniqueMessageIds.filter((messageId) => (rowsByMessageId.get(messageId) || []).length);
-  if (!pendingIds.length) return 0;
-
-  // P2-13: fetch the authoritative per-message read state in bounded parallel
-  // chunks instead of one serial GET per id; build the UPDATE statements from the
-  // resolved results, then apply them in a single batch as before.
-  const statements = [];
-  for (const chunk of chunkArray(pendingIds, GMAIL_METADATA_FETCH_CHUNK_SIZE)) {
-    const results = await Promise.all(chunk.map((messageId) =>
-      Promise.resolve()
-        .then(() => fetchMessageReadStateFn(account, messageId))
-        .then((read) => ({ messageId, read }))
-        .catch((err) => ({ messageId, error: err })),
-    ));
-    for (const { messageId, read, error } of results) {
-      if (error) {
-        console.warn(
-          `[Gmail Sync] Failed to reconcile read state for ${account.email}/${messageId}: ${error.message}`,
-        );
-        continue;
-      }
-      if (read == null) {
-        console.warn(`[Gmail Sync] Could not confirm read state for ${account.email}/${messageId}`);
-        continue;
-      }
-      for (const row of rowsByMessageId.get(messageId) || []) {
-        statements.push({
-          sql: `UPDATE ea_email_index
-                SET read = ?
-                WHERE user_id = ?
-                  AND account_id = ?
-                  AND uid = ?`,
-          args: [read ? 1 : 0, account.user_id, row.account_id, row.uid],
-        });
-      }
-    }
-  }
-  if (statements.length) await dbClient.batch(statements);
-  return statements.length;
-}
-
-function providerStateFromMetadata(metadata) {
-  if (!metadata) return null;
-  const labels = metadata?.labelIds || [];
-  if (labels.includes("TRASH")) return "trashed";
-  if (!labels.includes("INBOX")) return "archived";
-  return null;
-}
-
-async function reconcileProviderRemovalForExistingMessages(account, removalEvents, {
-  dbClient,
-  fetchMessageMetadataFn,
-  now,
-} = {}) {
-  const messageIds = [...removalEvents.keys()];
-  if (!messageIds.length) return 0;
-
-  const rowsByMessageId = await findExistingGmailRowsForMessageIds(account, messageIds, dbClient);
-  const pendingIds = messageIds.filter((messageId) => (rowsByMessageId.get(messageId) || []).length);
-  if (!pendingIds.length) return 0;
-
-  // P2-13: fetch each message's metadata in bounded parallel chunks; the snapshot
-  // write-backs (markProviderRemovedFromActiveSnapshots) still run sequentially
-  // after the fetch so ordering and the removed count are unchanged.
-  let removed = 0;
-  for (const chunk of chunkArray(pendingIds, GMAIL_METADATA_FETCH_CHUNK_SIZE)) {
-    const results = await Promise.all(chunk.map((messageId) =>
-      Promise.resolve()
-        .then(() => fetchMessageMetadataFn(account, messageId))
-        .then((metadata) => ({ messageId, metadata }))
-        .catch((err) => ({ messageId, error: err })),
-    ));
-    for (const { messageId, metadata, error } of results) {
-      if (error) {
-        console.warn(
-          `[Gmail Sync] Failed to reconcile provider removal for ${account.email}/${messageId}: ${error.message}`,
-        );
-        continue;
-      }
-      const eventTypes = removalEvents.get(messageId) || new Set();
-      let providerState = providerStateFromMetadata(metadata);
-      if (!providerState && eventTypes.has("message_deleted")) providerState = "trashed";
-      if (!providerState && eventTypes.has("trash_added")) providerState = "trashed";
-      if (!providerState && metadata == null && eventTypes.has("inbox_removed")) providerState = "archived";
-      if (!providerState) {
-        if (metadata == null) {
-          console.warn(`[Gmail Sync] Could not confirm provider state for ${account.email}/${messageId}`);
-        }
-        continue;
-      }
-      for (const row of rowsByMessageId.get(messageId) || []) {
-        await markProviderRemovedFromActiveSnapshots(
-          account.user_id,
-          row.account_id,
-          row.uid,
-          providerState,
-          { dbClient, now },
-        );
-        removed++;
-      }
-    }
-  }
-  return removed;
 }
 
 export async function syncGmailHistoryForAccount(account, {
@@ -567,17 +158,7 @@ export async function syncGmailHistoryForAccount(account, {
   const startHistoryId = await getStoredHistoryId(account, dbClient);
   if (!startHistoryId) {
     if (targetHistoryId) {
-      await dbClient.execute({
-        sql: `INSERT INTO ea_gmail_watch_state
-                (user_id, account_id, email_address, last_history_id,
-                 watch_status, last_notification_at)
-              VALUES (?, ?, ?, ?, 'inactive', ?)
-              ON CONFLICT(user_id, account_id) DO UPDATE SET
-                last_history_id = excluded.last_history_id,
-                last_notification_at = excluded.last_notification_at,
-                updated_at = datetime('now')`,
-        args: [account.user_id, account.id, account.email, targetHistoryId, now.toISOString()],
-      });
+      await dbClient.execute(seedInactiveWatchStateStatement({ account, targetHistoryId, now }));
     }
     return {
       account_id: account.id,
@@ -644,24 +225,9 @@ export async function syncGmailHistoryForAccount(account, {
     // Only advance the cursor when we resolved a fresh id; otherwise leave the stored
     // cursor untouched so we don't re-write the stale 404'd value and re-trigger backfill.
     if (recoveredHistoryId) {
-      statements.push({
-        sql: `UPDATE ea_gmail_watch_state
-              SET last_history_id = ?,
-                  last_sync_at = ?,
-                  last_error = ?,
-                  updated_at = datetime('now')
-              WHERE user_id = ? AND account_id = ?`,
-        args: [recoveredHistoryId, now.toISOString(), "", account.user_id, account.id],
-      });
+      statements.push(advanceCursorStatement({ historyId: recoveredHistoryId, account, now }));
     } else {
-      statements.push({
-        sql: `UPDATE ea_gmail_watch_state
-              SET last_sync_at = ?,
-                  last_error = ?,
-                  updated_at = datetime('now')
-              WHERE user_id = ? AND account_id = ?`,
-        args: [now.toISOString(), "", account.user_id, account.id],
-      });
+      statements.push(touchCursorStatement({ account, now }));
     }
     await dbClient.batch(statements);
     return {
@@ -709,15 +275,7 @@ export async function syncGmailHistoryForAccount(account, {
   const statements = emails.flatMap((email) =>
     triageStatementsForEmail(account.user_id, account.id, email, { arrivalGrace: true, now }),
   );
-  statements.push({
-    sql: `UPDATE ea_gmail_watch_state
-          SET last_history_id = ?,
-              last_sync_at = ?,
-              last_error = ?,
-              updated_at = datetime('now')
-          WHERE user_id = ? AND account_id = ?`,
-    args: [lastHistoryId, now.toISOString(), "", account.user_id, account.id],
-  });
+  statements.push(advanceCursorStatement({ historyId: lastHistoryId, account, now }));
   await dbClient.batch(statements);
   if (emails.length) {
     // P2-23: resolve the active snapshot once for the whole batch instead of
@@ -764,19 +322,6 @@ export async function enqueueEmailTriageForEmails(userId, emails, {
     }
   }
   return { queued: emails.length };
-}
-
-async function markWatchError(account, message, dbClient) {
-  await dbClient.execute({
-    sql: `INSERT INTO ea_gmail_watch_state
-            (user_id, account_id, email_address, watch_status, last_error)
-          VALUES (?, ?, ?, 'error', ?)
-          ON CONFLICT(user_id, account_id) DO UPDATE SET
-            watch_status = 'error',
-            last_error = excluded.last_error,
-            updated_at = datetime('now')`,
-    args: [account.user_id, account.id, account.email, message],
-  });
 }
 
 export async function renewDueGmailWatches({

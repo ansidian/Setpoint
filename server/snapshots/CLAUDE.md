@@ -4,7 +4,9 @@ The briefing snapshot lifecycle: building snapshots, item lanes, snooze, and arr
 
 ## Files
 
-- `snapshot-service.js` — snapshot CRUD: build, fetch, triage attach, archive
+- `snapshot-service.js` — snapshot orchestration API: build, fetch, sync, triage attach, provider-removal; thin orchestrator over snapshotStore.js + snapshotViewModel.js
+- `snapshotStore.js` — snapshot persistence: ea_briefing_snapshots/_items reads + lifecycle writes (find/freeze/carryover), item loads, processing-state counts, history rows/counts
+- `snapshotViewModel.js` — pure view projection: shapes loaded items into the lane/filter/laneCount briefing view
 - `snapshot-lifecycle.js` — normalizes lifecycle state transitions
 - `snapshot-state-machine.js` — canonical snapshot state enum and transition rules
 - `snapshot-snooze-lifecycle.js` — snooze end conditions and due-fire decisions

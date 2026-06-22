@@ -1,16 +1,22 @@
 import actualApi from "@actual-app/api";
 import { decrypt } from "../platform/encryption.js";
-import { amountConditionCents } from "./actual-amount-condition.js";
-import {
-  buildBillOccurrencesFromSchedules,
-  filterBillSchedulesForRange,
-  isSchedulePaid,
-} from "./actual-bill-occurrences.js";
+import { filterBillSchedulesForRange } from "./actual-bill-occurrences.js";
 import {
   actualDataDir,
   findLocalBudgetDir,
   pruneActualBudgetBackups,
 } from "./actual-local-metadata.js";
+import {
+  actualSessionKey,
+  classifySchedules,
+  findScheduleByPayee,
+  buildDateCondition,
+  mapOpenBillInstances,
+  transactionSearchStart,
+  projectSdkMetadata,
+  mapRecentTransactions,
+  mapUpcomingBills,
+} from "./actualCoreModel.js";
 import db from "../db/connection.js";
 
 export { isSchedulePaid } from "./actual-bill-occurrences.js";
@@ -45,16 +51,6 @@ function withLock(fn) {
   const result = lock.then(() => fn());
   lock = result.catch(() => {});
   return result;
-}
-
-function actualSessionKey(config) {
-  return JSON.stringify({
-    serverURL: config.serverURL,
-    password: config.password || "",
-    syncId: config.syncId,
-    dataDir: config.dataDir || "",
-    localBudgetId: config.localBudgetId || "",
-  });
 }
 
 async function closeActualSession() {
@@ -134,20 +130,6 @@ export function clearMetadataCache() {
   metadataCache = { data: null, ts: 0 };
 }
 
-function classifySchedules(schedules, rawPayees) {
-  const transferPayeeIds = new Set(rawPayees.filter(p => p.transfer_acct).map(p => p.id));
-  return schedules.map(s => {
-    const payeeId = s.conditions?.find(c => c.field === "payee")?.value;
-    const amtCond = s.conditions?.find(c => c.field === "amount");
-    const signedAmt = amountConditionCents(amtCond);
-    let type;
-    if (transferPayeeIds.has(payeeId)) type = "transfer";
-    else if (signedAmt > 0) type = "income";
-    else type = "bill";
-    return { ...s, type };
-  });
-}
-
 export function testConnection(userId, overrides = null) {
   return withLock(async () => {
     let serverURL, password, syncId;
@@ -217,42 +199,7 @@ async function getMetadataInner(userId, { forceRefresh = false } = {}) {
         ).then(r => r.data).catch(() => []),
       ]);
 
-      const accounts = rawAccounts
-        .filter(a => !a.closed)
-        .map(a => ({ id: a.id, name: a.name, type: a.type }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-      const payees = rawPayees
-        .filter(p => p.name && !p.transfer_acct)
-        .map(p => ({ id: p.id, name: p.name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-      const payeeMap = Object.fromEntries(rawPayees.map(p => [p.id, p.name]));
-
-      // Classify each schedule as bill / transfer / income so the calendar can
-      // hide income (paychecks) and style transfers distinctly. Transfer payees
-      // (Actual's special per-account payees) carry a non-null transfer_acct.
-      const classifiedSchedules = classifySchedules(schedules, rawPayees);
-
-      const categories = groups
-        .filter(g => g.name !== "Internal")
-        .map(g => ({
-          group_name: g.name,
-          categories: (g.categories || []).map(c => ({ id: c.id, name: c.name })),
-        }));
-
-      // Map recent transactions to { payee, amount, date } for client-side bill cross-reference
-      const recentTransactions = recentTxns
-        .filter(t => t.payee && t.amount)
-        .map(t => ({
-          payee: payeeMap[t.payee] || "",
-          payeeId: t.payee,
-          amount: Math.abs(t.amount) / 100,
-          date: t.date,
-          scheduleId: t.schedule || null,
-        }));
-
-      const result = { accounts, payees, payeeMap, categories, schedules: classifiedSchedules, recentTransactions };
+      const result = projectSdkMetadata({ rawAccounts, rawPayees, groups, schedules, recentTxns });
       metadataCache = { data: result, ts: Date.now() };
       return result;
     });
@@ -292,38 +239,6 @@ async function getSchedulesWithConditions({ includeCompleted = false } = {}) {
     .map(s => ({ ...s, conditions: ruleMap[s.rule]?.conditions || [] }));
 }
 
-function findScheduleByPayee(schedules, payeeId, accountId, amountCents) {
-  const matches = schedules.filter(s =>
-    s.conditions.some(c => c.field === 'payee' && c.value === payeeId)
-  );
-  if (matches.length === 0) return null;
-
-  // Transfers share a single payee (the transfer-payee of from_account), so a
-  // single payee-match is NOT sufficient — it may belong to a different card.
-  // Account must dominate even when matches.length === 1, otherwise creating a
-  // new CC transfer schedule silently rewrites the one existing one.
-  const acctMatches = accountId
-    ? matches.filter(s => s.conditions.some(c => c.field === 'account' && c.value === accountId))
-    : matches;
-  if (acctMatches.length === 0) return null;
-  if (acctMatches.length === 1) return acctMatches[0];
-
-  for (const s of acctMatches) {
-    const amtCond = s.conditions.find(c => c.field === 'amount');
-    if (!amtCond || !amountCents) return s;
-
-    const amt = Math.abs(amountCents);
-    if (amtCond.op === 'is' && Math.abs(amtCond.value) === amt) return s;
-    if (amtCond.op === 'isapprox' && Math.abs(Math.abs(amtCond.value) - amt) / amt < 0.3) return s;
-    if (amtCond.op === 'isbetween') {
-      const lo = Math.min(Math.abs(amtCond.value.num1), Math.abs(amtCond.value.num2));
-      const hi = Math.max(Math.abs(amtCond.value.num1), Math.abs(amtCond.value.num2));
-      if (amt >= lo * 0.7 && amt <= hi * 1.3) return s;
-    }
-  }
-  return acctMatches[0];
-}
-
 async function resolvePayee(payeeName) {
   if (!payeeName) return null;
   const payees = await actualApi.getPayees();
@@ -332,17 +247,6 @@ async function resolvePayee(payeeName) {
 }
 
 // --- Shared schedule helpers ---
-
-function buildDateCondition(oldConditions, newDueDate) {
-  const dateCond = oldConditions.find(c => c.field === "date");
-  if (dateCond && typeof dateCond.value === "object" && dateCond.value?.frequency) {
-    if (dateCond.value.interval > 1) {
-      return dateCond; // Keep complex recurrence as-is
-    }
-    return { op: dateCond.op, field: "date", value: { ...dateCond.value, start: newDueDate } };
-  }
-  return { op: "is", field: "date", value: newDueDate };
-}
 
 async function findExistingSchedule(payeeId, accountId, amount, name) {
   if (payeeId) {
@@ -493,29 +397,6 @@ async function upsertTransferSchedule(billData) {
   return { success: true, message: result.reused ? `Updated existing transfer schedule "${name}"` : `Transfer schedule "${name}" created` };
 }
 
-function addDaysYmd(ymd, days) {
-  const date = new Date(`${ymd}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function mapOpenBillInstances(schedules, payeeMap, range) {
-  return buildBillOccurrencesFromSchedules(schedules, {
-    payeeMap,
-    recentTransactions: range.recentTransactions || [],
-    range,
-  });
-}
-
-function transactionSearchStart(schedules) {
-  const dates = schedules
-    .map((schedule) => schedule.next_date)
-    .filter(Boolean)
-    .sort();
-  if (!dates.length) return null;
-  return addDaysYmd(dates[0], -14);
-}
-
 async function getRecentTransactionsForSchedules(schedules, payeeMap) {
   const start = transactionSearchStart(schedules);
   if (!start) return [];
@@ -523,16 +404,7 @@ async function getRecentTransactionsForSchedules(schedules, payeeMap) {
     actualApi.q("transactions")
       .filter({ date: { $gte: start } })
       .select(["id", "date", "amount", "payee", "schedule"])
-  ).then((result) => (result.data || [])
-    .filter(t => t.payee && t.amount)
-    .map(t => ({
-      payee: payeeMap[t.payee] || "",
-      payeeId: t.payee,
-      amount: Math.abs(t.amount) / 100,
-      date: t.date,
-      scheduleId: t.schedule || null,
-    }))
-  ).catch(() => []);
+  ).then((result) => mapRecentTransactions(result.data || [], payeeMap)).catch(() => []);
 }
 
 export async function getUpcomingBills(userId) {
@@ -542,28 +414,7 @@ export async function getUpcomingBills(userId) {
   const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     .toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
 
-  return schedules
-    .filter(s => s.next_date && s.next_date <= weekFromNow)
-    .filter(s => s.type !== "income")
-    .map(s => {
-      const amtCond = s.conditions.find(c => c.field === "amount");
-      const payeeCond = s.conditions.find(c => c.field === "payee");
-      const amountCents = amountConditionCents(amtCond);
-      const payeeName = payeeCond ? payeeMap[payeeCond.value] : s.name;
-
-      return {
-        id: s.id,
-        name: s.name || payeeName || "Unknown",
-        payee: payeeName || s.name || "Unknown",
-        amount: Math.abs(amountCents) / 100,
-        next_date: s.next_date,
-        isDueToday: s.next_date === today,
-        isOverdue: s.next_date < today,
-        paid: isSchedulePaid(s, recentTransactions),
-        type: s.type || "bill",
-      };
-    })
-    .sort((a, b) => a.next_date.localeCompare(b.next_date));
+  return mapUpcomingBills(schedules, payeeMap, recentTransactions, { today, weekFromNow });
 }
 
 export function getCalendarBillsRange(userId, { start, end }) {

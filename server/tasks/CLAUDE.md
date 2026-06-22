@@ -9,7 +9,9 @@ Todoist-backed tasks and deadlines: the REST/webhook/mirror sync stack plus dead
 - `deadline-helpers.js` — task reconciliation: active filters, stats (covered by `carry-forward.test.js`)
 - `todoist.js` — Todoist facade: fetch tasks, sync health
 - `todoist-api.js` — Todoist REST client
-- `todoist-mirror.js` — syncs tasks into the local Todoist mirror tables
+- `todoist-mirror.js` — syncs tasks into the local Todoist mirror tables (thin IO orchestrator over the two pure modules below)
+- `todoistMirrorStatements.js` — pure SQL statement-builders for the mirror tables and sync-state success/tombstone/reconcile writes
+- `todoistMirrorHealthModel.js` — pure derivation of mirror health (state/severity/ageMs) from sync-state freshness
 - `todoist-webhook.js` — webhook delta processing
 - `todoist-reminder-source.js` — exposes Todoist deadlines as reminder sources
 - `todoist-token.js` — Todoist OAuth token storage/refresh

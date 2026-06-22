@@ -154,10 +154,14 @@ async function checkSourceFileSizes() {
   const baseline = await readComponentSizeBaseline()
   if (!baseline) return
 
-  // Govern every non-test source file under src/ — not just .jsx/.tsx under
+  // Govern every non-test source file under src/ AND server/ — not just .jsx/.tsx under
   // /components/ or /pages/. Hooks (src/hooks/**) and loose .js controllers/models
-  // were the blind spot that let a 1519-line hook grow unguarded.
-  const sourceFiles = await collectFiles('src', isSizeCheckedSource)
+  // were the first blind spot; the entire server/ tree (11 modules at 686-918 lines)
+  // was the second, growing with no size enforcement at all.
+  const sourceFiles = [
+    ...await collectFiles('src', isSizeCheckedSource),
+    ...await collectFiles('server', isSizeCheckedSource),
+  ]
   const files = []
   for (const file of sourceFiles) {
     const text = await readText(file)

@@ -13,6 +13,12 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 - `email-ai-models.js` — email AI model catalog with defaults and provider inference
 - `gmail.js` — Gmail API client: list, fetch, search, mutate
 - `gmail-sync.js` — Gmail history/push-driven incremental sync (covered by `gmail-callback.test.js` too)
+- `gmailPubSubNotification.js` — pure Pub/Sub notification decode: base64url JSON → emailAddress/historyId payload
+- `gmailHistoryProjection.js` — pure history-record projections: inbox/unread id-sets, provider-removal events, provider state from metadata
+- `gmailTriageStatements.js` — pure triage statement builder: (user, account, email) → triage-row + triage-job INSERT pair (owns the arrival-grace branch)
+- `gmailSyncClient.js` — raw Gmail HTTP: history.list paging, message metadata, profile historyId, watch-registration POST
+- `gmailWatchStore.js` — `ea_gmail_watch_state` persistence: watch-state upsert, stored-cursor read, watch-error write, cursor statement builders (seed/advance/touch)
+- `gmailReconciliation.js` — Gmail row reconciliation: resolve mailbox account ids, find existing rows, reconcile read-state + provider-removal against the index/snapshots
 - `icloud.js` — iCloud Mail (IMAP) client
 - `html-to-text.js` — HTML → text conversion for email bodies
 - `dev-service.js` — dev/test helper: re-index recent emails
