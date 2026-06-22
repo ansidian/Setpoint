@@ -6,6 +6,7 @@ import {
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
   resolveShellTabHotkey,
+  shouldClearCalendarFocusOnLeave,
 } from "./dashboardShellModel.js";
 
 describe("dashboard shell model", () => {
@@ -238,6 +239,29 @@ describe("dashboard shell model", () => {
     it("plain backslash still does nothing", () => {
       expect(resolveDashboardShellHotkey({ key: "\\", code: "Backslash" }))
         .toEqual({ action: "ignore" });
+    });
+  });
+
+  describe("shouldClearCalendarFocusOnLeave", () => {
+    it("clears when leaving the calendar tab", () => {
+      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "dashboard" })).toBe(true);
+    });
+
+    it("clears on every leave path, not just calendar → dashboard", () => {
+      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "inbox" })).toBe(true);
+      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "notes" })).toBe(true);
+    });
+
+    it("does not clear while staying on the calendar tab", () => {
+      expect(shouldClearCalendarFocusOnLeave({ prevTab: "calendar", tab: "calendar" })).toBe(false);
+    });
+
+    it("does not clear when arriving at the calendar tab", () => {
+      expect(shouldClearCalendarFocusOnLeave({ prevTab: "dashboard", tab: "calendar" })).toBe(false);
+    });
+
+    it("does not clear when moving between two non-calendar tabs", () => {
+      expect(shouldClearCalendarFocusOnLeave({ prevTab: "dashboard", tab: "notes" })).toBe(false);
     });
   });
 });

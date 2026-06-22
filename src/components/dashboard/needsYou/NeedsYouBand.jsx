@@ -1,5 +1,5 @@
 import { memo, useMemo, useState, useCallback } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel } from "./needsYouModel.js";
 import { NeedsYouCountBlock } from "./NeedsYouCountBlock.jsx";
 import { PriorityCard } from "./PriorityCard.jsx";
@@ -31,6 +31,8 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
     if (card.jumpId != null) onCompleteDeadline?.(card.jumpId, card.data);
   }, [onCompleteDeadline]);
 
+  const allClear = model.countN === 0;
+
   return (
     <div
       data-testid="needs-you-band"
@@ -39,13 +41,23 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
         background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-rose) 5%, rgba(255,255,255,0.018)) 0%, rgba(255,255,255,0.005) 100%)",
         border: "1px solid color-mix(in srgb, var(--sp-rose) 15%, rgba(255,255,255,0.06))" }}
     >
-      <NeedsYouCountBlock countN={model.countN} countColor={model.countColor} breakdown={model.breakdown} empty={model.countN === 0} />
+      {/* When nothing needs you, the status block drops the "Needs you now" label
+          and count and just shows a centered "All clear" — but the band keeps its
+          right side, so upcoming (backfill) items still surface here. */}
+      {allClear ? (
+        <div style={{ width: 190, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+          <CheckCircle2 size={18} color="var(--sp-green)" />
+          <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-green)" }}>All clear</span>
+        </div>
+      ) : (
+        <NeedsYouCountBlock countN={model.countN} countColor={model.countColor} breakdown={model.breakdown} />
+      )}
       <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 10, alignItems: "stretch" }}>
         {model.urgentCards.map((card) => (
           <PriorityCard key={card.id} card={card} variant="urgent" onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
         ))}
         {model.backfillCards.map((card) => (
-          <PriorityCard key={card.id} card={card} variant="backfill" />
+          <PriorityCard key={card.id} card={card} variant="backfill" onComplete={handleComplete} />
         ))}
         {model.moreCount > 0 && (
           <button

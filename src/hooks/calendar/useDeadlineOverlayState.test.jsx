@@ -100,4 +100,58 @@ describe("useDeadlineOverlayState", () => {
     expect(result.current.deadlineOverlayVisible).toBe(false);
     expect(window.localStorage.getItem(DEADLINE_KEY)).toBe("false");
   });
+
+  it("forces show-completed on for a dashboard deep-link, then restores the stored 'off' preference on leave", () => {
+    // User keeps completed deadlines hidden; a dashboard deadline deep-link forces
+    // them visible so the (completed) target is shown.
+    window.localStorage.setItem(COMPLETED_KEY, "false");
+    const { result, rerender } = renderOverlayState({
+      open: true,
+      forceCompletedDeadlineOverlay: true,
+      openRequestId: 1,
+    });
+
+    expect(result.current.completedDeadlineOverlayVisible).toBe(true);
+    // Forcing must not overwrite the saved "off" choice.
+    expect(window.localStorage.getItem(COMPLETED_KEY)).toBe("false");
+
+    // Leaving the calendar restores the prior (off) state.
+    act(() => rerender({ open: false, forceCompletedDeadlineOverlay: true, openRequestId: 1 }));
+    expect(result.current.completedDeadlineOverlayVisible).toBe(false);
+    expect(window.localStorage.getItem(COMPLETED_KEY)).toBe("false");
+  });
+
+  it("leaves show-completed on after a deep-link when it was already on before", () => {
+    // No stored preference => defaults on. A forced peek must not flip it off on leave.
+    const { result, rerender } = renderOverlayState({
+      open: true,
+      forceCompletedDeadlineOverlay: true,
+      openRequestId: 1,
+    });
+    expect(result.current.completedDeadlineOverlayVisible).toBe(true);
+
+    act(() => rerender({ open: false, forceCompletedDeadlineOverlay: true, openRequestId: 1 }));
+    expect(result.current.completedDeadlineOverlayVisible).toBe(true);
+  });
+
+  it("reverts a forced session to the pre-deep-link preference when the keep-alive tab is hidden (effect cleanup)", () => {
+    // The calendar is a persistent tab, so `open` stays true for its lifetime;
+    // React's <Activity> runs this hook's effect cleanup on tab-hide. Unmounting
+    // exercises that same cleanup. A mid-session manual toggle is reverted to the
+    // value captured before the dashboard force, proving the cleanup fired.
+    window.localStorage.setItem(COMPLETED_KEY, "false"); // pre-force: hidden
+    const { result, unmount } = renderOverlayState({
+      open: true,
+      forceCompletedDeadlineOverlay: true,
+      openRequestId: 1,
+    });
+    expect(result.current.completedDeadlineOverlayVisible).toBe(true); // forced on
+
+    act(() => result.current.toggleCompletedDeadlineOverlay()); // -> off, writes "false"
+    act(() => result.current.toggleCompletedDeadlineOverlay()); // -> on, writes "true"
+    expect(window.localStorage.getItem(COMPLETED_KEY)).toBe("true");
+
+    unmount(); // tab hidden / left: cleanup restores the pre-deep-link preference
+    expect(window.localStorage.getItem(COMPLETED_KEY)).toBe("false");
+  });
 });

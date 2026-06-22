@@ -201,7 +201,7 @@ function DashboardBodyInner({
     <ContextColumn accent={accent} isMobile={isMobile} liveWeather={liveData.liveWeather}
       liveDeadlines={deadlines} liveBills={bills} snapshotLanes={activeSnapshot?.lanes}
       emailAccounts={emailAccounts}
-      onJump={handleRailJump} onOpenInbox={handleOpenInbox} />
+      onJump={handleRailJump} onOpenInbox={handleOpenInbox} onCompleteDeadline={handleCompleteDeadline} />
   );
 
   return <ThreeTierLayout isMobile={isMobile} band={band} timelinePanel={timelinePanel} contextColumn={contextColumn} />;

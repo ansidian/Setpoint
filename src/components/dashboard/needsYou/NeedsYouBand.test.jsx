@@ -17,6 +17,47 @@ const snapshotLanes = {
 };
 
 describe("NeedsYouBand", () => {
+  it("shows a centered 'All clear' when nothing needs attention — no 'Needs you now' label, no count", () => {
+    render(<NeedsYouBand snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
+    expect(screen.getByText("All clear")).toBeTruthy();
+    expect(screen.queryByText("Needs you now")).toBeNull();
+    expect(screen.queryByText(/items want/)).toBeNull();
+  });
+
+  it("still surfaces upcoming items in the band when all clear", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
+    render(
+      <NeedsYouBand
+        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
+        liveDeadlines={{ upcoming: [{ id: "up1", title: "Submit report", due_date: "2026-06-22", status: "open", class_name: "Work" }] }}
+        liveBills={[]}
+      />,
+    );
+    expect(screen.getByText("All clear")).toBeTruthy();
+    expect(screen.getByText("Submit report")).toBeTruthy();
+  });
+
+  it("marks an upcoming deadline done from the band (quiet action); bills get none", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-19T12:00:00-07:00"));
+    const onCompleteDeadline = vi.fn();
+    render(
+      <NeedsYouBand
+        snapshotLanes={{ needs_attention: [], fyi: [], carryover: [] }}
+        liveDeadlines={{ upcoming: [{ id: "up1", title: "Submit report", due_date: "2026-06-22", status: "open", class_name: "Work" }] }}
+        liveBills={[{ id: "rent", name: "Rent", payee: "LL", amount: 1800, next_date: "2026-06-23", paid: false }]}
+        onCompleteDeadline={onCompleteDeadline}
+      />,
+    );
+    // The upcoming deadline card exposes exactly one quiet Mark done; the bill card has none.
+    const markDone = screen.getByText("Mark done");
+    fireEvent.click(markDone);
+    expect(onCompleteDeadline).toHaveBeenCalledWith("up1", expect.objectContaining({ id: "up1" }));
+    expect(screen.queryByText("Submit report")).toBeNull();
+    expect(screen.getByText("Rent")).toBeTruthy();
+  });
+
   it("renders a card per urgent item and the count", () => {
     render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
     expect(screen.getByText("PR blocker")).toBeTruthy();

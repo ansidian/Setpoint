@@ -48,6 +48,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `calendarBillsData.js` — transforms live data into calendar-compatible bill shape
 - `inboxBadgeModel.js` — unread signal count with read-state overrides
 - `DeadlineDetailPopover.jsx` — mobile deadline detail sheet with edit/mark-done
+- `MarkDoneAction.jsx` — quiet text-only "Mark done" control shared by the Needs-you band's upcoming cards and the Coming-up rows; reveals on parent hover or its own focus
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 
