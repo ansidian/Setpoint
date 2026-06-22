@@ -4,6 +4,7 @@ import {
   addDaysYmd,
   buildDateCondition,
   classifySchedules,
+  findScheduleByName,
   findScheduleByPayee,
   mapRecentTransactions,
   mapUpcomingBills,
@@ -61,6 +62,35 @@ describe("findScheduleByPayee", () => {
     ];
     expect(findScheduleByPayee(schedules, "p1", "a", 10000)?.id).toBe("is");
     expect(findScheduleByPayee(schedules, "p1", "a", 9500)?.id).toBe("between");
+  });
+});
+
+describe("findScheduleByName cross-type guard (P3-76 SDK-path drift fix)", () => {
+  const billSchedule = { id: "b", name: "Acme", conditions: [{ op: "is", field: "amount", value: -5000 }] };
+  const rangeBill = { id: "rb", name: "Acme", conditions: [{ op: "isbetween", field: "amount", value: { num1: -4000, num2: -6000 } }] };
+
+  it("returns null when no schedule has the name", () => {
+    expect(findScheduleByName([billSchedule], "Other", -5000)).toBeNull();
+  });
+
+  it("reuses a same-sign scalar bill", () => {
+    expect(findScheduleByName([billSchedule], "Acme", -5000)).toBe(billSchedule);
+  });
+
+  it("rejects an opposite-sign scalar (transfer must not clobber a same-named bill)", () => {
+    expect(findScheduleByName([billSchedule], "Acme", 5000)).toBeNull();
+  });
+
+  it("guards an isbetween range by its midpoint sign, not by skipping the object", () => {
+    // The legacy `typeof value === "number"` gate skipped isbetween objects entirely,
+    // so a positive transfer would clobber this negative range bill.
+    expect(findScheduleByName([rangeBill], "Acme", 5000)).toBeNull();
+    expect(findScheduleByName([rangeBill], "Acme", -5000)).toBe(rangeBill);
+  });
+
+  it("reuses a same-named schedule with no amount condition (guard is a no-op)", () => {
+    const noAmount = { id: "na", name: "Acme", conditions: [{ op: "is", field: "payee", value: "p1" }] };
+    expect(findScheduleByName([noAmount], "Acme", 5000)).toBe(noAmount);
   });
 });
 
