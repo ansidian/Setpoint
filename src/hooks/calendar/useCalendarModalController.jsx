@@ -70,6 +70,7 @@ export default function useCalendarModalController({
   forceDeadlineOverlay = false,
   forceCompletedDeadlineOverlay = false,
   openRequestId = 0,
+  jumpTodayRequestId = 0,
   deadlineActions = {},
 }) {
   const view = normalizeCalendarWorkspaceView(requestedView);
@@ -1082,12 +1083,24 @@ export default function useCalendarModalController({
   }, [eventEditor.isEditorOpen, floatingDetailRef, setFloatingDetail]);
 
   const isMobile = useIsMobile();
+
+  // Mobile-only jump-to-today: re-tapping the active Calendar nav tab bumps
+  // jumpTodayRequestId, which we consume here to run the same overlay-preserving
+  // reset the in-agenda Events/Bills re-tap uses (scroll agenda to today +
+  // recenter the focused month). Desktop never bumps it, so this is inert there.
+  const handledJumpTodayRef = useRef(jumpTodayRequestId);
+  useEffect(() => {
+    if (jumpTodayRequestId === handledJumpTodayRef.current) return;
+    handledJumpTodayRef.current = jumpTodayRequestId;
+    if (isMobile) sync.navigateToToday();
+  }, [jumpTodayRequestId, isMobile, sync]);
+
   if (!open) return null;
 
   const shellProps = buildCalendarModalShellProps({
     refs: { panelRef, scrollRef, agendaRailRef, contextRailRef },
     viewState: { view, viewYear, viewMonth, currentYear, currentMonth, todayDate, suppressFocusRing },
-    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: eventsGetEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp },
+    data: { activeView, viewData: shellViewData, weatherData, isMonthCached: eventsHasMonth, getMonthEvents: eventsGetEvents, getMonthDeadlines: deadlinesRangeData?.getMonthData || null, eventsRange: eventsData || null, deadlinesRange: deadlinesRangeData || null, dataRevision: eventsCacheStamp, getMonthBills: billsRangeData?.getMonthData || null, billsRange: billsRangeData || null, billsDataRevision: billsRangeData?.revision ?? 0 },
     viewModel,
     selection: { activeSelectedDay, activeSelectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId, setViewDate },
     editors: {

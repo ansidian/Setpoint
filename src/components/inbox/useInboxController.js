@@ -54,8 +54,6 @@ export default function useInboxController({
     setSelectedId,
   } = useInboxSessionState({ sessionState, onSessionStateChange });
   const searchRef = useRef(null);
-  const mobileFilterTriggerRef = useRef(null);
-  const mobileFilterPanelRef = useRef(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [snoozedMap, setSnoozedMap] = useState(
     () => new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])),
@@ -375,8 +373,6 @@ export default function useInboxController({
     search,
     setSearch,
     searchRef,
-    mobileFilterTriggerRef,
-    mobileFilterPanelRef,
     selectedId,
     setSelectedId,
     onOpen,

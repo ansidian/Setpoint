@@ -5,6 +5,7 @@ import {
   computeLiveCount,
   computeMobileChipCounts,
   computeUnreadCount,
+  selectVisibleMobileChips,
 } from "./inboxCountsModel.js";
 
 function email(overrides = {}) {
@@ -131,5 +132,46 @@ describe("computeUnreadCount", () => {
       email({ uid: "untriaged-read", read: false, _lane: "untriaged_read" }),
     ]);
     expect(count).toBe(1);
+  });
+});
+
+describe("selectVisibleMobileChips", () => {
+  const chips = [
+    { key: "__all", label: "All" },
+    { key: "__live", label: "New" },
+    { key: "needs_attention", label: "Needs" },
+    { key: "fyi", label: "FYI" },
+    { key: "noise", label: "Noise" },
+  ];
+
+  it("hides zero-count lane chips but always keeps __all", () => {
+    const visible = selectVisibleMobileChips(chips, {
+      __all: 3, __live: 0, needs_attention: 2, fyi: 0, noise: 1,
+    }, { activeLane: "__all" });
+    expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
+  });
+
+  it("keeps the active lane even when its count is zero", () => {
+    const visible = selectVisibleMobileChips(chips, {
+      __all: 3, __live: 0, needs_attention: 0, fyi: 0, noise: 1,
+    }, { activeLane: "needs_attention" });
+    expect(visible.map((c) => c.key)).toEqual(["__all", "needs_attention", "noise"]);
+  });
+
+  it("preserves the source order of the surviving chips", () => {
+    const visible = selectVisibleMobileChips(chips, {
+      __all: 1, __live: 1, needs_attention: 1, fyi: 1, noise: 1,
+    });
+    expect(visible.map((c) => c.key)).toEqual(["__all", "__live", "needs_attention", "fyi", "noise"]);
+  });
+
+  it("hides a chip whose key is absent from counts, unless it is active", () => {
+    const sparse = { __all: 2, needs_attention: 2 };
+    expect(
+      selectVisibleMobileChips(chips, sparse, { activeLane: "__all" }).map((c) => c.key),
+    ).toEqual(["__all", "needs_attention"]);
+    expect(
+      selectVisibleMobileChips(chips, sparse, { activeLane: "fyi" }).map((c) => c.key),
+    ).toEqual(["__all", "needs_attention", "fyi"]);
   });
 });

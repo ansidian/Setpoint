@@ -21,6 +21,7 @@ function deadlineDataForCalendarModal(deadlines, isLoading) {
 
 export default function DashboardCalendarModalMount({
   calendarOpenRequestId,
+  calendarJumpTodayRequestId,
   calendarView,
   changeCalendarView,
   calendarFocus,
@@ -50,6 +51,7 @@ export default function DashboardCalendarModalMount({
       <CalendarModal
         open={true}
         openRequestId={calendarOpenRequestId}
+        jumpTodayRequestId={calendarJumpTodayRequestId}
         view={calendarView}
         onViewChange={changeCalendarView}
         focusDate={calendarFocus}

@@ -53,7 +53,7 @@ export default function EmailBodyPane({ state, fallback, isMobile = false }) {
             border: "1px solid rgba(255,255,255,0.04)",
           }}
         >
-          <EmailIframe html={text} />
+          <EmailIframe html={text} isMobile={isMobile} />
         </div>
       </div>
     );

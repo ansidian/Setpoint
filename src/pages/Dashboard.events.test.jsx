@@ -181,7 +181,9 @@ describe("Dashboard event loading", () => {
     const timeline = screen.getByTestId("today-timeline");
     fireEvent.click(within(timeline).getByText("Roadmap sync"));
 
-    expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1");
+    // The tapped event item is carried as a 3rd arg so the mobile shell can open
+    // it in an in-place sheet (desktop ignores it and still deep-links).
+    expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1", expect.objectContaining({ id: "event-1" }));
   });
 
   it("deep links coming-up bill rows to their schedule id and bill date", () => {
@@ -210,7 +212,8 @@ describe("Dashboard event loading", () => {
 
     fireEvent.click(screen.getAllByText("Rent").at(-1));
 
-    expect(onOpenBillsCalendar).toHaveBeenCalledWith("2026-04-20", "schedule-rent");
+    // The tapped bill record is carried as a 3rd arg (powers the mobile in-place sheet).
+    expect(onOpenBillsCalendar).toHaveBeenCalledWith("2026-04-20", "schedule-rent", expect.objectContaining({ name: "Rent", next_date: "2026-04-20" }));
   });
 
   it("refetches the live event window when calendar revision changes", async () => {

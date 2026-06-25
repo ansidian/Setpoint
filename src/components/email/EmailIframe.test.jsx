@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import EmailIframe from "./EmailIframe.jsx";
+import { withMobileViewport } from "./withMobileViewport.js";
 
 afterEach(() => {
   cleanup();
@@ -137,5 +138,56 @@ describe("EmailIframe reader-hotkey relay", () => {
 
       expect(received).toEqual([]);
     });
+  });
+});
+
+describe("EmailIframe mobile viewport", () => {
+  it("injects a device-width viewport meta into the srcDoc when isMobile", () => {
+    render(<EmailIframe html="<html><head></head><body><p>hi</p></body></html>" isMobile />);
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).toMatch(/name="viewport"/);
+    expect(out).toContain("width=device-width");
+  });
+
+  it("leaves the srcDoc free of the viewport meta on desktop", () => {
+    render(<EmailIframe html="<html><head></head><body><p>hi</p></body></html>" />);
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).not.toContain("width=device-width");
+  });
+
+  it("never disables pinch-zoom (no maximum-scale)", () => {
+    render(<EmailIframe html="<p>hi</p>" isMobile />);
+    const out = screen.getByTitle("Email content").getAttribute("srcdoc") || "";
+    expect(out).not.toMatch(/maximum-scale/);
+  });
+});
+
+describe("withMobileViewport", () => {
+  it("inserts the meta just after an existing <head>", () => {
+    const out = withMobileViewport("<html><head><title>x</title></head><body>b</body></html>");
+    expect(out).toMatch(/<head><meta name="viewport"/);
+  });
+
+  it("adds a <head> when the document has <html> but no head", () => {
+    const out = withMobileViewport("<html><body>b</body></html>");
+    expect(out).toMatch(/<html><head><meta name="viewport"/);
+  });
+
+  it("prepends a <head> when there is no document wrapper", () => {
+    const out = withMobileViewport("<p>bare</p>");
+    expect(out.startsWith('<head><meta name="viewport"')).toBe(true);
+  });
+
+  it("matches the full open tag even when an attribute value contains '>'", () => {
+    const out = withMobileViewport('<head data-x="a > b"><title>t</title></head><body>b</body>');
+    expect(out).toContain('<head data-x="a > b"><meta name="viewport"');
+    expect(out).toContain('data-x="a > b"');
+  });
+
+  it("injects the reset before the email's own styles in a whole document", () => {
+    const out = withMobileViewport('<html><head><style>.x{color:red}</style></head><body><p>hi</p></body></html>');
+    expect(out).toContain("width=device-width");
+    expect(out).toContain("<p>hi</p>");
+    expect(out.indexOf("width=device-width")).toBeLessThan(out.indexOf(".x{color:red}"));
   });
 });

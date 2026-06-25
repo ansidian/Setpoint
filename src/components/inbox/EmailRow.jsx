@@ -2,9 +2,9 @@ import { memo, useState } from "react";
 import { Clock } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { pendingSecurityGraceLabel, timeAgo } from "./helpers";
-import { Avatar } from "./primitives";
+import { Avatar, LaneIcon } from "./primitives";
 
-function EmailRow({ email, account, selected, onOpen, density, showPreview, accent, nowTick }) {
+function EmailRow({ email, account, selected, onOpen, density, showPreview, accent, nowTick, showLaneTag = false }) {
   const [hover, setHover] = useState(false);
   const untriaged = email._untriaged;
   const arrivalGraceQueued = email._arrivalGraceQueued;
@@ -187,7 +187,21 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
               {email.urgentFlag.label || email.urgency}
             </span>
           )}
-          {!untriaged && !arrivalGraceQueued && !untriagedRead && email.category && (
+          {showLaneTag && !untriaged && L && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                flexShrink: 0,
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+                padding: "2px 6px", borderRadius: 4,
+                color: L.color, background: L.soft, border: `1px solid ${L.border}`,
+              }}
+            >
+              <LaneIcon laneKey={laneKey} />
+              {L.label}
+            </span>
+          )}
+          {!showLaneTag && !untriaged && !arrivalGraceQueued && !untriagedRead && email.category && (
             <span
               style={{
                 display: "inline-flex", alignItems: "center",
@@ -243,6 +257,7 @@ function areEqual(prev, next) {
     || prev.accent !== next.accent
     || prev.onOpen !== next.onOpen
     || prev.account !== next.account
+    || prev.showLaneTag !== next.showLaneTag
   ) {
     return false;
   }
