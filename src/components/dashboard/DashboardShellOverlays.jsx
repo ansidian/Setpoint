@@ -5,11 +5,15 @@ const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
 const CommandPalette = lazy(() => import("../shell/CommandPalette"));
 const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
+const CalendarItemDetailSheet = lazy(() => import("./CalendarItemDetailSheet"));
 
 export default function DashboardShellOverlays({
   isMobile,
   deadlinePopover,
   setDeadlinePopover,
+  calendarItemSheet,
+  setCalendarItemSheet,
+  onOpenCalendarItemInCalendar,
   accent,
   addTaskOpen,
   setAddTaskOpen,
@@ -35,6 +39,18 @@ export default function DashboardShellOverlays({
             task={deadlinePopover.task}
             accent={accent}
             onClose={() => setDeadlinePopover(null)}
+          />
+        </Suspense>
+      )}
+
+      {isMobile && calendarItemSheet && (
+        <Suspense fallback={null}>
+          <CalendarItemDetailSheet
+            kind={calendarItemSheet.kind}
+            item={calendarItemSheet.item}
+            accent={accent}
+            onClose={() => setCalendarItemSheet(null)}
+            onOpenInCalendar={() => onOpenCalendarItemInCalendar(calendarItemSheet)}
           />
         </Suspense>
       )}

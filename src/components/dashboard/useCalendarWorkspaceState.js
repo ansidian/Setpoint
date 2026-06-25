@@ -29,6 +29,11 @@ export default function useCalendarWorkspaceState({
   onCalendarWorkspaceChange,
 }) {
   const [calendarOpenRequestId, setCalendarOpenRequestId] = useState(0);
+  // Bumped when the active Calendar nav tab is re-tapped on mobile; the calendar
+  // controller consumes the counter to scroll the agenda back to today + recenter
+  // the month (the bare navigateToToday reset, overlay-preserving — same semantics
+  // as re-tapping the in-agenda Events/Bills toggle).
+  const [calendarJumpTodayRequestId, setCalendarJumpTodayRequestId] = useState(0);
   const [calendarView, setCalendarView] = useState(() => {
     try {
       const saved = localStorage.getItem("calendar:lastView");
@@ -69,6 +74,10 @@ export default function useCalendarWorkspaceState({
     if (request.shouldLoadDeadlines) loadCalendarDeadlines();
     if (request.shouldLoadBills) loadCalendarBills({ refreshLive: true });
   }, [isMobile, calendarView, showBills, loadCalendarDeadlines, loadCalendarBills, setShellTab, setCalendarMounted]);
+
+  const jumpCalendarToToday = useCallback(() => {
+    setCalendarJumpTodayRequestId((value) => value + 1);
+  }, []);
 
   const changeCalendarView = (v) => {
     const nextView = normalizeCalendarWorkspaceView(v);
@@ -123,12 +132,14 @@ export default function useCalendarWorkspaceState({
 
   return {
     calendarOpenRequestId,
+    calendarJumpTodayRequestId,
     calendarView,
     calendarFocus,
     calendarFocusItemId,
     calendarFocusOpenDetail,
     calendarForceOverlays,
     openCalendar,
+    jumpCalendarToToday,
     changeCalendarView,
     handleCalendarEventsRangeChange,
   };

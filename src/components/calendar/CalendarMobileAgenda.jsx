@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import BottomSheet from "../ui/BottomSheet.jsx";
 import CalendarModalAgendaRailContent from "./modal/CalendarModalAgendaRailContent.jsx";
@@ -17,6 +18,41 @@ const STRIP_BTN = {
   cursor: "pointer",
 };
 
+// Visible "jump to today" affordance, shown in the month strip only when the
+// agenda has been scrolled/navigated off the current month — the discoverable
+// escape from the "stranded months ahead" state.
+function TodayPill({ onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Jump to today"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      style={{
+        minHeight: 32,
+        padding: "0 12px",
+        borderRadius: 999,
+        border: "1px solid color-mix(in srgb, var(--sp-accent) " + (hover ? "55%" : "32%") + ", transparent)",
+        background: "color-mix(in srgb, var(--sp-accent) " + (hover ? "22%" : "14%") + ", transparent)",
+        color: "var(--sp-accent)",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        fontSize: 12,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+        transform: hover ? "translateY(-1px)" : "translateY(0)",
+        transition: "background 150ms, border-color 150ms, transform 150ms",
+      }}
+    >
+      Today
+    </button>
+  );
+}
+
 // Mobile-only calendar root (rendered by useCalendarModalController when useIsMobile()).
 // Agenda-only: a slim month strip + events/bills toggle + the full-width agenda
 // (CalendarModalAgendaRailContent with the MiniCalendar suppressed), and tap-to-open
@@ -29,7 +65,7 @@ export default function CalendarMobileAgenda(shellProps) {
     layout, monthName, monthYear, canGoPrev, computed,
     selectedItems, selectedDayState, effectiveSelectedItemId, ghostPreview, floatingDetailLabel,
   } = viewModel;
-  const { activeView, viewData, weatherData, getMonthEvents, eventsRange, deadlinesRange, dataRevision } = data;
+  const { activeView, viewData, weatherData, getMonthEvents, eventsRange, deadlinesRange, dataRevision, getMonthBills, billsRange, billsDataRevision } = data;
   const { selectedDay, selectedDateKey, setSelectedItemId } = selection;
   const { eventEditor, deadlineEditor, setDeadlineEditor, onDeadlineDraftPreviewChange } = editors;
   const { eventQuickActions } = quickActions;
@@ -42,8 +78,9 @@ export default function CalendarMobileAgenda(shellProps) {
     onCancelFloatingEditor, onFloatingDeadlineDeleted,
     onFloatingDeadlineSaved, onFloatingEditorDirtyChange, onFloatingEditorSaveRequest,
   } = floating;
-  const { navigateMonth, onViewChange, focusDeadlineTask } = handlers;
+  const { navigateMonth, onViewChange, focusDeadlineTask, navigateToToday } = handlers;
 
+  const onCurrentMonth = viewYear === currentYear && viewMonth === currentMonth;
   const detailOpen = !!floatingDetail?.open;
   const floatingDeadlineDetail = floatingDetail?.detailKind === "deadline";
   const views = availableCalendarViews || ["events"];
@@ -59,7 +96,10 @@ export default function CalendarMobileAgenda(shellProps) {
           style={{ ...STRIP_BTN, opacity: canGoPrev ? 1 : 0.4, cursor: canGoPrev ? "pointer" : "default" }}>
           <ChevronLeft size={20} />
         </button>
-        <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-text)" }}>{monthName} {monthYear}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-text)" }}>{monthName} {monthYear}</span>
+          {!onCurrentMonth && <TodayPill onClick={() => navigateToToday()} />}
+        </div>
         <button type="button" aria-label="Next month" onClick={() => navigateMonth(1)} style={STRIP_BTN}>
           <ChevronRight size={20} />
         </button>
@@ -75,7 +115,7 @@ export default function CalendarMobileAgenda(shellProps) {
             const active = v === view;
             return (
               <button key={v} type="button" role="tab" aria-selected={active}
-                onClick={() => onViewChange(v)}
+                onClick={() => (active ? navigateToToday() : onViewChange(v))}
                 style={{
                   flex: 1, minHeight: "var(--sp-touch-min)", borderRadius: 8, cursor: "pointer",
                   border: "1px solid " + (active ? "color-mix(in srgb, var(--sp-accent) 40%, transparent)" : "rgba(255,255,255,0.06)"),
@@ -120,6 +160,9 @@ export default function CalendarMobileAgenda(shellProps) {
           eventsRange={eventsRange}
           deadlinesRange={deadlinesRange}
           dataRevision={dataRevision}
+          getMonthBills={getMonthBills}
+          billsRange={billsRange}
+          billsDataRevision={billsDataRevision}
         />
       </div>
 

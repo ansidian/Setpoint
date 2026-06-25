@@ -62,6 +62,9 @@ export default function buildCalendarModalShellProps({
       eventsRange: data.eventsRange,
       deadlinesRange: data.deadlinesRange,
       dataRevision: data.dataRevision,
+      getMonthBills: data.getMonthBills,
+      billsRange: data.billsRange,
+      billsDataRevision: data.billsDataRevision,
     },
     selection: {
       selectedDay: selection.activeSelectedDay,
@@ -119,6 +122,9 @@ export default function buildCalendarModalShellProps({
       onDisplayMonthChange: handlers.onDisplayMonthChange,
       onLabelMonthChange: handlers.onLabelMonthChange,
       onFetchSettle: handlers.onFetchSettle,
+      // Mobile agenda reuses the controller's jump-to-today reset (re-tap toggle /
+      // "Today" strip pill). Desktop CalendarModalShell ignores this handler.
+      navigateToToday: handlers.navigateToToday,
     },
     search,
     availableCalendarViews: availableCalendarViews ?? ["events"],

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import InboxSearchFlagChips from "../InboxSearchFlagChips";
 import { buildActiveSnapshotSummary } from "../snapshotSummary";
 import InboxUndoToast from "../InboxUndoToast";
+import { selectVisibleMobileChips } from "../inboxCountsModel";
 
 const MOBILE_FILTER_CHIPS = [
   { key: "__all", label: "All" },
@@ -35,7 +36,7 @@ function MobileChip({ active, label, count, onClick, accent }) {
         alignItems: "center",
         justifyContent: "center",
         gap: 6,
-        width: "100%",
+        flexShrink: 0,
         minWidth: 0,
         minHeight: "var(--sp-touch-min)",
         padding: "8px 6px",
@@ -89,25 +90,21 @@ function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = fa
     color: tinted ? accent : "rgba(205,214,244,0.7)",
     cursor: "pointer",
     fontFamily: "inherit",
-    transition: "background 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out",
+    transition: "background 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out",
   };
-  const hoverStyle = {
+  const focusStyle = {
     background: tinted ? `${accent}24` : "rgba(255,255,255,0.07)",
     borderColor: tinted ? `${accent}66` : "rgba(255,255,255,0.14)",
     color: tinted ? "#fff" : "rgba(205,214,244,0.9)",
-    transform: "translateY(-1px)",
   };
   return (
     <button
       ref={buttonRef}
       type="button"
       aria-label={label}
-      title={label}
       data-testid={testId}
       onClick={onClick}
-      onMouseEnter={(event) => Object.assign(event.currentTarget.style, hoverStyle)}
-      onMouseLeave={(event) => Object.assign(event.currentTarget.style, baseStyle)}
-      onFocus={(event) => Object.assign(event.currentTarget.style, hoverStyle)}
+      onFocus={(event) => Object.assign(event.currentTarget.style, focusStyle)}
       onBlur={(event) => Object.assign(event.currentTarget.style, baseStyle)}
       style={baseStyle}
     >
@@ -175,8 +172,6 @@ export default function MobileInboxView({
   search,
   setSearch,
   searchRef,
-  mobileFilterTriggerRef,
-  mobileFilterPanelRef,
   selectedEmail,
   selectedAccount,
   onOpen,
@@ -247,11 +242,11 @@ export default function MobileInboxView({
           data-testid="inbox-mobile-list"
           style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain" }}
         >
-          <div style={{ padding: "16px 16px 0" }}>
+          <div style={{ padding: "10px 16px 0" }}>
             <div
               style={{
-                padding: "14px 14px 12px",
-                borderRadius: 14,
+                padding: "10px 12px",
+                borderRadius: 12,
                 background: `linear-gradient(135deg, ${accent}12, color-mix(in srgb, var(--sp-cyan) 4%, transparent))`,
                 border: `1px solid ${accent}2c`,
               }}
@@ -270,37 +265,24 @@ export default function MobileInboxView({
                   {activeSnapshotMode ? "Active snapshot" : "Inbox snapshot"}
                 </span>
                 <span style={{ flex: 1 }} />
+                {noiseUnreadCount > 0 && (
+                  <span style={{ fontSize: 10.5, color: "var(--color-text-faint)", whiteSpace: "nowrap" }}>
+                    <span style={{ color: "rgba(205,214,244,0.78)", fontWeight: 700 }}>{noiseUnreadCount}</span> noise unread
+                  </span>
+                )}
               </div>
               {snapshotSummary && (
                 <div
-                  className="ea-display"
                   style={{
-                    marginTop: 8,
-                    fontSize: 13,
-                    lineHeight: 1.55,
-                    color: "rgba(255,255,255,0.92)",
-                    fontStyle: "italic",
+                    marginTop: 4,
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                    color: "rgba(205,214,244,0.82)",
                   }}
                 >
                   {snapshotSummary}
                 </div>
               )}
-              <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
-                  <span style={{ color: "#fff", fontWeight: 700 }}>{unreadInView}</span> unread
-                </div>
-                <div style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
-                  <span style={{ color: "#fff", fontWeight: 700 }}>{mobileChipCounts.__live}</span> new
-                </div>
-                <div style={{ fontSize: 11, color: "rgba(205,214,244,0.62)" }}>
-                  <span style={{ color: "#fff", fontWeight: 700 }}>{mobileChipCounts.__all}</span> in scope
-                </div>
-                {noiseUnreadCount > 0 && (
-                  <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>
-                    <span style={{ color: "rgba(205,214,244,0.78)", fontWeight: 700 }}>{noiseUnreadCount}</span> noise unread
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
@@ -372,7 +354,6 @@ export default function MobileInboxView({
                 label="Open filters"
                 onClick={() => setMobileFiltersOpen(true)}
                 accent={accent}
-                buttonRef={mobileFilterTriggerRef}
                 testId="inbox-mobile-filter-trigger"
               />
               {!readOnly && (
@@ -385,25 +366,29 @@ export default function MobileInboxView({
                 />
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 8, overflowX: "auto" }}>
+            <div
+              data-testid="inbox-mobile-chip-grid"
+              style={{
+                display: "flex",
+                flexWrap: "nowrap",
+                alignItems: "center",
+                gap: 6,
+                paddingTop: 10,
+                overflowX: "auto",
+                scrollbarWidth: "none",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
               <InboxSearchFlagChips
                 query={search}
                 onChange={setSearch}
                 accent={accent}
                 compact
               />
-            </div>
-
-            <div
-              data-testid="inbox-mobile-chip-grid"
-              style={{
-                display: "grid",
-                gridTemplateColumns: indexedSearchActive ? "minmax(0, 1fr)" : "repeat(5, minmax(0, 1fr))",
-                gap: 6,
-                paddingTop: 10,
-              }}
-            >
-              {(indexedSearchActive ? [{ key: "__all", label: "All" }] : MOBILE_FILTER_CHIPS).map((chip) => (
+              {(indexedSearchActive
+                ? [{ key: "__all", label: "All" }]
+                : selectVisibleMobileChips(MOBILE_FILTER_CHIPS, mobileChipCounts, { activeLane: lane })
+              ).map((chip) => (
                 <MobileChip
                   key={chip.key}
                   active={indexedSearchActive ? true : lane === chip.key}
@@ -473,6 +458,7 @@ export default function MobileInboxView({
                   showPreview={showPreview}
                   accent={accent}
                   nowTick={nowTick}
+                  showLaneTag
                 />
               ))
             ) : (
@@ -494,8 +480,6 @@ export default function MobileInboxView({
       <MobileFilterSheet
         open={mobileFiltersOpen}
         accent={accent}
-        triggerRef={mobileFilterTriggerRef}
-        panelRef={mobileFilterPanelRef}
         accountId={accountId}
         setAccountId={setAccountId}
         accounts={emailAccounts}

@@ -78,3 +78,13 @@ export function computeMobileChipCounts(emails = [], {
 export function computeUnreadCount(emails = []) {
   return emails.filter((email) => email._lane !== "untriaged_read" && !email.read).length;
 }
+
+// Mobile chip-bar visibility: hide lane chips with a zero count so the real
+// lanes fit without horizontal scrolling. Always keep `__all`, the currently
+// active lane (so filtering into a now-empty lane doesn't yank the chip out
+// from under the user), and any lane whose count is > 0. Source order preserved.
+export function selectVisibleMobileChips(chips = [], counts = {}, { activeLane = "__all" } = {}) {
+  return chips.filter(
+    (chip) => chip.key === "__all" || chip.key === activeLane || (counts[chip.key] ?? 0) > 0,
+  );
+}

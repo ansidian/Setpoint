@@ -65,6 +65,49 @@ describe("CalendarModal bills behavior", () => {
     expect(screen.queryByTestId("calendar-pending-update")).toBeNull();
   });
 
+  it("infinite-scrolls Bills: renders a bill from a month beyond the active one when the range exposes per-month data", async () => {
+    window.innerWidth = 1900;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-01T12:00:00.000-07:00"));
+    try {
+      const buckets = {
+        "2026-06": {
+          schedules: [
+            { id: "june-1", scheduleId: "june-1", name: "June Only Bill", next_date: "2026-06-15", amount: 50, paid: false, type: "bill" },
+          ],
+          payeeMap: {},
+        },
+      };
+      const getMonthData = (year, month) => buckets[`${year}-${String(month + 1).padStart(2, "0")}`] || { schedules: [], payeeMap: {} };
+
+      render(wrapWithDashboard(
+        <CalendarModal
+          open
+          onClose={() => {}}
+          view="bills"
+          onViewChange={() => {}}
+          focusDate="2026-05-01"
+          eventsData={{ getEvents: () => [] }}
+          billsData={{}}
+          billsRangeData={{
+            loading: false,
+            revision: 1,
+            data: { schedules: [], payeeMap: {} },
+            ensureRange: vi.fn().mockResolvedValue(undefined),
+            getMonthData,
+          }}
+          deadlinesData={{}}
+        />,
+      ));
+
+      // June is one month after the active May view; the full controller → adapter
+      // → rail multi-month chain must fetch + render it without navigating there.
+      expect(await screen.findByText("June Only Bill")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("utility statement status", () => {
     beforeEach(() => {
       vi.useFakeTimers({ shouldAdvanceTime: true });

@@ -459,6 +459,60 @@ describe("DashboardShell mobile behavior", () => {
     vi.useRealTimers();
   });
 
+  it("opens a bill in an in-place sheet (not the calendar tab) on mobile", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-04-20T12:00:00-07:00"));
+    mockIsMobile = true;
+    const props = makeProps();
+    props.liveData.liveBills = [
+      { id: "bill-rent", name: "Rent", payee: "Landlord", amount: 1800, next_date: "2026-04-20", paid: false },
+    ];
+
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <DashboardShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    const band = screen.getByTestId("needs-you-band");
+    fireEvent.click(within(band).getByText("Rent"));
+
+    // The in-place detail sheet exposes "Open in calendar"; the calendar tab is
+    // never mounted (no tab switch) on a mobile dashboard tap.
+    await screen.findByRole("button", { name: /open in calendar/i });
+    expect(screen.queryByTestId("calendar-modal")).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("restores the mobile dashboard scroll offset after a tab round-trip", async () => {
+    mockIsMobile = true;
+    const props = makeProps();
+    render(
+      <BrowserRouter>
+        <DashboardProvider briefing={props.bd.briefing} setBriefing={() => {}} setCalendarDeadlines={() => {}}>
+          <DashboardShell {...props} />
+        </DashboardProvider>
+      </BrowserRouter>,
+    );
+
+    const scroller = screen.getByTestId("shell-scroll-region");
+    // Record an offset live while the dashboard tab is active.
+    scroller.scrollTop = 420;
+    fireEvent.scroll(scroller);
+
+    // Leave to the (mocked) calendar tab; emulate the browser clamping the shared
+    // container while the dashboard is hidden behind a shorter tab.
+    fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
+    await waitFor(() => expect(screen.getByTestId("calendar-modal")).toBeTruthy());
+    scroller.scrollTop = 0;
+
+    // Returning to the dashboard restores the saved offset.
+    fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
+    await waitFor(() => expect(scroller.scrollTop).toBe(420));
+  });
+
   it("exposes the Calendar tab on both mobile and desktop", () => {
     // Phase 4: calendar is reachable on mobile via the bottom nav Calendar tab.
     mockIsMobile = true;

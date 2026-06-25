@@ -1,7 +1,7 @@
 import { formatAmount, daysUntil, urgencyColor } from "../../../../lib/bill-utils";
-import { addDaysYmd, ymdFromParts } from "../../calendarDateUtils.js";
+import { addDaysYmd, pacificYMD, ymdFromParts } from "../../calendarDateUtils.js";
 import { buildDisplayedMonthGroups, sparseVisibleGroups } from "../agenda/agendaDateModel.js";
-import { getDayState } from "./billsModel.js";
+import { compute, getDayState } from "./billsModel.js";
 
 function billDueLabel(bill) {
   if (bill.paid) return "Paid";
@@ -92,6 +92,57 @@ export function buildBillsAgendaGroups({
     firstVisibleDateKey,
     monthStartDateKey,
   };
+}
+
+// Per-month variant of buildBillsAgendaGroups for the infinite-scroll rail: each
+// month's groups are built from that month's bills bucket (getMonthBills, a
+// {schedules, payeeMap} object from the domain-range cache) and the previous
+// value is reused by identity when the month's inputs are unchanged, so a
+// prefetch landing mid-scroll rebuilds only the months it actually touched.
+// Mirrors reuseMultiMonthAgendaGroups in eventsAgendaModel.js — but the per-month
+// bucket is ref-stable in the cache, so `===` on it is the identity key (no
+// sameEventList), and the bucket is run through billsModel.compute first because
+// buildBillsAgendaGroups consumes computed.itemsByDate, not raw schedules.
+// Returns { list, cache }; callers thread `cache` back in as `previous`.
+export function reuseMultiMonthBillsAgendaGroups({
+  previous = null,
+  months = [],
+  getMonthBills,
+  todayKey = pacificYMD(Date.now()),
+  forceVisibleDateKey = null,
+} = {}) {
+  const cache = new Map();
+  const list = months.map(({ year, month }) => {
+    const mk = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const bucket = getMonthBills ? getMonthBills(year, month) : null;
+    const forceKey = forceVisibleDateKey?.startsWith(mk) ? forceVisibleDateKey : null;
+    const prior = previous?.get(mk);
+    if (
+      prior
+      && prior.inputs.bucket === bucket
+      && prior.inputs.todayKey === todayKey
+      && prior.inputs.forceKey === forceKey
+    ) {
+      cache.set(mk, prior);
+      return prior.value;
+    }
+    const computed = compute({ data: bucket, viewYear: year, viewMonth: month });
+    const value = {
+      monthKey: mk,
+      year,
+      month,
+      ...buildBillsAgendaGroups({
+        computed,
+        viewYear: year,
+        viewMonth: month,
+        todayKey,
+        forceVisibleDateKey: forceKey,
+      }),
+    };
+    cache.set(mk, { inputs: { bucket, todayKey, forceKey }, value });
+    return value;
+  });
+  return { list, cache };
 }
 
 export function buildBillsMiniCalendarActivityItems({

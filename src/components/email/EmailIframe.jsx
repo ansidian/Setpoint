@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import DOMPurify from "dompurify";
 import { shouldRelayReaderKey } from "./readerHotkeyRelay.js";
+import { withMobileViewport } from "./withMobileViewport";
 
 // Renders a sanitized email body inside an iframe. The iframe always fills
 // its parent container's height (100%) — EmailReader provides a fixed-size
 // scrollable region, and the iframe's own scrollbar handles overflow for
 // long emails. Width is 100% so multi-column layouts can reflow.
-export default function EmailIframe({ html }) {
+export default function EmailIframe({ html, isMobile = false }) {
   const iframeRef = useRef(null);
   const hotkeyDocumentRef = useRef(null);
 
@@ -24,6 +25,11 @@ export default function EmailIframe({ html }) {
     // Strip tracking pixels (1x1 or 0x0 images). The digit must be the whole
     // value — not a prefix — otherwise width="100" / height="150" get eaten.
     .replace(/<img[^>]*(?:width\s*=\s*["']?[01]["'\s/>]|height\s*=\s*["']?[01]["'\s/>])[^>]*\/?>/gi, ""), [html]);
+
+  const srcDoc = useMemo(
+    () => (isMobile ? withMobileViewport(sanitized) : sanitized),
+    [isMobile, sanitized],
+  );
 
   // Keydowns inside the email document never bubble to the parent window, so the
   // inbox/shell/Alfred command listeners (all on the parent) would otherwise go
@@ -87,7 +93,7 @@ export default function EmailIframe({ html }) {
       ref={iframeRef}
       className="w-full h-full border-none rounded-default bg-white"
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-      srcDoc={sanitized}
+      srcDoc={srcDoc}
       title="Email content"
       onLoad={handleLoad}
     />

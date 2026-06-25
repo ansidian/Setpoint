@@ -77,6 +77,9 @@ export default function CalendarModalShell({
     eventsRange = null,
     deadlinesRange = null,
     dataRevision = 0,
+    getMonthBills,
+    billsRange = null,
+    billsDataRevision = 0,
   } = data;
   const { selectedDay, selectedDateKey, setSelectedDay, setSelectedDateKey, setSelectedItemId } = selection;
   const { eventEditor, deadlineEditor, setDeadlineEditor, closeEventEditor, onDeadlineDraftPreviewChange } = editors;
@@ -222,6 +225,9 @@ export default function CalendarModalShell({
       eventsRange={eventsRange}
       deadlinesRange={deadlinesRange}
       dataRevision={dataRevision}
+      getMonthBills={getMonthBills}
+      billsRange={billsRange}
+      billsDataRevision={billsDataRevision}
       onFilteredSelectedDeadlineHidden={handleFilteredSelectedDeadlineHidden}
     />
   ) : buildContextContent({

@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, lazy, Suspense, useCallback, startTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { MobileBottomNav } from "../shell/MobileBottomNav.jsx";
@@ -149,12 +149,14 @@ export function DashboardShell({
 
   const {
     calendarOpenRequestId,
+    calendarJumpTodayRequestId,
     calendarView,
     calendarFocus,
     calendarFocusItemId,
     calendarFocusOpenDetail,
     calendarForceOverlays,
     openCalendar,
+    jumpCalendarToToday,
     changeCalendarView,
     handleCalendarEventsRangeChange,
   } = useCalendarWorkspaceState({
@@ -271,6 +273,55 @@ export function DashboardShell({
 
   // Deadline detail (mobile-only; opens as a BottomSheet) — holds the clicked task
   const [deadlinePopover, setDeadlinePopover] = useState(null);
+  // Bill/event detail (mobile-only BottomSheet) — holds the clicked calendar item
+  // so a dashboard tap opens it in place instead of switching to the Calendar tab.
+  const [calendarItemSheet, setCalendarItemSheet] = useState(null);
+
+  // The bill/event deep-link openers, shared by the desktop tap path AND the
+  // mobile sheet's "Open in calendar" action (which scrolls the agenda to the
+  // item via the focusDate the request carries).
+  const openBillInCalendar = useCallback((date, itemId) => {
+    const request = dashboardBillCalendarRequest(date, itemId);
+    openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+  }, [openCalendar]);
+  const openEventInCalendar = useCallback((date, itemId) => {
+    openCalendar("events", date || null, itemId, {
+      source: "dashboard",
+      openDetail: !!itemId && itemId !== "new",
+      forceEventOverlay: !!itemId && itemId !== "new",
+    });
+  }, [openCalendar]);
+  const handleOpenCalendarItem = useCallback((sheet) => {
+    setCalendarItemSheet(null);
+    if (!sheet) return;
+    if (sheet.kind === "bill") openBillInCalendar(sheet.date, sheet.itemId);
+    else openEventInCalendar(sheet.date, sheet.itemId);
+  }, [openBillInCalendar, openEventInCalendar]);
+
+  // Mobile-only: the four tabs share one scroll container, so switching to a
+  // shorter tab (the inbox owns its own inner scroller) collapses the shared
+  // scrollHeight and the browser clamps the dashboard's scrollTop to 0. We record
+  // the dashboard's offset live while it is the active tab (so the saved value is
+  // never the post-switch clamp), then restore it on return — re-applying on the
+  // next frame, after the revealed content re-expands, to beat the clamp.
+  const dashboardScrollRef = useRef(null);
+  const dashboardScrollTopRef = useRef(0);
+  const handleSharedScroll = useCallback((event) => {
+    if (isMobile && tab === "dashboard") {
+      dashboardScrollTopRef.current = event.currentTarget.scrollTop;
+    }
+  }, [isMobile, tab]);
+  useLayoutEffect(() => {
+    if (!isMobile || tab !== "dashboard") return undefined;
+    const el = dashboardScrollRef.current;
+    if (!el) return undefined;
+    const target = dashboardScrollTopRef.current;
+    el.scrollTop = target;
+    const raf = window.requestAnimationFrame(() => {
+      if (dashboardScrollRef.current) dashboardScrollRef.current.scrollTop = target;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [tab, isMobile]);
 
   const navigate = useNavigate();
   const handlePaletteAction = useCallback((item) => {
@@ -322,6 +373,7 @@ export function DashboardShell({
 
   const calendarMountProps = {
     calendarOpenRequestId,
+    calendarJumpTodayRequestId,
     calendarView,
     changeCalendarView,
     calendarFocus,
@@ -376,6 +428,9 @@ export function DashboardShell({
       />
 
       <div
+        ref={dashboardScrollRef}
+        onScroll={handleSharedScroll}
+        data-testid="shell-scroll-region"
         style={{
           flex: 1,
           overflow: (tab === "dashboard" || tab === "calendar" || tab === "notes") && !isMobile ? "hidden" : "auto",
@@ -410,15 +465,14 @@ export function DashboardShell({
                 return { task };
               });
             }}
-            onOpenBillsCalendar={(date, itemId) => {
-              const request = dashboardBillCalendarRequest(date, itemId);
-              openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+            onOpenBillsCalendar={(date, itemId, item) => {
+              if (isMobile && item) { setCalendarItemSheet({ kind: "bill", item, date, itemId }); return; }
+              openBillInCalendar(date, itemId);
             }}
-            onOpenEventsCalendar={(date, itemId) => openCalendar("events", date || null, itemId, {
-              source: "dashboard",
-              openDetail: !!itemId && itemId !== "new",
-              forceEventOverlay: !!itemId && itemId !== "new",
-            })}
+            onOpenEventsCalendar={(date, itemId, item) => {
+              if (isMobile && item) { setCalendarItemSheet({ kind: "event", item, date, itemId }); return; }
+              openEventInCalendar(date, itemId);
+            }}
           />
         </KeepAliveTab>
         <KeepAliveTab active={tab === "inbox"}>
@@ -462,6 +516,7 @@ export function DashboardShell({
         <MobileBottomNav
           tab={tab}
           onTab={setShellTab}
+          onRetap={(t) => { if (t === "calendar") jumpCalendarToToday(); }}
           inboxUnreadSignalCount={inboxUnreadSignalCount}
         />
       )}
@@ -470,6 +525,9 @@ export function DashboardShell({
         isMobile={isMobile}
         deadlinePopover={deadlinePopover}
         setDeadlinePopover={setDeadlinePopover}
+        calendarItemSheet={calendarItemSheet}
+        setCalendarItemSheet={setCalendarItemSheet}
+        onOpenCalendarItemInCalendar={handleOpenCalendarItem}
         accent={accent}
         addTaskOpen={addTaskOpen}
         setAddTaskOpen={setAddTaskOpen}

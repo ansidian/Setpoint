@@ -8,7 +8,7 @@ const NAV_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar
 // DashboardShell's fixed inset-0 column, so it pins to the viewport bottom and
 // the flex:1 tab body shrinks to reserve its height. No position:fixed / z-index:
 // body-portal sheets (z-50) and AlfredPanel (z-60) paint above the whole column.
-export function MobileBottomNav({ tab, onTab, inboxUnreadSignalCount }) {
+export function MobileBottomNav({ tab, onTab, onRetap, inboxUnreadSignalCount }) {
   return (
     <nav
       aria-label="Primary"
@@ -31,7 +31,7 @@ export function MobileBottomNav({ tab, onTab, inboxUnreadSignalCount }) {
             type="button"
             aria-label={NAV_LABELS[tabKey]}
             aria-current={active ? "page" : undefined}
-            onClick={() => onTab(tabKey)}
+            onClick={() => (active && onRetap ? onRetap(tabKey) : onTab(tabKey))}
             style={{
               flex: 1,
               minHeight: "var(--sp-touch-min)",

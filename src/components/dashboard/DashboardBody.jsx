@@ -146,12 +146,12 @@ function DashboardBodyInner({
     } else if (payload.kind === "deadline") {
       onOpenDeadline(payload.data || payload, anchor);
     } else if (payload.kind === "bill") {
-      onOpenBillsCalendar(payload.data?.next_date || payload.date || null, payload.id || payload.data?.id || null);
+      onOpenBillsCalendar(payload.data?.next_date || payload.date || null, payload.id || payload.data?.id || null, payload.data);
     } else if (payload.kind === "event" && payload.data?.startMs) {
       const ymd = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Los_Angeles",
       }).format(new Date(payload.data.startMs));
-      onOpenEventsCalendar(ymd, payload.id || getEventSelectionId(payload.data));
+      onOpenEventsCalendar(ymd, payload.id || getEventSelectionId(payload.data), payload.data);
     }
   }, [onOpenEmail, onOpenDeadline, onOpenBillsCalendar, onOpenEventsCalendar]);
 

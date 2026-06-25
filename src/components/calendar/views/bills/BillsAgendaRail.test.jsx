@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import BillsAgendaRail from "./BillsAgendaRail.jsx";
 import { compute } from "./billsModel.js";
 
@@ -99,5 +99,21 @@ describe("BillsAgendaRail", () => {
     const markers = within(juneOne).getAllByTestId("calendar-mini-calendar-marker");
     expect(markers.map((marker) => marker.getAttribute("data-marker-kind"))).toEqual(["dot"]);
     expect(markers[0].getAttribute("data-marker-color")).toBe("#89b4fa");
+  });
+
+  it("renders bills from months beyond the active month once a range provider is wired (infinite scroll)", async () => {
+    const buckets = {
+      "2026-06": { schedules: [{ id: "june-1", name: "June Only Bill", amount: 50, next_date: "2026-06-15", type: "bill" }] },
+    };
+    const getMonthBills = (year, month) => buckets[`${year}-${String(month + 1).padStart(2, "0")}`] || { schedules: [] };
+    const billsRange = { ensureRange: vi.fn().mockResolvedValue(undefined), loading: false, revision: 1 };
+
+    renderRail({ getMonthBills, billsRange });
+
+    // June is a month after the active May view; with the multi-month pipeline on,
+    // its bill is fetched + rendered without navigating there. (Gate off — no range
+    // — keeps the single-month behavior the other tests assert.)
+    expect(await screen.findByText("June Only Bill")).toBeTruthy();
+    expect(billsRange.ensureRange).toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useMemo, useState } from "react";
+import { forwardRef, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { parseYmd, ymdFromParts } from "../../calendarDateUtils.js";
 import AgendaMonthScrollContainer from "../agenda/AgendaMonthScrollContainer.jsx";
 import AgendaRailShell from "../agenda/AgendaRailShell.jsx";
@@ -6,7 +6,14 @@ import MiniCalendar, { AgendaRailWithMiniCalendar } from "../agenda/MiniCalendar
 import {
   buildBillsAgendaGroups,
   buildBillsMiniCalendarActivityItems,
+  reuseMultiMonthBillsAgendaGroups,
 } from "./billsAgendaModel.js";
+import { useAgendaFetch } from "../../../../hooks/calendar/useAgendaFetch.js";
+import { scrollCommandTargetMonth } from "../../../../hooks/calendar/agendaFetchModel.js";
+
+function parseMonthKey(mk) {
+  return { year: Number(mk.slice(0, 4)), month: Number(mk.slice(5, 7)) - 1 };
+}
 
 function groupDate(group) {
   const parsed = parseYmd(group.dateKey);
@@ -214,15 +221,74 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   onMiniCalendarDateCreate,
   hideMiniCalendar = false,
   onBillAction,
+  getMonthBills = null,
+  billsRange = null,
+  dataRevision = 0,
 }, ref) {
   const todayKey = ymdFromParts(currentYear, currentMonth, todayDate);
-  const agenda = useMemo(() => buildBillsAgendaGroups({
-    computed,
-    viewYear,
-    viewMonth,
+  const forceVisibleDateKey = entryScrollTargetDateKey || selectedDateKey;
+
+  // Infinite-scroll multi-month pipeline (mirrors EventsAgendaRail). Gated purely
+  // on data-provider presence — no isMobile branch — so it lands on desktop and
+  // mobile alike, and degrades to the single-month build when no range is wired
+  // (which keeps the single-month unit tests, that pass no range, green).
+  const multiMonthEnabled = !!getMonthBills && typeof billsRange?.ensureRange === "function";
+  const pendingTargetMonth = scrollCommandTargetMonth(scrollCommand, todayKey);
+  const [topmostMonth, setTopmostMonth] = useState(null);
+
+  // initialReady is intentionally unused: bills keeps the single-month build as
+  // the fallback while the first window loads (no skeleton), so the rail never
+  // goes blank and needs no readiness gate.
+  const { loadedMonths } = useAgendaFetch({
+    topmostMonth,
+    pendingTargetMonth,
+    domainRange: billsRange,
+    deadlinesRange: null,
     todayKey,
-    forceVisibleDateKey: entryScrollTargetDateKey || selectedDateKey,
-  }), [computed, entryScrollTargetDateKey, selectedDateKey, todayKey, viewMonth, viewYear]);
+    disabled: !multiMonthEnabled,
+  });
+
+  const monthDescriptors = useMemo(() => {
+    if (!multiMonthEnabled || !loadedMonths.length) return null;
+    return loadedMonths.map(parseMonthKey);
+  }, [multiMonthEnabled, loadedMonths]);
+
+  // Defer the (per-month rebuild) inputs so a prefetch landing mid-scroll keeps
+  // scroll renders on the prior months and moves the rebuild off the urgent path.
+  const deferredMonthDescriptors = useDeferredValue(monthDescriptors);
+  const deferredDataRevision = useDeferredValue(dataRevision);
+
+  const monthGroupsCacheRef = useRef(null);
+  const multiMonthGroups = useMemo(() => {
+    if (!multiMonthEnabled || !deferredMonthDescriptors) return null;
+    const { list, cache } = reuseMultiMonthBillsAgendaGroups({
+      previous: monthGroupsCacheRef.current,
+      months: deferredMonthDescriptors,
+      getMonthBills,
+      todayKey,
+      forceVisibleDateKey,
+    });
+    monthGroupsCacheRef.current = cache;
+    return list;
+    // deferredDataRevision invalidates the ref-backed getMonthBills reads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multiMonthEnabled, deferredMonthDescriptors, getMonthBills, todayKey, forceVisibleDateKey, deferredDataRevision]);
+
+  // Single-month fallback: kept available whenever the multi-month list isn't
+  // ready yet (gate off OR the first window still loading), so the rail always
+  // renders the current month immediately — no skeleton flash, matching today's
+  // bills behavior.
+  const singleMonthAgenda = useMemo(() => {
+    if (multiMonthGroups) return null;
+    return buildBillsAgendaGroups({
+      computed,
+      viewYear,
+      viewMonth,
+      todayKey,
+      forceVisibleDateKey,
+    });
+  }, [multiMonthGroups, computed, viewYear, viewMonth, todayKey, forceVisibleDateKey]);
+
   const miniCalendarItems = useMemo(() => buildBillsMiniCalendarActivityItems({
     computed,
     viewYear,
@@ -230,12 +296,16 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   }), [computed, viewMonth, viewYear]);
   const [hoverPreviewItem, setHoverPreviewItem] = useState(null);
 
-  const months = useMemo(() => [{
-    monthKey: `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`,
-    year: viewYear,
-    month: viewMonth,
-    ...agenda,
-  }], [viewYear, viewMonth, agenda]);
+  const months = useMemo(() => {
+    if (multiMonthGroups) return multiMonthGroups;
+    if (!singleMonthAgenda) return [];
+    return [{
+      monthKey: `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`,
+      year: viewYear,
+      month: viewMonth,
+      ...singleMonthAgenda,
+    }];
+  }, [multiMonthGroups, singleMonthAgenda, viewYear, viewMonth]);
 
   function startHoverPreview(item) {
     setHoverPreviewItem(previewItemForBill(item));
@@ -247,6 +317,13 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
       current?.previewSourceKey === sourceKey ? null : current
     ));
   }
+
+  // Track the topmost-visible month (drives useAgendaFetch's edge prefetch) and
+  // still forward the passive date change for selection sync.
+  const handleTopmostDateChange = useCallback((dateKey) => {
+    if (dateKey) setTopmostMonth(dateKey.slice(0, 7));
+    onPassiveDateChange?.(dateKey);
+  }, [onPassiveDateChange]);
 
   const renderMonth = useCallback((month, { registerHeader, registerSection, registerRow, registerContent }) => (
     <AgendaRailShell
@@ -313,6 +390,9 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
         />
       )}
     >
+      {/* entryScrollReady/skeleton are intentionally omitted (unlike EventsAgendaRail):
+          bills never shows an agenda skeleton — the single-month build is the always-
+          ready fallback while the first multi-month window loads. */}
       <AgendaMonthScrollContainer
         ref={ref}
         testId="bills-agenda-rail"
@@ -321,7 +401,8 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
         selectedDateKey={selectedDateKey}
         scrollCommand={scrollCommand}
         entryScrollTargetDateKey={entryScrollTargetDateKey}
-        onTopmostDateChange={onPassiveDateChange}
+        isLoading={!!billsRange?.loading}
+        onTopmostDateChange={handleTopmostDateChange}
         renderMonth={renderMonth}
       />
     </AgendaRailWithMiniCalendar>
