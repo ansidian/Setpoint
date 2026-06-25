@@ -34,6 +34,22 @@ describe("buildComingUp", () => {
     ]);
   });
 
+  it("gives a chipTooltip short date for future rows, and none (null) for due-today rows", () => {
+    freezeToJan15();
+    const out = buildComingUp({
+      liveDeadlines: [
+        { id: "today", title: "T", due_date: "2026-01-15", due_time: "2:00 PM", status: "open" },
+        { id: "tom", title: "M", due_date: "2026-01-16", status: "open" },
+      ],
+      liveBills: [{ id: "b", name: "Rent", amount: 2450, next_date: "2026-01-18", paid: false }],
+      days: 7,
+    });
+    const byId = Object.fromEntries(out.map((x) => [x.id, x.chipTooltip]));
+    expect(byId["deadline:today"]).toBeNull(); // due today → chip already says "Today"
+    expect(byId["deadline:tom"]).toBe("1/16/26");
+    expect(byId["bill:b"]).toBe("1/18/26");
+  });
+
   it("excludes paid bills, completed deadlines, overdue items, and anything past the window", () => {
     freezeToJan15();
     const liveDeadlines = [

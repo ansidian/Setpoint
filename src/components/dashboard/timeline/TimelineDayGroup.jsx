@@ -47,7 +47,7 @@ export default function TimelineDayGroup({
           }}
         >
           {showRelativeTooltip ? (
-            <Tooltip text={formatFullDateForOffset(day, now)} sideOffset={12}>
+            <Tooltip text={formatFullDateForOffset(day, now)} side="right" sideOffset={8}>
               <div
                 style={{
                   fontSize: isMobile ? 10 : 10.5,

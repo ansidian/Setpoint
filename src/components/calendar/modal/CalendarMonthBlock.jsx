@@ -62,6 +62,7 @@ export default function CalendarMonthBlock({
     cached,
     monthCached,
     showGridSkeleton,
+    shareItemsByDate,
   });
   const preview = hasFullData ? null : previewByIndex.get(index);
   const previewEvents = preview?.events ?? null;

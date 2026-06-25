@@ -7,7 +7,10 @@ import { Check } from "lucide-react";
 // hover state. It reveals on the parent's hover (`revealed`) or its own focus, and
 // only shifts colour (muted -> green) on direct hover/focus. Reduced motion is
 // honoured by the global transition reset in index.css.
-export default function MarkDoneAction({ onComplete, revealed = false, itemTitle = "", style }) {
+// `compact` renders an icon-only 20x20 check button (used beside the Coming-up
+// chip, where a text label would crowd the slot); the default is the text-only
+// "Mark done" used by the needs-you band's upcoming-card footer.
+export default function MarkDoneAction({ onComplete, revealed = false, itemTitle = "", compact = false, style }) {
   const [active, setActive] = useState(false);
   const visible = revealed || active;
   return (
@@ -20,18 +23,22 @@ export default function MarkDoneAction({ onComplete, revealed = false, itemTitle
       onFocus={() => setActive(true)}
       onBlur={() => setActive(false)}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 4,
-        background: "transparent", border: "none", padding: 0, margin: 0,
+        display: "inline-flex", alignItems: "center",
+        background: compact && active ? "color-mix(in srgb, var(--sp-green) 16%, transparent)" : "transparent",
+        border: "none", margin: 0,
         color: active ? "var(--sp-green)" : "rgba(205,214,244,0.5)",
-        fontSize: 10.5, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap",
+        fontFamily: "inherit", whiteSpace: "nowrap",
         cursor: "pointer", outline: "none",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
-        transition: "opacity 130ms ease, color 130ms ease",
+        transition: "opacity 130ms ease, color 130ms ease, background 130ms ease",
+        ...(compact
+          ? { justifyContent: "center", width: 20, height: 20, borderRadius: 6, padding: 0 }
+          : { gap: 4, padding: 0, fontSize: 10.5, fontWeight: 600 }),
         ...style,
       }}
     >
-      <Check size={11} strokeWidth={2.4} />Mark done
+      <Check size={compact ? 13 : 11} strokeWidth={2.4} />{compact ? null : "Mark done"}
     </button>
   );
 }

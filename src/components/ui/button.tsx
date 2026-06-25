@@ -11,11 +11,11 @@ const buttonVariants = cva(
         default:
           "bg-[color:var(--ea-accent)] text-[var(--sp-page)] hover:bg-[color:color-mix(in_srgb,var(--sp-accent)_88%,white)] hover:-translate-y-px active:translate-y-0",
         outline:
-          "border-border bg-background hover:bg-surface-hover hover:text-foreground hover:border-white/15 aria-expanded:bg-surface-hover aria-expanded:text-foreground",
+          "border-border bg-background hover:bg-white/10 hover:text-foreground hover:border-white/15 aria-expanded:bg-white/10 aria-expanded:text-foreground",
         secondary:
           "bg-secondary text-secondary-foreground border-white/10 hover:bg-white/10 hover:text-text-body hover:border-white/20 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
-          "hover:bg-surface-hover hover:text-foreground aria-expanded:bg-surface-hover aria-expanded:text-foreground",
+          "hover:bg-white/10 hover:text-foreground aria-expanded:bg-white/10 aria-expanded:text-foreground",
         destructive:
           "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20 hover:border-destructive/40 focus-visible:border-destructive/40 focus-visible:ring-destructive/20",
         link: "text-primary underline-offset-4 hover:underline",

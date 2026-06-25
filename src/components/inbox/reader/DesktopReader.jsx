@@ -412,7 +412,6 @@ export default function DesktopReader({
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ padding: "22px 24px 8px", flexShrink: 0 }}>
           <h1
-            className="ea-display"
             style={{
               margin: 0,
               fontSize: 21,

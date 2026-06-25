@@ -56,7 +56,7 @@ export default function SearchableDropdown({ options, value, onChange, placehold
           collisionPadding={16}
           sticky
           onPointerDown={(e) => e.stopPropagation()}
-          className="w-[var(--anchor-width)] rounded bg-elevated border border-white/10 p-0 shadow-modal"
+          className="w-[var(--anchor-width)] rounded bg-[var(--sp-panel)] border border-white/10 p-0 shadow-lg"
         >
           {/* PopoverContent is keepMounted (shared popover.tsx default), so the
               option DOM would otherwise persist while closed. Build the Command

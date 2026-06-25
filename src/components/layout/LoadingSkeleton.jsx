@@ -12,7 +12,7 @@ function SkeletonSection({ titleWidth, lines, delay }) {
       style={{ animationDelay: `${delay}ms` }}
     >
       <Skeleton className={cn("h-[11px] mb-3", titleWidth)} />
-      <div className="bg-surface border border-border rounded-lg px-5 py-4 flex flex-col gap-3">
+      <div className="bg-card border border-border rounded-lg px-5 py-4 flex flex-col gap-3">
         {lines.map((w, i) => (
           <SkeletonBar key={i} className={w} />
         ))}

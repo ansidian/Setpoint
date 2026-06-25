@@ -1,4 +1,5 @@
 import { daysUntil } from "../../../lib/bill-utils";
+import { formatChipDateTime } from "../../../lib/shell-helpers";
 
 function chipFor(days) {
   if (days === 0) return { chipLabel: "Today", chipTone: "rose" };
@@ -23,7 +24,8 @@ export function buildComingUp({ liveDeadlines, liveBills, days = 7 } = {}) {
     if (n == null || n < 0 || n > days) continue;
     rows.push({
       id: `deadline:${d.id}`, kind: "deadline", title: d.title || "",
-      meta: d.class_name || d.project_name || "Deadline", sortDays: n, ...chipFor(n),
+      meta: d.class_name || d.project_name || "Deadline", sortDays: n,
+      chipTooltip: formatChipDateTime(d.due_date, d.due_time, n === 0), ...chipFor(n),
     });
   }
 
@@ -34,7 +36,8 @@ export function buildComingUp({ liveDeadlines, liveBills, days = 7 } = {}) {
     const amount = `$${Number(b.amount || 0).toFixed(2)}`;
     rows.push({
       id: `bill:${b.id}`, kind: "bill", title: b.name || "",
-      meta: b.payee ? `${amount} · ${b.payee}` : amount, sortDays: n, ...chipFor(n),
+      meta: b.payee ? `${amount} · ${b.payee}` : amount, sortDays: n,
+      chipTooltip: formatChipDateTime(b.next_date, null, n === 0), ...chipFor(n),
     });
   }
 

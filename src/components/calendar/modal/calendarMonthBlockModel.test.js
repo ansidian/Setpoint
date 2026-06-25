@@ -61,6 +61,17 @@ describe("resolveMonthBlockState", () => {
     expect(resolveMonthBlockState({ ...base, monthCached: true }).blockSkeleton).toBe(false);
   });
 
+  it("never skeletons a non-active month in a month-agnostic (shared itemsByDate) view", () => {
+    // Bills share one date-keyed map across all mounted months (monthAgnosticItemsByDate),
+    // so a non-active bills month already has its chips — it must not paint a skeleton over
+    // them just because the EVENTS range cache lacks that month.
+    const shared = resolveMonthBlockState({ ...base, monthCached: false, shareItemsByDate: true });
+    expect(shared.isActive).toBe(false);
+    expect(shared.blockSkeleton).toBe(false);
+    // Events (no shared map) still skeleton an uncached non-active month.
+    expect(resolveMonthBlockState({ ...base, monthCached: false, shareItemsByDate: false }).blockSkeleton).toBe(true);
+  });
+
   it("keeps isCached/hasFullData falsy (the raw operand, not coerced) when there is no cached entry", () => {
     // `!isActive && cached && ...` short-circuits to the falsy `cached` (null);
     // `isActive || isCached` then yields null too. The render reads both only in

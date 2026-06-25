@@ -110,8 +110,13 @@ export function resolveTodayNowMarkerIndex(items, now) {
   if (liveInCard) return null;
   let index = 0;
   for (const it of items) {
+    // All-day events span the whole day (their startMs is a noon-UTC anchor, but
+    // they have no clock time), so the NOW marker always sits below them — count
+    // them as already-elapsed regardless of their nominal ms vs now. This keeps
+    // the marker under an all-day event even in the pre-anchor early-morning window.
+    const isAllDay = it.kind === "event" && it.data?.allDay;
     const ms = it.startMs ?? it.dueAtMs;
-    if (ms != null && ms <= now) index += 1;
+    if (isAllDay || (ms != null && ms <= now)) index += 1;
     else break;
   }
   return index;
