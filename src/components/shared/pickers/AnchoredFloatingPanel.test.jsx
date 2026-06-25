@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AnchoredFloatingPanel from "./AnchoredFloatingPanel.jsx";
+import useIsMobile from "@/hooks/useIsMobile";
+
+vi.mock("@/hooks/useIsMobile", () => ({ default: vi.fn(() => false) }));
 
 function rect({ top, left, width, height }) {
   return {
@@ -24,6 +27,7 @@ describe("AnchoredFloatingPanel", () => {
   let getBoundingClientRectMock;
 
   beforeEach(() => {
+    useIsMobile.mockReturnValue(false);
     window.innerWidth = 1280;
     window.innerHeight = 800;
 
@@ -201,5 +205,50 @@ describe("AnchoredFloatingPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
 
     sibling.remove();
+  });
+
+  it("renders content through BottomSheet on mobile (sheet, not anchored)", () => {
+    useIsMobile.mockReturnValue(true);
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        width={300}
+        height={386}
+        role="dialog"
+        ariaLabel="Snooze options"
+        onClose={() => {}}
+      >
+        <button type="button">Tomorrow</button>
+      </AnchoredFloatingPanel>,
+    );
+
+    // BottomSheet renders the ariaLabel as a header title + a Close button; the
+    // anchored panel's marker is absent because AnchoredPanelDesktop never mounts.
+    expect(screen.getByText("Snooze options")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    expect(screen.getByText("Tomorrow")).toBeTruthy();
+    expect(document.querySelector('[data-calendar-popover-panel="true"]')).toBeNull();
+  });
+
+  it("stays anchored on mobile when disableMobileSheet is set", async () => {
+    useIsMobile.mockReturnValue(true);
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        width={300}
+        height={386}
+        role="dialog"
+        ariaLabel="Snooze options"
+        disableMobileSheet
+        onClose={() => {}}
+      >
+        <button type="button">Tomorrow</button>
+      </AnchoredFloatingPanel>,
+    );
+
+    // Opt-out: anchored path is taken even on mobile — the dialog renders and
+    // there is no BottomSheet (no Close button).
+    await screen.findByRole("dialog", { name: "Snooze options" });
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 });

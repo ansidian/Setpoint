@@ -45,6 +45,7 @@ export default function SnoozePicker({ anchorRef, onSelect, onClose }) {
       width={panelW}
       height={panelH}
       role="menu"
+      ariaLabel="Snooze"
       style={{
         padding: view === "custom" ? 8 : 6,
         borderRadius: 8,

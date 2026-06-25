@@ -1,7 +1,6 @@
 import { CalendarClock } from "lucide-react";
 import AnchoredFloatingPanel from "@/components/shared/pickers/AnchoredFloatingPanel";
 import CalendarDateTimeView from "@/components/shared/pickers/CalendarDateTimeView";
-import useIsMobile from "@/hooks/useIsMobile";
 
 const PICKER_WIDTH = 300;
 const PICKER_HEIGHT = 432;
@@ -15,13 +14,8 @@ export default function TodoistDuePicker({
   onSelect,
   onClose,
 }) {
-  const isMobile = useIsMobile();
-  const width = isMobile
-    ? Math.min(window.innerWidth - 24, PICKER_WIDTH)
-    : PICKER_WIDTH;
-  const height = isMobile
-    ? Math.min(Math.round(window.innerHeight * 0.6), PICKER_HEIGHT)
-    : PICKER_HEIGHT;
+  const width = PICKER_WIDTH;
+  const height = PICKER_HEIGHT;
   return (
     <AnchoredFloatingPanel
       anchorRef={anchorRef}

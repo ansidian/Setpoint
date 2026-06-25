@@ -177,4 +177,14 @@ describe("ShellHeader system status", () => {
 
     expect(onOpenAnalytics).toHaveBeenCalledTimes(1);
   });
+
+  it("hides the top tab strip on mobile (MobileBottomNav takes over), keeps it on desktop", () => {
+    renderHeader();
+    expect(screen.getByText("Calendar")).toBeTruthy(); // desktop strip present
+
+    cleanup();
+    renderHeader({ isMobile: true });
+    expect(screen.queryByText("Notes")).toBeNull(); // mobile strip gone
+    expect(screen.queryByText("Calendar")).toBeNull();
+  });
 });

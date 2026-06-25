@@ -247,7 +247,7 @@ export function QuickAction({
         display: "inline-flex", alignItems: "center", gap: 6,
         justifyContent: "center",
         width: iconOnly ? 36 : undefined,
-        height: touch ? 44 : 36,
+        height: touch ? "var(--sp-touch-min)" : 36,
         padding: iconOnly ? 0 : "0 11px",
         borderRadius: 8,
         fontSize: 11, fontWeight: 600, fontFamily: "inherit",

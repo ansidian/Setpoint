@@ -65,7 +65,7 @@
     "breakpoints": [
       {
         "name": "mobile",
-        "value": "max-width dependent via useIsMobile",
+        "value": "639px",
         "purpose": "Mobile tab and inbox behavior."
       }
     ],

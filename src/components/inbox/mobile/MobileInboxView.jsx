@@ -37,10 +37,9 @@ function MobileChip({ active, label, count, onClick, accent }) {
         gap: 6,
         width: "100%",
         minWidth: 0,
-        minHeight: 44,
+        minHeight: "var(--sp-touch-min)",
         padding: "8px 6px",
         borderRadius: 999,
-        touchAction: "manipulation",
         border: `1px solid ${active ? `${accent}48` : "rgba(255,255,255,0.08)"}`,
         background: active ? `${accent}16` : "rgba(255,255,255,0.03)",
         color: active ? "#fff" : "rgba(205,214,244,0.72)",
@@ -78,8 +77,8 @@ function MobileChip({ active, label, count, onClick, accent }) {
 function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = false, testId }) {
   const Icon = icon;
   const baseStyle = {
-    width: 44,
-    height: 44,
+    width: "var(--sp-touch-min)",
+    height: "var(--sp-touch-min)",
     flexShrink: 0,
     display: "inline-flex",
     alignItems: "center",
@@ -90,7 +89,6 @@ function MobileIconButton({ icon, label, onClick, accent, buttonRef, tinted = fa
     color: tinted ? accent : "rgba(205,214,244,0.7)",
     cursor: "pointer",
     fontFamily: "inherit",
-    touchAction: "manipulation",
     transition: "background 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out, transform 160ms ease-out",
   };
   const hoverStyle = {
@@ -356,7 +354,7 @@ export default function MobileInboxView({
                     border: "none",
                     outline: "none",
                     color: "var(--sp-text)",
-                    fontSize: 12,
+                    fontSize: 16,
                     fontFamily: "inherit",
                   }}
                 />

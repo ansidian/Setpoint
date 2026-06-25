@@ -2,8 +2,31 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { computePlacement } from "@/components/inbox/helpers";
 import useDismissablePortal from "@/hooks/useDismissablePortal";
+import useIsMobile from "@/hooks/useIsMobile";
+import BottomSheet from "@/components/ui/BottomSheet";
 
-export default function AnchoredFloatingPanel({
+// Public entry point: anchored popover on desktop, bottom sheet on mobile.
+// On a phone (useIsMobile) the content renders through BottomSheet so every
+// consumer inherits "anchored on desktop, sheet on mobile" from one place —
+// unless a consumer opts out with disableMobileSheet (then it stays anchored).
+// Branching on a whole component (not guarding hooks in one function) keeps
+// rules-of-hooks intact and means the desktop positioning hooks only mount on
+// the desktop path — and the panel's useDismissablePortal never runs on mobile,
+// where panelRef is unattached and the first in-sheet tap would read as
+// "outside" and close the sheet.
+export default function AnchoredFloatingPanel({ disableMobileSheet = false, ...props }) {
+  const isMobile = useIsMobile();
+  if (isMobile && !disableMobileSheet) {
+    return (
+      <BottomSheet open onClose={props.onClose} title={props.ariaLabel}>
+        {props.children}
+      </BottomSheet>
+    );
+  }
+  return <AnchoredPanelDesktop {...props} />;
+}
+
+function AnchoredPanelDesktop({
   anchorRef,
   panelRef,
   onClose,

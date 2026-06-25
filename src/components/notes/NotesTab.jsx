@@ -253,7 +253,7 @@ export default function NotesTab({ accent, isMobile = false }) {
 
   const inputStyle = {
     width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 8, padding: "9px 12px", color: "var(--sp-text)", fontSize: 13, fontFamily: "inherit",
+    borderRadius: 8, padding: "9px 12px", color: "var(--sp-text)", fontSize: isMobile ? 16 : 13, fontFamily: "inherit",
     outline: "none", boxSizing: "border-box",
   };
 

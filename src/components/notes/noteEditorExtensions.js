@@ -254,7 +254,7 @@ export const tagChips = ViewPlugin.fromClass(
 
 export function noteTheme() {
   return EditorView.theme({
-    "&": { color: "var(--sp-text)", fontSize: "13px", background: "transparent" },
+    "&": { color: "var(--sp-text)", fontSize: "var(--sp-note-editor-font)", background: "transparent" },
     // Match the notes search input's ::placeholder (.notes-search-input in index.css)
     // so both placeholders read identically; CM's base theme would otherwise use #888.
     ".cm-placeholder": { color: "var(--color-text-faint)" },

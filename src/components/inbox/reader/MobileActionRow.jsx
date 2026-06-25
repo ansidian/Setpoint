@@ -20,7 +20,7 @@ export default function MobileActionRow({
         width: "100%",
         minWidth: 0,
         padding: "11px 12px",
-        minHeight: 44,
+        minHeight: "var(--sp-touch-min)",
         borderRadius: 10,
         border: `1px solid ${danger ? "color-mix(in srgb, var(--sp-rose) 18%, transparent)" : active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
         background,

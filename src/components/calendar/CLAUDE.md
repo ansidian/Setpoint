@@ -23,7 +23,7 @@ Calendar UI root: `CalendarModal.jsx` is the entry point (named for history; the
 
 ### Models + utilities
 - `calendarDateUtils.js` — Pacific-timezone date parsing, formatting, manipulation
-- `calendarLayout.js` — responsive layout metrics from viewport breakpoints
+- `calendarLayout.js` — responsive layout metrics from viewport breakpoints — a **desktop** viewport-width ladder driven by `window.innerWidth` (`useViewportWidth`), independent of the app's mobile gate. The 639px `useIsMobile` gate unmounts the calendar below 639px, so the `sm` fallback tier (a 7-column month grid, 100px cells, no rails/detail) is only ever reached on a desktop window 640–1239px wide — never the phone gate.
 - `calendarOverviewModel.js` — month summary stats for the overview rail
 - `calendarEmptyStateMeta.js` — per-view (events/bills) labels and icons
 - `calendarRailStyles.js` — shared rail container and hero-card styles

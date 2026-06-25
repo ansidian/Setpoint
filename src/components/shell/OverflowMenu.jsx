@@ -31,13 +31,12 @@ function MenuItem({ icon, label, kbd, onClick, onPrepare, danger, isMobile }) {
         alignItems: "center",
         gap: 10,
         padding: isMobile ? "12px 12px" : "8px 10px",
-        minHeight: isMobile ? 44 : undefined,
+        minHeight: isMobile ? "var(--sp-touch-min)" : undefined,
         borderRadius: 6,
         cursor: "pointer",
         fontSize: 12,
         color: danger ? "var(--sp-rose)" : "var(--sp-text)",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
-        touchAction: "manipulation",
         transition: "background 150ms",
       }}
     >
@@ -63,13 +62,12 @@ function MenuLink({ icon, label, to, onClick, isMobile }) {
         alignItems: "center",
         gap: 10,
         padding: isMobile ? "12px 12px" : "8px 10px",
-        minHeight: isMobile ? 44 : undefined,
+        minHeight: isMobile ? "var(--sp-touch-min)" : undefined,
         borderRadius: 6,
         textDecoration: "none",
         fontSize: 12,
         color: "var(--sp-text)",
         background: hover ? "rgba(255,255,255,0.04)" : "transparent",
-        touchAction: "manipulation",
         transition: "background 150ms",
       }}
     >
@@ -108,7 +106,6 @@ function OverflowButton({ open, onClick, isMobile }) {
         cursor: "pointer",
         display: "grid",
         placeItems: "center",
-        touchAction: "manipulation",
         transform: lifted ? "translateY(-1px)" : "translateY(0)",
         transition: "transform 150ms, background 150ms, border-color 150ms, color 150ms",
       }}

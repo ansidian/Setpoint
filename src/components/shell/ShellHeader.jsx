@@ -77,6 +77,7 @@ function ShellHeader({
         alignItems: "center",
         gap: 12,
         padding: isMobile ? "10px 12px" : "12px 20px",
+        paddingTop: `calc(${isMobile ? "10px" : "12px"} + var(--sp-safe-top))`,
         borderBottom: "1px solid rgba(255,255,255,0.05)",
         background: "color-mix(in srgb, var(--sp-deep) 94%, transparent)",
         position: "sticky",
@@ -119,12 +120,13 @@ function ShellHeader({
           Demo data
         </span>
       ) : null}
-      <ShellTabs
-        isMobile={isMobile}
-        tab={tab}
-        onTab={onTab}
-        inboxUnreadSignalCount={inboxUnreadSignalCount}
-      />
+      {!isMobile && (
+        <ShellTabs
+          tab={tab}
+          onTab={onTab}
+          inboxUnreadSignalCount={inboxUnreadSignalCount}
+        />
+      )}
       <div style={{ flex: 1 }} />
       {!isMobile && (
         <AnalyticsTriggerButton

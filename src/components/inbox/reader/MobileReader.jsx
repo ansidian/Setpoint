@@ -96,8 +96,8 @@ export default function MobileReader({
           aria-label="Back to inbox"
           onClick={onClose}
           style={{
-            width: 44,
-            height: 44,
+            width: "var(--sp-touch-min)",
+            height: "var(--sp-touch-min)",
             flexShrink: 0,
             display: "inline-flex",
             alignItems: "center",
@@ -108,7 +108,6 @@ export default function MobileReader({
             color: "rgba(205,214,244,0.8)",
             cursor: "pointer",
             fontFamily: "inherit",
-            touchAction: "manipulation",
           }}
         >
           <ArrowLeft size={18} />
