@@ -12,7 +12,6 @@ export default function NoteEditor({
   tags = [],
   autoFocus = false,
   placeholder = "",
-  maxHeight = 180,
   submitOnEnter = false,
   editorApiRef,
 }) {
@@ -47,7 +46,7 @@ export default function NoteEditor({
       state: EditorState.create({
         doc: value,
         extensions: [
-          buildNoteEditorExtensions({ callbacksRef: cbRef, placeholderText: placeholder, maxHeight }),
+          buildNoteEditorExtensions({ callbacksRef: cbRef, placeholderText: placeholder }),
           EditorView.domEventHandlers({ blur: () => {
             if (destroyingRef.current) return false; // ignore the blur emitted by view.destroy()
             onBlurRef.current?.(viewRef.current?.state.doc.toString() ?? "");

@@ -6,6 +6,7 @@ import {
   CalendarChipStatusIcon,
 } from "./CalendarCellItemChip.jsx";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
+import { deadlineDragAllowed } from "../views/deadlines/calendarDeadlineRescheduleModel.js";
 
 function inlineOverflowItemStyle({ item, selected, active, batchSelected = false }) {
   const specialDate = item.specialDate === true;
@@ -262,6 +263,7 @@ export default function CalendarInlineOverflowLayer({
         const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
         const active = itemId === String(activeItemId);
         const dragAllowed = !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent && !specialDate;
+        const deadlineDragOk = !item.isGhost && deadlineDragAllowed(item, quickActions?.deadlineDragEnabled);
         return (
           <button
             key={item.id}
@@ -273,7 +275,7 @@ export default function CalendarInlineOverflowLayer({
             data-hovered={active ? "true" : "false"}
             data-calendar-event-selection={batchSelected ? "true" : undefined}
             data-calendar-event-activation="true"
-            draggable={dragAllowed}
+            draggable={dragAllowed || deadlineDragOk}
             data-calendar-focus-ring="true"
             onClick={(event) => {
               event.stopPropagation();
@@ -330,6 +332,18 @@ export default function CalendarInlineOverflowLayer({
               });
             }}
             onDragStart={(event) => {
+              if (deadlineDragOk) {
+                if (!quickActions?.beginDeadlineDrag?.(item.sourceItem)) {
+                  event.preventDefault();
+                  return;
+                }
+                onBeforeItemAction?.();
+                event.stopPropagation();
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("application/x-ea-calendar-deadline", JSON.stringify(item.sourceItem));
+                event.dataTransfer.setData("text/plain", String(item.title || ""));
+                return;
+              }
               if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
                 event.preventDefault();
                 return;
@@ -340,7 +354,10 @@ export default function CalendarInlineOverflowLayer({
               event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
               event.dataTransfer.setData("text/plain", String(item.title || ""));
             }}
-            onDragEnd={() => quickActions?.endDrag?.()}
+            onDragEnd={() => {
+              quickActions?.endDrag?.();
+              quickActions?.endDeadlineDrag?.();
+            }}
             onPointerEnter={() => setActiveItemId(itemId)}
             onPointerLeave={() => setActiveItemId((current) => (current === itemId ? null : current))}
             onFocus={() => setActiveItemId(itemId)}

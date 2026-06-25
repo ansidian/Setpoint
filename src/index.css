@@ -376,3 +376,20 @@ body {
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: oklch(0.4037 0.0320 280.1520); border-radius: 2px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* The calendar mounts as a KeepAlive (Activity-frozen) tab, but its floating
+   detail panel is a document.body portal that escapes Activity's hiding. When
+   the calendar isn't the active tab, hide that portal so it can't paint over
+   the tab the user navigated to. (data-active-tab is set by DashboardShell.)
+
+   Use visibility, NOT display:none: the panel reveals via a ResizeObserver
+   measurement (opacity stays 0 until measured). display:none collapses its box
+   to 0x0, which resets that measurement, so on return the panel was stuck
+   invisible (opacity 0) yet still hit-testable. visibility:hidden keeps the
+   box measured AND blocks pointer events, so there is no paint and no
+   interaction while away, and return restores cleanly. !important overrides the
+   panel root's inline display/layout styles. */
+html:not([data-active-tab="calendar"]) [data-calendar-floating-detail="true"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

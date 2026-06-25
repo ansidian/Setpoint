@@ -1,14 +1,15 @@
 import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardProvider, useDashboard } from "./DashboardContext.jsx";
-import { completeDeadlineOccurrence } from "../api";
+import { completeDeadlineOccurrence, updateDeadline } from "../api";
 
 vi.mock("../api", () => ({
   completeDeadlineOccurrence: vi.fn(),
+  updateDeadline: vi.fn(),
 }));
 
-function Probe({ task }) {
-  const { handleAddTask, handleCompleteTask, handleUpdateTask, handleDeleteTask } = useDashboard();
+function Probe({ task, moveTarget = "2026-04-25" }) {
+  const { handleAddTask, handleCompleteTask, handleUpdateTask, handleDeleteTask, handleMoveTask } = useDashboard();
   return (
     <>
       <button type="button" onClick={() => handleAddTask(task)}>
@@ -22,6 +23,9 @@ function Probe({ task }) {
       </button>
       <button type="button" onClick={() => handleDeleteTask(task.id)}>
         Delete
+      </button>
+      <button type="button" onClick={() => handleMoveTask(task, moveTarget)}>
+        Move
       </button>
     </>
   );
@@ -332,6 +336,144 @@ describe("DashboardContext deadline single-owner state", () => {
     expect(seededDeadlines.upcoming[0]).toMatchObject({
       id: "todo-fallback",
       _completing: true,
+    });
+  });
+
+  it("moves a deadline to the target day and persists with the time preserved", async () => {
+    const task = {
+      id: "todo-move",
+      title: "Timed task",
+      due_date: "2026-04-21",
+      due_time: "3:00 PM",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    updateDeadline.mockResolvedValue({});
+
+    render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} moveTarget="2026-04-25" />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Move"));
+    });
+
+    // Optimistic: the deadline's due_date shifts to the target day so the
+    // calendar re-buckets the chip immediately.
+    const movedDeadlines = setCalendarDeadlines.mock.results[0].value;
+    expect(movedDeadlines.upcoming[0]).toMatchObject({
+      id: "todo-move",
+      due_date: "2026-04-25",
+    });
+    // Persist re-supplies the time so the day-only move keeps it (not all-day).
+    expect(updateDeadline).toHaveBeenCalledWith("todo-move", { dueDate: "2026-04-25", dueTime: "3:00 PM" });
+  });
+
+  it("reverts the optimistic move when the server rejects", async () => {
+    const task = {
+      id: "todo-move-fails",
+      title: "Move-rejects task",
+      due_date: "2026-04-21",
+      due_time: "3:00 PM",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+    updateDeadline.mockRejectedValue(new Error("provider down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} moveTarget="2026-04-25" />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Move"));
+    });
+
+    // Optimistic shift happened, then the rejection rolled the due_date back.
+    expect(updateDeadline).toHaveBeenCalledWith("todo-move-fails", { dueDate: "2026-04-25", dueTime: "3:00 PM" });
+    const revertedDeadlines = setCalendarDeadlines.mock.results.at(-1).value;
+    expect(revertedDeadlines.upcoming[0]).toMatchObject({
+      id: "todo-move-fails",
+      due_date: "2026-04-21",
+    });
+
+    errorSpy.mockRestore();
+  });
+
+  it("ignores a same-day move (no optimistic write, no network call)", async () => {
+    const task = {
+      id: "todo-move-noop",
+      title: "Same-day move",
+      due_date: "2026-04-21",
+      due_time: "3:00 PM",
+      status: "incomplete",
+    };
+    const deadlines = {
+      upcoming: [task],
+      stats: { incomplete: 1, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(deadlines));
+
+    render(
+      <DashboardProvider deadlines={deadlines} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} moveTarget="2026-04-21" />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Move"));
+    });
+
+    expect(updateDeadline).not.toHaveBeenCalled();
+    expect(setCalendarDeadlines).not.toHaveBeenCalled();
+  });
+
+  it("optimistically lands a full chip (with title) when the target cache lacks the task", async () => {
+    // Reproduces a cross-month move: the per-month range cache the updater runs
+    // against does NOT already hold the task, so the optimistic upsert takes its
+    // push branch. The payload must carry the full task — a minimal {id,due_date}
+    // would render as an "Untitled" stub in the target month's preview block.
+    const task = {
+      id: "todo-cross",
+      title: "Pay rent",
+      due_date: "2026-04-21",
+      due_time: "3:00 PM",
+      status: "incomplete",
+    };
+    const targetMonthCache = {
+      upcoming: [],
+      stats: { incomplete: 0, dueToday: 0, dueThisWeek: 0, totalPoints: 0 },
+    };
+    const setCalendarDeadlines = vi.fn((updater) => updater(targetMonthCache));
+    updateDeadline.mockResolvedValue({});
+
+    render(
+      <DashboardProvider deadlines={targetMonthCache} setCalendarDeadlines={setCalendarDeadlines}>
+        <Probe task={task} moveTarget="2026-04-25" />
+      </DashboardProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Move"));
+    });
+
+    const moved = setCalendarDeadlines.mock.results[0].value;
+    expect(moved.upcoming[0]).toMatchObject({
+      id: "todo-cross",
+      due_date: "2026-04-25",
+      title: "Pay rent",
     });
   });
 });

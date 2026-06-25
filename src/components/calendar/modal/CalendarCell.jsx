@@ -119,7 +119,8 @@ export default function CalendarCell({
     cellShadow = "0 16px 36px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.05)";
   }
 
-  const isDropTarget = quickActions?.dropTargetDate === dateKey;
+  const isDropTarget = quickActions?.dropTargetDate === dateKey
+    || quickActions?.deadlineDropTargetDate === dateKey;
   if (isDropTarget) {
     cellBg = "color-mix(in srgb, var(--sp-accent) 10%, transparent)";
     cellBorder = "1px solid color-mix(in srgb, var(--sp-accent) 58%, transparent)";
@@ -209,19 +210,36 @@ export default function CalendarCell({
       onPointerLeave={() => {
         setHovered(false);
         quickActions?.leaveDropTarget?.(dateKey);
+        quickActions?.leaveDeadlineDropTarget?.(dateKey);
       }}
       onDragEnter={(event) => {
-        if (!quickActions?.draggingEventId || !dateKey) return;
+        const dragging = quickActions?.draggingEventId || quickActions?.draggingDeadlineId;
+        if (!dragging || !dateKey) return;
         event.preventDefault();
-        quickActions.enterDropTarget(dateKey);
+        if (quickActions.draggingDeadlineId) quickActions.enterDeadlineDropTarget(dateKey);
+        else quickActions.enterDropTarget(dateKey);
       }}
       onDragOver={(event) => {
-        if (!quickActions?.draggingEventId || !dateKey) return;
+        if ((!quickActions?.draggingEventId && !quickActions?.draggingDeadlineId) || !dateKey) return;
         event.preventDefault();
       }}
       onDrop={(event) => {
-        if (!quickActions?.draggingEventId || !dateKey) return;
+        const dragging = quickActions?.draggingEventId || quickActions?.draggingDeadlineId;
+        if (!dragging || !dateKey) return;
         event.preventDefault();
+        const deadlinePayload = event.dataTransfer?.getData(
+          "application/x-ea-calendar-deadline",
+        );
+        if (deadlinePayload) {
+          let deadline = null;
+          try {
+            deadline = JSON.parse(deadlinePayload);
+          } catch {
+            deadline = null;
+          }
+          quickActions.dropDeadline({ deadline, targetDate: dateKey });
+          return;
+        }
         const payload = event.dataTransfer?.getData(
           "application/x-ea-calendar-event",
         );

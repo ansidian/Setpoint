@@ -252,7 +252,7 @@ export const tagChips = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
-export function noteTheme(maxHeight) {
+export function noteTheme() {
   return EditorView.theme({
     "&": { color: "var(--sp-text)", fontSize: "13px", background: "transparent" },
     // Match the notes search input's ::placeholder (.notes-search-input in index.css)
@@ -261,7 +261,7 @@ export function noteTheme(maxHeight) {
     ".cm-content": { fontFamily: "inherit", padding: "9px 12px", caretColor: "var(--sp-text)" },
     // Unclamped: the editor grows to fit content (long-backlog notes) and the
     // surrounding NotesTab scroll container owns the single outer scroll, instead
-    // of a nested scrollbar inside a fixed-height editor. (maxHeight now unused.)
+    // of a nested scrollbar inside a fixed-height editor.
     ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.5" },
     "&.cm-focused": { outline: "none" },
     ".cm-note-strong": { fontWeight: "700" },
@@ -338,7 +338,7 @@ export const checkboxes = ViewPlugin.fromClass(
 
 // Assembles the full extension list for a NoteEditor instance.
 // callbacksRef.current = { onChange, onSubmit, onCancel, submitOnEnter, getTags }
-export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHeight }) {
+export function buildNoteEditorExtensions({ callbacksRef, placeholderText }) {
   const submitKeymap = Prec.highest(keymap.of([
     {
       key: "Enter",
@@ -368,7 +368,7 @@ export function buildNoteEditorExtensions({ callbacksRef, placeholderText, maxHe
     formattingKeymap,
     keymap.of([...defaultKeymap, ...historyKeymap]),
     cmPlaceholder(placeholderText || ""),
-    noteTheme(maxHeight),
+    noteTheme(),
     EditorView.updateListener.of((u) => { if (u.docChanged) callbacksRef.current.onChange?.(u.state.doc.toString()); }),
   ];
 }

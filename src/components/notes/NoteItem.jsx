@@ -149,7 +149,6 @@ export default function NoteItem({
             autoFocus
             placeholder=""
             submitOnEnter
-            maxHeight={140}
           />
         ) : (
           <>
