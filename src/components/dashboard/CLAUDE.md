@@ -25,6 +25,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `needsYou/needsYouModel.js` — classifies deadlines/bills/emails into urgent + backfill cards (overdue/due-today only; bills admit `days===0`)
 - `needsYou/NeedsYouCountBlock.jsx` — the leading count + breakdown block
 - `needsYou/PriorityCard.jsx` — a single priority card; deadline/bill bodies are click-to-open, emails open via their button
+- `needsYou/NeedsYouCarousel.jsx` — mobile-only horizontal scroll-snap carousel of the priority cards (full-width count header, fixed-width peeking slides, position dots, "Show all" last slide); `NeedsYouBand` renders it instead of the desktop row on phones
 
 ### Tier 2 — Timeline
 - `TodayTimeline.jsx` — merges events and deadlines chronologically with live now marker

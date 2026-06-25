@@ -3,9 +3,11 @@ import { StatusDot } from "../../shared/StatusDot";
 // The leading count block, shown only when something needs attention. The
 // all-clear state is owned by NeedsYouBand (a centered, label-less treatment),
 // so this block always renders the count + breakdown.
-export function NeedsYouCountBlock({ countN, countColor, breakdown = [] }) {
+export function NeedsYouCountBlock({ countN, countColor, breakdown = [], isMobile = false }) {
   return (
-    <div style={{ width: 190, flex: "none", display: "flex", flexDirection: "column", justifyContent: "center", paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
+    <div style={isMobile
+      ? { width: "100%", flex: "none", display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.07)" }
+      : { width: 190, flex: "none", display: "flex", flexDirection: "column", justifyContent: "center", paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "var(--sp-rose)" }}>
         <StatusDot tone="var(--sp-rose)" state="glow" />
         Needs you now

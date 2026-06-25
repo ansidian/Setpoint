@@ -5,7 +5,9 @@ import useCalendarEventEditor from "../../components/calendar/events/useCalendar
 import useDeadlineQuickActions from "../../components/calendar/views/deadlines/useDeadlineQuickActions.js";
 import { getDeadlineSelectionId } from "../../components/calendar/views/deadlines/deadlinesModel.js";
 import CalendarModalShell from "../../components/calendar/modal/CalendarModalShell.jsx";
+import CalendarMobileAgenda from "../../components/calendar/CalendarMobileAgenda.jsx";
 import buildCalendarModalShellProps from "../../components/calendar/modal/buildCalendarModalShellProps.js";
+import useIsMobile from "../useIsMobile";
 import {
   getMultiMonthGridRange,
   getVisibleGridRange,
@@ -1079,6 +1081,7 @@ export default function useCalendarModalController({
     return () => window.cancelAnimationFrame(id);
   }, [eventEditor.isEditorOpen, floatingDetailRef, setFloatingDetail]);
 
+  const isMobile = useIsMobile();
   if (!open) return null;
 
   const shellProps = buildCalendarModalShellProps({
@@ -1135,7 +1138,7 @@ export default function useCalendarModalController({
     availableCalendarViews,
   });
 
-  return (
-    <CalendarModalShell {...shellProps} />
-  );
+  return isMobile
+    ? <CalendarMobileAgenda {...shellProps} />
+    : <CalendarModalShell {...shellProps} />;
 }

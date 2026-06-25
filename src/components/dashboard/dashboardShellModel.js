@@ -1,7 +1,6 @@
 import { normalizeCalendarWorkspaceView } from "../../hooks/calendar/calendarModalInteractionModel.js";
 
 export function resolveCalendarOpenState({
-  isMobile = false,
   viewKey = null,
   currentView = "events",
   showBills = false,
@@ -9,7 +8,6 @@ export function resolveCalendarOpenState({
   focusItemId = null,
   options = {},
 } = {}) {
-  if (isMobile) return null;
   const requested = viewKey ? normalizeCalendarWorkspaceView(viewKey) : null;
   const fallbackView = normalizeCalendarWorkspaceView(currentView);
   const view = requested === "bills" && !showBills

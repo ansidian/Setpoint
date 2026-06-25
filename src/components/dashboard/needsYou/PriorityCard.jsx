@@ -40,7 +40,7 @@ function CardActionButton({ tone, label, onClick }) {
   );
 }
 
-export function PriorityCard({ card, variant = "urgent", onOpen, onMarkHandled, onComplete, onJump }) {
+export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpen, onMarkHandled, onComplete, onJump }) {
   const [hover, setHover] = useState(false);
   const SourceIcon = SOURCE_ICONS[card.sourceIcon] || Circle;
   const tone = variant === "backfill" ? "rgba(205,214,244,0.5)" : card.tone;
@@ -65,17 +65,21 @@ export function PriorityCard({ card, variant = "urgent", onOpen, onMarkHandled, 
   // Backfill (upcoming) cards show their "Coming up" foot at rest; completable
   // ones (deadlines) reveal the same quiet text-only Mark-done on hover/focus —
   // subordinate to the urgent cards' filled button, since they aren't urgent.
+  // On mobile there is no hover: the foot and Mark-done sit side-by-side
+  // (space-between), both always visible — so the foot keeps opacity 1 (the
+  // `!isMobile` guard) and the action is always-visible in flow, not absolute.
   const footer = variant === "backfill" ? (
-    <div style={{ position: "relative", display: "flex", alignItems: "center", minHeight: 16 }}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(205,214,244,0.42)", opacity: card.completable && hover ? 0 : 1, transition: "opacity 130ms ease", pointerEvents: "none" }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: isMobile ? "space-between" : "flex-start", minHeight: 16 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(205,214,244,0.42)", opacity: !isMobile && card.completable && hover ? 0 : 1, transition: "opacity 130ms ease", pointerEvents: "none" }}>
         <Calendar size={11} color="rgba(205,214,244,0.42)" />{card.foot}
       </span>
       {card.completable && (
         <MarkDoneAction
           onComplete={() => onComplete?.(card)}
           revealed={hover}
+          alwaysVisible={isMobile}
           itemTitle={card.title}
-          style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}
+          style={isMobile ? undefined : { position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)" }}
         />
       )}
     </div>

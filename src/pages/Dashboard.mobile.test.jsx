@@ -459,12 +459,13 @@ describe("DashboardShell mobile behavior", () => {
     vi.useRealTimers();
   });
 
-  it("exposes the Calendar shell tab on desktop only", () => {
+  it("exposes the Calendar tab on both mobile and desktop", () => {
+    // Phase 4: calendar is reachable on mobile via the bottom nav Calendar tab.
     mockIsMobile = true;
     const { unmount } = renderShell();
 
-    // Mobile drops the Calendar tab from the shell tablist.
-    expect(screen.queryByRole("button", { name: /calendar/i })).toBeNull();
+    // Mobile renders the Calendar button in the MobileBottomNav.
+    expect(screen.getByRole("button", { name: /calendar/i })).toBeTruthy();
 
     unmount();
     cleanup();
@@ -472,7 +473,7 @@ describe("DashboardShell mobile behavior", () => {
     mockIsMobile = false;
     renderShell();
 
-    // Desktop renders the third Calendar tab button alongside Dashboard and Inbox.
+    // Desktop renders the Calendar tab button in the ShellHeader tablist.
     expect(screen.getByRole("button", { name: /calendar/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /dashboard/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /inbox/i })).toBeTruthy();

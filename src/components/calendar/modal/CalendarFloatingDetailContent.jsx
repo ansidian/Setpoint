@@ -12,6 +12,8 @@ export default function CalendarFloatingDetailContent({
   floatingEditorOpen,
   ghostPreview,
   layout,
+  mobileSheet = false,
+  hideEdit = false,
   onCancelFloatingEditor,
   onCloseFloatingDetail,
   onDeadlineDraftPreviewChange,
@@ -33,7 +35,7 @@ export default function CalendarFloatingDetailContent({
   viewYear,
   focusDeadlineTask,
 }) {
-  if (layout.stacked || !floatingDetail?.open) return null;
+  if ((layout.stacked && !mobileSheet) || !floatingDetail?.open) return null;
 
   const selectedItemPool = activeView.getDayState
     ? [
@@ -120,6 +122,7 @@ export default function CalendarFloatingDetailContent({
       data: viewData,
       computed,
       selectedItemId: floatingDetail.itemId,
+      hideEdit,
       onStartEdit: (task) => {
         if (!layout.stacked) {
           onOpenFloatingDeadlineEdit?.(task, {
@@ -145,6 +148,7 @@ export default function CalendarFloatingDetailContent({
     data: viewData,
     computed,
     selectedItemId: floatingDetail.itemId,
+    hideEdit,
     onEditEvent: (item) => {
       if (!layout.stacked) {
         onOpenFloatingEventEdit?.(item, {

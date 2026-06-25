@@ -110,4 +110,30 @@ describe("NeedsYouBand", () => {
     expect(screen.queryByText("Mark done")).toBeNull();
     expect(screen.queryByText("Mark handled")).toBeNull();
   });
+
+  it("renders the cards in a swipeable carousel on mobile", () => {
+    render(
+      <NeedsYouBand
+        snapshotLanes={snapshotLanes}
+        liveDeadlines={{ upcoming: [] }}
+        liveBills={[]}
+        isMobile
+      />,
+    );
+    expect(screen.getByTestId("needs-you-carousel")).toBeTruthy();
+    expect(screen.getByText("PR blocker")).toBeTruthy();
+  });
+
+  it("keeps the desktop row (no carousel) when not mobile", () => {
+    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} />);
+    expect(screen.queryByTestId("needs-you-carousel")).toBeNull();
+    expect(screen.getByText("PR blocker")).toBeTruthy();
+  });
+
+  it("Mark handled fires onMarkHandled through the carousel on mobile", () => {
+    const onMarkHandled = vi.fn();
+    render(<NeedsYouBand snapshotLanes={snapshotLanes} liveDeadlines={{ upcoming: [] }} liveBills={[]} onMarkHandled={onMarkHandled} isMobile />);
+    fireEvent.click(screen.getByText("Mark handled"));
+    expect(onMarkHandled).toHaveBeenCalledWith(1);
+  });
 });

@@ -324,7 +324,7 @@ function EventSelectedCard({ ev, actions, accent = "#89b4fa" }) {
   );
 }
 
-function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b4fa" }) {
+function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b4fa", hideEdit = false }) {
   if (!ev) return null;
   if (isGoogleSpecialDateEvent(ev)) return null;
   const editable = isEditableEvent(ev);
@@ -358,7 +358,7 @@ function EventSelectedActions({ ev, onEditEvent, compact = false, accent = "#89b
           size={size}
         />
       ) : null}
-      {editable ? (
+      {editable && !hideEdit ? (
         <RailAction
           icon={Pencil}
           label="Edit details"
@@ -491,7 +491,7 @@ export function renderEventsDetail({
   );
 }
 
-export function renderEventsFloatingDetail({ items, selectedItemId, onEditEvent }) {
+export function renderEventsFloatingDetail({ items, selectedItemId, onEditEvent, hideEdit = false }) {
   const ordered = orderDetailEvents(items);
   const selectedEvent = ordered.find((item) => (
     String(getEventSelectionId(item)) === String(selectedItemId)
@@ -510,6 +510,7 @@ export function renderEventsFloatingDetail({ items, selectedItemId, onEditEvent 
           onEditEvent={onEditEvent}
           compact
           accent={accent}
+          hideEdit={hideEdit}
         />
       ) : null}
     />

@@ -16,6 +16,7 @@ function DeadlinePrimaryActions({
   onComplete,
   onEdit,
   compact = false,
+  hideEdit = false,
 }) {
   const size = compact ? "compact" : "default";
   const completeLabel = compact ? "Complete" : "Mark complete";
@@ -34,14 +35,16 @@ function DeadlinePrimaryActions({
           onClick={() => onComplete(task.id, task)}
         />
       ) : null}
-      <RailAction
-        icon={Pencil}
-        label="Edit"
-        accent={accent}
-        size={size}
-        disabled={isCompleting}
-        onClick={() => onEdit(task)}
-      />
+      {hideEdit ? null : (
+        <RailAction
+          icon={Pencil}
+          label="Edit"
+          accent={accent}
+          size={size}
+          disabled={isCompleting}
+          onClick={() => onEdit(task)}
+        />
+      )}
     </>
   );
 }
@@ -74,6 +77,7 @@ export default function DeadlineSelectedActions({
   onEdit,
   onComplete,
   compact = false,
+  hideEdit = false,
 }) {
   if (!task) return null;
   const normalizedStatus = normalizeStatus(task.status);
@@ -90,6 +94,7 @@ export default function DeadlineSelectedActions({
         onComplete={onComplete}
         onEdit={onEdit}
         compact={compact}
+        hideEdit={hideEdit}
       />
       {hasExternalActions ? (
         <DeadlineExternalActions

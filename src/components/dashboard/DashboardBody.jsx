@@ -178,6 +178,7 @@ function DashboardBodyInner({
       liveDeadlines={bandDeadlines}
       liveBills={bills}
       maxCards={5}
+      isMobile={isMobile}
       onOpenEmail={onOpenEmail}
       onMarkHandled={handleMarkHandled}
       onCompleteDeadline={handleCompleteDeadline}

@@ -12,6 +12,7 @@ Calendar UI root: `CalendarModal.jsx` is the entry point (named for history; the
 
 ### Entry + rails
 - `CalendarModal.jsx` — entry point delegating to the calendar controller hook
+- `CalendarMobileAgenda.jsx` — mobile-only (≤639px) agenda-only calendar root: slim month strip + events/bills toggle + full-width agenda (MiniCalendar suppressed) + tap-to-open detail BottomSheet; rendered by `useCalendarModalController` instead of `CalendarModalShell`
 - `CalendarOverviewRail.jsx` — month navigator with stats and loading frame
 - `CalendarRailPrimitives.jsx` — reusable rail components and utilities
 - `CalendarRailStates.jsx` — rail state transitions: loading, expanded, collapsed

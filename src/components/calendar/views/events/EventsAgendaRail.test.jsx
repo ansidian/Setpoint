@@ -610,4 +610,16 @@ describe("EventsAgendaRail", () => {
     expect(screen.queryByTestId("events-agenda-active-header")).toBeNull();
     expect(screen.queryByTestId("events-agenda-terminal-sentinel")).toBeNull();
   });
+
+  it("suppresses the MiniCalendar when hideMiniCalendar is set (mobile)", () => {
+    // Reuse this file's existing render setup; add hideMiniCalendar.
+    renderRail({ hideMiniCalendar: true });
+    expect(screen.queryByTestId("calendar-mini-calendar")).toBeNull();
+    expect(screen.getByTestId("events-agenda-rail")).toBeTruthy();
+  });
+
+  it("renders the MiniCalendar by default (desktop unchanged)", () => {
+    renderRail();
+    expect(screen.getByTestId("calendar-mini-calendar")).toBeTruthy();
+  });
 });

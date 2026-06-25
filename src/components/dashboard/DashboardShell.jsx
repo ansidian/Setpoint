@@ -111,7 +111,6 @@ export function DashboardShell({
   const [calendarMounted, setCalendarMounted] = useState(false);
   const setShellTab = useCallback((nextTab) => {
     if (nextTab !== "dashboard" && nextTab !== "inbox" && nextTab !== "calendar" && nextTab !== "notes") return;
-    if (nextTab === "calendar" && isMobile) return; // desktop-only
     if (nextTab === "calendar") setCalendarMounted(true); // mount-on-first-visit
     if (!isMobile || nextTab === tab) {
       // Non-urgent so the show/hide + re-mounted effects yield to user input.
@@ -204,14 +203,6 @@ export function DashboardShell({
   // openAnalytics is already a stable useCallback, so it is wired directly.
   const handleHeaderToggleHistory = useCallback(() => setHistoryOpen((v) => !v), [setHistoryOpen]);
 
-  useEffect(() => {
-    // The calendar tab is desktop-only; if the viewport drops to mobile while it
-    // is active, fall back to the dashboard. setState-in-effect is intentional
-    // here (reacting to an external viewport change), not derivable from render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (isMobile && tab === "calendar") setTab("dashboard");
-  }, [isMobile, tab]);
-
   // Single signal for "a non-input overlay owns the foreground", gating the global
   // single-key shell hotkeys and ShellHeader's 1/2 tab hotkeys so neither opens overlays
   // behind, nor desyncs the tab from, the open modal.
@@ -278,7 +269,7 @@ export function DashboardShell({
     setHistoryOpen(false);
   }, [setHistoryOpen, setShellTab]);
 
-  // Deadline detail popover (anchored to the clicked row)
+  // Deadline detail (mobile-only; opens as a BottomSheet) — holds the clicked task
   const [deadlinePopover, setDeadlinePopover] = useState(null);
 
   const navigate = useNavigate();
@@ -408,7 +399,7 @@ export function DashboardShell({
             calendarDeadlines={dashboardCalendarDeadlines}
             calendarDeadlinesError={!!calendarDeadlinesError}
             onOpenEmail={openEmailInInbox}
-            onOpenDeadline={(task, anchor) => {
+            onOpenDeadline={(task) => {
               if (!isMobile) {
                 const request = dashboardDeadlineCalendarRequest(task);
                 openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
@@ -416,7 +407,7 @@ export function DashboardShell({
               }
               setDeadlinePopover((prev) => {
                 if (prev && String(prev.task?.id) === String(task?.id)) return null;
-                return { task, anchor };
+                return { task };
               });
             }}
             onOpenBillsCalendar={(date, itemId) => {
@@ -453,15 +444,13 @@ export function DashboardShell({
             />
           </Suspense>
         </KeepAliveTab>
-        {!isMobile && (
-          <KeepAliveTab active={tab === "calendar"}>
-            {calendarMounted ? (
-              <Suspense fallback={null}>
-                <DashboardCalendarModalMount {...calendarMountProps} />
-              </Suspense>
-            ) : null}
-          </KeepAliveTab>
-        )}
+        <KeepAliveTab active={tab === "calendar"}>
+          {calendarMounted ? (
+            <Suspense fallback={null}>
+              <DashboardCalendarModalMount {...calendarMountProps} />
+            </Suspense>
+          ) : null}
+        </KeepAliveTab>
         <KeepAliveTab active={tab === "notes"}>
           <Suspense fallback={null}>
             <NotesTab accent={accent} isMobile={isMobile} />
