@@ -105,6 +105,50 @@ describe("buildNeedsYouModel breakdown + cards", () => {
   });
 });
 
+describe("buildNeedsYouModel due-today time on deadline pills", () => {
+  const onlyDeadline = (d) =>
+    buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: { upcoming: [d] }, liveBills: [] });
+
+  it("appends the due time after 'Due today' when a due-today deadline has one", () => {
+    const m = onlyDeadline({ id: "demolink", title: "Send portfolio demo link", due_date: "2026-06-19", due_time: "2:00 PM", status: "open", priority: 2, class_name: "Career" });
+    expect(m.urgentCards.find((c) => c.id === "deadline:demolink").pill.label).toBe("Due today, 2:00 PM");
+  });
+
+  it("keeps a bare 'Due today' when the due-today deadline has no time", () => {
+    const m = onlyDeadline({ id: "demolink", title: "Send portfolio demo link", due_date: "2026-06-19", status: "open", priority: 2, class_name: "Career" });
+    expect(m.urgentCards.find((c) => c.id === "deadline:demolink").pill.label).toBe("Due today");
+  });
+
+  it("never appends time to an overdue deadline (keeps the 'N days overdue' label)", () => {
+    const m = onlyDeadline({ id: "pr", title: "Respond to PR review", due_date: "2026-06-18", due_time: "2:00 PM", status: "open", priority: 1, class_name: "Engineering" });
+    expect(m.urgentCards.find((c) => c.id === "deadline:pr").pill.label).toBe("1 day overdue");
+  });
+});
+
+describe("buildNeedsYouModel chip tooltips", () => {
+  it("gives urgent + backfill cards an absolute chipTooltip (Today+time / short date)", () => {
+    const dl = {
+      upcoming: [
+        { id: "pr", title: "PR", due_date: "2026-06-18", status: "open", priority: 1, class_name: "Eng" }, // overdue
+        { id: "demolink", title: "Demo", due_date: "2026-06-19", due_time: "2:00 PM", status: "open", priority: 2, class_name: "Career" }, // today
+        { id: "later", title: "Later", due_date: "2026-06-22", status: "open", priority: 2, class_name: "Port" }, // backfill
+      ],
+    };
+    const bl = [
+      { id: "rent", name: "Rent", amount: 2450, next_date: "2026-06-19", paid: false }, // today
+      { id: "electric", name: "Electric", amount: 100, next_date: "2026-06-23", paid: false }, // backfill
+    ];
+    const m = buildNeedsYouModel({ snapshotLanes: { needs_attention: [], fyi: [], carryover: [] }, liveDeadlines: dl, liveBills: bl });
+    const urgent = Object.fromEntries(m.urgentCards.map((c) => [c.id, c.chipTooltip]));
+    const backfill = Object.fromEntries(m.backfillCards.map((c) => [c.id, c.chipTooltip]));
+    expect(urgent["deadline:pr"]).toBe("6/18/26");      // overdue → short date
+    expect(urgent["deadline:demolink"]).toBeNull();     // due today → chip already says it
+    expect(urgent["bill:rent"]).toBeNull();             // due today → no tooltip
+    expect(backfill["deadline:later"]).toBe("6/22/26");
+    expect(backfill["bill:electric"]).toBe("6/23/26");
+  });
+});
+
 describe("buildNeedsYouModel email open/handled transitions + inbox rows", () => {
   it("Open (mark-read) flips the card to opened: MailOpen icon, 'opened, no reply yet' meta, STAYS in band", () => {
     const base = buildNeedsYouModel({ snapshotLanes: lanes(), liveDeadlines: { upcoming: [] }, liveBills: [] });

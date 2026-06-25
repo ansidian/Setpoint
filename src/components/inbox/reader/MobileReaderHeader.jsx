@@ -24,7 +24,6 @@ export default function MobileReaderHeader({
     <div style={{ padding: "10px 16px 8px", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <h1
-          className="ea-display"
           style={{
             flex: 1,
             margin: 0,

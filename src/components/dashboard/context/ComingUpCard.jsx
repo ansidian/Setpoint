@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CreditCard, CalendarClock } from "lucide-react";
 import { SectionHeader, EmptyRow } from "../rails/railPrimitives.jsx";
 import { StatusChip } from "../../shared/StatusChip.jsx";
+import Tooltip from "../../shared/Tooltip.jsx";
 import MarkDoneAction from "../MarkDoneAction.jsx";
 
 // Map buildComingUp short chip keys to the canonical token strings StatusChip expects.
@@ -10,9 +11,9 @@ const CHIP_TONE = { rose: "var(--sp-rose)", cream: "var(--sp-cream)", muted: "rg
 // A single coming-up row. The whole row stays click-to-open (jump to its calendar
 // detail). Deadlines also get a "Mark done" action — but coming-up isn't urgent,
 // so unlike the needs-you band's filled button this one stays subordinate: a quiet
-// ghost control that reveals on hover/focus and crossfades with the timing chip in
-// a shared slot, so the resting list stays calm and the layout never shifts. Bills
-// aren't Todoist items, so they keep the chip only.
+// compact check button that reveals on hover/focus to the LEFT of the timing chip
+// (the chip stays put so its date tooltip reads cleanly). Bills aren't Todoist
+// items, so they keep the chip only.
 function ComingUpRow({ row, isLast, onJump, onComplete }) {
   const [rowHover, setRowHover] = useState(false);
   const completable = row.kind === "deadline" && !!onComplete;
@@ -40,20 +41,21 @@ function ComingUpRow({ row, isLast, onJump, onComplete }) {
           <div style={{ fontSize: 10, color: "rgba(205,214,244,0.4)", marginTop: 1, fontVariantNumeric: "tabular-nums" }}>{row.meta}</div>
         </div>
       </div>
-      {/* Chip at rest, quiet text-only "Mark done" on hover/focus — crossfaded in
-          one fixed slot so there's no layout shift and no button box to clip. */}
-      <div style={{ position: "relative", flex: "none", display: "flex", alignItems: "center", justifyContent: "flex-end", height: 20, minWidth: completable ? 76 : undefined }}>
-        <span style={{ opacity: completable && rowHover ? 0 : 1, transition: "opacity 130ms ease", pointerEvents: "none" }}>
-          <StatusChip label={row.chipLabel} tone={CHIP_TONE[row.chipTone] || CHIP_TONE.muted} />
-        </span>
+      {/* The time chip stays put so its hover tooltip reads cleanly; a compact
+          check button fades in to its LEFT on hover (completable deadlines only),
+          its 20px slot reserved so nothing shifts. No crossfade, no overlap. */}
+      <div style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, height: 20, minWidth: completable ? 88 : undefined }}>
         {completable && (
           <MarkDoneAction
             onComplete={() => onComplete(row)}
             revealed={rowHover}
             itemTitle={row.title}
-            style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)" }}
+            compact
           />
         )}
+        <Tooltip text={row.chipTooltip}>
+          <StatusChip label={row.chipLabel} tone={CHIP_TONE[row.chipTone] || CHIP_TONE.muted} />
+        </Tooltip>
       </div>
     </div>
   );

@@ -259,7 +259,10 @@ export function noteTheme(maxHeight) {
     // so both placeholders read identically; CM's base theme would otherwise use #888.
     ".cm-placeholder": { color: "var(--color-text-faint)" },
     ".cm-content": { fontFamily: "inherit", padding: "9px 12px", caretColor: "var(--sp-text)" },
-    ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.5", overflowY: "auto", maxHeight: `${maxHeight || 180}px` },
+    // Unclamped: the editor grows to fit content (long-backlog notes) and the
+    // surrounding NotesTab scroll container owns the single outer scroll, instead
+    // of a nested scrollbar inside a fixed-height editor. (maxHeight now unused.)
+    ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.5" },
     "&.cm-focused": { outline: "none" },
     ".cm-note-strong": { fontWeight: "700" },
     ".cm-note-em": { fontStyle: "italic" },

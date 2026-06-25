@@ -11,7 +11,7 @@ describe("ComingUpCard", () => {
   it("offers a 'Mark done' action on deadline rows that completes and optimistically removes the row", () => {
     const onComplete = vi.fn();
     render(<ComingUpCard items={[deadlineRow]} onJump={vi.fn()} onComplete={onComplete} />);
-    fireEvent.click(screen.getByText("Mark done"));
+    fireEvent.click(screen.getByRole("button", { name: "Mark Finalize notes done" }));
     expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ id: "deadline:d1" }));
     expect(screen.queryByText("Finalize notes")).toBeNull();
   });
@@ -19,18 +19,18 @@ describe("ComingUpCard", () => {
   it("does not offer 'Mark done' on bill rows (bills aren't Todoist items)", () => {
     render(<ComingUpCard items={[billRow]} onJump={vi.fn()} onComplete={vi.fn()} />);
     expect(screen.getByText("Demo Electric")).toBeTruthy();
-    expect(screen.queryByText("Mark done")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Mark .+ done$/i })).toBeNull();
   });
 
   it("completing does not also fire row navigation (the action stops propagation)", () => {
     const onJump = vi.fn();
     render(<ComingUpCard items={[deadlineRow]} onJump={onJump} onComplete={vi.fn()} />);
-    fireEvent.click(screen.getByText("Mark done"));
+    fireEvent.click(screen.getByRole("button", { name: "Mark Finalize notes done" }));
     expect(onJump).not.toHaveBeenCalled();
   });
 
   it("renders no action affordance when onComplete is omitted", () => {
     render(<ComingUpCard items={[deadlineRow]} onJump={vi.fn()} />);
-    expect(screen.queryByText("Mark done")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Mark .+ done$/i })).toBeNull();
   });
 });

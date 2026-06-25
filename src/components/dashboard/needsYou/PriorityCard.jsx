@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock, Check, Calendar } from "lucide-react";
 import { StatusChip } from "../../shared/StatusChip";
+import Tooltip from "../../shared/Tooltip";
 import MarkDoneAction from "../MarkDoneAction.jsx";
 
 const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
@@ -8,7 +9,7 @@ const SOURCE_ICONS = { AlertCircle, Circle, CreditCard, Mail, MailOpen, Clock };
 const baseCardStyle = {
   position: "relative", textAlign: "left", display: "flex", flexDirection: "column",
   minWidth: 0, flex: "1 1 0", padding: "13px 14px", borderRadius: 12,
-  transition: "transform 150ms cubic-bezier(0.22,1,0.36,1), box-shadow 150ms",
+  transition: "transform 150ms cubic-bezier(0.22,1,0.36,1), box-shadow 150ms, opacity 150ms",
 };
 
 // The card body has its own hover lift; this action button owns a distinct
@@ -86,7 +87,13 @@ export function PriorityCard({ card, variant = "urgent", onOpen, onMarkHandled, 
 
   return (
     <div
-      style={hover && variant === "urgent" ? { ...style, transform: "translateY(-2px)", boxShadow: "0 10px 30px rgba(0,0,0,0.35)" } : style}
+      style={
+        !hover
+          ? style
+          : variant === "urgent"
+            ? { ...style, transform: "translateY(-2px)", boxShadow: "0 10px 30px rgba(0,0,0,0.35)" }
+            : { ...style, transform: "translateY(-1px)", boxShadow: "0 6px 16px rgba(0,0,0,0.25)", opacity: 1 }
+      }
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       {...(bodyClickable
         ? {
@@ -101,7 +108,9 @@ export function PriorityCard({ card, variant = "urgent", onOpen, onMarkHandled, 
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(205,214,244,0.6)" }}>
           <SourceIcon size={12} color={tone} strokeWidth={2.2} />{card.source}
         </span>
-        <StatusChip label={card.pill.label} tone={card.pill.tone} />
+        <Tooltip text={card.chipTooltip}>
+          <StatusChip label={card.pill.label} tone={card.pill.tone} />
+        </Tooltip>
       </div>
       <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.28, color: "#dfe5f7", margin: "9px 0 6px", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{card.title}</div>
       <div style={{ fontSize: 11, color: "rgba(205,214,244,0.5)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.meta}</div>

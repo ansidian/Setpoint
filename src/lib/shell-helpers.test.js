@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { phaseIndex, briefingPhaseLabel, greetingFor, dueDateToMs, buildTimeline, deriveLane } from "./shell-helpers";
+import { phaseIndex, briefingPhaseLabel, greetingFor, dueDateToMs, buildTimeline, deriveLane, formatChipDateTime } from "./shell-helpers";
 import { greetingPools } from "./dashboard-helpers";
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -11,6 +11,29 @@ function atHourPacific(hour) {
   const utcHour = hour + 7;
   return new Date(Date.UTC(2026, 3, 17, utcHour, 0, 0));
 }
+
+describe("formatChipDateTime", () => {
+  it("returns null for a due-today item — the chip already says 'due today (· time)'", () => {
+    expect(formatChipDateTime("2026-06-21", "2:00 PM", true)).toBeNull();
+    expect(formatChipDateTime("2026-06-21", null, true)).toBeNull();
+  });
+  it("shows the short date '6/21/26, <time>' for any other day", () => {
+    expect(formatChipDateTime("2026-06-21", "2:00 PM", false)).toBe("6/21/26, 2pm");
+    expect(formatChipDateTime("2026-12-05", "11:00 AM", false)).toBe("12/5/26, 11am");
+  });
+  it("shows the short date alone when a non-today item has no time", () => {
+    expect(formatChipDateTime("2026-06-23", null, false)).toBe("6/23/26");
+  });
+  it("drops minutes only on the hour, keeps lowercase meridiem", () => {
+    expect(formatChipDateTime("2026-06-21", "12:00 PM", false)).toBe("6/21/26, 12pm");
+    expect(formatChipDateTime("2026-06-21", "12:00 AM", false)).toBe("6/21/26, 12am");
+    expect(formatChipDateTime("2026-06-21", "9:05 AM", false)).toBe("6/21/26, 9:05am");
+  });
+  it("returns null when neither date nor time is usable", () => {
+    expect(formatChipDateTime(null, null, false)).toBeNull();
+    expect(formatChipDateTime("garbage", "nope", false)).toBeNull();
+  });
+});
 
 describe("phaseIndex", () => {
   it("returns 0 for late-night hours (before 5 AM Pacific)", () => {

@@ -224,7 +224,7 @@ export default function Dashboard() {
             actions={(
               <>
                 <Button onClick={handleExplicitQuickRefresh}>Sync now</Button>
-                <Button variant="outline" asChild><Link to="/settings">Settings</Link></Button>
+                <Button variant="outline" render={<Link to="/settings" />}>Settings</Button>
               </>
             )}
             minHeight={360}

@@ -167,7 +167,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 **Character:** The type pairing gives assistant summaries a human voice while leaving operational UI exact and compact. Serif type should feel like the assistant speaking; sans-serif type should feel like the workspace operating.
 
 ### Hierarchy
-- **Display** (400, 48px, 1 line-height): Hero greeting, snapshot summary, triage summary, and email-reader subjects.
+- **Display** (400, 48px, 1 line-height): Hero greeting, snapshot summary, and triage summary.
 - **Headline** (600, 28px, 1.12 line-height): Page-level headings such as settings and major empty states.
 - **Title** (500, 13px, 1.35 line-height): Card titles, row titles, input text, and dense primary labels.
 - **Body** (400, 12px, 1.5 line-height): Summaries, descriptions, previews, and readable supporting copy. Cap long body text at 65 to 75 characters.
@@ -176,7 +176,7 @@ The palette is restrained Catppuccin-influenced dusk: purple-tinted neutrals, la
 
 ### Named Rules
 
-**The Voice Split Rule.** Use display serif only where the product is summarizing or speaking. Use Montserrat for controls, metadata, navigation, and repeated scan surfaces.
+**The Voice Split Rule.** Use display serif only where the product is summarizing or speaking. Use Montserrat for controls, metadata, navigation, repeated scan surfaces, and content authored by others (e.g. email-reader subjects, which are the sender's words — not the assistant's).
 
 ## 4. Elevation
 

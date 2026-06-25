@@ -193,6 +193,39 @@ export function dueDateToMs(dateStr, dueTime) {
   return epochFromLa(year, month, day, h, m);
 }
 
+// Short 12h time for a chip tooltip: "2:00 PM" -> "2pm", "2:30 PM" -> "2:30pm".
+// Null when there's no parseable time (bills carry no time).
+function formatChipTime(dueTime) {
+  const m = String(dueTime || "").trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  const mer = m[3].toLowerCase();
+  return mm === 0 ? `${h}${mer}` : `${h}:${String(mm).padStart(2, "0")}${mer}`;
+}
+
+// Short date for a chip tooltip: "2026-06-21" -> "6/21/26".
+function formatChipShortDate(dateStr) {
+  const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return `${Number(m[2])}/${Number(m[3])}/${m[1].slice(2)}`;
+}
+
+/**
+ * Absolute date+time label for a relative-time chip's hover tooltip, or null for
+ * no tooltip. A due-today item gets NO tooltip — its chip already reads "Due
+ * today (· time)" / "Today", so repeating it adds nothing. Any other day reveals
+ * the otherwise-hidden absolute date: "6/21/26, 2pm" (time omitted when absent,
+ * e.g. bills: "6/21/26"). Null when due-today or no date is given.
+ */
+export function formatChipDateTime(dateStr, dueTime, isToday) {
+  if (isToday) return null;
+  const date = formatChipShortDate(dateStr);
+  const time = formatChipTime(dueTime);
+  if (!date) return time || null;
+  return time ? `${date}, ${time}` : date;
+}
+
 // Build a unified chronological stream: events + deadlines + bills.
 export function buildTimeline({ events = [], deadlines = [], bills = [] }) {
   const items = [];

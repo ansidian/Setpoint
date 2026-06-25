@@ -1,4 +1,5 @@
 import { daysUntil, formatAmount } from "../../../lib/bill-utils";
+import { formatChipDateTime } from "../../../lib/shell-helpers";
 
 const TONE = { rose: "var(--sp-rose)", cream: "var(--sp-cream)", cyan: "var(--sp-cyan)", green: "var(--sp-green)", accent: "var(--sp-accent)" };
 
@@ -30,9 +31,10 @@ function classifyDeadline(d) {
     // through onOpen/onJump as { kind: jumpKind, id, date, data } so the band
     // remains the single home for opening an overdue/due-today deadline.
     jumpKind: "deadline", jumpId: d.id, date: d.due_date || null, data: d,
+    chipTooltip: formatChipDateTime(d.due_date, d.due_time, days === 0),
     title: d.title || "Deadline",
     meta: `${d.class_name || d.project_name || "Deadline"}${d.priority ? ` · P${d.priority}` : ""}`,
-    pill: { label: overdue ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue` : "Due today", tone: TONE.rose },
+    pill: { label: overdue ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue` : (d.due_time ? `Due today, ${d.due_time}` : "Due today"), tone: TONE.rose },
     _overdue: overdue, _dueToday: days === 0, _rank: overdue ? 0 : 2,
   };
 }
@@ -46,6 +48,7 @@ function classifyBill(b) {
     tone: TONE.rose, email: false, opened: false, handleable: false, completable: false, snapshotItemId: null, uid: null,
     // Click-to-open dispatch payload (Blocking Fix 2).
     jumpKind: "bill", jumpId: b.id, date: b.next_date || null, data: b,
+    chipTooltip: formatChipDateTime(b.next_date, null, true),
     title: b.name || b.payee || "Bill", meta: `${formatAmount(b.amount)} · Autopay off`,
     pill: { label: "Due today", tone: TONE.rose },
     _overdue: false, _dueToday: true, _rank: 1,
@@ -129,18 +132,18 @@ export function buildNeedsYouModel({ snapshotLanes, liveDeadlines, liveBills, ha
     const upcoming = [
       ...(liveDeadlines?.upcoming || [])
         .filter((d) => d.status !== "complete")
-        .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || d.project_name || "Deadline"}`, foot: "Deadline", completable: true, jumpId: d.id, data: d }))
+        .map((d) => ({ when: daysUntil(d.due_date), kind: "deadline", id: `deadline:${d.id}`, title: d.title, meta: `${d.class_name || d.project_name || "Deadline"}`, foot: "Deadline", completable: true, jumpId: d.id, data: d, chipTooltip: formatChipDateTime(d.due_date, d.due_time, false) }))
         .filter((x) => x.when != null && x.when > 0),
       ...(liveBills || [])
         .filter((b) => !b.paid)
-        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill", completable: false }))
+        .map((b) => ({ when: daysUntil(b.next_date), kind: "bill", id: `bill:${b.id}`, title: b.name || b.payee, meta: `${formatAmount(b.amount)}`, foot: "Bill", completable: false, chipTooltip: formatChipDateTime(b.next_date, null, false) }))
         .filter((x) => x.when != null && x.when > 0),
     ]
       .filter((u) => !handled.includes(u.id))
       .sort((a, b) => a.when - b.when).slice(0, slotsLeft);
     const backfillCards = upcoming.map((u) => ({
       id: u.id, kind: "backfill", source: "Coming up", sourceIcon: "Clock",
-      title: u.title, meta: u.meta, foot: u.foot,
+      title: u.title, meta: u.meta, foot: u.foot, chipTooltip: u.chipTooltip,
       // Deadlines are completable from the band too (bills aren't Todoist items);
       // jumpId/data feed the same canonical completer the urgent cards use.
       completable: !!u.completable, jumpId: u.jumpId ?? null, data: u.data ?? null,

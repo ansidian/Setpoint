@@ -172,4 +172,33 @@ describe("resolveTodayNowMarkerIndex", () => {
     ];
     expect(resolveTodayNowMarkerIndex(items, now)).toBe(2);
   });
+
+  const allDayEv = (startISO, endISO) => ({
+    kind: "event",
+    startMs: Date.parse(startISO),
+    endMs: Date.parse(endISO),
+    data: { allDay: true, title: "Holiday" },
+  });
+
+  it("always sits below an all-day event, even before the all-day's nominal time (early-morning)", () => {
+    // 'now' is BEFORE the all-day's noon-UTC anchor — the pre-~5am-Pacific window.
+    const earlyNow = Date.parse("2026-05-11T13:00:00.000Z");
+    const items = [
+      allDayEv("2026-05-11T19:00:00.000Z", "2026-05-12T19:00:00.000Z"), // sorts first
+      ev("2026-05-11T22:00:00.000Z", "2026-05-11T23:00:00.000Z"), // genuinely future
+    ];
+    // Marker after the all-day (index 1), never above it (index 0).
+    expect(resolveTodayNowMarkerIndex(items, earlyNow)).toBe(1);
+  });
+
+  it("still breaks at a future TIMED item — an all-day does not force everything past", () => {
+    const earlyNow = Date.parse("2026-05-11T13:00:00.000Z");
+    const items = [
+      allDayEv("2026-05-11T19:00:00.000Z", "2026-05-12T19:00:00.000Z"),
+      ev("2026-05-11T20:00:00.000Z", "2026-05-11T21:00:00.000Z"), // future timed
+      ev("2026-05-11T22:00:00.000Z", "2026-05-11T23:00:00.000Z"), // future timed
+    ];
+    // All-day counts (index 1); the marker still stops before the future timed items.
+    expect(resolveTodayNowMarkerIndex(items, earlyNow)).toBe(1);
+  });
 });
