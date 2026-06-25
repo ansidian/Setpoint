@@ -338,6 +338,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
   onDateAction,
   onMiniCalendarDateAction,
   onMiniCalendarDateCreate,
+  hideMiniCalendar = false,
   onEventAction,
   getMonthEvents = null,
   eventsRange = null,
@@ -535,7 +536,7 @@ const EventsAgendaRail = forwardRef(function EventsAgendaRail({
 
   return (
     <AgendaRailWithMiniCalendar
-      miniCalendar={(
+      miniCalendar={hideMiniCalendar ? null : (
         <MiniCalendar
           viewYear={viewYear}
           viewMonth={viewMonth}

@@ -14,7 +14,7 @@ const CHIP_TONE = { rose: "var(--sp-rose)", cream: "var(--sp-cream)", muted: "rg
 // compact check button that reveals on hover/focus to the LEFT of the timing chip
 // (the chip stays put so its date tooltip reads cleanly). Bills aren't Todoist
 // items, so they keep the chip only.
-function ComingUpRow({ row, isLast, onJump, onComplete }) {
+function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }) {
   const [rowHover, setRowHover] = useState(false);
   const completable = row.kind === "deadline" && !!onComplete;
 
@@ -49,6 +49,7 @@ function ComingUpRow({ row, isLast, onJump, onComplete }) {
           <MarkDoneAction
             onComplete={() => onComplete(row)}
             revealed={rowHover}
+            alwaysVisible={isMobile}
             itemTitle={row.title}
             compact
           />
@@ -61,7 +62,7 @@ function ComingUpRow({ row, isLast, onJump, onComplete }) {
   );
 }
 
-export default function ComingUpCard({ items = [], onJump, onComplete }) {
+export default function ComingUpCard({ items = [], isMobile = false, onJump, onComplete }) {
   // Optimistically hide a just-completed deadline so it leaves instantly, before
   // the dashboard refetch drops it from the feed (mirrors the needs-you band).
   // No completer wired (e.g. mobile) => no action affordance at all.
@@ -91,6 +92,7 @@ export default function ComingUpCard({ items = [], onJump, onComplete }) {
             key={row.id}
             row={row}
             isLast={i === visible.length - 1}
+            isMobile={isMobile}
             onJump={onJump}
             onComplete={handleComplete}
           />

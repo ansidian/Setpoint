@@ -43,7 +43,7 @@ export default function ContextColumn({
       }}
     >
       <WeatherCard weather={liveWeather} />
-      <ComingUpCard items={comingUp} onJump={handleComingUpJump} onComplete={onCompleteDeadline ? handleComingUpComplete : undefined} />
+      <ComingUpCard items={comingUp} isMobile={isMobile} onJump={handleComingUpJump} onComplete={onCompleteDeadline ? handleComingUpComplete : undefined} />
       {showInboxPeek && (
         <InboxPeek accent={accent} emailAccounts={emailAccounts} onJump={onJump} onOpenInbox={onOpenInbox} isMobile={isMobile} />
       )}

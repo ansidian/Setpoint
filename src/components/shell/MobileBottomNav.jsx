@@ -1,8 +1,8 @@
-import { Inbox, LayoutList, Notebook } from "lucide-react";
+import { CalendarDays, Inbox, LayoutList, Notebook } from "lucide-react";
 
-const NAV_TABS = ["dashboard", "inbox", "notes"];
-const NAV_ICONS = { dashboard: LayoutList, inbox: Inbox, notes: Notebook };
-const NAV_LABELS = { dashboard: "Dashboard", inbox: "Inbox", notes: "Notes" };
+const NAV_TABS = ["dashboard", "inbox", "calendar", "notes"];
+const NAV_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays, notes: Notebook };
+const NAV_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes" };
 
 // Mobile-only bottom tab bar. Rendered as the last in-flow flex child of
 // DashboardShell's fixed inset-0 column, so it pins to the viewport bottom and

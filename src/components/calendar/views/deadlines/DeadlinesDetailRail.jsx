@@ -241,6 +241,7 @@ function DeadlinesFloatingDetail({
   onStartEdit,
   onCloseFloatingDetail,
   accent = "var(--ea-accent)",
+  hideEdit = false,
 }) {
   const {
     handleCompleteTask,
@@ -274,6 +275,7 @@ function DeadlinesFloatingDetail({
           onEdit={onStartEdit}
           onComplete={handleFloatingComplete}
           compact
+          hideEdit={hideEdit}
         />
       }
     />

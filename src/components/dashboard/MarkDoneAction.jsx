@@ -10,9 +10,9 @@ import { Check } from "lucide-react";
 // `compact` renders an icon-only 20x20 check button (used beside the Coming-up
 // chip, where a text label would crowd the slot); the default is the text-only
 // "Mark done" used by the needs-you band's upcoming-card footer.
-export default function MarkDoneAction({ onComplete, revealed = false, itemTitle = "", compact = false, style }) {
+export default function MarkDoneAction({ onComplete, revealed = false, itemTitle = "", compact = false, alwaysVisible = false, style }) {
   const [active, setActive] = useState(false);
-  const visible = revealed || active;
+  const visible = revealed || active || alwaysVisible;
   return (
     <button
       type="button"

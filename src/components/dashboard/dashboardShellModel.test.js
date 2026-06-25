@@ -11,10 +11,11 @@ import {
 
 describe("dashboard shell model", () => {
   it("normalizes calendar open requests without rendering DashboardShell", () => {
+    // Phase 4: the calendar is reachable on mobile, so deep-links resolve (no longer null).
     expect(resolveCalendarOpenState({
       isMobile: true,
       viewKey: "events",
-    })).toBeNull();
+    })).toMatchObject({ view: "events" });
 
     expect(resolveCalendarOpenState({
       isMobile: false,

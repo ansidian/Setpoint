@@ -212,6 +212,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
   onDateAction,
   onMiniCalendarDateAction,
   onMiniCalendarDateCreate,
+  hideMiniCalendar = false,
   onBillAction,
 }, ref) {
   const todayKey = ymdFromParts(currentYear, currentMonth, todayDate);
@@ -296,7 +297,7 @@ const BillsAgendaRail = forwardRef(function BillsAgendaRail({
 
   return (
     <AgendaRailWithMiniCalendar
-      miniCalendar={(
+      miniCalendar={hideMiniCalendar ? null : (
         <MiniCalendar
           viewYear={viewYear}
           viewMonth={viewMonth}

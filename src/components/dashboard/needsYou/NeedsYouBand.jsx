@@ -3,8 +3,9 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { buildNeedsYouModel } from "./needsYouModel.js";
 import { NeedsYouCountBlock } from "./NeedsYouCountBlock.jsx";
 import { PriorityCard } from "./PriorityCard.jsx";
+import { NeedsYouCarousel } from "./NeedsYouCarousel.jsx";
 
-function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards = 5, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen, onShowAll }) {
+function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards = 5, isMobile = false, onOpenEmail, onMarkHandled, onCompleteDeadline, onOpen, onShowAll }) {
   const [opened, setOpened] = useState([]);
   const [handled, setHandled] = useState([]);
   const [expandAll, setExpandAll] = useState(false);
@@ -33,6 +34,43 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
 
   const allClear = model.countN === 0;
 
+  const allClearBlock = (
+    <div style={!isMobile
+      ? { width: 190, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }
+      : { width: "100%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+      <CheckCircle2 size={18} color="var(--sp-green)" />
+      <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-green)" }}>All clear</span>
+    </div>
+  );
+  const header = allClear
+    ? allClearBlock
+    : <NeedsYouCountBlock countN={model.countN} countColor={model.countColor} breakdown={model.breakdown} isMobile={isMobile} />;
+
+  if (isMobile) {
+    return (
+      <div
+        data-testid="needs-you-band"
+        data-sect="needs-you"
+        style={{ flex: "none", display: "flex", flexDirection: "column", gap: 12, padding: "14px 14px", borderRadius: 16,
+          background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-rose) 5%, rgba(255,255,255,0.018)) 0%, rgba(255,255,255,0.005) 100%)",
+          border: "1px solid color-mix(in srgb, var(--sp-rose) 15%, rgba(255,255,255,0.06))" }}
+      >
+        {header}
+        <NeedsYouCarousel
+          urgentCards={model.urgentCards}
+          backfillCards={model.backfillCards}
+          moreCount={model.moreCount}
+          moreLabel={model.moreLabel}
+          onShowAll={() => { setExpandAll(true); onShowAll?.(); }}
+          onOpen={handleOpen}
+          onMarkHandled={handleMarkHandled}
+          onComplete={handleComplete}
+          onJump={onOpen}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="needs-you-band"
@@ -41,23 +79,13 @@ function NeedsYouBandInner({ snapshotLanes, liveDeadlines, liveBills, maxCards =
         background: "linear-gradient(180deg, color-mix(in srgb, var(--sp-rose) 5%, rgba(255,255,255,0.018)) 0%, rgba(255,255,255,0.005) 100%)",
         border: "1px solid color-mix(in srgb, var(--sp-rose) 15%, rgba(255,255,255,0.06))" }}
     >
-      {/* When nothing needs you, the status block drops the "Needs you now" label
-          and count and just shows a centered "All clear" — but the band keeps its
-          right side, so upcoming (backfill) items still surface here. */}
-      {allClear ? (
-        <div style={{ width: 190, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 18, borderRight: "1px solid rgba(255,255,255,0.07)" }}>
-          <CheckCircle2 size={18} color="var(--sp-green)" />
-          <span style={{ fontSize: 15, fontWeight: 600, color: "var(--sp-green)" }}>All clear</span>
-        </div>
-      ) : (
-        <NeedsYouCountBlock countN={model.countN} countColor={model.countColor} breakdown={model.breakdown} />
-      )}
+      {header}
       <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 10, alignItems: "stretch" }}>
         {model.urgentCards.map((card) => (
-          <PriorityCard key={card.id} card={card} variant="urgent" onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
+          <PriorityCard key={card.id} card={card} variant="urgent" isMobile={isMobile} onOpen={handleOpen} onMarkHandled={handleMarkHandled} onComplete={handleComplete} onJump={onOpen} />
         ))}
         {model.backfillCards.map((card) => (
-          <PriorityCard key={card.id} card={card} variant="backfill" onComplete={handleComplete} />
+          <PriorityCard key={card.id} card={card} variant="backfill" isMobile={isMobile} onComplete={handleComplete} />
         ))}
         {model.moreCount > 0 && (
           <button

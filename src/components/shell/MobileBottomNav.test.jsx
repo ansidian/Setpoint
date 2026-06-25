@@ -5,10 +5,17 @@ import { MobileBottomNav } from "./MobileBottomNav.jsx";
 afterEach(cleanup);
 
 describe("MobileBottomNav", () => {
-  it("renders exactly the three mobile tabs in order, with no calendar", () => {
+  it("renders the four mobile tabs in order, including calendar", () => {
     render(<MobileBottomNav tab="dashboard" onTab={() => {}} inboxUnreadSignalCount={0} />);
     const labels = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"));
-    expect(labels).toEqual(["Dashboard", "Inbox", "Notes"]);
+    expect(labels).toEqual(["Dashboard", "Inbox", "Calendar", "Notes"]);
+  });
+
+  it("fires onTab('calendar') when the Calendar tab is tapped", () => {
+    const onTab = vi.fn();
+    render(<MobileBottomNav tab="dashboard" onTab={onTab} inboxUnreadSignalCount={0} />);
+    fireEvent.click(screen.getByRole("button", { name: "Calendar" }));
+    expect(onTab).toHaveBeenCalledWith("calendar");
   });
 
   it("marks the active tab with aria-current and fires onTab with the tab key", () => {

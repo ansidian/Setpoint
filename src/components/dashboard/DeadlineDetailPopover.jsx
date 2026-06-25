@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState, useRef } from "react";
 import {
-  Check, ExternalLink, Pencil, X, AlertCircle, Flag,
+  Check, ExternalLink, Pencil, AlertCircle, Flag,
 } from "lucide-react";
+import BottomSheet from "../ui/BottomSheet";
 import { useDashboard } from "../../context/DashboardContext";
 import { daysUntil } from "../../lib/bill-utils";
 import { daysLabel, urgencyForDays } from "../../lib/shell-helpers";
@@ -128,70 +128,13 @@ function openInNewTab(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function computePos(anchor) {
-  if (!anchor) return null;
-  const r = anchor.getBoundingClientRect();
-  const panelW = 340;
-  const panelH = 300;
-  const margin = 8;
-  // Prefer right-of anchor, else below, else above
-  let top = r.top;
-  let left = r.right + margin;
-  if (left + panelW > window.innerWidth - 12) {
-    left = Math.max(12, r.left);
-    top = r.bottom + margin;
-    if (top + panelH > window.innerHeight - 12) {
-      top = Math.max(12, r.top - panelH - margin);
-    }
-  }
-  if (top + panelH > window.innerHeight - 12) {
-    top = Math.max(12, window.innerHeight - 12 - panelH);
-  }
-  return { top, left };
-}
-
-export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da", onClose }) {
-  const panelRef = useRef(null);
-  const [pos, setPos] = useState(() => computePos(anchor));
+export default function DeadlineDetailPopover({ task, accent = "#cba6da", onClose }) {
   const [editing, setEditing] = useState(false);
   const [completingState, setCompletingState] = useState({ taskId: null, pending: false });
-  const [closeActive, setCloseActive] = useState(false);
   const editAnchorRef = useRef(null);
   const { handleCompleteTask, handleUpdateTask } = useDashboard();
 
-  // Reposition on scroll/resize (init already happened in lazy useState)
-  useEffect(() => {
-    if (!anchor) return undefined;
-    function update() { setPos(computePos(anchor)); }
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [anchor]);
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (editing) return;
-      if (panelRef.current?.contains(e.target)) return;
-      if (anchor?.contains(e.target)) return;
-      if (e.target.closest?.('[role="menu"], [role="dialog"]')) return;
-      onClose();
-    }
-    document.addEventListener("pointerdown", handleClick);
-    return () => document.removeEventListener("pointerdown", handleClick);
-  }, [anchor, onClose, editing]);
-
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
-    }
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
-
-  if (!task || !pos) return null;
+  if (!task) return null;
 
   const completing = completingState.pending && completingState.taskId === task.id;
   const isComplete = task.status === "complete" || completing;
@@ -204,172 +147,132 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
   const deadlineColor = task.color || task.sourceColor || TODOIST_DEADLINE_COLOR || accent;
   const dueColor = urgency.key === "high" ? "var(--sp-rose)" : urgency.key === "medium" ? "var(--sp-cream)" : deadlineColor;
 
-  return createPortal(
+  return (
     <>
-      <div
-        ref={panelRef}
-        role="dialog"
-        className="isolate animate-in fade-in zoom-in-95 duration-150"
-        style={{
-          position: "fixed",
-          top: pos.top,
-          left: pos.left,
-          width: 340,
-          zIndex: 60,
-          background: "radial-gradient(ellipse at top left, var(--sp-page), var(--sp-deep) 70%)",
-          borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.06)",
-          boxShadow: "0 30px 80px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.04)",
-          overflow: "hidden",
-          isolation: "isolate",
-        }}
-      >
-        {/* Header strip with source tint */}
-        <div
-          style={{
-            padding: "12px 14px 10px",
-            borderBottom: "1px solid rgba(255,255,255,0.05)",
-            background: `linear-gradient(135deg, ${deadlineColor}0e, transparent 65%)`,
-            display: "flex", alignItems: "center", gap: 8,
-          }}
-        >
+      <BottomSheet open onClose={onClose} title="Deadline">
+        <div>
+          {/* Header strip with source tint */}
           <div
             style={{
-              width: 22, height: 22, borderRadius: 6,
-              background: `${deadlineColor}18`,
-              display: "grid", placeItems: "center",
+              padding: "12px 14px 10px",
+              borderBottom: "1px solid rgba(255,255,255,0.05)",
+              background: `linear-gradient(135deg, ${deadlineColor}0e, transparent 65%)`,
+              display: "flex", alignItems: "center", gap: 8,
             }}
           >
-            <AlertCircle size={11} color={deadlineColor} />
-          </div>
-          <div
-            style={{
-              fontSize: 9.5, fontWeight: 700, letterSpacing: 2,
-              textTransform: "uppercase", color: deadlineColor,
-            }}
-          >
-            {deadlineLabel}
-          </div>
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            onClick={onClose}
-            onMouseEnter={() => setCloseActive(true)}
-            onMouseLeave={() => setCloseActive(false)}
-            onFocus={() => setCloseActive(true)}
-            onBlur={() => setCloseActive(false)}
-            style={{
-              background: closeActive ? "rgba(255,255,255,0.07)" : "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: closeActive ? "rgba(205,214,244,0.85)" : "rgba(205,214,244,0.5)",
-              padding: 4,
-              borderRadius: 4,
-              display: "inline-flex",
-              fontFamily: "inherit",
-              outline: closeActive ? `2px solid ${accent}55` : "none",
-              outlineOffset: 2,
-              transition: "background 120ms ease, color 120ms ease, outline-color 120ms ease",
-            }}
-            aria-label="Close"
-          >
-            <X size={12} />
-          </button>
-        </div>
-
-        {/* Title */}
-        <div style={{ padding: "14px 16px 8px" }}>
-          <div
-            className="ea-display"
-            style={{
-              fontSize: 15, fontWeight: 500, color: "#fff",
-              lineHeight: 1.3, letterSpacing: -0.2,
-              textDecoration: isComplete ? "line-through" : "none",
-              textDecorationColor: "rgba(205,214,244,0.35)",
-            }}
-          >
-            {task.title || "Untitled task"}
-          </div>
-          {(task.class_name || task.project_name) && (
             <div
               style={{
-                marginTop: 4, fontSize: 11,
-                color: "var(--color-text-faint)",
+                width: 22, height: 22, borderRadius: 6,
+                background: `${deadlineColor}18`,
+                display: "grid", placeItems: "center",
               }}
             >
-              {task.class_name || task.project_name}
+              <AlertCircle size={11} color={deadlineColor} />
             </div>
-          )}
-        </div>
-
-        {/* Meta */}
-        <div style={{ padding: "4px 16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <InfoRow
-            label="Due"
-            value={`${daysLabel(days)}${task.due_time ? ` · ${task.due_time}` : ""}`}
-            color={dueColor}
-          />
-          <InfoRow
-            label="Status"
-            value={isComplete ? "Complete" : isInProgress ? "In progress" : "Incomplete"}
-          />
-          {PRIORITY_META[task.priority] && (
-            <InfoRow
-              label="Priority"
-              value={<PriorityBadge level={task.priority} />}
-            />
-          )}
-          {task.points_possible != null && (
-            <InfoRow label="Points" value={`${task.points_possible}`} />
-          )}
-        </div>
-
-        {/* Actions */}
-        <div
-          style={{
-            padding: "10px 14px 14px",
-            borderTop: "1px solid rgba(255,255,255,0.04)",
-            display: "flex", flexWrap: "wrap", gap: 6,
-          }}
-        >
-          {!isComplete && (
-            <ActionButton
-              icon={Check}
-              label={completing ? "Completing..." : "Mark complete"}
-              variant="primary"
-              accent={accent}
-              disabled={completing}
-              loading={completing}
-              onClick={() => {
-                setCompletingState({ taskId: task.id, pending: true });
-                Promise.resolve(handleCompleteTask(task.id, task)).catch(() => {
-                  setCompletingState({ taskId: task.id, pending: false });
-                });
-                window.setTimeout(() => onClose(), 720);
+            <div
+              style={{
+                fontSize: 9.5, fontWeight: 700, letterSpacing: 2,
+                textTransform: "uppercase", color: deadlineColor,
               }}
-            />
-          )}
-          <div ref={editAnchorRef} style={{ display: "inline-flex" }}>
-            <ActionButton
-              icon={Pencil}
-              label="Edit"
-              accent={accent}
-              disabled={completing}
-              onClick={() => setEditing(true)}
-            />
+            >
+              {deadlineLabel}
+            </div>
           </div>
-          {task.url && (
-            <ActionButton
-              icon={ExternalLink}
-              label="Open in Todoist"
-              variant="accent"
-              accent={accent}
-              disabled={completing}
-              onClick={() => { openInNewTab(task.url); onClose(); }}
+
+          {/* Title */}
+          <div style={{ padding: "14px 16px 8px" }}>
+            <div
+              className="ea-display"
+              style={{
+                fontSize: 15, fontWeight: 500, color: "#fff",
+                lineHeight: 1.3, letterSpacing: -0.2,
+                textDecoration: isComplete ? "line-through" : "none",
+                textDecorationColor: "rgba(205,214,244,0.35)",
+              }}
+            >
+              {task.title || "Untitled task"}
+            </div>
+            {(task.class_name || task.project_name) && (
+              <div
+                style={{
+                  marginTop: 4, fontSize: 11,
+                  color: "var(--color-text-faint)",
+                }}
+              >
+                {task.class_name || task.project_name}
+              </div>
+            )}
+          </div>
+
+          {/* Meta */}
+          <div style={{ padding: "4px 16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+            <InfoRow
+              label="Due"
+              value={`${daysLabel(days)}${task.due_time ? ` · ${task.due_time}` : ""}`}
+              color={dueColor}
             />
-          )}
+            <InfoRow
+              label="Status"
+              value={isComplete ? "Complete" : isInProgress ? "In progress" : "Incomplete"}
+            />
+            {PRIORITY_META[task.priority] && (
+              <InfoRow
+                label="Priority"
+                value={<PriorityBadge level={task.priority} />}
+              />
+            )}
+            {task.points_possible != null && (
+              <InfoRow label="Points" value={`${task.points_possible}`} />
+            )}
+          </div>
+
+          {/* Actions */}
+          <div
+            style={{
+              padding: "10px 14px 14px",
+              borderTop: "1px solid rgba(255,255,255,0.04)",
+              display: "flex", flexWrap: "wrap", gap: 6,
+            }}
+          >
+            {!isComplete && (
+              <ActionButton
+                icon={Check}
+                label={completing ? "Completing..." : "Mark complete"}
+                variant="primary"
+                accent={accent}
+                disabled={completing}
+                loading={completing}
+                onClick={() => {
+                  setCompletingState({ taskId: task.id, pending: true });
+                  Promise.resolve(handleCompleteTask(task.id, task)).catch(() => {
+                    setCompletingState({ taskId: task.id, pending: false });
+                  });
+                  window.setTimeout(() => onClose(), 720);
+                }}
+              />
+            )}
+            <div ref={editAnchorRef} style={{ display: "inline-flex" }}>
+              <ActionButton
+                icon={Pencil}
+                label="Edit"
+                accent={accent}
+                disabled={completing}
+                onClick={() => setEditing(true)}
+              />
+            </div>
+            {task.url && (
+              <ActionButton
+                icon={ExternalLink}
+                label="Open in Todoist"
+                variant="accent"
+                accent={accent}
+                disabled={completing}
+                onClick={() => { openInNewTab(task.url); onClose(); }}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </BottomSheet>
 
       {editing && (
         <AddTaskPanel
@@ -379,7 +282,6 @@ export default function DeadlineDetailPopover({ task, anchor, accent = "#cba6da"
           onTaskUpdated={(updated) => { handleUpdateTask(updated); setEditing(false); onClose(); }}
         />
       )}
-    </>,
-    document.body,
+    </>
   );
 }

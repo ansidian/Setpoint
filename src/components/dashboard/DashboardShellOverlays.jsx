@@ -33,7 +33,6 @@ export default function DashboardShellOverlays({
         <Suspense fallback={null}>
           <DeadlineDetailPopover
             task={deadlinePopover.task}
-            anchor={deadlinePopover.anchor}
             accent={accent}
             onClose={() => setDeadlinePopover(null)}
           />
