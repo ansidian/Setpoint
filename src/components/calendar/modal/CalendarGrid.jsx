@@ -84,6 +84,16 @@ export default memo(function CalendarGrid({
         if (payload?.item?.itemKind === "deadline") return deadlineQuickActions?.openContextMenu?.(payload);
         return eventQuickActions?.openContextMenu?.(payload);
       },
+      // Deadline drag slice, namespaced so it never collides with the event
+      // drag fields the cell already reads off this merged object.
+      deadlineDragEnabled: deadlineQuickActions?.dragEnabled,
+      draggingDeadlineId: deadlineQuickActions?.draggingDeadlineId,
+      deadlineDropTargetDate: deadlineQuickActions?.dropTargetDate,
+      beginDeadlineDrag: deadlineQuickActions?.beginDrag,
+      endDeadlineDrag: deadlineQuickActions?.endDrag,
+      enterDeadlineDropTarget: deadlineQuickActions?.enterDropTarget,
+      leaveDeadlineDropTarget: deadlineQuickActions?.leaveDropTarget,
+      dropDeadline: deadlineQuickActions?.dropDeadline,
     };
   }, [deadlineQuickActions, eventDateCells, eventQuickActions]);
   const itemQuickActions = eventDateCells ? eventsPlanningQuickActions : null;

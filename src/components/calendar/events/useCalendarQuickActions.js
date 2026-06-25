@@ -16,6 +16,7 @@ import {
   mergeBounds,
   shiftEventByDays,
 } from "./calendarQuickActionModel.js";
+import { nativeDragSupported } from "../calendarDragSupport.js";
 
 function promptPositionFromRect(rect) {
   if (!rect || typeof window === "undefined") return { top: 96, left: 96 };
@@ -30,12 +31,6 @@ function promptPositionFromRect(rect) {
     Math.max(padding, window.innerHeight - 220),
   );
   return { top, left };
-}
-
-function nativeDragSupported(layout) {
-  if (layout?.stacked) return false;
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
-  return window.matchMedia("(pointer: fine)").matches;
 }
 
 export default function useCalendarQuickActions({

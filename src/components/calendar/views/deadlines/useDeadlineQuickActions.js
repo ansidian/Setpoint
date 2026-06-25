@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteDeadline } from "@/api";
+import { nativeDragSupported } from "../../calendarDragSupport.js";
+import { resolveDeadlineRescheduleTarget } from "./calendarDeadlineRescheduleModel.js";
 import {
   normalizeStatus,
   openInNewTab,
@@ -46,12 +48,18 @@ function deadlineActionItems(task, { onEdit, onComplete, onRequestDelete }) {
 
 export default function useDeadlineQuickActions({
   enabled = true,
+  layout,
   actions = {},
   onEditTask,
   onDeleted,
 } = {}) {
   const [contextMenu, setContextMenu] = useState(null);
   const [status, setStatus] = useState(null);
+  // Day-only drag-reschedule, gated the same way as event drag: desktop +
+  // fine pointer only (recurring/complete are excluded per-drag below).
+  const dragEnabled = nativeDragSupported(layout);
+  const [draggingDeadlineId, setDraggingDeadlineId] = useState(null);
+  const [dropTargetDate, setDropTargetDate] = useState(null);
 
   // Callers pass these handlers as inline closures; reading them through a
   // ref keeps the returned actions identity stable across parent re-renders,
@@ -128,6 +136,36 @@ export default function useDeadlineQuickActions({
     externalHandlersRef.current.actions?.onCompleteTask?.(task.id, task);
   }, []);
 
+  const beginDrag = useCallback((task) => {
+    if (!dragEnabled || !task || task.is_recurring || normalizeStatus(task.status) === "complete") return false;
+    setDraggingDeadlineId(String(task.id));
+    setStatus(null);
+    return true;
+  }, [dragEnabled]);
+
+  const endDrag = useCallback(() => {
+    setDraggingDeadlineId(null);
+    setDropTargetDate(null);
+  }, []);
+
+  const enterDropTarget = useCallback((dateKey) => {
+    if (!draggingDeadlineId) return;
+    setDropTargetDate(dateKey);
+  }, [draggingDeadlineId]);
+
+  const leaveDropTarget = useCallback((dateKey) => {
+    setDropTargetDate((current) => (current === dateKey ? null : current));
+  }, []);
+
+  const dropDeadline = useCallback(({ deadline, targetDate }) => {
+    setDropTargetDate(null);
+    setDraggingDeadlineId(null);
+    if (!deadline) return;
+    const target = resolveDeadlineRescheduleTarget(deadline.due_date, targetDate);
+    if (!target) return;
+    externalHandlersRef.current.actions?.onMoveTask?.(deadline, target);
+  }, []);
+
   const menuItems = useMemo(() => {
     const task = contextMenu?.task;
     if (!task) return [];
@@ -153,6 +191,14 @@ export default function useDeadlineQuickActions({
     requestDelete,
     confirmContextDelete,
     closeContextMenu,
+    dragEnabled,
+    draggingDeadlineId,
+    dropTargetDate,
+    beginDrag,
+    endDrag,
+    enterDropTarget,
+    leaveDropTarget,
+    dropDeadline,
   }), [
     clearStatus,
     closeContextMenu,
@@ -162,5 +208,13 @@ export default function useDeadlineQuickActions({
     openContextMenu,
     requestDelete,
     status,
+    dragEnabled,
+    draggingDeadlineId,
+    dropTargetDate,
+    beginDrag,
+    endDrag,
+    enterDropTarget,
+    leaveDropTarget,
+    dropDeadline,
   ]);
 }

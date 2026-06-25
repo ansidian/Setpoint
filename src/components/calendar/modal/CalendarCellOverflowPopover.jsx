@@ -9,6 +9,7 @@ import {
   CalendarChipStatusIcon,
 } from "./CalendarCellItemChip.jsx";
 import { compactLeadingLabel, getChipLeadingColumnWidth } from "./CalendarCellItemChipModel.js";
+import { deadlineDragAllowed } from "../views/deadlines/calendarDeadlineRescheduleModel.js";
 
 function isOverflowTriggerTarget(target) {
   return target instanceof HTMLElement
@@ -373,6 +374,7 @@ export default function CalendarCellOverflowPopover({
               const specialDate = item.specialDate === true;
               const accent = specialDate ? item.specialDateAccent || item.accent || "var(--ea-accent)" : item.accent || "var(--ea-accent)";
               const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent && !specialDate;
+              const deadlineDragOk = !ghost && deadlineDragAllowed(item, quickActions?.deadlineDragEnabled);
               const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
               const Shell = ghost ? "div" : "button";
 
@@ -386,7 +388,7 @@ export default function CalendarCellOverflowPopover({
                   data-hovered={active ? "true" : "false"}
                   data-calendar-event-selection={batchSelected ? "true" : undefined}
                   data-calendar-event-activation="true"
-                  draggable={dragAllowed}
+                  draggable={dragAllowed || deadlineDragOk}
                   onClick={(event) => {
                     event.stopPropagation();
                     event.currentTarget.focus({ preventScroll: true });
@@ -441,6 +443,19 @@ export default function CalendarCellOverflowPopover({
                     });
                   }}
                   onDragStart={(event) => {
+                    if (deadlineDragOk) {
+                      if (!quickActions?.beginDeadlineDrag?.(item.sourceItem)) {
+                        event.preventDefault();
+                        return;
+                      }
+                      onBeforeItemAction?.();
+                      onClose?.();
+                      event.stopPropagation();
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("application/x-ea-calendar-deadline", JSON.stringify(item.sourceItem));
+                      event.dataTransfer.setData("text/plain", String(item.title || ""));
+                      return;
+                    }
                     if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
                       event.preventDefault();
                       return;
@@ -452,7 +467,10 @@ export default function CalendarCellOverflowPopover({
                     event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
                     event.dataTransfer.setData("text/plain", String(item.title || ""));
                   }}
-                  onDragEnd={() => quickActions?.endDrag?.()}
+                  onDragEnd={() => {
+                    quickActions?.endDrag?.();
+                    quickActions?.endDeadlineDrag?.();
+                  }}
                   onPointerEnter={() => setActiveItemId(itemId)}
                   onPointerLeave={() => setActiveItemId((current) => (
                     current === itemId ? null : current

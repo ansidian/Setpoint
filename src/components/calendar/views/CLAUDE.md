@@ -51,7 +51,8 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `deadlines/deadlineDetailModel.js` — task formatting, priority/context labels, compression
 - `deadlines/deadlinesAgendaModel.js` — task → agenda conversion, status/accent mapping
 - `deadlines/deadlinesModel.js` — status normalization, priority colors, source resolution
-- `deadlines/useDeadlineQuickActions.js` — quick-action menu building and handlers
+- `deadlines/calendarDeadlineRescheduleModel.js` — pure drag-reschedule target resolution + day-only payload (re-supplies `due_time`) + drag-eligibility gate
+- `deadlines/useDeadlineQuickActions.js` — quick-action menu building and handlers, plus the day-only drag-reschedule slice
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)
 

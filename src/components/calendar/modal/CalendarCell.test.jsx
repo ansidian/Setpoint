@@ -1,10 +1,32 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import CalendarCell from "./CalendarCell.jsx";
 
 afterEach(() => {
   cleanup();
 });
+
+const baseCellProps = {
+  view: "events",
+  viewYear: 2026,
+  viewMonth: 3,
+  viewLabel: "Events",
+  day: 7,
+  dateKey: "2026-04-07",
+  dateLabel: "7",
+  items: [],
+  ghosts: [],
+  cellMeta: {},
+  itemCount: 0,
+  hasItems: false,
+  isToday: false,
+  isSelected: false,
+  renderCellContents: () => null,
+};
+
+function dataTransferWith(map) {
+  return { getData: vi.fn((type) => map[type] ?? "") };
+}
 
 describe("CalendarCell", () => {
   it("renders weather inline with the date header", () => {
@@ -44,5 +66,78 @@ describe("CalendarCell", () => {
     expect(weather.textContent).toBe("83/61");
     expect(weather.getAttribute("aria-label")).toBe("Sunny");
     expect(weather.getAttribute("title")).toBe("Sunny");
+  });
+});
+
+describe("CalendarCell deadline drag-drop", () => {
+  it("routes a deadline drop to dropDeadline with the parsed deadline and the cell date", () => {
+    const dropDeadline = vi.fn();
+    const deadline = { id: "todo-1", due_date: "2026-04-01", due_time: "3:00 PM" };
+    render(
+      <CalendarCell
+        {...baseCellProps}
+        quickActions={{
+          draggingDeadlineId: "todo-1",
+          dropDeadline,
+          enterDeadlineDropTarget: vi.fn(),
+          enterDropTarget: vi.fn(),
+        }}
+      />,
+    );
+
+    const cell = screen.getByRole("gridcell");
+    fireEvent.drop(cell, {
+      dataTransfer: dataTransferWith({ "application/x-ea-calendar-deadline": JSON.stringify(deadline) }),
+    });
+
+    expect(dropDeadline).toHaveBeenCalledWith({ deadline, targetDate: "2026-04-07" });
+  });
+
+  it("highlights the deadline drop target via enterDeadlineDropTarget, not the event one", () => {
+    const enterDeadlineDropTarget = vi.fn();
+    const enterDropTarget = vi.fn();
+    render(
+      <CalendarCell
+        {...baseCellProps}
+        quickActions={{ draggingDeadlineId: "todo-1", enterDeadlineDropTarget, enterDropTarget, dropDeadline: vi.fn() }}
+      />,
+    );
+
+    fireEvent.dragEnter(screen.getByRole("gridcell"), { dataTransfer: dataTransferWith({}) });
+
+    expect(enterDeadlineDropTarget).toHaveBeenCalledWith("2026-04-07");
+    expect(enterDropTarget).not.toHaveBeenCalled();
+  });
+
+  it("still routes an event drop to dropEvent when an event is being dragged", () => {
+    const dropEvent = vi.fn();
+    const droppedEvent = { id: "event-1", title: "Hold" };
+    render(
+      <CalendarCell
+        {...baseCellProps}
+        quickActions={{ draggingEventId: "event-1", dropEvent, enterDropTarget: vi.fn() }}
+      />,
+    );
+
+    fireEvent.drop(screen.getByRole("gridcell"), {
+      dataTransfer: dataTransferWith({ "application/x-ea-calendar-event": JSON.stringify(droppedEvent) }),
+    });
+
+    expect(dropEvent).toHaveBeenCalledWith(expect.objectContaining({ event: droppedEvent, targetDate: "2026-04-07" }));
+  });
+
+  it("ignores a drop when nothing is being dragged", () => {
+    const dropDeadline = vi.fn();
+    const dropEvent = vi.fn();
+    render(
+      <CalendarCell {...baseCellProps} quickActions={{ dropDeadline, dropEvent }} />,
+    );
+
+    fireEvent.drop(screen.getByRole("gridcell"), {
+      dataTransfer: dataTransferWith({ "application/x-ea-calendar-deadline": JSON.stringify({ id: "x" }) }),
+    });
+
+    expect(dropDeadline).not.toHaveBeenCalled();
+    expect(dropEvent).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
 import { useDashboard } from "../../context/DashboardContext";
@@ -58,6 +58,7 @@ export function DashboardShell({
     handleAddTask,
     handleCompleteTask,
     handleDeleteTask,
+    handleMoveTask,
   } = useDashboard();
   const [tab, setTab] = useState(() => {
     try {
@@ -71,6 +72,15 @@ export function DashboardShell({
   });
   useEffect(() => {
     try { localStorage.setItem("ea:tab", tab); } catch { /* ignore */ }
+  }, [tab]);
+  // Reflect the active tab as a root attribute so global CSS can hide
+  // calendar-owned document.body portals (the floating detail panel) when the
+  // calendar isn't the active tab. The calendar mounts as a KeepAlive
+  // (Activity-frozen) tab, so on leave it can't re-render to retract its own
+  // body portal — this lets the (non-frozen) shell drive the hide. Layout
+  // effect runs before paint so the panel never flashes over the new tab.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.activeTab = tab;
   }, [tab]);
   // Warm the lazy inbox chunk after first paint so the first dashboard->inbox
   // switch is instant instead of staring at a blank fetch.
@@ -306,9 +316,15 @@ export function DashboardShell({
       queueCalendarDeadlineRefresh();
       return result;
     },
+    onMoveTask: (...args) => {
+      const result = handleMoveTask(...args);
+      queueCalendarDeadlineRefresh();
+      return result;
+    },
   }), [
     handleCompleteTask,
     handleDeleteTask,
+    handleMoveTask,
     queueCalendarDeadlineRefresh,
   ]);
 

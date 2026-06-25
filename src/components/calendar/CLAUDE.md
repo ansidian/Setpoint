@@ -30,6 +30,7 @@ Calendar UI root: `CalendarModal.jsx` is the entry point (named for history; the
 - `detailRailMotion.js` — easing curves and transition durations for rails
 - `googleSpecialDateModel.js` — identifies Google special dates and their colors
 - `reminderDisplay.js` — reminder time formatting and upcoming-state calculation
+- `calendarDragSupport.js` — `nativeDragSupported(layout)` gate (desktop + fine-pointer); shared by the event and deadline drag hooks
 - `ghostPreview.js` — preview indicators for dragged events/deadlines
 - `useCalendarGhostPreview.js` — combined ghost previews with auto-navigation
 

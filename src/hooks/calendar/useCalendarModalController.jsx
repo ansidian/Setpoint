@@ -485,6 +485,7 @@ export default function useCalendarModalController({
 
   const deadlineQuickActions = useDeadlineQuickActions({
     enabled: open && view === "events" && deadlineOverlayVisible,
+    layout: activeLayout,
     actions: deadlineActions,
     onEditTask: (task, options = {}) => {
       if (activeLayout.stacked) {

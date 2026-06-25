@@ -1,5 +1,6 @@
 import { createContext, useContext, useCallback, useMemo } from "react";
-import { completeDeadlineOccurrence } from "../api";
+import { completeDeadlineOccurrence, updateDeadline } from "../api";
+import { buildDeadlineReschedulePayload } from "../components/calendar/views/deadlines/calendarDeadlineRescheduleModel.js";
 import {
   EMPTY_DEADLINES,
   applyDeadlineComplete,
@@ -73,16 +74,44 @@ export function DashboardProvider({
     applyTaskMutation((root) => applyDeadlineUpsert(root, task));
   }, [applyTaskMutation]);
 
+  // Day-only drag-reschedule: optimistically shift the due_date (the calendar
+  // re-buckets the chip onto the target day), persist through Todoist, and roll
+  // the date back if the server rejects. Mirrors handleCompleteTask's
+  // optimistic→await→revert so the single deadlines store never half-commits.
+  const handleMoveTask = useCallback(async (task, targetDate) => {
+    const taskId = task?.id;
+    if (!taskId || !targetDate) return;
+    const existingTask = deadlines?.upcoming?.find((t) => deadlineMatches(t, taskId)) || task;
+    const originalDueDate = existingTask?.due_date ?? task?.due_date ?? null;
+    // Same-day (or an undated source) → nothing to move.
+    if (!originalDueDate || originalDueDate === targetDate) return;
+
+    // Carry the whole task (not a minimal {id,due_date}): the month-range cache
+    // applies this updater to every cached month, so the TARGET month — which
+    // doesn't yet hold the task — would otherwise push a title-less stub that a
+    // mounted adjacent-month preview block renders as "Untitled" until refetch.
+    applyTaskMutation((root) => applyDeadlineUpsert(root, { ...existingTask, due_date: targetDate }, { merge: true }));
+
+    try {
+      await updateDeadline(taskId, buildDeadlineReschedulePayload(task, targetDate));
+    } catch (err) {
+      console.error("[Briefing] Move task failed:", err.message);
+      applyTaskMutation((root) => applyDeadlineUpsert(root, { ...existingTask, due_date: originalDueDate }, { merge: true }));
+    }
+  }, [applyTaskMutation, deadlines?.upcoming]);
+
   const value = useMemo(() => ({
     handleCompleteTask,
     handleAddTask,
     handleUpdateTask,
     handleDeleteTask,
+    handleMoveTask,
   }), [
     handleCompleteTask,
     handleAddTask,
     handleUpdateTask,
     handleDeleteTask,
+    handleMoveTask,
   ]);
 
   return (

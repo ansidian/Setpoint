@@ -9,7 +9,7 @@ vi.mock("motion/react", async () => {
     animate,
     children,
     exit: _exit,
-    initial: _initial,
+    initial,
     transition,
     whileDrag: _whileDrag,
     whileHover: _whileHover,
@@ -19,6 +19,7 @@ vi.mock("motion/react", async () => {
     return React.createElement("div", {
       ...props,
       ref,
+      "data-motion-initial": JSON.stringify(initial ?? null),
       "data-motion-animate-opacity": animate?.opacity ?? "",
       "data-motion-animate-x": animate?.x ?? "",
       "data-motion-animate-y": animate?.y ?? "",
@@ -90,6 +91,59 @@ describe("CalendarFloatingDetailPanel", () => {
     } else {
       delete globalThis.ResizeObserver;
     }
+  });
+
+  it("renders the Motion shell with initial={false} so a revealed panel survives an Activity tab re-show", () => {
+    // Regression guard: the panel is a document.body portal inside the calendar's
+    // Activity-frozen KeepAliveTab. A non-false `initial` (e.g. {opacity:0,
+    // scale:0.985}) is re-applied by Motion on tab re-show WITHOUT re-running the
+    // enter animation (the `animate` target is unchanged), pinning the panel at
+    // opacity 0 — invisible yet hit-testable. The awaiting gate already supplies
+    // the faded/scaled-down start via `animate`, so `initial` must stay false.
+    const anchorElement = appendRectElement({
+      top: 400, left: 600, right: 700, bottom: 424, width: 100, height: 24,
+    });
+    const detail = {
+      open: true,
+      mode: "detail",
+      placementKey: "reveal-survives-1",
+      view: "events",
+      itemId: "evt-1",
+      dateKey: "2026-06-09",
+      anchorElement,
+      sourceCellElement: null,
+      exclusionElement: null,
+      preferredSide: "left",
+      forcedSide: null,
+      sideIntent: "auto",
+      userDragged: false,
+      initialPlacement: resolveFloatingDetailPlacement({
+        anchorRect: anchorElement.getBoundingClientRect(),
+        sourceRect: null,
+        exclusionRect: null,
+        calendarRect: null,
+        railRect: null,
+        panelHeight: 300,
+        mode: "detail",
+        preferredSide: "left",
+      }),
+    };
+
+    render(
+      <CalendarFloatingDetailPanel
+        detail={detail}
+        label="Event"
+        calendarPanelRef={{ current: null }}
+        railRef={{ current: null }}
+        onClose={() => {}}
+      >
+        <div>Work</div>
+      </CalendarFloatingDetailPanel>,
+    );
+
+    expect(
+      screen.getByTestId("calendar-floating-detail-panel").getAttribute("data-motion-initial"),
+    ).toBe("false");
   });
 
   it("waits for the first measured placement before revealing, then keeps later repositioning animated", async () => {

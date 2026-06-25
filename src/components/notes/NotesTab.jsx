@@ -277,7 +277,6 @@ export default function NotesTab({ accent, isMobile = false }) {
             tags={tags}
             placeholder="Jot something down…"
             submitOnEnter
-            maxHeight={180}
           />
         </div>
         <div style={{ position: "relative", marginBottom: 12 }}>

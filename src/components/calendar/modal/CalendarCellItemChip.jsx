@@ -3,6 +3,7 @@ import { useReducedMotion } from "motion/react";
 import GoogleSpecialDateBadge from "../GoogleSpecialDateBadge.jsx";
 import { compactLeadingLabel } from "./CalendarCellItemChipModel.js";
 import { hasUpcomingReminder } from "../reminderDisplay.js";
+import { deadlineDragAllowed } from "../views/deadlines/calendarDeadlineRescheduleModel.js";
 
 function chipStyle({
   item,
@@ -420,6 +421,9 @@ export function ItemChip({
   const selectionId = item.selectionId != null ? String(item.selectionId) : String(item.id);
   const specialDate = item.specialDate === true;
   const dragAllowed = !ghost && !!quickActions?.dragEnabled && !!item.writable && !!item.sourceEvent && !specialDate;
+  // Deadline drag is a parallel affordance: gated on the deadline slice and
+  // mutually exclusive with the event path (deadlines have no sourceEvent).
+  const deadlineDragOk = !ghost && deadlineDragAllowed(item, quickActions?.deadlineDragEnabled);
   const batchSelected = !specialDate && !!quickActions?.isEventSelectionSelected?.(item.sourceEvent || item.sourceItem);
 
   if (ghost) {
@@ -467,7 +471,7 @@ export function ItemChip({
       data-hovered={active ? "true" : "false"}
       data-calendar-event-selection={batchSelected ? "true" : undefined}
       data-calendar-event-activation="true"
-      draggable={dragAllowed}
+      draggable={dragAllowed || deadlineDragOk}
       data-calendar-focus-ring="true"
       onClick={(event) => {
         event.stopPropagation();
@@ -520,6 +524,18 @@ export function ItemChip({
         });
       }}
       onDragStart={(event) => {
+        if (deadlineDragOk) {
+          if (!quickActions?.beginDeadlineDrag?.(item.sourceItem)) {
+            event.preventDefault();
+            return;
+          }
+          onBeforeDragStart?.();
+          event.stopPropagation();
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("application/x-ea-calendar-deadline", JSON.stringify(item.sourceItem));
+          event.dataTransfer.setData("text/plain", String(item.title || ""));
+          return;
+        }
         if (!dragAllowed || !quickActions?.beginDrag?.(item.sourceEvent)) {
           event.preventDefault();
           return;
@@ -530,7 +546,10 @@ export function ItemChip({
         event.dataTransfer.setData("application/x-ea-calendar-event", JSON.stringify(item.sourceEvent));
         event.dataTransfer.setData("text/plain", String(item.title || ""));
       }}
-      onDragEnd={() => quickActions?.endDrag?.()}
+      onDragEnd={() => {
+        quickActions?.endDrag?.();
+        quickActions?.endDeadlineDrag?.();
+      }}
       onPointerEnter={() => onSetActive?.(String(item.id))}
       onPointerLeave={() => onClearActive?.(String(item.id))}
       onFocus={() => onSetActive?.(String(item.id))}

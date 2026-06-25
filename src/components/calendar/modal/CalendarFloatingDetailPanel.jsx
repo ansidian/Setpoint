@@ -150,7 +150,17 @@ export default function CalendarFloatingDetailPanel({
           // will-change around its own animations, so letting the panel de-promote once
           // the open spring settles renders text on the main compositor where it's stable.
         }}
-        initial={reducedMotion ? false : { opacity: 0, scale: 0.985 }}
+        // initial MUST stay false (not {opacity:0,scale:0.985}). This panel is a
+        // document.body portal living inside the calendar's Activity-frozen
+        // KeepAliveTab. On tab re-show, Activity tears down and re-creates Motion's
+        // effects, and Motion re-applies a non-false `initial` to the DOM — but it
+        // does NOT run the enter animation, because the `animate` target is
+        // referentially unchanged (awaitingMeasuredPlacement was already false and
+        // is preserved across the freeze). That pinned the panel at opacity 0 /
+        // scale 0.985 on return: invisible yet still hit-testable. The awaiting
+        // gate below already supplies the same faded+scaled-down start via
+        // `animate`, so the open animation is unchanged while re-show stays in sync.
+        initial={false}
         animate={{
           opacity: awaitingMeasuredPlacement ? 0 : 1,
           scale: awaitingMeasuredPlacement ? 0.985 : 1,
