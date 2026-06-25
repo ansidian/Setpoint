@@ -310,7 +310,6 @@ export function SystemStatusButton({ systemStatus = FALLBACK_STATUS, isMobile = 
           width: isMobile ? 40 : 28,
           height: isMobile ? 40 : 28,
           flexShrink: 0,
-          touchAction: "manipulation",
           borderRadius: 8,
           // Match the sibling "More" tool button so the cluster reads as one
           // group. At rest the glyph color carries the signal; attention states

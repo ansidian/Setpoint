@@ -5,8 +5,8 @@ const TAB_ICONS = { dashboard: LayoutList, inbox: Inbox, calendar: CalendarDays,
 const TAB_LABELS = { dashboard: "Dashboard", inbox: "Inbox", calendar: "Calendar", notes: "Notes" };
 const TAB_KEYS = { dashboard: "1", inbox: "2", calendar: "3", notes: "4" };
 
-export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
-  const tabs = isMobile ? ["dashboard", "inbox", "notes"] : ["dashboard", "inbox", "calendar", "notes"];
+export function ShellTabs({ tab, onTab, inboxUnreadSignalCount }) {
+  const tabs = ["dashboard", "inbox", "calendar", "notes"];
   return (
     <div
       style={{
@@ -28,12 +28,11 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
             type="button"
             onClick={() => onTab(tabKey)}
             style={{
-              padding: isMobile ? "9px 12px" : "5px 12px",
-              minHeight: isMobile ? 44 : undefined,
+              padding: "5px 12px",
               borderRadius: 7,
               border: "none",
               cursor: "pointer",
-              fontSize: isMobile ? 11 : 11.5,
+              fontSize: 11.5,
               fontWeight: 600,
               letterSpacing: 0.3,
               fontFamily: "inherit",
@@ -45,10 +44,9 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
               gap: 6,
               transition: "background 150ms, color 150ms",
               minWidth: 0,
-              touchAction: "manipulation",
             }}
           >
-            <Icon size={isMobile ? 11 : 12} />
+            <Icon size={12} />
             {showUnread && (
               <span
                 title={`${inboxUnreadSignalCount} unread`}
@@ -73,7 +71,7 @@ export function ShellTabs({ isMobile, tab, onTab, inboxUnreadSignalCount }) {
               </span>
             )}
             <span>{TAB_LABELS[tabKey]}</span>
-            {!isMobile && <Kbd>{TAB_KEYS[tabKey]}</Kbd>}
+            <Kbd>{TAB_KEYS[tabKey]}</Kbd>
           </button>
         );
       })}

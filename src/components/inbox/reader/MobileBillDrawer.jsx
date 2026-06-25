@@ -95,7 +95,7 @@ export default function MobileBillDrawer({
               alignItems: "center",
               gap: 4,
               padding: "6px 8px",
-              minHeight: 44,
+              minHeight: "var(--sp-touch-min)",
               borderRadius: 8,
               border: "1px solid rgba(255,255,255,0.08)",
               background: "rgba(255,255,255,0.03)",

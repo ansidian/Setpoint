@@ -102,7 +102,7 @@ export default function MobileFilterSheet({
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              minHeight: 44,
+              minHeight: "var(--sp-touch-min)",
               padding: "0 12px",
             }}
           >

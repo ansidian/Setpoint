@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, lazy, Suspense, useCallback, startTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import ShellHeader from "../shell/ShellHeader";
+import { MobileBottomNav } from "../shell/MobileBottomNav.jsx";
 import { useDashboard } from "../../context/DashboardContext";
 import useIsMobile from "../../hooks/useIsMobile";
 import useBrowserBackDismiss from "../../hooks/useBrowserBackDismiss";
@@ -467,6 +468,14 @@ export function DashboardShell({
           </Suspense>
         </KeepAliveTab>
       </div>
+
+      {isMobile && (
+        <MobileBottomNav
+          tab={tab}
+          onTab={setShellTab}
+          inboxUnreadSignalCount={inboxUnreadSignalCount}
+        />
+      )}
 
       <DashboardShellOverlays
         isMobile={isMobile}

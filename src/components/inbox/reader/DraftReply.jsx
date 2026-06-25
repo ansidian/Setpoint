@@ -59,8 +59,8 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
             color: "rgba(205,214,244,0.5)", padding: 4, borderRadius: 4,
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             fontFamily: "inherit",
-            width: isMobile ? 44 : undefined,
-            height: isMobile ? 44 : undefined,
+            width: isMobile ? "var(--sp-touch-min)" : undefined,
+            height: isMobile ? "var(--sp-touch-min)" : undefined,
           }}
         >
           <X size={12} />
@@ -74,7 +74,7 @@ export default function DraftReply({ email, accent, onDiscard, isMobile = false 
         style={{
           width: "100%", background: "transparent", border: "none", outline: "none",
           padding: "12px 14px", resize: "vertical",
-          fontFamily: "inherit", fontSize: 13, color: "var(--sp-text)", lineHeight: 1.55,
+          fontFamily: "inherit", fontSize: isMobile ? 16 : 13, color: "var(--sp-text)", lineHeight: 1.55,
           boxSizing: "border-box",
         }}
       />

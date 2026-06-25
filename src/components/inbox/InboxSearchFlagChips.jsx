@@ -32,10 +32,9 @@ export default function InboxSearchFlagChips({
         onFocus={() => setHovered(true)}
         onBlur={() => setHovered(false)}
         style={{
-          height: compact ? 44 : 30,
+          height: compact ? "var(--sp-touch-min)" : 30,
           padding: compact ? "0 12px" : "0 10px",
           borderRadius: 999,
-          touchAction: "manipulation",
           border: `1px solid ${active ? `${accent}55` : hovered ? "rgba(255,255,255,0.13)" : "rgba(255,255,255,0.08)"}`,
           background: active ? `${accent}1f` : hovered ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.03)",
           color: active ? "#fff" : "rgba(205,214,244,0.68)",

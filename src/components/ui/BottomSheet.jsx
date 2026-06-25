@@ -108,7 +108,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
           borderRadius: "12px 12px 0 0",
           border: "1px solid rgba(255,255,255,0.08)",
           borderBottom: "none",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          paddingBottom: "var(--sp-safe-bottom)",
           overscrollBehavior: "contain",
           transition: "transform 300ms cubic-bezier(0.16,1,0.3,1)",
         }}
@@ -132,7 +132,7 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
             <div className="text-sm font-semibold text-foreground">{title}</div>
             <button
               onClick={onClose}
-              className="text-muted-foreground/60 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="text-muted-foreground/60 p-2 min-w-[var(--sp-touch-min)] min-h-[var(--sp-touch-min)] flex items-center justify-center"
               aria-label="Close"
             >
               <X size={16} />

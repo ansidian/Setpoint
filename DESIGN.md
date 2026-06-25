@@ -221,7 +221,7 @@ Depth is border-first. Inline cards and list items should rely on 1px borders, t
 ### Navigation
 
 - **Style:** The shell header owns primary navigation between Dashboard and Inbox. Active states use lavender or V3 accent; inactive states use tinted neutral backgrounds.
-- **Mobile:** Tabs and sheets should retain stable hit targets and avoid reflowing labels into cramped controls.
+- **Mobile:** Tabs and sheets must meet the `--sp-touch-min` (44px) canonical hit-target size and avoid reflowing labels into cramped controls. Text inputs must render at ≥16px on mobile viewports to prevent iOS auto-zoom.
 - **Keyboard:** Existing hotkeys and command palette affordances should stay visible through compact labels or key pills.
 
 ### Floating Panels
@@ -242,7 +242,21 @@ Adjacent-month dates in the mini calendar use a gray, more muted date number ins
 
 Keep the mini calendar on a stable six-row grid so month changes do not resize the agenda rail below it.
 
-## 6. Do's and Don'ts
+## 6. CSS Custom Properties
+
+The following `--sp-*` tokens are defined in `src/index.css :root` and used throughout the app. Add new tokens here when they are minted.
+
+### Mobile / Touch
+
+- **`--sp-touch-min`** (`44px`): Minimum touch-target dimension for mobile hit targets. All tappable controls must meet or exceed this size on narrow viewports.
+- **`--sp-safe-top`** (`env(safe-area-inset-top, 0px)`): Notch / status-bar inset. Reserved by the sticky header so content is never obscured by the device frame.
+- **`--sp-safe-bottom`** (`env(safe-area-inset-bottom, 0px)`): Home-indicator inset. Reserved by sheets and the Phase-1 bottom navigation bar.
+
+### Editor
+
+- **`--sp-note-editor-font`** (`13px` base, flipped to `16px` at ≤639px): CodeMirror notes-editor font size. The 16px value at narrow viewports satisfies the iOS focus-zoom floor — inputs below 16px trigger an unwanted automatic zoom on iPhone Safari.
+
+## 7. Do's and Don'ts
 
 ### Do:
 

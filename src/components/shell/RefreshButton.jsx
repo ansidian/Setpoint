@@ -35,7 +35,6 @@ export function RefreshButton({
         overflow: "hidden",
         padding: isMobile ? "7px 10px" : "5px 10px",
         minHeight: isMobile ? 40 : undefined,
-        touchAction: "manipulation",
         borderRadius: 8,
         border: "1px solid transparent",
         background: "var(--sp-accent)",

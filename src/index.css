@@ -76,6 +76,11 @@
   --sp-lavender: #b4befe; /* Lavender — card / transfer badge label */
   --sp-overlay: #6c7086;  /* Overlay2 — low-urgency / disabled muted (DESIGN.json text-subtle) */
   --sp-teal: #94e2d5;     /* Teal — Alfred unread dot; Todoist label accent */
+  /* ── Mobile foundation tokens (Phase 0) ── */
+  --sp-touch-min: 44px;                                /* minimum touch-target dimension */
+  --sp-safe-top: env(safe-area-inset-top, 0px);        /* notch / status-bar inset (sticky header) */
+  --sp-safe-bottom: env(safe-area-inset-bottom, 0px);  /* home-indicator inset (sheets; Phase-1 nav) */
+  --sp-note-editor-font: 13px;                         /* CM editor base font; flipped to 16px ≤639px (Task 5) */
   /* Top-layer z-index tokens. Valued in the existing 9998–10020 band to preserve current stacking.
      (A full z-index-scale renumber of the 10001/10020 band is intentionally deferred.) */
   --z-popover: 9999;
@@ -167,6 +172,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Kill the 300ms tap delay + double-tap-zoom on interactive controls.
+     Layered (low specificity) so an inline `touch-action: none` drag handle
+     still wins. `manipulation` keeps panning/pinch-zoom. */
+  button, a, [role="button"], [role="tab"] {
+    touch-action: manipulation;
+  }
 }
 
 html, body, #root {
@@ -187,6 +198,15 @@ body {
   background-size: auto, 10px 10px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mobile input font floor — ≥16px stops iOS focus-zoom. Inputs are styled with
+   inline fontSize (which out-specifies this rule), so the inline surfaces flip
+   via isMobile (see NotesTab / MobileInboxView / DraftReply); this block is the
+   safety net for class-based inputs + the variable flip the CodeMirror theme reads. */
+@media (max-width: 639px) {
+  input, textarea, select { font-size: 16px; }
+  :root { --sp-note-editor-font: 16px; }
 }
 
 /* Display serif (hero greeting) — overridable via --serif-choice */
