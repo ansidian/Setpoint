@@ -230,26 +230,32 @@ describe("AnchoredFloatingPanel", () => {
     expect(document.querySelector('[data-calendar-popover-panel="true"]')).toBeNull();
   });
 
-  it("hideTitle suppresses the visible sheet title but keeps Close and the accessible name", () => {
+  it("hideTitle drops the sheet header entirely (no visible title, no redundant Close) but keeps the accessible name and dismissal", () => {
     useIsMobile.mockReturnValue(true);
+    const onClose = vi.fn();
     render(
       <AnchoredFloatingPanel
         anchorRef={{ current: anchor }}
         role="dialog"
         ariaLabel="Deadline"
         hideTitle
-        onClose={() => {}}
+        onClose={onClose}
       >
         <div>Glance content</div>
       </AnchoredFloatingPanel>,
     );
 
-    // Visible title text is gone (the card carries its own eyebrow), but the
-    // dialog still has an accessible name and a Close affordance.
+    // The card carries its own eyebrow, so the header collapses to nothing: no
+    // visible title and no Close button — the bottom sheet is dismissed by
+    // drag-down, backdrop tap, or Escape, so the X is dead chrome over empty space.
     expect(screen.queryByText("Deadline")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    // The dialog still exposes its accessible name (aria-label) and content.
     expect(screen.getByRole("dialog", { name: "Deadline" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
     expect(screen.getByText("Glance content")).toBeTruthy();
+    // Removing the X did not strand the sheet: Escape still dismisses it.
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("stays anchored on mobile when disableMobileSheet is set", async () => {
