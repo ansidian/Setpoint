@@ -48,10 +48,10 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
   // separate Open button — the hover lift is the affordance), deadlines/bills
   // jump to their detail. Backfill cards don't jump.
   const bodyClickable = variant === "urgent" && (card.email || card.jumpKind != null);
-  const activate = () => {
+  const activate = (e) => {
     if (!bodyClickable) return;
     if (card.email) onOpen?.(card);
-    else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data });
+    else onJump?.({ kind: card.jumpKind, id: card.jumpId, date: card.date, data: card.data }, e?.currentTarget);
   };
   const style = variant === "backfill"
     ? { ...baseCardStyle, background: "color-mix(in srgb, var(--sp-surface) 50%, transparent)", border: "1px solid rgba(255,255,255,0.07)", opacity: 0.94 }
@@ -104,7 +104,7 @@ export function PriorityCard({ card, variant = "urgent", isMobile = false, onOpe
             role: "button",
             tabIndex: 0,
             onClick: activate,
-            onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } },
+            onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(e); } },
           }
         : {})}
     >

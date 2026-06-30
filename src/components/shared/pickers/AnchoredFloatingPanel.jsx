@@ -14,15 +14,17 @@ import BottomSheet from "@/components/ui/BottomSheet";
 // the desktop path — and the panel's useDismissablePortal never runs on mobile,
 // where panelRef is unattached and the first in-sheet tap would read as
 // "outside" and close the sheet.
-export default function AnchoredFloatingPanel({ disableMobileSheet = false, ...props }) {
+export default function AnchoredFloatingPanel({ disableMobileSheet = false, hideTitle = false, ...props }) {
   const isMobile = useIsMobile();
   if (isMobile && !disableMobileSheet) {
     return (
-      <BottomSheet open onClose={props.onClose} title={props.ariaLabel}>
+      <BottomSheet open onClose={props.onClose} title={props.ariaLabel} hideTitle={hideTitle}>
         {props.children}
       </BottomSheet>
     );
   }
+  // hideTitle is mobile-only (the desktop panel has no header), so it is
+  // intentionally not forwarded to AnchoredPanelDesktop.
   return <AnchoredPanelDesktop {...props} />;
 }
 

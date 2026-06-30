@@ -11,7 +11,7 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 - `InboxMountFallback.jsx` — skeleton fallback shown while the lazy inbox chunk loads on a tab switch
 - `KeepAliveTab.jsx` — keep-alive tab wrapper (Activity + freeze-when-hidden) so tab switches don't unmount/remount and a data refresh skips the hidden tab
 - `DashboardCalendarModalMount.jsx` — lazy calendar mount (rendered inside the calendar `KeepAliveTab`) with deadline/bill data
-- `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution
+- `dashboardShellModel.js` — calendar open-state logic, request builders, hotkey resolution, glance-sheet tap toggle (`nextItemSheet`: re-tap closes, keyed per kind)
 - `useDashboardShellHotkeys.js` — global shortcuts: command palette, g+d/e chords
 - `useCalendarWorkspaceState.js` — calendar workspace state slice: view/focus/overlay deep-link state, `openCalendar`/`changeCalendarView`, and the leave-clear + workspace-change-notify effects
 - `useAlfredPanelState.js` — Alfred panel mount/open/new-chat/handoff state and its stable actions
@@ -52,8 +52,8 @@ The landing surface: a Needs-you band, today timeline, and a context column, plu
 ### Data + details
 - `calendarBillsData.js` — transforms live data into calendar-compatible bill shape
 - `inboxBadgeModel.js` — unread signal count with read-state overrides
-- `DeadlineDetailPopover.jsx` — mobile deadline detail sheet with edit/mark-done
-- `CalendarItemDetailSheet.jsx` — mobile bill/event detail BottomSheet (display + "Open in calendar"); a dashboard bill/event tap opens it in place instead of switching to the calendar tab
+- `DashboardItemDetailSheet.jsx` — unified glance sheet for a dashboard item tap (deadline/bill/event): full detail via the reused calendar cards (`DeadlineDetailCard`/`BillSelectedCard`/`EventSelectedCard`) + per-type action + "Open in calendar" deep-link; anchored panel on desktop, bottom sheet on mobile (via `AnchoredFloatingPanel`). Carries the deadline inline edit (`AddTaskPanel`) + mark-complete. Replaces the old DeadlineDetailPopover + CalendarItemDetailSheet
+- `glanceActionsModel.js` — pure per-type action descriptors for the glance sheet (deadline: complete/edit/todoist; bill: actual/pay; event: zoom/url/gcal; all: open-in-calendar)
 - `MarkDoneAction.jsx` — quiet text-only "Mark done" control shared by the Needs-you band's upcoming cards and the Coming-up rows; reveals on parent hover or its own focus
 
 (Tests are not listed: `X.test.js(x)` covers `X` by convention.)

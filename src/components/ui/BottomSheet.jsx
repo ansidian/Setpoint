@@ -20,7 +20,10 @@ function findScrollableParent(el, boundary) {
 // (e.g. EmailReader): without a definite height, the sheet sizes to content
 // and percentage/flex-1 children collapse. When `height` is set, the content
 // wrapper also becomes a flex column so children's flex-1 engages.
-export default function BottomSheet({ open, onClose, title, children, maxHeight = "70vh", height }) {
+// `hideTitle` keeps the accessible name + Close affordance but suppresses the
+// visible title text — for consumers whose content already carries its own
+// heading (e.g. the dashboard glance sheet's card eyebrow), avoiding a doubled label.
+export default function BottomSheet({ open, onClose, title, children, maxHeight = "70vh", height, hideTitle = false }) {
   const sheetRef = useRef(null);
   const contentRef = useRef(null);
   const dragStartY = useRef(null);
@@ -101,6 +104,9 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
       {/* Sheet */}
       <div
         ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || undefined}
         className="absolute bottom-0 left-0 right-0 flex flex-col animate-[slideUp_300ms_cubic-bezier(0.16,1,0.3,1)]"
         style={{
           ...(height ? { height } : { maxHeight }),
@@ -124,15 +130,19 @@ export default function BottomSheet({ open, onClose, title, children, maxHeight 
           />
         </div>
 
-        {/* Header */}
+        {/* Header — visible title is optional (hideTitle); the Close affordance
+            and the dialog's accessible name (aria-label on the sheet) remain. */}
         {title && (
           <div className="flex items-center justify-between px-4 py-2 shrink-0"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+            style={hideTitle ? undefined : { borderBottom: "1px solid rgba(255,255,255,0.06)" }}
           >
-            <div className="text-sm font-semibold text-foreground">{title}</div>
+            {hideTitle
+              ? <span aria-hidden="true" />
+              : <div className="text-sm font-semibold text-foreground">{title}</div>}
             <button
+              type="button"
               onClick={onClose}
-              className="text-muted-foreground/60 p-2 min-w-[var(--sp-touch-min)] min-h-[var(--sp-touch-min)] flex items-center justify-center"
+              className="text-muted-foreground/60 hover:text-foreground focus-visible:text-foreground p-2 min-w-[var(--sp-touch-min)] min-h-[var(--sp-touch-min)] flex items-center justify-center rounded-lg hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none transition-[color,background-color,transform] duration-150 motion-safe:hover:scale-110 motion-safe:active:scale-95"
               aria-label="Close"
             >
               <X size={16} />

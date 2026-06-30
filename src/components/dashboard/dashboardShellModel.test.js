@@ -3,6 +3,7 @@ import {
   buildDashboardEventsData,
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
+  nextItemSheet,
   resolveCalendarOpenState,
   resolveDashboardShellHotkey,
   resolveShellTabHotkey,
@@ -240,6 +241,49 @@ describe("dashboard shell model", () => {
     it("plain backslash still does nothing", () => {
       expect(resolveDashboardShellHotkey({ key: "\\", code: "Backslash" }))
         .toEqual({ action: "ignore" });
+    });
+  });
+
+  describe("nextItemSheet", () => {
+    it("closes an open event sheet when the same card is re-tapped (the events toggle bug)", () => {
+      const open = { kind: "event", item: { title: "Standup" }, itemId: "evt-1" };
+      const reTap = { kind: "event", item: { title: "Standup" }, itemId: "evt-1", anchorRef: { current: {} } };
+      expect(nextItemSheet(open, reTap)).toBeNull();
+    });
+
+    it("closes an open bill sheet when the same card is re-tapped (same toggle bug)", () => {
+      const open = { kind: "bill", item: { name: "Electric" }, itemId: "bill-1" };
+      const reTap = { kind: "bill", item: { name: "Electric" }, itemId: "bill-1" };
+      expect(nextItemSheet(open, reTap)).toBeNull();
+    });
+
+    it("still toggles deadlines shut, keyed by the task id (unchanged behavior)", () => {
+      const open = { kind: "deadline", item: { id: "t1", title: "Report" } };
+      const reTap = { kind: "deadline", item: { id: "t1", title: "Report" } };
+      expect(nextItemSheet(open, reTap)).toBeNull();
+    });
+
+    it("swaps to a different item of the same kind instead of closing", () => {
+      const open = { kind: "event", itemId: "evt-1" };
+      const other = { kind: "event", itemId: "evt-2" };
+      expect(nextItemSheet(open, other)).toBe(other);
+    });
+
+    it("swaps when the kind changes even if the keys happen to collide", () => {
+      const open = { kind: "deadline", item: { id: "x" } };
+      const other = { kind: "bill", itemId: "x" };
+      expect(nextItemSheet(open, other)).toBe(other);
+    });
+
+    it("opens when nothing is currently open", () => {
+      const next = { kind: "event", itemId: "evt-1" };
+      expect(nextItemSheet(null, next)).toBe(next);
+    });
+
+    it("opens (cannot toggle) when the tapped item has no resolvable identity", () => {
+      const open = { kind: "event", item: {} };
+      const reTap = { kind: "event", item: {} };
+      expect(nextItemSheet(open, reTap)).toBe(reTap);
     });
   });
 

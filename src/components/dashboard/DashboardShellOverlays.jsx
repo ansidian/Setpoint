@@ -4,16 +4,14 @@ import { AnalyticsModalMount } from "../shell/AnalyticsModalMount.jsx";
 const AddTaskPanel = lazy(() => import("../todoist/AddTaskPanel"));
 const BriefingHistoryPanel = lazy(() => import("../briefing/BriefingHistoryPanel"));
 const CommandPalette = lazy(() => import("../shell/CommandPalette"));
-const DeadlineDetailPopover = lazy(() => import("./DeadlineDetailPopover"));
-const CalendarItemDetailSheet = lazy(() => import("./CalendarItemDetailSheet"));
+const DashboardItemDetailSheet = lazy(() => import("./DashboardItemDetailSheet"));
 
 export default function DashboardShellOverlays({
   isMobile,
-  deadlinePopover,
-  setDeadlinePopover,
-  calendarItemSheet,
-  setCalendarItemSheet,
-  onOpenCalendarItemInCalendar,
+  itemSheet,
+  setItemSheet,
+  onOpenItemInCalendar,
+  billCtx,
   accent,
   addTaskOpen,
   setAddTaskOpen,
@@ -33,24 +31,16 @@ export default function DashboardShellOverlays({
 }) {
   return (
     <>
-      {isMobile && deadlinePopover && (
+      {itemSheet && (
         <Suspense fallback={null}>
-          <DeadlineDetailPopover
-            task={deadlinePopover.task}
+          <DashboardItemDetailSheet
+            kind={itemSheet.kind}
+            item={itemSheet.item}
+            anchorRef={itemSheet.anchorRef}
             accent={accent}
-            onClose={() => setDeadlinePopover(null)}
-          />
-        </Suspense>
-      )}
-
-      {isMobile && calendarItemSheet && (
-        <Suspense fallback={null}>
-          <CalendarItemDetailSheet
-            kind={calendarItemSheet.kind}
-            item={calendarItemSheet.item}
-            accent={accent}
-            onClose={() => setCalendarItemSheet(null)}
-            onOpenInCalendar={() => onOpenCalendarItemInCalendar(calendarItemSheet)}
+            ctx={itemSheet.kind === "bill" ? billCtx : undefined}
+            onClose={() => setItemSheet(null)}
+            onOpenInCalendar={() => onOpenItemInCalendar(itemSheet)}
           />
         </Suspense>
       )}

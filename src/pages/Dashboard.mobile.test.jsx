@@ -80,12 +80,6 @@ vi.mock("../components/inbox/InboxView", () => ({
   },
 }));
 
-vi.mock("../components/dashboard/DeadlineDetailPopover", () => ({
-  default: function DeadlineDetailPopoverMock() {
-    return null;
-  },
-}));
-
 const { DashboardShell } = await import("./Dashboard.jsx");
 
 afterEach(() => {
@@ -380,7 +374,7 @@ describe("DashboardShell mobile behavior", () => {
     });
   });
 
-  it("opens the desktop calendar from deadline clicks and loads deadline data", async () => {
+  it("opens the calendar from a deadline glance sheet's Open in calendar and loads deadline data", async () => {
     // Pin the clock to the fixture day so the deadline classifies as due-today and
     // lands in the Needs-you band (the only home for overdue/due-today items now
     // that the rails are retired). shouldAdvanceTime keeps waitFor's poll alive.
@@ -412,7 +406,12 @@ describe("DashboardShell mobile behavior", () => {
     );
 
     const band = screen.getByTestId("needs-you-band");
+    // A dashboard tap opens the in-place glance sheet, not the calendar.
     fireEvent.click(within(band).getByText("Ship report"));
+    expect(screen.queryByTestId("calendar-modal")).toBeNull();
+
+    // "Open in calendar" is the explicit deep-link out — that is what loads data.
+    fireEvent.click(await screen.findByRole("button", { name: /open in calendar/i }));
 
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");
@@ -422,7 +421,7 @@ describe("DashboardShell mobile behavior", () => {
     vi.useRealTimers();
   });
 
-  it("opens the desktop calendar from bill clicks and refreshes bill data", async () => {
+  it("opens the calendar from a bill glance sheet's Open in calendar and refreshes bill data", async () => {
     // Pin the clock so the bill is due-today (classifyBill admits only days===0),
     // putting "Rent" in the band as a clickable priority card.
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -450,6 +449,9 @@ describe("DashboardShell mobile behavior", () => {
 
     const band = screen.getByTestId("needs-you-band");
     fireEvent.click(within(band).getByText("Rent"));
+    expect(screen.queryByTestId("calendar-modal")).toBeNull();
+
+    fireEvent.click(await screen.findByRole("button", { name: /open in calendar/i }));
 
     await waitFor(() => {
       const modal = screen.getByTestId("calendar-modal");

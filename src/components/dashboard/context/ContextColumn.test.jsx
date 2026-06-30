@@ -42,6 +42,7 @@ describe("ContextColumn", () => {
     const onJump = vi.fn();
     render(<ContextColumn {...baseProps} onJump={onJump} />);
     fireEvent.click(screen.getByText("Finalize notes"));
-    expect(onJump).toHaveBeenCalledWith(expect.objectContaining({ kind: "deadline", id: "d1" }));
+    // Second arg is the clicked element (the desktop glance-sheet anchor).
+    expect(onJump).toHaveBeenCalledWith(expect.objectContaining({ kind: "deadline", id: "d1" }), expect.anything());
   });
 });

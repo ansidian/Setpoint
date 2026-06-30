@@ -230,6 +230,28 @@ describe("AnchoredFloatingPanel", () => {
     expect(document.querySelector('[data-calendar-popover-panel="true"]')).toBeNull();
   });
 
+  it("hideTitle suppresses the visible sheet title but keeps Close and the accessible name", () => {
+    useIsMobile.mockReturnValue(true);
+    render(
+      <AnchoredFloatingPanel
+        anchorRef={{ current: anchor }}
+        role="dialog"
+        ariaLabel="Deadline"
+        hideTitle
+        onClose={() => {}}
+      >
+        <div>Glance content</div>
+      </AnchoredFloatingPanel>,
+    );
+
+    // Visible title text is gone (the card carries its own eyebrow), but the
+    // dialog still has an accessible name and a Close affordance.
+    expect(screen.queryByText("Deadline")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Deadline" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+    expect(screen.getByText("Glance content")).toBeTruthy();
+  });
+
   it("stays anchored on mobile when disableMobileSheet is set", async () => {
     useIsMobile.mockReturnValue(true);
     render(

@@ -159,3 +159,10 @@ export function payUrlForBill(bill, payLinksByScheduleId) {
   const url = payLinksByScheduleId?.[scheduleId];
   return typeof url === "string" && url ? url : null;
 }
+
+export function getScheduleUrl(bill, actualBudgetUrl) {
+  const scheduleId = bill?.scheduleId || bill?.id;
+  return actualBudgetUrl
+    ? `${actualBudgetUrl.replace(/\/+$/, "")}/schedules?highlight=${scheduleId}`
+    : null;
+}

@@ -22,8 +22,8 @@ function ComingUpRow({ row, isLast, isMobile = false, onJump, onComplete }) {
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onJump?.(row)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onJump?.(row); }}
+      onClick={(e) => onJump?.(row, e.currentTarget)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onJump?.(row, e.currentTarget); }}
       onMouseEnter={() => setRowHover(true)}
       onMouseLeave={() => setRowHover(false)}
       style={{

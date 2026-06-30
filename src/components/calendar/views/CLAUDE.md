@@ -23,15 +23,18 @@ Per-domain view layers for the calendar modal: events, bills, and deadlines each
 - `events/EventsAgendaDeadlineRow.jsx` — task-like agenda row with deadline status
 - `events/EventsCellContent.jsx` — event chips in grid cells, multi-day span handling
 - `events/EventsDetailRail.jsx` — event detail panel: duration, location, reminders, attendees
+- `events/EventSelectedCard.jsx` — selected-event hero card (title/time/meta chips); shared by the detail rail and the dashboard glance sheet
 - `events/EventsFooter.jsx` — month statistics (count, busy hours)
 - `events/eventsAgendaModel.js` — event → agenda conversion, date range clamping
 - `events/eventsPlanningModel.js` — deadline overlay merging and planning item ordering
 - `events/eventsAgendaColor.js` — hex → rgba and contrast text selection
+- `events/eventDetailModel.js` — pure event-detail transforms (title sanitize, time range, meta, accent, Google-calendar action url); shared by the card, detail rail, and dashboard glance sheet
 
 ### bills
 - `bills/BillsAgendaRail.jsx` — bill timeline grouped by date with utility status
 - `bills/BillsCellContent.jsx` — compact bill chips for grid cells
 - `bills/BillsDetailRail.jsx` — bill detail panel with schedule link and actions
+- `bills/BillSelectedCard.jsx` — selected-bill hero card (name/payee/amount/due/status); shared by the detail rail and the dashboard glance sheet
 - `bills/BillsFooter.jsx` — month bill total badge
 - `bills/UtilityStatusButton.jsx` — tracked utility status pill
 - `bills/billsAgendaModel.js` — bill → agenda conversion, due labels, urgency coloring
