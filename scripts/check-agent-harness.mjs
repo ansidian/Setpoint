@@ -29,7 +29,9 @@ async function collectFiles(dir, predicate) {
   const files = []
 
   for (const entry of entries) {
-    const relativePath = path.join(dir, entry.name)
+    // Emit POSIX-separated paths so they match the forward-slash keys in the
+    // size + import-boundary baselines on Windows (path.join yields `\` there).
+    const relativePath = path.join(dir, entry.name).split(path.sep).join('/')
     if (entry.isDirectory()) {
       if (['node_modules', 'dist', '.git'].includes(entry.name)) continue
       files.push(...await collectFiles(relativePath, predicate))
