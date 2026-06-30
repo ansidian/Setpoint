@@ -11,10 +11,12 @@ import DashboardCalendarModalMount, { importCalendar } from "./DashboardCalendar
 import InboxMountFallback from "./InboxMountFallback.jsx";
 import KeepAliveTab from "./KeepAliveTab.jsx";
 import useWarmImport from "../../hooks/useWarmImport";
+import { useUtilityPayLinks } from "../../hooks/useUtilityPayLinks";
 import {
   buildDashboardEventsData,
   dashboardBillCalendarRequest,
   dashboardDeadlineCalendarRequest,
+  nextItemSheet,
 } from "./dashboardShellModel.js";
 import useDashboardShellHotkeys from "./useDashboardShellHotkeys.js";
 import useCalendarWorkspaceState from "./useCalendarWorkspaceState.js";
@@ -271,11 +273,28 @@ export function DashboardShell({
     setHistoryOpen(false);
   }, [setHistoryOpen, setShellTab]);
 
-  // Deadline detail (mobile-only; opens as a BottomSheet) — holds the clicked task
-  const [deadlinePopover, setDeadlinePopover] = useState(null);
-  // Bill/event detail (mobile-only BottomSheet) — holds the clicked calendar item
-  // so a dashboard tap opens it in place instead of switching to the Calendar tab.
-  const [calendarItemSheet, setCalendarItemSheet] = useState(null);
+  // Unified glance sheet for a dashboard item tap (deadline/bill/event): opens the
+  // detail in place — anchored panel on desktop, bottom sheet on mobile — instead
+  // of jumping to the calendar + floating detail. Holds { kind, item, date, itemId,
+  // anchorRef }; "Open in calendar" is the explicit deep-link out.
+  const [itemSheet, setItemSheet] = useState(null);
+  // The glance sheet belongs to the dashboard tab: it is a document.body portal
+  // anchored to a dashboard card. Once you switch tabs (2/3/4) that anchor sits
+  // in the Activity-frozen dashboard subtree, so its getBoundingClientRect()
+  // returns 0,0 and the panel would re-place itself in the top-left corner.
+  // Unlike the calendar's floating panel — whose frozen owner can't retract it,
+  // so global CSS hides it (commit 51a34c4) — this sheet's owner (DashboardShell)
+  // is always live, so it simply closes itself on leave.
+  useLayoutEffect(() => {
+    if (tab === "dashboard") return;
+    // Reacting to a tab transition (external navigation), not deriving render
+    // state; the guarded update no-ops when the sheet is already closed. Keyed on
+    // `tab` so every leave path is covered (header/hotkey tabs, mobile nav). A
+    // layout effect runs before paint, so the stale sheet never flashes top-left.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setItemSheet((cur) => (cur ? null : cur));
+  }, [tab]);
+  const billPayLinksByScheduleId = useUtilityPayLinks();
 
   // The bill/event deep-link openers, shared by the desktop tap path AND the
   // mobile sheet's "Open in calendar" action (which scrolls the agenda to the
@@ -291,12 +310,21 @@ export function DashboardShell({
       forceEventOverlay: !!itemId && itemId !== "new",
     });
   }, [openCalendar]);
-  const handleOpenCalendarItem = useCallback((sheet) => {
-    setCalendarItemSheet(null);
+  // The glance sheet's "Open in calendar" action: close the sheet and run the same
+  // deep-link the dashboard tap used to run directly (kind-aware), which switches to
+  // the calendar tab and opens the item's native detail.
+  const openItemSheetInCalendar = useCallback((sheet) => {
+    setItemSheet(null);
     if (!sheet) return;
-    if (sheet.kind === "bill") openBillInCalendar(sheet.date, sheet.itemId);
-    else openEventInCalendar(sheet.date, sheet.itemId);
-  }, [openBillInCalendar, openEventInCalendar]);
+    if (sheet.kind === "deadline") {
+      const request = dashboardDeadlineCalendarRequest(sheet.item);
+      openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
+    } else if (sheet.kind === "bill") {
+      openBillInCalendar(sheet.date, sheet.itemId);
+    } else {
+      openEventInCalendar(sheet.date, sheet.itemId);
+    }
+  }, [openCalendar, openBillInCalendar, openEventInCalendar]);
 
   // Mobile-only: the four tabs share one scroll container, so switching to a
   // shorter tab (the inbox owns its own inner scroller) collapses the shared
@@ -454,23 +482,15 @@ export function DashboardShell({
             calendarDeadlines={dashboardCalendarDeadlines}
             calendarDeadlinesError={!!calendarDeadlinesError}
             onOpenEmail={openEmailInInbox}
-            onOpenDeadline={(task) => {
-              if (!isMobile) {
-                const request = dashboardDeadlineCalendarRequest(task);
-                openCalendar(request.viewKey, request.focusDate, request.focusItemId, request.options);
-                return;
-              }
-              setDeadlinePopover((prev) => {
-                if (prev && String(prev.task?.id) === String(task?.id)) return null;
-                return { task };
-              });
+            onOpenDeadline={(task, anchor) => {
+              setItemSheet((prev) => nextItemSheet(prev, { kind: "deadline", item: task, anchorRef: { current: anchor || null } }));
             }}
-            onOpenBillsCalendar={(date, itemId, item) => {
-              if (isMobile && item) { setCalendarItemSheet({ kind: "bill", item, date, itemId }); return; }
+            onOpenBillsCalendar={(date, itemId, item, anchor) => {
+              if (item) { setItemSheet((prev) => nextItemSheet(prev, { kind: "bill", item, date, itemId, anchorRef: { current: anchor || null } })); return; }
               openBillInCalendar(date, itemId);
             }}
-            onOpenEventsCalendar={(date, itemId, item) => {
-              if (isMobile && item) { setCalendarItemSheet({ kind: "event", item, date, itemId }); return; }
+            onOpenEventsCalendar={(date, itemId, item, anchor) => {
+              if (item) { setItemSheet((prev) => nextItemSheet(prev, { kind: "event", item, date, itemId, anchorRef: { current: anchor || null } })); return; }
               openEventInCalendar(date, itemId);
             }}
           />
@@ -523,11 +543,10 @@ export function DashboardShell({
 
       <DashboardShellOverlays
         isMobile={isMobile}
-        deadlinePopover={deadlinePopover}
-        setDeadlinePopover={setDeadlinePopover}
-        calendarItemSheet={calendarItemSheet}
-        setCalendarItemSheet={setCalendarItemSheet}
-        onOpenCalendarItemInCalendar={handleOpenCalendarItem}
+        itemSheet={itemSheet}
+        setItemSheet={setItemSheet}
+        onOpenItemInCalendar={openItemSheetInCalendar}
+        billCtx={{ actualBudgetUrl: calendarBillsData?.actualBudgetUrl, payLinksByScheduleId: billPayLinksByScheduleId }}
         accent={accent}
         addTaskOpen={addTaskOpen}
         setAddTaskOpen={setAddTaskOpen}

@@ -19,11 +19,11 @@ export default function ContextColumn({
     return map;
   }, [liveDeadlines, liveBills]);
 
-  const handleComingUpJump = (row) => {
+  const handleComingUpJump = (row, anchor) => {
     const record = recordsById.get(row.id);
     if (!record) return;
-    if (row.kind === "deadline") onJump?.({ kind: "deadline", id: record.id, data: record });
-    else onJump?.({ kind: "bill", id: record.id, data: record, date: record.next_date || null });
+    if (row.kind === "deadline") onJump?.({ kind: "deadline", id: record.id, data: record }, anchor);
+    else onJump?.({ kind: "bill", id: record.id, data: record, date: record.next_date || null }, anchor);
   };
 
   // Coming-up deadlines complete through the same canonical completer the band

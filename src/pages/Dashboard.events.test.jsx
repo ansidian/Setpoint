@@ -155,10 +155,11 @@ describe("Dashboard event loading", () => {
     // the stale briefing one, through onJump -> handleRailJump -> onOpenDeadline.
     const comingUp = screen.getByTestId("context-coming-up");
     fireEvent.click(within(comingUp).getByText("Recurring review"));
+    // Second arg is the clicked element, the desktop glance-sheet anchor.
     expect(onOpenDeadline).toHaveBeenCalledWith(expect.objectContaining({
       id: "deadline-rec",
       due_date: "2026-04-23",
-    }), undefined);
+    }), expect.anything());
   });
 
   it("deep links timeline events to the selected calendar chip", async () => {
@@ -181,9 +182,9 @@ describe("Dashboard event loading", () => {
     const timeline = screen.getByTestId("today-timeline");
     fireEvent.click(within(timeline).getByText("Roadmap sync"));
 
-    // The tapped event item is carried as a 3rd arg so the mobile shell can open
-    // it in an in-place sheet (desktop ignores it and still deep-links).
-    expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1", expect.objectContaining({ id: "event-1" }));
+    // The tapped event record is carried as a 3rd arg so the shell can open it in
+    // the in-place glance sheet; the 4th arg is the clicked element (desktop anchor).
+    expect(onOpenEventsCalendar).toHaveBeenCalledWith("2026-04-19", "event-1", expect.objectContaining({ id: "event-1" }), expect.anything());
   });
 
   it("deep links coming-up bill rows to their schedule id and bill date", () => {
@@ -212,8 +213,9 @@ describe("Dashboard event loading", () => {
 
     fireEvent.click(screen.getAllByText("Rent").at(-1));
 
-    // The tapped bill record is carried as a 3rd arg (powers the mobile in-place sheet).
-    expect(onOpenBillsCalendar).toHaveBeenCalledWith("2026-04-20", "schedule-rent", expect.objectContaining({ name: "Rent", next_date: "2026-04-20" }));
+    // The tapped bill record is carried as a 3rd arg (powers the in-place glance
+    // sheet); the 4th arg is the clicked element (desktop anchor).
+    expect(onOpenBillsCalendar).toHaveBeenCalledWith("2026-04-20", "schedule-rent", expect.objectContaining({ name: "Rent", next_date: "2026-04-20" }), expect.anything());
   });
 
   it("refetches the live event window when calendar revision changes", async () => {

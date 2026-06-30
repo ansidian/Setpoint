@@ -68,6 +68,30 @@ export function dashboardBillCalendarRequest(date, itemId) {
   };
 }
 
+// Identity key for a glance-sheet descriptor. Bills and events carry an explicit
+// itemId; deadlines carry the task object (keyed by its id). One key fn so a
+// re-tap of the same card toggles the sheet shut for every kind — not only
+// deadlines, which were the sole kind wired for toggle before.
+function itemSheetKey(sheet) {
+  if (!sheet) return null;
+  if (sheet.itemId != null) return String(sheet.itemId);
+  if (sheet.item?.id != null) return String(sheet.item.id);
+  return null;
+}
+
+// Resolve the next glance-sheet state for a dashboard item tap: re-tapping the
+// card whose sheet is already open closes it (toggle); tapping a different item —
+// or a different kind — swaps to the new one. A tap with no resolvable identity
+// always opens, since we cannot prove it is the same item.
+export function nextItemSheet(prev, next) {
+  if (!next) return null;
+  const nextKey = itemSheetKey(next);
+  if (prev && prev.kind === next.kind && nextKey != null && itemSheetKey(prev) === nextKey) {
+    return null;
+  }
+  return next;
+}
+
 // A dashboard deep-link forces calendar overlays on and focuses an item for that
 // one navigation. The forced overlays + focus must be dropped when the user leaves
 // the calendar tab, so a later manual return can't resurrect the stale detail.
