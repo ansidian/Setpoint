@@ -154,6 +154,20 @@ export default function useCalendarEventSelectionSet({
         agendaRailRef.current?.scrollToEvent?.(itemId, dateKey);
       });
     },
+    onReconcileSelection: (prevItemId, nextItemId) => {
+      // Swap an optimistic paste/clone id for its reconciled server id ONLY if the
+      // user is still on that event. We deliberately never touch the selected day
+      // here: the optimistic select already moved it synchronously with the paste,
+      // and re-asserting it now (after network latency) would yank selection back
+      // from wherever the user has since navigated — the bug where a rapid
+      // multi-day paste lands every event on the first day.
+      if (prevItemId == null) return;
+      setSelectedItemId((current) => (
+        current != null && String(current) === String(prevItemId)
+          ? (nextItemId != null ? String(nextItemId) : current)
+          : current
+      ));
+    },
     onEventDeleted: (itemId) => {
       const current = floatingDetailRef.current;
       if (itemId != null && current?.open && current.view === "events" && String(current.itemId) === String(itemId)) {

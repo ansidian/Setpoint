@@ -40,6 +40,7 @@ export default function useCalendarQuickActions({
   removeEvent,
   refreshRange,
   onSelectEvent,
+  onReconcileSelection,
   onEventDeleted,
   onBatchDeleted,
   onCopyEvent,
@@ -64,6 +65,7 @@ export default function useCalendarQuickActions({
       removeEvent,
       refreshRange,
       onSelectEvent,
+      onReconcileSelection,
       onEventDeleted,
       onBatchDeleted,
       onCopyEvent,
@@ -180,7 +182,7 @@ export default function useCalendarQuickActions({
   }, [runDelete]);
 
   const runClone = useCallback(async ({ event, targetDate = null }) => {
-    const { upsertEvents, removeEvent, onSelectEvent } = externalHandlersRef.current;
+    const { upsertEvents, removeEvent, onSelectEvent, onReconcileSelection } = externalHandlersRef.current;
     if (!editable || !event?.writable) return;
     const optimisticEvent = buildOptimisticCloneEvent(event, targetDate);
     const optimisticId = String(optimisticEvent.id);
@@ -210,7 +212,10 @@ export default function useCalendarQuickActions({
         }
         removeEvent?.(optimisticEvent.id);
         upsertEvents?.(result.event);
-        onSelectEvent?.(eventSelectionId(result.event), pacificYMD(result.event.startMs));
+        // Reconcile the selected id without re-asserting the day: a delayed
+        // day-move would yank the user's selection back here if they have since
+        // navigated to the next paste/clone target.
+        onReconcileSelection?.(eventSelectionId(optimisticEvent), eventSelectionId(result.event));
         window.setTimeout(() => {
           const current = optimisticCloneRequestsRef.current.get(optimisticId);
           if (current === cloneRequest && !current.deleted) {
@@ -237,7 +242,7 @@ export default function useCalendarQuickActions({
   }, [editable]);
 
   const runClipboardPaste = useCallback(async ({ clipboard, targetDate = null }) => {
-    const { upsertEvents, removeEvent, onSelectEvent } = externalHandlersRef.current;
+    const { upsertEvents, removeEvent, onSelectEvent, onReconcileSelection } = externalHandlersRef.current;
     if (!editable || !targetDate) return false;
     const plan = planCalendarEventClipboardPaste(clipboard, targetDate);
     if (!plan?.items?.length) return false;
@@ -258,7 +263,7 @@ export default function useCalendarQuickActions({
         removeEvent?.(optimisticEvent.id);
         if (result?.event) {
           upsertEvents?.(result.event);
-          onSelectEvent?.(eventSelectionId(result.event), pacificYMD(result.event.startMs));
+          onReconcileSelection?.(eventSelectionId(optimisticEvent), eventSelectionId(result.event));
         }
       } catch {
         // Surface paste failure instead of silently rolling back the optimistic
@@ -294,7 +299,7 @@ export default function useCalendarQuickActions({
       const firstCreated = [...createdByIndex.entries()]
         .sort(([a], [b]) => a - b)[0]?.[1];
       if (firstCreated) {
-        onSelectEvent?.(eventSelectionId(firstCreated), pacificYMD(firstCreated.startMs));
+        onReconcileSelection?.(eventSelectionId(firstOptimistic), eventSelectionId(firstCreated));
       }
       // A partially-rejected batch was previously silent: failed rows vanished
       // with no feedback. Report the failure count when any item did not paste.
