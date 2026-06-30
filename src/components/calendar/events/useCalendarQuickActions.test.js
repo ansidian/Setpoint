@@ -187,11 +187,13 @@ describe("useCalendarQuickActions clone races", () => {
     const upsertEvents = vi.fn();
     const removeEvent = vi.fn();
     const onSelectEvent = vi.fn();
+    const onReconcileSelection = vi.fn();
     const { result } = renderHook(() => useCalendarQuickActions({
       editable: true,
       upsertEvents,
       removeEvent,
       onSelectEvent,
+      onReconcileSelection,
     }));
 
     await act(async () => {
@@ -224,7 +226,11 @@ describe("useCalendarQuickActions clone races", () => {
     expect(removeEvent).toHaveBeenCalledWith(optimisticEvents[0].id);
     expect(removeEvent).toHaveBeenCalledWith(optimisticEvents[1].id);
     expect(upsertEvents).toHaveBeenCalledWith(expect.objectContaining({ id: "google-created-first" }));
-    expect(onSelectEvent).toHaveBeenCalledWith("google-created-first", "2026-06-01");
+    // The optimistic select moved the day once; the reconcile only swaps the id of
+    // the first optimistic row for its real server id, without re-asserting the day.
+    expect(onSelectEvent).toHaveBeenCalledTimes(1);
+    expect(onSelectEvent).toHaveBeenCalledWith(optimisticEvents[0].id, "2026-06-01");
+    expect(onReconcileSelection).toHaveBeenCalledWith(optimisticEvents[0].id, "google-created-first");
   });
 
   it("treats deleting a pending optimistic clone as cancellation until the provider create reconciles", async () => {
@@ -355,6 +361,100 @@ describe("useCalendarQuickActions clone races", () => {
     expect(onEventDeleted).toHaveBeenCalledWith("google-created-copy-late-delete", expect.objectContaining({
       id: "google-created-copy-late-delete",
     }));
+  });
+});
+
+describe("useCalendarQuickActions reconcile selection", () => {
+  it("swaps the selected id via onReconcileSelection on single paste without re-selecting the day", async () => {
+    createCalendarEvent.mockResolvedValue({
+      event: {
+        id: "google-created-single",
+        title: "Pasted",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-22T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+        allDay: false,
+        writable: true,
+      },
+    });
+    const source = {
+      id: "event-paste-reconcile",
+      title: "Pasted",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      allDay: false,
+      writable: true,
+    };
+    const clipboard = createCalendarEventClipboard(createCalendarEventSelectionSet([source]));
+    const onSelectEvent = vi.fn();
+    const onReconcileSelection = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents: vi.fn(),
+      removeEvent: vi.fn(),
+      onSelectEvent,
+      onReconcileSelection,
+    }));
+
+    await act(async () => {
+      await result.current.pasteEvent(clipboard, "2026-04-22");
+    });
+
+    // The optimistic select fires once, synchronously with the paste, and is the
+    // only call that moves the day cell. The reconcile must NOT re-assert the day
+    // (a delayed day-move races against the user navigating to the next paste target).
+    expect(onSelectEvent).toHaveBeenCalledTimes(1);
+    const [optimisticId, optimisticDay] = onSelectEvent.mock.calls[0];
+    expect(optimisticId).toMatch(/^optimistic-calendar-copy-/);
+    expect(optimisticDay).toBe("2026-04-22");
+    expect(onReconcileSelection).toHaveBeenCalledWith(optimisticId, "google-created-single");
+  });
+
+  it("swaps the selected id via onReconcileSelection on clone without re-selecting the day", async () => {
+    createCalendarEvent.mockResolvedValue({
+      event: {
+        id: "google-created-clone",
+        title: "Clone",
+        accountId: "gmail-main",
+        calendarId: "primary",
+        startMs: new Date("2026-04-22T16:00:00.000Z").getTime(),
+        endMs: new Date("2026-04-22T17:00:00.000Z").getTime(),
+        allDay: false,
+        writable: true,
+      },
+    });
+    const source = {
+      id: "event-clone-reconcile",
+      title: "Clone",
+      accountId: "gmail-main",
+      calendarId: "primary",
+      startMs: new Date("2026-04-20T16:00:00.000Z").getTime(),
+      endMs: new Date("2026-04-20T17:00:00.000Z").getTime(),
+      allDay: false,
+      writable: true,
+    };
+    const onSelectEvent = vi.fn();
+    const onReconcileSelection = vi.fn();
+    const { result } = renderHook(() => useCalendarQuickActions({
+      editable: true,
+      upsertEvents: vi.fn(),
+      removeEvent: vi.fn(),
+      onSelectEvent,
+      onReconcileSelection,
+    }));
+
+    await act(async () => {
+      // A bare event (not a clipboard) routes through the clone/duplicate path.
+      await result.current.pasteEvent(source, "2026-04-22");
+    });
+
+    expect(onSelectEvent).toHaveBeenCalledTimes(1);
+    const [optimisticId] = onSelectEvent.mock.calls[0];
+    expect(optimisticId).toMatch(/^optimistic-calendar-copy-/);
+    expect(onReconcileSelection).toHaveBeenCalledWith(optimisticId, "google-created-clone");
   });
 });
 
