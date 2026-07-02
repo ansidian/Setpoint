@@ -336,6 +336,99 @@ describe("database migrations", () => {
     expect(column.notnull).toBe(0);
   });
 
+  it("rebuilds a legacy briefing-era pinned table to the canonical pin-overlay shape", async () => {
+    db = createClient({ url: "file::memory:" });
+    // Prod still carries the April-2026 briefing-era ea_pinned_emails (old
+    // 020_pinned_emails.sql + old 022_pinned_emails_snapshot.sql ALTER): no
+    // account_id, nullable pinned_at. 022's CREATE TABLE IF NOT EXISTS no-ops
+    // against it, so 023 must rebuild the table to the canonical shape.
+    await db.executeMultiple(`
+      CREATE TABLE ea_pinned_emails (
+        user_id TEXT NOT NULL,
+        email_id TEXT NOT NULL,
+        pinned_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, email_id)
+      );
+      ALTER TABLE ea_pinned_emails ADD COLUMN email_snapshot TEXT;
+    `);
+    await db.execute({
+      sql: "INSERT INTO ea_pinned_emails (user_id, email_id) VALUES (?, ?)",
+      args: ["u1", "stale-april-pin"],
+    });
+
+    await applyMigrations(db, [
+      "022_pinned_emails.sql",
+      "023_pinned_emails_rebuild.sql",
+    ]);
+
+    const columns = await db.execute("PRAGMA table_info('ea_pinned_emails')");
+    const columnByName = new Map(columns.rows.map((row) => [row.name, row]));
+    expect(columnByName.get("user_id").pk).toBe(1);
+    expect(columnByName.get("email_id").pk).toBe(2);
+    expect(columnByName.get("account_id").type).toBe("TEXT");
+    expect(columnByName.get("pinned_at").notnull).toBe(1);
+    expect(columnByName.get("email_snapshot").type).toBe("TEXT");
+
+    // Retired briefing-era pins are discarded, not resurrected into the new UI.
+    const rows = await db.execute("SELECT * FROM ea_pinned_emails");
+    expect(rows.rows).toEqual([]);
+
+    const index = await db.execute("PRAGMA index_info('idx_pinned_emails_user')");
+    expect(index.rows.map((row) => row.name)).toEqual(["user_id", "pinned_at"]);
+  });
+
+  it("retires dead pre-rebaseline ledger rows so future migration names cannot collide", async () => {
+    db = createClient({ url: "file::memory:" });
+    // The 2026-05-05 migrations rebaseline (ce116483) deleted the old file set,
+    // but long-lived DBs still carry their ledger rows. Any future file that
+    // reuses one of those names would be silently skipped by migrate(). 024
+    // renames the dead rows out of the collision namespace.
+    await db.executeMultiple(`
+      CREATE TABLE migrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    const seeded = [
+      "002_account_calendar_flag.sql", // first dead name
+      "020_pinned_emails.sql", // the name-reuse that caused the 2026-07-01 outage
+      "023_snoozed_emails.sql", // collides with the natural next-number namespace
+      "044_legacy_briefing_cleanup.sql", // last dead name
+      "001_ea_tables.sql", // also a CURRENT file — must stay recorded as executed
+      "022_pinned_emails.sql", // current-era row — untouched
+    ];
+    for (const name of seeded) {
+      await db.execute({
+        sql: "INSERT INTO migrations (name) VALUES (?)",
+        args: [name],
+      });
+    }
+
+    await applyMigrations(db, ["024_retire_legacy_ledger_rows.sql"]);
+
+    const rows = await db.execute("SELECT name FROM migrations ORDER BY name");
+    expect(rows.rows.map((row) => row.name)).toEqual([
+      "001_ea_tables.sql",
+      "022_pinned_emails.sql",
+      "legacy/002_account_calendar_flag.sql",
+      "legacy/020_pinned_emails.sql",
+      "legacy/023_snoozed_emails.sql",
+      "legacy/044_legacy_briefing_cleanup.sql",
+    ]);
+  });
+
+  it("tolerates raw-apply harnesses that have no migrations ledger", async () => {
+    db = createClient({ url: "file::memory:" });
+    // Test bootstraps (snapshot-test-fixtures, triage test-utils) apply every
+    // migration file raw via executeMultiple, without the runner — so 024 must
+    // not assume the migrations table exists.
+    await applyMigrations(db, ["024_retire_legacy_ledger_rows.sql"]);
+
+    const ledger = await db.execute("SELECT name FROM migrations");
+    expect(ledger.rows).toEqual([]);
+  });
+
   it("adds the bounded carryover depth counter to snapshot items", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMigrations(db, [
