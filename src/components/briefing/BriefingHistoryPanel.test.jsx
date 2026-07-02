@@ -49,6 +49,17 @@ function renderPanel(props = {}) {
 }
 
 describe("BriefingHistoryPanel snapshots", () => {
+  it("carries the blocking calendar-hotkey suspension marker while open", async () => {
+    getSnapshotHistory.mockResolvedValue({ snapshots: [] });
+    renderPanel();
+
+    // The panel never traps focus, so the calendar's hotkey handler suspends
+    // by PRESENCE of this marker — assert the same query the handler runs.
+    await waitFor(() => {
+      expect(document.querySelector("[data-suspend-calendar-hotkeys='blocking']")).toBeTruthy();
+    });
+  });
+
   it("renders active and frozen snapshot history", async () => {
     // Date bucketing, window labels, and item counts are covered in
     // briefingHistoryModel.test.js. This guard checks the panel fetches history

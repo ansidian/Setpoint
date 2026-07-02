@@ -143,6 +143,31 @@ describe("useCalendarModalHotkeys — 3-key view cycling", () => {
     expect(onViewChange).toHaveBeenCalledWith("bills");
   });
 
+  it("suspends all calendar hotkeys while a blocking shell overlay is open", () => {
+    const onViewChange = vi.fn();
+    renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
+
+    // Simulate an open blocking overlay (Analytics / briefing History) mounted
+    // anywhere in the DOM. History never traps focus, so the keydown target is
+    // the body — the calendar must stay inert on PRESENCE of the marker alone:
+    // no view cycle, and the key is left unconsumed.
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-suspend-calendar-hotkeys", "blocking");
+    document.body.appendChild(overlay);
+
+    // "t" is normally always consumed (today reset) — asserting BOTH keys pass
+    // through unprevented pins the guard ahead of the whole switch, not just
+    // the view-cycle case.
+    for (const key of ["3", "t"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      document.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(onViewChange).not.toHaveBeenCalled();
+
+    overlay.remove();
+  });
+
   it("3 does NOT cycle when focus is inside a suspended hotkey target", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });

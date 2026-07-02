@@ -83,6 +83,11 @@ function CommandPaletteInner({ accent, onClose, onAction }) {
   return createPortal(
     <div
       onClick={onClose}
+      // Presence-based marker: the calendar's hotkey handler goes fully inert
+      // while this blocking overlay is mounted (its pre-editable branches —
+      // Cmd+F, the Escape cascade, bare Meta — would otherwise fire beneath
+      // the palette's focused input).
+      data-suspend-calendar-hotkeys="blocking"
       style={{
         position: "fixed", inset: 0, zIndex: 100,
         // Static CSS faux-frost — no live backdrop-filter (which would re-blur the

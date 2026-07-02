@@ -93,6 +93,9 @@ export default function AiAnalyticsModal({ open, onClose }) {
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
       <DialogContent
         data-testid="ai-analytics-modal"
+        // Presence-based marker: the calendar's hotkey handler goes fully
+        // inert while this blocking overlay is mounted (focus-independent).
+        data-suspend-calendar-hotkeys="blocking"
         overlayClassName="bg-[var(--sp-deep)]/70"
         // Static CSS faux-frost over the flat dim scrim. Explicitly overrides the
         // DialogOverlay base `supports-backdrop-filter:backdrop-blur-xs` to none so

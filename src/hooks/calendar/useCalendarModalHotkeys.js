@@ -27,6 +27,15 @@ function isFullySuspendedHotkeyTarget(target) {
     && !!target.closest("[data-suspend-calendar-hotkeys='all']");
 }
 
+// "blocking" suspends the whole calendar keyboard surface by PRESENCE in the
+// DOM, not event-target containment — for blocking shell overlays (Analytics,
+// briefing History) that stack above the calendar tab without trapping focus:
+// keys pressed with focus left on the body must not reach the calendar either.
+function blockingShellOverlayOpen() {
+  return typeof document !== "undefined"
+    && !!document.querySelector("[data-suspend-calendar-hotkeys='blocking']");
+}
+
 function visibleOverflowPopoverOwnsEscape() {
   return typeof document !== "undefined"
     && !!document.querySelector("[data-testid='calendar-cell-overflow-popover']")
@@ -103,6 +112,7 @@ export default function useCalendarModalHotkeys({
 
     function handleKey(event) {
       if (isFullySuspendedHotkeyTarget(event.target)) return;
+      if (blockingShellOverlayOpen()) return;
       if (event.key === "Tab") {
         setSuppressFocusRing(false);
         return;

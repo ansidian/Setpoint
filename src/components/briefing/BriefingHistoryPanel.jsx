@@ -309,6 +309,10 @@ export default function BriefingHistoryPanel({
   return createPortal(
     <div
       ref={panelRef}
+      // Presence-based marker: the calendar's hotkey handler goes fully inert
+      // while this blocking overlay is mounted (the panel never traps focus,
+      // so target-based suspension would not cover it).
+      data-suspend-calendar-hotkeys="blocking"
       className="isolate animate-in fade-in slide-in-from-top-2 duration-250"
       style={{
         position: "fixed",
