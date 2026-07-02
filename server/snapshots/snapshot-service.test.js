@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { pin } from "../email/pinned-emails.js";
 import {
   advanceSnapshotBoundary,
   CARRYOVER_MAX_DEPTH,
@@ -1067,5 +1068,53 @@ describe("active briefing snapshots", () => {
 
     const view = await getSnapshotViewById("user-1", snapshot.id, { dbClient });
     expect(view.carryoverAgedOut).toBe(0);
+  });
+
+  it("includes an empty pinned array on the active snapshot view when no pins exist", async () => {
+    const dbClient = await createMigratedDb();
+    await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    expect(view.pinned).toEqual([]);
+  });
+
+  it("hydrates a pinned entry on the active snapshot view for an email outside today's snapshot", async () => {
+    const dbClient = await createMigratedDb();
+    await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+    await pin("user-1", "msg-not-in-snapshot", { subject: "Pinned elsewhere" }, { dbClient });
+
+    const view = await getActiveSnapshotView("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+
+    expect(view.pinned).toHaveLength(1);
+    expect(view.pinned[0]).toMatchObject({
+      uid: "msg-not-in-snapshot",
+      subject: "Pinned elsewhere",
+    });
+  });
+
+  it("keeps the frozen snapshot view free of a pinned key", async () => {
+    const dbClient = await createMigratedDb();
+    const snapshot = await getOrCreateActiveSnapshot("user-1", {
+      dbClient,
+      now: new Date("2026-05-03T15:00:00.000Z"),
+    });
+    await pin("user-1", "msg-not-in-snapshot", { subject: "Pinned elsewhere" }, { dbClient });
+
+    const view = await getSnapshotViewById("user-1", snapshot.id, { dbClient });
+
+    expect(view.pinned).toBeUndefined();
   });
 });

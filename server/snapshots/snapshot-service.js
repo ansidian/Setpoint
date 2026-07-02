@@ -3,6 +3,7 @@ import { loadUserConfig } from "../platform/config-service.js";
 import { fetchAllEmails } from "../email/email-fetch.js";
 import { indexEmails } from "../email/email-index.js";
 import { enqueueEmailTriageForEmails } from "../email/gmail-sync.js";
+import { loadPinnedEntries } from "../email/pinned-emails.js";
 import { getElapsedMs, logTiming } from "../timing.js";
 import {
   DEFAULT_TIMEZONE,
@@ -215,8 +216,8 @@ export async function getActiveSnapshotView(userId, {
 } = {}) {
   // getOrCreateActiveSnapshot must stay first — it may INSERT the snapshot and
   // copy carryover items, and the readers below consume its id. Once it
-  // resolves, the four reads are mutually independent pure SELECTs, so run them
-  // concurrently instead of as five serial Turso round-trips (P1-7).
+  // resolves, the six reads are mutually independent pure SELECTs, so run them
+  // concurrently instead of as six serial Turso round-trips (P1-7).
   const snapshot = await getOrCreateActiveSnapshot(userId, { dbClient, now, timeZone });
   // The previous frozen snapshot is needed by BOTH the catch-up and aged-out
   // reads. Resolve it once and share the single in-flight promise so the
@@ -225,14 +226,15 @@ export async function getActiveSnapshotView(userId, {
   const previousFrozen = snapshot?.start_at
     ? loadPreviousFrozenSnapshot(dbClient, userId, { start_at: snapshot.start_at })
     : Promise.resolve(null);
-  const [items, catchUpItems, accountOrder, processing, carryoverAgedOut] = await Promise.all([
+  const [items, catchUpItems, accountOrder, processing, carryoverAgedOut, pinned] = await Promise.all([
     snapshot ? loadSnapshotItems(dbClient, snapshot.id) : [],
     snapshot ? loadActiveCatchUpItems(dbClient, userId, snapshot, { previousFrozen }) : [],
     loadAccountFilterOrder(dbClient, userId),
     loadProcessingState(dbClient, userId),
     snapshot ? loadCarryoverAgedOutCount(dbClient, userId, snapshot, { previousFrozen }) : 0,
+    loadPinnedEntries(userId, { dbClient }),
   ]);
-  return buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut);
+  return { ...buildSnapshotView(snapshot, [...items, ...catchUpItems], processing, accountOrder, carryoverAgedOut), pinned };
 }
 
 async function runActiveSnapshotSync(userId, {
