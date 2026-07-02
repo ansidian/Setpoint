@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Mail,
   MailOpen,
+  Pin,
   Trash2,
   XCircle,
   Zap,
@@ -56,6 +57,8 @@ export default function MobileReader({
     canMoveToNeeds,
     canMoveToFyi,
     canMoveToNoise,
+    canPin,
+    pinned,
   } = resolveReaderActions(email, { readOnly });
   const showBillToggle = showDestructiveActions && billToggleEligible;
   const triageSummary = showTriage ? email.claude?.summary || email.aiSummary || null : null;
@@ -203,6 +206,15 @@ export default function MobileReader({
           }}
         >
           <div data-testid="inbox-mobile-actions-menu" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {canPin && (
+              <MobileActionRow
+                icon={Pin}
+                label={pinned ? "Unpin" : "Pin"}
+                active={pinned}
+                accent="#b4befe"
+                onClick={() => handleAction("pin-toggle")}
+              />
+            )}
             {showBillToggle && (
               <MobileActionRow
                 icon={CreditCard}

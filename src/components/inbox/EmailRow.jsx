@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Pin } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import { pendingSecurityGraceLabel, timeAgo } from "./helpers";
 import { Avatar, LaneIcon } from "./primitives";
@@ -45,7 +45,7 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
         background: selected ? `${accent}14` : hover ? "rgba(255,255,255,0.025)" : "transparent",
         boxShadow: selected ? `inset 0 0 0 1px ${accent}35` : "inset 0 0 0 1px transparent",
         transition: "background 120ms, box-shadow 120ms",
-        opacity: dimmed && !hover ? 0.82 : 1,
+        opacity: email._providerRemoved ? 0.55 : dimmed && !hover ? 0.82 : 1,
         // Skip layout+paint for offscreen rows (the dominant cost at large N);
         // reserve a representative row height so the scrollbar does not jump
         // before the row is first rendered. Pure CSS containment.
@@ -113,6 +113,7 @@ function EmailRow({ email, account, selected, onOpen, density, showPreview, acce
           >
             {email.subject}
           </span>
+          {email._pinned && <Pin size={10} color="#b4befe" data-testid="email-row-pin" style={{ flexShrink: 0 }} />}
           {untriaged && email._resurfaced && (
             <span
               style={{
@@ -246,6 +247,7 @@ function rowKeyFields(email) {
     email.urgency, email.category, email.from, email.fromEmail,
     email.subject, email.preview, email.date,
     email.urgentFlag?.label, email.urgentFlag,
+    email._pinned, email._providerRemoved,
   ];
 }
 

@@ -175,3 +175,73 @@ export function collectResurfaced(resurfacedMap, synthAccount, liveReadOverrides
   }
   return out;
 }
+
+// Inject pinned overlay entries (see docs/exec-plans/active/2026-07-01-pinned-emails-design.md).
+// Pins live outside snapshots; these rows carry _pinned/_pinnedAt so the
+// projection can render the Pinned section without touching snapshot state.
+export function collectPinned(pinnedEntries, synthAccount, liveReadOverrides) {
+  const out = [];
+  for (const entry of pinnedEntries || []) {
+    if (!entry?.uid) continue;
+    const acc = synthAccount(entry);
+    out.push(buildInboxRow(entry, {
+      uid: entry.uid,
+      id: entry.uid,
+      account: acc,
+      read: entry.read,
+      readOverrides: liveReadOverrides,
+      lane: entry.lane || undefined,
+      extras: {
+        _pinned: true,
+        _pinnedAt: entry.pinned_at ? Date.parse(entry.pinned_at) : 0,
+        _providerRemoved: entry.provider_state === "archived" || entry.provider_state === "deleted",
+      },
+    }));
+  }
+  return out;
+}
+
+// Dedup rule: an email both pinned and present in the current list appears ONCE,
+// as its existing row decorated with the pin flags — keeping snapshot_item_id so
+// lane actions still route. Pinned-only rows (origin in a frozen snapshot) append.
+export function mergePinnedIntoFlat(flatRows, pinnedRows) {
+  if (!pinnedRows?.length) return flatRows;
+  const pinnedByUid = new Map(pinnedRows.map((row) => [row.uid || row.id, row]));
+  const decorated = new Set();
+  const out = flatRows.map((row) => {
+    const key = row.uid || row.id;
+    const pinRow = pinnedByUid.get(key);
+    if (!pinRow) return row;
+    decorated.add(key);
+    return { ...row, _pinned: true, _pinnedAt: pinRow._pinnedAt };
+  });
+  for (const pinRow of pinnedRows) {
+    if (!decorated.has(pinRow.uid || pinRow.id)) out.push(pinRow);
+  }
+  return out;
+}
+
+// Shapes a client-side buildEmailSnapshot() capture into the PinnedEntry shape
+// loadPinnedEntries returns, for optimistic pins before the next payload refresh.
+export function pinnedEntryFromSnapshot(uid, pinnedAtMs, snap = {}) {
+  return {
+    uid,
+    pinned_at: new Date(pinnedAtMs).toISOString(),
+    account_id: snap.account_id || null,
+    subject: snap.subject ?? "",
+    from_name: snap.from ?? "",
+    from_address: snap.from_email ?? "",
+    preview: snap.preview ?? "",
+    date: snap.date ?? null,
+    read: !!snap.read,
+    account_label: snap.account_label || null,
+    account_email: snap.account_email || null,
+    account_color: snap.account_color || null,
+    account_icon: snap.account_icon || null,
+    lane: null,
+    urgency: snap.urgency ?? null,
+    category: null,
+    handled_at: null,
+    provider_state: null,
+  };
+}

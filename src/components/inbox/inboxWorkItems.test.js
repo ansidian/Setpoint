@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   collectActiveSnapshotEmails,
   collectLiveEmails,
+  collectPinned,
   collectResurfaced,
   makeSynthAccount,
+  mergePinnedIntoFlat,
   mergeReadState,
+  pinnedEntryFromSnapshot,
 } from "./inboxWorkItems.js";
 import { makeActiveSnapshot } from "./test-utils/inboxFixtures.js";
 
@@ -133,5 +136,144 @@ describe("inbox work items", () => {
     expect(mergeReadState(false, "uid-1", { "uid-1": true })).toBe(true);
     expect(mergeReadState(true, "uid-1", new Map([["uid-1", false]]))).toBe(false);
     expect(mergeReadState(false, "uid-2", { "uid-1": true })).toBe(false);
+  });
+
+  describe("collectPinned", () => {
+    it("builds a row per entry with _pinned/_pinnedAt and a synthesized account", () => {
+      const synthAccount = makeSynthAccount([{ id: "work", name: "Work", color: "#fff", icon: "Mail" }]);
+      const rows = collectPinned(
+        [{
+          uid: "pin-1",
+          account_label: "Work",
+          subject: "Pinned subject",
+          read: false,
+          pinned_at: "2026-06-30T12:00:00.000Z",
+        }],
+        synthAccount,
+        {},
+      );
+
+      expect(rows).toEqual([
+        expect.objectContaining({
+          uid: "pin-1",
+          id: "pin-1",
+          _accountKey: "work",
+          _pinned: true,
+          _pinnedAt: Date.parse("2026-06-30T12:00:00.000Z"),
+        }),
+      ]);
+    });
+
+    it("skips entries without a uid", () => {
+      const synthAccount = makeSynthAccount([]);
+      const rows = collectPinned(
+        [{ subject: "No uid", pinned_at: "2026-06-30T12:00:00.000Z" }],
+        synthAccount,
+        {},
+      );
+
+      expect(rows).toEqual([]);
+    });
+
+    it("applies the read-override merge like the other collectors", () => {
+      const synthAccount = makeSynthAccount([]);
+      const rows = collectPinned(
+        [{ uid: "pin-2", read: false, pinned_at: "2026-06-30T12:00:00.000Z" }],
+        synthAccount,
+        { "pin-2": true },
+      );
+
+      expect(rows[0]).toMatchObject({ uid: "pin-2", read: true });
+    });
+  });
+
+  describe("mergePinnedIntoFlat", () => {
+    it("decorates a matching flat row in place, preserving snapshot_item_id and _lane, without appending a duplicate", () => {
+      const flatRows = [{
+        uid: "shared-1",
+        snapshot_item_id: "snap-77",
+        _lane: "needs_attention",
+        subject: "Original",
+      }];
+      const pinnedRows = [{
+        uid: "shared-1",
+        id: "shared-1",
+        _pinned: true,
+        _pinnedAt: 12345,
+        subject: "Pinned view",
+      }];
+
+      const merged = mergePinnedIntoFlat(flatRows, pinnedRows);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0]).toMatchObject({
+        uid: "shared-1",
+        snapshot_item_id: "snap-77",
+        _lane: "needs_attention",
+        subject: "Original",
+        _pinned: true,
+        _pinnedAt: 12345,
+      });
+    });
+
+    it("appends a pinned row with no matching flat row", () => {
+      const flatRows = [{ uid: "existing-1", subject: "Existing" }];
+      const pinnedRows = [{ uid: "pin-only-1", _pinned: true, _pinnedAt: 999 }];
+
+      const merged = mergePinnedIntoFlat(flatRows, pinnedRows);
+
+      expect(merged).toHaveLength(2);
+      expect(merged[1]).toMatchObject({ uid: "pin-only-1", _pinned: true, _pinnedAt: 999 });
+    });
+
+    it("returns the same flatRows reference when there are no pins", () => {
+      const flatRows = [{ uid: "existing-1", subject: "Existing" }];
+
+      expect(mergePinnedIntoFlat(flatRows, [])).toBe(flatRows);
+      expect(mergePinnedIntoFlat(flatRows, null)).toBe(flatRows);
+    });
+  });
+
+  describe("pinnedEntryFromSnapshot", () => {
+    it("maps buildEmailSnapshot field names onto the PinnedEntry shape", () => {
+      const snap = {
+        account_id: "gmail-work",
+        subject: "Hello",
+        from: "Taylor",
+        fromEmail: "taylor@example.com",
+        from_email: "taylor@example.com",
+        preview: "Preview text",
+        date: "2026-06-29T00:00:00.000Z",
+        read: true,
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#fff",
+        account_icon: "Mail",
+        urgency: "high",
+      };
+
+      const entry = pinnedEntryFromSnapshot("pin-3", 1719700000000, snap);
+
+      expect(entry).toEqual({
+        uid: "pin-3",
+        pinned_at: new Date(1719700000000).toISOString(),
+        account_id: "gmail-work",
+        subject: "Hello",
+        from_name: "Taylor",
+        from_address: "taylor@example.com",
+        preview: "Preview text",
+        date: "2026-06-29T00:00:00.000Z",
+        read: true,
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#fff",
+        account_icon: "Mail",
+        lane: null,
+        urgency: "high",
+        category: null,
+        handled_at: null,
+        provider_state: null,
+      });
+    });
   });
 });

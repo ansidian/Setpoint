@@ -90,6 +90,25 @@ describe("resolveReaderActions snapshot workflow", () => {
   });
 });
 
+describe("resolveReaderActions pin toggle", () => {
+  it("is true for any email — including readOnly and catch-up rows (exempt from both gates)", () => {
+    expect(resolveReaderActions(snapshotEmail({ _lane: "needs_attention" })).canPin).toBe(true);
+    expect(resolveReaderActions(snapshotEmail({ _lane: "needs_attention" }), { readOnly: true }).canPin).toBe(true);
+    expect(resolveReaderActions(snapshotEmail({ _lane: "catch_up", lane_at_snapshot: "fyi" })).canPin).toBe(true);
+  });
+
+  it("is false with no email", () => {
+    expect(resolveReaderActions(null).canPin).toBe(false);
+    expect(resolveReaderActions(undefined).canPin).toBe(false);
+  });
+
+  it("mirrors email._pinned", () => {
+    expect(resolveReaderActions(snapshotEmail({ _pinned: true })).pinned).toBe(true);
+    expect(resolveReaderActions(snapshotEmail({ _pinned: false })).pinned).toBe(false);
+    expect(resolveReaderActions(snapshotEmail()).pinned).toBe(false);
+  });
+});
+
 describe("resolveReaderActions bill toggle", () => {
   it("is eligible for bill, live/untriaged, queued, and untriaged_read rows", () => {
     expect(resolveReaderActions({ hasBill: true }).billToggleEligible).toBe(true);

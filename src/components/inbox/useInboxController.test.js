@@ -8,7 +8,12 @@ vi.mock("./useInboxUndoSlot", () => ({
 vi.mock("./useInboxActionDispatch", () => ({ default: () => ({ onAction: () => {} }) }));
 vi.mock("./useInboxKeyboardCommands", () => ({ default: () => {} }));
 vi.mock("./useSnapshotOptimisticOverlay", () => ({
-  default: () => ({ overlayEmails: [], applyOverlay: () => {}, reconcile: () => {} }),
+  default: ({ activeSnapshotMode, rawActiveSnapshotEmails }) => ({
+    optimisticActiveSnapshotEmails: activeSnapshotMode ? rawActiveSnapshotEmails : [],
+    setSnapshotOptimistic: () => {},
+    snapshotPendingRef: { current: new Set() },
+    snapshotRequestRef: { current: 0 },
+  }),
 }));
 vi.mock("../../api", () => ({
   markEmailAsRead: vi.fn(),
@@ -60,5 +65,81 @@ describe("useInboxController resolves hardcoded prefs without a customize store"
     expect(result.current.density).toBe("comfortable");
     expect(result.current.layout).toBe("two-pane");
     expect(result.current.grouping).toBe("flat");
+  });
+});
+
+describe("useInboxController pinned rows", () => {
+  const pinnedEntry = {
+    uid: "pinned-1",
+    pinned_at: "2026-06-30T12:00:00.000Z",
+    account_id: "acct-1",
+    subject: "Pinned subject",
+    from_name: "Dana",
+    from_address: "dana@example.com",
+    preview: "hi",
+    date: "2026-06-29T10:00:00.000Z",
+    read: false,
+    account_label: "Work",
+    account_email: "work@example.com",
+    account_color: "#89b4fa",
+    account_icon: "Mail",
+    lane: null,
+    urgency: null,
+    category: null,
+    handled_at: null,
+    provider_state: null,
+  };
+
+  function snapshotWithPinned(pinned, extra = {}) {
+    return {
+      snapshot: { id: "snap-1" },
+      filters: { accounts: [], categories: [] },
+      lanes: {},
+      carryover: [],
+      pinned,
+      ...extra,
+    };
+  }
+
+  it("surfaces a _pinned row for an activeSnapshot.pinned entry", () => {
+    const { result } = renderController({
+      activeSnapshot: snapshotWithPinned([pinnedEntry]),
+    });
+
+    const row = result.current.visibleEmails.find((email) => (email.uid || email.id) === "pinned-1");
+    expect(row).toBeTruthy();
+    expect(row._pinned).toBe(true);
+  });
+
+  it("dedups a pinned uid that is also a snapshot item into exactly one row", () => {
+    const snapshotItem = {
+      uid: "dual-1",
+      email_id: "dual-1",
+      snapshot_item_id: 77,
+      subject: "Also pinned",
+      lane: "needs_attention",
+      account_id: "acct-1",
+    };
+    const { result } = renderController({
+      activeSnapshot: snapshotWithPinned(
+        [{ ...pinnedEntry, uid: "dual-1" }],
+        { lanes: { needs_attention: [snapshotItem] } },
+      ),
+    });
+
+    const matches = result.current.visibleEmails.filter((email) => (email.uid || email.id) === "dual-1");
+    expect(matches).toHaveLength(1);
+    expect(matches[0]._pinned).toBe(true);
+    expect(matches[0].snapshot_item_id).toBe(77);
+  });
+
+  it("contributes NO pinned rows when readOnly is true", () => {
+    const { result } = renderController({
+      activeSnapshot: snapshotWithPinned([pinnedEntry]),
+      readOnly: true,
+    });
+
+    const row = result.current.visibleEmails.find((email) => (email.uid || email.id) === "pinned-1");
+    expect(row).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import {
   CheckCheck,
   Filter,
+  Pin,
   Search,
   Sparkles,
 } from "lucide-react";
@@ -208,6 +209,12 @@ export default function MobileInboxView({
   const snapshotSummary = activeSnapshotMode
     ? buildActiveSnapshotSummary(mobileChipCounts, emailAccounts.length)
     : briefingSummary;
+  // visibleEmails arrives pinned-first (selectVisibleEmails sorts pinned rows
+  // ahead of everything else, newest pin first), so splitting off the pinned
+  // block for the compact group header is a findIndex split, not a re-sort.
+  const pinnedCount = visibleEmails.findIndex((e) => !e._pinned);
+  const pinnedRows = pinnedCount === -1 ? visibleEmails : visibleEmails.slice(0, pinnedCount);
+  const restRows = pinnedCount === -1 ? [] : visibleEmails.slice(pinnedCount);
   return (
     <div
       style={{
@@ -447,20 +454,59 @@ export default function MobileInboxView({
             ) : !indexedSearchActive && liveEmailsLoading && visibleEmails.length === 0 ? (
               <MobileLiveLoadingBlock activeSnapshotMode={activeSnapshotMode} />
             ) : visibleEmails.length > 0 ? (
-              visibleEmails.map((email) => (
-                <EmailRow
-                  key={email.id || email.uid}
-                  email={email}
-                  account={rowAccountsById[email.accountId] || rowAccountsById[email._accountKey]}
-                  selected={false}
-                  onOpen={onOpen}
-                  density={density}
-                  showPreview={showPreview}
-                  accent={accent}
-                  nowTick={nowTick}
-                  showLaneTag
-                />
-              ))
+              <>
+                {pinnedRows.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 16px",
+                    }}
+                  >
+                    <Pin size={10} color="#b4befe" />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: 1.8,
+                        textTransform: "uppercase",
+                        color: "#b4befe",
+                      }}
+                    >
+                      Pinned
+                    </span>
+                  </div>
+                )}
+                {pinnedRows.map((email) => (
+                  <EmailRow
+                    key={email.id || email.uid}
+                    email={email}
+                    account={rowAccountsById[email.accountId] || rowAccountsById[email._accountKey]}
+                    selected={false}
+                    onOpen={onOpen}
+                    density={density}
+                    showPreview={showPreview}
+                    accent={accent}
+                    nowTick={nowTick}
+                    showLaneTag
+                  />
+                ))}
+                {restRows.map((email) => (
+                  <EmailRow
+                    key={email.id || email.uid}
+                    email={email}
+                    account={rowAccountsById[email.accountId] || rowAccountsById[email._accountKey]}
+                    selected={false}
+                    onOpen={onOpen}
+                    density={density}
+                    showPreview={showPreview}
+                    accent={accent}
+                    nowTick={nowTick}
+                    showLaneTag
+                  />
+                ))}
+              </>
             ) : (
               <div
                 style={{

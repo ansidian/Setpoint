@@ -117,7 +117,7 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.getByRole("button", { name: /move to noise/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /mark handled/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /dismiss from today/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /pin email/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /pin email/i })).toBeTruthy();
     expect(screen.queryByText("Move to FYI")).toBeNull();
     expect(screen.queryByText("Move to Noise")).toBeNull();
     expect(screen.queryByText("Dismiss")).toBeNull();
@@ -143,6 +143,7 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.getByRole("button", { name: /dismiss from today/i }).textContent).toContain("D");
     expect(screen.getByRole("button", { name: /snooze email/i }).textContent).toContain("S");
     expect(screen.getByRole("button", { name: /trash email/i }).textContent).toContain("E");
+    expect(screen.getByRole("button", { name: /pin email/i }).textContent).toContain("P");
   });
 
 	  it("dispatches snapshot lane and lifecycle actions", () => {
@@ -183,6 +184,8 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByRole("button", { name: /mark read/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /snooze email/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /trash email/i })).toBeNull();
+    // Pin is exempt from the readOnly gate — pinning from a frozen snapshot is the feature.
+    expect(screen.getByRole("button", { name: /pin email/i })).toBeTruthy();
   });
 
   it("limits Catch-up rows to read state and Gmail open actions", () => {
@@ -263,6 +266,33 @@ describe("DesktopReader snapshot actions", () => {
     expect(screen.queryByRole("button", { name: /dismiss from today/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /move to fyi/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /move to noise/i })).toBeNull();
+  });
+});
+
+describe("DesktopReader pin toggle", () => {
+  it("dispatches pin-toggle when clicked", () => {
+    const { onAction } = renderReader();
+
+    fireEvent.click(screen.getByRole("button", { name: /pin email/i }));
+    expect(onAction).toHaveBeenCalledWith("pin-toggle");
+  });
+
+  it("flips the aria-label when the email is pinned", () => {
+    renderReader({ email: { _pinned: true } });
+
+    expect(screen.getByRole("button", { name: /unpin email/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^pin email$/i })).toBeNull();
+  });
+
+  it("renders even for catch-up rows", () => {
+    renderReader({
+      email: {
+        _lane: "catch_up",
+        lane_at_snapshot: "fyi",
+      },
+    });
+
+    expect(screen.getByRole("button", { name: /pin email/i })).toBeTruthy();
   });
 });
 

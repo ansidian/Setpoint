@@ -10,6 +10,9 @@ export function shouldSuspendInboxHotkeys(target) {
 export function resolveInboxHotkeyAction(key, selectedEmail, readOnly) {
   const snapshotAction = resolveSnapshotHotkeyAction(key, selectedEmail, readOnly);
   if (snapshotAction) return snapshotAction;
+  // Pin is an overlay write, not a snapshot mutation: allowed on read-only
+  // (frozen) views and catch-up rows — pinning history is the feature.
+  if (key === "p" && selectedEmail) return { kind: "pin-toggle" };
   if (isCatchUpEmail(selectedEmail)) return null;
   if (key === "s" && selectedEmail && !readOnly) return { kind: "snooze-default" };
   if (key === "e" && selectedEmail && !readOnly) return { kind: "trash" };

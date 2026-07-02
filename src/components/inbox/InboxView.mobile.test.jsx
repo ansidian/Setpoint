@@ -446,6 +446,46 @@ describe("InboxView mobile", () => {
     expect(screen.getByText((_, element) => element?.textContent === "1 noise unread")).toBeTruthy();
   });
 
+  it("shows a Pinned group label above a pinned row on mobile", () => {
+    activeSnapshotMock.state = {
+      snapshot: makeActiveSnapshot({
+        pinned: [{
+          uid: "pinned-msg-1",
+          pinned_at: "2026-05-03T15:30:00.000Z",
+          account_id: "gmail-work",
+          subject: "Pinned budget approval",
+          from_name: "Dana",
+          from_address: "dana@example.com",
+          preview: "Keep this handy.",
+          date: "2026-05-03T15:00:00.000Z",
+          read: false,
+        }],
+      }),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    const pinnedLabel = screen.getByText("Pinned");
+    const pinnedRow = screen.getByText("Pinned budget approval");
+    expect(pinnedLabel.compareDocumentPosition(pinnedRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows no Pinned group label on mobile when there are no pins", () => {
+    activeSnapshotMock.state = {
+      snapshot: makeActiveSnapshot(),
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    };
+
+    renderInbox({ isMobile: true, liveEmails: [] });
+
+    expect(screen.queryByText("Pinned")).toBeNull();
+  });
+
   it("shows resurfaced snoozes as fresh live rows in active snapshot mode", () => {
     activeSnapshotMock.state = {
       snapshot: makeActiveSnapshot({

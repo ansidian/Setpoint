@@ -273,4 +273,38 @@ describe("InboxList", () => {
     expect(onAskAlfred).toHaveBeenCalledWith("amazon return");
     expect(screen.queryByTestId("inbox-ai-confirmation")).toBeNull();
   });
+
+  it("renders a Pinned section before the live/lane sections when pinned rows are present", () => {
+    renderInboxList({
+      emails: [
+        makeInboxEmail({ id: "pin-1", subject: "Pinned budget note", date: "2026-05-03T10:00:00.000Z", _pinned: true, _pinnedAt: "2026-05-03T10:05:00.000Z" }),
+        makeInboxEmail({ id: "need-1", subject: "Needs attention deck", date: "2026-05-03T12:00:00.000Z", _lane: "needs_attention" }),
+      ],
+      totalCount: 2,
+      unreadCount: 2,
+      activeSnapshotMode: true,
+    });
+
+    expect(screen.getByText("Pinned")).toBeTruthy();
+    expect(screen.getByText("Pinned budget note")).toBeTruthy();
+
+    const laneLabels = screen.getAllByRole("button")
+      .map((button) => button.textContent)
+      .filter((text) => /Pinned|Needs Attention/.test(text));
+    const laneIndex = (label) => laneLabels.findIndex((text) => text.includes(label));
+    expect(laneIndex("Pinned")).toBeLessThan(laneIndex("Needs Attention"));
+  });
+
+  it("does not render a Pinned section when no rows are pinned", () => {
+    renderInboxList({
+      emails: [
+        makeInboxEmail({ id: "need-1", subject: "Needs attention deck", date: "2026-05-03T12:00:00.000Z", _lane: "needs_attention" }),
+      ],
+      totalCount: 1,
+      unreadCount: 1,
+      activeSnapshotMode: true,
+    });
+
+    expect(screen.queryByText("Pinned")).toBeNull();
+  });
 });

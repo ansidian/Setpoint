@@ -55,5 +55,9 @@ export function resolveReaderActions(email, { readOnly = false } = {}) {
     canMoveToNeeds: snapshotEligible && canMoveSnapshotEmailToLane(email, "needs_attention", readOnly),
     canMoveToFyi: snapshotEligible && canMoveSnapshotEmailToLane(email, "fyi", readOnly),
     canMoveToNoise: snapshotEligible && canMoveSnapshotEmailToLane(email, "noise", readOnly),
+    // Pin is an overlay write, deliberately exempt from readOnly and catch-up
+    // gating — pinning from frozen-snapshot browsing is the feature.
+    canPin: !!email,
+    pinned: !!email?._pinned,
   };
 }
