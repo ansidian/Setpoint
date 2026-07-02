@@ -16,6 +16,17 @@ it("defaults to the Alfred tab and switches sections", async () => {
   await waitFor(() => expect(screen.getByText(/Indexed/i)).toBeTruthy());
 });
 
+it("carries the blocking calendar-hotkey suspension marker while open", async () => {
+  render(<AiAnalyticsModal open onClose={() => {}} />);
+
+  // The calendar's hotkey handler suspends its whole keyboard surface while an
+  // element with data-suspend-calendar-hotkeys="blocking" is mounted anywhere —
+  // assert the same presence query the handler runs.
+  await waitFor(() => {
+    expect(document.querySelector("[data-suspend-calendar-hotkeys='blocking']")).toBeTruthy();
+  });
+});
+
 it("isolates a failing section", async () => {
   const { getAlfredUsageStats } = await import("@/api");
   getAlfredUsageStats.mockRejectedValueOnce(new Error("boom"));

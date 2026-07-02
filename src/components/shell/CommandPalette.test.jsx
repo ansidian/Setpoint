@@ -7,6 +7,22 @@ describe("CommandPalette", () => {
     cleanup();
   });
 
+  it("carries the blocking calendar-hotkey suspension marker while open", () => {
+    render(
+      <CommandPalette
+        open
+        accent="#cba6da"
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    // The calendar's hotkey handler suspends its whole keyboard surface while
+    // an element with data-suspend-calendar-hotkeys="blocking" is mounted
+    // anywhere — assert the same presence query the handler runs.
+    expect(document.querySelector("[data-suspend-calendar-hotkeys='blocking']")).toBeTruthy();
+  });
+
   it("offers Sync now without a generation action", () => {
     render(
       <CommandPalette

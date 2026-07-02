@@ -29,7 +29,7 @@ Calendar domain and view state: range fetching/caching, modal interaction (selec
 - `useCalendarEventSelectionSet.js` — event multi-select + clipboard submachine (selection set, copy/paste, seeded-toggle rules) hosting the event quick-actions bundle so its batch-delete callback prunes the selection; extracted from `useCalendarModalController.jsx`
 - `useCalendarSearchActivation.js` — calendar-search activation cluster (search UI hook + result/date-header activation, grid-navigability, anchor resolution) extracted from `useCalendarModalController.jsx`; must be called after the view model (reads `computed`)
 - `useCalendarModalSearch.js` — search UI state, debounced API calls, highlighting
-- `useCalendarModalHotkeys.js` — arrow nav, month pagination, Escape for the inner cascade (overflow/detail/editor), and the 3 key re-pressed in calendar toggles events/bills (1/2/4 bubble to the shell tab switcher); the calendar is a shell tab now, so Escape no longer closes a surface
+- `useCalendarModalHotkeys.js` — arrow nav, month pagination, Escape for the inner cascade (overflow/detail/editor), and the 3 key re-pressed in calendar toggles events/bills (1/2/4 bubble to the shell tab switcher); the calendar is a shell tab now, so Escape no longer closes a surface. Suspension ladder for `data-suspend-calendar-hotkeys`: `"true"` (target-based, mid-handler), `"all"` (target-based, pre-branch — Alfred), `"blocking"` (presence-based, pre-branch — Analytics/History/CommandPalette overlays, independent of where focus sits)
 
 ### Floating detail + editor routing
 - `useCalendarFloatingDetail.js` — floating detail anchoring, session memory, placement
