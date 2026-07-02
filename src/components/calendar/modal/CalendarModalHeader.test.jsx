@@ -49,7 +49,7 @@ function renderEventsOnly(onViewChange = vi.fn()) {
 }
 
 describe("CalendarModalHeader tablist", () => {
-  it("exposes a tablist with Events and Bills tabs and a V hint when bills is available", () => {
+  it("exposes a tablist with Events and Bills tabs and a 3 hint when bills is available", () => {
     renderWithBills("events");
 
     const list = screen.getByRole("tablist", { name: /calendar view/i });
@@ -60,7 +60,8 @@ describe("CalendarModalHeader tablist", () => {
         expect.stringMatching(/bills/i),
       ]),
     );
-    expect(screen.getByText("V")).toBeTruthy();
+    expect(screen.getByText("3", { selector: "kbd" })).toBeTruthy();
+    expect(screen.queryByText("V", { selector: "kbd" })).toBeNull();
   });
 
   it("marks the active view tab as selected and inactive as not selected", () => {

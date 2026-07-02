@@ -221,7 +221,8 @@ export default function useCalendarModalHotkeys({
       switch (event.key) {
         case "Escape":
           // Top-level Escape is a no-op now (inner cascade above already handled any
-          // open inner panel); leaving the calendar is via the 1/2/3 tab keys.
+          // open inner panel); leaving the calendar is via the 1/2/4 tab keys
+          // (3 re-pressed in calendar toggles the events/bills view instead).
           break;
         case "ArrowLeft":
         case "p":
@@ -337,14 +338,15 @@ export default function useCalendarModalHotkeys({
           }
           consumeCalendarKey();
           break;
-        case "v":
-        case "V":
-          cycleView?.(event.shiftKey);
+        case "3":
+          // Re-pressing the calendar's own tab key toggles the events/bills
+          // view; 1/2/4 still bubble to the shell tab switcher below.
+          cycleView?.();
           consumeCalendarKey();
           break;
         default:
           if (event.key === "Enter"
-            || (event.key.length === 1 && !["1", "2", "3", "4", " ", "r", "R"].includes(event.key))) {
+            || (event.key.length === 1 && !["1", "2", "4", " ", "r", "R"].includes(event.key))) {
             consumeCalendarKey();
           }
           break;
