@@ -4,7 +4,8 @@ import "../../components/calendar/CalendarModal.test-setup.js";
 import CalendarModal from "../../components/calendar/CalendarModal.jsx";
 import { wrapWithDashboard } from "../../components/calendar/CalendarModal.test-utils.jsx";
 
-// Thin integration tests for the v/Shift+V view-cycle hotkey binding.
+// Thin integration tests for the 3-key view-cycle hotkey binding (re-pressing
+// the calendar's own shell-tab key toggles events/bills; v is retired).
 // We fire real keydown events against a mounted CalendarModal and assert on
 // onViewChange — the observable output of the hotkey path.
 
@@ -25,35 +26,57 @@ function renderModal({ view = "events", billsRangeData, onViewChange } = {}) {
   ));
 }
 
-describe("useCalendarModalHotkeys — v/V view cycling", () => {
-  it("pressing v cycles from events → bills when bills is available", () => {
+describe("useCalendarModalHotkeys — 3-key view cycling", () => {
+  it("pressing 3 cycles from events → bills when bills is available", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
 
-    fireEvent.keyDown(document, { key: "v" });
+    fireEvent.keyDown(document, { key: "3" });
 
     expect(onViewChange).toHaveBeenCalledTimes(1);
     expect(onViewChange).toHaveBeenCalledWith("bills");
   });
 
-  it("pressing v again (from bills) cycles back to events", () => {
+  it("pressing 3 again (from bills) cycles back to events", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "bills", billsRangeData: { ensureRange: vi.fn().mockResolvedValue(null) }, onViewChange });
 
-    fireEvent.keyDown(document, { key: "v" });
+    fireEvent.keyDown(document, { key: "3" });
 
     expect(onViewChange).toHaveBeenCalledTimes(1);
     expect(onViewChange).toHaveBeenCalledWith("events");
   });
 
-  it("pressing Shift+V cycles in reverse (bills → events)", () => {
+  it("pressing v does NOT cycle the view (v is retired)", () => {
+    const onViewChange = vi.fn();
+    renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
+
+    fireEvent.keyDown(document, { key: "v" });
+
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  it("pressing Shift+V does NOT cycle the view (v is retired)", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "bills", billsRangeData: { ensureRange: vi.fn().mockResolvedValue(null) }, onViewChange });
 
     fireEvent.keyDown(document, { key: "V", shiftKey: true });
 
-    expect(onViewChange).toHaveBeenCalledTimes(1);
-    expect(onViewChange).toHaveBeenCalledWith("events");
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  it("Cmd+3 and Ctrl+3 do NOT cycle the view and still bubble", () => {
+    const onViewChange = vi.fn();
+    renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
+
+    // Browser tab-switch combos must pass through untouched.
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      const event = new KeyboardEvent("keydown", { key: "3", ...modifier, bubbles: true, cancelable: true });
+      document.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+
+    expect(onViewChange).not.toHaveBeenCalled();
   });
 
   it("pressing plain 1 does NOT cycle the view", () => {
@@ -83,24 +106,24 @@ describe("useCalendarModalHotkeys — v/V view cycling", () => {
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
-  it("v does not cycle when bills view is unavailable (no ensureRange)", () => {
+  it("3 does not cycle when bills view is unavailable (no ensureRange)", () => {
     const onViewChange = vi.fn();
     // No billsRangeData → availableCalendarViews = ["events"] → no-op cycle
     renderModal({ view: "events", onViewChange });
 
-    fireEvent.keyDown(document, { key: "v" });
+    fireEvent.keyDown(document, { key: "3" });
 
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
-  it("does not consume 1/2/3/4 so the shell tab hotkeys still receive them", () => {
+  it("does not consume 1/2/4 so the shell tab hotkeys still receive them", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
 
-    // The calendar's document-capture hotkey listener must let the shell tab keys
-    // (1=dashboard, 2=inbox, 3=calendar, 4=notes) bubble: it neither cycles the view
-    // nor calls preventDefault, so the event reaches the shell handler.
-    for (const key of ["1", "2", "3", "4"]) {
+    // The calendar's document-capture hotkey listener must let the OTHER shell
+    // tab keys (1=dashboard, 2=inbox, 4=notes) bubble: it neither cycles the
+    // view nor calls preventDefault, so the event reaches the shell handler.
+    for (const key of ["1", "2", "4"]) {
       const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
       document.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(false);
@@ -109,7 +132,18 @@ describe("useCalendarModalHotkeys — v/V view cycling", () => {
     expect(onViewChange).not.toHaveBeenCalled();
   });
 
-  it("v does NOT cycle when focus is inside a suspended hotkey target", () => {
+  it("consumes 3 (the calendar's own tab key) so it never reaches the shell tab handler", () => {
+    const onViewChange = vi.fn();
+    renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
+
+    const event = new KeyboardEvent("keydown", { key: "3", bubbles: true, cancelable: true });
+    document.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onViewChange).toHaveBeenCalledWith("bills");
+  });
+
+  it("3 does NOT cycle when focus is inside a suspended hotkey target", () => {
     const onViewChange = vi.fn();
     renderModal({ view: "events", billsRangeData: { ensureRange: vi.fn() }, onViewChange });
 
@@ -120,7 +154,7 @@ describe("useCalendarModalHotkeys — v/V view cycling", () => {
     rail.appendChild(input);
     document.body.appendChild(rail);
 
-    fireEvent.keyDown(input, { key: "v", bubbles: true });
+    fireEvent.keyDown(input, { key: "3", bubbles: true });
 
     expect(onViewChange).not.toHaveBeenCalled();
 

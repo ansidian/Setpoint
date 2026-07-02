@@ -157,7 +157,7 @@ describe("useCalendarModalController search wiring", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("cycles the view with v while calendar search is open but focus is not in the search rail", async () => {
+  it("cycles the view with 3 while calendar search is open but focus is not in the search rail", async () => {
     const onViewChange = vi.fn();
     renderHarness({ view: "events", onViewChange, billsRangeData: { ensureRange: vi.fn().mockResolvedValue(null) } });
 
@@ -167,8 +167,8 @@ describe("useCalendarModalController search wiring", () => {
 
     await waitFor(() => expect(latestShellProps.search.open).toBe(true));
 
-    // v pressed while search is open but focus is on the document (not the suspended search rail)
-    fireEvent.keyDown(document, { key: "v" });
+    // 3 pressed while search is open but focus is on the document (not the suspended search rail)
+    fireEvent.keyDown(document, { key: "3" });
 
     expect(onViewChange).toHaveBeenCalledWith("bills");
   });

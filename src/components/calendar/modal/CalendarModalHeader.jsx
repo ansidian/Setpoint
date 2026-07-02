@@ -393,7 +393,7 @@ export default function CalendarModalHeader({
                 );
               })}
             </div>
-            <kbd style={viewHintStyle(false)}>V</kbd>
+            <kbd style={viewHintStyle(false)}>3</kbd>
           </div>
         ) : (
           <div style={{ gridArea: "views" }} />
