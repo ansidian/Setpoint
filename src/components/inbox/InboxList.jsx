@@ -100,9 +100,10 @@ export default function InboxList({
   // bucketing + live re-sort on the layout so non-swimlane views skip it.
   const grouped = useMemo(() => {
     if (layout !== "swimlanes") return null;
-    const g = { live: [], queued: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [] };
+    const g = { pinned: [], live: [], queued: [], carryover: [], needs_attention: [], action: [], catch_up: [], fyi: [], handled: [], untriaged_read: [], noise: [] };
     for (const e of emails) {
-      if (e._untriaged) g.live.push(e);
+      if (e._pinned) g.pinned.push(e);
+      else if (e._untriaged) g.live.push(e);
       else {
         const laneKey = e._lane === "action" ? "needs_attention" : e._lane;
         g[laneKey]?.push(e);
@@ -331,6 +332,16 @@ export default function InboxList({
           <InboxLiveLoadingBlock />
         ) : layout === "swimlanes" ? (
           <>
+            {grouped.pinned.length > 0 && (
+              <LaneSection
+                laneKey="pinned"
+                emails={grouped.pinned}
+                collapsed={!!effectiveCollapsed.pinned}
+                noiseUnreadCount={0}
+                onToggle={toggleLane}
+                renderRows={renderRows}
+              />
+            )}
             {grouped.live.length > 0 && (
               <div>
                 <StickyHeader borderColor="color-mix(in srgb, var(--sp-blue) 12%, transparent)">

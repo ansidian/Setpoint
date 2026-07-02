@@ -11,8 +11,11 @@ import {
   restoreSnapshotItemForToday,
   markSnapshotItemHandled,
   reopenSnapshotItem,
+  pinEmail,
+  unpinEmail,
 } from "../../api";
 import { isCatchUpEmail } from "./helpers";
+import { pinnedEntryFromSnapshot } from "./inboxWorkItems.js";
 import {
   applyLiveTrashOptimistic,
   applySnapshotTrashOptimistic,
@@ -165,6 +168,7 @@ export default function useInboxActionDispatch({
   setLiveTrashedUids,
   setSnapshotOptimistic,
   setSnoozedMap,
+  setPinnedOverrides,
   snapshotPendingRef,
   snapshotRequestRef,
 }) {
@@ -260,6 +264,40 @@ export default function useInboxActionDispatch({
 
     if (kind === "prev") {
       moveBy(-1);
+      return;
+    }
+
+    if (kind === "pin-toggle") {
+      const wasPinned = !!selectedEmail._pinned;
+      const entry = wasPinned
+        ? null
+        : pinnedEntryFromSnapshot(uid, Date.now(), buildEmailSnapshot(selectedEmail));
+      setPinnedOverrides((prev) => {
+        const next = new Map(prev);
+        next.set(uid, { pinned: !wasPinned, entry });
+        return next;
+      });
+      const rollback = () => setPinnedOverrides((prev) => {
+        if (!prev.has(uid)) return prev;
+        const next = new Map(prev);
+        next.delete(uid);
+        return next;
+      });
+      const call = wasPinned
+        ? unpinEmail(uid)
+        : pinEmail(uid, buildEmailSnapshot(selectedEmail));
+      call.then(() => onActiveSnapshotRefresh()).catch(rollback);
+      replaceUndoSlot({
+        type: "pin-toggle",
+        message: wasPinned ? "Email unpinned" : "Email pinned",
+        undo: async () => {
+          await (wasPinned
+            ? pinEmail(uid, buildEmailSnapshot(selectedEmail))
+            : unpinEmail(uid)).catch(() => {});
+          rollback();
+          await onActiveSnapshotRefresh();
+        },
+      });
       return;
     }
 
@@ -392,6 +430,7 @@ export default function useInboxActionDispatch({
     setLiveTrashedUids,
     setSnapshotOptimistic,
     setSnoozedMap,
+    setPinnedOverrides,
     runSnapshotCommand,
   ]);
 }

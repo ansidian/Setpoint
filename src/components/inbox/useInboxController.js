@@ -10,6 +10,8 @@ import {
   collectActiveSnapshotEmails,
   collectLiveEmails,
   collectResurfaced,
+  collectPinned,
+  mergePinnedIntoFlat,
 } from "./inboxWorkItems.js";
 import {
   computeScopedNoiseUnreadCount,
@@ -58,6 +60,7 @@ export default function useInboxController({
   const [snoozedMap, setSnoozedMap] = useState(
     () => new Map((snoozedEntries || []).map((entry) => [entry.uid, entry.until_ts])),
   );
+  const [pinnedOverrides, setPinnedOverrides] = useState(() => new Map());
   const [resurfacedMap, setResurfacedMap] = useState(
     () => new Map((resurfacedEntries || []).map((entry) => [entry.uid, entry])),
   );
@@ -102,6 +105,11 @@ export default function useInboxController({
     setResurfacedMap(new Map((resurfacedEntries || []).map((entry) => [entry.uid, entry])));
   }, [resurfacedEntries]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset locally-mutable map when the payload changes
+    setPinnedOverrides(new Map());
+  }, [activeSnapshot?.pinned]);
+
   const accountsById = useMemo(() => {
     const map = {};
     for (const account of emailAccounts) {
@@ -130,6 +138,25 @@ export default function useInboxController({
     snapshotRequestRef,
   } = useSnapshotOptimisticOverlay({ activeSnapshotMode, rawActiveSnapshotEmails });
 
+  // Pinned overlay rows: server pins (activeSnapshot.pinned) reconciled with
+  // locally-optimistic pin/unpin overrides. Frozen (readOnly) views contribute
+  // no pinned rows — that's what keeps historical browsing overlay-free.
+  const pinnedRows = useMemo(() => {
+    if (readOnly) return [];
+    const overriddenOff = new Set();
+    const optimisticEntries = [];
+    for (const [uid, override] of pinnedOverrides) {
+      if (!override.pinned) overriddenOff.add(uid);
+      else if (override.entry) optimisticEntries.push(override.entry);
+    }
+    const serverEntries = (activeSnapshot?.pinned || [])
+      .filter((entry) => !overriddenOff.has(entry.uid));
+    const seen = new Set(serverEntries.map((entry) => entry.uid));
+    const entries = [...serverEntries, ...optimisticEntries.filter((entry) => !seen.has(entry.uid))];
+    if (!entries.length) return [];
+    return collectPinned(entries, makeSynthAccount(emailAccounts), liveReadOverrides);
+  }, [readOnly, pinnedOverrides, activeSnapshot?.pinned, emailAccounts, liveReadOverrides]);
+
   const flatEmails = useMemo(() => {
     const synthAccount = makeSynthAccount(emailAccounts);
     const resurfacedEmails = collectResurfaced(
@@ -141,11 +168,11 @@ export default function useInboxController({
 
     if (activeSnapshotMode) {
       const resurfacedKeys = new Set(resurfacedEmails.map((entry) => entry.uid || entry.id));
-      return [
+      return mergePinnedIntoFlat([
         ...optimisticActiveSnapshotEmails
           .filter((entry) => !resurfacedKeys.has(entry.uid || entry.id)),
         ...resurfacedEmails,
-      ];
+      ], pinnedRows);
     }
 
     const out = [];
@@ -173,7 +200,7 @@ export default function useInboxController({
     )) {
       pushEmail(entry);
     }
-    return out;
+    return mergePinnedIntoFlat(out, pinnedRows);
   }, [
     activeSnapshotMode,
     emailAccounts,
@@ -182,6 +209,7 @@ export default function useInboxController({
     liveTrashedUids,
     optimisticActiveSnapshotEmails,
     resurfacedMap,
+    pinnedRows,
   ]);
 
   // Bump nowTick at the soonest moment a derived value actually changes: a snooze
@@ -321,6 +349,7 @@ export default function useInboxController({
     setLiveTrashedUids,
     setSnapshotOptimistic,
     setSnoozedMap,
+    setPinnedOverrides,
     snapshotPendingRef,
     snapshotRequestRef,
   });

@@ -114,4 +114,73 @@ describe("selectVisibleEmails", () => {
     const result = selectVisibleEmails({ flatEmails });
     expect(result.map((e) => e.uid)).toEqual(["middle", "stale-resurface"]);
   });
+
+  it("pin beats snooze: a _pinned row still returns even when snoozed until the future", () => {
+    const nowTick = 1_000;
+    const flatEmails = [
+      email({ uid: "pinned-snoozed", _pinned: true, _pinnedAt: 500 }),
+      email({ uid: "plain-snoozed" }),
+    ];
+    const result = selectVisibleEmails({
+      flatEmails,
+      snoozedMap: new Map([
+        ["pinned-snoozed", nowTick + 500],
+        ["plain-snoozed", nowTick + 500],
+      ]),
+      nowTick,
+    });
+    expect(result.map((e) => e.uid)).toEqual(["pinned-snoozed"]);
+  });
+
+  it("pinned rows bypass the lane filter and the category filter", () => {
+    const flatEmails = [
+      email({
+        uid: "pinned-other-lane",
+        _pinned: true,
+        _pinnedAt: 500,
+        _lane: "needs_attention",
+        category: "finance",
+      }),
+      email({ uid: "plain-fyi", _lane: "fyi", category: "marketing" }),
+    ];
+    const result = selectVisibleEmails({
+      flatEmails,
+      lane: "fyi",
+      categoryFilter: "marketing",
+    });
+    expect(result.map((e) => e.uid)).toEqual(["pinned-other-lane", "plain-fyi"]);
+  });
+
+  it("pinned rows still RESPECT the account filter", () => {
+    const flatEmails = [
+      email({ uid: "pinned-wrong-account", _pinned: true, _pinnedAt: 500, _accountKey: "personal" }),
+      email({ uid: "work-row", _accountKey: "work" }),
+    ];
+    const result = selectVisibleEmails({
+      flatEmails,
+      accountId: "work",
+    });
+    expect(result.map((e) => e.uid)).toEqual(["work-row"]);
+  });
+
+  it("sorts all pinned rows before non-pinned rows, newest pin first", () => {
+    const flatEmails = [
+      email({ uid: "untriaged", _untriaged: true }),
+      email({ uid: "pin-older", _pinned: true, _pinnedAt: 100 }),
+      email({ uid: "pin-newer", _pinned: true, _pinnedAt: 900 }),
+      email({ uid: "plain" }),
+    ];
+    const result = selectVisibleEmails({ flatEmails });
+    expect(result.map((e) => e.uid)).toEqual(["pin-newer", "pin-older", "untriaged", "plain"]);
+  });
+
+  it("indexed-search short-circuit is unchanged by the pin rules", () => {
+    const indexedSearchEmails = [email({ uid: "hit-1" })];
+    const result = selectVisibleEmails({
+      flatEmails: [email({ uid: "pinned-live", _pinned: true, _pinnedAt: 999 })],
+      indexedSearchActive: true,
+      indexedSearchEmails,
+    });
+    expect(result).toBe(indexedSearchEmails);
+  });
 });

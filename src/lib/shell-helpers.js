@@ -252,6 +252,7 @@ export function buildTimeline({ events = [], deadlines = [], bills = [] }) {
 
 // Tri-color lane metadata for the inbox
 export const LANE = {
+  pinned: { key: "pinned", label: "Pinned", color: "#b4befe", soft: "rgba(180,190,254,0.10)", border: "rgba(180,190,254,0.22)", icon: "Pin" },
   queued: { key: "queued", label: "Queued", color: "#89b4fa", soft: "rgba(137,180,250,0.10)", border: "rgba(137,180,250,0.22)", icon: "Clock" },
   needs_attention: { key: "needs_attention", label: "Needs Attention", color: "#f38ba8", soft: "rgba(243,139,168,0.12)", border: "rgba(243,139,168,0.22)", icon: "Zap" },
   carryover: { key: "carryover", label: "Carryover", color: "#f9e2af", soft: "rgba(249,226,175,0.10)", border: "rgba(249,226,175,0.22)", icon: "History" },

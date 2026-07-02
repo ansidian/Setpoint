@@ -58,4 +58,26 @@ describe("resolveInboxHotkeyAction", () => {
       expect(resolveInboxHotkeyAction(key, untriagedRead, false)).toBeNull();
     }
   });
+
+  describe("pin-toggle", () => {
+    it("maps 'p' with a selected email to pin-toggle", () => {
+      expect(resolveInboxHotkeyAction("p", snapshotEmail, false)).toEqual({ kind: "pin-toggle" });
+    });
+
+    it("works with readOnly === true (frozen-snapshot browsing) — unlike s/e", () => {
+      expect(resolveInboxHotkeyAction("p", snapshotEmail, true)).toEqual({ kind: "pin-toggle" });
+      // Contrast: s/e ARE readOnly-gated and stay null.
+      expect(resolveInboxHotkeyAction("s", snapshotEmail, true)).toBeNull();
+      expect(resolveInboxHotkeyAction("e", snapshotEmail, true)).toBeNull();
+    });
+
+    it("works for catch-up rows — pinning history is the point", () => {
+      const catchUp = { ...snapshotEmail, _lane: "catch_up", lane_at_snapshot: "fyi" };
+      expect(resolveInboxHotkeyAction("p", catchUp, false)).toEqual({ kind: "pin-toggle" });
+    });
+
+    it("returns null with no selectedEmail", () => {
+      expect(resolveInboxHotkeyAction("p", null, false)).toBeNull();
+    });
+  });
 });

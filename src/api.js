@@ -207,6 +207,13 @@ export const snoozeEmail = (uid, untilTs, snapshot = null) =>
   });
 export const unsnoozeEmail = (uid) =>
   apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/snooze`, { method: "DELETE" });
+export const pinEmail = (uid, snapshot = null) =>
+  apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/pin`, {
+    method: "POST",
+    body: JSON.stringify({ snapshot }),
+  });
+export const unpinEmail = (uid) =>
+  apiFetch(`/api/briefing/email/${encodeURIComponent(uid)}/pin`, { method: "DELETE" });
 export const completeTask = (taskId) => apiFetch(`/api/briefing/complete-task/${encodeURIComponent(taskId)}`, { method: "POST" });
 export const dismissTombstone = (todoistId) =>
   apiFetch(`/api/briefing/tombstone/${todoistId}`, { method: "DELETE" });

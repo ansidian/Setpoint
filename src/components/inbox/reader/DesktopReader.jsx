@@ -9,6 +9,7 @@ import {
   FileText,
   Mail,
   MailOpen,
+  Pin,
   Reply,
   Sparkles,
   Trash2,
@@ -243,6 +244,8 @@ export default function DesktopReader({
     canMoveToNeeds,
     canMoveToFyi,
     canMoveToNoise,
+    canPin,
+    pinned,
   } = resolveReaderActions(email, { readOnly });
   const showReadAction = showMutableActions;
   const showBillToggle = billToggleEligible;
@@ -346,6 +349,17 @@ export default function DesktopReader({
             tooltip={email.read ? "Mark unread" : "Mark read"}
             onClick={() => onAction("toggle-read")}
             accent={accent}
+          />
+        )}
+        {canPin && (
+          <QuickAction
+            icon={Pin}
+            ariaLabel={pinned ? "Unpin email" : "Pin email"}
+            tooltip={pinned ? "Unpin email" : "Pin email"}
+            primary={pinned}
+            onClick={() => onAction("pin-toggle")}
+            accent="#b4befe"
+            keyHint="P"
           />
         )}
         {showDestructiveActions && (

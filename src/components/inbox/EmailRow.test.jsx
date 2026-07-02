@@ -55,3 +55,21 @@ describe("EmailRow lane tag (mobile)", () => {
     expect(screen.getByText("finance")).toBeTruthy();
   });
 });
+
+describe("EmailRow pinned", () => {
+  it("renders a pin glyph when the email is pinned", () => {
+    renderRow({ email: { _pinned: true } });
+    expect(screen.getByTestId("email-row-pin")).toBeTruthy();
+  });
+
+  it("renders no pin glyph when the email is not pinned", () => {
+    renderRow();
+    expect(screen.queryByTestId("email-row-pin")).toBeNull();
+  });
+
+  it("applies a muted treatment when a pinned email was provider-removed", () => {
+    const { container } = renderRow({ email: { _pinned: true, _providerRemoved: true } });
+    const row = container.querySelector('[role="button"]');
+    expect(row.style.opacity).toBe("0.55");
+  });
+});

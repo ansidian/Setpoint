@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History, Check, MailOpen, Clock } from "lucide-react";
+import { Zap, FileText, BellOff, ArrowUp, ArrowDown, History, Check, MailOpen, Clock, Pin } from "lucide-react";
 import { LANE } from "../../lib/shell-helpers";
 import Tooltip from "../shared/Tooltip";
 
@@ -105,7 +105,9 @@ export function IconBtn({ children, onClick, title, tinted, accent = "#cba6da" }
 
 export function LaneIcon({ laneKey }) {
   const color = LANE[laneKey].color;
-  const Icon = laneKey === "queued"
+  const Icon = laneKey === "pinned"
+    ? Pin
+    : laneKey === "queued"
     ? Clock
     : laneKey === "needs_attention" || laneKey === "action"
     ? Zap

@@ -210,6 +210,63 @@ describe("MobileReader bill extraction", () => {
   });
 });
 
+describe("MobileReader pin toggle", () => {
+  it("renders a pin action in the tap menu and dispatches pin-toggle when clicked", () => {
+    const { onAction } = renderMobileReader({
+      billOpen: false,
+      email: { hasBill: false },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+    fireEvent.click(screen.getByText("Pin"));
+
+    expect(onAction).toHaveBeenCalledWith("pin-toggle", undefined);
+  });
+
+  it("flips the label to Unpin when the email is pinned", () => {
+    renderMobileReader({
+      billOpen: false,
+      email: { hasBill: false, _pinned: true },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Unpin")).toBeTruthy();
+    expect(screen.queryByText("Pin")).toBeNull();
+  });
+
+  it("tints the pinned pin row lavender to match the desktop pin toggle", () => {
+    renderMobileReader({
+      billOpen: false,
+      email: { hasBill: false, _pinned: true },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    const pinRow = screen.getByText("Unpin").closest("button");
+    expect(pinRow.style.color).toMatch(/#b4befe|rgb\(180,\s*190,\s*254\)/i);
+
+    const snoozeRow = screen.getByText("Snooze").closest("button");
+    expect(snoozeRow.style.color).toMatch(/rgba\(205,\s*214,\s*244,\s*0\.8\)/);
+  });
+
+  it("renders the pin action even for catch-up rows", () => {
+    renderMobileReader({
+      billOpen: false,
+      email: {
+        hasBill: false,
+        _activeSnapshot: true,
+        _lane: "catch_up",
+        lane_at_snapshot: "fyi",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^actions$/i }));
+
+    expect(screen.getByText("Pin")).toBeTruthy();
+  });
+});
+
 describe("MobileReader draft reply (P1-2)", () => {
   it("copies the AI draft to the clipboard without trashing the email", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
