@@ -3,33 +3,32 @@
 // snapshot-snooze-lifecycle). Not a test file itself.
 
 import { createClient } from "@libsql/client";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { getOrCreateActiveSnapshot } from "./snapshot-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, "../db/migrations");
 export const migrationSql = readFileSync(
-  join(__dirname, "../db/migrations/001_ea_tables.sql"),
+  join(migrationsDir, "001_ea_tables.sql"),
   "utf8",
 );
 
+// Every real migration file in boot order — the same set migrate() applies to a
+// fresh database. Applying them all means schema-dependent reads (e.g.
+// getActiveSnapshotView's unconditional ea_pinned_emails read) never need
+// hand-copied DDL in per-test setups when a new migration lands.
+const allMigrationSql = readdirSync(migrationsDir)
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => readFileSync(join(migrationsDir, file), "utf8"));
+
 export async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(migrationSql);
-  const migration018 = readFileSync(
-    join(__dirname, "../db/migrations/018_carryover_depth_bound.sql"),
-    "utf8",
-  );
-  await db.executeMultiple(migration018);
-  // getActiveSnapshotView reads ea_pinned_emails (022) unconditionally, so every
-  // caller of this shared fixture needs the table even if a given test never
-  // pins anything.
-  const migration022 = readFileSync(
-    join(__dirname, "../db/migrations/022_pinned_emails.sql"),
-    "utf8",
-  );
-  await db.executeMultiple(migration022);
+  for (const sql of allMigrationSql) {
+    await db.executeMultiple(sql);
+  }
   return db;
 }
 

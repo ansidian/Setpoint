@@ -1,22 +1,7 @@
-import { createClient } from "@libsql/client";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { describe, expect, it, vi } from "vitest";
 import { getActiveSnapshotView } from "./snapshot-service.js";
-import { seedSnapshotItem } from "./snapshot-test-fixtures.js";
+import { createMigratedDb, seedSnapshotItem } from "./snapshot-test-fixtures.js";
 import { wakeDueSnoozes } from "./snooze-waker.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../db/migrations");
-
-async function createMigratedDb() {
-  const db = createClient({ url: "file::memory:" });
-  await db.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
-  // getActiveSnapshotView reads ea_pinned_emails (022) unconditionally.
-  await db.executeMultiple(readFileSync(join(migrationsDir, "022_pinned_emails.sql"), "utf8"));
-  return db;
-}
 
 describe("snooze waker", () => {
   it("reattaches woken snoozes to the active snapshot with resurfaced source metadata", async () => {

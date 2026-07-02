@@ -1,22 +1,6 @@
-import { createClient } from "@libsql/client";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
+import { createMigratedDb } from "../snapshots/snapshot-test-fixtures.js";
 import { loadPinnedEntries, pin, unpin } from "./pinned-emails.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../db/migrations");
-
-const migrationFiles = ["001_ea_tables.sql", "022_pinned_emails.sql"];
-
-async function createMigratedDb() {
-  const db = createClient({ url: "file::memory:" });
-  for (const file of migrationFiles) {
-    await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
-  }
-  return db;
-}
 
 const USER = "user-1";
 const UID = "gmail-work-msg-1";
