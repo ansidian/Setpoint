@@ -13,6 +13,8 @@ const migrationsDir = join(__dirname, "../db/migrations");
 async function createMigratedDb() {
   const db = createClient({ url: "file::memory:" });
   await db.executeMultiple(readFileSync(join(migrationsDir, "001_ea_tables.sql"), "utf8"));
+  // getActiveSnapshotView reads ea_pinned_emails (022) unconditionally.
+  await db.executeMultiple(readFileSync(join(migrationsDir, "022_pinned_emails.sql"), "utf8"));
   return db;
 }
 

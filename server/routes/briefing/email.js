@@ -49,6 +49,28 @@ router.delete("/email/:uid/snooze", async (req, res) => {
   }
 });
 
+router.post("/email/:uid/pin", async (req, res) => {
+  try {
+    await emailService.pin(EA_USER_ID, req.params.uid, req.body?.snapshot ?? null);
+    res.json({ ok: true });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Error pinning email:", err);
+    res.status(status).json({ message: err.message });
+  }
+});
+
+router.delete("/email/:uid/pin", async (req, res) => {
+  try {
+    await emailService.unpin(EA_USER_ID, req.params.uid);
+    res.json({ ok: true });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("Error unpinning email:", err);
+    res.status(status).json({ message: err.message });
+  }
+});
+
 router.post("/email/:uid/mark-read", async (req, res) => {
   try {
     await emailService.markRead(EA_USER_ID, req.params.uid);

@@ -22,6 +22,14 @@ export async function createMigratedDb() {
     "utf8",
   );
   await db.executeMultiple(migration018);
+  // getActiveSnapshotView reads ea_pinned_emails (022) unconditionally, so every
+  // caller of this shared fixture needs the table even if a given test never
+  // pins anything.
+  const migration022 = readFileSync(
+    join(__dirname, "../db/migrations/022_pinned_emails.sql"),
+    "utf8",
+  );
+  await db.executeMultiple(migration022);
   return db;
 }
 

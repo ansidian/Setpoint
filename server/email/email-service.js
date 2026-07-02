@@ -571,6 +571,8 @@ export async function settleArrivalGrace(userId) {
   return settleReadArrivalGraceRows(userId);
 }
 
+export { pin, unpin } from "./pinned-emails.js";
+
 // Exposed for unit testing only
 export const __testing__ = {
   findAccountByUid,

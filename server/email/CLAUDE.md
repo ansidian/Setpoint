@@ -5,6 +5,7 @@ Email domain: multi-account fetch (Gmail API, iCloud IMAP), the local index, and
 ## Files
 
 - `email-service.js` — public email API: search, fetch, read/trash mutations, backfill
+- `pinned-emails.js` — pin-state overlay store: pin/unpin upserts + hydrated pinned-entry loads (index/triage merge, email_snapshot fallback)
 - `email-fetch.js` — cross-account email fetching for Gmail and iCloud
 - `email-provider-adapters.js` — per-account adapters: fetch, mark-read, trash
 - `email-index.js` — parses headers, truncates bodies, writes `ea_email_index`

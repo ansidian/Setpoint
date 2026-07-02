@@ -76,6 +76,7 @@
     "server/scheduler.js -> server/email/email-index.js",
     "server/snapshots/snapshot-service.js -> server/email/email-fetch.js",
     "server/snapshots/snapshot-service.js -> server/email/email-index.js",
+    "server/snapshots/snapshot-service.js -> server/email/pinned-emails.js",
     "server/snapshots/snapshot-triage-attachment.js -> server/email/email-index.js",
     "server/snapshots/snapshotStore.js -> server/triage/triage-mode.js",
     "server/snapshots/snooze-waker.js -> server/email/gmail.js",
