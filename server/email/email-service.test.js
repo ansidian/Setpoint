@@ -859,3 +859,31 @@ describe("trash post-provider cleanup (P3-74)", () => {
     expect(snoozeDeleteAttempted).toBe(true);
   });
 });
+
+describe("searchEmails candidate pool recency", () => {
+  it("keeps the newest match reachable when older high-frequency matches saturate the bm25 pool", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    // 250 old fillers whose tiny bodies repeat the term dominate unweighted BM25 and
+    // would fill the entire 240-row bounded pool at the default limit of 30.
+    for (let i = 0; i < 250; i += 1) {
+      await seedIndexedEmail(testState.db.current, {
+        uid: `filler-${String(i).padStart(3, "0")}`,
+        subject: "Weekly digest",
+        body_snippet: "payment payment payment payment payment",
+        body_text: "payment payment payment payment payment",
+        email_date: "2026-01-05T12:00:00Z",
+      });
+    }
+    await seedIndexedEmail(testState.db.current, {
+      uid: "newest-subject-match",
+      subject: "Payment due notice",
+      body_snippet: "Your autopay draft is scheduled.",
+      body_text: "Your autopay draft is scheduled.",
+      email_date: "2026-04-30T12:00:00Z",
+    });
+
+    const result = await emailService.searchEmails("user-1", { q: "payment" });
+
+    expect(result.results.map((row) => row.uid)).toContain("newest-subject-match");
+  });
+});

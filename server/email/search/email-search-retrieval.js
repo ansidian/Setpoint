@@ -7,7 +7,7 @@ import {
 } from "./email-search-embedding-store.js";
 import { getEmailSearchEmbeddingCoverageRatio } from "./email-search-embedding-worker.js";
 import { filterEmailSearchCandidatesForEvidence } from "./email-search-evidence.js";
-import { parseEmailSearchQuery, sanitizeFtsQuery } from "./email-search-query.js";
+import { EMAIL_SEARCH_BM25_RANK_SQL, parseEmailSearchQuery, sanitizeFtsQuery } from "./email-search-query.js";
 import { rankEmailSearchRows } from "./email-search-ranking.js";
 import { recordEmailSearchAiUsage, estimateTokensFromText } from "./email-search-cost-stats.js";
 import { EMAIL_SEARCH_EMBEDDING_MODEL } from "./email-search-embeddings.js";
@@ -19,6 +19,11 @@ const VECTOR_FUSION_WEIGHT = 0.55;
 // narrow the query. Bounds tool-result/context cost while comfortably covering
 // realistic "exhaust this set" cases (e.g. ~89 matches).
 const MAX_RETRIEVAL_POOL = 200;
+// The bm25-ordered fetch is blind to recency: on broad queries a brand-new match can
+// sit past the fetch ceiling and never reach the re-ranker (prod: the newest "account"
+// match sat at bm25 position 325). Union in the newest matches so recency-shaped
+// queries always have them in the rankable pool.
+const RECENT_MATCH_SLICE = 50;
 
 const SNAPSHOT_JOIN = `
               LEFT JOIN ea_email_triage triage
@@ -84,6 +89,51 @@ function lexicalScoreFromRow(row) {
   return bounded(Number(row.search_score || 0) / 100, -1, 1);
 }
 
+function candidateDateMs(candidate) {
+  const ms = Date.parse(candidate.email_date_utc || candidate.email_date || "");
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function candidateFamilyKey(candidate) {
+  const from = String(candidate.from?.address || "").toLowerCase().trim();
+  const subject = String(candidate.subject || "").toLowerCase().trim();
+  if (!from || !subject) return null;
+  return `${from}|${subject}`;
+}
+
+function candidatePenalized(candidate) {
+  return candidate.metadata?.lane === "noise" || Boolean(candidate.metadata?.provider_removed);
+}
+
+// Fused-level mirror of applyFamilyRecencyDominance (email-search-ranking.js): the
+// per-pool clamp cannot see a recurring family whose siblings arrive via different
+// retrieval legs (newest lexical-only, older vector-only), and vector-similarity
+// epsilon between near-identical recurring bodies would re-split an exact score tie
+// before the date tiebreak fires. Clamping the fused score keeps families newest-first
+// regardless of which leg surfaced each sibling.
+function applyFamilyDominanceToCandidates(candidates) {
+  const families = new Map();
+  for (const candidate of candidates) {
+    const key = candidateFamilyKey(candidate);
+    if (!key) continue;
+    const members = families.get(key);
+    if (members) members.push(candidate);
+    else families.set(key, [candidate]);
+  }
+  for (const members of families.values()) {
+    if (members.length < 2) continue;
+    const newest = members.reduce((best, candidate) => (
+      candidateDateMs(candidate) > candidateDateMs(best) ? candidate : best
+    ));
+    if (candidatePenalized(newest) || newest.scores.combined < 0) continue;
+    for (const candidate of members) {
+      if (candidate === newest || candidate.scores.combined <= newest.scores.combined) continue;
+      candidate.scores.combined = newest.scores.combined;
+    }
+  }
+  return candidates;
+}
+
 function readFilterFromPlan(plan) {
   if (plan?.read_filter === "read") return 1;
   if (plan?.read_filter === "unread") return 0;
@@ -135,6 +185,7 @@ function candidateFromRow(row) {
     body_snippet: row.body_snippet,
     body_excerpt: String(row.body_text || "").slice(0, 1200),
     email_date: row.email_date,
+    email_date_utc: row.email_date_utc || null,
     read: !!row.read,
     from: {
       name: row.from_name,
@@ -155,21 +206,33 @@ async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, 
   const fetchLimit = Math.min(Math.max(limit * 8, 100), 500);
   const filters = buildPlanFilters(plan, readFilter);
   if (textQuery.trim()) {
+    // `matched` is bounded twice — best-by-bm25 plus newest-by-date — then the snapshot
+    // join runs against that bounded union only. The final SELECT aliases the union back
+    // to `idx` so SNAPSHOT_JOIN/RANKING_COLUMNS apply verbatim.
     const result = await dbClient.execute({
-      sql: `SELECT
-              idx.uid, idx.account_id, idx.account_label, idx.account_email,
-              idx.account_color, idx.account_icon,
-              idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-              idx.email_date, idx.email_date_utc, idx.read,
-              rank
+      sql: `WITH matched AS (
+              SELECT
+                idx.uid, idx.user_id, idx.account_id, idx.account_label, idx.account_email,
+                idx.account_color, idx.account_icon,
+                idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
+                idx.email_date, idx.email_date_utc, idx.read,
+                ${EMAIL_SEARCH_BM25_RANK_SQL} AS rank
+              FROM ea_email_fts
+              JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
+              WHERE ea_email_fts MATCH ? AND idx.user_id = ?${filters.sql}
+            ),
+            bounded AS (
+              SELECT * FROM (SELECT * FROM matched ORDER BY rank, email_date_utc DESC LIMIT ?)
+              UNION
+              SELECT * FROM (SELECT * FROM matched ORDER BY email_date_utc DESC, rank LIMIT ?)
+            )
+            SELECT
+              idx.*
               ${RANKING_COLUMNS}
-            FROM ea_email_fts
-            JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
+            FROM bounded idx
             ${SNAPSHOT_JOIN}
-            WHERE ea_email_fts MATCH ? AND idx.user_id = ?${filters.sql}
-            ORDER BY rank
-            LIMIT ?`,
-      args: [sanitizeFtsQuery(textQuery), userId, ...filters.args, fetchLimit],
+            ORDER BY idx.rank, idx.email_date_utc DESC`,
+      args: [sanitizeFtsQuery(textQuery), userId, ...filters.args, fetchLimit, RECENT_MATCH_SLICE],
     });
     return rankEmailSearchRows(result.rows, {
       query: textQuery,
@@ -277,9 +340,13 @@ export function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit,
     });
   }
 
-  return [...byUid.values()]
+  return applyFamilyDominanceToCandidates([...byUid.values()])
     .sort((a, b) => {
       if (b.scores.combined !== a.scores.combined) return b.scores.combined - a.scores.combined;
+      // Recency breaks fused-score ties (recurring twins often tie exactly) so the
+      // newest copy wins; uid only stabilizes genuinely identical rows.
+      const dateDiff = candidateDateMs(b) - candidateDateMs(a);
+      if (dateDiff) return dateDiff;
       return String(a.uid).localeCompare(String(b.uid));
     })
     .slice(0, limit);

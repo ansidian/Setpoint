@@ -94,9 +94,19 @@ export async function createSyntheticEvalRetriever(fixture, { migrationsDir, use
     if (triage) {
       await db.execute({
         sql: `INSERT INTO ea_email_triage
-                (user_id, account_id, email_id, lane, category, urgency, triage_status)
-              VALUES (?, ?, ?, ?, ?, ?, 'complete')`,
-        args: [userId, row.account_id, row.uid, triage.lane, triage.category, triage.urgency],
+                (user_id, account_id, email_id, lane, category, urgency,
+                 deadline_at, escalation_badge, bill_candidate_json, handled_at,
+                 provider_state, updated_at, triage_status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), 'complete')`,
+        args: [
+          userId, row.account_id, row.uid, triage.lane, triage.category, triage.urgency,
+          triage.deadline_at ?? null,
+          triage.escalation_badge ?? null,
+          triage.bill_candidate_json ?? null,
+          triage.handled_at ?? null,
+          triage.provider_state ?? "available",
+          triage.updated_at ?? null,
+        ],
       });
     }
     if (embedding) {
@@ -112,7 +122,7 @@ export async function createSyntheticEvalRetriever(fixture, { migrationsDir, use
     }
   }
   const embeddingByQuery = new Map(
-    (fixture.cases || []).map((testCase) => [testCase.query, testCase.query_embedding || [1, 0, 0, 0]]),
+    (fixture.cases || []).map((testCase) => [testCase.query, testCase.query_embedding || [1, 0, 0, 0, 0, 0]]),
   );
   const retrieve = (_evalUserId, options) => retrieveInboxAiSearch(userId, {
     ...options,
@@ -120,7 +130,7 @@ export async function createSyntheticEvalRetriever(fixture, { migrationsDir, use
     dbClient: db,
     capability: { mode: "fallback" },
     embeddingClient: {
-      embed: async ([text]) => [embeddingByQuery.get(text) || [1, 0, 0, 0]],
+      embed: async ([text]) => [embeddingByQuery.get(text) || [1, 0, 0, 0, 0, 0]],
     },
   });
   return { retrieve, cleanup: () => db.close?.() };

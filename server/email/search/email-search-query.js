@@ -1,3 +1,10 @@
+// bm25() weights per ea_email_fts column (uid, from_name, from_address, subject,
+// body_snippet, body_text): subject dominates so a subject match cannot be buried by
+// brand mentions in sender fields or term-dense bodies (prod: 13 from-field "paypal"
+// hits outranked the subject-matching statement under unweighted bm25, which also
+// exactly tied recurring statement twins).
+export const EMAIL_SEARCH_BM25_RANK_SQL = "bm25(ea_email_fts, 0.0, 4.0, 4.0, 10.0, 3.0, 1.0)";
+
 export function sanitizeFtsQuery(raw) {
   const terms = raw
     .replace(/[\u201C\u201D]/g, '"')

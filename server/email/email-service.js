@@ -24,7 +24,7 @@ import {
   markEmailUnreadWithProvider,
   trashEmailWithProvider,
 } from "./email-provider-adapters.js";
-import { parseEmailSearchQuery, sanitizeFtsQuery } from "./search/email-search-query.js";
+import { EMAIL_SEARCH_BM25_RANK_SQL, parseEmailSearchQuery, sanitizeFtsQuery } from "./search/email-search-query.js";
 import { rankEmailSearchRows } from "./search/email-search-ranking.js";
 import { normalizeBillCandidate } from "../snapshots/snapshot-lifecycle.js";
 
@@ -136,9 +136,13 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 snap.source_at AS snapshot_source_at,
                 snap.resurfaced_at AS snapshot_resurfaced_at,
                 snap.updated_at AS snapshot_updated_at`;
+  // `matched` is bounded twice — best-by-weighted-bm25 plus newest-by-date — so a
+  // brand-new match can never be pushed out of the rankable pool by older term-dense
+  // matches; the date tiebreak keeps recurring twins (identical bm25) newest-first.
+  const recentMatchSlice = 50;
   const result = hasTextQuery
     ? await db.execute({
-        sql: `WITH bounded AS (
+        sql: `WITH matched AS (
                 SELECT
                   idx.uid, idx.account_id, idx.account_label, idx.account_email,
                   idx.account_color, idx.account_icon,
@@ -146,12 +150,15 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                   idx.email_date, idx.email_date_utc, idx.read, idx.user_id,
                   snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
                   snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
-                  rank
+                  ${EMAIL_SEARCH_BM25_RANK_SQL} AS rank
                 FROM ea_email_fts
                 JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
                 WHERE ea_email_fts MATCH ? AND idx.user_id = ?${readPredicate}
-                ORDER BY rank
-                LIMIT ?
+              ),
+              bounded AS (
+                SELECT * FROM (SELECT * FROM matched ORDER BY rank, email_date_utc DESC LIMIT ?)
+                UNION
+                SELECT * FROM (SELECT * FROM matched ORDER BY email_date_utc DESC, rank LIMIT ?)
               )
               SELECT
                 bounded.uid, bounded.account_id, bounded.account_label, bounded.account_email,
@@ -162,10 +169,10 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 ${rankingColumns}
               FROM bounded
               ${buildSnapshotJoins("bounded")}
-              ORDER BY bounded.rank`,
+              ORDER BY bounded.rank, bounded.email_date_utc DESC`,
         args: readFilter == null
-          ? [sanitizeFtsQuery(textQuery), userId, fetchLimit]
-          : [sanitizeFtsQuery(textQuery), userId, readFilter, fetchLimit],
+          ? [sanitizeFtsQuery(textQuery), userId, fetchLimit, recentMatchSlice]
+          : [sanitizeFtsQuery(textQuery), userId, readFilter, fetchLimit, recentMatchSlice],
       })
     : await db.execute({
         sql: `WITH bounded AS (
