@@ -85,8 +85,7 @@ describe("email search retrieval eval runner", () => {
     const fixture = JSON.parse(
       readFileSync(join(__dirname, "evals/email-search-retrieval.synthetic.json"), "utf8"),
     );
-    const migrationsDir = join(__dirname, "../../db/migrations");
-    const { retrieve, retrieveInbox, cleanup } = await createSyntheticEvalRetriever(fixture, { migrationsDir });
+    const { retrieve, retrieveInbox, cleanup } = await createSyntheticEvalRetriever(fixture);
     try {
       const report = await evaluateRetrievalCases(fixture, { retrieve, retrieveInbox });
       expect(report.total).toBe(6);

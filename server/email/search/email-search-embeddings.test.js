@@ -1,7 +1,3 @@
-import { createClient } from "@libsql/client";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EMAIL_SEARCH_EMBEDDING_BODY_CHAR_LIMIT,
@@ -18,27 +14,11 @@ import {
   createEmailSearchEmbeddingStore,
   detectEmailSearchVectorCapability,
 } from "./email-search-embedding-store.js";
-import { seedIndexedEmail } from "../test-utils/email-index-db.js";
+import { createEmailIndexTestDb, seedIndexedEmail } from "../test-utils/email-index-db.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../db/migrations");
-
-async function applyMigrations(db, files) {
-  for (const file of files) {
-    await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
-  }
-}
-
-async function createEmbeddingTestDb() {
-  const db = createClient({ url: "file::memory:" });
-  await applyMigrations(db, [
-    "001_ea_tables.sql",
-    "004_email_read_state_search_index.sql",
-    "005_email_search_embeddings.sql",
-    "013_email_index_normalized_date.sql",
-    "025_email_thread_identity.sql",
-  ]);
-  return db;
+function createEmbeddingTestDb() {
+  // Core set only — no embedding-state/AI-usage tables needed here.
+  return createEmailIndexTestDb({ extraMigrations: [] });
 }
 
 describe("email search embedding documents", () => {
