@@ -571,6 +571,32 @@ describe("searchEmails contract", () => {
     });
     expect(mockDb.execute).not.toHaveBeenCalled();
   });
+
+  it("honors an injected dbClient instead of the module-level db (audit F3)", async () => {
+    // testState.db.current stays null here on purpose: the mocked global db
+    // would throw/return nothing if consulted, so a passing result proves
+    // searchEmails read through the injected client, not the module default.
+    const injectedDb = await createEmailIndexTestDb();
+    await seedIndexedEmail(injectedDb, {
+      uid: "gmail-work-injected-1",
+      subject: "Injected client receipt",
+      body_snippet: "Injected client receipt",
+      body_text: "Injected client receipt",
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "injected client",
+      limit: 5,
+      dbClient: injectedDb,
+    });
+
+    expect(result.results).toEqual([
+      expect.objectContaining({ uid: "gmail-work-injected-1" }),
+    ]);
+    expect(mockDb.execute).not.toHaveBeenCalled();
+
+    await injectedDb.close?.();
+  });
 });
 
 describe("searchEmails offset paging (audit E1)", () => {
@@ -616,6 +642,25 @@ describe("searchEmails offset paging (audit E1)", () => {
     expect(result.results.length).toBe(30);
     expect(result.total).toBe(35);
     expect(result.has_more).toBe(true);
+  });
+
+  it("returns an empty page with has_more false when offset lands past the total", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    for (let i = 0; i < 3; i += 1) {
+      await seedIndexedEmail(testState.db.current, {
+        uid: `past-end-${i}`,
+        subject: `Autopay notice ${i}`,
+        body_text: "Your autopay notice is ready.",
+        email_date: `2026-05-${String(10 + i).padStart(2, "0")}T12:00:00Z`,
+      });
+    }
+
+    const result = await emailService.searchEmails("user-1", { q: "autopay notice", limit: 5, offset: 50 });
+
+    expect(result.results).toEqual([]);
+    expect(result.total).toBe(3);
+    expect(result.has_more).toBe(false);
+    expect(result.offset).toBe(50);
   });
 
   it("flags capped when the SQL candidate pool itself hits its bound", async () => {

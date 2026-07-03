@@ -200,6 +200,50 @@
         0,
         1
       ]
+    },
+    {
+      "uid": "synthetic-dismissed-sibling-older",
+      "subject": "Internet service renewal notice",
+      "body_text": "Your internet service renewal notice is ready for review.",
+      "from_name": "Broadband Co",
+      "from_address": "billing@broadband.example.com",
+      "email_date": "2026-05-25T12:00:00Z",
+      "triage": {
+        "lane": "needs_attention",
+        "category": "finance",
+        "urgency": "high",
+        "deadline_at": "2026-06-05T23:59:59Z",
+        "escalation_badge": "bill due",
+        "bill_candidate_json": "{\"amount\":64.99}",
+        "updated_at": "2026-06-13T00:00:00Z"
+      },
+      "snapshot": {
+        "dismissed_from_today_at": "2026-06-12T00:00:00Z"
+      },
+      "embedding": [
+        0,
+        0,
+        0,
+        0,
+        0.15,
+        0.98
+      ]
+    },
+    {
+      "uid": "synthetic-dismissed-sibling-newer",
+      "subject": "Internet service renewal confirmed",
+      "body_text": "Your internet service renewal has been confirmed for this cycle.",
+      "from_name": "Broadband Co",
+      "from_address": "billing@broadband.example.com",
+      "email_date": "2026-06-12T12:00:00Z",
+      "embedding": [
+        0,
+        0,
+        0,
+        0,
+        0.15,
+        0.99
+      ]
     }
   ],
   "cases": [
@@ -220,7 +264,8 @@
       "must_not_top": [
         "synthetic-refund-decoy"
       ],
-      "top_n": 3
+      "top_n": 3,
+      "inbox_path": true
     },
     {
       "id": "synthetic-payment-due-vs-receipt",
@@ -239,7 +284,8 @@
       "must_not_top": [
         "synthetic-payment-receipt"
       ],
-      "top_n": 3
+      "top_n": 3,
+      "inbox_path": true
     },
     {
       "id": "synthetic-semantic-not-flattened",
@@ -277,7 +323,8 @@
       "must_not_top": [
         "synthetic-statement-2026-05"
       ],
-      "top_n": 1
+      "top_n": 1,
+      "inbox_path": true
     },
     {
       "id": "synthetic-expired-bill-signals",
@@ -296,7 +343,28 @@
       "must_not_top": [
         "synthetic-water-bill-paid"
       ],
-      "top_n": 1
+      "top_n": 1,
+      "inbox_path": true
+    },
+    {
+      "id": "synthetic-dismissed-sibling-demoted",
+      "query": "internet service renewal",
+      "query_embedding": [
+        0,
+        0,
+        0,
+        0,
+        0.15,
+        0.99
+      ],
+      "expected_uids": [
+        "synthetic-dismissed-sibling-newer"
+      ],
+      "must_not_top": [
+        "synthetic-dismissed-sibling-older"
+      ],
+      "top_n": 1,
+      "inbox_path": true
     }
   ]
 }
