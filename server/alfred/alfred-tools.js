@@ -1,10 +1,13 @@
 import { cacheAlfredItems, readAlfredItems } from "./alfred-conversations.js";
+import { searchEmailResultRow, stripQuotedReply, wrapEmailContent } from "./alfred-email-content.js";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_RANGE_DAYS = 92;
 const MAX_QUERY_RANGE_DAYS = 366;
 const MAX_SEARCH_LIMIT = 20;
-const DEFAULT_SEARCH_LIMIT = 12;
+// Exported because the run loop's cite-nudge cap is defined as "one default page":
+// a default search must never return a set too large for the backstop to arm (C8).
+export const DEFAULT_SEARCH_LIMIT = 12;
 // Every full body the model reads is written into context once (cache write,
 // 1.25x) and re-read on each later turn (0.1x) — the one-time write dominates,
 // so shrinking what enters context is the biggest cost lever. The decision/answer
@@ -19,12 +22,12 @@ const SHOW_KINDS = new Set(["email", "event", "deadline", "bill", "transaction"]
 export const ALFRED_TOOL_DEFINITIONS = [
   {
     name: "search_email",
-    description: "Search the owner's indexed inbox mail (hybrid keyword + semantic). Returns compact matches with snippets, plus total (full match count) and has_more. To walk a large set, page with offset (e.g. offset 12 after a first page of 12) while has_more is true; if capped is returned, narrow instead with date windows or lexical_queries. Use get_email_body to read a full message.",
+    description: "Search the owner's indexed inbox mail (hybrid keyword + semantic). Results are relevance-ranked, NOT newest-first — for 'latest X' questions compare each result's date (or constrain with after) instead of trusting result order. Returns compact matches with snippets, plus total (full match count) and has_more. To walk a large set, page with offset (e.g. offset 12 after a first page of 12) while has_more is true; if capped is returned, narrow instead with date windows or lexical_queries. Use get_email_body to read a full message.",
     input_schema: {
       type: "object",
       properties: {
         query: { type: "string", description: "Natural-language description of what to find" },
-        lexical_queries: { type: "array", items: { type: "string" }, description: "Optional exact keyword phrases likely to appear in matching emails" },
+        lexical_queries: { type: "array", items: { type: "string" }, description: "Optional exact keyword phrases likely to appear in matching emails; up to 3 are each run as keyword searches and the results merged" },
         after: { type: "string", description: "Only emails on/after this ISO date (YYYY-MM-DD)" },
         before: { type: "string", description: "Only emails on/before this ISO date (YYYY-MM-DD)" },
         read_filter: { type: "string", enum: ["read", "unread"], description: "Restrict by read state" },
@@ -160,55 +163,6 @@ export const ALFRED_TOOL_DEFINITIONS = [
   },
 ];
 
-// Candidates carry `from` as a { name, address } object; get_email_body carries
-// it as a string. Flatten to a readable "Name <address>" before fencing so the
-// model sees the actual sender instead of "[object Object]".
-function formatSender(from) {
-  if (!from) return "";
-  if (typeof from === "string") return from;
-  const name = String(from.name || "").trim();
-  const address = String(from.address || "").trim();
-  if (name && address && name !== address) return `${name} <${address}>`;
-  return name || address || "";
-}
-
-function wrapEmailContent(uid, text) {
-  // Neutralize any attacker-supplied delimiter in the untrusted text so it can't
-  // close the trust fence early and smuggle "trusted" instructions after it.
-  const safe = String(text || "").replace(/<(\/?)email_content/gi, "&lt;$1email_content");
-  return `<email_content uid="${uid}">${safe}</email_content>`;
-}
-
-// htmlToPlainText collapses newlines, so the body arrives as one line — quoted
-// reply chains can't be detected by a leading ">" or a "-- " signature line.
-// Match the chain header inline instead, and cut everything from the EARLIEST
-// high-confidence marker onward. Conservative by design: the "On … wrote:"
-// attribution requires an email address in the window (a bare "he wrote:" in
-// prose is not a quote boundary), so legitimate content is never dropped — at
-// worst a chain isn't stripped and the char cap still bounds it.
-const QUOTE_MARKERS = [
-  /-{2,}\s*Original Message\s*-{2,}/i, // Outlook reply divider
-  /-{2,}\s*Forwarded message\s*-{2,}/i, // Gmail/Outlook forward divider
-  /\bBegin forwarded message:/i, // Apple Mail forward
-  /\bFrom:\s.{1,120}?\bSent:\s.{1,120}?\bTo:\s/i, // Outlook header block
-];
-
-export function stripQuotedReply(text) {
-  const s = String(text || "");
-  let cut = -1;
-  for (const re of QUOTE_MARKERS) {
-    const m = s.match(re);
-    if (m && (cut === -1 || m.index < cut)) cut = m.index;
-  }
-  // Gmail/Apple "On <date>, <name> <addr> wrote:" — only treat it as a boundary
-  // when an email address sits inside the matched header.
-  const onWrote = s.match(/\bOn\b[\s\S]{5,240}?\bwrote:/i);
-  if (onWrote && /@/.test(onWrote[0]) && (cut === -1 || onWrote.index < cut)) {
-    cut = onWrote.index;
-  }
-  return (cut === -1 ? s : s.slice(0, cut)).trim();
-}
-
 function parseDateRange(input = {}) {
   const startIso = String(input.start || "");
   const endIso = String(input.end || "");
@@ -298,19 +252,7 @@ async function runSearchEmail(input, { userId, conversation, deps }) {
     has_more: !!result?.has_more,
     ...(result?.capped ? { capped: true } : {}),
     mode: result?.mode || "lexical",
-    results: candidates.map((candidate) => ({
-      uid: candidate.uid,
-      // subject/from are attacker-controlled too — wrap them in the untrusted
-      // delimiter so the system prompt's distrust rule covers them, not just the body.
-      from: wrapEmailContent(candidate.uid, formatSender(candidate.from)),
-      subject: wrapEmailContent(candidate.uid, candidate.subject),
-      date: candidate.email_date,
-      read: candidate.read,
-      snippet: wrapEmailContent(candidate.uid, candidate.body_snippet),
-      lane: candidate.metadata?.lane ?? null,
-      urgency: candidate.metadata?.urgency ?? null,
-      scores: candidate.scores,
-    })),
+    results: candidates.map((candidate) => searchEmailResultRow(candidate)),
   };
 }
 
@@ -486,6 +428,15 @@ function runShowItems(input, { conversation, emit }) {
   if (!ids.length) return { error: "ids is required" };
   const { found, missing } = readAlfredItems(conversation, kind, ids);
   if (found.length) emit({ type: "rows", kind, items: found });
+  // Nothing resolved = the citation failed. Say so as an error (C7): a quiet
+  // shown:0 read as success, marked the run as "cited", and disarmed the
+  // cite-by-reference backstop while the owner saw no rows at all.
+  if (!found.length) {
+    return {
+      error: `No cached ${kind} items match these ids; use ids returned by earlier tool calls in this conversation.`,
+      unknown_ids: missing,
+    };
+  }
   return {
     shown: found.length,
     ...(missing.length ? { unknown_ids: missing } : {}),

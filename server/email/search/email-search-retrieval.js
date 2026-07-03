@@ -7,8 +7,13 @@ import {
 } from "./email-search-embedding-store.js";
 import { getEmailSearchEmbeddingCoverageRatio } from "./email-search-embedding-worker.js";
 import { filterEmailSearchCandidatesForEvidence } from "./email-search-evidence.js";
-import { EMAIL_SEARCH_BM25_RANK_SQL, parseEmailSearchQuery, sanitizeFtsQuery } from "./email-search-query.js";
-import { rankEmailSearchRows } from "./email-search-ranking.js";
+import {
+  EMAIL_SEARCH_BM25_RANK_SQL,
+  buildFtsFallbackQueries,
+  parseEmailSearchQuery,
+  sanitizeFtsQuery,
+} from "./email-search-query.js";
+import { hasJsonPayload, rankEmailSearchRows } from "./email-search-ranking.js";
 import { recordEmailSearchAiUsage, estimateTokensFromText } from "./email-search-cost-stats.js";
 import { EMAIL_SEARCH_EMBEDDING_MODEL } from "./email-search-embeddings.js";
 
@@ -24,6 +29,9 @@ const MAX_RETRIEVAL_POOL = 200;
 // match sat at bm25 position 325). Union in the newest matches so recency-shaped
 // queries always have them in the rankable pool.
 const RECENT_MATCH_SLICE = 50;
+// Each planned lexical query is its own FTS pass; the passes are unioned before
+// ranking. Bounded so a planner cannot fan one search out into arbitrary SQL.
+const MAX_LEXICAL_QUERY_PASSES = 3;
 
 const SNAPSHOT_JOIN = `
               LEFT JOIN ea_email_triage triage
@@ -173,6 +181,7 @@ function metadataFromRow(row) {
     urgency: row.snapshot_urgency || row.triage_urgency || "normal",
     deadline_at: row.snapshot_deadline_at || row.triage_deadline_at || null,
     escalation_badge: row.snapshot_escalation_badge || row.triage_escalation_badge || null,
+    bill_candidate: hasJsonPayload(row.triage_bill_candidate_json),
     handled: Boolean(row.snapshot_handled_at || row.triage_handled_at),
     provider_removed: Boolean(row.snapshot_provider_removed_at),
   };
@@ -202,40 +211,80 @@ function candidateFromRow(row) {
   };
 }
 
-async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, limit, now = Date.now() }) {
+// One FTS pass. `matched` is bounded twice — best-by-bm25 plus newest-by-date — then
+// the snapshot join runs against that bounded union only. The final SELECT aliases the
+// union back to `idx` so SNAPSHOT_JOIN/RANKING_COLUMNS apply verbatim.
+async function fetchFtsRows(dbClient, userId, { ftsQuery, filters, fetchLimit }) {
+  const result = await dbClient.execute({
+    sql: `WITH matched AS (
+            SELECT
+              idx.uid, idx.user_id, idx.account_id, idx.account_label, idx.account_email,
+              idx.account_color, idx.account_icon,
+              idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
+              idx.email_date, idx.email_date_utc, idx.read,
+              ${EMAIL_SEARCH_BM25_RANK_SQL} AS rank
+            FROM ea_email_fts
+            JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
+            WHERE ea_email_fts MATCH ? AND idx.user_id = ?${filters.sql}
+          ),
+          bounded AS (
+            SELECT * FROM (SELECT * FROM matched ORDER BY rank, email_date_utc DESC LIMIT ?)
+            UNION
+            SELECT * FROM (SELECT * FROM matched ORDER BY email_date_utc DESC, rank LIMIT ?)
+          )
+          SELECT
+            idx.*
+            ${RANKING_COLUMNS}
+          FROM bounded idx
+          ${SNAPSHOT_JOIN}
+          ORDER BY idx.rank, idx.email_date_utc DESC`,
+    args: [ftsQuery, userId, ...filters.args, fetchLimit, RECENT_MATCH_SLICE],
+  });
+  return result.rows;
+}
+
+async function loadLexicalRows(dbClient, userId, { textQueries = [], fallbackQuery = "", readFilter, plan, limit, now = Date.now() }) {
   const fetchLimit = Math.min(Math.max(limit * 8, 100), 500);
   const filters = buildPlanFilters(plan, readFilter);
-  if (textQuery.trim()) {
-    // `matched` is bounded twice — best-by-bm25 plus newest-by-date — then the snapshot
-    // join runs against that bounded union only. The final SELECT aliases the union back
-    // to `idx` so SNAPSHOT_JOIN/RANKING_COLUMNS apply verbatim.
-    const result = await dbClient.execute({
-      sql: `WITH matched AS (
-              SELECT
-                idx.uid, idx.user_id, idx.account_id, idx.account_label, idx.account_email,
-                idx.account_color, idx.account_icon,
-                idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-                idx.email_date, idx.email_date_utc, idx.read,
-                ${EMAIL_SEARCH_BM25_RANK_SQL} AS rank
-              FROM ea_email_fts
-              JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
-              WHERE ea_email_fts MATCH ? AND idx.user_id = ?${filters.sql}
-            ),
-            bounded AS (
-              SELECT * FROM (SELECT * FROM matched ORDER BY rank, email_date_utc DESC LIMIT ?)
-              UNION
-              SELECT * FROM (SELECT * FROM matched ORDER BY email_date_utc DESC, rank LIMIT ?)
-            )
-            SELECT
-              idx.*
-              ${RANKING_COLUMNS}
-            FROM bounded idx
-            ${SNAPSHOT_JOIN}
-            ORDER BY idx.rank, idx.email_date_utc DESC`,
-      args: [sanitizeFtsQuery(textQuery), userId, ...filters.args, fetchLimit, RECENT_MATCH_SLICE],
-    });
-    return rankEmailSearchRows(result.rows, {
-      query: textQuery,
+  const queries = textQueries
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .slice(0, MAX_LEXICAL_QUERY_PASSES);
+  if (queries.length) {
+    // Every planned lexical query gets its own FTS pass (the schema advertises an
+    // array; pre-audit only [0] ever reached FTS — C2). Union by uid, first pass
+    // wins: per-pass bm25 ranks are not comparable across MATCH strings, and rank
+    // is only a late tiebreaker after score and date.
+    const ftsQueries = [...new Set(queries.map((query) => sanitizeFtsQuery(query)))];
+    const passes = await Promise.all(
+      ftsQueries.map((ftsQuery) => fetchFtsRows(dbClient, userId, { ftsQuery, filters, fetchLimit })),
+    );
+    const rowsByUid = new Map();
+    for (const rows of passes) {
+      for (const row of rows) {
+        if (!rowsByUid.has(row.uid)) rowsByUid.set(row.uid, row);
+      }
+    }
+    // Zero-result recovery ladder (audit B1/C3): when no primary pass matched, retry
+    // the NL query in progressively looser forms and stop at the first that matches
+    // anything — so filler words or one wrong token degrade the leg instead of
+    // zeroing it (which silently collapsed retrieval to vector-only).
+    if (!rowsByUid.size) {
+      const tried = new Set(ftsQueries.map((query) => query.toLowerCase()));
+      for (const variant of buildFtsFallbackQueries(fallbackQuery || queries[0])) {
+        if (tried.has(variant.toLowerCase())) continue;
+        tried.add(variant.toLowerCase());
+        const rows = await fetchFtsRows(dbClient, userId, { ftsQuery: variant, filters, fetchLimit });
+        if (!rows.length) continue;
+        // Fallback matches are speculative (a loosened query, not the planned one):
+        // tag them so the evidence gate does not treat the engine match itself as
+        // evidence the way it does for primary-pass rows.
+        for (const row of rows) rowsByUid.set(row.uid, { ...row, lexical_fallback: true });
+        break;
+      }
+    }
+    return rankEmailSearchRows([...rowsByUid.values()], {
+      query: queries[0],
       limit: fetchLimit,
       now,
       debug: true,
@@ -258,7 +307,8 @@ async function loadLexicalRows(dbClient, userId, { textQuery, readFilter, plan, 
     args: [userId, ...filters.args, fetchLimit],
   });
   return rankEmailSearchRows(result.rows, {
-    query: textQuery,
+    // Only reachable when every text query was blank — score recency/quality alone.
+    query: "",
     limit: fetchLimit,
     now,
     debug: true,
@@ -304,7 +354,9 @@ export function mergeCandidates({ lexicalRows, vectorMatches, vectorRows, limit,
     const lexicalScore = lexicalScoreFromRow(row);
     byUid.set(row.uid, {
       ...candidateFromRow(row),
-      provenance: { lexical: true, vector: false },
+      // lexical_fallback only appears when true, so primary-pass provenance keeps
+      // its exact two-key shape.
+      provenance: { lexical: true, vector: false, ...(row.lexical_fallback ? { lexical_fallback: true } : {}) },
       scores: {
         lexical: lexicalScore,
         vector: 0,
@@ -386,7 +438,11 @@ export async function retrieveInboxAiSearch(userId, {
   } : null;
   const planReadFilter = readFilterFromPlan(plan);
   const readFilter = explicitReadFilter == null ? planReadFilter : explicitReadFilter;
-  const textQuery = plan?.lexical_queries?.[0] || plan?.semantic_query || rawTextQuery;
+  const plannedLexicalQueries = (Array.isArray(plan?.lexical_queries) ? plan.lexical_queries : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const textQuery = plannedLexicalQueries[0] || plan?.semantic_query || rawTextQuery;
+  const textQueries = plannedLexicalQueries.length ? plannedLexicalQueries : [textQuery];
   const vectorQuery = plan?.semantic_query || rawTextQuery;
   const resolvedCapability = capability || await detectEmailSearchVectorCapability(dbClient);
   // Sizing is INDEPENDENT of offset so `total`/`has_more`/`capped` and the page
@@ -401,7 +457,8 @@ export async function retrieveInboxAiSearch(userId, {
   const candidatePoolLimit = MAX_RETRIEVAL_POOL;
 
   const lexicalPromise = loadLexicalRows(dbClient, userId, {
-    textQuery,
+    textQueries,
+    fallbackQuery: vectorQuery,
     readFilter,
     plan: effectivePlan,
     limit: maxResults,

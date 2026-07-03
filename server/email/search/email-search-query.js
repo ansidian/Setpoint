@@ -18,6 +18,40 @@ export function sanitizeFtsQuery(raw) {
   return terms.join(" ") || `"${raw}"`;
 }
 
+// Query filler that poisons AND-of-every-token FTS: unicode61 indexes stopwords, so
+// "most recent paypal statement" literally requires 'most' AND 'recent' in the
+// document and returns zero (audit B1). Only consulted for FALLBACK forms after a
+// zero-result primary pass, so stripping aggressively is safe — the ranker and the
+// evidence gate bound whatever extra noise a looser form lets in.
+const FTS_QUERY_STOPWORDS = new Set([
+  "a", "about", "all", "am", "an", "and", "any", "are", "as", "at", "be", "been",
+  "by", "can", "could", "did", "do", "does", "earliest", "email", "emails", "find",
+  "first", "for", "from", "get", "had", "has", "have", "her", "his", "how", "i",
+  "in", "is", "it", "its", "last", "latest", "look", "looking", "mail", "may", "me",
+  "message", "messages", "might", "most", "must", "my", "new", "newest", "no", "not",
+  "of", "old", "oldest", "on", "or", "our", "please", "recent", "recently", "search",
+  "shall", "should", "show", "some", "that", "the", "their", "these", "this", "those",
+  "to", "was", "were", "what", "whats", "when", "whens", "where", "which", "who",
+  "why", "will", "with", "would", "your",
+]);
+
+// Progressively looser FTS forms for a query whose primary AND pass matched nothing:
+// (1) the AND with filler stripped, prefix on the last token (mirrors sanitizeFtsQuery);
+// (2) OR of the remaining tokens, each prefix-matched, so a single wrong token can no
+// longer zero the whole lexical leg. Token split on non-alphanumerics also dissolves
+// possessives ("paypal's" → paypal) that would otherwise become unmatchable phrases.
+export function buildFtsFallbackQueries(raw) {
+  const tokens = String(raw || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 2 && !FTS_QUERY_STOPWORDS.has(token));
+  if (!tokens.length) return [];
+  const quoted = tokens.map((token) => `"${token}"`);
+  const strippedAnd = [...quoted.slice(0, -1), `${quoted[quoted.length - 1]}*`].join(" ");
+  const anyToken = quoted.map((token) => `${token}*`).join(" OR ");
+  return anyToken === strippedAnd ? [strippedAnd] : [strippedAnd, anyToken];
+}
+
 export function unsupportedSearchFlagError(flag) {
   const err = new Error(`Unsupported email search flag: ${flag}`);
   err.status = 400;

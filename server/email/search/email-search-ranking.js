@@ -21,7 +21,7 @@ function queryTerms(query) {
     .filter((term) => term && !/^is:[^\s]+$/.test(term));
 }
 
-function hasJsonPayload(value) {
+export function hasJsonPayload(value) {
   const text = String(value || "").trim();
   return !!text && text !== "{}" && text !== "null";
 }
