@@ -17,6 +17,8 @@ afterEach(() => {
 });
 
 describe("Settings demo mode", () => {
+  // The dynamic Settings import chain is slow under full-suite worker load;
+  // the default 10s test timeout flakes even though the test passes in ~4s alone.
   it("renders the Email Automation tab with demo data and no real fetch", async () => {
     const { default: Settings } = await importDemoSettingsPage();
 
@@ -32,5 +34,5 @@ describe("Settings demo mode", () => {
     expect(screen.getAllByText("Demo-only model")).toHaveLength(2);
     expect(screen.queryByText(/key configured/i)).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
-  });
+  }, 30000);
 });
