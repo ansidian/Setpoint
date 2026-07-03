@@ -23,7 +23,7 @@ export function pluralVariants(token) {
   return [`${t}s`];
 }
 
-const DATE_TOKEN_RE = /^(\d{1,2})([/\-])(\d{1,2})(?:\2(\d{2,4}))?$/;
+const DATE_TOKEN_RE = /^(\d{1,2})([/-])(\d{1,2})(?:\2(\d{2,4}))?$/;
 
 // Audit B5: in-body dates like "07/07/2026" tokenize (unicode61) into
 // adjacent numeric tokens, so "7/7" can only match via an adjacency phrase

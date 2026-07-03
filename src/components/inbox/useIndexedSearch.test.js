@@ -58,7 +58,7 @@ describe("useIndexedSearch", () => {
     await flushDebounce();
 
     expect(searchEmails).toHaveBeenCalledTimes(1);
-    expect(searchEmails).toHaveBeenCalledWith("hello");
+    expect(searchEmails).toHaveBeenCalledWith("hello", 30);
     expect(result.current.indexedSearch.loading).toBe(false);
     expect(result.current.indexedSearch.emails).toHaveLength(1);
     // read is merged up from the session-wide live override map.
@@ -76,7 +76,7 @@ describe("useIndexedSearch", () => {
     await flushDebounce();
 
     expect(searchEmails).toHaveBeenCalledTimes(1);
-    expect(searchEmails).toHaveBeenCalledWith("foobar");
+    expect(searchEmails).toHaveBeenCalledWith("foobar", 30);
     expect(result.current.indexedSearch.emails).toHaveLength(1);
   });
 
@@ -92,11 +92,11 @@ describe("useIndexedSearch", () => {
 
     const { result, rerender } = render({ search: "foo", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(1, "foo");
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "foo", 30);
 
     rerender({ search: "foobar", liveReadOverrides: {} });
     await flushDebounce();
-    expect(searchEmails).toHaveBeenNthCalledWith(2, "foobar");
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "foobar", 30);
 
     // Newest (request 2) lands first and wins.
     await act(async () => {
@@ -157,5 +157,111 @@ describe("useIndexedSearch", () => {
     await flushDebounce();
 
     expect(result.current.indexedSearch.emails[0].read).toBe(true);
+  });
+
+  it("surfaces total and hasMore from a resolved search", async () => {
+    searchEmails.mockResolvedValue({
+      results: [searchResult("m1")],
+      total: 42,
+      has_more: true,
+    });
+
+    const { result } = render({ search: "hello", liveReadOverrides: {} });
+    await flushDebounce();
+
+    expect(result.current.indexedSearch.total).toBe(42);
+    expect(result.current.indexedSearch.hasMore).toBe(true);
+  });
+
+  it("loadMoreIndexedSearch refetches with a limit of 60 and replaces the list", async () => {
+    searchEmails.mockResolvedValue({
+      results: [searchResult("m1")],
+      total: 100,
+      has_more: true,
+    });
+
+    const { result } = render({ search: "hello", liveReadOverrides: {} });
+    await flushDebounce();
+
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30);
+
+    searchEmails.mockResolvedValue({
+      results: [searchResult("m1"), searchResult("m2")],
+      total: 100,
+      has_more: true,
+    });
+
+    act(() => result.current.loadMoreIndexedSearch());
+    await flushDebounce();
+
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60);
+    expect(result.current.indexedSearch.emails.map((e) => e.uid)).toEqual(["m1", "m2"]);
+  });
+
+  it("resets the limit to 30 when the search term changes", async () => {
+    searchEmails.mockResolvedValue({ results: [searchResult("m1")], total: 100, has_more: true });
+
+    const { result, rerender } = render({ search: "hello", liveReadOverrides: {} });
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30);
+
+    act(() => result.current.loadMoreIndexedSearch());
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60);
+
+    rerender({ search: "newterm", liveReadOverrides: {} });
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(3, "newterm", 30);
+  });
+
+  it("stops growing at the 100 ceiling: hasMore becomes false and further loadMore calls do not refetch", async () => {
+    searchEmails.mockResolvedValue({ results: [searchResult("m1")], total: 500, has_more: true });
+
+    const { result } = render({ search: "hello", liveReadOverrides: {} });
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(1, "hello", 30);
+
+    act(() => result.current.loadMoreIndexedSearch()); // -> 60
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(2, "hello", 60);
+
+    act(() => result.current.loadMoreIndexedSearch()); // -> 90
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(3, "hello", 90);
+
+    act(() => result.current.loadMoreIndexedSearch()); // -> 100 (clamped)
+    await flushDebounce();
+    expect(searchEmails).toHaveBeenNthCalledWith(4, "hello", 100);
+
+    // Server still says has_more: true, but the ceiling caps surfaced hasMore.
+    expect(result.current.indexedSearch.hasMore).toBe(false);
+
+    const callCountAtCeiling = searchEmails.mock.calls.length;
+    act(() => result.current.loadMoreIndexedSearch()); // already at ceiling
+    await flushDebounce();
+    expect(searchEmails.mock.calls.length).toBe(callCountAtCeiling);
+  });
+
+  it("carries a local read toggle forward across a load-more refetch", async () => {
+    searchEmails.mockResolvedValue({ results: [searchResult("m1", { read: false })], total: 100, has_more: true });
+
+    const { result } = render({ search: "hello", liveReadOverrides: {} });
+    await flushDebounce();
+    expect(result.current.indexedSearch.emails[0].read).toBe(false);
+
+    act(() => result.current.updateIndexedSearchRead("m1", true));
+    expect(result.current.indexedSearch.emails[0].read).toBe(true);
+
+    // load-more re-fetches; server still reports m1 as unread, but the local
+    // toggle must win so the just-applied read state does not go stale.
+    searchEmails.mockResolvedValue({
+      results: [searchResult("m1", { read: false }), searchResult("m2")],
+      total: 100,
+      has_more: true,
+    });
+    act(() => result.current.loadMoreIndexedSearch());
+    await flushDebounce();
+
+    expect(result.current.indexedSearch.emails.find((e) => e.uid === "m1").read).toBe(true);
   });
 });

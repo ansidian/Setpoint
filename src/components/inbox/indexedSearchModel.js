@@ -100,5 +100,7 @@ export function normalizeIndexedSearchResults(data, readOverrides) {
     accountsById,
     loading: false,
     error: null,
+    total: Number(data?.total) || emails.length,
+    hasMore: Boolean(data?.has_more),
   };
 }

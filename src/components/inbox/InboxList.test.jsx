@@ -307,4 +307,49 @@ describe("InboxList", () => {
 
     expect(screen.queryByText("Pinned")).toBeNull();
   });
+
+  it("shows the true indexed-search total in the count header, not just the loaded page size", () => {
+    renderInboxList({
+      indexedSearchActive: true,
+      totalCount: 30,
+      indexedSearchTotal: 42,
+      unreadCount: 5,
+    });
+
+    expect(screen.getByText("30")).toBeTruthy();
+    expect(screen.getByText("of 42 indexed results")).toBeTruthy();
+  });
+
+  it("renders a Show more results button when more indexed results are available and wires the click through", () => {
+    const onLoadMoreSearch = vi.fn();
+
+    renderInboxList({
+      emails: [makeInboxEmail({ id: "email-1", _lane: "action" })],
+      layout: "flat",
+      indexedSearchActive: true,
+      totalCount: 30,
+      indexedSearchTotal: 42,
+      indexedSearchHasMore: true,
+      onLoadMoreSearch,
+    });
+
+    const button = screen.getByRole("button", { name: "Show more results" });
+    fireEvent.click(button);
+    expect(onLoadMoreSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the Show more results button when there is nothing more to load, even at the results ceiling", () => {
+    renderInboxList({
+      emails: [makeInboxEmail({ id: "email-1", _lane: "action" })],
+      layout: "flat",
+      indexedSearchActive: true,
+      totalCount: 100,
+      indexedSearchTotal: 250,
+      indexedSearchHasMore: false,
+    });
+
+    expect(screen.getByText("100")).toBeTruthy();
+    expect(screen.getByText("of 250 indexed results")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show more results" })).toBeNull();
+  });
 });

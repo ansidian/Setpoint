@@ -154,6 +154,42 @@ describe("normalizeIndexedSearchResults", () => {
     expect(reconciled.emails[0].read).toBe(true);
   });
 
+  it("surfaces total and hasMore from the server response", () => {
+    const normalized = normalizeIndexedSearchResults({
+      query: "tuition",
+      results: [{
+        uid: "work-older",
+        account_id: "gmail-work",
+        from_name: "Bursar",
+        from_address: "billing@school.edu",
+        subject: "Tuition receipt ready",
+        body_snippet: "Payment confirmation.",
+        email_date: "2026-04-20T12:00:00Z",
+        read: true,
+      }],
+      accounts: [],
+      total: 42,
+      has_more: true,
+    }, {});
+
+    expect(normalized.total).toBe(42);
+    expect(normalized.hasMore).toBe(true);
+  });
+
+  it("defaults total to the email count and hasMore to false when the fields are absent", () => {
+    const normalized = normalizeIndexedSearchResults({
+      query: "tuition",
+      results: [
+        { uid: "a", account_id: "gmail-work", from_address: "x@example.com", subject: "One", email_date: "2026-04-20T12:00:00Z" },
+        { uid: "b", account_id: "gmail-work", from_address: "y@example.com", subject: "Two", email_date: "2026-04-21T12:00:00Z" },
+      ],
+      accounts: [],
+    }, {});
+
+    expect(normalized.total).toBe(2);
+    expect(normalized.hasMore).toBe(false);
+  });
+
   it("preserves triaged bill metadata for bill-pay form seeding", () => {
     const normalized = normalizeIndexedSearchResults({
       query: "payment",
