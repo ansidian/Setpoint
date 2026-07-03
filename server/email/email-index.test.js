@@ -455,6 +455,159 @@ describe("email indexing", () => {
     expect(embedding.rows).toEqual([{ source_hash: "fresh-hash" }]);
   });
 
+  it("persists thread and message identity on first index (D2)", async () => {
+    await emailIndex.indexEmails("user-1", [
+      {
+        uid: "gmail-work-msg-identity",
+        account_id: "gmail-work",
+        account_label: "Work",
+        account_email: "work@example.com",
+        account_color: "#123456",
+        account_icon: "Mail",
+        from: "Sender <sender@example.com>",
+        subject: "Identity subject",
+        body_preview: "Preview",
+        body_text: "Body",
+        date: "2026-05-01T12:00:00Z",
+        read: true,
+        thread_id: "t-777",
+        message_id: "<m-777@example.com>",
+      },
+    ]);
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT thread_id, message_id FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-identity"],
+    });
+    expect(indexed.rows).toEqual([
+      { thread_id: "t-777", message_id: "<m-777@example.com>" },
+    ]);
+  });
+
+  it("backfills identity via the cheap metadata update, not an FTS rewrite (D2)", async () => {
+    const base = {
+      uid: "gmail-work-msg-identity-backfill",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      account_color: "#123456",
+      account_icon: "Mail",
+      from: "Sender <sender@example.com>",
+      subject: "Stable subject",
+      body_text: "Stable body",
+      date: "2026-05-01T12:00:00.000Z",
+      read: true,
+    };
+    // Baseline rows predate the identity columns (indexed without ids).
+    await emailIndex.indexEmails("user-1", [{ ...base, body_preview: "Old preview" }]);
+    // Stand in for the search embedding: an identity backfill must NOT
+    // invalidate it — identity is metadata, not searchable content.
+    await testState.db.current.execute({
+      sql: `INSERT INTO ea_email_search_embeddings
+              (uid, user_id, account_id, document_text, document_json,
+               source_hash, document_version, embedding_model,
+               embedding_dimensions, embedding)
+            VALUES (?, ?, ?, ?, ?, ?, 1, 'text-embedding-3-small', 1536, ?)`,
+      args: [
+        "gmail-work-msg-identity-backfill",
+        "user-1",
+        "gmail-work",
+        "Subject: Stable subject",
+        JSON.stringify({ subject: "Stable subject" }),
+        "fresh-hash",
+        Buffer.from(new Float32Array([0.1, 0.2]).buffer),
+      ],
+    });
+
+    // A re-fetch now carries the ids (and a drifted snippet) — content identical.
+    await emailIndex.indexEmails("user-1", [{
+      ...base,
+      body_preview: "New preview",
+      thread_id: "t-888",
+      message_id: "<m-888@example.com>",
+    }]);
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT thread_id, message_id, body_snippet FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-identity-backfill"],
+    });
+    expect(indexed.rows).toEqual([
+      { thread_id: "t-888", message_id: "<m-888@example.com>", body_snippet: "New preview" },
+    ]);
+    // The FTS row keeps the pre-backfill snippet: no FTS rewrite happened.
+    const fts = await testState.db.current.execute({
+      sql: "SELECT body_snippet FROM ea_email_fts WHERE uid = ?",
+      args: ["gmail-work-msg-identity-backfill"],
+    });
+    expect(fts.rows).toEqual([{ body_snippet: "Old preview" }]);
+    // And the embedding survives (no invalidation).
+    const embedding = await testState.db.current.execute({
+      sql: "SELECT source_hash FROM ea_email_search_embeddings WHERE uid = ?",
+      args: ["gmail-work-msg-identity-backfill"],
+    });
+    expect(embedding.rows).toEqual([{ source_hash: "fresh-hash" }]);
+  });
+
+  it("keeps stored identity when a metadata-path refetch omits it (D2)", async () => {
+    const base = {
+      uid: "gmail-work-msg-identity-keep",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      account_color: "#123456",
+      account_icon: "Mail",
+      from: "Sender <sender@example.com>",
+      subject: "Stable subject",
+      body_preview: "Preview",
+      body_text: "Stable body",
+      date: "2026-05-01T12:00:00.000Z",
+    };
+    await emailIndex.indexEmails("user-1", [
+      { ...base, read: false, thread_id: "t-999", message_id: "<m-999@example.com>" },
+    ]);
+
+    // A later fetch path without identity fields flips read state only.
+    await emailIndex.indexEmails("user-1", [{ ...base, read: true }]);
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT thread_id, message_id, read FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-identity-keep"],
+    });
+    expect(indexed.rows).toEqual([
+      { thread_id: "t-999", message_id: "<m-999@example.com>", read: 1 },
+    ]);
+  });
+
+  it("keeps stored identity across a searchable-content rewrite that omits it (D2)", async () => {
+    const base = {
+      uid: "gmail-work-msg-identity-rewrite",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      account_color: "#123456",
+      account_icon: "Mail",
+      from: "Sender <sender@example.com>",
+      subject: "Stable subject",
+      body_preview: "Preview",
+      date: "2026-05-01T12:00:00.000Z",
+      read: true,
+    };
+    await emailIndex.indexEmails("user-1", [
+      { ...base, body_text: "Original body", thread_id: "t-111", message_id: "<m-111@example.com>" },
+    ]);
+
+    // Content actually changed → full upsert branch; identity fields absent.
+    await emailIndex.indexEmails("user-1", [{ ...base, body_text: "Rewritten body" }]);
+
+    const indexed = await testState.db.current.execute({
+      sql: "SELECT thread_id, message_id, body_text FROM ea_email_index WHERE uid = ?",
+      args: ["gmail-work-msg-identity-rewrite"],
+    });
+    expect(indexed.rows).toEqual([
+      { thread_id: "t-111", message_id: "<m-111@example.com>", body_text: "Rewritten body" },
+    ]);
+  });
+
   it("normalizes provider email dates for temporal search without rewriting unchanged FTS content", async () => {
     await seedIndexedEmail(testState.db.current, {
       uid: "gmail-work-msg-date",

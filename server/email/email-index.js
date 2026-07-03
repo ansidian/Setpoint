@@ -239,7 +239,7 @@ async function loadExistingIndexRows(userId, uids, { dbClient }) {
     const chunk = uids.slice(i, i + EMAIL_INDEX_LOOKUP_CHUNK_SIZE);
     const result = await dbClient.execute({
       sql: `SELECT rowid, uid, from_name, from_address, subject, body_snippet, body_text,
-                   email_date, email_date_utc, read
+                   email_date, email_date_utc, read, thread_id, message_id
             FROM ea_email_index
             WHERE user_id = ?
               AND uid IN (${chunk.map(() => "?").join(",")})`,
@@ -278,6 +278,8 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
     const emailDate = email.date || "";
     const emailDateUtc = normalizeEmailDateUtc(emailDate);
     const read = email.read ? 1 : 0;
+    const threadId = email.thread_id || null;
+    const messageId = email.message_id || null;
     const existing = existingRows.get(uid);
     // P3-2: body_snippet is the volatile Gmail preview and is NOT part of the
     // searchable-content set. A snippet-only drift (common at backfill window
@@ -292,17 +294,23 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
     const snippetChanged = !existing || existing.body_snippet !== bodySnippet;
     const indexMetadataChanged = !existing
       || existing.email_date !== emailDate
-      || existing.email_date_utc !== emailDateUtc;
+      || existing.email_date_utc !== emailDateUtc
+      || (threadId && threadId !== existing.thread_id)
+      || (messageId && messageId !== existing.message_id);
     if (!searchableChanged) {
       if (!indexMetadataChanged && !snippetChanged && Number(existing.read) === read) return [];
+      // Identity columns COALESCE so a fetch path that lacks them (or a
+      // pre-identity cached row) never nulls out stored values.
       return [{
         sql: `UPDATE ea_email_index
               SET body_snippet = ?,
                   email_date = ?,
                   email_date_utc = ?,
-                  read = ?
+                  read = ?,
+                  thread_id = COALESCE(?, thread_id),
+                  message_id = COALESCE(?, message_id)
               WHERE uid = ? AND user_id = ?`,
-        args: [bodySnippet, emailDate, emailDateUtc, read, uid, userId],
+        args: [bodySnippet, emailDate, emailDateUtc, read, threadId, messageId, uid, userId],
       }];
     }
 
@@ -311,7 +319,7 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
       email.account_email, email.account_color || "#818cf8",
       email.account_icon || "Mail", fromName, fromAddress,
       subject, bodySnippet, bodyText,
-      emailDate, emailDateUtc, read,
+      emailDate, emailDateUtc, read, threadId, messageId,
     ];
     // When an already-indexed email's searchable content changed, drop any
     // existing search embedding so the re-embedding worker re-selects it as a
@@ -335,8 +343,9 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
         sql: `INSERT INTO ea_email_index
               (uid, user_id, account_id, account_label, account_email,
                account_color, account_icon, from_name, from_address,
-               subject, body_snippet, body_text, email_date, email_date_utc, read)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               subject, body_snippet, body_text, email_date, email_date_utc, read,
+               thread_id, message_id)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(uid) DO UPDATE SET
                 account_id = excluded.account_id,
                 account_label = excluded.account_label,
@@ -350,7 +359,9 @@ export async function indexEmails(userId, emails, { dbClient = db } = {}) {
                 body_text = excluded.body_text,
                 email_date = excluded.email_date,
                 email_date_utc = excluded.email_date_utc,
-                read = excluded.read`,
+                read = excluded.read,
+                thread_id = COALESCE(excluded.thread_id, ea_email_index.thread_id),
+                message_id = COALESCE(excluded.message_id, ea_email_index.message_id)`,
         args,
       },
       {

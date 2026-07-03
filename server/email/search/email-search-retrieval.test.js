@@ -28,6 +28,7 @@ async function createRetrievalTestDb() {
     "005_email_search_embeddings.sql",
     "006_email_search_embedding_state.sql",
     "013_email_index_normalized_date.sql",
+    "025_email_thread_identity.sql",
   ]);
   return db;
 }
@@ -957,6 +958,52 @@ describe("family dominance across the fused hybrid pool", () => {
     const uids = result.candidates.map((candidate) => candidate.uid);
     expect(uids.indexOf("stmt-new-lexical")).toBeGreaterThanOrEqual(0);
     expect(uids.indexOf("stmt-new-lexical")).toBeLessThan(uids.indexOf("stmt-old-vector"));
+  });
+
+  it("keeps a same-thread reply newest-first when siblings have DIFFERENT subjects and arrive via different retrieval legs", async () => {
+    db = await createRetrievalTestDb();
+    // Same thread_id but the subjects diverge (a "Re:" reply) — the family key
+    // (from+subject) does NOT group these, so only the thread-key pass can clamp.
+    await seedIndexedEmail(db, {
+      uid: "thread-new-lexical",
+      from_address: "ops@contractor.example",
+      from_name: "Contractor",
+      subject: "Re: Water heater quote",
+      body_snippet: "Following up on the quote. Confirmation code 0707.",
+      body_text: "Following up on the quote. Confirmation code 0707.",
+      email_date: "2026-06-15T12:00:00Z",
+      thread_id: "t-fused-1",
+    });
+    const older = await seedIndexedEmail(db, {
+      uid: "thread-old-vector",
+      from_address: "ops@contractor.example",
+      from_name: "Contractor",
+      subject: "Water heater quote",
+      body_snippet: "Quote attached.",
+      body_text: "Quote attached.",
+      email_date: "2026-05-16T12:00:00Z",
+      thread_id: "t-fused-1",
+    });
+    await upsertEmbedding(db, older, [1, 0, 0]);
+    await db.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, bill_candidate_json, triage_status)
+            VALUES (?, ?, ?, 'fyi', 'finance', 'medium', '{"amount":42}', 'complete')`,
+      args: ["user-1", "gmail-work", "thread-old-vector"],
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "water heater 0707",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      limit: 5,
+      now: "2026-07-02T12:00:00Z",
+    });
+
+    const uids = result.candidates.map((candidate) => candidate.uid);
+    expect(uids.indexOf("thread-new-lexical")).toBeGreaterThanOrEqual(0);
+    expect(uids.indexOf("thread-new-lexical")).toBeLessThan(uids.indexOf("thread-old-vector"));
   });
 });
 

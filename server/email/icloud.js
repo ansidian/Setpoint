@@ -90,7 +90,7 @@ export async function fetchEmails(account, password, hoursBack) {
     })) {
       const msgDate = msg.envelope?.date;
       if (msgDate && new Date(msgDate) < cutoffDate) continue;
-      emails.push(normalizeMessage(account, msg));
+      emails.push(await normalizeMessage(account, msg));
     }
   } finally {
     lock.release();
@@ -128,7 +128,7 @@ export async function fetchEmailsInRange(account, password, {
     })) {
       const msgDate = msg.envelope?.date ? new Date(msg.envelope.date) : null;
       if (msgDate && (msgDate < startDate || msgDate >= endDate)) continue;
-      emails.push(normalizeMessage(account, msg));
+      emails.push(await normalizeMessage(account, msg));
     }
   } finally {
     lock.release();
@@ -137,13 +137,13 @@ export async function fetchEmailsInRange(account, password, {
   return { emails, cursor: null };
 }
 
-function normalizeMessage(account, msg) {
+async function normalizeMessage(account, msg) {
   const msgDate = msg.envelope?.date;
   const from = msg.envelope?.from?.[0];
   const fromName = from?.name || from?.address || "Unknown";
   const fromAddress = from?.address || "";
 
-  const { bodyText, bodyPreview } = extractBodyTextAndPreview(msg.source);
+  const { bodyText, bodyPreview } = await extractBodyTextAndPreview(msg.source);
   return {
     uid: `icloud-${msg.uid}`,
     account_id: account.id,
@@ -158,6 +158,9 @@ function normalizeMessage(account, msg) {
     body_text: bodyText,
     date: msgDate ? new Date(msgDate).toISOString() : "",
     read: msg.flags?.has("\\Seen") || false,
+    // IMAP has no Gmail-style thread id; Message-ID rides the envelope for free.
+    thread_id: null,
+    message_id: msg.envelope?.messageId || null,
   };
 }
 
@@ -168,16 +171,23 @@ function extractAmounts(text) {
   return ` [amounts: ${unique.join(", ")}]`;
 }
 
-// P2-1: decode the raw source and run the HTML→text strip ONCE, then derive both
-// the full body_text (for FTS) and the 600-char body_preview (+amounts) from the
-// same clean text. Previously normalizeMessage called two helpers that each
-// decoded up to 256KB and re-ran the full strip chain.
-function extractBodyTextAndPreview(source) {
+// P2-1: decode the raw source ONCE, then derive both the full body_text (for FTS)
+// and the 600-char body_preview (+amounts) from the same clean text.
+// D1 fix: MIME-parse with mailparser (same as gmail.js and fetchEmailBody below)
+// so multipart/quoted-printable/base64 messages index as decoded text, not raw MIME.
+async function extractBodyTextAndPreview(source) {
   if (!source) return { bodyText: "", bodyPreview: "" };
-  const text = source.toString("utf8");
-  const bodyStart = text.indexOf("\r\n\r\n");
-  if (bodyStart === -1) return { bodyText: "", bodyPreview: "" };
-  const clean = htmlToPlainText(text.slice(bodyStart + 4));
+  let clean = "";
+  try {
+    const parsed = await simpleParser(source);
+    const text = (parsed.text || "").trim();
+    clean = text || htmlToPlainText(parsed.html || "");
+  } catch {
+    // Malformed message: fall back to the old naive split so it still indexes.
+    const text = source.toString("utf8");
+    const bodyStart = text.indexOf("\r\n\r\n");
+    clean = bodyStart === -1 ? "" : htmlToPlainText(text.slice(bodyStart + 4));
+  }
   return { bodyText: clean, bodyPreview: clean.slice(0, 600) + extractAmounts(clean) };
 }
 

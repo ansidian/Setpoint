@@ -5,17 +5,67 @@
 // exactly tied recurring statement twins).
 export const EMAIL_SEARCH_BM25_RANK_SQL = "bm25(ea_email_fts, 0.0, 4.0, 4.0, 10.0, 3.0, 1.0)";
 
-export function sanitizeFtsQuery(raw) {
-  const terms = raw
-    .replace(/[\u201C\u201D]/g, '"')
-    .split(/\s+/)
-    .filter((t) => t.length > 0)
-    .map((t) => `"${t.replace(/"/g, '""')}"`);
-  if (terms.length > 0) {
-    const last = terms[terms.length - 1];
-    terms[terms.length - 1] = last.slice(0, -1) + '"*';
+const MIN_VARIANT_TOKEN_LENGTH = 4;
+
+// Query-side singular/plural expansion (audit B2). Deliberately NOT a porter
+// tokenizer migration: prod FTS runs on Turso's hosted engine, and a one-shot
+// FTS rebuild against an engine we can't test locally is the works-locally/
+// breaks-prod class of change. Regular English noun inflection covers the
+// measured corpus gap.
+export function pluralVariants(token) {
+  const t = String(token || "").toLowerCase();
+  if (t.length < MIN_VARIANT_TOKEN_LENGTH || /[^a-z]/.test(t)) return [];
+  if (t.endsWith("ies")) return [`${t.slice(0, -3)}y`];
+  if (/(ses|xes|zes|ches|shes)$/.test(t)) return [t.slice(0, -2)];
+  if (t.endsWith("ss")) return [];
+  if (t.endsWith("s")) return [t.slice(0, -1)];
+  if (t.endsWith("y") && !/[aeiou]y$/.test(t)) return [`${t.slice(0, -1)}ies`];
+  return [`${t}s`];
+}
+
+const DATE_TOKEN_RE = /^(\d{1,2})([/\-])(\d{1,2})(?:\2(\d{2,4}))?$/;
+
+// Audit B5: in-body dates like "07/07/2026" tokenize (unicode61) into
+// adjacent numeric tokens, so "7/7" can only match via an adjacency phrase
+// with the same zero-padding. Expand date-shaped query tokens into padded
+// and unpadded phrase variants.
+export function dateTokenVariants(token) {
+  const m = DATE_TOKEN_RE.exec(String(token || ""));
+  if (!m) return [];
+  const [, first, , second, year] = m;
+  const pad = (n) => String(n).padStart(2, "0");
+  const unpad = (n) => String(Number(n));
+  const variants = [];
+  for (const a of [...new Set([pad(first), unpad(first)])]) {
+    for (const b of [...new Set([pad(second), unpad(second)])]) {
+      const phrase = year ? `${a} ${b} ${year}` : `${a} ${b}`;
+      if (!variants.includes(phrase)) variants.push(phrase);
+    }
   }
-  return terms.join(" ") || `"${raw}"`;
+  return variants;
+}
+
+export function sanitizeFtsQuery(raw) {
+  const tokens = String(raw || "")
+    .replace(/[\u201C\u201D]/g, '"')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!tokens.length) return raw ? `"${raw}"` : "";
+  // FTS5 only allows implicit-AND adjacency between bare phrases; a parenthesized
+  // OR-group next to anything else (bare or grouped) is a syntax error and needs an
+  // explicit AND (verified against the libsql fts5 parser used here and in prod).
+  return tokens
+    .map((token, i) => {
+      const star = i === tokens.length - 1 ? "*" : "";
+      const escaped = token.replace(/"/g, '""');
+      const dates = dateTokenVariants(token);
+      const forms = dates.length
+        ? [`"${escaped}"${star}`, ...dates.map((p) => `"${p}"`)]
+        : [`"${escaped}"${star}`, ...pluralVariants(escaped).map((v) => `"${v}"${star}`)];
+      return forms.length === 1 ? forms[0] : `(${forms.join(" OR ")})`;
+    })
+    .join(" AND ");
 }
 
 // Query filler that poisons AND-of-every-token FTS: unicode61 indexes stopwords, so
@@ -46,8 +96,13 @@ export function buildFtsFallbackQueries(raw) {
     .split(/[^a-z0-9]+/)
     .filter((token) => token.length >= 2 && !FTS_QUERY_STOPWORDS.has(token));
   if (!tokens.length) return [];
+  const strippedAndGroups = tokens.map((token, i) => {
+    const star = i === tokens.length - 1 ? "*" : "";
+    const forms = [`"${token}"${star}`, ...pluralVariants(token).map((v) => `"${v}"${star}`)];
+    return forms.length === 1 ? forms[0] : `(${forms.join(" OR ")})`;
+  });
+  const strippedAnd = strippedAndGroups.join(" AND ");
   const quoted = tokens.map((token) => `"${token}"`);
-  const strippedAnd = [...quoted.slice(0, -1), `${quoted[quoted.length - 1]}*`].join(" ");
   const anyToken = quoted.map((token) => `${token}*`).join(" OR ");
   return anyToken === strippedAnd ? [strippedAnd] : [strippedAnd, anyToken];
 }

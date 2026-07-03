@@ -217,6 +217,7 @@ function normalizeMessage(account, msg) {
     date: getHeaderValue(headers, "Date"),
     read: !msg.labelIds?.includes("UNREAD"),
     message_id: getHeaderValue(headers, "Message-ID"),
+    thread_id: msg.threadId || null,
   };
 }
 

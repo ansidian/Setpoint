@@ -245,6 +245,98 @@ describe("recurring-family newest-first dominance", () => {
   });
 });
 
+describe("thread-recency newest-first dominance", () => {
+  // Same non-null thread_id but DIFFERENT subjects (reply threads whose subjects
+  // diverge with "Re:" prefixes) must still clamp older siblings to the newest
+  // member's score, same as the from+subject family clamp. This is an ADDITIONAL
+  // dominance pass, not a replacement for the family key.
+  const base = {
+    from_name: "Contractor",
+    from_address: "ops@contractor.example",
+    read: 1,
+  };
+
+  it("ranks the newest thread member first even when an older sibling carries more triage points and a different subject", () => {
+    const rows = [
+      {
+        ...base,
+        uid: "thread-old",
+        subject: "Water heater quote",
+        thread_id: "t-1",
+        body_snippet: "Quote attached.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_category: "finance",
+        triage_bill_candidate_json: "{\"amount\":42}",
+      },
+      {
+        ...base,
+        uid: "thread-new",
+        subject: "Re: Water heater quote",
+        thread_id: "t-1",
+        body_snippet: "Quote attached.",
+        email_date: "2026-04-28T12:00:00Z",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "water heater", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["thread-new", "thread-old"]);
+  });
+
+  it("never groups null thread_id rows even with matching subjects", () => {
+    const rows = [
+      {
+        ...base,
+        uid: "null-thread-old",
+        subject: "Different subject one",
+        thread_id: null,
+        body_snippet: "Note.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_category: "finance",
+        triage_bill_candidate_json: "{\"amount\":42}",
+      },
+      {
+        ...base,
+        uid: "null-thread-new",
+        subject: "Different subject two",
+        thread_id: null,
+        body_snippet: "Note.",
+        email_date: "2026-04-28T12:00:00Z",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "note", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["null-thread-old", "null-thread-new"]);
+  });
+
+  it("skips the thread clamp when the newest member is penalized (noise stays demoted)", () => {
+    const rows = [
+      {
+        ...base,
+        uid: "thread-old-clean",
+        subject: "Water heater quote",
+        thread_id: "t-2",
+        body_snippet: "Quote attached.",
+        email_date: "2026-03-25T12:00:00Z",
+      },
+      {
+        ...base,
+        uid: "thread-new-noise",
+        subject: "Re: Water heater quote",
+        thread_id: "t-2",
+        body_snippet: "Quote attached.",
+        email_date: "2026-04-28T12:00:00Z",
+        triage_lane: "noise",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "water heater", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["thread-old-clean", "thread-new-noise"]);
+  });
+});
+
 describe("scoreEmailSearchRow per-signal contributions", () => {
   it("scores the baseline row at exactly 0 with no signals", () => {
     const scoring = scoreOf({});

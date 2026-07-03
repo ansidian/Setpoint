@@ -147,7 +147,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                   idx.uid, idx.account_id, idx.account_label, idx.account_email,
                   idx.account_color, idx.account_icon,
                   idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-                  idx.email_date, idx.email_date_utc, idx.read, idx.user_id,
+                  idx.email_date, idx.email_date_utc, idx.read, idx.user_id, idx.thread_id,
                   snippet(ea_email_fts, 3, '<mark>', '</mark>', '...', 32) AS subject_highlight,
                   snippet(ea_email_fts, 5, '<mark>', '</mark>', '...', 48) AS body_highlight,
                   ${EMAIL_SEARCH_BM25_RANK_SQL} AS rank
@@ -164,7 +164,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 bounded.uid, bounded.account_id, bounded.account_label, bounded.account_email,
                 bounded.account_color, bounded.account_icon,
                 bounded.from_name, bounded.from_address, bounded.subject, bounded.body_snippet,
-                bounded.email_date, bounded.email_date_utc, bounded.read,
+                bounded.email_date, bounded.email_date_utc, bounded.read, bounded.thread_id,
                 bounded.subject_highlight, bounded.body_highlight, bounded.rank
                 ${rankingColumns}
               FROM bounded
@@ -180,7 +180,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                   idx.uid, idx.account_id, idx.account_label, idx.account_email,
                   idx.account_color, idx.account_icon,
                   idx.from_name, idx.from_address, idx.subject, idx.body_snippet,
-                  idx.email_date, idx.email_date_utc, idx.read, idx.user_id
+                  idx.email_date, idx.email_date_utc, idx.read, idx.user_id, idx.thread_id
                 FROM ea_email_index idx
                 WHERE idx.user_id = ?${readPredicate}
                 ORDER BY idx.email_date_utc DESC
@@ -190,7 +190,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
                 bounded.uid, bounded.account_id, bounded.account_label, bounded.account_email,
                 bounded.account_color, bounded.account_icon,
                 bounded.from_name, bounded.from_address, bounded.subject, bounded.body_snippet,
-                bounded.email_date, bounded.email_date_utc, bounded.read,
+                bounded.email_date, bounded.email_date_utc, bounded.read, bounded.thread_id,
                 NULL AS subject_highlight,
                 NULL AS body_highlight,
                 0 AS rank

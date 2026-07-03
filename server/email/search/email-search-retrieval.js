@@ -109,26 +109,31 @@ function candidateFamilyKey(candidate) {
   return `${from}|${subject}`;
 }
 
+function candidateThreadKey(candidate) {
+  const thread = String(candidate.thread_id || "").trim();
+  return thread || null;
+}
+
 function candidatePenalized(candidate) {
   return candidate.metadata?.lane === "noise" || Boolean(candidate.metadata?.provider_removed);
 }
 
-// Fused-level mirror of applyFamilyRecencyDominance (email-search-ranking.js): the
-// per-pool clamp cannot see a recurring family whose siblings arrive via different
-// retrieval legs (newest lexical-only, older vector-only), and vector-similarity
-// epsilon between near-identical recurring bodies would re-split an exact score tie
-// before the date tiebreak fires. Clamping the fused score keeps families newest-first
-// regardless of which leg surfaced each sibling.
-function applyFamilyDominanceToCandidates(candidates) {
-  const families = new Map();
+// Fused-level mirror of applyRecencyDominance (email-search-ranking.js): the
+// per-pool clamp cannot see a recurring family (or reply thread) whose siblings arrive
+// via different retrieval legs (newest lexical-only, older vector-only), and
+// vector-similarity epsilon between near-identical recurring bodies would re-split an
+// exact score tie before the date tiebreak fires. Clamping the fused score keeps
+// families/threads newest-first regardless of which leg surfaced each sibling.
+function applyRecencyDominanceToCandidates(candidates, keyOf) {
+  const groups = new Map();
   for (const candidate of candidates) {
-    const key = candidateFamilyKey(candidate);
+    const key = keyOf(candidate);
     if (!key) continue;
-    const members = families.get(key);
+    const members = groups.get(key);
     if (members) members.push(candidate);
-    else families.set(key, [candidate]);
+    else groups.set(key, [candidate]);
   }
-  for (const members of families.values()) {
+  for (const members of groups.values()) {
     if (members.length < 2) continue;
     const newest = members.reduce((best, candidate) => (
       candidateDateMs(candidate) > candidateDateMs(best) ? candidate : best
@@ -140,6 +145,11 @@ function applyFamilyDominanceToCandidates(candidates) {
     }
   }
   return candidates;
+}
+
+function applyFamilyDominanceToCandidates(candidates) {
+  applyRecencyDominanceToCandidates(candidates, candidateFamilyKey);
+  return applyRecencyDominanceToCandidates(candidates, candidateThreadKey);
 }
 
 function readFilterFromPlan(plan) {
@@ -196,6 +206,7 @@ function candidateFromRow(row) {
     email_date: row.email_date,
     email_date_utc: row.email_date_utc || null,
     read: !!row.read,
+    thread_id: row.thread_id || null,
     from: {
       name: row.from_name,
       address: row.from_address,
@@ -221,7 +232,7 @@ async function fetchFtsRows(dbClient, userId, { ftsQuery, filters, fetchLimit })
               idx.uid, idx.user_id, idx.account_id, idx.account_label, idx.account_email,
               idx.account_color, idx.account_icon,
               idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-              idx.email_date, idx.email_date_utc, idx.read,
+              idx.email_date, idx.email_date_utc, idx.read, idx.thread_id,
               ${EMAIL_SEARCH_BM25_RANK_SQL} AS rank
             FROM ea_email_fts
             JOIN ea_email_index idx ON idx.uid = ea_email_fts.uid
@@ -296,7 +307,7 @@ async function loadLexicalRows(dbClient, userId, { textQueries = [], fallbackQue
             idx.uid, idx.account_id, idx.account_label, idx.account_email,
             idx.account_color, idx.account_icon,
             idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-            idx.email_date, idx.email_date_utc, idx.read,
+            idx.email_date, idx.email_date_utc, idx.read, idx.thread_id,
             0 AS rank
             ${RANKING_COLUMNS}
           FROM ea_email_index idx
@@ -323,7 +334,7 @@ async function loadRowsByUid(dbClient, userId, uids, { readFilter, plan }) {
             idx.uid, idx.account_id, idx.account_label, idx.account_email,
             idx.account_color, idx.account_icon,
             idx.from_name, idx.from_address, idx.subject, idx.body_snippet, idx.body_text,
-            idx.email_date, idx.email_date_utc, idx.read,
+            idx.email_date, idx.email_date_utc, idx.read, idx.thread_id,
             0 AS rank
             ${RANKING_COLUMNS}
           FROM ea_email_index idx

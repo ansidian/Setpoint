@@ -139,7 +139,11 @@ describe("findAccountByUid", () => {
 
 describe("sanitizeFtsQuery", () => {
   it("quotes each term and wildcards the last", () => {
-    expect(__testing__.sanitizeFtsQuery("foo bar")).toBe(`"foo" "bar"*`);
+    // Joined with explicit "AND": FTS5's implicit-AND adjacency only holds between
+    // bare phrases, and now that some tokens expand into parenthesized OR-groups
+    // (audit B2 plural expansion) every join must be an explicit AND to stay valid
+    // FTS5 syntax — same boolean semantics as the old bare-space join.
+    expect(__testing__.sanitizeFtsQuery("foo bar")).toBe(`"foo" AND "bar"*`);
   });
 
   it("normalizes smart quotes", () => {
@@ -203,6 +207,60 @@ describe("searchEmails contract", () => {
         uid: "gmail-work-historical-1",
         account_id: "gmail-work",
         account_label: "Work",
+      }),
+    ]);
+  });
+
+  it("matches a plural query against an indexed email that only contains the singular (audit B2)", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-paypal-singular-1",
+      from_name: "PayPal",
+      from_address: "service@paypal.com",
+      subject: "Your PayPal statement is ready",
+      body_snippet: "Your PayPal statement is ready",
+      body_text: "Your PayPal statement is ready to view online.",
+      email_date: "2025-09-03T12:00:00Z",
+      read: 1,
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "paypal statements",
+      limit: 5,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        uid: "gmail-work-paypal-singular-1",
+        subject: "Your PayPal statement is ready",
+      }),
+    ]);
+  });
+
+  it("matches a slash-date query against a zero-padded in-body date (audit B5)", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    await seedIndexedEmail(testState.db.current, {
+      uid: "gmail-work-due-date-1",
+      from_name: "Billing",
+      from_address: "billing@example.com",
+      subject: "Your statement is ready",
+      body_snippet: "Payment due date 07/07/2026",
+      body_text: "Payment due date 07/07/2026. Minimum payment due $29.00.",
+      email_date: "2026-06-01T12:00:00Z",
+      read: 1,
+    });
+
+    const result = await emailService.searchEmails("user-1", {
+      q: "due 7/7",
+      limit: 5,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        uid: "gmail-work-due-date-1",
+        subject: "Your statement is ready",
       }),
     ]);
   });
