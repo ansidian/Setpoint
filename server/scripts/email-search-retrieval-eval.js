@@ -3,6 +3,7 @@ import { readFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import db from "../db/connection.js";
+import { searchEmails } from "../email/email-service.js";
 import {
   createSyntheticEvalRetriever,
   evaluateRetrievalCases,
@@ -20,20 +21,27 @@ async function main() {
   // legacy path that scores expected UIDs against the real dev DB (the local
   // fixture built from `email-search:eval:seed`).
   let retrieve;
+  let retrieveInbox;
   let cleanup = () => {};
   if (Array.isArray(fixture.corpus) && fixture.corpus.length) {
     const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "../db/migrations");
-    ({ retrieve, cleanup } = await createSyntheticEvalRetriever(fixture, { migrationsDir }));
+    ({ retrieve, retrieveInbox, cleanup } = await createSyntheticEvalRetriever(fixture, { migrationsDir }));
   } else {
     retrieve = (evalUserId, options) => retrieveInboxAiSearch(evalUserId, {
       ...options,
       dbClient: db,
     });
+    retrieveInbox = async (evalUserId, options) => {
+      const { results } = await searchEmails(evalUserId, { ...options, dbClient: db });
+      return { candidates: results.map((r) => ({ uid: r.uid })) };
+    };
   }
 
   try {
-    const report = await evaluateRetrievalCases(fixture, { userId, retrieve });
+    const report = await evaluateRetrievalCases(fixture, { userId, retrieve, retrieveInbox });
     console.log(JSON.stringify(report, null, 2));
+    if (report.mrr != null) console.log(`MRR: ${report.mrr.toFixed(3)}`);
+    if (report.inbox_mrr != null) console.log(`Inbox MRR: ${report.inbox_mrr.toFixed(3)}`);
     if (report.failed) process.exitCode = 1;
   } finally {
     await cleanup();

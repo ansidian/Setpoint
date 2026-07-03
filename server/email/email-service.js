@@ -87,7 +87,7 @@ export async function getEmailBody(userId, uid) {
   return fetchEmailBodyForUid(userId, uid);
 }
 
-export async function searchEmails(userId, { q, limit, offset, debug = false }) {
+export async function searchEmails(userId, { q, limit, offset, debug = false, dbClient = db }) {
   const maxResults = Math.min(parseInt(limit) || 30, 100);
   const start = Math.max(parseInt(offset) || 0, 0);
   const fetchLimit = Math.min(Math.max(maxResults * 8, 200), 500);
@@ -142,7 +142,7 @@ export async function searchEmails(userId, { q, limit, offset, debug = false }) 
   // matches; the date tiebreak keeps recurring twins (identical bm25) newest-first.
   const recentMatchSlice = 50;
   const result = hasTextQuery
-    ? await db.execute({
+    ? await dbClient.execute({
         sql: `WITH matched AS (
                 SELECT
                   idx.uid, idx.account_id, idx.account_label, idx.account_email,
@@ -175,7 +175,7 @@ export async function searchEmails(userId, { q, limit, offset, debug = false }) 
           ? [sanitizeFtsQuery(textQuery), userId, fetchLimit, recentMatchSlice]
           : [sanitizeFtsQuery(textQuery), userId, readFilter, fetchLimit, recentMatchSlice],
       })
-    : await db.execute({
+    : await dbClient.execute({
         sql: `WITH bounded AS (
                 SELECT
                   idx.uid, idx.account_id, idx.account_label, idx.account_email,

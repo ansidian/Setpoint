@@ -143,6 +143,42 @@ describe("recurring-family newest-first dominance", () => {
     expect(ranked.map((row) => row.uid)).toEqual(["statement-new", "statement-old"]);
   });
 
+  it("keeps a fully-resolved family newest-first at any evaluation time (score-floor tiebreak)", () => {
+    // Both siblings handled with past deadlines: every attention signal is
+    // resolved, so far in the future recency decays to the same floor for both
+    // and only the family clamp + date tiebreak keeps the newest first. The
+    // inbox eval path silently depends on this at real Date.now().
+    const rows = [
+      {
+        ...family,
+        uid: "resolved-old",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_lane: "needs_attention",
+        triage_deadline_at: "2026-04-01T00:00:00Z",
+        triage_handled_at: "2026-04-02T00:00:00Z",
+        triage_bill_candidate_json: "{\"amount\":42}",
+      },
+      {
+        ...family,
+        uid: "resolved-new",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-04-28T12:00:00Z",
+        triage_lane: "needs_attention",
+        triage_deadline_at: "2026-05-07T00:00:00Z",
+        triage_handled_at: "2026-05-08T00:00:00Z",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, {
+      query: "statement",
+      limit: 2,
+      now: "2035-01-01T00:00:00Z",
+    });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["resolved-new", "resolved-old"]);
+  });
+
   it("does not rescue a deliberately penalized newest member (noise stays demoted)", () => {
     const rows = [
       {
