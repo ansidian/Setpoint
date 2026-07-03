@@ -1,7 +1,5 @@
 import "dotenv/config";
 import { readFile } from "fs/promises";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import db from "../db/connection.js";
 import { searchEmails } from "../email/email-service.js";
 import {
@@ -24,8 +22,7 @@ async function main() {
   let retrieveInbox;
   let cleanup = () => {};
   if (Array.isArray(fixture.corpus) && fixture.corpus.length) {
-    const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "../db/migrations");
-    ({ retrieve, retrieveInbox, cleanup } = await createSyntheticEvalRetriever(fixture, { migrationsDir }));
+    ({ retrieve, retrieveInbox, cleanup } = await createSyntheticEvalRetriever(fixture));
   } else {
     retrieve = (evalUserId, options) => retrieveInboxAiSearch(evalUserId, {
       ...options,

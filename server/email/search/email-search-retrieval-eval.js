@@ -1,25 +1,11 @@
-import { createClient } from "@libsql/client";
-import { readFileSync } from "fs";
-import { join } from "path";
 import { searchEmails } from "../email-service.js";
-import { seedIndexedEmail } from "../test-utils/email-index-db.js";
+import { createEmailIndexTestDb, seedIndexedEmail } from "../test-utils/email-index-db.js";
 import {
   buildEmailSearchEmbeddingDocument,
   computeEmailSearchEmbeddingSourceHash,
 } from "./email-search-embeddings.js";
 import { createEmailSearchEmbeddingStore } from "./email-search-embedding-store.js";
 import { retrieveInboxAiSearch } from "./email-search-retrieval.js";
-
-// Migration subset needed to seed an indexed-email + embeddings corpus in memory
-// (mirrors the retrieval test harness).
-const EVAL_MIGRATIONS = [
-  "001_ea_tables.sql",
-  "004_email_read_state_search_index.sql",
-  "005_email_search_embeddings.sql",
-  "006_email_search_embedding_state.sql",
-  "013_email_index_normalized_date.sql",
-  "025_email_thread_identity.sql",
-];
 
 export function normalizeRetrievalEvalFixture(fixture = {}) {
   const cases = Array.isArray(fixture) ? fixture : fixture.cases || [];
@@ -149,11 +135,9 @@ export async function evaluateRetrievalCases(fixture, {
 // bound to a fake embedding client (per-case `query_embedding`). When every corpus
 // row is embedded, coverage resolves to 1.0 (healthy corpus), so this exercises
 // today's full-strength fusion — guarding against silent vector flattening.
-export async function createSyntheticEvalRetriever(fixture, { migrationsDir, userId = "eval-user" } = {}) {
-  const db = createClient({ url: "file::memory:" });
-  for (const file of EVAL_MIGRATIONS) {
-    await db.executeMultiple(readFileSync(join(migrationsDir, file), "utf8"));
-  }
+export async function createSyntheticEvalRetriever(fixture, { userId = "eval-user" } = {}) {
+  // Same migration subset as the retrieval test harness: core + embedding state.
+  const db = await createEmailIndexTestDb({ extraMigrations: ["006_email_search_embedding_state.sql"] });
   const store = createEmailSearchEmbeddingStore(db, { mode: "fallback" });
   for (const entry of fixture.corpus || []) {
     const { triage, embedding, snapshot, ...email } = entry;

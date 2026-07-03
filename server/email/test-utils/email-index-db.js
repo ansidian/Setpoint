@@ -7,24 +7,40 @@ import { normalizeEmailDateUtc } from "../email-date.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../db/migrations");
 
-const migrationFiles = [
+// Core migration set every email-index bootstrap needs: a migration touching
+// ea_email_index or its FTS table gets added HERE, once — hand-copied per-test
+// lists are the class that broke four bootstraps when 025 landed. Bootstraps
+// opt into extra tables via `extraMigrations`; the minimal subsets are
+// deliberate (faster suites), not drift.
+const CORE_MIGRATION_FILES = [
   "001_ea_tables.sql",
   "004_email_read_state_search_index.sql",
   "005_email_search_embeddings.sql",
-  "006_email_search_embedding_state.sql",
-  "007_email_search_ai_usage.sql",
   "013_email_index_normalized_date.sql",
   "025_email_thread_identity.sql",
 ];
 
-const migrationSql = migrationFiles.map((file) =>
-  readFileSync(join(migrationsDir, file), "utf8"),
-);
+const DEFAULT_EXTRA_MIGRATION_FILES = [
+  "006_email_search_embedding_state.sql",
+  "007_email_search_ai_usage.sql",
+];
 
-export async function createEmailIndexTestDb() {
+const migrationSqlByFile = new Map();
+
+function migrationSql(file) {
+  let sql = migrationSqlByFile.get(file);
+  if (sql === undefined) {
+    sql = readFileSync(join(migrationsDir, file), "utf8");
+    migrationSqlByFile.set(file, sql);
+  }
+  return sql;
+}
+
+export async function createEmailIndexTestDb({ extraMigrations = DEFAULT_EXTRA_MIGRATION_FILES } = {}) {
   const db = createClient({ url: "file::memory:" });
-  for (const sql of migrationSql) {
-    await db.executeMultiple(sql);
+  // Zero-padded filenames: lexicographic sort = numeric application order.
+  for (const file of [...CORE_MIGRATION_FILES, ...extraMigrations].sort()) {
+    await db.executeMultiple(migrationSql(file));
   }
   return db;
 }
