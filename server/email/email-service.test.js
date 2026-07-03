@@ -573,6 +573,87 @@ describe("searchEmails contract", () => {
   });
 });
 
+describe("searchEmails offset paging (audit E1)", () => {
+  it("pages through a stable total independent of offset", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    for (let i = 0; i < 12; i += 1) {
+      await seedIndexedEmail(testState.db.current, {
+        uid: `paging-${String(i).padStart(2, "0")}`,
+        subject: `Statement notice ${i}`,
+        body_text: "Your statement notice is ready.",
+        email_date: `2026-05-${String(10 + i).padStart(2, "0")}T12:00:00Z`,
+      });
+    }
+
+    const pages = [];
+    const seen = new Set();
+    for (const offset of [0, 5, 10]) {
+      const page = await emailService.searchEmails("user-1", { q: "statement notice", limit: 5, offset });
+      pages.push(page);
+      page.results.forEach((email) => seen.add(email.uid));
+    }
+
+    expect(pages.map((page) => page.total)).toEqual([12, 12, 12]);
+    expect(pages.map((page) => page.results.length)).toEqual([5, 5, 2]);
+    expect(pages.map((page) => page.has_more)).toEqual([true, true, false]);
+    expect(pages.map((page) => page.offset)).toEqual([0, 5, 10]);
+    expect(seen.size).toBe(12);
+  });
+
+  it("reports the true total past the returned page (E1 regression)", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    for (let i = 0; i < 35; i += 1) {
+      await seedIndexedEmail(testState.db.current, {
+        uid: `overflow-${String(i).padStart(2, "0")}`,
+        subject: `Renewal reminder ${i}`,
+        body_text: "Your renewal reminder is due.",
+        email_date: `2026-04-${String(1 + (i % 28)).padStart(2, "0")}T12:00:00Z`,
+      });
+    }
+
+    const result = await emailService.searchEmails("user-1", { q: "renewal reminder" });
+
+    expect(result.results.length).toBe(30);
+    expect(result.total).toBe(35);
+    expect(result.has_more).toBe(true);
+  });
+
+  it("flags capped when the SQL candidate pool itself hits its bound", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    for (let i = 0; i < 250; i += 1) {
+      await seedIndexedEmail(testState.db.current, {
+        uid: `capped-${String(i).padStart(3, "0")}`,
+        subject: "Weekly digest",
+        body_snippet: "receipt receipt receipt receipt receipt",
+        body_text: "receipt receipt receipt receipt receipt",
+        email_date: "2026-01-05T12:00:00Z",
+      });
+    }
+
+    const result = await emailService.searchEmails("user-1", { q: "receipt" });
+
+    expect(result.capped).toBe(true);
+    expect(result.total).toBeGreaterThanOrEqual(240);
+  });
+
+  it("reports capped false when the candidate pool does not hit its bound", async () => {
+    testState.db.current = await createEmailIndexTestDb();
+    for (let i = 0; i < 12; i += 1) {
+      await seedIndexedEmail(testState.db.current, {
+        uid: `uncapped-${String(i).padStart(2, "0")}`,
+        subject: `Shipping update ${i}`,
+        body_text: "Your shipping update is here.",
+        email_date: `2026-05-${String(10 + i).padStart(2, "0")}T12:00:00Z`,
+      });
+    }
+
+    const result = await emailService.searchEmails("user-1", { q: "shipping update" });
+
+    expect(result.capped).toBe(false);
+    expect(result.total).toBe(12);
+  });
+});
+
 describe("pending triage action semantics", () => {
   it("dismiss durably skips pending triage rows and completes queued jobs", async () => {
     testState.db.current = await createEmailIndexTestDb();

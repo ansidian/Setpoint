@@ -73,6 +73,7 @@ export default function useInboxController({
     indexedSearchActive,
     updateIndexedSearchRead,
     markIndexedSearchReadBulk,
+    loadMoreIndexedSearch,
   } = useIndexedSearch({ search, liveReadOverrides });
   const {
     undo,
@@ -418,6 +419,9 @@ export default function useInboxController({
     indexedSearchActive,
     indexedSearchLoading: indexedSearch.loading,
     indexedSearchError: indexedSearch.error,
+    indexedSearchTotal: indexedSearch.total,
+    indexedSearchHasMore: indexedSearch.hasMore,
+    loadMoreIndexedSearch,
     onAskAlfred: askAlfred,
     visibleEmails,
     laneCounts,

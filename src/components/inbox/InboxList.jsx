@@ -80,6 +80,9 @@ export default function InboxList({
   indexedSearchActive = false,
   indexedSearchLoading = false,
   indexedSearchError = null,
+  indexedSearchTotal = null,
+  indexedSearchHasMore = false,
+  onLoadMoreSearch = () => {},
   onAskAlfred = () => {},
   activeSnapshotMode = false,
   processingCount = 0,
@@ -254,11 +257,13 @@ export default function InboxList({
           </span>{" "}
           <span style={{ color: "var(--color-text-faint)" }}>unread · </span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{totalCount}</span>
-          <span style={{ color: "var(--color-text-faint)" }}>
-            {indexedSearchActive
-              ? ` indexed result${totalCount === 1 ? "" : "s"}`
-              : " total"}
-          </span>
+          {indexedSearchActive ? (
+            <span style={{ color: "var(--color-text-faint)" }}>
+              {` of ${indexedSearchTotal ?? totalCount} indexed results`}
+            </span>
+          ) : (
+            <span style={{ color: "var(--color-text-faint)" }}> total</span>
+          )}
         </span>
         <span style={{ flex: 1 }} />
       </div>
@@ -438,6 +443,40 @@ export default function InboxList({
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {renderRows(emails)}
+            {indexedSearchActive && indexedSearchHasMore && (
+              <button
+                type="button"
+                onClick={onLoadMoreSearch}
+                disabled={indexedSearchLoading}
+                style={{
+                  margin: "10px 12px 16px",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  color: "rgba(205,214,244,0.7)",
+                  fontFamily: "inherit",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: indexedSearchLoading ? "default" : "pointer",
+                  opacity: indexedSearchLoading ? 0.6 : 1,
+                  transition: "background 120ms, border-color 120ms, color 120ms",
+                }}
+                onMouseEnter={(e) => {
+                  if (indexedSearchLoading) return;
+                  e.currentTarget.style.background = "color-mix(in srgb, var(--sp-blue) 14%, transparent)";
+                  e.currentTarget.style.borderColor = "color-mix(in srgb, var(--sp-blue) 32%, transparent)";
+                  e.currentTarget.style.color = "var(--sp-blue)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                  e.currentTarget.style.color = "rgba(205,214,244,0.7)";
+                }}
+              >
+                {indexedSearchLoading ? "Loading…" : "Show more results"}
+              </button>
+            )}
           </div>
         )}
         {emails.length === 0 && !showSkeletonRows && !showSearchSkeletonRows && (

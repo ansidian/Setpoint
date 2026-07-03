@@ -14,8 +14,15 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
     accountsById: {},
     loading: false,
     error: null,
+    total: 0,
+    hasMore: false,
   });
+  const [searchLimit, setSearchLimit] = useState(30);
   const searchRequestRef = useRef(0);
+  // Tracks the query the current searchLimit was grown for, so the term-change
+  // effect below can tell "limit already reset for this term" apart from
+  // "term changed, reset the limit" without re-triggering on every render.
+  const searchLimitTermRef = useRef(search.trim());
   // Local read-toggles applied to indexed-search hits that are not live/snapshot
   // emails. These live only in indexedSearch.emails, not in liveReadOverrides,
   // so a fresh search response would otherwise rebuild rows from server read +
@@ -27,6 +34,18 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
 
   useEffect(() => {
     const term = search.trim();
+
+    // A changed search term resets the grow-limit back to the base page size.
+    // Track the term the limit was last grown for so a loadMore-triggered
+    // render (searchLimit changes, term does not) doesn't reset itself.
+    if (searchLimitTermRef.current !== term) {
+      searchLimitTermRef.current = term;
+      if (searchLimit !== 30) {
+        setSearchLimit(30);
+        return undefined;
+      }
+    }
+
     searchRequestRef.current += 1;
     const requestId = searchRequestRef.current;
 
@@ -37,6 +56,8 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
         accountsById: {},
         loading: false,
         error: null,
+        total: 0,
+        hasMore: false,
       });
       return undefined;
     }
@@ -49,7 +70,7 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
     }));
 
     const timeout = setTimeout(() => {
-      searchEmails(term)
+      searchEmails(term, searchLimit)
         .then((data) => {
           if (searchRequestRef.current !== requestId) return;
           // Reconcile fresh results against the latest read state: session-wide
@@ -69,16 +90,22 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
             accountsById: {},
             loading: false,
             error: err.message || "Search failed",
+            total: 0,
+            hasMore: false,
           });
         });
     }, 250);
 
     return () => clearTimeout(timeout);
-  // Intentionally key the API request only on the query. Some callers pass
+  // Intentionally exclude liveReadOverrides from deps. Some callers pass
   // object-literal read override defaults, and including that object here
   // would restart the debounce after every search-state render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, searchLimit]);
+
+  const loadMoreIndexedSearch = useCallback(() => {
+    setSearchLimit((current) => (current >= 100 ? current : Math.min(current + 30, 100)));
+  }, []);
 
   const updateIndexedSearchRead = useCallback((uid, read) => {
     if (uid) searchReadOverridesRef.current.set(uid, !!read);
@@ -103,10 +130,18 @@ export default function useIndexedSearch({ search, liveReadOverrides }) {
     }));
   }, []);
 
+  // Once the grow-limit ceiling is reached, loadMore can't fetch anything
+  // further, so hasMore is surfaced as false regardless of what the server
+  // reports (the UI instead shows "first 100 of N" via total > emails.length).
+  const cappedIndexedSearch = indexedSearch.hasMore && searchLimit >= 100
+    ? { ...indexedSearch, hasMore: false }
+    : indexedSearch;
+
   return {
-    indexedSearch,
+    indexedSearch: cappedIndexedSearch,
     indexedSearchActive,
     updateIndexedSearchRead,
     markIndexedSearchReadBulk,
+    loadMoreIndexedSearch,
   };
 }

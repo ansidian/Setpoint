@@ -196,10 +196,135 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("amazon");
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 30);
     });
     expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
     expect(screen.queryByText("Budget dinner plans")).toBeNull();
+  });
+
+  it("shows the true indexed-search total in the mobile summary line, not just the loaded page size", async () => {
+    searchEmails.mockReset();
+    searchEmails.mockResolvedValue({
+      accounts: [
+        {
+          account_id: "gmail-personal",
+          account_label: "Personal",
+          account_email: "personal@example.com",
+          account_color: "#cba6da",
+          account_icon: "Mail",
+          results: [
+            {
+              uid: "gmail-personal-amazon-1",
+              from_name: "Amazon.com",
+              from_address: "store-news@amazon.com",
+              subject: "Amazon order from last month",
+              body_snippet: "Your historical order is indexed.",
+              email_date: "2026-04-02T12:00:00.000Z",
+              read: true,
+            },
+          ],
+        },
+      ],
+      total: 42,
+      has_more: true,
+      query: "amazon",
+    });
+
+    renderInbox({ isMobile: true });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: "amazon" },
+    });
+
+    await waitFor(() => {
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 30);
+    });
+    expect(await screen.findByText("1 of 42 indexed")).toBeTruthy();
+  });
+
+  it("renders a Show more results button on mobile when more indexed results are available and wires the click through", async () => {
+    searchEmails.mockReset();
+    searchEmails.mockResolvedValue({
+      accounts: [
+        {
+          account_id: "gmail-personal",
+          account_label: "Personal",
+          account_email: "personal@example.com",
+          account_color: "#cba6da",
+          account_icon: "Mail",
+          results: [
+            {
+              uid: "gmail-personal-amazon-1",
+              from_name: "Amazon.com",
+              from_address: "store-news@amazon.com",
+              subject: "Amazon order from last month",
+              body_snippet: "Your historical order is indexed.",
+              email_date: "2026-04-02T12:00:00.000Z",
+              read: true,
+            },
+          ],
+        },
+      ],
+      total: 42,
+      has_more: true,
+      query: "amazon",
+    });
+
+    renderInbox({ isMobile: true });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: "amazon" },
+    });
+
+    await waitFor(() => {
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 30);
+    });
+    expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
+
+    const button = screen.getByRole("button", { name: "Show more results" });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(searchEmails).toHaveBeenCalledWith("amazon", 60);
+    });
+  });
+
+  it("hides the mobile Show more results button when there is nothing more to load", async () => {
+    searchEmails.mockReset();
+    searchEmails.mockResolvedValue({
+      accounts: [
+        {
+          account_id: "gmail-personal",
+          account_label: "Personal",
+          account_email: "personal@example.com",
+          account_color: "#cba6da",
+          account_icon: "Mail",
+          results: [
+            {
+              uid: "gmail-personal-amazon-1",
+              from_name: "Amazon.com",
+              from_address: "store-news@amazon.com",
+              subject: "Amazon order from last month",
+              body_snippet: "Your historical order is indexed.",
+              email_date: "2026-04-02T12:00:00.000Z",
+              read: true,
+            },
+          ],
+        },
+      ],
+      total: 1,
+      has_more: false,
+      query: "amazon",
+    });
+
+    renderInbox({ isMobile: true });
+
+    fireEvent.change(screen.getByLabelText("Search indexed mail"), {
+      target: { value: "amazon" },
+    });
+
+    expect(await screen.findByText("Amazon order from last month")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show more results" })).toBeNull();
   });
 
   it("shows skeleton rows instead of search chrome or empty copy while mobile indexed search is loading", async () => {
@@ -228,7 +353,7 @@ describe("InboxView mobile", () => {
     });
 
     await waitFor(() => {
-      expect(searchEmails).toHaveBeenCalledWith("tuition");
+      expect(searchEmails).toHaveBeenCalledWith("tuition", 30);
     });
     await waitFor(() => {
       expect(screen.getByText("No indexed mail matches")).toBeTruthy();

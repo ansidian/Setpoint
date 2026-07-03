@@ -87,8 +87,9 @@ export async function getEmailBody(userId, uid) {
   return fetchEmailBodyForUid(userId, uid);
 }
 
-export async function searchEmails(userId, { q, limit, debug = false }) {
+export async function searchEmails(userId, { q, limit, offset, debug = false }) {
   const maxResults = Math.min(parseInt(limit) || 30, 100);
+  const start = Math.max(parseInt(offset) || 0, 0);
   const fetchLimit = Math.min(Math.max(maxResults * 8, 200), 500);
   const { textQuery, readFilter } = parseEmailSearchQuery(q);
   const hasTextQuery = textQuery.trim().length > 0;
@@ -205,9 +206,12 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
 
   const ranked = rankEmailSearchRows(result.rows, {
     query: textQuery,
-    limit: maxResults,
+    limit: Infinity,
     debug,
   });
+  const total = ranked.length;
+  const pageRows = ranked.slice(start, start + maxResults);
+  const capped = result.rows.length >= fetchLimit;
 
   const byAccount = {};
   const results = [];
@@ -242,7 +246,7 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
     return email;
   };
 
-  for (const row of ranked) {
+  for (const row of pageRows) {
     const key = row.account_id;
     if (!byAccount[key]) {
       byAccount[key] = {
@@ -259,7 +263,15 @@ export async function searchEmails(userId, { q, limit, debug = false }) {
     byAccount[key].results.push(email);
   }
 
-  return { results, accounts: Object.values(byAccount), total: ranked.length, query: q };
+  return {
+    results,
+    accounts: Object.values(byAccount),
+    total,
+    offset: start,
+    has_more: start + maxResults < total,
+    capped,
+    query: q,
+  };
 }
 
 // --- State-changing ops ---

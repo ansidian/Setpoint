@@ -185,6 +185,9 @@ export default function MobileInboxView({
   indexedSearchActive,
   indexedSearchLoading,
   indexedSearchError,
+  indexedSearchTotal,
+  indexedSearchHasMore,
+  loadMoreIndexedSearch,
   onAskAlfred,
   visibleEmails,
   mobileChipCounts,
@@ -420,10 +423,9 @@ export default function MobileInboxView({
               <span>{scopedAccount ? scopedAccount.name || scopedAccount.email : "All accounts"}</span>
               <span style={{ opacity: 0.35 }}>·</span>
               <span>
-                {visibleEmails.length}{" "}
                 {indexedSearchActive
-                  ? `indexed result${visibleEmails.length === 1 ? "" : "s"}`
-                  : "shown"}
+                  ? `${visibleEmails.length} of ${indexedSearchTotal ?? visibleEmails.length} indexed`
+                  : `${visibleEmails.length} shown`}
               </span>
             </div>
           </div>
@@ -506,6 +508,33 @@ export default function MobileInboxView({
                     showLaneTag
                   />
                 ))}
+                {indexedSearchActive && indexedSearchHasMore && (
+                  <div style={{ padding: "6px 16px 0" }}>
+                    <button
+                      type="button"
+                      onClick={loadMoreIndexedSearch}
+                      disabled={indexedSearchLoading}
+                      style={{
+                        width: "100%",
+                        minHeight: "var(--sp-touch-min)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 12,
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: "rgba(255,255,255,0.03)",
+                        color: "rgba(205,214,244,0.7)",
+                        cursor: indexedSearchLoading ? "default" : "pointer",
+                        opacity: indexedSearchLoading ? 0.6 : 1,
+                        fontFamily: "inherit",
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {indexedSearchLoading ? "Loading…" : "Show more results"}
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <div

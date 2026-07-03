@@ -33,6 +33,9 @@ function InboxDesktopPane({
   indexedSearchActive,
   indexedSearchLoading,
   indexedSearchError,
+  indexedSearchTotal,
+  indexedSearchHasMore,
+  loadMoreIndexedSearch,
   onAskAlfred,
   visibleEmails,
   laneCounts,
@@ -146,6 +149,9 @@ function InboxDesktopPane({
               indexedSearchActive={indexedSearchActive}
               indexedSearchLoading={indexedSearchLoading}
               indexedSearchError={indexedSearchError}
+              indexedSearchTotal={indexedSearchTotal}
+              indexedSearchHasMore={indexedSearchHasMore}
+              onLoadMoreSearch={loadMoreIndexedSearch}
               onAskAlfred={onAskAlfred}
               totalCount={visibleEmails.length}
               unreadCount={unreadInView}
