@@ -86,6 +86,17 @@ describe("buildAlfredSystemPrompt", () => {
     expect(lower).toContain("approximately");
   });
 
+  it("warns that search results are relevance-ranked, not newest-first, and gives the latest-X recipe (audit C6)", () => {
+    const prompt = buildAlfredSystemPrompt({ now: new Date("2026-07-01T12:00:00-07:00") });
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain("relevance-ranked");
+    expect(lower).toContain("newest-first");
+    // The recipe: compare dates across matches, or constrain the window.
+    expect(lower).toMatch(/latest|most recent/);
+    expect(lower).toMatch(/compare (the )?date|date field/);
+    expect(lower).toContain("after");
+  });
+
   it("instructs the model to use group_items for grouping/distribution questions, keyed on shape not vocabulary", () => {
     const prompt = buildAlfredSystemPrompt({ now: new Date("2026-06-14T12:00:00-07:00") });
     expect(prompt).toContain("group_items");

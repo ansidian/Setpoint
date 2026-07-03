@@ -1,5 +1,5 @@
 import { consumeAnthropicStream } from "./anthropic-stream.js";
-import { ALFRED_TOOL_DEFINITIONS, alfredToolSummary, executeAlfredTool } from "./alfred-tools.js";
+import { ALFRED_TOOL_DEFINITIONS, DEFAULT_SEARCH_LIMIT, alfredToolSummary, executeAlfredTool } from "./alfred-tools.js";
 import { buildAlfredSystemPrompt } from "./alfred-prompt.js";
 import { recordAlfredUsage } from "./alfred-usage.js";
 
@@ -12,7 +12,9 @@ const MAX_TOKENS = 2000;
 // details instead of calling show_items. When a run retrieved a small, almost
 // certainly named result set and is about to end without rows, remind once.
 // Above this size the answer is likely a summary/count, where rows would spam.
-const MAX_NUDGE_ITEMS = 8;
+// Pinned to one default search page: a lower cap let every default search_email
+// call disarm the backstop by itself (C8: 12 retrieved > 8 cap).
+const MAX_NUDGE_ITEMS = DEFAULT_SEARCH_LIMIT;
 const SHOW_ITEMS_NUDGE = "<system-reminder>Your reply referenced retrieved items without calling show_items. If it named specific emails, events, deadlines, bills, or transactions, call show_items now with those ids, then add at most one short sentence without retyping details the rows show. If it did not name specific items, briefly restate your conclusion.</system-reminder>";
 
 // Second backstop (ADR 0006, alfred-prompt.js group_items rule): a question that
@@ -184,7 +186,10 @@ async function runAlfredInner({
         console.error("[Alfred] tool usage recording failed:", err.message);
       });
       if (toolUse.name === "show_items") {
-        showItemsCalled = true;
+        // Only a call that actually rendered rows counts as citing (C7): an errored
+        // or zero-shown call used to set this flag and permanently disarm the
+        // cite-by-reference backstop while the owner saw nothing.
+        if (!result?.error && Number(result?.shown) > 0) showItemsCalled = true;
       } else if (toolUse.name === "group_items") {
         groupItemsCalled = true;
       } else if (toolUse.name === "summarize_transactions") {

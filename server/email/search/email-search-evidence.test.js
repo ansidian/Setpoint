@@ -31,6 +31,21 @@ describe("lexical evidence floor", () => {
     expect(kept).toHaveLength(0);
   });
 
+  it("does not let a zero-result fallback pass satisfy the lexical floor (loosened matches are speculative)", () => {
+    const fallbackRow = {
+      uid: "lex-fallback",
+      subject: "Quarterly newsletter",
+      from: { name: "Marketing", address: "news@vendor.com" },
+      provenance: { lexical: true, vector: false, lexical_fallback: true },
+      scores: { lexical: 0.45, vector: 0.1, combined: 0.25 },
+    };
+    const kept = filterEmailSearchCandidatesForEvidence([fallbackRow], {
+      q: "credit card payment due",
+      plan: null,
+    });
+    expect(kept).toHaveLength(0);
+  });
+
   it("does not treat vector-only provenance as lexical evidence", () => {
     const vectorOnly = {
       ...strongLexical,
@@ -132,6 +147,113 @@ describe("subject/sender token evidence", () => {
       q: "quarterly mortgage",
       plan: null,
     });
+    expect(kept).toHaveLength(0);
+  });
+});
+
+describe("sender-address sub-tokens (C5)", () => {
+  it("matches a query brand against the sender domain even when the display name never names it", () => {
+    const candidate = {
+      uid: "domain-1",
+      subject: "Quarterly statement ready",
+      from: { name: "Card Services", address: "no-reply@chase.com" },
+      provenance: { lexical: false, vector: true },
+      scores: { lexical: 0.05, vector: 0.05, combined: 0.05 },
+    };
+    const kept = filterEmailSearchCandidatesForEvidence([candidate], {
+      q: "chase statement",
+      plan: null,
+    });
+    expect(kept.map((c) => c.uid)).toEqual(["domain-1"]);
+  });
+});
+
+describe("prefix matching against field tokens (C5 anchor)", () => {
+  it("lets a query brand prefix-match a compound domain label, mirroring FTS prefix semantics", () => {
+    // The anchor sender: 'synchrony' can never EQUAL the domain label
+    // 'synchronybank', yet FTS's "synchrony"* matched it — the gate must not be
+    // stricter than the retrieval it filters.
+    const candidate = {
+      uid: "prefix-1",
+      subject: "Your PayPal Cashback World Mastercard statement is ready",
+      from: { name: "PayPal", address: "ppv@mail.synchronybank.com" },
+      provenance: { lexical: false, vector: true },
+      scores: { lexical: 0.05, vector: 0.05, combined: 0.05 },
+    };
+    const kept = filterEmailSearchCandidatesForEvidence([candidate], {
+      q: "synchrony statement",
+      plan: null,
+    });
+    expect(kept.map((c) => c.uid)).toEqual(["prefix-1"]);
+  });
+
+  it("does not let very short terms prefix-match their way into evidence", () => {
+    const candidate = {
+      uid: "prefix-2",
+      subject: "Concert tickets inside",
+      from: { name: "Events", address: "hello@stubhub.com" },
+      provenance: { lexical: false, vector: true },
+      scores: { lexical: 0.05, vector: 0.05, combined: 0.05 },
+    };
+    // 'stu' (3 chars) must not count as matching 'stubhub'; 'con' likewise for 'concert'.
+    const kept = filterEmailSearchCandidatesForEvidence([candidate], {
+      q: "stu con",
+      plan: null,
+    });
+    expect(kept).toHaveLength(0);
+  });
+});
+
+describe("body-snippet evidence (C5)", () => {
+  it("counts query terms found in the visible body snippet, not just subject/sender", () => {
+    const candidate = {
+      uid: "snippet-1",
+      subject: "Payment reminder",
+      from: { name: "Billing", address: "billing@vendor.example" },
+      body_snippet: "Your statement balance is due on 07/07.",
+      provenance: { lexical: false, vector: true },
+      scores: { lexical: 0.05, vector: 0.05, combined: 0.05 },
+    };
+    const kept = filterEmailSearchCandidatesForEvidence([candidate], {
+      q: "payment statement",
+      plan: null,
+    });
+    expect(kept.map((c) => c.uid)).toEqual(["snippet-1"]);
+  });
+});
+
+describe("near-floor vector with corroborating field evidence (C5)", () => {
+  const nearFloorCandidate = (uid, vector, subject) => ({
+    uid,
+    subject,
+    from: { name: "Notifications", address: "no-reply@vendor.example" },
+    provenance: { lexical: false, vector: true },
+    scores: { lexical: 0.05, vector, combined: 0.2 },
+  });
+
+  it("keeps a candidate just under the hard vector floor when a field token corroborates it", () => {
+    // Prod anchor: the newest statement scored vector 0.31 (< 0.32) and was dropped
+    // while a wrong-family sibling at 0.35 was kept.
+    const kept = filterEmailSearchCandidatesForEvidence(
+      [nearFloorCandidate("near-1", 0.29, "Your statement is ready")],
+      { q: "synchrony statement due date", plan: null },
+    );
+    expect(kept.map((c) => c.uid)).toEqual(["near-1"]);
+  });
+
+  it("still drops a near-floor candidate with zero field evidence", () => {
+    const kept = filterEmailSearchCandidatesForEvidence(
+      [nearFloorCandidate("near-2", 0.29, "Weekend getaway deals")],
+      { q: "synchrony statement due date", plan: null },
+    );
+    expect(kept).toHaveLength(0);
+  });
+
+  it("still drops a corroborated candidate whose vector sits below the near-floor band", () => {
+    const kept = filterEmailSearchCandidatesForEvidence(
+      [nearFloorCandidate("near-3", 0.27, "Your statement is ready")],
+      { q: "synchrony statement due date", plan: null },
+    );
     expect(kept).toHaveLength(0);
   });
 });

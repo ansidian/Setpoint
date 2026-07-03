@@ -289,6 +289,84 @@ describe("runAlfred", () => {
     expect(nudge.content).toContain("<system-reminder>");
   });
 
+  it("still nudges when the only show_items call failed to resolve any ids (C7: failed calls must not disarm the backstop)", async () => {
+    const fetchImpl = fetchScript([
+      toolUseTurn("get_upcoming_bills", { start: "2026-06-12", end: "2026-07-12" }),
+      // The model cites with ids it invented — the call errors and renders nothing.
+      toolUseTurn("show_items", { kind: "bill", ids: ["ghost-1"] }, "tu_2"),
+      textTurn("Your car insurance is due June 21."),
+      // The nudge drives a corrected citation.
+      toolUseTurn("show_items", { kind: "bill", ids: ["b-1"] }, "tu_3"),
+      textTurn("Due in nine days."),
+    ]);
+    const readBillsMirrorRange = vi.fn().mockResolvedValue({
+      schedules: [{ id: "b-1", name: "Car insurance", payee: "Geico", amount: 182.13, next_date: "2026-06-21", paid: false, type: "bill" }],
+      syncHealth: { state: "current" },
+    });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "When is my car insurance due?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { readBillsMirrorRange },
+      recordUsage,
+    });
+
+    // Without the fix the failed call marks the run as cited: no nudge, no rows, 3 calls.
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
+    expect(events.some((event) => event.type === "rows")).toBe(true);
+    const nudge = conversation.messages.find(
+      (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("show_items"),
+    );
+    expect(nudge).toBeDefined();
+    expect(nudge.content).toContain("<system-reminder>");
+  });
+
+  it("nudges on a full default search_email page (C8: the default page size must not disarm the backstop)", async () => {
+    const candidates = Array.from({ length: 12 }, (_, i) => ({
+      uid: `em-${i}`,
+      subject: `Statement ${i}`,
+      body_snippet: "s",
+      email_date: "2026-06-15",
+      read: true,
+      from: { name: "Bank", address: "a@bank.com" },
+      metadata: {},
+      scores: {},
+    }));
+    const fetchImpl = fetchScript([
+      toolUseTurn("search_email", { query: "bank statements" }),
+      textTurn("Your June statement arrived on the 15th."),
+      toolUseTurn("show_items", { kind: "email", ids: ["em-0"] }, "tu_2"),
+      textTurn("Here it is."),
+    ]);
+    const retrieve = vi.fn().mockResolvedValue({ total: 12, mode: "lexical", candidates });
+
+    await runAlfred({
+      userId: "user-1",
+      conversation,
+      message: "when did my june bank statement arrive?",
+      model: "claude-haiku-4-5-20251001",
+      emit,
+      fetchImpl,
+      apiKey: "key",
+      deps: { retrieve },
+      recordUsage,
+    });
+
+    // 12 rows is one DEFAULT page — small enough to have been named in prose, so the
+    // backstop must fire (pre-fix: 12 > 8 silently disarmed it on every default search).
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(events.some((event) => event.type === "rows")).toBe(true);
+    const nudge = conversation.messages.find(
+      (entry) => entry.role === "user" && typeof entry.content === "string" && entry.content.includes("show_items"),
+    );
+    expect(nudge).toBeDefined();
+  });
+
   it("does not nudge when the result set is too large to plausibly be named", async () => {
     const fetchImpl = fetchScript([
       toolUseTurn("get_deadlines", { start: "2026-06-12", end: "2026-09-12" }),
@@ -359,9 +437,10 @@ describe("runAlfred", () => {
       }, "tu_2"),
       textTurn("3 overdue, 9 upcoming."),
     ]);
-    // 12 rows > MAX_NUDGE_ITEMS, so the small-set show_items backstop can't fire —
-    // only the new split/categorize backstop can, which keeps this test unambiguous.
-    const upcoming = Array.from({ length: 12 }, (_, i) => ({
+    // 13 rows > MAX_NUDGE_ITEMS (12, one default search page), so the small-set
+    // show_items backstop can't fire — only the split/categorize backstop can,
+    // which keeps this test unambiguous.
+    const upcoming = Array.from({ length: 13 }, (_, i) => ({
       id: `td-${i}`, content: `Task ${i}`, due_date: "2026-07-01", status: "incomplete",
     }));
     const readCalendarDeadlineRange = vi.fn().mockResolvedValue({ payload: { upcoming }, errors: [] });

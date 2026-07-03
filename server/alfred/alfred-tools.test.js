@@ -3,8 +3,8 @@ import {
   ALFRED_TOOL_DEFINITIONS,
   alfredToolSummary,
   executeAlfredTool,
-  stripQuotedReply,
 } from "./alfred-tools.js";
+import { stripQuotedReply } from "./alfred-email-content.js";
 import {
   _clearAlfredConversationsForTest,
   createAlfredConversation,
@@ -42,6 +42,13 @@ describe("tool definitions", () => {
       expect(tool.input_schema?.type).toBe("object");
       expect(tool.description).toBeTruthy();
     }
+  });
+
+  it("search_email description states relevance ranking so the model does not read the first result as the newest", () => {
+    const search = ALFRED_TOOL_DEFINITIONS.find((tool) => tool.name === "search_email");
+    expect(search.description).toMatch(/relevance-ranked/i);
+    expect(search.description).toMatch(/newest-first/i);
+    expect(search.description).toMatch(/date/i);
   });
 
   it("tells the model that a query filter unlocks year-long ranges", () => {
@@ -211,6 +218,93 @@ describe("search_email", () => {
 
     expect(retrieve).toHaveBeenCalledWith("user-1", expect.objectContaining({ offset: 12, limit: 12 }));
     expect(result).toMatchObject({ total: 30, has_more: true, offset: 12 });
+  });
+
+  it("surfaces the disambiguators the model needs: ISO date, account, deadline, category, bill, excerpt — and drops raw scores", async () => {
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "hybrid",
+      total: 1,
+      candidates: [{
+        uid: "em-new",
+        subject: "Your PayPal Cashback Mastercard statement is ready",
+        body_snippet: "preheader boilerplate",
+        body_excerpt: `Statement balance $238.80 Minimum payment due $29.00 Payment due date 07/07/2026 ${"x".repeat(400)}`,
+        email_date: "Mon, 15 Jun 2026 14:29:54 -0700",
+        email_date_utc: "2026-06-15T21:29:54Z",
+        read: true,
+        from: { name: "PayPal", address: "ppv@mail.synchronybank.com" },
+        account: { id: "acc-1", label: "Personal", email: "andy@example.com" },
+        metadata: {
+          lane: "fyi",
+          urgency: "medium",
+          category: "finance",
+          deadline_at: "2126-07-07T00:00:00Z",
+          bill_candidate: true,
+          handled: false,
+        },
+        provenance: { lexical: true, vector: true },
+        scores: { lexical: 0.4, vector: 0.5, combined: 0.46 },
+      }],
+    });
+    const result = await executeAlfredTool("search_email", { query: "paypal statement" }, ctxWith({ retrieve }));
+    const row = result.results[0];
+    expect(row.date).toBe("2026-06-15T21:29:54Z");
+    expect(row.account).toBe("andy@example.com");
+    expect(row.deadline_at).toBe("2126-07-07T00:00:00Z");
+    expect(row.category).toBe("finance");
+    expect(row.bill).toBe(true);
+    // The ~300-char body excerpt carries the decision signal the snippet cuts off…
+    expect(row.excerpt).toContain("Payment due date 07/07/2026");
+    // …stays bounded…
+    expect(row.excerpt.length).toBeLessThan(450);
+    // …and is fenced as untrusted email content like every other body-derived field.
+    expect(row.excerpt).toContain("<email_content");
+    // Fresh (unresolved) triage still shows lane/urgency.
+    expect(row.lane).toBe("fyi");
+    expect(row.urgency).toBe("medium");
+    // Undocumented fused-score floats no longer reach the model.
+    expect(row.scores).toBeUndefined();
+  });
+
+  it("suppresses stale lane/urgency once an email is handled or its deadline passed, and flags handled (anchor incident C1)", async () => {
+    const base = {
+      subject: "Your statement is ready",
+      body_snippet: "s",
+      email_date_utc: "2026-05-16T12:00:00Z",
+      read: true,
+      from: { name: "Bank", address: "no-reply@bank.com" },
+      account: { id: "a", label: "Personal", email: "andy@example.com" },
+      provenance: { lexical: true, vector: false },
+      scores: {},
+    };
+    const retrieve = vi.fn().mockResolvedValue({
+      mode: "lexical",
+      total: 2,
+      candidates: [
+        {
+          ...base,
+          uid: "em-handled",
+          // Paid statement: triage froze at needs_attention/high when it WAS urgent.
+          metadata: { lane: "needs_attention", urgency: "high", deadline_at: "2020-06-07T00:00:00Z", handled: true },
+        },
+        {
+          ...base,
+          uid: "em-expired",
+          // Deadline passed but never marked handled — the "act now" framing is equally stale.
+          metadata: { lane: "needs_attention", urgency: "high", deadline_at: "2020-06-07T00:00:00Z", handled: false },
+        },
+      ],
+    });
+    const result = await executeAlfredTool("search_email", { query: "statement" }, ctxWith({ retrieve }));
+    const [handledRow, expiredRow] = result.results;
+    expect(handledRow.handled).toBe(true);
+    expect(handledRow.lane).toBeUndefined();
+    expect(handledRow.urgency).toBeUndefined();
+    expect(expiredRow.handled).toBeUndefined();
+    expect(expiredRow.lane).toBeUndefined();
+    expect(expiredRow.urgency).toBeUndefined();
+    // The deadline itself stays visible — a past date is honest context, a "high urgency" label is not.
+    expect(expiredRow.deadline_at).toBe("2020-06-07T00:00:00Z");
   });
 });
 
@@ -489,6 +583,17 @@ describe("show_items", () => {
     const ctx = ctxWith({});
     const result = await executeAlfredTool("show_items", { kind: "banana", ids: ["x"] }, ctx);
     expect(result.error).toBeTruthy();
+    expect(ctx.emit).not.toHaveBeenCalled();
+  });
+
+  it("errors when no id resolves, so a wholly failed citation reads as is_error instead of shown:0 (C7)", async () => {
+    const ctx = ctxWith({});
+    ctx.conversation.items.set("bill:b-1", { id: "b-1", name: "Car insurance" });
+
+    const result = await executeAlfredTool("show_items", { kind: "bill", ids: ["ghost-1", "ghost-2"] }, ctx);
+
+    expect(result.error).toBeTruthy();
+    expect(result.unknown_ids).toEqual(["ghost-1", "ghost-2"]);
     expect(ctx.emit).not.toHaveBeenCalled();
   });
 });

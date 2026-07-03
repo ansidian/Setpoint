@@ -112,6 +112,41 @@ describe("retrieveInboxAiSearch", () => {
     });
   });
 
+  it("exposes bill_candidate in candidate metadata so the tool layer can surface it", async () => {
+    db = await createRetrievalTestDb();
+    await seedIndexedEmail(db, {
+      uid: "bill-stmt",
+      subject: "Your statement is ready",
+      body_text: "Statement balance $238.80 minimum payment due",
+      email_date: "2026-06-15T12:00:00Z",
+    });
+    await seedIndexedEmail(db, {
+      uid: "plain-stmt",
+      subject: "Your statement archive",
+      body_text: "Statement archive notice",
+      email_date: "2026-06-10T12:00:00Z",
+    });
+    await db.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, triage_status, bill_candidate_json)
+            VALUES (?, ?, ?, 'fyi', 'finance', 'medium', 'complete', ?)`,
+      args: ["user-1", "gmail-work", "bill-stmt", JSON.stringify({ amount: 238.8, due_date: "2026-07-07" })],
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "statement",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      limit: 5,
+    });
+
+    const withBill = result.candidates.find((c) => c.uid === "bill-stmt");
+    const withoutBill = result.candidates.find((c) => c.uid === "plain-stmt");
+    expect(withBill.metadata.bill_candidate).toBe(true);
+    expect(withoutBill.metadata.bill_candidate).toBe(false);
+  });
+
   it("records a query_embedding usage event on vector search", async () => {
     db = await createRetrievalTestDb();
     const row = await seedIndexedEmail(db, {
@@ -581,6 +616,118 @@ describe("retrieveInboxAiSearch", () => {
     expect(pages[2].has_more).toBe(false);
     // Pages are disjoint and together cover the whole set.
     expect(seen.size).toBe(60);
+  });
+});
+
+describe("lexical query passes and zero-result fallback", () => {
+  let db = null;
+
+  afterEach(async () => {
+    await db?.close?.();
+    db = null;
+  });
+
+  const opts = () => ({
+    dbClient: db,
+    embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+    capability: { mode: "fallback" },
+    coverageRatio: 1,
+    limit: 5,
+  });
+
+  it("runs lexical_queries beyond [0] against FTS so an alternate phrasing can retrieve (C2)", async () => {
+    db = await createRetrievalTestDb();
+    // Only the SECOND planned phrase matches this email; under first-query-only
+    // retrieval it is invisible.
+    await seedIndexedEmail(db, {
+      uid: "second-phrase",
+      subject: "Synchrony statement ready",
+      body_text: "Your Synchrony statement is ready to view.",
+      email_date: "2026-06-15T12:00:00Z",
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "paypal mastercard statement",
+      plan: {
+        semantic_query: "paypal mastercard statement",
+        lexical_queries: ["paypal cashback", "synchrony statement"],
+      },
+      ...opts(),
+    });
+
+    expect(result.candidates.map((c) => c.uid)).toContain("second-phrase");
+  });
+
+  it("recovers a natural-language query whose AND form matches nothing by stripping filler words (B1/C3)", async () => {
+    db = await createRetrievalTestDb();
+    // Prod repro: 'most recent paypal statement' returned 0 because unicode61 indexes
+    // stopwords and every token is AND-required — 'most'/'recent' appear nowhere.
+    await seedIndexedEmail(db, {
+      uid: "anchor-stmt",
+      subject: "Your PayPal statement is ready",
+      body_text: "Statement balance $238.80 Minimum payment due $29.00",
+      email_date: "2026-06-15T12:00:00Z",
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "most recent paypal statement",
+      ...opts(),
+    });
+
+    expect(result.candidates.map((c) => c.uid)).toContain("anchor-stmt");
+  });
+
+  it("falls through to OR-of-prefixed-tokens so one wrong token cannot zero the lexical leg (C3 ladder rung 2)", async () => {
+    db = await createRetrievalTestDb();
+    await seedIndexedEmail(db, {
+      uid: "costco-stmt",
+      subject: "Your Costco statement is ready",
+      body_text: "Costco statement balance and rewards summary.",
+      email_date: "2026-06-15T12:00:00Z",
+    });
+
+    // 'water' appears nowhere: the AND form and its stopword-stripped variant both
+    // return zero; only the OR rung can rescue the two correct tokens.
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "costco water statement",
+      ...opts(),
+    });
+
+    expect(result.candidates.map((c) => c.uid)).toContain("costco-stmt");
+  });
+
+  it("end-to-end anchor repro: 'synchrony statement' surfaces the statement family newest-first when the brand only lives in the sender domain", async () => {
+    db = await createRetrievalTestDb();
+    const family = {
+      from_name: "PayPal",
+      from_address: "ppv@mail.synchronybank.com",
+      subject: "Your PayPal Cashback World Mastercard statement is ready.",
+    };
+    await seedIndexedEmail(db, {
+      ...family,
+      uid: "syn-old",
+      body_text: "Statement balance $310.20 Minimum payment due $30.00",
+      email_date: "2026-05-16T12:00:00Z",
+    });
+    await seedIndexedEmail(db, {
+      ...family,
+      uid: "syn-new",
+      body_text: "Statement balance $238.80 Minimum payment due $29.00 Payment due date 07/07/2026",
+      email_date: "2026-06-15T12:00:00Z",
+    });
+
+    // No token 'synchrony' exists anywhere — only the synchronybank domain label —
+    // so the AND pass returns zero and only the OR rung plus the gate's prefix
+    // matching can carry the family through.
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "synchrony statement",
+      ...opts(),
+    });
+
+    const uids = result.candidates.map((c) => c.uid);
+    expect(uids).toContain("syn-new");
+    expect(uids).toContain("syn-old");
+    expect(uids.indexOf("syn-new")).toBeLessThan(uids.indexOf("syn-old"));
   });
 });
 
