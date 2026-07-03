@@ -14,6 +14,7 @@ const migrationFiles = [
   "006_email_search_embedding_state.sql",
   "007_email_search_ai_usage.sql",
   "013_email_index_normalized_date.sql",
+  "025_email_thread_identity.sql",
 ];
 
 const migrationSql = migrationFiles.map((file) =>
@@ -85,6 +86,8 @@ export async function seedIndexedEmail(db, email = {}) {
     email_date: "2026-05-01T12:00:00Z",
     email_date_utc: null,
     read: 1,
+    thread_id: null,
+    message_id: null,
     ...email,
   };
   const emailDateUtc = row.email_date_utc ?? normalizeEmailDateUtc(row.email_date);
@@ -93,8 +96,9 @@ export async function seedIndexedEmail(db, email = {}) {
       sql: `INSERT INTO ea_email_index
               (uid, user_id, account_id, account_label, account_email,
                account_color, account_icon, from_name, from_address,
-               subject, body_snippet, body_text, email_date, email_date_utc, read)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               subject, body_snippet, body_text, email_date, email_date_utc, read,
+               thread_id, message_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         row.uid,
         row.user_id,
@@ -111,6 +115,8 @@ export async function seedIndexedEmail(db, email = {}) {
         row.email_date,
         emailDateUtc,
         row.read,
+        row.thread_id,
+        row.message_id,
       ],
     },
     {

@@ -17,6 +17,7 @@ const EVAL_MIGRATIONS = [
   "005_email_search_embeddings.sql",
   "006_email_search_embedding_state.sql",
   "013_email_index_normalized_date.sql",
+  "025_email_thread_identity.sql",
 ];
 
 export function normalizeRetrievalEvalFixture(fixture = {}) {

@@ -34,6 +34,7 @@ async function createWorkerTestDb() {
     "006_email_search_embedding_state.sql",
     "007_email_search_ai_usage.sql",
     "013_email_index_normalized_date.sql",
+    "025_email_thread_identity.sql",
   ]);
   return db;
 }

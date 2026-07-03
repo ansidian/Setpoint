@@ -167,6 +167,7 @@ describe("fetchEmailsInRange", () => {
         ok: true,
         json: async () => ({
           id: "msg-1",
+          threadId: "t-abc123",
           snippet: "Short preview",
           labelIds: ["INBOX", "UNREAD"],
           payload: {
@@ -212,6 +213,7 @@ describe("fetchEmailsInRange", () => {
           date: "Fri, 01 May 2026 10:00:00 -0700",
           read: false,
           message_id: "<msg-1@example.com>",
+          thread_id: "t-abc123",
         }),
       ],
       nextPageToken: "next-page",

@@ -156,22 +156,31 @@ function familyKey(row) {
   return `${from}|${subject}`;
 }
 
+function threadKey(row) {
+  const thread = String(row.thread_id || "").trim();
+  return thread || null;
+}
+
 // Recurring emails (same sender + same subject: monthly statements, autopay notices)
 // must surface newest-first: any metadata edge an older sibling still carries is stale
 // context, not higher relevance. Clamp older siblings to the newest member's score so
 // the date tie-break orders the family newest-first — unless the newest is deliberately
 // penalized (negative score: noise/removed/dismissed), where demotion is intentional
 // and clamping would drag the rest of the family down with it.
-function applyFamilyRecencyDominance(rows) {
-  const families = new Map();
+//
+// (generalized from the family-only version; see the family comment above —
+// the same stale-metadata logic applies to reply threads, whose subjects
+// diverge ("Re:") and so escape the from+subject family key.)
+function applyRecencyDominance(rows, keyOf, label) {
+  const groups = new Map();
   for (const row of rows) {
-    const key = familyKey(row);
+    const key = keyOf(row);
     if (!key) continue;
-    const members = families.get(key);
+    const members = groups.get(key);
     if (members) members.push(row);
-    else families.set(key, [row]);
+    else groups.set(key, [row]);
   }
-  for (const members of families.values()) {
+  for (const members of groups.values()) {
     if (members.length < 2) continue;
     const newest = members.reduce((best, row) => (
       parseTime(row.email_date_utc || row.email_date) > parseTime(best.email_date_utc || best.email_date) ? row : best
@@ -182,12 +191,17 @@ function applyFamilyRecencyDominance(rows) {
       const delta = newest.search_score - row.search_score;
       row.search_score = newest.search_score;
       if (row.search_score_details) {
-        row.search_score_details.details.push({ label: "family_recency_clamp", value: delta });
+        row.search_score_details.details.push({ label, value: delta });
         row.search_score_details.score = row.search_score;
       }
     }
   }
   return rows;
+}
+
+function applyFamilyRecencyDominance(rows) {
+  applyRecencyDominance(rows, familyKey, "family_recency_clamp");
+  return applyRecencyDominance(rows, threadKey, "thread_recency_clamp");
 }
 
 export function rankEmailSearchRows(rows, {
