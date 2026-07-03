@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "description": "Synthetic CI-safe retrieval corpus + cases. Seeded into an in-memory DB and run at full embedding coverage (healthy corpus) to guard against silent vector flattening. No real personal email UIDs or snippets here. Each case uses an orthogonal embedding dimension to avoid cross-case vector collisions.",
+  "version": 3,
+  "description": "Synthetic CI-safe retrieval corpus + cases. Seeded into an in-memory DB and run at full embedding coverage (healthy corpus) to guard against silent vector flattening. No real personal email UIDs or snippets here. Each case uses an orthogonal embedding dimension to avoid cross-case vector collisions; the two recurring-statement rows deliberately share one dimension so the vector term cancels and the case isolates ranking recency. The water-bill pair spans two senders (no family key), so only stale-signal expiry can gate it.",
   "now": "2026-06-14T00:00:00.000Z",
   "corpus": [
     {
@@ -10,8 +10,19 @@
       "from_name": "Amazon Returns",
       "from_address": "returns@amazon.com",
       "email_date": "2026-05-30T12:00:00Z",
-      "triage": { "lane": "needs_attention", "category": "delivery", "urgency": "high" },
-      "embedding": [1, 0, 0, 0]
+      "triage": {
+        "lane": "needs_attention",
+        "category": "delivery",
+        "urgency": "high"
+      },
+      "embedding": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
     },
     {
       "uid": "synthetic-refund-decoy",
@@ -20,7 +31,14 @@
       "from_name": "Store",
       "from_address": "no-reply@store.com",
       "email_date": "2026-04-10T12:00:00Z",
-      "embedding": [0.5, 0, 0, 0.8660254]
+      "embedding": [
+        0.5,
+        0,
+        0,
+        0.8660254,
+        0,
+        0
+      ]
     },
     {
       "uid": "synthetic-payment-due",
@@ -29,8 +47,19 @@
       "from_name": "Chase",
       "from_address": "billing@chase.com",
       "email_date": "2026-06-01T12:00:00Z",
-      "triage": { "lane": "needs_attention", "category": "finance", "urgency": "high" },
-      "embedding": [0, 1, 0, 0]
+      "triage": {
+        "lane": "needs_attention",
+        "category": "finance",
+        "urgency": "high"
+      },
+      "embedding": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ]
     },
     {
       "uid": "synthetic-payment-receipt",
@@ -39,7 +68,14 @@
       "from_name": "Chase",
       "from_address": "billing@chase.com",
       "email_date": "2026-06-02T12:00:00Z",
-      "embedding": [0, 0.9, 0, 0.1]
+      "embedding": [
+        0,
+        0.9,
+        0,
+        0.1,
+        0,
+        0
+      ]
     },
     {
       "uid": "synthetic-semantic-balance",
@@ -48,7 +84,14 @@
       "from_name": "Bank",
       "from_address": "noreply@bank.com",
       "email_date": "2026-06-10T12:00:00Z",
-      "embedding": [0, 0, 1, 0]
+      "embedding": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
     },
     {
       "uid": "synthetic-lexical-decoy",
@@ -57,33 +100,203 @@
       "from_name": "Promo",
       "from_address": "noreply@promo.com",
       "email_date": "2026-06-11T12:00:00Z",
-      "embedding": [0, 0, 0.2, 0.97]
+      "embedding": [
+        0,
+        0,
+        0.2,
+        0.97,
+        0,
+        0
+      ]
+    },
+    {
+      "uid": "synthetic-statement-2026-05",
+      "subject": "Your cashback card statement is ready",
+      "body_text": "Your May billing statement is ready. Statement balance $231.10. Payment due date 06/07/2026.",
+      "from_name": "Cashback Card",
+      "from_address": "billing@card.example.com",
+      "email_date": "2026-05-16T12:00:00Z",
+      "triage": {
+        "lane": "needs_attention",
+        "category": "finance",
+        "urgency": "high",
+        "deadline_at": "2026-06-07T23:59:59Z",
+        "escalation_badge": "bill due",
+        "bill_candidate_json": "{\"amount\":231.10}",
+        "handled_at": "2026-05-17T00:00:00Z",
+        "updated_at": "2026-06-13T00:00:00Z"
+      },
+      "embedding": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "uid": "synthetic-statement-2026-06",
+      "subject": "Your cashback card statement is ready",
+      "body_text": "Your June billing statement is ready. Statement balance $238.80. Payment due date 07/07/2026.",
+      "from_name": "Cashback Card",
+      "from_address": "billing@card.example.com",
+      "email_date": "2026-06-13T12:00:00Z",
+      "triage": {
+        "lane": "fyi",
+        "category": "finance",
+        "urgency": "medium",
+        "deadline_at": "2026-07-07T00:00:00Z",
+        "bill_candidate_json": "{\"amount\":238.80}",
+        "updated_at": "2026-06-13T00:00:00Z"
+      },
+      "embedding": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "uid": "synthetic-water-bill-paid",
+      "subject": "Bill is ready for your water service",
+      "body_text": "Your water bill is ready. Amount due 88 dollars.",
+      "from_name": "City Utilities",
+      "from_address": "utility@h2o-city.example.com",
+      "email_date": "2026-05-20T12:00:00Z",
+      "triage": {
+        "lane": "needs_attention",
+        "category": "finance",
+        "urgency": "high",
+        "deadline_at": "2026-06-01T23:59:59Z",
+        "escalation_badge": "bill due",
+        "bill_candidate_json": "{\"amount\":88}",
+        "handled_at": "2026-05-21T00:00:00Z",
+        "updated_at": "2026-06-13T00:00:00Z"
+      },
+      "embedding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "uid": "synthetic-water-autopay",
+      "subject": "Water bill autopay scheduled",
+      "body_text": "Autopay for your water bill is scheduled this week.",
+      "from_name": "Utility Pay",
+      "from_address": "noreply@utilitypay.example.com",
+      "email_date": "2026-06-11T12:00:00Z",
+      "embedding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ]
     }
   ],
   "cases": [
     {
       "id": "synthetic-amazon-return-active",
       "query": "amazon return drop off deadline",
-      "query_embedding": [1, 0, 0, 0],
-      "expected_uids": ["synthetic-active-return"],
-      "must_not_top": ["synthetic-refund-decoy"],
+      "query_embedding": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "expected_uids": [
+        "synthetic-active-return"
+      ],
+      "must_not_top": [
+        "synthetic-refund-decoy"
+      ],
       "top_n": 3
     },
     {
       "id": "synthetic-payment-due-vs-receipt",
       "query": "credit card payment due",
-      "query_embedding": [0, 1, 0, 0],
-      "expected_uids": ["synthetic-payment-due"],
-      "must_not_top": ["synthetic-payment-receipt"],
+      "query_embedding": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "expected_uids": [
+        "synthetic-payment-due"
+      ],
+      "must_not_top": [
+        "synthetic-payment-receipt"
+      ],
       "top_n": 3
     },
     {
       "id": "synthetic-semantic-not-flattened",
       "query": "card statement balance",
-      "query_embedding": [0, 0, 1, 0],
-      "expected_uids": ["synthetic-semantic-balance"],
-      "must_not_top": ["synthetic-lexical-decoy"],
+      "query_embedding": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "expected_uids": [
+        "synthetic-semantic-balance"
+      ],
+      "must_not_top": [
+        "synthetic-lexical-decoy"
+      ],
       "top_n": 3
+    },
+    {
+      "id": "synthetic-latest-statement-recency",
+      "query": "cashback statement",
+      "query_embedding": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "expected_uids": [
+        "synthetic-statement-2026-06"
+      ],
+      "must_not_top": [
+        "synthetic-statement-2026-05"
+      ],
+      "top_n": 1
+    },
+    {
+      "id": "synthetic-expired-bill-signals",
+      "query": "water bill",
+      "query_embedding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "expected_uids": [
+        "synthetic-water-autopay"
+      ],
+      "must_not_top": [
+        "synthetic-water-bill-paid"
+      ],
+      "top_n": 1
     }
   ]
 }

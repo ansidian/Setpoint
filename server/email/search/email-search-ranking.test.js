@@ -110,6 +110,141 @@ describe("rankEmailSearchRows", () => {
   });
 });
 
+describe("recurring-family newest-first dominance", () => {
+  // Same sender + same subject = a recurring family (monthly statements, autopay
+  // notices). Stale metadata on an older sibling must not outrank the newest copy.
+  const family = {
+    from_name: "Bank",
+    from_address: "billing@bank.com",
+    subject: "Your statement is ready",
+    read: 1,
+  };
+
+  it("ranks the newest family member first even when an older sibling carries more triage points", () => {
+    const rows = [
+      {
+        ...family,
+        uid: "statement-old",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_category: "finance",
+        triage_bill_candidate_json: "{\"amount\":42}",
+      },
+      {
+        ...family,
+        uid: "statement-new",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-04-28T12:00:00Z",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "statement", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["statement-new", "statement-old"]);
+  });
+
+  it("does not rescue a deliberately penalized newest member (noise stays demoted)", () => {
+    const rows = [
+      {
+        ...family,
+        uid: "statement-old-clean",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-03-25T12:00:00Z",
+      },
+      {
+        ...family,
+        uid: "statement-new-noise",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-04-28T12:00:00Z",
+        triage_lane: "noise",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "statement", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["statement-old-clean", "statement-new-noise"]);
+  });
+
+  it("skips the clamp when the newest member is penalized even if query points push its total positive", () => {
+    // Query "bank.com" showers sender points (+45 exact, +42 domain, +15 token) on both
+    // rows, so the noise-lane newest still totals positive — the guard must key on the
+    // penalty itself, not the total, or the clamp drags the clean older copy down to a
+    // tie and the date tiebreak puts the noise copy first.
+    const rows = [
+      {
+        ...family,
+        uid: "old-clean",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_lane: "fyi",
+      },
+      {
+        ...family,
+        uid: "new-noise-positive",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-04-28T12:00:00Z",
+        triage_lane: "noise",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "bank.com", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["old-clean", "new-noise-positive"]);
+  });
+
+  it("never groups subjectless emails into a family", () => {
+    // Distinct no-subject emails from one sender are not a recurring series; grouping
+    // them would let the clamp wrongly demote an older, better-matching one.
+    const rows = [
+      {
+        ...family,
+        uid: "no-subject-old",
+        subject: "",
+        body_snippet: "Statement balance attached.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_category: "finance",
+        triage_bill_candidate_json: "{\"amount\":42}",
+      },
+      {
+        ...family,
+        uid: "no-subject-new",
+        subject: "",
+        body_snippet: "Unrelated note.",
+        email_date: "2026-04-28T12:00:00Z",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "statement", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["no-subject-old", "no-subject-new"]);
+  });
+
+  it("leaves same-sender emails with different subjects unclamped (not a family)", () => {
+    const rows = [
+      {
+        ...family,
+        uid: "different-old",
+        subject: "Rate change notice for your account",
+        body_snippet: "Statement note.",
+        email_date: "2026-03-25T12:00:00Z",
+        triage_category: "finance",
+        triage_bill_candidate_json: "{\"amount\":42}",
+      },
+      {
+        ...family,
+        uid: "different-new",
+        subject: "Weekly digest",
+        body_snippet: "Statement note.",
+        email_date: "2026-04-28T12:00:00Z",
+      },
+    ];
+
+    const ranked = rankEmailSearchRows(rows, { query: "statement", limit: 2, now: NOW });
+
+    expect(ranked.map((row) => row.uid)).toEqual(["different-old", "different-new"]);
+  });
+});
+
 describe("scoreEmailSearchRow per-signal contributions", () => {
   it("scores the baseline row at exactly 0 with no signals", () => {
     const scoring = scoreOf({});
@@ -265,8 +400,70 @@ describe("scoreEmailSearchRow per-signal contributions", () => {
       expect(deltaFor(s, "deadline_signal")).toBe(5);
     });
 
-    it("treats a past deadline as deadline_signal +5", () => {
-      expect(deltaFor(deadlineScoring(-1), "deadline_signal")).toBe(5);
+    it("expires a past deadline entirely (no deadline points once it has passed)", () => {
+      const s = deadlineScoring(-1);
+      expect(deltaFor(s, "deadline_soon")).toBe(0);
+      expect(deltaFor(s, "deadline_future")).toBe(0);
+      expect(deltaFor(s, "deadline_signal")).toBe(0);
+    });
+  });
+
+  describe("resolved emails (handled or past-deadline) lose stale attention signals", () => {
+    const NOW_MS = Date.parse(NOW);
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const handled = { triage_handled_at: "2026-04-30T00:00:00Z" };
+
+    it("demotes a handled needs_attention lane to the resolved fyi-level bonus", () => {
+      const s = scoreOf({ triage_lane: "needs_attention", ...handled });
+      expect(deltaFor(s, "lane_needs_attention")).toBe(0);
+      expect(deltaFor(s, "lane_needs_attention_resolved")).toBe(8);
+    });
+
+    it("suppresses positive urgency, escalation badge, and the old handled bonus once handled", () => {
+      const s = scoreOf({
+        triage_lane: "needs_attention",
+        triage_urgency: "high",
+        triage_escalation_badge: "bill due",
+        ...handled,
+      });
+      expect(deltaFor(s, "urgency_high")).toBe(0);
+      expect(deltaFor(s, "escalation_badge")).toBe(0);
+      expect(s.details.some((d) => d.label === "handled_important")).toBe(false);
+    });
+
+    it("suppresses future-deadline bonuses once handled (bill already paid)", () => {
+      const s = scoreOf({
+        triage_deadline_at: new Date(NOW_MS + 2 * DAY_MS).toISOString(),
+        ...handled,
+      });
+      expect(deltaFor(s, "deadline_soon")).toBe(0);
+      expect(deltaFor(s, "deadline_future")).toBe(0);
+      expect(deltaFor(s, "deadline_signal")).toBe(0);
+    });
+
+    it("keeps urgency_low demotion and bill/category traits for handled rows", () => {
+      const s = scoreOf({
+        triage_urgency: "low",
+        triage_category: "finance",
+        triage_bill_candidate_json: "{\"amount\":1}",
+        ...handled,
+      });
+      expect(deltaFor(s, "urgency_low")).toBe(-2);
+      expect(deltaFor(s, "useful_category")).toBe(8);
+      expect(deltaFor(s, "bill_candidate")).toBe(16);
+    });
+
+    it("expires attention signals when the deadline has passed even if unhandled", () => {
+      const s = scoreOf({
+        triage_lane: "needs_attention",
+        triage_urgency: "high",
+        triage_escalation_badge: "bill due",
+        triage_deadline_at: new Date(NOW_MS - DAY_MS).toISOString(),
+      });
+      expect(deltaFor(s, "lane_needs_attention")).toBe(0);
+      expect(deltaFor(s, "lane_needs_attention_resolved")).toBe(8);
+      expect(deltaFor(s, "urgency_high")).toBe(0);
+      expect(deltaFor(s, "escalation_badge")).toBe(0);
     });
   });
 

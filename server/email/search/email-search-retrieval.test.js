@@ -658,3 +658,204 @@ describe("mergeCandidates coverage-aware fusion", () => {
     expect(penalized.scores.combined).toBeCloseTo(0.0725, 6);
   });
 });
+
+describe("candidate pool recency", () => {
+  let db = null;
+
+  afterEach(async () => {
+    await db?.close?.();
+    db = null;
+  });
+
+  it("keeps the newest match reachable when older high-frequency matches saturate the bm25 pool", async () => {
+    db = await createRetrievalTestDb();
+    // 110 old fillers whose tiny bodies repeat the term: they dominate unweighted BM25
+    // and would fill the entire lexical fetch pool (fetchLimit = 100 at default limit).
+    for (let i = 0; i < 110; i += 1) {
+      await seedIndexedEmail(db, {
+        uid: `filler-${String(i).padStart(3, "0")}`,
+        subject: "Weekly digest",
+        body_snippet: "payment payment payment payment payment",
+        body_text: "payment payment payment payment payment",
+        email_date: "2026-01-05T12:00:00Z",
+      });
+    }
+    await seedIndexedEmail(db, {
+      uid: "newest-subject-match",
+      subject: "Payment due notice",
+      body_snippet: "Your autopay draft is scheduled.",
+      body_text: "Your autopay draft is scheduled.",
+      email_date: "2026-04-30T12:00:00Z",
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "payment",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      limit: 12,
+      now: "2026-05-01T12:00:00Z",
+    });
+
+    expect(result.candidates.map((candidate) => candidate.uid)).toContain("newest-subject-match");
+  });
+
+  it("breaks combined-score ties by recency instead of uid order", () => {
+    const row = (uid, date) => ({
+      uid,
+      subject: "statement",
+      body_snippet: "statement",
+      body_text: "",
+      email_date: date,
+      email_date_utc: date,
+      read: 1,
+      from_name: "Bank",
+      from_address: "billing@bank.com",
+      account_id: "gmail-work",
+      account_label: "Work",
+      account_email: "work@example.com",
+      account_color: "#123456",
+      account_icon: "Mail",
+      search_score: 50,
+    });
+    const merged = mergeCandidates({
+      lexicalRows: [row("a-old", "2026-01-01T00:00:00.000Z"), row("b-new", "2026-03-01T00:00:00.000Z")],
+      vectorMatches: [],
+      vectorRows: [],
+      limit: 5,
+    });
+    expect(merged.map((candidate) => candidate.uid)).toEqual(["b-new", "a-old"]);
+  });
+});
+
+describe("date window inclusivity", () => {
+  let db = null;
+
+  afterEach(async () => {
+    await db?.close?.();
+    db = null;
+  });
+
+  it("includes emails sent ON the before date (bare-date bound covers the whole day)", async () => {
+    db = await createRetrievalTestDb();
+    await seedIndexedEmail(db, {
+      uid: "sent-on-before-day",
+      subject: "Your statement is ready",
+      body_text: "Statement balance attached.",
+      email_date: "2026-06-15T21:29:54Z",
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "statement",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      plan: { date_window: { before: "2026-06-15" } },
+      now: "2026-07-02T18:00:00Z",
+    });
+
+    expect(result.candidates.map((candidate) => candidate.uid)).toContain("sent-on-before-day");
+  });
+});
+
+describe("family dominance across the fused hybrid pool", () => {
+  let db = null;
+
+  afterEach(async () => {
+    await db?.close?.();
+    db = null;
+  });
+
+  it("keeps a recurring family newest-first when the siblings arrive via different retrieval legs", async () => {
+    db = await createRetrievalTestDb();
+    // Newest sibling matches the query lexically (unique token in its body) but is not
+    // embedded; the older sibling is vector-only (perfect similarity) and carries
+    // non-expiring triage edges (bill_candidate, finance). The per-pool clamp sees two
+    // 1-member families, so only a fused-level clamp can keep the family newest-first.
+    await seedIndexedEmail(db, {
+      uid: "stmt-new-lexical",
+      from_address: "billing@bank.com",
+      from_name: "Bank",
+      subject: "Your statement is ready",
+      body_snippet: "Your statement is ready. Payment due 0707.",
+      body_text: "Your statement is ready. Payment due 0707.",
+      email_date: "2026-06-15T12:00:00Z",
+    });
+    const older = await seedIndexedEmail(db, {
+      uid: "stmt-old-vector",
+      from_address: "billing@bank.com",
+      from_name: "Bank",
+      subject: "Your statement is ready",
+      body_snippet: "Your statement is ready.",
+      body_text: "Your statement is ready.",
+      email_date: "2026-05-16T12:00:00Z",
+    });
+    await upsertEmbedding(db, older, [1, 0, 0]);
+    await db.execute({
+      sql: `INSERT INTO ea_email_triage
+              (user_id, account_id, email_id, lane, category, urgency, bill_candidate_json, triage_status)
+            VALUES (?, ?, ?, 'fyi', 'finance', 'medium', '{"amount":42}', 'complete')`,
+      args: ["user-1", "gmail-work", "stmt-old-vector"],
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "statement 0707",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      limit: 5,
+      now: "2026-07-02T12:00:00Z",
+    });
+
+    const uids = result.candidates.map((candidate) => candidate.uid);
+    expect(uids.indexOf("stmt-new-lexical")).toBeGreaterThanOrEqual(0);
+    expect(uids.indexOf("stmt-new-lexical")).toBeLessThan(uids.indexOf("stmt-old-vector"));
+  });
+});
+
+describe("bm25 subject weighting", () => {
+  let db = null;
+
+  afterEach(async () => {
+    await db?.close?.();
+    db = null;
+  });
+
+  it("keeps an old subject match in the pool ahead of from-field decoys (gates the bm25 weights)", async () => {
+    db = await createRetrievalTestDb();
+    // 160 newer decoys match via short from_name + body — the strongest columns under
+    // UNWEIGHTED bm25. The subject-matching target is older than the 50-newest date
+    // slice, so only the subject-heavy bm25 weights can carry it into the 100-row pool.
+    for (let i = 0; i < 160; i += 1) {
+      await seedIndexedEmail(db, {
+        uid: `decoy-${String(i).padStart(3, "0")}`,
+        from_name: "Payment",
+        from_address: `billing@decoy${i}.example.com`,
+        subject: "Ledger update",
+        body_snippet: "Ledger reconciliation attached for your records.",
+        body_text: "Ledger reconciliation attached for your records.",
+        email_date: `2026-03-${String((i % 28) + 1).padStart(2, "0")}T12:00:00Z`,
+      });
+    }
+    await seedIndexedEmail(db, {
+      uid: "subject-weighted-target",
+      from_name: "Accounting",
+      from_address: "books@firm.example.com",
+      subject: "Payment reconciliation summary",
+      body_snippet: "Quarterly summary attached.",
+      body_text: "Quarterly summary attached.",
+      email_date: "2026-02-01T12:00:00Z",
+    });
+
+    const result = await retrieveInboxAiSearch("user-1", {
+      q: "payment reconciliation",
+      dbClient: db,
+      embeddingClient: { embed: vi.fn(async () => [[1, 0, 0]]) },
+      capability: { mode: "fallback" },
+      limit: 12,
+      now: "2026-05-01T12:00:00Z",
+    });
+
+    expect(result.candidates.map((candidate) => candidate.uid)).toContain("subject-weighted-target");
+  });
+});

@@ -87,7 +87,7 @@ describe("email search retrieval eval runner", () => {
     const { retrieve, cleanup } = await createSyntheticEvalRetriever(fixture, { migrationsDir });
     try {
       const report = await evaluateRetrievalCases(fixture, { retrieve });
-      expect(report.total).toBe(3);
+      expect(report.total).toBe(5);
       expect(report.failed).toBe(0);
     } finally {
       await cleanup();
