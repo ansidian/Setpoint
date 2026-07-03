@@ -255,6 +255,20 @@ describe("InboxList", () => {
 
     expect(screen.queryByTestId("inbox-search-skeleton")).toBeNull();
     expect(screen.getByText("No indexed mail matches")).toBeTruthy();
+    // Coverage copy must not claim "INBOX mail only": since-archived mail stays
+    // searchable, while mail archived before it was ever indexed does not.
+    expect(screen.getByText(/mail archived before it was ever indexed isn't included/)).toBeTruthy();
+  });
+
+  it("describes search coverage without the INBOX-only claim on the filtered-view empty state", () => {
+    renderInboxList({
+      searchQuery: "tuition",
+      emails: [],
+    });
+
+    expect(screen.getByText("No emails match this view")).toBeTruthy();
+    expect(screen.getByText(/Search covers mail indexed from your inboxes/)).toBeTruthy();
+    expect(screen.queryByText(/INBOX mail only/)).toBeNull();
   });
 
   it("hands the search query off to alfred on Cmd+Enter", () => {

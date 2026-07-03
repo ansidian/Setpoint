@@ -184,8 +184,18 @@ async function persistWindowSuccess(state, window, result, { now }) {
     if (new Date(window.start) <= window.targetDate) nextStatus = "completed";
   }
 
+  // Reaching the target with a cumulative indexed_count of 0 is ambiguous: a
+  // genuinely empty mailbox history and a silently failing fetch produce the
+  // same "completed, no error" row (audit D4: one account scanned 53 windows,
+  // indexed nothing, and reported success). Keep the terminal state but make
+  // the emptiness observable as its own status.
+  if (nextStatus === "completed" && Number(state.indexed_count || 0) + emails.length === 0) {
+    nextStatus = "completed_empty";
+  }
   const nextOldestIndexed = oldestEmailDate(emails, state.oldest_indexed_date);
-  const completedAt = nextStatus === "completed" ? now.toISOString() : null;
+  const completedAt = nextStatus === "completed" || nextStatus === "completed_empty"
+    ? now.toISOString()
+    : null;
   await db.execute({
     sql: `UPDATE ea_email_backfill_state
           SET status = ?,
@@ -256,15 +266,18 @@ export async function processNextBackfillWindow({
 
   const window = calculateWindow(state, { now, windowDays });
   if (window.done) {
+    // Same emptiness distinction as persistWindowSuccess: zero ever indexed
+    // must not be indistinguishable from a real completion.
+    const status = Number(state.indexed_count || 0) > 0 ? "completed" : "completed_empty";
     await db.execute({
       sql: `UPDATE ea_email_backfill_state
-            SET status = 'completed',
+            SET status = ?,
                 completed_at = ?,
                 updated_at = datetime('now')
             WHERE user_id = ? AND account_id = ? AND mailbox_scope = ?`,
-      args: [now.toISOString(), state.user_id, state.account_id, state.mailbox_scope],
+      args: [status, now.toISOString(), state.user_id, state.account_id, state.mailbox_scope],
     });
-    return { processed: true, status: "completed", indexed: 0 };
+    return { processed: true, status, indexed: 0 };
   }
 
   const account = await loadAccount(state);

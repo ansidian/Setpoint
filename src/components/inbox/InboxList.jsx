@@ -500,9 +500,9 @@ export default function InboxList({
                 eyebrow="Inbox"
                 title={indexedSearchActive ? "No indexed mail matches" : searchQuery ? "No emails match this view" : "No emails available"}
                 message={indexedSearchActive
-                  ? "Try another sender, subject, or phrase from indexed INBOX mail."
+                  ? "Try another sender, subject, or phrase. Search covers mail indexed from your inboxes — mail archived before it was ever indexed isn't included."
                   : searchQuery
-                  ? "Try a sender, subject word, or another account. Search covers indexed INBOX mail only."
+                  ? "Try a sender, subject word, or another account. Search covers mail indexed from your inboxes."
                   : "This slice of the inbox is calm right now. Live arrivals and triaged mail will appear here as they land."}
                 compact
                 minHeight="100%"
