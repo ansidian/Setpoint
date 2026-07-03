@@ -98,6 +98,10 @@ export default function useCalendarEventEditor({
   const editorHistoryTokenRef = useRef(null);
   const editorRequestIdRef = useRef(0);
   const selectLocationRef = useRef(null);
+  // The parsed @token query a Places resolution has already answered. The
+  // title rewrite that consumes the token is debounced, so without this the
+  // draft-sync effect re-applies the stale token text over the resolved place.
+  const lastCommittedLocationQueryRef = useRef("");
   const handleSourcesLoadStart = useCallback(() => {
     setError(null);
     setErrorCode(null);
@@ -239,6 +243,7 @@ export default function useCalendarEventEditor({
   useEffect(() => {
     if (mode !== "editor") return;
     if (isEditing && !touchedFields.title) return;
+    if (!titleAssist.locationQuery) lastCommittedLocationQueryRef.current = "";
     setDraft((current) => {
       const next = {
         ...current,
@@ -251,7 +256,7 @@ export default function useCalendarEventEditor({
       if (!manualOverrides.endDate) next.endDate = derivedDraft?.endDate || parsed?.endDate || createSeedDraft.endDate;
       if (!manualOverrides.startTime) next.startTime = derivedDraft?.startTime || parsed?.startTime || createSeedDraft.startTime;
       if (!manualOverrides.endTime) next.endTime = derivedDraft?.endTime || parsed?.endTime || createSeedDraft.endTime;
-      if (titleAssist.locationQuery) next.location = titleAssist.locationQuery;
+      if (titleAssist.locationQuery && titleAssist.locationQuery !== lastCommittedLocationQueryRef.current) next.location = titleAssist.locationQuery;
       else if (!manualOverrides.location) next.location = createSeedDraft.location;
 
       if (
@@ -561,6 +566,10 @@ export default function useCalendarEventEditor({
 
   useLayoutEffect(() => {
     selectLocationRef.current = (location) => {
+      // draft.location is the query the suggestion fetch ran with; record it
+      // so the draft-sync effect stops re-applying that token over the
+      // resolved place while the debounced title rewrite is pending.
+      lastCommittedLocationQueryRef.current = draftRef.current?.location || "";
       updateField("location", location, {
         markTouched: true,
         markOverride: true,
@@ -759,6 +768,25 @@ export default function useCalendarEventEditor({
     // blocked by validation (or the deliberate debounce-flush bounce) never
     // latches the ref. Protects the hotkey, button, and pendingSaveRef re-fire.
     if (savingRef.current) return;
+    // An @token whose Places suggestion was never explicitly accepted would
+    // save the raw token text as the location. Resolve the active suggestion
+    // first and bounce the save (same pattern as the title debounce flush) so
+    // the re-fired save reads the resolved place from the draft. A dismissed
+    // panel (suggestions cleared) or failed details fetch falls through and
+    // saves the raw text.
+    if (titleAssist.locationQuery && draft.location === titleAssist.locationQuery) {
+      savingRef.current = true;
+      let resolvedLocation = null;
+      try {
+        resolvedLocation = await acceptActiveLocationSuggestion();
+      } finally {
+        savingRef.current = false;
+      }
+      if (resolvedLocation) {
+        pendingSaveRef.current = true;
+        return;
+      }
+    }
     savingRef.current = true;
     setSaving(true);
     setError(null);
@@ -823,7 +851,7 @@ export default function useCalendarEventEditor({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, upsertEvents, validationMessage]);
+  }, [acceptActiveLocationSuggestion, batchDrafts, draft, editable, editingEvent, effectiveTitle, eventReminders, intentState.mode, isEditing, isEditingRecurring, onFocusDate, onSaved, recurrenceDraft, recurringEditScope, refreshRange, removedReminderIds, titleAssist.locationQuery, upsertEvents, validationMessage]);
 
   useEffect(() => {
     if (!pendingSaveRef.current) return;

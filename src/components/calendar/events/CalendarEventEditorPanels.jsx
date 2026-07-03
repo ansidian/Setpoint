@@ -109,8 +109,8 @@ export default function CalendarEventEditorPanels({ editor, pickers }) {
               error={locationSuggestionsError}
               activeIndex={activeLocationSuggestion}
               onSelect={async (item) => {
-                await selectLocationSuggestion(item);
-                pickers.consumeParsedLocationFromTitle();
+                const resolved = await selectLocationSuggestion(item);
+                if (resolved) pickers.consumeParsedLocationFromTitle();
                 pickers.setOpenPicker(null);
               }}
             />

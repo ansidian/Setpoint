@@ -428,6 +428,105 @@ describe("CalendarEventEditor source and location assist behavior", () => {
     });
   });
 
+  it("resolves an unconsumed @location token through Places when the event is saved directly", async () => {
+    renderModal();
+    mockGetCalendarPlaceSuggestions.mockResolvedValue({
+      places: [
+        {
+          placeId: "place-cc",
+          primaryText: "C&C Collision",
+          secondaryText: "800 W Main St, Alhambra, CA 91801, USA",
+          fullText: "C&C Collision, 800 W Main St, Alhambra, CA 91801, USA",
+        },
+      ],
+    });
+    mockGetCalendarPlaceDetails.mockResolvedValue({
+      place: {
+        placeId: "place-cc",
+        displayName: "C&C Collision",
+        formattedAddress: "800 W Main St, Alhambra, CA 91801, USA",
+        location: "C&C Collision, 800 W Main St, Alhambra, CA 91801, USA",
+      },
+    });
+    mockCreateCalendarEvent.mockResolvedValue({ event: { id: "new-place-event" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    fireEvent.input(screen.getByTestId("calendar-event-title"), {
+      target: { value: "Body shop visit 5pm @C&C Collision alhambra" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-location").value).toBe("C&C Collision alhambra");
+      expect(screen.getByText("800 W Main St, Alhambra, CA 91801, USA")).toBeTruthy();
+    }, { timeout: 5000 });
+
+    // Save without explicitly accepting the suggestion — the active suggestion
+    // must still be resolved so Google gets the full place, not the raw token.
+    fireEvent.click(screen.getByTestId("calendar-event-save"));
+
+    await waitFor(() => {
+      expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(1);
+    }, { timeout: 5000 });
+    expect(mockGetCalendarPlaceDetails).toHaveBeenCalledWith("place-cc", expect.any(String));
+    expect(mockCreateCalendarEvent.mock.calls[0][0].location)
+      .toBe("C&C Collision, 800 W Main St, Alhambra, CA 91801, USA");
+  });
+
+  it("keeps the resolved place when details arrive slower than the title debounce", async () => {
+    renderModal();
+    mockGetCalendarPlaceSuggestions.mockResolvedValue({
+      places: [
+        {
+          placeId: "place-cc",
+          primaryText: "C&C Collision",
+          secondaryText: "800 W Main St, Alhambra, CA 91801, USA",
+          fullText: "C&C Collision, 800 W Main St, Alhambra, CA 91801, USA",
+        },
+      ],
+    });
+    // Prod-like latency: details resolve well after the 120ms title debounce,
+    // so the stale @token re-parse must not clobber the committed location.
+    mockGetCalendarPlaceDetails.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({
+        place: {
+          placeId: "place-cc",
+          displayName: "C&C Collision",
+          formattedAddress: "800 W Main St, Alhambra, CA 91801, USA",
+          location: "C&C Collision, 800 W Main St, Alhambra, CA 91801, USA",
+        },
+      }), 300)),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /new event/i }));
+    expect(await screen.findByTestId("calendar-event-editor-rail")).toBeTruthy();
+
+    const titleInput = screen.getByTestId("calendar-event-title");
+    fireEvent.input(titleInput, {
+      target: { value: "Body shop visit 5pm @C&C Collision alhambra" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("800 W Main St, Alhambra, CA 91801, USA")).toBeTruthy();
+    }, { timeout: 5000 });
+
+    fireEvent.keyDown(titleInput, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(mockGetCalendarPlaceDetails).toHaveBeenCalled();
+    });
+
+    // Let details latency, the title debounce, and draft-sync effects settle.
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-event-location").value)
+        .toBe("C&C Collision, 800 W Main St, Alhambra, CA 91801, USA");
+    }, { timeout: 5000 });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.getByTestId("calendar-event-location").value)
+      .toBe("C&C Collision, 800 W Main St, Alhambra, CA 91801, USA");
+  });
+
   it("routes parsed title source tokens through the source picker flow", async () => {
     mockGetCalendarSources.mockResolvedValue({
       accounts: [

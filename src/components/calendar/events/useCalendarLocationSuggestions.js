@@ -60,8 +60,11 @@ export default function useCalendarLocationSuggestions({
     };
   }, [enabled, placesSessionToken, query]);
 
+  // Resolves and commits the suggestion, returning the resolved location
+  // string — or null when the details fetch failed, so callers can leave the
+  // raw @token in place instead of consuming it against an unresolved place.
   const selectLocationSuggestion = useCallback(async (suggestion) => {
-    if (!suggestion?.placeId) return;
+    if (!suggestion?.placeId) return null;
     const sessionToken = placesSessionToken || crypto.randomUUID();
     if (!placesSessionToken) setPlacesSessionToken(sessionToken);
     setLocationSuggestionsLoading(true);
@@ -69,12 +72,15 @@ export default function useCalendarLocationSuggestions({
     try {
       const data = await getCalendarPlaceDetails(suggestion.placeId, sessionToken);
       const place = data?.place || null;
-      onSelectLocation?.(place?.location || suggestion.fullText || suggestion.primaryText);
+      const resolved = place?.location || suggestion.fullText || suggestion.primaryText;
+      onSelectLocation?.(resolved);
       setLocationSuggestions([]);
       setActiveLocationSuggestion(0);
       setPlacesSessionToken("");
+      return resolved;
     } catch (err) {
       setLocationSuggestionsError(err.message || "Failed to load place details.");
+      return null;
     } finally {
       setLocationSuggestionsLoading(false);
     }
@@ -95,8 +101,7 @@ export default function useCalendarLocationSuggestions({
   const acceptActiveLocationSuggestion = useCallback(async () => {
     const suggestion = locationSuggestionsRef.current[activeLocationSuggestionRef.current];
     if (!suggestion) return false;
-    await selectLocationSuggestion(suggestion);
-    return true;
+    return await selectLocationSuggestion(suggestion);
   }, [selectLocationSuggestion]);
 
   const clearLocationSuggestions = useCallback(() => {
