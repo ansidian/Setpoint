@@ -8,6 +8,7 @@ import {
 import { createTriageSoundGate } from "@/lib/triageSoundGate";
 import {
   isTriageSoundAudioUnlocked,
+  markTriageSoundAudioUnlocked,
   playTriageNotificationSound,
 } from "@/lib/triageSoundPlayback";
 
@@ -64,6 +65,25 @@ export default function useTriageNotificationSounds() {
     };
   }, [loadSettings]);
 
+  // Browsers grant audio playback after ANY user gesture in the page (sticky
+  // activation). Mirror that: the first pointerdown/keydown unlocks triage
+  // sounds instead of waiting for a test play or task completion. Capture
+  // phase so a stopPropagation elsewhere cannot swallow the gesture.
+  useEffect(() => {
+    if (isTriageSoundAudioUnlocked()) return undefined;
+    const removeListeners = () => {
+      document.removeEventListener("pointerdown", unlock, true);
+      document.removeEventListener("keydown", unlock, true);
+    };
+    const unlock = () => {
+      markTriageSoundAudioUnlocked();
+      removeListeners();
+    };
+    document.addEventListener("pointerdown", unlock, true);
+    document.addEventListener("keydown", unlock, true);
+    return removeListeners;
+  }, []);
+
   useEffect(() => () => {
     for (const timerId of calendarUpcomingTimersRef.current) {
       clearTimeout(timerId);
@@ -71,13 +91,16 @@ export default function useTriageNotificationSounds() {
     calendarUpcomingTimersRef.current = [];
   }, []);
 
-  const schedulePlayback = useCallback((sound, volume, { markUnlocked = false, immediate = false } = {}) => {
+  const schedulePlayback = useCallback((sound, volume, { markUnlocked = false, immediate = false, eventInfo = null } = {}) => {
     const play = async () => {
       if (!immediate) {
         const waitMs = Math.max(0, lastPlayAtRef.current + TRIAGE_SOUND_SPACING_MS - Date.now());
         if (waitMs > 0) await sleep(waitMs);
       }
-      await playTriageNotificationSound(sound, { volume, markUnlocked });
+      const didPlay = await playTriageNotificationSound(sound, { volume, markUnlocked });
+      // A rejected play() (autoplay block, suspended context) made no sound:
+      // release the dedup key so the next offer of the same event can retry.
+      if (!didPlay && eventInfo) gateRef.current.forget(eventInfo);
       lastPlayAtRef.current = Date.now();
     };
     if (immediate) {
@@ -96,7 +119,7 @@ export default function useTriageNotificationSounds() {
     );
     if (!eventInfo) return;
     if (!gateRef.current.accept(eventInfo)) return;
-    schedulePlayback(eventInfo.sound, eventInfo.volume);
+    schedulePlayback(eventInfo.sound, eventInfo.volume, { eventInfo });
   }, [schedulePlayback]);
 
   const handleAppTrigger = useCallback((triggerType, eventKey, { allowLocked = false } = {}) => {
@@ -113,6 +136,7 @@ export default function useTriageNotificationSounds() {
     schedulePlayback(eventInfo.sound, eventInfo.volume, {
       immediate: allowLocked,
       markUnlocked: allowLocked,
+      eventInfo,
     });
   }, [schedulePlayback]);
 

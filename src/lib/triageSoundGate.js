@@ -48,6 +48,16 @@ export function createTriageSoundGate({ storage } = {}) {
       }
       if (added) persist();
     },
+    // Release a key that was accepted but whose playback failed (autoplay
+    // block, suspended context). The failed play made no sound, so the next
+    // offer of the same event should pass both the dedupe set and the
+    // coalesce window.
+    forget(eventInfo) {
+      if (!eventInfo?.eventKey || !dedupeKeys.has(eventInfo.eventKey)) return;
+      dedupeKeys.delete(eventInfo.eventKey);
+      persist();
+      if (eventInfo.triggerType) lastTriggerAt[eventInfo.triggerType] = 0;
+    },
     accept(eventInfo, now = Date.now()) {
       if (!eventInfo?.eventKey || !eventInfo?.triggerType) return false;
       if (dedupeKeys.has(eventInfo.eventKey)) return false;
