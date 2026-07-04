@@ -96,6 +96,44 @@ describe("useTriageNotificationSounds", () => {
     expect(globalThis.Audio.mock.instances[0].volume).toBe(0.9);
   });
 
+  it("unlocks audio on the first pointerdown so later events sound without a test play", async () => {
+    const play = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      document.dispatchEvent(new Event("pointerdown"));
+    });
+    expect(sessionStorage.getItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY)).toBe("1");
+
+    act(() => {
+      result.current.handleDashboardEvent(triageEvent());
+    });
+
+    await waitFor(() => {
+      expect(globalThis.Audio).toHaveBeenCalledWith("/sounds/notifications/clear-chime.mp3");
+    });
+  });
+
+  it("unlocks audio on the first keydown as well", async () => {
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = vi.fn(() => Promise.resolve());
+    }));
+    renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    act(() => {
+      document.dispatchEvent(new Event("keydown"));
+    });
+
+    expect(sessionStorage.getItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY)).toBe("1");
+  });
+
   it("dedupes repeated SSE event keys", async () => {
     const play = vi.fn(() => Promise.resolve());
     vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
@@ -200,6 +238,48 @@ describe("useTriageNotificationSounds", () => {
     await waitFor(() => {
       expect(globalThis.Audio).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("retries an event whose playback failed when a later snapshot re-offers it", async () => {
+    // First play() rejects (autoplay block); subsequent plays succeed.
+    const play = vi.fn()
+      .mockRejectedValueOnce(new Error("NotAllowedError"))
+      .mockResolvedValue(undefined);
+    vi.stubGlobal("Audio", vi.fn(function AudioMock(path) {
+      this.path = path;
+      this.play = play;
+    }));
+    sessionStorage.setItem(TRIAGE_SOUND_AUDIO_UNLOCK_KEY, "1");
+    const { result } = renderHook(() => useTriageNotificationSounds());
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+
+    const queuedSnapshot = {
+      snapshot: { id: "active" },
+      lanes: {
+        queued: [{
+          account_id: "icloud",
+          email_id: "icloud-3232",
+        }],
+      },
+    };
+    act(() => {
+      result.current.handleActiveSnapshot({
+        snapshot: { id: "active" },
+        lanes: { queued: [] },
+      });
+      result.current.handleActiveSnapshot(queuedSnapshot);
+    });
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
+    // Let the rejection propagate so the gate releases the burned key.
+    await act(async () => {});
+
+    act(() => {
+      result.current.handleActiveSnapshot(queuedSnapshot);
+    });
+
+    await waitFor(() => {
+      expect(play).toHaveBeenCalledTimes(2);
+    }, { timeout: 3000 });
   });
 
   it("coalesces a burst of new queued snapshot rows into one sound", async () => {

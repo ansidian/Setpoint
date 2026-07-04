@@ -50,6 +50,18 @@ describe("triage sound gate", () => {
     expect(gate.accept({ eventKey: "fresh-1", triggerType: "email_queued" }, 10_000)).toBe(true);
   });
 
+  it("forgets a failed playback so the same event can sound when re-offered", () => {
+    const gate = createTriageSoundGate();
+    const eventInfo = { eventKey: "queued-1", triggerType: "email_queued" };
+
+    expect(gate.accept(eventInfo, 10_000)).toBe(true);
+    gate.forget(eventInfo);
+
+    // Re-offered immediately: the failed play made no sound, so neither the
+    // dedupe set nor the coalesce window should block the retry.
+    expect(gate.accept(eventInfo, 10_100)).toBe(true);
+  });
+
   it("persists dedupe keys across gate instances within the session", () => {
     const first = createTriageSoundGate();
     expect(first.accept({ eventKey: "email-1", triggerType: "needs_attention_finalized" }, 10_000)).toBe(true);
@@ -57,5 +69,16 @@ describe("triage sound gate", () => {
     const second = createTriageSoundGate();
     expect(second.has("email-1")).toBe(true);
     expect(second.accept({ eventKey: "email-1", triggerType: "needs_attention_finalized" }, 60_000)).toBe(false);
+  });
+
+  it("persists forgotten keys across gate instances within the session", () => {
+    const first = createTriageSoundGate();
+    const eventInfo = { eventKey: "email-1", triggerType: "needs_attention_finalized" };
+    expect(first.accept(eventInfo, 10_000)).toBe(true);
+    first.forget(eventInfo);
+
+    const second = createTriageSoundGate();
+    expect(second.has("email-1")).toBe(false);
+    expect(second.accept(eventInfo, 60_000)).toBe(true);
   });
 });
