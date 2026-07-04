@@ -194,10 +194,13 @@ export async function fetchCalendarMirrorEvents(account, calendar, { window, syn
           pageToken,
         }
       : {
+          // No orderBy here: Google omits nextSyncToken from responses when
+          // orderBy is set, which would silently force every mirror sync to be
+          // a full re-sync. Mirror writes are keyed per occurrence, so response
+          // order is irrelevant.
           timeMin: new Date(`${window.start}T00:00:00.000Z`).toISOString(),
           timeMax: new Date(`${window.end}T23:59:59.999Z`).toISOString(),
           singleEvents: true,
-          orderBy: "startTime",
           showDeleted: true,
           maxResults: pageSize,
           pageToken,

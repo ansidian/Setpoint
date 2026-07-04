@@ -188,6 +188,28 @@ describe("calendar recurring mutations", () => {
     });
   });
 
+  it("windowed mirror fetch omits orderBy so Google returns a nextSyncToken", async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      const parsed = new URL(String(url));
+      const method = init.method || "GET";
+      const path = parsed.pathname.replace("/calendar/v3/", "");
+      if (method === "GET" && path === "calendars/work/events") {
+        return jsonResponse({ items: [], nextSyncToken: "sync-1" });
+      }
+      return jsonResponse({ error: `Unexpected ${method} ${path}` }, 500);
+    });
+
+    await expect(fetchCalendarMirrorEvents(account, { id: "work", summary: "Work" }, {
+      window: { start: "2026-05-01", end: "2026-06-01" },
+    })).resolves.toMatchObject({ nextSyncToken: "sync-1" });
+
+    const [url] = fetch.mock.calls.find(([callUrl]) => String(callUrl).includes("calendars/work/events"));
+    const params = new URL(String(url)).searchParams;
+    expect(params.get("orderBy")).toBeNull();
+    expect(params.get("singleEvents")).toBe("true");
+    expect(params.get("timeMin")).toBe("2026-05-01T00:00:00.000Z");
+  });
+
   it("uses the fetched parent etag when editing an instance with all scope", async () => {
     installCalendarFetch();
 

@@ -6,6 +6,7 @@ import {
 import {
   iso,
   mirrorOccurrenceStatement,
+  purgeExpiredTombstonesStatement,
   upsertStateStatement,
   stateSuccessStatement,
   tombstoneCalendarStatement,
@@ -16,6 +17,10 @@ import {
 const DASHBOARD_CALENDAR_TZ = "America/Los_Angeles";
 const MIRROR_HISTORY_MONTHS = 12;
 const MIRROR_FUTURE_MONTHS = 18;
+// Cancelled rows exist only so search readers skip deleted events; if one is
+// purged early, the next sync that re-delivers the cancellation simply
+// recreates it, so a short retention is safe and keeps the table bounded.
+const TOMBSTONE_RETENTION_DAYS = 30;
 
 // Clamps day-of-month to the target month's last day so 29th-31st no longer
 // overflow into the next month (which would shift the mirror/search window by up
@@ -261,6 +266,9 @@ export async function syncCalendarSearchMirror(userId, accounts, {
       occurrenceCount += result.occurrences;
     }
   }
+
+  const purgeCutoff = iso(new Date(now.getTime() - TOMBSTONE_RETENTION_DAYS * 24 * 60 * 60 * 1000));
+  await dbClient.execute(purgeExpiredTombstonesStatement(userId, purgeCutoff));
 
   return {
     status: "current",
