@@ -5,6 +5,7 @@ import {
   mirrorOccurrenceStatement,
   upsertStateStatement,
   stateSuccessStatement,
+  purgeExpiredTombstonesStatement,
   tombstoneCalendarStatement,
   tombstoneRecurringFamilyStatement,
   tombstoneUnlistedCalendarStatements,
@@ -70,12 +71,20 @@ describe("upsert/tombstone builders", () => {
     const stmt = upsertStateStatement("u1", { id: "a1", label: "Main", email: "me@x.test" }, { id: "c1", summary: "Personal", backgroundColor: "#fff" }, { start: "2025-01-01", end: "2027-01-01" }, "T");
     expect(stmt.args).toEqual(["u1", "a1", "c1", "Main", "me@x.test", "Personal", "#fff", "2025-01-01", "2027-01-01", "T"]);
   });
-  it("tombstoneCalendarStatement cancels all rows for the calendar", () => {
-    expect(tombstoneCalendarStatement("u1", { id: "a1" }, { id: "c1" }, "T").args).toEqual(["T", "T", "u1", "a1", "c1"]);
+  it("tombstoneCalendarStatement cancels only not-yet-cancelled rows for the calendar", () => {
+    const stmt = tombstoneCalendarStatement("u1", { id: "a1" }, { id: "c1" }, "T");
+    expect(stmt.args).toEqual(["T", "T", "u1", "a1", "c1"]);
+    expect(stmt.sql).toContain("status != 'cancelled'");
   });
   it("tombstoneRecurringFamilyStatement matches the family by event_id or recurring_event_id", () => {
     const stmt = tombstoneRecurringFamilyStatement("u1", { id: "a1" }, { id: "c1" }, { id: "ev", recurringEventId: "series" }, "T");
     expect(stmt.args).toEqual(["T", "T", "u1", "a1", "c1", "series", "series"]);
+  });
+  it("purgeExpiredTombstonesStatement deletes only cancelled rows older than the cutoff", () => {
+    const stmt = purgeExpiredTombstonesStatement("u1", "2026-04-12T00:00:00.000Z");
+    expect(stmt.args).toEqual(["u1", "2026-04-12T00:00:00.000Z"]);
+    expect(stmt.sql).toContain("status = 'cancelled'");
+    expect(stmt.sql).toContain("deleted_at < ?");
   });
   it("tombstoneUnlistedCalendarStatements returns the cancel + state-delete pair", () => {
     const [cancel, del] = tombstoneUnlistedCalendarStatements("u1", { id: "a1" }, "c-stale", "T");

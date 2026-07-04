@@ -258,6 +258,137 @@ describe("Calendar Search Mirror service", () => {
     });
   });
 
+  it("skips rewriting an occurrence when a sync re-delivers identical event data", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMirrorMigration(db);
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+
+    const listCalendars = vi.fn(async () => [primaryCalendar]);
+    const syncClient = vi.fn()
+      .mockResolvedValueOnce({ events: [occurrence], nextSyncToken: "sync-1" })
+      .mockResolvedValueOnce({ events: [{ ...occurrence }], nextSyncToken: "sync-2" });
+
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T19:00:00.000Z"),
+      forceFull: true,
+    });
+    // Incremental sync re-delivers the same event byte-for-byte.
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T20:00:00.000Z"),
+    });
+
+    const rows = await db.execute(
+      "SELECT title, updated_at, synced_at FROM ea_calendar_search_occurrences WHERE event_id = 'event-1'",
+    );
+    expect(rows.rows[0]).toMatchObject({
+      title: "Final presentation",
+      updated_at: "2026-05-12T19:00:00.000Z",
+      synced_at: "2026-05-12T19:00:00.000Z",
+    });
+    // The sync itself still completed and advanced the token.
+    const state = await db.execute("SELECT sync_token FROM ea_calendar_search_mirror_state");
+    expect(state.rows[0].sync_token).toBe("sync-2");
+  });
+
+  it("full sync leaves already-cancelled tombstones untouched", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMirrorMigration(db);
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+
+    const listCalendars = vi.fn(async () => [primaryCalendar]);
+    const syncClient = vi.fn()
+      .mockResolvedValueOnce({ events: [occurrence], nextSyncToken: "sync-1" })
+      .mockResolvedValueOnce({ events: [], nextSyncToken: "sync-2" })
+      .mockResolvedValueOnce({ events: [], nextSyncToken: "sync-3" });
+
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T19:00:00.000Z"),
+      forceFull: true,
+    });
+    // Second full sync drops the event -> tombstoned at 20:00.
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T20:00:00.000Z"),
+      forceFull: true,
+    });
+    // Third full sync must not touch the existing tombstone again.
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T21:00:00.000Z"),
+      forceFull: true,
+    });
+
+    const rows = await db.execute(
+      "SELECT status, deleted_at, updated_at FROM ea_calendar_search_occurrences WHERE event_id = 'event-1'",
+    );
+    expect(rows.rows[0]).toMatchObject({
+      status: "cancelled",
+      deleted_at: "2026-05-12T20:00:00.000Z",
+      updated_at: "2026-05-12T20:00:00.000Z",
+    });
+  });
+
+  it("purges cancelled tombstones older than the retention window during sync", async () => {
+    db = createClient({ url: "file::memory:" });
+    await applyMirrorMigration(db);
+    const { syncCalendarSearchMirror } = await import("./calendar-search-mirror.js");
+
+    const secondOccurrence = { ...occurrence, id: "event-2", originalStartTime: "2026-05-21T17:00:00.000Z" };
+    const listCalendars = vi.fn(async () => [primaryCalendar]);
+    const syncClient = vi.fn()
+      .mockResolvedValueOnce({ events: [occurrence, secondOccurrence], nextSyncToken: "sync-1" })
+      .mockResolvedValueOnce({ events: [], nextSyncToken: "sync-2" })
+      .mockResolvedValueOnce({ events: [], nextSyncToken: "sync-3" });
+
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T19:00:00.000Z"),
+      forceFull: true,
+    });
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T20:00:00.000Z"),
+      forceFull: true,
+    });
+    // Backdate event-1's tombstone past the retention window; event-2 stays fresh.
+    await db.execute({
+      sql: "UPDATE ea_calendar_search_occurrences SET deleted_at = ? WHERE event_id = 'event-1'",
+      args: ["2026-03-01T00:00:00.000Z"],
+    });
+
+    await syncCalendarSearchMirror("test-user", [account], {
+      dbClient: db,
+      listCalendars,
+      syncClient,
+      now: new Date("2026-05-12T21:00:00.000Z"),
+      forceFull: true,
+    });
+
+    const rows = await db.execute(
+      "SELECT event_id, status FROM ea_calendar_search_occurrences ORDER BY event_id",
+    );
+    expect(rows.rows).toEqual([
+      expect.objectContaining({ event_id: "event-2", status: "cancelled" }),
+    ]);
+  });
+
   it("tombstones mirror rows for calendars that are no longer selected", async () => {
     db = createClient({ url: "file::memory:" });
     await applyMirrorMigration(db);
